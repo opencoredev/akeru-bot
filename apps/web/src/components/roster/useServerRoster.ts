@@ -10,6 +10,7 @@ import {
 } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { useRosterStore } from "./rosterStore";
 import type { BotAvatar } from "./types";
 
@@ -38,7 +39,7 @@ export function useServerRosterSync(): void {
           avatar: { kind: "blob", shape: "circle", color: "#5B7FD4" },
           engine: null,
           sandbox: null,
-          runtimeMode: "full-access",
+          runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
           usageCap: null,
           groupId: null,
         },

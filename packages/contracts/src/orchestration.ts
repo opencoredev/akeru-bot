@@ -127,7 +127,11 @@ export const RuntimeMode = Schema.Literals([
   "full-access",
 ]);
 export type RuntimeMode = typeof RuntimeMode.Type;
+// Event decoders keep the historical full-access fallback for old persisted data.
 export const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
+export const LocalExecutionMode = Schema.Literals(["approval-required", "full-access"]);
+export type LocalExecutionMode = typeof LocalExecutionMode.Type;
+export const DEFAULT_LOCAL_EXECUTION_MODE: LocalExecutionMode = "approval-required";
 export const ProviderInteractionMode = Schema.Literals(["default", "plan"]);
 export type ProviderInteractionMode = typeof ProviderInteractionMode.Type;
 export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "default";
@@ -840,7 +844,9 @@ const BotCreateCommand = Schema.Struct({
   avatar: BotAvatar,
   engine: Schema.NullOr(BotEngine),
   sandbox: Schema.NullOr(BotSandbox),
-  runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
+  runtimeMode: RuntimeMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
+  ),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.NullOr(GroupId),
@@ -1174,7 +1180,9 @@ export const ThreadTurnStartCommand = Schema.Struct({
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
-  runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
+  runtimeMode: RuntimeMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
+  ),
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),

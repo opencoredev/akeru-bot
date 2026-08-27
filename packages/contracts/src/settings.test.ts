@@ -96,6 +96,20 @@ describe("ClaudeSettings auto-compaction", () => {
   });
 });
 
+describe("ServerSettings local execution", () => {
+  it("asks before local execution by default and accepts an explicit full-access opt-in", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+    expect(
+      decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
+    ).toBe("full-access");
+  });
+
+  it("rejects other runtime modes", () => {
+    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
+    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto-accept-edits" })).toThrow();
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

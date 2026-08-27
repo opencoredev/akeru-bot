@@ -3,7 +3,6 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
-  DEFAULT_RUNTIME_MODE,
   EnvironmentId,
   GroupId,
   ProviderInstanceId,
@@ -30,6 +29,7 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
+import { resolveBotRuntimeMode } from "./botSandbox";
 import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
 
@@ -129,6 +129,9 @@ export function useGroupThreadRuntime(groupId: string) {
     () => resolveAppModelSelectionState(settings, providers),
     [providers, settings],
   );
+  const setRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
+    reportFailure: false,
+  });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
   const sendInFlightRef = useRef(false);
@@ -173,6 +176,7 @@ export function useGroupThreadRuntime(groupId: string) {
       const createdAt = new Date().toISOString();
       const currentThreadRef = retainedThreadRef.current.threadRef;
       const threadId = currentThreadRef?.threadId ?? newThreadId();
+      const runtimeMode = resolveBotRuntimeMode(respondingBot.sandbox, settings.localExecutionMode);
 
       try {
         const attachments = await Promise.all(
@@ -185,6 +189,16 @@ export function useGroupThreadRuntime(groupId: string) {
           })),
         );
         const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
+        if (currentThreadRef && rememberedThread?.runtimeMode !== runtimeMode) {
+          const modeResult = await setRuntimeMode({
+            environmentId,
+            input: { threadId, runtimeMode },
+          });
+          if (modeResult._tag === "Failure") {
+            setError(errorMessage(modeResult));
+            return false;
+          }
+        }
         const result = await startTurn({
           environmentId,
           input: buildGroupTurnStartInput({
@@ -200,7 +214,7 @@ export function useGroupThreadRuntime(groupId: string) {
               attachments,
             },
             modelSelection,
-            runtimeMode: respondingBot.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+            runtimeMode,
             interactionMode: DEFAULT_INTERACTION_MODE,
             createdAt,
             createThread: currentThreadRef === null,
@@ -220,7 +234,18 @@ export function useGroupThreadRuntime(groupId: string) {
         setSending(false);
       }
     },
-    [activeProject, appDefaultModelSelection, bots, group, groupId, groupReady, startTurn],
+    [
+      activeProject,
+      appDefaultModelSelection,
+      bots,
+      group,
+      groupId,
+      groupReady,
+      rememberedThread?.runtimeMode,
+      settings.localExecutionMode,
+      setRuntimeMode,
+      startTurn,
+    ],
   );
 
   return {

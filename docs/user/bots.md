@@ -14,6 +14,8 @@ Akeru Bot stores the profile in the connected environment. Other clients connect
 
 Settings controls whether bots share their workspace and browser. **Separate** is the default and gives each bot its own workspace identity and browser profile. **Shared** lets bots share files and cookies. Bots use a local workspace. Remote sandbox options stay unavailable.
 
+Local bots ask before file changes and shell commands by default. Select **Settings > General > Local execution > Full access** to skip those local prompts. Actions that send, pay, delete, change production, or use secrets still ask. Bots that run in a cloud sandbox do not show the local computer prompt.
+
 Use the panel button to collapse or reopen the editor. The default shortcut is **Mod+Alt+B**, and you can change `Right Panel: Toggle` in the keybinding settings. On a narrow screen, the same button opens a sheet.
 
 Bot replies support headings, links, tables, task lists, code blocks, math, and Mermaid diagrams.

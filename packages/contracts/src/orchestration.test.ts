@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { MessageId } from "./baseSchemas.ts";
 import {
   BotAvatar,
+  DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   ClientOrchestrationCommand,
@@ -262,8 +263,29 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.modelSelection, undefined);
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_LOCAL_EXECUTION_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+  }),
+);
+
+it.effect("decodes bot.create to approval required when an old client omits runtimeMode", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationCommand({
+      type: "bot.create",
+      commandId: "cmd-bot-default-runtime",
+      botId: "bot-default-runtime",
+      name: "Akeru",
+      title: "Akeru",
+      avatar: { kind: "dither", seed: "akeru" },
+      engine: null,
+      sandbox: null,
+      usageCap: null,
+      groupId: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    if (parsed.type !== "bot.create") assert.fail(`Expected bot.create, received ${parsed.type}.`);
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_LOCAL_EXECUTION_MODE);
   }),
 );
 

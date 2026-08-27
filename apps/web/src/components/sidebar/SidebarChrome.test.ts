@@ -56,6 +56,58 @@ describe("sidebar footer", () => {
     expect(source).toContain("Sign in for remote access");
   });
 
+  it("creates manual and first-run bots with approval required", () => {
+    const rosterSource = NodeFS.readFileSync(
+      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
+      "utf8",
+    );
+    const syncSource = NodeFS.readFileSync(
+      new URL("../roster/useServerRoster.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(rosterSource).toContain("runtimeMode: DEFAULT_BOT_RUNTIME_MODE");
+    expect(syncSource).toContain("runtimeMode: DEFAULT_BOT_RUNTIME_MODE");
+    expect(rosterSource).not.toContain('runtimeMode: "full-access"');
+    expect(syncSource).not.toContain('runtimeMode: "full-access"');
+  });
+
+  it("updates existing bot and group threads before starting the next turn", () => {
+    const botSource = NodeFS.readFileSync(
+      new URL("../roster/useBotThreadRuntime.ts", import.meta.url),
+      "utf8",
+    );
+    const groupSource = NodeFS.readFileSync(
+      new URL("../roster/useGroupThreadRuntime.ts", import.meta.url),
+      "utf8",
+    );
+
+    for (const source of [botSource, groupSource]) {
+      const modeUpdate = source.indexOf("const modeResult = await setRuntimeMode");
+      expect(modeUpdate).toBeGreaterThan(-1);
+      expect(modeUpdate).toBeLessThan(source.indexOf("await startTurn", modeUpdate));
+    }
+  });
+
+  it("mints fresh web and mobile threads from the local execution setting", () => {
+    const webSource = NodeFS.readFileSync(
+      new URL("../../hooks/useHandleNewThread.ts", import.meta.url),
+      "utf8",
+    );
+    const mobileSource = NodeFS.readFileSync(
+      new URL(
+        "../../../../mobile/src/features/threads/new-task-flow-provider.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+    expect(webSource).toContain(
+      "runtimeMode: carryRuntimeMode ?? primaryServerSettings.localExecutionMode",
+    );
+    expect(mobileSource).toContain("selectedEnvironmentServerConfig?.settings.localExecutionMode");
+  });
+
   it("keeps the roster scrollable from touch gestures that start on a bot row", () => {
     const source = NodeFS.readFileSync(
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),

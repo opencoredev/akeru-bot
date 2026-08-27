@@ -12,6 +12,8 @@ import {
 import {
   BotSandboxBrowserSharing,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+  DEFAULT_LOCAL_EXECUTION_MODE,
+  LocalExecutionMode,
   ModelSelection,
 } from "./orchestration.ts";
 import {
@@ -683,6 +685,9 @@ export const ServerSettings = Schema.Struct({
    * between a desktop window and a phone attached to the same server.
    */
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  localExecutionMode: LocalExecutionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
+  ),
   voice: VoiceSettings,
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
@@ -907,6 +912,7 @@ export const ServerSettingsPatch = Schema.Struct({
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
+  localExecutionMode: Schema.optionalKey(LocalExecutionMode),
   voice: Schema.optionalKey(
     Schema.Struct({
       enabled: Schema.optionalKey(Schema.Boolean),
