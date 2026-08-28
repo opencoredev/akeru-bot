@@ -1871,9 +1871,11 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "voice-call",
           }),
         [WS_METHODS.voiceCallHangup]: ({ callId }) =>
-          observeRpcEffect(WS_METHODS.voiceCallHangup, voiceCalls.hangup(callId), {
-            "rpc.aggregate": "voice-call",
-          }),
+          observeRpcEffect(
+            WS_METHODS.voiceCallHangup,
+            voiceCalls.hangup(callId, voiceCallOwnerId),
+            { "rpc.aggregate": "voice-call" },
+          ),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
           observeRpcEffect(
             WS_METHODS.serverDiscoverSourceControl,

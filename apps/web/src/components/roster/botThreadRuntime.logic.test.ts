@@ -6,9 +6,31 @@ import {
   buildGroupTurnStartInput,
   findLatestBotThreadTarget,
   findLatestGroupThreadTarget,
+  joinOrStartThreadCreate,
 } from "./botThreadRuntime.logic";
 
 describe("bot thread runtime", () => {
+  it("shares concurrent initial thread creation", async () => {
+    let retained: { threadId: string } | null = null;
+    const inFlight = { current: null as Promise<{ threadId: string } | null> | null };
+    let starts = 0;
+    const start = async () => {
+      starts += 1;
+      await Promise.resolve();
+      retained = { threadId: "thread-akeru" };
+      return retained;
+    };
+    const join = () => joinOrStartThreadCreate({ getRetained: () => retained, inFlight, start });
+
+    const [first, second] = await Promise.all([join(), join()]);
+    expect(starts).toBe(1);
+    expect(first).toBe(retained);
+    expect(second).toBe(retained);
+
+    expect(await join()).toBe(retained);
+    expect(starts).toBe(1);
+  });
+
   it("associates the first durable thread with its bot", () => {
     const input = buildBotTurnStartInput({
       botId: BotId.make("bot-akeru"),

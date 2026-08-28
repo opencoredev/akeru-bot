@@ -139,7 +139,7 @@ it.layer(SelectedVoiceTestLayer)("VoiceCallManager voice selection", (it) => {
       const manager = yield* VoiceCallManager;
       const result = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-1");
       assert.equal(negotiatedVoice, "cedar");
-      yield* manager.hangup(result.call.callId);
+      yield* manager.hangup(result.call.callId, "client-1");
     }),
   );
 });
@@ -159,6 +159,26 @@ it.layer(VoiceDisabledTestLayer)("VoiceCallManager global settings", (it) => {
 });
 
 it.layer(TestLayer)("VoiceCallManager", (it) => {
+  it.effect("refuses hangup from a different connection owner", () =>
+    Effect.gen(function* () {
+      const manager = yield* VoiceCallManager;
+      const first = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-1");
+
+      const stolen = yield* Effect.result(manager.hangup(first.call.callId, "client-2"));
+      assert.equal(stolen._tag, "Failure");
+      if (stolen._tag === "Failure") {
+        assert.equal(stolen.failure.reason, "call-not-active");
+      }
+      assert.equal((yield* manager.get).status, "live");
+
+      yield* manager.hangupOwner("client-2");
+      assert.equal((yield* manager.get).status, "live");
+
+      yield* manager.hangup(first.call.callId, "client-1");
+      assert.deepEqual(yield* manager.get, { status: "idle" });
+    }),
+  );
+
   it.effect("refuses a second call until hangup and clears the active call", () =>
     Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
@@ -176,7 +196,9 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
         assert.equal(failure.reason, "already-active");
       }
 
-      assert.deepEqual(yield* manager.hangup(first.call.callId), { status: "idle" });
+      assert.deepEqual(yield* manager.hangup(first.call.callId, "client-1"), {
+        status: "idle",
+      });
       assert.deepEqual(yield* manager.get, { status: "idle" });
 
       const restarted = yield* manager.start({ botId, sdp: "third-offer" }, "client-1");
@@ -256,7 +278,7 @@ it.layer(PendingTestLayer)("VoiceCallManager pending start", (it) => {
       assert.notEqual(pending.status, "idle");
       if (pending.status === "idle") return;
 
-      yield* manager.hangup(pending.callId);
+      yield* manager.hangup(pending.callId, "client-1");
       const result = yield* Fiber.join(startFiber);
       assert.equal(result._tag, "Failure");
       if (result._tag === "Failure") assert.equal(result.failure.reason, "call-not-active");

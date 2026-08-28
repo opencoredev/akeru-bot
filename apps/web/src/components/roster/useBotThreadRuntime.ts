@@ -28,7 +28,11 @@ import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
-import { buildBotTurnStartInput, findLatestBotThreadTarget } from "./botThreadRuntime.logic";
+import {
+  buildBotTurnStartInput,
+  findLatestBotThreadTarget,
+  joinOrStartThreadCreate,
+} from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
@@ -141,6 +145,53 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const ensureTranscriptThread = useCallback(
+    async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
+      if (!activeProject || !botReady) return null;
+      return joinOrStartThreadCreate({
+        getRetained: () => retainedThreadRef.current.threadRef,
+        inFlight: ensureThreadRef,
+        start: async () => {
+          const threadId = newThreadId();
+          const result = await createThread({
+            environmentId: activeProject.environmentId,
+            input: {
+              threadId,
+              projectId: activeProject.id,
+              botId: BotId.make(botId),
+              title,
+              modelSelection:
+                effectiveModelSelection ??
+                activeProject.defaultModelSelection ??
+                appDefaultModelSelection,
+              runtimeMode: bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+              interactionMode: DEFAULT_INTERACTION_MODE,
+              branch: null,
+              worktreePath: null,
+              createdAt: new Date().toISOString(),
+            },
+          });
+          if (result._tag === "Failure") return null;
+          const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
+          retainedThreadRef.current.threadRef = threadRef;
+          useRosterStore
+            .getState()
+            .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+          return threadRef;
+        },
+      });
+    },
+    [
+      activeProject,
+      appDefaultModelSelection,
+      bot,
+      botId,
+      botReady,
+      createThread,
+      effectiveModelSelection,
+    ],
+  );
+
   const send = useCallback(
     async (prompt: string, files: readonly File[]): Promise<boolean> => {
       if (sendInFlightRef.current) return false;
@@ -162,8 +213,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       setSending(true);
       setError(null);
       const createdAt = new Date().toISOString();
-      const currentThreadRef = retainedThreadRef.current.threadRef;
-      const threadId = currentThreadRef?.threadId ?? newThreadId();
       const modelSelection: ModelSelection =
         effectiveModelSelection ?? activeProject.defaultModelSelection ?? appDefaultModelSelection;
       const runtimeMode = bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
@@ -179,12 +228,17 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             dataUrl: await readFileAsDataUrl(file),
           })),
         );
-        const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
+        const currentThreadRef =
+          retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
+        if (!currentThreadRef) {
+          setError("Could not send the message.");
+          return false;
+        }
         const startResult = await startTurn({
-          environmentId,
+          environmentId: currentThreadRef.environmentId,
           input: buildBotTurnStartInput({
             botId: BotId.make(botId),
-            threadId,
+            threadId: currentThreadRef.threadId,
             projectId: activeProject.id,
             title,
             message: {
@@ -197,7 +251,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             runtimeMode,
             interactionMode: DEFAULT_INTERACTION_MODE,
             createdAt,
-            createThread: currentThreadRef === null,
+            createThread: false,
           }),
         });
         if (startResult._tag === "Failure") {
@@ -205,11 +259,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           return false;
         }
 
-        const threadRef = scopeThreadRef(environmentId, threadId);
-        retainedThreadRef.current.threadRef = threadRef;
+        retainedThreadRef.current.threadRef = currentThreadRef;
         useRosterStore
           .getState()
-          .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+          .recordChatPath(botId, `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`);
         useRosterStore.getState().recordLastMessage(botId, {
           text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
           at: createdAt,
@@ -230,54 +283,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       botId,
       effectiveModelSelection,
       botReady,
+      ensureTranscriptThread,
       startTurn,
     ],
   );
-
-  const ensureTranscriptThread = useCallback(async (): Promise<ScopedThreadRef | null> => {
-    const existing = retainedThreadRef.current.threadRef;
-    if (existing) return existing;
-    if (!activeProject || !botReady) return null;
-    ensureThreadRef.current ??= (async () => {
-      const threadId = newThreadId();
-      const result = await createThread({
-        environmentId: activeProject.environmentId,
-        input: {
-          threadId,
-          projectId: activeProject.id,
-          botId: BotId.make(botId),
-          title: `Call with ${bot?.name ?? "bot"}`,
-          modelSelection:
-            effectiveModelSelection ??
-            activeProject.defaultModelSelection ??
-            appDefaultModelSelection,
-          runtimeMode: bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
-          interactionMode: DEFAULT_INTERACTION_MODE,
-          branch: null,
-          worktreePath: null,
-          createdAt: new Date().toISOString(),
-        },
-      });
-      if (result._tag === "Failure") return null;
-      const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
-      retainedThreadRef.current.threadRef = threadRef;
-      useRosterStore
-        .getState()
-        .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
-      return threadRef;
-    })();
-    const created = await ensureThreadRef.current;
-    ensureThreadRef.current = null;
-    return retainedThreadRef.current.threadRef ?? created;
-  }, [
-    activeProject,
-    appDefaultModelSelection,
-    bot,
-    botId,
-    botReady,
-    createThread,
-    effectiveModelSelection,
-  ]);
 
   const appendTranscript = useCallback(
     async (role: "user" | "assistant", text: string) => {

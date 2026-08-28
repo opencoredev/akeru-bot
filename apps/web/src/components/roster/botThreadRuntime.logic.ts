@@ -9,6 +9,22 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
+export async function joinOrStartThreadCreate<T>(input: {
+  getRetained: () => T | null;
+  inFlight: { current: Promise<T | null> | null };
+  start: () => Promise<T | null>;
+}): Promise<T | null> {
+  const existing = input.getRetained();
+  if (existing) return existing;
+  const pending = (input.inFlight.current ??= input.start());
+  try {
+    const created = await pending;
+    return input.getRetained() ?? created;
+  } finally {
+    if (input.inFlight.current === pending) input.inFlight.current = null;
+  }
+}
+
 export function buildBotTurnStartInput(input: {
   botId: BotId;
   threadId: ThreadId;

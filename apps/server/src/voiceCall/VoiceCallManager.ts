@@ -197,7 +197,10 @@ export class VoiceCallManager extends Context.Service<
       input: VoiceCallStartInput,
       ownerId: string,
     ) => Effect.Effect<VoiceCallStartResult, VoiceCallError>;
-    readonly hangup: (callId: string) => Effect.Effect<VoiceCallSnapshot, VoiceCallError>;
+    readonly hangup: (
+      callId: string,
+      ownerId: string,
+    ) => Effect.Effect<VoiceCallSnapshot, VoiceCallError>;
     readonly hangupOwner: (ownerId: string) => Effect.Effect<void>;
   }
 >()("t3/voiceCall/VoiceCallManager") {}
@@ -361,10 +364,10 @@ const make = (options?: VoiceCallManagerOptions) =>
       };
     });
 
-    const hangup = (callId: string) =>
+    const hangup = (callId: string, ownerId: string) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
-          if (active?.callId !== callId) {
+          if (active?.callId !== callId || active.ownerId !== ownerId) {
             return yield* new VoiceCallError({
               reason: "call-not-active",
               message: "This call is no longer active.",
