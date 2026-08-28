@@ -189,6 +189,13 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  VoiceCallError,
+  VoiceCallHangupInput,
+  VoiceCallSnapshot,
+  VoiceCallStartInput,
+  VoiceCallStartResult,
+} from "./voiceCall.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -270,6 +277,9 @@ export const WS_METHODS = {
   subscriptionAuthComplete: "subscriptionAuth.complete",
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
+  voiceCallGet: "voiceCall.get",
+  voiceCallStart: "voiceCall.start",
+  voiceCallHangup: "voiceCall.hangup",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
@@ -410,6 +420,24 @@ export const WsSubscriptionAuthLogoutRpc = Rpc.make(WS_METHODS.subscriptionAuthL
   payload: SubscriptionAuthLogoutInput,
   success: SubscriptionAuthStatuses,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsVoiceCallGetRpc = Rpc.make(WS_METHODS.voiceCallGet, {
+  payload: Schema.Struct({}),
+  success: VoiceCallSnapshot,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsVoiceCallStartRpc = Rpc.make(WS_METHODS.voiceCallStart, {
+  payload: VoiceCallStartInput,
+  success: VoiceCallStartResult,
+  error: Schema.Union([VoiceCallError, EnvironmentAuthorizationError]),
+});
+
+export const WsVoiceCallHangupRpc = Rpc.make(WS_METHODS.voiceCallHangup, {
+  payload: VoiceCallHangupInput,
+  success: VoiceCallSnapshot,
+  error: Schema.Union([VoiceCallError, EnvironmentAuthorizationError]),
 });
 
 export const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
@@ -917,6 +945,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCompleteRpc,
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
+  WsVoiceCallGetRpc,
+  WsVoiceCallStartRpc,
+  WsVoiceCallHangupRpc,
   WsServerDiscoverSourceControlRpc,
   WsServerGetTraceDiagnosticsRpc,
   WsServerGetProcessDiagnosticsRpc,

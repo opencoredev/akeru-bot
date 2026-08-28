@@ -124,6 +124,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
@@ -429,11 +430,13 @@ const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientOrigin: OrchestrationClientOrigin,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  voiceCalls: VoiceCallManager.VoiceCallManager["Service"],
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const crypto = yield* Crypto.Crypto;
+      const voiceCallOwnerId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
       const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
       const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
@@ -494,17 +497,21 @@ const makeWsRpcLayer = (
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
       yield* Effect.addFinalizer(() =>
-        Ref.get(rpcClientIds).pipe(
-          Effect.flatMap((clientIds) =>
-            Effect.forEach(
-              clientIds,
-              (clientId) => backgroundPolicy.removeRpcClient(currentSessionId, clientId),
-              {
-                discard: true,
-              },
+        Effect.all(
+          [
+            Ref.get(rpcClientIds).pipe(
+              Effect.flatMap((clientIds) =>
+                Effect.forEach(
+                  clientIds,
+                  (clientId) => backgroundPolicy.removeRpcClient(currentSessionId, clientId),
+                  { discard: true },
+                ),
+              ),
+              Effect.ignore,
             ),
-          ),
-          Effect.ignore,
+            voiceCalls.hangupOwner(voiceCallOwnerId),
+          ],
+          { discard: true },
         ),
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
@@ -800,6 +807,7 @@ const makeWsRpcLayer = (
                     sandbox: nextBot.sandbox,
                     runtimeMode: nextBot.runtimeMode,
                     usageCap: nextBot.usageCap,
+                    voiceEnabled: nextBot.voiceEnabled,
                     groupId: nextBot.groupId,
                     archivedAt: nextBot.archivedAt,
                     createdAt: nextBot.createdAt,
@@ -1854,6 +1862,18 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "server" },
           ),
+        [WS_METHODS.voiceCallGet]: (_input) =>
+          observeRpcEffect(WS_METHODS.voiceCallGet, voiceCalls.get, {
+            "rpc.aggregate": "voice-call",
+          }),
+        [WS_METHODS.voiceCallStart]: (input) =>
+          observeRpcEffect(WS_METHODS.voiceCallStart, voiceCalls.start(input, voiceCallOwnerId), {
+            "rpc.aggregate": "voice-call",
+          }),
+        [WS_METHODS.voiceCallHangup]: ({ callId }) =>
+          observeRpcEffect(WS_METHODS.voiceCallHangup, voiceCalls.hangup(callId), {
+            "rpc.aggregate": "voice-call",
+          }),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
           observeRpcEffect(
             WS_METHODS.serverDiscoverSourceControl,
@@ -2548,6 +2568,7 @@ const makeWsRpcLayer = (
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const voiceCalls = yield* VoiceCallManager.VoiceCallManager;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     return HttpRouter.add(
       "GET",
@@ -2575,7 +2596,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, clientOrigin, previewAutomationBroker).pipe(
+            makeWsRpcLayer(session, clientOrigin, previewAutomationBroker, voiceCalls).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
@@ -2616,4 +2637,4 @@ export const websocketRpcRouteLayer = Layer.unwrap(
       ),
     );
   }),
-);
+).pipe(Layer.provide(VoiceCallManager.layer()));

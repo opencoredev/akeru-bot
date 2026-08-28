@@ -35,7 +35,7 @@ describe("BotUsageCap", () => {
     expect(bot.label).toBeNull();
     expect(bot.description).toBeNull();
     expect(bot.disabledMcpServerIds).toEqual([]);
-    expect(bot.disabledMcpServerIds).toEqual([]);
+    expect(bot.voiceEnabled).toBe(false);
   });
 
   it("accepts cloud sandbox providers on bot events", () => {

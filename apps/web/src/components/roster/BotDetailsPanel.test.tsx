@@ -19,6 +19,7 @@ const bot: Bot = {
   sandbox: null,
   runtimeMode: "full-access",
   usageCap: null,
+  voiceEnabled: false,
   groupId: null,
   pinned: false,
   archivedAt: null,
@@ -37,6 +38,8 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain("Connect a provider");
     expect(markup).toContain(">Sandbox</div>");
     expect(markup).toContain('aria-label="Sandbox provider"');
+    expect(markup).toContain(">Voice calls</span>");
+    expect(markup).toContain('aria-label="Enable voice calls for Akeru"');
     expect(markup).toContain(">Tools</div>");
     expect(markup).toContain("No workspace tools");
     expect(markup).toContain(">Manage</span>");
@@ -98,7 +101,7 @@ describe("BotDetailsPanel", () => {
     );
     expect(source).toContain("<BotDetailsPanel");
     expect(source).toContain("onSaveBot=");
-    expect(source).toContain("label, description, engine, sandbox, disabledMcpServerIds");
+    expect(source).toContain("voiceEnabled,");
     expect(source).toContain("sandbox,");
     expect(source).toContain("disabledMcpServerIds,");
     expect(source).not.toContain("RightPanelTabs");

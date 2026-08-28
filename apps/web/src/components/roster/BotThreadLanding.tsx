@@ -27,6 +27,7 @@ import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotVoiceCallButton } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
@@ -110,6 +111,9 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             <div className="flex min-w-0 items-center gap-2">
               <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-6" />
               <span className="truncate text-sm font-medium">{bot.name}</span>
+            </div>
+            <div data-chat-header-actions className="ml-auto flex items-center">
+              <BotVoiceCallButton bot={bot} />
             </div>
           </WorkspacePageHeader>
           <BotConversationScrollArea>

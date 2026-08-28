@@ -37,6 +37,7 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Sheet, SheetClose, SheetPopup, SheetTitle } from "../ui/sheet";
 import { Textarea } from "../ui/textarea";
+import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
@@ -81,6 +82,7 @@ export interface BotProfileUpdate {
   readonly description: string | null;
   readonly engine: BotEngine | null;
   readonly sandbox: Bot["sandbox"];
+  readonly voiceEnabled: boolean;
   readonly disabledMcpServerIds: readonly McpServerId[];
 }
 
@@ -104,6 +106,7 @@ function BotProfileEditor({
   const [engineChanged, setEngineChanged] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
+  const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
     bot.disabledMcpServerIds,
   );
@@ -162,6 +165,7 @@ function BotProfileEditor({
     normalizedDescription !== bot.description ||
     engineChanged ||
     sandboxDirty ||
+    voiceEnabled !== bot.voiceEnabled ||
     toolOverridesDirty;
 
   const markChanged = () => setSaved(false);
@@ -271,6 +275,18 @@ function BotProfileEditor({
           </Select>
         </div>
 
+        <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
+          <span className="text-sm font-medium">Voice calls</span>
+          <Switch
+            checked={voiceEnabled}
+            onCheckedChange={(checked) => {
+              setVoiceEnabled(Boolean(checked));
+              markChanged();
+            }}
+            aria-label={`${voiceEnabled ? "Disable" : "Enable"} voice calls for ${bot.name}`}
+          />
+        </div>
+
         <div className="space-y-2">
           <div className="text-sm font-medium">Tools</div>
           <button
@@ -305,6 +321,7 @@ function BotProfileEditor({
               description: normalizedDescription,
               engine: nextEngine,
               sandbox: nextSandbox,
+              voiceEnabled,
               disabledMcpServerIds,
             }).then((success) => {
               setSaving(false);

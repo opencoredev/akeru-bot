@@ -30,6 +30,7 @@ function BotThreadRouteView() {
             description,
             engine,
             sandbox,
+            voiceEnabled,
             disabledMcpServerIds,
           }) => {
             if (!environmentId) return false;
@@ -42,6 +43,7 @@ function BotThreadRouteView() {
                 description,
                 engine,
                 sandbox,
+                voiceEnabled,
                 disabledMcpServerIds,
               },
             });

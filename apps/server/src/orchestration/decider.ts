@@ -411,6 +411,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           sandbox: command.sandbox,
           runtimeMode: command.runtimeMode,
           usageCap: command.usageCap,
+          voiceEnabled: command.voiceEnabled ?? false,
           groupId: command.groupId,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -518,6 +519,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.sandbox !== undefined ? { sandbox: command.sandbox } : {}),
           ...(command.runtimeMode !== undefined ? { runtimeMode: command.runtimeMode } : {}),
           ...(command.usageCap !== undefined ? { usageCap: command.usageCap } : {}),
+          ...(command.voiceEnabled !== undefined ? { voiceEnabled: command.voiceEnabled } : {}),
           ...(command.groupId !== undefined ? { groupId: command.groupId } : {}),
           updatedAt: occurredAt,
         },
@@ -1444,6 +1446,39 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           threadId: command.threadId,
           orderKey: command.orderKey,
           updatedAt: keyUnchanged ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
+    case "thread.voice-transcript.append": {
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (command.respondingBotId !== undefined) {
+        yield* requireBot({ readModel, command, botId: command.respondingBotId });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          role: command.role,
+          text: command.text,
+          turnId: null,
+          ...(command.respondingBotId !== undefined
+            ? { respondingBotId: command.respondingBotId }
+            : {}),
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
         },
       };
     }

@@ -603,6 +603,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               sandbox: event.payload.sandbox,
               runtimeMode: event.payload.runtimeMode,
               usageCap: event.payload.usageCap,
+              voiceEnabled: event.payload.voiceEnabled,
               groupId: event.payload.groupId,
               archivedAt: null,
               createdAt: event.payload.createdAt,
@@ -630,6 +631,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                 ? { runtimeMode: event.payload.runtimeMode }
                 : {}),
               ...(event.payload.usageCap !== undefined ? { usageCap: event.payload.usageCap } : {}),
+              ...(event.payload.voiceEnabled !== undefined
+                ? { voiceEnabled: event.payload.voiceEnabled }
+                : {}),
               ...(event.payload.groupId !== undefined ? { groupId: event.payload.groupId } : {}),
               updatedAt: event.payload.updatedAt,
             });

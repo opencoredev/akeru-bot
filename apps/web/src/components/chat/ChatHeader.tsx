@@ -34,6 +34,7 @@ import ProjectScriptsControl, {
 import { OpenInPicker } from "./OpenInPicker";
 import { type PresentationMode } from "./quietPresentation";
 import { ActiveBotHeaderChip } from "../roster/ActiveBotHeaderChip";
+import { SelectedBotVoiceCallButton } from "../voice/VoiceCall";
 import { useRemoteOpenState, type RemoteOpenMode } from "../../remoteOpen";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
@@ -387,6 +388,7 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
+        <SelectedBotVoiceCallButton />
         <Tooltip>
           <TooltipTrigger
             render={

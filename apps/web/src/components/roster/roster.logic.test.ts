@@ -36,6 +36,7 @@ function bot(input: Partial<Bot> & Pick<Bot, "id" | "name">): Bot {
     sandbox: null,
     runtimeMode: "full-access",
     usageCap: null,
+    voiceEnabled: false,
     groupId: null,
     pinned: false,
     archivedAt: null,

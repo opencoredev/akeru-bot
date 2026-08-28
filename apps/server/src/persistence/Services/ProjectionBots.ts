@@ -28,6 +28,7 @@ export const ProjectionBot = Schema.Struct({
   sandbox: Schema.NullOr(BotSandbox),
   runtimeMode: RuntimeMode,
   usageCap: Schema.NullOr(BotUsageCap),
+  voiceEnabled: Schema.Boolean,
   groupId: Schema.NullOr(GroupId),
   archivedAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,

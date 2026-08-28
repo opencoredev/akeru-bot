@@ -16,6 +16,7 @@ function bot(id: string, archivedAt: string | null = null): Bot {
     sandbox: null,
     runtimeMode: "full-access",
     usageCap: null,
+    voiceEnabled: false,
     groupId: null,
     pinned: false,
     archivedAt,

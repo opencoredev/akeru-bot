@@ -566,8 +566,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       const workspace = yield* runMastra("workspace.create", () =>
         createBotWorkspace({
           threadId: key,
-          cwd: input.cwd,
-          sandbox: input.botSandbox,
+          ...(input.cwd ? { cwd: input.cwd } : {}),
+          ...(input.botSandbox !== undefined ? { sandbox: input.botSandbox } : {}),
           ...(options?.makeRemoteWorkspace
             ? { makeRemoteWorkspace: options.makeRemoteWorkspace }
             : {}),

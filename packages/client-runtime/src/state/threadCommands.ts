@@ -8,6 +8,7 @@ import {
   createEnvironmentRpcCommand,
 } from "./runtime.ts";
 import {
+  type AppendVoiceTranscriptInput,
   type ArchiveThreadInput,
   type CreateThreadInput,
   type DeleteThreadInput,
@@ -28,6 +29,7 @@ import {
   type UnsettleThreadInput,
   type UnsnoozeThreadInput,
   type UpdateThreadMetadataInput,
+  appendVoiceTranscript,
   archiveThread,
   createThread,
   deleteThread,
@@ -171,6 +173,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     startTurn: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:start-turn",
       execute: (input: StartThreadTurnInput) => startThreadTurn(input),
+      scheduler,
+      concurrency,
+    }),
+    appendVoiceTranscript: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:append-voice-transcript",
+      execute: (input: AppendVoiceTranscriptInput) => appendVoiceTranscript(input),
       scheduler,
       concurrency,
     }),

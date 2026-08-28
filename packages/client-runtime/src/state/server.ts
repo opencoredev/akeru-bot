@@ -733,6 +733,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.subscriptionAuthList,
       staleTimeMs: 5_000,
     }),
+    voiceCall: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:voice-call",
+      tag: WS_METHODS.voiceCallGet,
+      staleTimeMs: 1_000,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",
@@ -794,6 +799,22 @@ export function createServerEnvironmentAtoms<R, E>(
     logoutSubscriptionAuth: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:subscription-auth:logout",
       tag: WS_METHODS.subscriptionAuthLogout,
+    }),
+    startVoiceCall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice-call:start",
+      tag: WS_METHODS.voiceCallStart,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
+    hangupVoiceCall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice-call:hangup",
+      tag: WS_METHODS.voiceCallHangup,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
     }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",

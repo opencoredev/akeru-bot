@@ -155,7 +155,7 @@ function makeMastraHarness() {
     respondToToolApproval: vi.fn(),
     respondToToolSuspension: vi.fn(async () => undefined),
   } as unknown as Session<Record<string, unknown>>;
-  const createSession = vi.fn(async () => session as never);
+  const createSession = vi.fn(async (_input: unknown) => session as never);
   const deleteSession = vi.fn(async () => true);
   const destroy = vi.fn(async () => undefined);
   const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (options) => {

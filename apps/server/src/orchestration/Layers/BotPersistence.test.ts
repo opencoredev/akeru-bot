@@ -94,6 +94,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
+        voiceEnabled: true,
       });
       yield* engine.dispatch({
         type: "bot.archive",
@@ -131,6 +132,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           sandbox: null,
           runtimeMode: "approval-required",
           usageCap: { unit: "tokens", limit: 50_000 },
+          voiceEnabled: true,
           groupId,
           archivedAt: null,
           createdAt,
@@ -167,6 +169,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       assert.equal(rebuilt.bots.length, 1);
       assert.equal(rebuilt.bots[0]?.id, botId);
       assert.equal(rebuilt.bots[0]?.name, "Pathfinder");
+      assert.equal(rebuilt.bots[0]?.voiceEnabled, true);
       assert.equal(rebuilt.bots[0]?.groupId, null);
       assert.equal(rebuilt.bots[0]?.archivedAt, null);
       assert.deepEqual(rebuilt.groups, []);

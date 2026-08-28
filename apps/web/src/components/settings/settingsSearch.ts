@@ -5,6 +5,7 @@ export type SettingsPath =
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
+  | "/settings/voice"
   | "/settings/integrations"
   | "/settings/source-control"
   | "/settings/connections"
@@ -29,6 +30,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
   "/settings/providers": "Providers",
+  "/settings/voice": "Voice",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
@@ -145,6 +147,21 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "provider-update-checks",
     title: "Provider update checks",
     to: "/settings/general",
+  },
+  {
+    id: "voice-enabled",
+    title: "Voice",
+    to: "/settings/voice",
+  },
+  {
+    id: "voice-provider",
+    title: "Voice provider",
+    to: "/settings/voice",
+  },
+  {
+    id: "voice-selection",
+    title: "Voice selection",
+    to: "/settings/voice",
   },
   {
     id: "new-threads",

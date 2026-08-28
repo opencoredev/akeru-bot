@@ -20,6 +20,28 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("ServerSettings voice", () => {
+  it("defaults to enabled ChatGPT voice calls with Alloy", () => {
+    expect(decodeServerSettings({}).voice).toEqual({
+      enabled: true,
+      provider: "chatgpt",
+      voice: "alloy",
+    });
+  });
+
+  it("accepts a partial voice settings patch", () => {
+    expect(decodeServerSettingsPatch({ voice: { enabled: false, voice: "marin" } }).voice).toEqual({
+      enabled: false,
+      voice: "marin",
+    });
+  });
+
+  it("rejects unsupported providers and voices", () => {
+    expect(() => decodeServerSettings({ voice: { provider: "xai" } })).toThrow();
+    expect(() => decodeServerSettingsPatch({ voice: { voice: "unknown" } })).toThrow();
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");

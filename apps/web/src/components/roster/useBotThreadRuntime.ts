@@ -131,6 +131,11 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     [providers, settings],
   );
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const appendVoiceTranscript = useAtomCommand(threadEnvironment.appendVoiceTranscript, {
+    reportFailure: false,
+  });
+  const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
+  const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
@@ -229,7 +234,73 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     ],
   );
 
+  const ensureTranscriptThread = useCallback(async (): Promise<ScopedThreadRef | null> => {
+    const existing = retainedThreadRef.current.threadRef;
+    if (existing) return existing;
+    if (!activeProject || !botReady) return null;
+    ensureThreadRef.current ??= (async () => {
+      const threadId = newThreadId();
+      const result = await createThread({
+        environmentId: activeProject.environmentId,
+        input: {
+          threadId,
+          projectId: activeProject.id,
+          botId: BotId.make(botId),
+          title: `Call with ${bot?.name ?? "bot"}`,
+          modelSelection:
+            effectiveModelSelection ??
+            activeProject.defaultModelSelection ??
+            appDefaultModelSelection,
+          runtimeMode: bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+          interactionMode: DEFAULT_INTERACTION_MODE,
+          branch: null,
+          worktreePath: null,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      if (result._tag === "Failure") return null;
+      const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
+      retainedThreadRef.current.threadRef = threadRef;
+      useRosterStore
+        .getState()
+        .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+      return threadRef;
+    })();
+    const created = await ensureThreadRef.current;
+    ensureThreadRef.current = null;
+    return retainedThreadRef.current.threadRef ?? created;
+  }, [
+    activeProject,
+    appDefaultModelSelection,
+    bot,
+    botId,
+    botReady,
+    createThread,
+    effectiveModelSelection,
+  ]);
+
+  const appendTranscript = useCallback(
+    async (role: "user" | "assistant", text: string) => {
+      const trimmed = text.trim();
+      if (trimmed.length === 0) return;
+      const threadRef = retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread());
+      if (!threadRef) return;
+      void appendVoiceTranscript({
+        environmentId: threadRef.environmentId,
+        input: {
+          threadId: threadRef.threadId,
+          messageId: newMessageId(),
+          role,
+          text: trimmed,
+          ...(role === "assistant" ? { respondingBotId: BotId.make(botId) } : {}),
+        },
+      });
+    },
+    [appendVoiceTranscript, botId, ensureTranscriptThread],
+  );
+
   return {
+    appendTranscript,
     bootstrapped,
     botReady,
     defaultProject: activeProject,

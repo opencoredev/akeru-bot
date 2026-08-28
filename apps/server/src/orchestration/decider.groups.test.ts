@@ -46,6 +46,7 @@ function makeBot(input: {
     sandbox: "local",
     runtimeMode: "full-access",
     usageCap: null,
+    voiceEnabled: false,
     groupId: input.groupId ?? null,
     archivedAt: input.archivedAt ?? null,
     createdAt: NOW,

@@ -92,6 +92,7 @@ const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
     engine: Schema.NullOr(Schema.fromJsonString(BotEngine)),
     usageCap: Schema.NullOr(Schema.fromJsonString(BotUsageCap)),
     disabledMcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)),
+    voiceEnabled: Schema.Number,
   }),
 );
 const ProjectionGroupDbRowSchema = ProjectionGroup.mapFields(
@@ -371,6 +372,7 @@ function mapBotRow(row: Schema.Schema.Type<typeof ProjectionBotDbRowSchema>): Or
     sandbox: row.sandbox,
     runtimeMode: row.runtimeMode,
     usageCap: row.usageCap,
+    voiceEnabled: row.voiceEnabled === 1,
     groupId: row.groupId,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
@@ -480,8 +482,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         bot_id AS "botId", name, title, label, description,
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
-        usage_cap_json AS "usageCap", group_id AS "groupId", archived_at AS "archivedAt",
-        created_at AS "createdAt", updated_at AS "updatedAt"
+        usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled", group_id AS "groupId",
+        archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
       ORDER BY created_at ASC, bot_id ASC
     `,

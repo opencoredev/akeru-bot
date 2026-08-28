@@ -378,6 +378,18 @@ export class SubscriptionAuthService {
     return refresh;
   }
 
+  async getOpenAICodexAccess(): Promise<
+    { readonly accessToken: string; readonly accountId: string } | undefined
+  > {
+    this.reload();
+    const accessToken = await this.getAccessToken("openai-codex");
+    const credential = this.data["openai-codex"];
+    const accountId = credential?.accountId;
+    return accessToken && typeof accountId === "string" && accountId.length > 0
+      ? { accessToken, accountId }
+      : undefined;
+  }
+
   private async refreshCredential(
     provider: SubscriptionProviderId,
     credential: OAuthCredential,
