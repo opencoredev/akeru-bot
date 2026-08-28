@@ -108,7 +108,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
 
   if (!bot || bot.archivedAt !== null) return null;
   const working = runtime.sending || presence === "working";
-  const messages = visibleBotChatMessages(runtime.messages, working);
+  const messages = visibleBotChatMessages(runtime.messages);
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
 
   return (

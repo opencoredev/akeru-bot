@@ -50,6 +50,7 @@ export interface AgentControllerShape {
     readonly engine: BotEngine | null;
     readonly fallback: ModelSelection;
     readonly mode: ProviderInteractionMode;
+    readonly botConversation: boolean;
   }) => Effect.Effect<AgentControllerEngineSelection, AgentControllerError>;
 
   /** Read routing metadata without changing the thread's active runtime session. */

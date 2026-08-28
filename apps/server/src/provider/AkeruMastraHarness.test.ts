@@ -7,10 +7,11 @@ import {
 } from "@t3tools/contracts";
 import { assert, describe, it } from "vite-plus/test";
 
-import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import {
   criticalAkeruAction,
   mastraModelId,
+  resolveAkeruInstructions,
   resolveAkeruMastraModel,
   resolveAkeruTools,
 } from "./AkeruMastraHarness.ts";
@@ -42,6 +43,18 @@ describe("AkeruMastraHarness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
     assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
+  });
+
+  it("adds reply and status rules only to bot conversations", () => {
+    const regular = new RequestContext();
+    regular.setRaw("controller", { state: { botConversation: false } });
+    const bot = new RequestContext();
+    bot.setRaw("controller", { state: { botConversation: true } });
+
+    assert.equal(resolveAkeruInstructions(regular), AKERU_AGENT_INSTRUCTIONS);
+    assert.equal(resolveAkeruInstructions(bot), AKERU_BOT_INSTRUCTIONS);
+    assert.include(resolveAkeruInstructions(bot), "Before you use a tool");
+    assert.include(resolveAkeruInstructions(bot), "automatic continuation");
   });
 
   it("selects implemented runtime tools without dropping approval-aware plugins", async () => {

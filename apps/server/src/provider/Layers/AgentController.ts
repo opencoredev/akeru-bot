@@ -61,6 +61,7 @@ import {
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
+import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
 import {
   createAkeruToolRuntime,
   isMemoryToolId,
@@ -88,14 +89,19 @@ interface ResolvedEngine {
   readonly providerInstanceId: ProviderInstanceId;
   readonly mastraModelId: string;
   readonly mode: "default" | "plan";
+  readonly botConversation: boolean;
+}
+
+interface ActiveAssistantMessage {
+  readonly itemId: RuntimeItemId;
+  length: number;
+  started: boolean;
+  completed: boolean;
 }
 
 interface ActiveTurn {
   readonly turnId: TurnId;
-  readonly assistantItemId: RuntimeItemId;
-  assistantLength: number;
-  assistantStarted: boolean;
-  assistantCompleted: boolean;
+  readonly assistantMessages: Map<string, ActiveAssistantMessage>;
   waiting: boolean;
   finished: boolean;
 }
@@ -395,6 +401,23 @@ const make = (options?: AgentControllerLiveOptions) =>
       });
     };
 
+    const completeAssistantMessages = (
+      threadId: ThreadId,
+      active: ActiveSession,
+      turn: ActiveTurn,
+    ) => {
+      for (const message of turn.assistantMessages.values()) {
+        if (!message.started || message.completed) continue;
+        message.completed = true;
+        publish({
+          ...baseEvent(threadId, active, turn.turnId),
+          itemId: message.itemId,
+          type: "item.completed",
+          payload: { itemType: "assistant_message", status: "completed" },
+        });
+      }
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -404,15 +427,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       const turn = active.activeTurn;
       if (!turn || turn.finished) return;
       turn.finished = true;
-      if (turn.assistantStarted && !turn.assistantCompleted) {
-        turn.assistantCompleted = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: turn.assistantItemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
-      }
+      completeAssistantMessages(threadId, active, turn);
       publish({
         ...baseEvent(threadId, active, turn.turnId),
         type: "turn.completed",
@@ -437,30 +452,42 @@ const make = (options?: AgentControllerLiveOptions) =>
       const turn = active.activeTurn;
       if (!turn) return;
       const text = messageText(message);
-      if (!turn.assistantStarted && text.length > 0) {
-        turn.assistantStarted = true;
+      const messageKey = String(message.id);
+      let activeMessage = turn.assistantMessages.get(messageKey);
+      if (!activeMessage) {
+        activeMessage = {
+          itemId: RuntimeItemId.make(`mastra-answer-${messageKey}`),
+          length: 0,
+          started: false,
+          completed: false,
+        };
+        turn.assistantMessages.set(messageKey, activeMessage);
+      }
+      if (activeMessage.completed) return;
+      if (!activeMessage.started && text.length > 0) {
+        activeMessage.started = true;
         publish({
           ...baseEvent(threadId, active, turn.turnId),
-          itemId: turn.assistantItemId,
+          itemId: activeMessage.itemId,
           type: "item.started",
           payload: { itemType: "assistant_message", status: "inProgress" },
         });
       }
-      if (text.length > turn.assistantLength) {
-        const delta = text.slice(turn.assistantLength);
-        turn.assistantLength = text.length;
+      if (text.length > activeMessage.length) {
+        const delta = text.slice(activeMessage.length);
+        activeMessage.length = text.length;
         publish({
           ...baseEvent(threadId, active, turn.turnId),
-          itemId: turn.assistantItemId,
+          itemId: activeMessage.itemId,
           type: "content.delta",
           payload: { streamKind: "assistant_text", delta },
         });
       }
-      if (complete && turn.assistantStarted && !turn.assistantCompleted) {
-        turn.assistantCompleted = true;
+      if (complete && activeMessage.started && !activeMessage.completed) {
+        activeMessage.completed = true;
         publish({
           ...baseEvent(threadId, active, turn.turnId),
-          itemId: turn.assistantItemId,
+          itemId: activeMessage.itemId,
           type: "item.completed",
           payload: { itemType: "assistant_message", status: "completed" },
         });
@@ -482,6 +509,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           return;
         case "tool_start": {
           if (!turn) return;
+          completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
           publish({
             ...baseEvent(threadId, active, turn.turnId),
@@ -528,6 +556,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         case "tool_approval_required":
           if (!turn) return;
+          completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
           active.approvalRequests.set(event.toolCallId, {
             name: event.toolName,
@@ -570,6 +599,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           return;
         case "tool_suspended":
           if (!turn) return;
+          completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
@@ -675,6 +705,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             providerInstanceId: modelSelection.instanceId,
             mastraModelId: mastraModelId(inspected.routing.driverKind, modelSelection.model),
             mode: input.mode,
+            botConversation: input.botConversation,
           };
           resolvedByThread.set(String(input.threadId), resolved);
           const active = sessions.get(String(input.threadId));
@@ -836,6 +867,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         session.state.set({
           ...(input.cwd ? { projectPath: input.cwd } : {}),
           yolo: false,
+          botConversation: resolved.botConversation,
         }),
       );
       yield* runMastra("model.switch", () =>
@@ -913,7 +945,15 @@ const make = (options?: AgentControllerLiveOptions) =>
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
-          return yield* legacyProviderBridge.sendTurn(input);
+          const resolved = resolvedByThread.get(key);
+          return yield* legacyProviderBridge.sendTurn(
+            resolved?.botConversation === true && String(resolved.provider) !== "claudeAgent"
+              ? {
+                  ...input,
+                  input: [AKERU_BOT_TURN_INSTRUCTIONS, input.input].filter(Boolean).join("\n\n"),
+                }
+              : input,
+          );
         }
         if (active.activeTurn) {
           return yield* new AgentControllerRuntimeError({
@@ -958,10 +998,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
         active.activeTurn = {
           turnId,
-          assistantItemId: RuntimeItemId.make(`mastra-answer-${turnId}`),
-          assistantLength: 0,
-          assistantStarted: false,
-          assistantCompleted: false,
+          assistantMessages: new Map(),
           waiting: false,
           finished: false,
         };

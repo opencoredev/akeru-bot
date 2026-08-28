@@ -21,7 +21,7 @@ import {
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
-import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -69,6 +69,7 @@ const productFeedbackTool = createTool({
 export interface AkeruMastraState {
   readonly projectPath?: string;
   readonly yolo?: boolean;
+  readonly botConversation?: boolean;
 }
 
 export type AkeruMastraSession = Session<AkeruMastraState>;
@@ -147,6 +148,16 @@ export function resolveAkeruMastraModel(
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
   }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
+}
+
+export function resolveAkeruInstructions(requestContext: RequestContext): string {
+  const state = controllerContext(requestContext)?.state;
+  return typeof state === "object" &&
+    state !== null &&
+    "botConversation" in state &&
+    state.botConversation === true
+    ? AKERU_BOT_INSTRUCTIONS
+    : AKERU_AGENT_INSTRUCTIONS;
 }
 
 export async function resolveAkeruTools(
@@ -343,7 +354,7 @@ export async function createAkeruMastraHarness(
   const agent = createCodingAgent({
     id: "akeru-agent",
     name: "Akeru",
-    instructions: AKERU_AGENT_INSTRUCTIONS,
+    instructions: ({ requestContext }) => resolveAkeruInstructions(requestContext),
     model: ({ requestContext }) =>
       resolveAkeruMastraModel(
         controllerModelId(requestContext),

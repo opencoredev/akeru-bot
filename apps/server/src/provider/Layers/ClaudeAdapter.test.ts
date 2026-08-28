@@ -413,19 +413,43 @@ describe("ClaudeAdapterLive", () => {
           type: "preset",
           preset: "claude_code",
         });
-        assert.include(
+        const appendedInstructions =
           typeof createInput?.options.systemPrompt === "object" &&
-            "append" in createInput.options.systemPrompt
+          "append" in createInput.options.systemPrompt
             ? (createInput.options.systemPrompt.append ?? "")
-            : "",
-          "general-purpose assistant",
-        );
+            : "";
+        assert.include(appendedInstructions, "general-purpose assistant");
+        assert.notInclude(appendedInstructions, "Before you use a tool");
       }).pipe(
         Effect.provideService(Random.Random, makeDeterministicRandomService()),
         Effect.provide(harness.layer),
       );
     },
   );
+
+  it.effect("adds reply-first instructions to bot Claude sessions", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+        botId: "bot-1" as never,
+      });
+
+      const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
+      const appendedInstructions =
+        typeof systemPrompt === "object" && "append" in systemPrompt
+          ? (systemPrompt.append ?? "")
+          : "";
+      assert.include(appendedInstructions, "Before you use a tool");
+      assert.include(appendedInstructions, "automatic continuation");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
 
   it.effect("passes the configured auto-compaction window to Claude", () => {
     const harness = makeHarness({ claudeConfig: { autoCompactWindow: "300000" } });
