@@ -28,4 +28,16 @@ describe("BotThreadLanding message formatting", () => {
     expect(botSource).not.toContain("justify-end gap-4");
     expect(groupSource).not.toContain("justify-end gap-4");
   });
+
+  it("mounts the voice action in the live bot chat header", () => {
+    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain(
+      'import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall"',
+    );
+    expect(source).toContain("data-chat-header-actions");
+    expect(source).toContain('runtime.latestTurn?.state === "running"');
+    expect(source).toContain("voiceCall.activeCall?.botId === bot.id");
+    expect(source).toContain("voiceCall.startingBotId === bot.id");
+  });
 });

@@ -41,6 +41,7 @@ import {
   serverUpdateStateForProgressEvent,
   serverUpdateStateForServerVersion,
   validateServerUpdateReadyEvent,
+  voiceCallHangupConcurrencyKey,
 } from "./server.ts";
 
 const CONFIG = {
@@ -64,6 +65,13 @@ const TARGET = new PrimaryConnectionTarget({
   label: "Test environment",
   httpBaseUrl: "https://environment.example.test",
   wsBaseUrl: "wss://environment.example.test",
+});
+
+it("uses the call ID in hangup single-flight keys", () => {
+  const environmentId = EnvironmentId.make("environment-1");
+  expect(voiceCallHangupConcurrencyKey({ environmentId, input: { callId: "call-a" } })).not.toBe(
+    voiceCallHangupConcurrencyKey({ environmentId, input: { callId: "call-b" } }),
+  );
 });
 
 function session(client: WsRpcProtocolClient): RpcSession {

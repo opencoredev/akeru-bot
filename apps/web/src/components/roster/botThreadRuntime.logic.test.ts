@@ -7,9 +7,33 @@ import {
   findLatestBotThreadTarget,
   findLatestGroupThreadTarget,
   joinOrStartThreadCreate,
+  releaseBotTurnSubmissionAfterSettlement,
+  reserveBotTurnSubmission,
 } from "./botThreadRuntime.logic";
 
 describe("bot thread runtime", () => {
+  it("shares the turn submission lock across runtime instances", () => {
+    const release = reserveBotTurnSubmission("env-a:bot-akeru", "turn-old");
+    expect(release).not.toBeNull();
+    expect(reserveBotTurnSubmission("env-a:bot-akeru")).toBeNull();
+    expect(
+      releaseBotTurnSubmissionAfterSettlement("env-a:bot-akeru", {
+        turnId: "turn-new",
+        state: "running",
+      }),
+    ).toBe(false);
+    expect(
+      releaseBotTurnSubmissionAfterSettlement("env-a:bot-akeru", {
+        turnId: "turn-new",
+        state: "completed",
+      }),
+    ).toBe(true);
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-akeru");
+    expect(nextRelease).not.toBeNull();
+    nextRelease?.();
+    release?.();
+  });
+
   it("shares concurrent initial thread creation", async () => {
     let retained: { threadId: string } | null = null;
     const inFlight = { current: null as Promise<{ threadId: string } | null> | null };

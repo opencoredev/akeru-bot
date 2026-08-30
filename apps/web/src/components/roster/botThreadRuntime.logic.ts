@@ -9,6 +9,40 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
+const botTurnSubmissions = new Map<
+  string,
+  { readonly previousTurnId: string | null; readonly token: symbol }
+>();
+
+export function reserveBotTurnSubmission(
+  key: string,
+  previousTurnId: string | null = null,
+): (() => void) | null {
+  if (botTurnSubmissions.has(key)) return null;
+  const token = Symbol(key);
+  botTurnSubmissions.set(key, { previousTurnId, token });
+  return () => {
+    if (botTurnSubmissions.get(key)?.token === token) botTurnSubmissions.delete(key);
+  };
+}
+
+export function releaseBotTurnSubmissionAfterSettlement(
+  key: string,
+  latestTurn: { readonly turnId: string; readonly state: string } | null | undefined,
+): boolean {
+  const submission = botTurnSubmissions.get(key);
+  if (
+    !submission ||
+    !latestTurn ||
+    latestTurn.turnId === submission.previousTurnId ||
+    latestTurn.state === "running"
+  ) {
+    return false;
+  }
+  botTurnSubmissions.delete(key);
+  return true;
+}
+
 export async function joinOrStartThreadCreate<T>(input: {
   getRetained: () => T | null;
   inFlight: { current: Promise<T | null> | null };
