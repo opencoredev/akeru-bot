@@ -24,16 +24,22 @@ function assertOmits(haystack: string, needle: string, message: string): void {
   if (haystack.toLowerCase().includes(needle.toLowerCase())) throw new Error(message);
 }
 
-const releaseWorkflow = read(".github/workflows/release.yml");
-const ciWorkflow = read(".github/workflows/ci.yml");
+const releaseWorkflow = read(".depot/workflows/release.yml");
+const ciWorkflow = read(".depot/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
-const workflowDirectory = NodePath.join(repoRoot, ".github/workflows");
+const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
 
-for (const workflowFile of NodeFS.readdirSync(workflowDirectory)) {
+for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
   if (!workflowFile.endsWith(".yml") && !workflowFile.endsWith(".yaml")) continue;
-  const workflow = read(NodePath.join(".github/workflows", workflowFile));
+  const workflow = read(NodePath.join(".depot/workflows", workflowFile));
   if (/^\s*(?:runs-on|runner): (?:ubuntu|macos|windows)-/mu.test(workflow)) {
-    throw new Error(`Workflow still uses a GitHub-hosted runner: ${workflowFile}.`);
+    throw new Error(`Depot workflow still uses a GitHub-hosted runner: ${workflowFile}.`);
+  }
+}
+
+for (const relativePath of [".github/workflows/ci.yml", ".github/workflows/release.yml"] as const) {
+  if (NodeFS.existsSync(NodePath.join(repoRoot, relativePath))) {
+    throw new Error(`GitHub Actions still owns ${relativePath}; move it to .depot/workflows.`);
   }
 }
 
