@@ -56,7 +56,10 @@ for (const [needle, label] of [
   ["runner: depot-macos-15", "Depot macOS runner"],
   ["runner: depot-windows-2025-8", "8-vCPU Depot Windows runner"],
   ["runner: depot-ubuntu-24.04-8", "8-vCPU Depot Linux runner"],
-  ["apple-actions/import-codesign-certs@v7", "Developer ID certificate import"],
+  [
+    "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
+    "pinned Developer ID certificate import",
+  ],
   ["--signed", "signed macOS build"],
   ["xcrun notarytool submit", "DMG notarization"],
   ["xcrun stapler staple", "DMG ticket stapling"],

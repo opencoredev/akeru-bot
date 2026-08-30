@@ -102,7 +102,7 @@ jobs:
         run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!t3code-relay' --filter '!@t3tools/monorepo' --filter '!@t3tools/mobile' test
 
   test_server:
-    name: Server tests ${{ matrix.shard }}
+    name: Server tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 15
     strategy:
