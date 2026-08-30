@@ -7,6 +7,7 @@ import {
   findLatestBotThreadTarget,
   findLatestGroupThreadTarget,
   joinOrStartThreadCreate,
+  observeBotTurnSubmission,
   releaseBotTurnSubmissionAfterSettlement,
   reserveBotTurnSubmission,
   scheduleBotTurnSubmissionFallbackRelease,
@@ -44,12 +45,15 @@ describe("bot thread runtime", () => {
     let latestTurn: { turnId: string; state: string } | null = null;
     const release = reserveBotTurnSubmission("env-a:bot-stale", "turn-old");
     expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-stale", {
+      connected: true,
+      generation: 1,
+      latestTurn,
+    });
     scheduleBotTurnSubmissionFallbackRelease(
       {
+        key: "env-a:bot-stale",
         release: release as () => void,
-        previousTurnId: "turn-old",
-        getLatestTurn: () => latestTurn,
-        isConnected: () => true,
       },
       1_000,
     );
@@ -60,10 +64,20 @@ describe("bot thread runtime", () => {
     expect(reserveBotTurnSubmission("env-a:bot-stale")).toBeNull();
 
     latestTurn = { turnId: "turn-old", state: "completed" };
+    observeBotTurnSubmission("env-a:bot-stale", {
+      connected: true,
+      generation: 1,
+      latestTurn,
+    });
     vi.advanceTimersByTime(1_000);
     expect(reserveBotTurnSubmission("env-a:bot-stale")).toBeNull();
 
     latestTurn = { turnId: "turn-new", state: "completed" };
+    observeBotTurnSubmission("env-a:bot-stale", {
+      connected: true,
+      generation: 1,
+      latestTurn,
+    });
     vi.advanceTimersByTime(1_000);
     const nextRelease = reserveBotTurnSubmission("env-a:bot-stale");
     expect(nextRelease).not.toBeNull();
@@ -75,47 +89,129 @@ describe("bot thread runtime", () => {
     let latestTurn = { turnId: "turn-new", state: "running" };
     const release = reserveBotTurnSubmission("env-a:bot-running", "turn-old");
     expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-running", {
+      connected: true,
+      generation: 1,
+      latestTurn,
+    });
     scheduleBotTurnSubmissionFallbackRelease(
       {
+        key: "env-a:bot-running",
         release: release as () => void,
-        previousTurnId: "turn-old",
-        getLatestTurn: () => latestTurn,
-        isConnected: () => true,
       },
       1_000,
     );
-
     vi.advanceTimersByTime(1_000);
     expect(reserveBotTurnSubmission("env-a:bot-running")).toBeNull();
 
     latestTurn = { turnId: "turn-new", state: "failed" };
+    observeBotTurnSubmission("env-a:bot-running", {
+      connected: true,
+      generation: 1,
+      latestTurn,
+    });
     vi.advanceTimersByTime(1_000);
     const nextRelease = reserveBotTurnSubmission("env-a:bot-running");
     expect(nextRelease).not.toBeNull();
     nextRelease?.();
   });
 
-  it("releases a running submission after the environment disconnects", () => {
+  it("retains a running submission through disconnect and reconnect", () => {
     vi.useFakeTimers();
     let connected = true;
     const release = reserveBotTurnSubmission("env-a:bot-disconnected", "turn-old");
     expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-disconnected", {
+      connected,
+      generation: 1,
+      latestTurn: { turnId: "turn-new", state: "running" },
+    });
     scheduleBotTurnSubmissionFallbackRelease(
       {
+        key: "env-a:bot-disconnected",
         release: release as () => void,
-        previousTurnId: "turn-old",
-        getLatestTurn: () => ({ turnId: "turn-new", state: "running" }),
-        isConnected: () => connected,
       },
       1_000,
     );
-
     vi.advanceTimersByTime(1_000);
     expect(reserveBotTurnSubmission("env-a:bot-disconnected")).toBeNull();
     connected = false;
+    observeBotTurnSubmission("env-a:bot-disconnected", {
+      connected,
+      generation: 1,
+      latestTurn: { turnId: "turn-new", state: "running" },
+    });
+    vi.advanceTimersByTime(1_000);
+    expect(reserveBotTurnSubmission("env-a:bot-disconnected")).toBeNull();
+
+    connected = true;
+    observeBotTurnSubmission("env-a:bot-disconnected", {
+      connected,
+      generation: 2,
+      latestTurn: { turnId: "turn-new", state: "running" },
+    });
+    vi.advanceTimersByTime(1_000);
+    expect(reserveBotTurnSubmission("env-a:bot-disconnected")).toBeNull();
+
+    observeBotTurnSubmission("env-a:bot-disconnected", {
+      connected,
+      generation: 2,
+      latestTurn: { turnId: "turn-new", state: "completed" },
+    });
+    vi.advanceTimersByTime(1_000);
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-disconnected");
+    expect(nextRelease).not.toBeNull();
+    nextRelease?.();
+  });
+
+  it("releases an unobserved submission after reconnect", () => {
+    vi.useFakeTimers();
+    const release = reserveBotTurnSubmission("env-a:bot-reconnected", "turn-old");
+    expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-reconnected", {
+      connected: true,
+      generation: 1,
+      latestTurn: { turnId: "turn-old", state: "completed" },
+    });
+    scheduleBotTurnSubmissionFallbackRelease(
+      { key: "env-a:bot-reconnected", release: release as () => void },
+      1_000,
+    );
+
+    observeBotTurnSubmission("env-a:bot-reconnected", {
+      connected: true,
+      generation: 2,
+      latestTurn: { turnId: "turn-old", state: "completed" },
+    });
     vi.advanceTimersByTime(1_000);
 
-    const nextRelease = reserveBotTurnSubmission("env-a:bot-disconnected");
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-reconnected");
+    expect(nextRelease).not.toBeNull();
+    nextRelease?.();
+  });
+
+  it("releases an unobserved first submission after reconnect", () => {
+    vi.useFakeTimers();
+    const release = reserveBotTurnSubmission("env-a:bot-first");
+    expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-first", {
+      connected: true,
+      generation: 1,
+      latestTurn: null,
+    });
+    scheduleBotTurnSubmissionFallbackRelease(
+      { key: "env-a:bot-first", release: release as () => void },
+      1_000,
+    );
+
+    observeBotTurnSubmission("env-a:bot-first", {
+      connected: true,
+      generation: 2,
+      latestTurn: null,
+    });
+    vi.advanceTimersByTime(1_000);
+
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-first");
     expect(nextRelease).not.toBeNull();
     nextRelease?.();
   });
@@ -124,12 +220,15 @@ describe("bot thread runtime", () => {
     vi.useFakeTimers();
     const release = reserveBotTurnSubmission("env-a:bot-replaced", "turn-old");
     expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-replaced", {
+      connected: true,
+      generation: 1,
+      latestTurn: { turnId: "turn-old", state: "completed" },
+    });
     scheduleBotTurnSubmissionFallbackRelease(
       {
+        key: "env-a:bot-replaced",
         release: release as () => void,
-        previousTurnId: "turn-old",
-        getLatestTurn: () => ({ turnId: "turn-old", state: "completed" }),
-        isConnected: () => true,
       },
       1_000,
     );
@@ -137,6 +236,11 @@ describe("bot thread runtime", () => {
 
     const nextRelease = reserveBotTurnSubmission("env-a:bot-replaced");
     expect(nextRelease).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-replaced", {
+      connected: false,
+      generation: 2,
+      latestTurn: null,
+    });
     vi.advanceTimersByTime(1_000);
     expect(reserveBotTurnSubmission("env-a:bot-replaced")).toBeNull();
 

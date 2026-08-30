@@ -11,7 +11,15 @@ import type {
 
 const botTurnSubmissions = new Map<
   string,
-  { readonly previousTurnId: string | null; readonly token: symbol }
+  {
+    readonly previousTurnId: string | null;
+    readonly token: symbol;
+    readonly observation: {
+      readonly connected: boolean;
+      readonly generation: number | null;
+      readonly latestTurn: { readonly turnId: string; readonly state: string } | null | undefined;
+    };
+  }
 >();
 
 export const BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS = 15_000;
@@ -22,10 +30,26 @@ export function reserveBotTurnSubmission(
 ): (() => void) | null {
   if (botTurnSubmissions.has(key)) return null;
   const token = Symbol(key);
-  botTurnSubmissions.set(key, { previousTurnId, token });
+  botTurnSubmissions.set(key, {
+    previousTurnId,
+    token,
+    observation: { connected: true, generation: null, latestTurn: null },
+  });
   return () => {
     if (botTurnSubmissions.get(key)?.token === token) botTurnSubmissions.delete(key);
   };
+}
+
+export function observeBotTurnSubmission(
+  key: string,
+  observation: {
+    readonly connected: boolean;
+    readonly generation: number | null;
+    readonly latestTurn: { readonly turnId: string; readonly state: string } | null | undefined;
+  },
+): void {
+  const submission = botTurnSubmissions.get(key);
+  if (submission) botTurnSubmissions.set(key, { ...submission, observation });
 }
 
 export function releaseBotTurnSubmissionAfterSettlement(
@@ -47,21 +71,21 @@ export function releaseBotTurnSubmissionAfterSettlement(
 
 export function scheduleBotTurnSubmissionFallbackRelease(
   input: {
+    readonly key: string;
     readonly release: () => void;
-    readonly previousTurnId: string | null;
-    readonly getLatestTurn: () =>
-      | { readonly turnId: string; readonly state: string }
-      | null
-      | undefined;
-    readonly isConnected: () => boolean;
   },
   delayMs = BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS,
 ): void {
+  const token = botTurnSubmissions.get(input.key)?.token;
+  const generation = botTurnSubmissions.get(input.key)?.observation.generation;
   const reconcile = () => {
-    const latestTurn = input.getLatestTurn();
+    const submission = botTurnSubmissions.get(input.key);
+    if (!submission || submission.token !== token) return;
+    const { connected, latestTurn } = submission.observation;
+    const hasNewerTurn = latestTurn ? latestTurn.turnId !== submission.previousTurnId : false;
     if (
-      input.isConnected() &&
-      (!latestTurn || latestTurn.turnId === input.previousTurnId || latestTurn.state === "running")
+      latestTurn?.state === "running" ||
+      (!hasNewerTurn && (!connected || submission.observation.generation === generation))
     ) {
       globalThis.setTimeout(reconcile, delayMs);
       return;

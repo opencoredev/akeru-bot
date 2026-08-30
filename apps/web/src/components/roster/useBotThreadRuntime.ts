@@ -23,7 +23,7 @@ import {
   useThreadShells,
 } from "../../state/entities";
 import { environmentBotsAtom } from "../../state/bots";
-import { usePrimaryEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironmentConnectionState, usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -32,6 +32,7 @@ import {
   buildBotTurnStartInput,
   findLatestBotThreadTarget,
   joinOrStartThreadCreate,
+  observeBotTurnSubmission,
   releaseBotTurnSubmissionAfterSettlement,
   reserveBotTurnSubmission,
   scheduleBotTurnSubmissionFallbackRelease,
@@ -74,7 +75,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export function useBotThreadRuntime(botId: string, effectiveModelSelection: ModelSelection | null) {
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const primaryEnvironment = usePrimaryEnvironment();
+  const environmentConnection = useEnvironmentConnectionState(primaryEnvironmentId);
   const serverBots = useAtomValue(environmentBotsAtom(primaryEnvironmentId ?? NO_ENVIRONMENT));
   const threadShells = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
@@ -149,21 +150,28 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submissionStateRef = useRef({
-    connected: primaryEnvironment?.connection.phase === "connected",
+    connected: environmentConnection.data?.phase === "connected",
+    generation: environmentConnection.data?.generation ?? null,
     latestTurn: rememberedThread?.latestTurn ?? null,
   });
   submissionStateRef.current = {
-    connected: primaryEnvironment?.connection.phase === "connected",
+    connected: environmentConnection.data?.phase === "connected",
+    generation: environmentConnection.data?.generation ?? null,
     latestTurn: rememberedThread?.latestTurn ?? null,
   };
 
   useEffect(() => {
     if (!primaryEnvironmentId) return;
-    releaseBotTurnSubmissionAfterSettlement(
-      `${primaryEnvironmentId}:${botId}`,
-      rememberedThread?.latestTurn,
-    );
-  }, [botId, primaryEnvironmentId, rememberedThread?.latestTurn]);
+    const submissionKey = `${primaryEnvironmentId}:${botId}`;
+    observeBotTurnSubmission(submissionKey, submissionStateRef.current);
+    releaseBotTurnSubmissionAfterSettlement(submissionKey, rememberedThread?.latestTurn);
+  }, [
+    botId,
+    environmentConnection.data?.generation,
+    environmentConnection.data?.phase,
+    primaryEnvironmentId,
+    rememberedThread?.latestTurn,
+  ]);
 
   const ensureTranscriptThread = useCallback(
     async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
@@ -292,11 +300,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         }
 
         accepted = true;
+        observeBotTurnSubmission(submissionKey, submissionStateRef.current);
         scheduleBotTurnSubmissionFallbackRelease({
+          key: submissionKey,
           release: releaseSubmission,
-          previousTurnId,
-          getLatestTurn: () => submissionStateRef.current.latestTurn,
-          isConnected: () => submissionStateRef.current.connected,
         });
         retainedThreadRef.current.threadRef = currentThreadRef;
         useRosterStore
