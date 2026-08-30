@@ -49,6 +49,7 @@ const clientSettings: ClientSettings = {
   sidebarThreadPreviewCount: 6,
   legacySidebarEnabled: false,
   timestampFormat: "24-hour",
+  usageRefreshMinutes: 5,
   wordWrap: true,
 };
 

@@ -30,9 +30,10 @@ import {
   MacPasskeySigningConfigurationResolutionError,
   MissingMacPasskeyProvisioningProfileError,
   packWindowsServerAsar,
-  renderMacPasskeyEntitlements,
+  renderMacEntitlements,
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
+  resolveOptionalMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
   resolveMacStageDependencies,
   resolveFffNativeDependencies,
@@ -42,6 +43,7 @@ import {
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
   resolveResourceMonitorRustTargets,
+  resolveResourceMonitorCargoBuildArgs,
   resolveWindowsServerAsarIgnoreGlobs,
   resourceMonitorExecutableName,
   resolveGitHubPublishConfig,
@@ -804,7 +806,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
 
         assert.isFalse(
-          commands.some((command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1"),
+          commands.some(
+            (command) =>
+              command.command !== process.execPath &&
+              command.options.env?.ELECTRON_RUN_AS_NODE === "1",
+          ),
         );
         assert.isTrue(
           commands.some(
@@ -1074,7 +1080,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "dev.leodoes.akeru",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1088,13 +1094,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       T3CODE_CLERK_PASSKEY_RP_DOMAINS:
         " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
     });
-    const entitlements = renderMacPasskeyEntitlements(configuration);
+    const entitlements = renderMacEntitlements(configuration);
 
     assert.deepStrictEqual(configuration.rpDomains, [
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.dev.leodoes.akeru</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -1160,6 +1166,24 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(invalidPublishableKeyError.message, "pk_test_%");
   });
 
+  it("does not require Clerk passkey configuration for signed macOS builds", () => {
+    assert.isUndefined(resolveOptionalMacPasskeySigningConfiguration({}));
+  });
+
+  it("renders signed macOS entitlements without Clerk passkey configuration", () => {
+    const entitlements = renderMacEntitlements();
+
+    assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
+    assert.include(
+      entitlements,
+      "<key>com.apple.security.cs.allow-unsigned-executable-memory</key>",
+    );
+    assert.include(entitlements, "<key>com.apple.security.cs.disable-library-validation</key>");
+    assert.include(entitlements, "<key>com.apple.security.device.audio-input</key>");
+    assert.notInclude(entitlements, "com.apple.developer.associated-domains");
+    assert.notInclude(entitlements, "com.apple.application-identifier");
+  });
+
   it("preserves known passkey signing configuration errors at the build boundary", () => {
     const decodingCause = new Error("publishable-key-decode-failed");
     const knownError = new InvalidMacPasskeyPublishableKeyError({ cause: decodingCause });
@@ -1190,13 +1214,29 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.t3tools.t3code");
+      assert.equal(config.appId, "dev.leodoes.akeru");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
+      assert.equal(mac.notarize, true);
       assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
       assert.deepStrictEqual(mac.protocols, [
         { name: "Akeru Bot", schemes: ["t3code", "t3code-dev"] },
       ]);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("keeps signed macOS entitlements explicit without Clerk passkeys", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
+        entitlementsPath: "/tmp/entitlements.mac.plist",
+      });
+
+      const mac = config.mac as Record<string, unknown>;
+      assert.equal(config.appId, "dev.leodoes.akeru");
+      assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
+      assert.notProperty(mac, "provisioningProfile");
+      assert.equal(mac.notarize, true);
+      assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
@@ -1216,6 +1256,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         (config.dmg as Record<string, unknown>).background,
         "dmg/dmg-background-nightly.png",
       );
+      assert.equal((config.mac as Record<string, unknown>).notarize, false);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
@@ -1257,6 +1298,24 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ]);
     assert.equal(resourceMonitorExecutableName("mac"), "t3-resource-monitor");
     assert.equal(resourceMonitorExecutableName("win"), "t3-resource-monitor.exe");
+    assert.deepStrictEqual(
+      resolveResourceMonitorCargoBuildArgs(
+        "/repo/native/resource-monitor/Cargo.toml",
+        "/repo/native/resource-monitor/target",
+        "aarch64-apple-darwin",
+      ),
+      [
+        "build",
+        "--locked",
+        "--release",
+        "--manifest-path",
+        "/repo/native/resource-monitor/Cargo.toml",
+        "--target-dir",
+        "/repo/native/resource-monitor/target",
+        "--target",
+        "aarch64-apple-darwin",
+      ],
+    );
   });
   it("promotes target fff binaries to direct staged dependencies", () => {
     assert.deepStrictEqual(resolveFffNativeDependencies("mac", "arm64", "0.9.4"), {

@@ -182,4 +182,48 @@ describe("UsagePage", () => {
     const markup = renderToStaticMarkup(<UsagePage />);
     expect(markup).toContain("anthropic");
   });
+
+  it("labels model activity by its transcript provider, not its model name", () => {
+    testState.useUsage.mockReturnValue({
+      merged: {
+        ...mergeUsage([], USAGE_CONTRACT_VERSION),
+        models: [
+          {
+            provider: "codex" as const,
+            model: "claude-opus-5",
+            costUsd: 0,
+            totalTokens: 31_000_000,
+            records: 1,
+            costShare: 0,
+          },
+          {
+            provider: "claude" as const,
+            model: "gpt-5.6-sol",
+            costUsd: 0,
+            totalTokens: 1_000,
+            records: 1,
+            costShare: 0,
+          },
+        ],
+      },
+      environments: [
+        {
+          environmentId: "env-1",
+          label: "This Mac",
+          isPending: false,
+          error: null,
+          summary: { contractVersion: USAGE_CONTRACT_VERSION },
+        },
+      ],
+      isPending: false,
+      isPartial: false,
+      refresh: vi.fn(),
+    });
+
+    const markup = renderToStaticMarkup(<UsagePage />);
+
+    expect(markup).toContain("Codex · claude-opus-5");
+    expect(markup).toContain("Claude · gpt-5.6-sol");
+    expect(markup).not.toContain("Claude · claude-opus-5");
+  });
 });
