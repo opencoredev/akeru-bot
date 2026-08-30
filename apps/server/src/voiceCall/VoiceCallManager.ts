@@ -1,6 +1,6 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
@@ -45,6 +45,7 @@ const CodexCliAuth = Schema.Struct({
     account_id: TrimmedNonEmptyString,
   }),
 });
+const decodeCodexCliAuth = Schema.decodeUnknownSync(CodexCliAuth);
 
 interface ChatGptRealtimeSession {
   readonly negotiate: (input: {
@@ -71,7 +72,7 @@ export function parseCodexCliAuth(
   encoded: string,
 ): { readonly accessToken: string; readonly accountId: string } | undefined {
   try {
-    const decoded = Schema.decodeUnknownSync(CodexCliAuth)(JSON.parse(encoded));
+    const decoded = decodeCodexCliAuth(JSON.parse(encoded));
     return { accessToken: decoded.tokens.access_token, accountId: decoded.tokens.account_id };
   } catch {
     return undefined;
@@ -82,7 +83,7 @@ async function getCodexCliCredential(): Promise<
   { readonly accessToken: string; readonly accountId: string } | undefined
 > {
   try {
-    const encoded = await NodeFS.readFile(
+    const encoded = await NodeFSP.readFile(
       NodePath.join(NodeOS.homedir(), ".codex", "auth.json"),
       "utf8",
     );

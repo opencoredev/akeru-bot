@@ -1,30 +1,26 @@
 # CI quality gates
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For Akeru Bot maintainers.
 
-[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs these quality gates on pull requests
-and pushes to `main`:
+[`ci.yml`](../../.github/workflows/ci.yml) runs on pull requests and pushes to `main`.
+All jobs use Depot's 8-vCPU `depot-ubuntu-24.04-8` GitHub Actions runner.
+The issue-label, PR-vouch, and PR-size maintenance workflows use the same Depot runner.
 
-- **Check**: `vp check` (format and lint; this repo sets `typeCheck: false` in its lint options),
-  then `vpr typecheck` for the workspace type check. The same job
-  builds the desktop pipeline (`vp run build:desktop`) and verifies the preload bundle exists and
-  still exports its expected symbols.
-- **Test**: `vp run test` across the workspace.
-- **Mobile Native Static Analysis**: `vp run lint:mobile` on macOS, wrapping
-  `scripts/mobile-native-static-check.ts`. A cheap Linux **Mobile Native Changes** job gates it:
-  the macOS runner only boots when the diff touches `apps/mobile` Swift/Kotlin sources, the
-  SwiftLint/detekt/ktlint configuration, the `Brewfile`, the check script, the root `package.json`
-  that defines `lint:mobile`, or `ci.yml`. Otherwise the job is skipped, which GitHub reports as
-  success for the required check. Renames are matched on both their old and new path. The gate fails
-  open in every other case: if the changed-file list cannot be resolved, GitHub truncates it, or the
-  gate job itself fails, the lint runs.
-- **Release Smoke**: exercises release-only workflow steps through `scripts/release-smoke.ts`, so
-  release breakage surfaces on PRs rather than at tag time.
+- **Public dependency install.** The job rejects `file:` and `link:` dependencies that resolve
+  outside the repository, then runs `vp install --frozen-lockfile`.
+- **Lint, types, and builds.** The job checks lint and formatting, runs workspace type checks,
+  builds the desktop pipeline, checks the preload output, and builds the marketing site.
+- **Focused tests.** Separate jobs run the shipped desktop and shared-package tests, the sharded
+  server tests, and the resource-monitor tests. Relay and mobile-production packages are excluded.
+- **Release smoke.** `scripts/release-smoke.ts` checks the public dependency rule, the supported
+  artifact matrix, Akeru naming, and the absence of retired publishing and deployment paths.
 
-`.github/workflows/release.yml` builds macOS (`arm64` and `x64`), Linux (`x64`), and Windows (`x64`)
-desktop artifacts from a single `v*.*.*` tag and publishes one GitHub release. It auto-enables
-signing only when platform credentials are present. macOS passkey builds additionally require
-`APPLE_TEAM_ID` and the `MACOS_PROVISIONING_PROFILE` secret; Windows uses Azure Trusted Signing.
-Without the core signing credentials, it still releases unsigned artifacts.
+[`release.yml`](../../.github/workflows/release.yml) is a manual, non-publishing artifact smoke
+workflow. It uses 8-vCPU Depot runners for Linux and Windows, plus Apple Silicon macOS. It builds a
+Developer ID signed macOS arm64 app. Electron-builder notarizes and staples the app before it packages
+the DMG. The workflow then submits and staples the DMG as a separate object. It checks both objects
+with Apple's verification tools. Windows and Linux artifacts stay unsigned. The workflow also builds
+and dry-runs the CLI package and checks the marketing site. It uploads desktop artifacts for seven
+days. It does not create a GitHub release, publish a package, or deploy a site.
 
-See [Release Checklist](../operations/release.md) for the full release/signing setup checklist.
+See the [release smoke runbook](../operations/release.md) for the exact validation path.
