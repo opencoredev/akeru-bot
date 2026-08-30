@@ -23,7 +23,7 @@ import {
   useThreadShells,
 } from "../../state/entities";
 import { environmentBotsAtom } from "../../state/bots";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { usePrimaryEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -74,6 +74,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export function useBotThreadRuntime(botId: string, effectiveModelSelection: ModelSelection | null) {
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const primaryEnvironment = usePrimaryEnvironment();
   const serverBots = useAtomValue(environmentBotsAtom(primaryEnvironmentId ?? NO_ENVIRONMENT));
   const threadShells = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
@@ -147,6 +148,14 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submissionStateRef = useRef({
+    connected: primaryEnvironment?.connection.phase === "connected",
+    latestTurn: rememberedThread?.latestTurn ?? null,
+  });
+  submissionStateRef.current = {
+    connected: primaryEnvironment?.connection.phase === "connected",
+    latestTurn: rememberedThread?.latestTurn ?? null,
+  };
 
   useEffect(() => {
     if (!primaryEnvironmentId) return;
@@ -224,10 +233,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         return false;
       }
       const submissionKey = `${activeProject.environmentId}:${botId}`;
-      const releaseSubmission = reserveBotTurnSubmission(
-        submissionKey,
-        rememberedThread?.latestTurn?.turnId ?? null,
-      );
+      const previousTurnId = rememberedThread?.latestTurn?.turnId ?? null;
+      const releaseSubmission = reserveBotTurnSubmission(submissionKey, previousTurnId);
       if (!releaseSubmission) {
         setError("Wait for the current reply to start.");
         return false;
@@ -285,7 +292,12 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         }
 
         accepted = true;
-        scheduleBotTurnSubmissionFallbackRelease(releaseSubmission);
+        scheduleBotTurnSubmissionFallbackRelease({
+          release: releaseSubmission,
+          previousTurnId,
+          getLatestTurn: () => submissionStateRef.current.latestTurn,
+          isConnected: () => submissionStateRef.current.connected,
+        });
         retainedThreadRef.current.threadRef = currentThreadRef;
         useRosterStore
           .getState()

@@ -46,10 +46,31 @@ export function releaseBotTurnSubmissionAfterSettlement(
 }
 
 export function scheduleBotTurnSubmissionFallbackRelease(
-  release: () => void,
+  input: {
+    readonly release: () => void;
+    readonly previousTurnId: string | null;
+    readonly getLatestTurn: () =>
+      | { readonly turnId: string; readonly state: string }
+      | null
+      | undefined;
+    readonly isConnected: () => boolean;
+  },
   delayMs = BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS,
 ): void {
-  globalThis.setTimeout(release, delayMs);
+  const reconcile = () => {
+    const latestTurn = input.getLatestTurn();
+    if (
+      input.isConnected() &&
+      latestTurn &&
+      latestTurn.turnId !== input.previousTurnId &&
+      latestTurn.state === "running"
+    ) {
+      globalThis.setTimeout(reconcile, delayMs);
+      return;
+    }
+    input.release();
+  };
+  globalThis.setTimeout(reconcile, delayMs);
 }
 
 export async function joinOrStartThreadCreate<T>(input: {
