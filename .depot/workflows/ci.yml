@@ -1,3 +1,5 @@
+# Depot CI runs Akeru checks on pull requests and main.
+
 name: CI
 
 on:

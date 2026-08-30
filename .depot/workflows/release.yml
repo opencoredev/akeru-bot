@@ -1,3 +1,5 @@
+# Depot CI builds smoke artifacts. It does not publish or release them.
+
 name: Release artifact smoke
 
 on:

@@ -2,8 +2,8 @@
 
 > For Akeru Bot maintainers.
 
-`.github/workflows/release.yml` validates release inputs without publishing or releasing anything.
-Run it manually with a version such as `0.0.0-smoke.0`.
+`.depot/workflows/release.yml` validates release inputs without publishing or releasing anything.
+Dispatch it from Depot with a version such as `0.0.0-smoke.0`.
 
 ## What it checks
 
@@ -27,8 +27,8 @@ AUR, or send release announcements.
 
 ## Depot setup
 
-Connect the `opencoredev` GitHub organization in Depot before the first run. This public repository
-also needs a Depot runner group that allows public repositories. All jobs use a Depot runner label:
+CI and release smoke run on Depot CI. Code Access is already installed for `opencoredev/akeru-bot`.
+GitHub Actions no longer owns those jobs. All Depot jobs use a Depot runner label:
 
 - Linux uses the 8-vCPU `depot-ubuntu-24.04-8` runner.
 - Windows uses the 8-vCPU `depot-windows-2025-8` runner.
@@ -36,7 +36,7 @@ also needs a Depot runner group that allows public repositories. All jobs use a 
 
 ## macOS secrets
 
-Add these GitHub Actions secrets before running the workflow:
+Add these Depot CI secrets before running the workflow:
 
 - `MACOS_CERTIFICATE_P12` contains the base64-encoded `.p12` export of the Developer ID Application
   certificate and its private key.
