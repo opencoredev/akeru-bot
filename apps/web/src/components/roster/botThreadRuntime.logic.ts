@@ -61,9 +61,7 @@ export function scheduleBotTurnSubmissionFallbackRelease(
     const latestTurn = input.getLatestTurn();
     if (
       input.isConnected() &&
-      latestTurn &&
-      latestTurn.turnId !== input.previousTurnId &&
-      latestTurn.state === "running"
+      (!latestTurn || latestTurn.turnId === input.previousTurnId || latestTurn.state === "running")
     ) {
       globalThis.setTimeout(reconcile, delayMs);
       return;

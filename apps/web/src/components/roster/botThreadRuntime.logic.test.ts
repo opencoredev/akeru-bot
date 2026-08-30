@@ -39,15 +39,16 @@ describe("bot thread runtime", () => {
     release?.();
   });
 
-  it("releases an accepted submission when no newer turn is observed", () => {
+  it("retains an accepted submission until a newer turn settles", () => {
     vi.useFakeTimers();
+    let latestTurn: { turnId: string; state: string } | null = null;
     const release = reserveBotTurnSubmission("env-a:bot-stale", "turn-old");
     expect(release).not.toBeNull();
     scheduleBotTurnSubmissionFallbackRelease(
       {
         release: release as () => void,
         previousTurnId: "turn-old",
-        getLatestTurn: () => ({ turnId: "turn-old", state: "completed" }),
+        getLatestTurn: () => latestTurn,
         isConnected: () => true,
       },
       1_000,
@@ -56,7 +57,14 @@ describe("bot thread runtime", () => {
     vi.advanceTimersByTime(999);
     expect(reserveBotTurnSubmission("env-a:bot-stale")).toBeNull();
     vi.advanceTimersByTime(1);
+    expect(reserveBotTurnSubmission("env-a:bot-stale")).toBeNull();
 
+    latestTurn = { turnId: "turn-old", state: "completed" };
+    vi.advanceTimersByTime(1_000);
+    expect(reserveBotTurnSubmission("env-a:bot-stale")).toBeNull();
+
+    latestTurn = { turnId: "turn-new", state: "completed" };
+    vi.advanceTimersByTime(1_000);
     const nextRelease = reserveBotTurnSubmission("env-a:bot-stale");
     expect(nextRelease).not.toBeNull();
     nextRelease?.();
