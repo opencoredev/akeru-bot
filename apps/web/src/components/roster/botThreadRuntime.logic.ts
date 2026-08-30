@@ -14,6 +14,8 @@ const botTurnSubmissions = new Map<
   { readonly previousTurnId: string | null; readonly token: symbol }
 >();
 
+export const BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS = 15_000;
+
 export function reserveBotTurnSubmission(
   key: string,
   previousTurnId: string | null = null,
@@ -41,6 +43,13 @@ export function releaseBotTurnSubmissionAfterSettlement(
   }
   botTurnSubmissions.delete(key);
   return true;
+}
+
+export function scheduleBotTurnSubmissionFallbackRelease(
+  release: () => void,
+  delayMs = BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS,
+): void {
+  globalThis.setTimeout(release, delayMs);
 }
 
 export async function joinOrStartThreadCreate<T>(input: {

@@ -1,5 +1,5 @@
 import { BotId, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   buildBotTurnStartInput,
@@ -9,7 +9,12 @@ import {
   joinOrStartThreadCreate,
   releaseBotTurnSubmissionAfterSettlement,
   reserveBotTurnSubmission,
+  scheduleBotTurnSubmissionFallbackRelease,
 } from "./botThreadRuntime.logic";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("bot thread runtime", () => {
   it("shares the turn submission lock across runtime instances", () => {
@@ -32,6 +37,36 @@ describe("bot thread runtime", () => {
     expect(nextRelease).not.toBeNull();
     nextRelease?.();
     release?.();
+  });
+
+  it("releases an accepted submission when no newer turn is observed", () => {
+    vi.useFakeTimers();
+    const release = reserveBotTurnSubmission("env-a:bot-stale", "turn-old");
+    expect(release).not.toBeNull();
+    scheduleBotTurnSubmissionFallbackRelease(release as () => void, 1_000);
+
+    vi.advanceTimersByTime(999);
+    expect(reserveBotTurnSubmission("env-a:bot-stale")).toBeNull();
+    vi.advanceTimersByTime(1);
+
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-stale");
+    expect(nextRelease).not.toBeNull();
+    nextRelease?.();
+  });
+
+  it("does not let stale fallback cleanup release a newer submission", () => {
+    vi.useFakeTimers();
+    const release = reserveBotTurnSubmission("env-a:bot-replaced", "turn-old");
+    expect(release).not.toBeNull();
+    scheduleBotTurnSubmissionFallbackRelease(release as () => void, 1_000);
+    release?.();
+
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-replaced");
+    expect(nextRelease).not.toBeNull();
+    vi.advanceTimersByTime(1_000);
+    expect(reserveBotTurnSubmission("env-a:bot-replaced")).toBeNull();
+
+    nextRelease?.();
   });
 
   it("shares concurrent initial thread creation", async () => {

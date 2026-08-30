@@ -34,6 +34,7 @@ import {
   joinOrStartThreadCreate,
   releaseBotTurnSubmissionAfterSettlement,
   reserveBotTurnSubmission,
+  scheduleBotTurnSubmissionFallbackRelease,
 } from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -284,6 +285,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         }
 
         accepted = true;
+        scheduleBotTurnSubmissionFallbackRelease(releaseSubmission);
         retainedThreadRef.current.threadRef = currentThreadRef;
         useRosterStore
           .getState()
