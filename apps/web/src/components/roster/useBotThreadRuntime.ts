@@ -311,6 +311,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       botReady,
       ensureTranscriptThread,
       rememberedThread?.latestTurn?.state,
+      rememberedThread?.latestTurn?.turnId,
       startTurn,
     ],
   );
