@@ -12,6 +12,8 @@ Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04`
   builds the desktop pipeline, checks the preload output, and builds the marketing site.
 - **Focused tests.** Separate jobs run the shipped desktop and shared-package tests, the sharded
   server tests, and the resource-monitor tests. Relay and mobile-production packages are excluded.
+  The server shards exclude `orchestrationEngine.integration.test.ts` until the executor stack
+  restores its test adapter and stops the fixture from calling OpenAI with a test credential.
 - **Release smoke.** `scripts/release-smoke.ts` checks the public dependency rule, the supported
   artifact matrix, Akeru naming, and the absence of retired publishing and deployment paths.
 

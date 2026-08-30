@@ -120,8 +120,11 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Test server shard
-        run: vp run --filter t3 test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+      - name: Test isolated server shard
+        run: >-
+          vp run --filter t3 test
+          --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+          --exclude integration/orchestrationEngine.integration.test.ts
 
   rust:
     name: Resource monitor
