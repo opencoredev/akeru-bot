@@ -20,7 +20,7 @@ export const PROVIDER_PRESENTATION = {
     mark: OpenAI,
   },
   claude: {
-    label: "Claude Code",
+    label: "Claude",
     color: "#d97757",
     mark: ClaudeAI,
   },
