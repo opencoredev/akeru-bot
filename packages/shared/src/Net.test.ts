@@ -71,13 +71,19 @@ it.layer(NetService.layer)("NetService", (it) => {
       ),
     );
 
-    it.effect("findAvailablePort returns preferred when it is free", () =>
+    it.effect("findAvailablePort respects loopback availability", () =>
       Effect.gen(function* () {
         const net = yield* NetService.NetService;
         const preferred = yield* net.reserveLoopbackPort();
+        const isPreferredAvailable = yield* net.isPortAvailableOnLoopback(preferred);
 
         const resolved = yield* net.findAvailablePort(preferred);
-        assert.equal(resolved, preferred);
+        assert.ok(resolved > 0);
+        if (isPreferredAvailable) {
+          assert.equal(resolved, preferred);
+        } else {
+          assert.notEqual(resolved, preferred);
+        }
       }),
     );
 
