@@ -2,9 +2,9 @@ import { BotId } from "@t3tools/contracts";
 import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { inboxRepairDestination } from "./InboxPanel";
+import { inboxRepairDestination, inboxRowAction } from "./InboxPanel";
 
-function incident(incidentKey: string): BotInboxItem {
+function incident(incidentKey: string, overrides: Partial<BotInboxItem> = {}): BotInboxItem {
   return {
     id: "incident-1",
     incidentKey,
@@ -18,6 +18,7 @@ function incident(incidentKey: string): BotInboxItem {
     firstSeenAt: "2026-08-30T10:00:00.000Z",
     lastSeenAt: "2026-08-30T10:00:00.000Z",
     occurrenceCount: 1,
+    ...overrides,
   };
 }
 
@@ -35,5 +36,12 @@ describe("inbox repair destinations", () => {
 
   it("does not add a dead action for approval requests", () => {
     expect(inboxRepairDestination(incident("approval:req-1"))).toBeNull();
+  });
+});
+
+describe("inbox row actions", () => {
+  it("resolves approval and user-action items in Settings", () => {
+    expect(inboxRowAction(incident("approval:req-1"))).toBe("resolve");
+    expect(inboxRowAction(incident("user-action:bot-1:request_box_help:login"))).toBe("resolve");
   });
 });
