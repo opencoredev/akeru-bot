@@ -135,7 +135,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           usageCap: { unit: "tokens", limit: 50_000 },
           voiceEnabled: true,
           channelBindings: [],
-          groupId,
+          groupId: null,
           archivedAt: null,
           createdAt,
           updatedAt: restored.bots[0]!.updatedAt,

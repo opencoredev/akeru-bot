@@ -87,6 +87,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         turnId: null,
         role: "assistant",
         text: "with attachment",
+        channelOrigin: null,
         attachments: [
           {
             type: "image",
@@ -117,6 +118,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
       assert.equal(rows.length, 1);
       assert.equal(rows[0]?.text, "cleared");
       assert.deepEqual(rows[0]?.attachments, []);
+      assert.equal(rows[0]?.channelOrigin, null);
     }),
   );
 });

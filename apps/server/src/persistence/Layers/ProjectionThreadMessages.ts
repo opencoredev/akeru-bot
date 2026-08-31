@@ -76,7 +76,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           ${row.respondingBotId ?? null},
           ${row.authorPersonId ?? null},
           ${row.authorDisplayName ?? null},
-          ${row.channelOrigin === undefined ? null : JSON.stringify(row.channelOrigin)},
+          ${row.channelOrigin == null ? null : JSON.stringify(row.channelOrigin)},
           ${row.role},
           ${row.text},
           COALESCE(
