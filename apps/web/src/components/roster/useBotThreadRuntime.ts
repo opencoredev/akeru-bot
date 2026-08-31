@@ -37,6 +37,7 @@ import {
   resolveBotThreadTarget,
   reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
+import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -135,6 +136,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const setRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
+    reportFailure: false,
+  });
   const appendVoiceTranscript = useAtomCommand(threadEnvironment.appendVoiceTranscript, {
     reportFailure: false,
   });

@@ -674,6 +674,9 @@ export const ServerSettings = Schema.Struct({
   botSandboxBrowserSharing: BotSandboxBrowserSharing.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BOT_SANDBOX_BROWSER_SHARING)),
   ),
+  localExecutionMode: LocalExecutionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
+  ),
   /**
    * Whether agents may drive the in-app preview browser. Turning this off
    * withholds the MCP credential, so the `t3-code` server (and with it every
@@ -911,6 +914,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   analyticsEnabled: Schema.optionalKey(Schema.Boolean),
+  localExecutionMode: Schema.optionalKey(LocalExecutionMode),
   productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),

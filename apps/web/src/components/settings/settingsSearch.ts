@@ -174,6 +174,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/voice",
   },
   {
+    id: "local-execution",
+    title: "Local execution",
+    to: "/settings/general",
+  },
+  {
     id: "new-threads",
     title: "New threads",
     to: "/settings/general",

@@ -12,6 +12,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { useRosterStore } from "./rosterStore";
+import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import type { BotAvatar } from "./types";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;

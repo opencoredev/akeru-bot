@@ -37,4 +37,12 @@ describe("botSandbox", () => {
     ]);
     expect(botSandboxLabel("vercel")).toBe("Vercel Sandbox");
   });
+
+  it("uses the local setting only for local workspaces", () => {
+    expect(resolveBotRuntimeMode(null, "approval-required")).toBe("approval-required");
+    expect(resolveBotRuntimeMode("local", "full-access")).toBe("full-access");
+    for (const sandbox of ["vercel", "akeru-cloud", "upstash"] as const) {
+      expect(resolveBotRuntimeMode(sandbox, "approval-required")).toBe("full-access");
+    }
+  });
 });

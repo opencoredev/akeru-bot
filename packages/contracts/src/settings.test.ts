@@ -249,6 +249,16 @@ describe("ServerSettings bot sandbox and browser sharing", () => {
   });
 });
 
+describe("ServerSettings local execution", () => {
+  it("asks first by default and accepts full access only as an opt-in", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+    expect(
+      decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
+    ).toBe("full-access");
+    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults text generation to Luna at low reasoning effort", () => {
     expect(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection).toEqual({

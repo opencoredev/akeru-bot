@@ -487,6 +487,10 @@ export function portableRecords(
             const requestKind = stringField(activity.payload, "requestKind");
             const requestType = stringField(activity.payload, "requestType");
             const decision = stringField(activity.payload, "decision");
+            const actor = stringField(activity.payload, "actor");
+            const target = stringField(activity.payload, "target");
+            const action = stringField(activity.payload, "action");
+            const outcome = stringField(activity.payload, "outcome");
             return [
               {
                 originalKind: originalKind as
@@ -498,6 +502,10 @@ export function portableRecords(
                 ...(requestKind ? { requestKind } : {}),
                 ...(requestType ? { requestType } : {}),
                 ...(decision ? { decision } : {}),
+                ...(actor ? { actor } : {}),
+                ...(target ? { target } : {}),
+                ...(action ? { action } : {}),
+                ...(outcome ? { outcome } : {}),
                 provider:
                   stringField(activity.payload, "provider") ?? thread.modelSelection.instanceId,
                 createdAt: activity.createdAt,
@@ -665,6 +673,10 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
         approval.requestKind,
         approval.requestType,
         approval.decision,
+        approval.actor,
+        approval.target,
+        approval.action,
+        approval.outcome,
       ]) {
         if (value !== undefined)
           assertSafeImportedText(`Thread '${record.id}' approval field`, value);
@@ -1762,6 +1774,10 @@ export function commandsForPortabilityImport(
                 ...(approval.requestKind ? { requestKind: approval.requestKind } : {}),
                 ...(approval.requestType ? { requestType: approval.requestType } : {}),
                 ...(approval.decision ? { decision: approval.decision } : {}),
+                ...(approval.actor ? { actor: approval.actor } : {}),
+                ...(approval.target ? { target: approval.target } : {}),
+                ...(approval.action ? { action: approval.action } : {}),
+                ...(approval.outcome ? { outcome: approval.outcome } : {}),
                 provider: approval.provider,
               },
               turnId: null,

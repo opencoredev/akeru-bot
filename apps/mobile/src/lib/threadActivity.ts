@@ -1400,10 +1400,10 @@ export function derivePendingApprovals(
       ? payload.options.filter(isProviderApprovalOption)
       : undefined;
 
-    if (activity.kind === "approval.requested" && requestId && requestKind) {
+    if (activity.kind === "approval.requested" && requestId) {
       openByRequestId.set(requestId, {
         requestId,
-        requestKind,
+        requestKind: requestKind ?? "command",
         createdAt: activity.createdAt,
         ...(detail ? { detail } : {}),
         ...(appName ? { appName } : {}),
