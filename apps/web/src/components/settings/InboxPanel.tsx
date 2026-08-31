@@ -1,11 +1,12 @@
 import { CircleAlertIcon } from "lucide-react";
+import { useState } from "react";
 
 import { selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { botInboxEnvironment } from "../../state/botInbox";
-import { useEnvironmentQuery } from "../../state/query";
+import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -57,8 +58,18 @@ export function InboxPanel() {
               key={item.id}
               item={item}
               environmentId={environmentId}
-              onResolve={() =>
-                environmentId && void resolveIncident({ environmentId, input: { id: item.id } })
+              onResolve={
+                environmentId === null
+                  ? null
+                  : async () => {
+                      const result = await resolveIncident({
+                        environmentId,
+                        input: { id: item.id },
+                      });
+                      return result._tag === "Failure"
+                        ? formatEnvironmentQueryError(result.cause)
+                        : null;
+                    }
               }
             />
           ))
@@ -75,15 +86,27 @@ function InboxIncidentRow({
 }: {
   readonly item: BotInboxItem;
   readonly environmentId: ReturnType<typeof useSettingsEnvironmentId>;
-  readonly onResolve: () => void;
+  readonly onResolve: (() => Promise<string | null>) | null;
 }) {
   const action = inboxRowAction(item);
+  const [isResolving, setIsResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const openRepair = () => {
     if (action === "plugins") {
       openPlugins();
       return;
     }
     if (action === "providers") openSettings("providers", null, environmentId);
+  };
+  const handleResolve = async () => {
+    if (onResolve === null || isResolving) return;
+    setIsResolving(true);
+    setResolveError(null);
+    try {
+      setResolveError(await onResolve());
+    } finally {
+      setIsResolving(false);
+    }
   };
 
   return (
@@ -95,11 +118,16 @@ function InboxIncidentRow({
         </span>
       }
       description={item.lastFailure}
-      status={item.nextAction}
+      status={resolveError ?? item.nextAction}
       control={
         action === "resolve" ? (
-          <Button size="xs" variant="outline" onClick={onResolve}>
-            Resolve
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={isResolving || onResolve === null}
+            onClick={() => void handleResolve()}
+          >
+            {isResolving ? "Resolving..." : "Resolve"}
           </Button>
         ) : (
           <Button size="xs" variant="outline" onClick={openRepair}>
