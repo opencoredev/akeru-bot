@@ -295,6 +295,37 @@ it.layer(layer)("MemoryCandidateRepository", (it) => {
     }),
   );
 
+  it.effect("rejects approval when the entity kind does not match the selected scope", () =>
+    Effect.gen(function* () {
+      const repository = yield* MemoryCandidateRepository;
+      const candidateId = AkeruMemoryCandidateId.make("candidate-wrong-entity-kind");
+      yield* repository.create({ access, candidate: candidate(candidateId) });
+      const revision = {
+        ...approvedRevision("candidate-wrong-entity-kind"),
+        entityKind: "user" as const,
+      };
+
+      const exit = yield* repository
+        .approve({
+          access,
+          candidateId,
+          revision,
+          receiptId: "receipt-wrong-entity-kind",
+          decidedAt: revision.updatedAt,
+        })
+        .pipe(Effect.exit);
+      assert.equal(exit._tag, "Failure");
+      assert.equal((yield* repository.listPending({ access })).length, 1);
+      yield* repository.approve({
+        access,
+        candidateId,
+        revision: approvedRevision("candidate-wrong-entity-kind"),
+        receiptId: "receipt-correct-entity-kind",
+        decidedAt: revision.updatedAt,
+      });
+    }),
+  );
+
   it.effect("hides pending candidates after the responding bot loses group access", () =>
     Effect.gen(function* () {
       const repository = yield* MemoryCandidateRepository;

@@ -109,6 +109,9 @@ import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts
 import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { EntityMemoryRepositoryLive } from "./memory/Layers/EntityMemoryRepository.ts";
+import { MemoryCandidateRepositoryLive } from "./memory/Layers/MemoryCandidateRepository.ts";
+import { MemoryRevisionWriteLockLive } from "./memory/Services/MemoryRevisionWriteLock.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -276,6 +279,11 @@ const ProviderLayerLive = AgentControllerLive.pipe(Layer.provide(LegacyProviderL
 
 const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
 
+export const RuntimeMemoryRepositoriesLive = Layer.mergeAll(
+  EntityMemoryRepositoryLive,
+  MemoryCandidateRepositoryLive,
+).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+
 const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
   Layer.provide(VcsProjectConfig.layer),
 );
@@ -388,7 +396,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
   Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive)),
-  Layer.provideMerge(PersistenceLayerLive),
+  Layer.provideMerge(RuntimeMemoryRepositoriesLive.pipe(Layer.provideMerge(PersistenceLayerLive))),
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
   // The instance registry is the new routing keystone — text generation,
