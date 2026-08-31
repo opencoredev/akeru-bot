@@ -694,14 +694,16 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
-  it("reserves a configured bot's usage cap and binds the provider turn", async () => {
-    const harness = await createHarness({
-      botEngine: { provider: "codex", model: "gpt-5-codex" },
-      botUsageCap: { unit: "tokens", limit: 1_000 },
-    });
+  effectIt.effect("reserves a configured bot's usage cap and binds the provider turn", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: { provider: "codex", model: "gpt-5-codex" },
+          botUsageCap: { unit: "tokens", limit: 1_000 },
+        }),
+      );
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-metered-bot"),
         threadId: ThreadId.make("thread-1"),
@@ -714,64 +716,69 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: "2026-01-01T00:00:00.000Z",
-      }),
-    );
-
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
-    await waitFor(async () => (await harness.summarizeBotUsage()).entries[0]?.turnId === "turn-1");
-    const usage = await harness.summarizeBotUsage();
-    expect(usage.reservedTokens).toBe(1_000);
-    expect(usage.entries).toContainEqual(
-      expect.objectContaining({
-        botId: "bot-1",
-        threadId: "thread-1",
-        turnId: "turn-1",
-        state: "reserved",
-        reservedTokens: 1_000,
-      }),
-    );
-  });
-
-  it("rejects a new turn after a configured bot reserves its full usage cap", async () => {
-    const harness = await createHarness({
-      botEngine: { provider: "codex", model: "gpt-5-codex" },
-      botUsageCap: { unit: "tokens", limit: 1_000 },
-    });
-    const dispatchTurn = (suffix: string) =>
-      harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make(`cmd-turn-start-cap-${suffix}`),
-        threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId(`user-message-cap-${suffix}`),
-          role: "user" as const,
-          text: suffix,
-          attachments: [],
-        },
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required" as const,
-        createdAt: `2026-01-01T00:00:0${suffix === "first" ? "0" : "1"}.000Z`,
       });
 
-    await Effect.runPromise(dispatchTurn("first"));
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
-    await Effect.runPromise(dispatchTurn("second"));
-    await harness.drain();
-
-    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
-    const thread = (await harness.readModel()).threads.find(
-      (entry) => entry.id === ThreadId.make("thread-1"),
-    );
-    expect(thread?.activities).toContainEqual(
-      expect.objectContaining({
-        kind: "provider.turn.start.failed",
-        payload: expect.objectContaining({
-          detail: "Bot bot-1 reached its 1000-token usage cap.",
-          requestId: "user-message-cap-second",
+      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+      yield* Effect.promise(() =>
+        waitFor(async () => (await harness.summarizeBotUsage()).entries[0]?.turnId === "turn-1"),
+      );
+      const usage = yield* Effect.promise(() => harness.summarizeBotUsage());
+      expect(usage.reservedTokens).toBe(1_000);
+      expect(usage.entries).toContainEqual(
+        expect.objectContaining({
+          botId: "bot-1",
+          threadId: "thread-1",
+          turnId: "turn-1",
+          state: "reserved",
+          reservedTokens: 1_000,
         }),
-      }),
-    );
-  });
+      );
+    }),
+  );
+
+  effectIt.effect("rejects a new turn after a configured bot reserves its full usage cap", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: { provider: "codex", model: "gpt-5-codex" },
+          botUsageCap: { unit: "tokens", limit: 1_000 },
+        }),
+      );
+      const dispatchTurn = (suffix: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-turn-start-cap-${suffix}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-cap-${suffix}`),
+            role: "user" as const,
+            text: suffix,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required" as const,
+          createdAt: `2026-01-01T00:00:0${suffix === "first" ? "0" : "1"}.000Z`,
+        });
+
+      yield* dispatchTurn("first");
+      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+      yield* dispatchTurn("second");
+      yield* Effect.promise(() => harness.drain());
+
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.activities).toContainEqual(
+        expect.objectContaining({
+          kind: "provider.turn.start.failed",
+          payload: expect.objectContaining({
+            detail: "Bot bot-1 reached its 1000-token usage cap.",
+            requestId: "user-message-cap-second",
+          }),
+        }),
+      );
+    }),
+  );
 
   it("projects a typed failure when the configured bot engine is unavailable", async () => {
     const harness = await createHarness({
