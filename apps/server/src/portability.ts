@@ -12,6 +12,7 @@ import {
   PortabilityArchive,
   ProjectId,
   ThreadId,
+  isGroupBotMember,
   type PortabilityArchiveRecord,
   type PortabilityImportItem,
   type PortabilityImportPreview,
@@ -38,7 +39,7 @@ const ARCHIVE_RECORD_TYPES = [
   "thread",
 ] as const;
 const ARCHIVE_EXCLUSIONS = [
-  "Access tokens, cookies, passwords, secret values, environment variables, pairing and relay credentials",
+  "Access tokens, cookies, passwords, secret values, environment variables, pairing and relay credentials, and paired client identities",
   "Absolute local paths, project scripts, attachments, image avatar files, Git refs, pull request links, and diff blobs",
   "Event identifiers, event sequences, command receipts, provider sessions, and opaque provider configuration",
   "Conversation attachments, raw approval payloads, provider request details, and deleted threads and projects",
@@ -405,7 +406,9 @@ export function portableRecords(
       data: {
         name: safeText(group.name),
         bossBotId: group.bossBotId,
-        members: [...group.members].sort((left, right) => left.botId.localeCompare(right.botId)),
+        members: group.members
+          .filter(isGroupBotMember)
+          .sort((left, right) => left.botId.localeCompare(right.botId)),
       },
     })),
     ...snapshot.projects
@@ -715,7 +718,6 @@ export function parsePortabilityArchive(contents: string) {
   const groupIds = new Set(
     archive.records.filter((record) => record.type === "group").map((record) => record.id),
   );
-  const groupByBotId = new Map<string, string>();
   for (const record of archive.records) {
     if (record.type === "bot") {
       const missing = record.data.disabledMcpServerIds.find((id) => !mcpIds.has(id));
@@ -742,15 +744,6 @@ export function parsePortabilityArchive(contents: string) {
       ];
       const missing = referenced.find((id) => id !== null && !botIds.has(id));
       if (missing) throw new Error(`Group '${record.id}' references missing bot '${missing}'.`);
-      for (const member of record.data.members) {
-        const existingGroupId = groupByBotId.get(member.botId);
-        if (existingGroupId && existingGroupId !== record.id) {
-          throw new Error(
-            `Bot '${member.botId}' belongs to both group '${existingGroupId}' and '${record.id}'.`,
-          );
-        }
-        groupByBotId.set(member.botId, record.id);
-      }
     }
     if (record.type === "thread") {
       if (!projectIds.has(record.data.projectId)) {
@@ -958,7 +951,6 @@ export function previewPortabilityImport(
   const deletedThreadIds = new Set<string>(
     snapshot.threads.filter((thread) => thread.deletedAt !== null).map((thread) => thread.id),
   );
-  const currentBotGroupIds = new Map(snapshot.bots.map((bot) => [bot.id, bot.groupId]));
   const enabledMcpServerIds = new Set(
     (snapshot.mcpServers ?? []).filter((server) => server.enabled).map((server) => server.id),
   );
@@ -999,13 +991,7 @@ export function previewPortabilityImport(
       const hasUnavailableMember = record.data.members.some((member) =>
         unavailableBotIds.has(member.botId),
       );
-      const hasAssignedMember = record.data.members.some((member) => {
-        const groupId = currentBotGroupIds.get(member.botId);
-        return groupId !== undefined && groupId !== null && groupId !== record.id;
-      });
-      return record.data.bossBotId === null || hasUnavailableMember || hasAssignedMember
-        ? [record.id]
-        : [];
+      return record.data.bossBotId === null || hasUnavailableMember ? [record.id] : [];
     }),
   );
   const unsupportedCounts = new Map<
@@ -1114,6 +1100,7 @@ export function previewPortabilityImport(
       "Provider credentials and opaque provider configuration",
       "MCP credentials and environment variables",
       "Local paths, image avatar files, Git state, and event identifiers",
+      "Paired client identities and group person membership",
     ],
     unsupported: [
       ...unsupportedCounts.values(),
@@ -1421,7 +1408,9 @@ export function commandsForPortabilityImport(
       });
     }
     const desired = new Map(record.data.members.map((member) => [member.botId, member.role]));
-    const predicted = new Map(existing.members.map((member) => [member.botId, member.role]));
+    const predicted = new Map(
+      existing.members.filter(isGroupBotMember).map((member) => [member.botId, member.role]),
+    );
     if (record.data.bossBotId && existing.bossBotId !== record.data.bossBotId) {
       const unassignPreviousBoss = existing.bossBotId !== null && !desired.has(existing.bossBotId);
       commands.push({

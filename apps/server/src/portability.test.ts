@@ -1,4 +1,5 @@
 import {
+  AuthSessionId,
   BotId,
   DEFAULT_SERVER_SETTINGS,
   EventId,
@@ -156,7 +157,7 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
         id: GROUP_ID,
         name: "Builders",
         bossBotId: BOT_ID,
-        members: [{ botId: BOT_ID, role: "boss" }],
+        members: [{ kind: "bot", botId: BOT_ID, role: "boss" }],
         createdAt: NOW,
         updatedAt: NOW,
       },
@@ -351,6 +352,94 @@ describe("portability archive", () => {
     expect(text).toContain('"approvalHistory"');
     expect(text).toContain('"messages"');
     expect(text).toContain('"proposedPlans"');
+  });
+
+  it("omits paired people while preserving bot group membership", () => {
+    const snapshot = makeSnapshot();
+    const source = {
+      ...snapshot,
+      groups: [
+        {
+          ...snapshot.groups[0]!,
+          members: [
+            ...snapshot.groups[0]!.members,
+            {
+              kind: "person" as const,
+              personId: AuthSessionId.make("person-portable"),
+              displayName: "Paired person",
+            },
+          ],
+        },
+      ],
+    };
+    const archive = createPortabilityArchive(source, makeSettings(), NOW);
+    const group = archive.records.find((record) => record.type === "group");
+
+    expect(group?.data.members).toEqual([{ kind: "bot", botId: BOT_ID, role: "boss" }]);
+    const commandTypes = commandsForPortabilityImport(
+      archive,
+      source,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    ).commands.map((command) => command.type);
+
+    expect(commandTypes).not.toContain("group.person.assign");
+    expect(commandTypes).not.toContain("group.person.unassign");
+  });
+
+  it("rejects paired identities in imported group records", () => {
+    const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+    const withPerson = resignArchive(
+      archive,
+      archive.records.map((record) =>
+        record.type === "group"
+          ? ({
+              ...record,
+              data: {
+                ...record.data,
+                members: [
+                  ...record.data.members,
+                  {
+                    kind: "person",
+                    personId: AuthSessionId.make("person-imported"),
+                    displayName: "Imported person",
+                  },
+                ],
+              },
+            } as unknown as PortabilityArchiveRecord)
+          : record,
+      ),
+    );
+
+    expect(() => parsePortabilityArchive(serializePortabilityArchive(withPerson))).toThrow();
+  });
+
+  it("allows one bot to belong to multiple groups", () => {
+    const secondGroupId = GroupId.make("group-second");
+    const source = makeSnapshot({
+      groups: [
+        makeSnapshot().groups[0]!,
+        {
+          ...makeSnapshot().groups[0]!,
+          id: secondGroupId,
+          name: "Second group",
+        },
+      ],
+    });
+    const archive = parsePortabilityArchive(
+      serializePortabilityArchive(createPortabilityArchive(source, makeSettings(), NOW)),
+    );
+    const preview = previewPortabilityImport(
+      archive,
+      makeSnapshot(),
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.additions).toContainEqual(
+      expect.objectContaining({ recordType: "group", id: secondGroupId }),
+    );
+    expect(preview.conflicts).not.toContainEqual(expect.objectContaining({ recordType: "group" }));
   });
 
   it("omits deleted threads and projects and does not restore over them", () => {
@@ -633,31 +722,6 @@ describe("portability import", () => {
       commandsForPortabilityImport(archive, target, makeSettings(), AVAILABLE_PROVIDER_IDS)
         .commands,
     ).not.toContainEqual(expect.objectContaining({ type: "thread.history.restore" }));
-  });
-
-  it("conflicts a group whose member belongs to another target group", () => {
-    const otherGroupId = GroupId.make("group-other");
-    const snapshot = makeSnapshot({
-      bots: [{ ...makeSnapshot().bots[0]!, groupId: otherGroupId }],
-      groups: [
-        {
-          ...makeSnapshot().groups[0]!,
-          id: otherGroupId,
-          bossBotId: BOT_ID,
-          members: [{ botId: BOT_ID, role: "boss" }],
-        },
-      ],
-    });
-    const preview = previewPortabilityImport(
-      createPortabilityArchive(makeSnapshot(), makeSettings(), NOW),
-      snapshot,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.conflicts).toContainEqual(
-      expect.objectContaining({ recordType: "group", id: GROUP_ID }),
-    );
   });
 
   it("does not overwrite newer server settings", () => {
@@ -1037,8 +1101,8 @@ describe("portability import", () => {
           ...makeSnapshot().groups[0]!,
           bossBotId: secondBotId,
           members: [
-            { botId: secondBotId, role: "boss" },
-            { botId: BOT_ID, role: "specialist" },
+            { kind: "bot", botId: secondBotId, role: "boss" },
+            { kind: "bot", botId: BOT_ID, role: "specialist" },
           ],
         },
       ],
