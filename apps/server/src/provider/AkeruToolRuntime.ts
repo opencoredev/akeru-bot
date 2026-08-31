@@ -2,6 +2,7 @@ import { RequestContext } from "@mastra/core/request-context";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
   AkeruToolInputSchemas,
+  type BotId,
   type AkeruToolDefinition,
   type AkeruToolId,
   type AkeruToolWorkspaceType,
@@ -12,11 +13,19 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
+import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
+
 export interface AkeruToolSession {
+  readonly botId?: BotId;
+  readonly botName?: string;
   readonly runtimeMode: RuntimeMode;
   readonly workspaceType: AkeruToolWorkspaceType;
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
+}
+
+export interface AkeruToolRuntimeOptions {
+  readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
 }
 
 export interface AkeruToolExecution {
@@ -103,7 +112,7 @@ function executable(value: unknown): value is {
   );
 }
 
-export function createAkeruToolRuntime(): AkeruToolRuntime {
+export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): AkeruToolRuntime {
   const sessions = new Map<string, AkeruToolSession>();
   const grants = new Map<string, { readonly toolId: AkeruToolId; readonly input: string }>();
   const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
@@ -131,6 +140,9 @@ export function createAkeruToolRuntime(): AkeruToolRuntime {
     if (session.workspace?.filesystem && session.userComputerWorkspace?.filesystem) {
       tools.add("CopyToBox");
       tools.add("CopyFromBox");
+    }
+    if (options?.onUserActionRequired && session.workspace && session.botId && session.botName) {
+      tools.add("request_box_help");
     }
     return tools;
   };
@@ -233,7 +245,18 @@ export function createAkeruToolRuntime(): AkeruToolRuntime {
         return { sourcePath, destinationPath };
       }
       if (input.toolId === "request_box_help") {
-        throw new Error("Human handoff is not available for this session.");
+        if (!options?.onUserActionRequired || !session.botId || !session.botName) {
+          throw new Error("Human handoff is not available for this session.");
+        }
+        await options.onUserActionRequired({
+          botId: session.botId,
+          botName: session.botName,
+          toolId: input.toolId,
+          summary: requiredString(decoded, "message"),
+          nextAction: "Open the bot workspace and complete the requested step.",
+          target: requiredString(decoded, "reason"),
+        });
+        return { requested: true };
       }
 
       const workspace = workspaceForTool(input.toolId, session);

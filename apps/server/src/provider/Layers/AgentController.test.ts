@@ -9,6 +9,7 @@ import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ApprovalRequestId,
+  BotId,
   EventId,
   McpServerId,
   ProviderDriverKind,
@@ -26,6 +27,7 @@ import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
+import { BotInboxService } from "../../bot-inbox/service.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
@@ -618,6 +620,56 @@ describe("AgentControllerLive", () => {
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("records human handoff requests in the bot inbox", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-handoff-inbox-"));
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          botId: BotId.make("bot-one"),
+          botName: "Research bot",
+          runtimeMode: "full-access",
+        });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "request_box_help",
+            toolCallId: "tool-help",
+            input: { reason: "captcha", message: "Complete the CAPTCHA." },
+            approvalMode: "require-grant",
+          }),
+        );
+
+        expect(
+          BotInboxService.forSecretsDir(NodePath.join(baseDir, "userdata", "secrets")).list(),
+        ).toMatchObject([
+          {
+            botId: "bot-one",
+            botName: "Research bot",
+            taskOrRoutine: "request_box_help",
+            lastFailure: "Complete the CAPTCHA.",
+          },
+        ]);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      baseDir,
+    ).pipe(
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(baseDir, { recursive: true, force: true }))),
     );
   });
 

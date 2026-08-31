@@ -65,10 +65,12 @@ describe("ProviderSessionStartInput", () => {
       threadId: "thread-1",
       provider: "codex",
       botId: "bot-one",
+      botName: "Research bot",
       botSandboxBrowserSharing: "separate",
       runtimeMode: "full-access",
     });
     expect(parsed.botId).toBe("bot-one");
+    expect(parsed.botName).toBe("Research bot");
     expect(parsed.botSandboxBrowserSharing).toBe("separate");
   });
 

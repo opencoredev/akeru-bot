@@ -69,7 +69,8 @@ describe("user-action inbox incidents", () => {
       service
         .list()
         .filter((item) => item.status === "open")
-        .map((item) => item.incidentKey),
+        .map((item) => item.incidentKey)
+        .sort(),
     ).toEqual([
       "user-action:bot-akeru:request_box_help:captcha",
       "user-action:bot-akeru:request_box_help:login",

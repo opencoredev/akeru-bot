@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+import { BotId } from "@t3tools/contracts";
 
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
@@ -117,6 +118,42 @@ describe("AkeruToolRuntime", () => {
 
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     await expect(replacement.filesystem?.readFile(".env")).rejects.toThrow();
+  });
+
+  it("records a human handoff request", async () => {
+    const requests: unknown[] = [];
+    const runtime = createAkeruToolRuntime({
+      onUserActionRequired: (request) => {
+        requests.push(request);
+      },
+    });
+    runtime.registerSession("thread-1", {
+      botId: BotId.make("bot-one"),
+      botName: "Research bot",
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      workspace: workspace("handoff"),
+    });
+
+    await expect(
+      runtime.execute({
+        threadId: "thread-1",
+        toolId: "request_box_help",
+        toolCallId: "tool-help",
+        input: { reason: "captcha", message: "Complete the CAPTCHA." },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ requested: true });
+    expect(requests).toEqual([
+      {
+        botId: "bot-one",
+        botName: "Research bot",
+        toolId: "request_box_help",
+        summary: "Complete the CAPTCHA.",
+        nextAction: "Open the bot workspace and complete the requested step.",
+        target: "captcha",
+      },
+    ]);
   });
 
   it("translates await handles to workspace process ids", async () => {

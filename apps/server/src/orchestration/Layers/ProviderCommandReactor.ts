@@ -712,6 +712,7 @@ const make = Effect.gen(function* () {
         modelSelection: desiredModelSelection,
         mcpServers,
         ...(respondingBotId ? { botId: respondingBotId } : {}),
+        ...(respondingBot ? { botName: respondingBot.name } : {}),
         botSandbox: respondingBot?.sandbox ?? null,
         botSandboxBrowserSharing,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),

@@ -36,6 +36,8 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import { BotInboxService } from "../../bot-inbox/service.ts";
+import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
 import {
   SubscriptionAuthService,
@@ -295,7 +297,12 @@ const make = (options?: AgentControllerLiveOptions) =>
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
     });
-    const toolRuntime = createAkeruToolRuntime();
+    const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
+    const toolRuntime = createAkeruToolRuntime({
+      onUserActionRequired: (input) => {
+        recordUserActionIncident(botInbox, input);
+      },
+    });
     const legacyResourceIdentity = new Map<
       string,
       {
@@ -686,7 +693,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.providerInstanceId === resolved.providerInstanceId
       ) {
         existing.runtimeMode = input.runtimeMode;
-        existing.toolSession = { ...existing.toolSession, runtimeMode: input.runtimeMode };
+        existing.toolSession = {
+          ...existing.toolSession,
+          runtimeMode: input.runtimeMode,
+          ...(input.botId ? { botId: input.botId } : {}),
+          ...(input.botName ? { botName: input.botName } : {}),
+        };
         toolRuntime.registerSession(key, existing.toolSession);
         return toProviderSession(threadId, existing);
       }
@@ -755,6 +767,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
       }
       const toolSession: AkeruToolSession = {
+        ...(input.botId ? { botId: input.botId } : {}),
+        ...(input.botName ? { botName: input.botName } : {}),
         runtimeMode: input.runtimeMode,
         workspaceType: resources.workspaceType,
         workspace: resources.workspace,
