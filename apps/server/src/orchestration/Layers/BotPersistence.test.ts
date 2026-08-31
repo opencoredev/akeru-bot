@@ -1,4 +1,5 @@
 import {
+  AuthSessionId,
   BotId,
   CommandId,
   GroupId,
@@ -296,6 +297,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const bossBotId = BotId.make("bot-routing-boss");
       const specialistBotId = BotId.make("bot-routing-specialist");
       const threadId = ThreadId.make("thread-group-routing");
+      const personId = AuthSessionId.make("person-routing");
       const createdAt = "2026-01-04T00:00:00.000Z";
       const modelSelection = {
         instanceId: ProviderInstanceId.make("codex"),
@@ -334,6 +336,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         name: "Routing group",
         bossBotId,
         specialistBotIds: [specialistBotId],
+        creator: { kind: "person", personId, displayName: "Routing person" },
         createdAt,
       });
       yield* engine.dispatch({
@@ -363,6 +366,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
         },
         runtimeMode: "full-access",
         interactionMode: "default",
+        senderPersonId: personId,
+        senderDisplayName: "Routing person",
         createdAt,
       });
 

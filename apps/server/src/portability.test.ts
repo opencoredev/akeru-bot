@@ -11,7 +11,6 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-  type PortabilityArchive,
   type PortabilityArchiveRecord,
   type ServerSettings,
 } from "@t3tools/contracts";
@@ -270,9 +269,9 @@ function makeSettings(): ServerSettings {
 }
 
 function resignArchive(
-  archive: PortabilityArchive,
+  archive: ReturnType<typeof createPortabilityArchive>,
   records: readonly PortabilityArchiveRecord[],
-): PortabilityArchive {
+): ReturnType<typeof createPortabilityArchive> {
   const signedRecords = records.map((record) => {
     const { checksum: _checksum, ...core } = record;
     return { ...core, checksum: portabilityChecksum(core) } as PortabilityArchiveRecord;
@@ -626,7 +625,10 @@ describe("portability import", () => {
     expect(preview.changes.map((entry) => entry.recordType)).toEqual(["server-settings"]);
     expect(preview.conflicts.map((entry) => entry.recordType)).toEqual(["bot", "group", "thread"]);
     expect(preview.missingProviders).toEqual(["missing-instance", "missing-provider"]);
-    expect(preview.skippedSecrets).toHaveLength(3);
+    expect(preview.skippedSecrets).toHaveLength(4);
+    expect(preview.skippedSecrets).toContain(
+      "Paired client identities and group person membership",
+    );
     expect(preview.unsupported).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "jobs", count: 0 }),

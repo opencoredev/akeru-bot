@@ -1227,6 +1227,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
   respondingBotId: Schema.optional(BotId),
   senderPersonId: Schema.optional(AuthSessionId),
   senderDisplayName: Schema.optional(TrimmedNonEmptyString),
+  senderCanManageGroups: Schema.optional(Schema.Boolean),
   createdAt: IsoDateTime,
 });
 

@@ -12,6 +12,7 @@ import {
   DEFAULT_BLOB_COLOR,
   DEFAULT_BLOB_SHAPE,
   formatRosterTimestamp,
+  groupContainsBot,
   isRecordableChatPath,
   parseChatPath,
   randomBotAvatar,
@@ -101,6 +102,12 @@ describe("buildGroupedRosterSections", () => {
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
   };
+
+  it("uses group membership instead of the legacy bot group ID", () => {
+    const member = bot({ id: "assigned", name: "Assigned", groupId: null });
+
+    expect(groupContainsBot(group, member.id)).toBe(true);
+  });
 
   it("shows assigned groups before Unassigned and leaves pinned bots in the strip", () => {
     const sections = buildGroupedRosterSections(

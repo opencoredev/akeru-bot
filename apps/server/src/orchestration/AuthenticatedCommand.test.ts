@@ -32,14 +32,18 @@ describe("authenticated orchestration commands", () => {
         groupId: GroupId.make("group-1"),
         personId: AuthSessionId.make("person-spoofed"),
       },
-      { personId: currentPersonId, displayName: "Current person" },
+      { personId: currentPersonId, displayName: "Current person", canManageGroups: false },
     );
 
     expect(command).toMatchObject({ type: "group.leave", personId: currentPersonId });
   });
 
   it("stamps group creators and turn senders from the authenticated person", () => {
-    const actor = { personId: currentPersonId, displayName: "Current person" };
+    const actor = {
+      personId: currentPersonId,
+      displayName: "Current person",
+      canManageGroups: false,
+    };
     const group = applyAuthenticatedCommandActor(
       {
         type: "group.create",
@@ -73,6 +77,7 @@ describe("authenticated orchestration commands", () => {
     expect(turn).toMatchObject({
       senderPersonId: currentPersonId,
       senderDisplayName: "Current person",
+      senderCanManageGroups: false,
     });
   });
 
@@ -114,18 +119,15 @@ describe("authenticated orchestration commands", () => {
     ).toBeNull();
   });
 
-  it("rejects unassigning an unknown group person", () => {
-    expect(
-      applyKnownGroupPerson(
-        {
-          type: "group.person.unassign",
-          commandId: CommandId.make("command-unassign-unknown"),
-          groupId: GroupId.make("group-1"),
-          personId: targetPersonId,
-        },
-        [],
-      ),
-    ).toBeNull();
+  it("allows an administrator to unassign a revoked person", () => {
+    const command = {
+      type: "group.person.unassign" as const,
+      commandId: CommandId.make("command-unassign-revoked"),
+      groupId: GroupId.make("group-1"),
+      personId: targetPersonId,
+    };
+
+    expect(applyKnownGroupPerson(command, [])).toEqual(command);
   });
 
   it("requires access write to assign or unassign people", () => {

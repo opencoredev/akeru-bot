@@ -25,6 +25,13 @@ import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 
+export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
+  members: ReadonlyArray<T>,
+  bossBotId: string | null,
+): T | null {
+  return members.find((bot) => bot.id === bossBotId) ?? null;
+}
+
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
@@ -49,8 +56,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   if (!group) return null;
   const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
-  const boss = members.find((bot) => bot.id === group.bossBotId) ?? members[0];
-  if (!boss) return null;
+  const boss = resolveAvailableGroupBoss(members, group.bossBotId);
   const working = runtime.sending || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages, working);
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
@@ -85,13 +91,32 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   />
                 ))}
               </div>
-              <h1 className="text-lg font-medium">Message {group.name}</h1>
+              <h1 className="text-lg font-medium">
+                {boss ? `Message ${group.name}` : "Group boss unavailable"}
+              </h1>
             </div>
           ) : (
             messages.map((message) => {
               if (message.role === "assistant") {
                 const respondingBot =
                   members.find((bot) => bot.id === message.respondingBotId) ?? boss;
+                if (!respondingBot) {
+                  return (
+                    <div
+                      key={message.id}
+                      className="max-w-[85%]"
+                      data-testid="group-provider-message"
+                    >
+                      <div className="text-sm font-medium">Unavailable bot</div>
+                      <ChatMarkdown
+                        className="mt-1"
+                        cwd={runtime.defaultProject?.workspaceRoot}
+                        text={message.text}
+                        threadRef={runtime.linkedThreadRef ?? undefined}
+                      />
+                    </div>
+                  );
+                }
                 return (
                   <div
                     key={message.id}
@@ -142,7 +167,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               );
             })
           )}
-          {working ? <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} /> : null}
+          {working && activeBot ? (
+            <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} />
+          ) : null}
         </BotConversationScrollArea>
         <BotInboxAlertStack
           items={inboxItems}
@@ -153,6 +180,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
           }
         />
+        {boss === null ? (
+          <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
+            Choose an active group boss in Settings.
+          </div>
+        ) : null}
         <BotPromptComposer
           botName={group.name}
           draftKey={`group:${group.id}`}
@@ -160,7 +192,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             runtime.sending ||
             !runtime.groupReady ||
             !runtime.bootstrapped ||
-            runtime.defaultProject === null
+            runtime.defaultProject === null ||
+            boss === null
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
           modelPicker={null}

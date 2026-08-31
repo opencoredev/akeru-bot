@@ -9,6 +9,7 @@ import {
 export interface AuthenticatedCommandActor {
   readonly personId: AuthSessionId;
   readonly displayName: string;
+  readonly canManageGroups: boolean;
 }
 
 export function canManageGroupPeople(
@@ -25,11 +26,7 @@ export function applyKnownGroupPerson(
   command: OrchestrationCommand,
   clientSessions: ReadonlyArray<AuthClientSession>,
 ): OrchestrationCommand | null {
-  if (command.type === "group.person.unassign") {
-    return clientSessions.some((candidate) => candidate.sessionId === command.personId)
-      ? command
-      : null;
-  }
+  if (command.type === "group.person.unassign") return command;
   if (command.type !== "group.person.assign") return command;
   const clientSession = clientSessions.find(
     (candidate) => candidate.sessionId === command.person.personId,
@@ -66,6 +63,7 @@ export function applyAuthenticatedCommandActor(
         ...command,
         senderPersonId: actor.personId,
         senderDisplayName: actor.displayName,
+        senderCanManageGroups: actor.canManageGroups,
       };
     default:
       return command;

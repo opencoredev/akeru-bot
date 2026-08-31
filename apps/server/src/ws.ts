@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  AuthAccessWriteScope,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
   type AuthEnvironmentScope,
@@ -481,13 +482,17 @@ const makeWsRpcLayer = (
       // the client's request caused them.
       const hasClientOrigin =
         clientOrigin.surface !== undefined || clientOrigin.appVersion !== undefined;
+      const dispatchActor = {
+        personId: currentSessionId,
+        canManageGroups: currentSession.scopes.includes(AuthAccessWriteScope),
+      };
       const dispatchFromClient: OrchestrationEngine.OrchestrationEngineShape["dispatch"] = (
         command,
       ) =>
-        orchestrationEngine.dispatch(
-          command,
-          hasClientOrigin ? { origin: clientOrigin } : undefined,
-        );
+        orchestrationEngine.dispatch(command, {
+          actor: dispatchActor,
+          ...(hasClientOrigin ? { origin: clientOrigin } : {}),
+        });
       const originProps = clientOriginAnalyticsProps(clientOrigin);
       const recordClientCommandAnalytics = (command: OrchestrationCommand) => {
         switch (command.type) {
@@ -671,16 +676,14 @@ const makeWsRpcLayer = (
               (session) => session.sessionId === currentSessionId,
             );
             const hostClient = clientSessions.find((session) =>
-              EnvironmentAuth.isEnvironmentHostSessionSubject(session.subject),
+              session.scopes.includes(AuthAccessWriteScope),
             );
             return {
               current: {
                 personId: currentSessionId,
                 displayName:
                   currentClient?.client.label ??
-                  (EnvironmentAuth.isEnvironmentHostSessionSubject(currentSession.subject)
-                    ? "Host"
-                    : "Paired person"),
+                  (currentSession.scopes.includes(AuthAccessWriteScope) ? "Host" : "Paired person"),
               },
               host:
                 hostClient === undefined
@@ -1397,6 +1400,7 @@ const makeWsRpcLayer = (
               const actorCommand = applyAuthenticatedCommandActor(decodedCommand, {
                 personId: currentSessionId,
                 displayName: currentPerson?.displayName ?? "Paired person",
+                canManageGroups: currentSession.scopes.includes(AuthAccessWriteScope),
               });
               let normalizedCommand = actorCommand;
               if (

@@ -126,19 +126,19 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           const currentClient = clientSessions.find(
             (session) => session.sessionId === principal.sessionId,
           );
-          const actorCommand = applyAuthenticatedCommandActor(decodedCommand, {
+          const actor = {
             personId: principal.sessionId,
             displayName:
               currentClient?.client.label ??
-              (EnvironmentAuth.isEnvironmentHostSessionSubject(principal.subject)
-                ? "Host"
-                : "Paired person"),
-          });
+              (principal.scopes.has(AuthAccessWriteScope) ? "Host" : "Paired person"),
+            canManageGroups: principal.scopes.has(AuthAccessWriteScope),
+          };
+          const actorCommand = applyAuthenticatedCommandActor(decodedCommand, actor);
           const normalizedCommand = applyKnownGroupPerson(actorCommand, clientSessions);
           if (!normalizedCommand) {
             return yield* failEnvironmentInvalidRequest("invalid_command");
           }
-          return yield* orchestrationEngine.dispatch(normalizedCommand).pipe(
+          return yield* orchestrationEngine.dispatch(normalizedCommand, { actor }).pipe(
             Effect.tapError(() =>
               cleanupFailedUploadedAttachments(args.payload, normalizedCommand),
             ),

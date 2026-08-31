@@ -1173,6 +1173,9 @@ function itemForCommand(
       case "group.delete":
       case "group.member.assign":
       case "group.member.unassign":
+      case "group.person.assign":
+      case "group.person.unassign":
+      case "group.leave":
       case "group.boss.set":
         return `group:${command.groupId}`;
       case "mcp-server.create":
