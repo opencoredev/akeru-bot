@@ -231,7 +231,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         VALUES (
           'thread-1',
           'turn-1',
-          NULL,
+          'message-request-1',
           'thread-1',
           'plan-1',
           'message-1',
@@ -322,6 +322,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             startedAt: "2026-02-24T00:00:08.000Z",
             completedAt: "2026-02-24T00:00:08.000Z",
             assistantMessageId: asMessageId("message-1"),
+            requestMessageId: asMessageId("message-request-1"),
             respondingBotId: null,
             sourceProposedPlan: {
               threadId: ThreadId.make("thread-1"),
@@ -453,6 +454,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             startedAt: "2026-02-24T00:00:08.000Z",
             completedAt: "2026-02-24T00:00:08.000Z",
             assistantMessageId: asMessageId("message-1"),
+            requestMessageId: asMessageId("message-request-1"),
             respondingBotId: null,
             sourceProposedPlan: {
               threadId: ThreadId.make("thread-1"),
@@ -1305,6 +1307,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       if (threadShell._tag === "Some") {
         assert.equal(threadShell.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadShell.value.latestTurn?.state, "running");
+        assert.equal(threadShell.value.latestTurn?.requestMessageId, asMessageId("message-user-2"));
         assert.equal(threadShell.value.latestTurn?.startedAt, "2026-04-02T00:00:30.000Z");
       }
 
@@ -1313,6 +1316,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       if (threadDetail._tag === "Some") {
         assert.equal(threadDetail.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadDetail.value.latestTurn?.state, "running");
+        assert.equal(
+          threadDetail.value.latestTurn?.requestMessageId,
+          asMessageId("message-user-2"),
+        );
         assert.equal(threadDetail.value.latestTurn?.startedAt, "2026-04-02T00:00:30.000Z");
       }
     }),
@@ -1460,14 +1467,26 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const commandReadModel = yield* snapshotQuery.getCommandReadModel();
       assert.equal(commandReadModel.threads[0]?.latestTurn?.turnId, asTurnId("turn-running"));
       assert.equal(commandReadModel.threads[0]?.latestTurn?.state, "running");
+      assert.equal(
+        commandReadModel.threads[0]?.latestTurn?.requestMessageId,
+        asMessageId("message-user-2"),
+      );
 
       const shellSnapshot = yield* snapshotQuery.getShellSnapshot();
       assert.equal(shellSnapshot.threads[0]?.latestTurn?.turnId, asTurnId("turn-running"));
       assert.equal(shellSnapshot.threads[0]?.latestTurn?.state, "running");
+      assert.equal(
+        shellSnapshot.threads[0]?.latestTurn?.requestMessageId,
+        asMessageId("message-user-2"),
+      );
 
       const fullSnapshot = yield* snapshotQuery.getSnapshot();
       assert.equal(fullSnapshot.threads[0]?.latestTurn?.turnId, asTurnId("turn-running"));
       assert.equal(fullSnapshot.threads[0]?.latestTurn?.state, "running");
+      assert.equal(
+        fullSnapshot.threads[0]?.latestTurn?.requestMessageId,
+        asMessageId("message-user-2"),
+      );
     }),
   );
 

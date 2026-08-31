@@ -7,100 +7,60 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
   ThreadId,
+  OrchestrationLatestTurn,
+  OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 
 const botTurnSubmissions = new Map<
   string,
   {
-    readonly previousTurnId: string | null;
+    readonly requestMessageId: string | null;
     readonly token: symbol;
-    readonly observation: {
-      readonly connected: boolean;
-      readonly generation: number | null;
-      readonly latestTurn: { readonly turnId: string; readonly state: string } | null | undefined;
-    };
   }
 >();
 
-export const BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS = 15_000;
-export const BOT_TURN_SUBMISSION_MAX_UNOBSERVED_CHECKS = 4;
-
-export function reserveBotTurnSubmission(
-  key: string,
-  previousTurnId: string | null = null,
-): (() => void) | null {
+export function reserveBotTurnSubmission(key: string): (() => void) | null {
   if (botTurnSubmissions.has(key)) return null;
   const token = Symbol(key);
-  botTurnSubmissions.set(key, {
-    previousTurnId,
-    token,
-    observation: { connected: true, generation: null, latestTurn: null },
-  });
+  botTurnSubmissions.set(key, { requestMessageId: null, token });
   return () => {
     if (botTurnSubmissions.get(key)?.token === token) botTurnSubmissions.delete(key);
   };
 }
 
-export function observeBotTurnSubmission(
-  key: string,
-  observation: {
-    readonly connected: boolean;
-    readonly generation: number | null;
-    readonly latestTurn: { readonly turnId: string; readonly state: string } | null | undefined;
-  },
-): void {
+export function acceptBotTurnSubmission(key: string, requestMessageId: string): void {
   const submission = botTurnSubmissions.get(key);
-  if (submission) botTurnSubmissions.set(key, { ...submission, observation });
+  if (submission) botTurnSubmissions.set(key, { ...submission, requestMessageId });
 }
 
-export function releaseBotTurnSubmissionAfterSettlement(
+export function releaseBotTurnSubmissionAfterObservation(
   key: string,
-  latestTurn: { readonly turnId: string; readonly state: string } | null | undefined,
+  latestTurn: Pick<OrchestrationLatestTurn, "requestMessageId" | "state"> | null | undefined,
+  activities: readonly Pick<OrchestrationThreadActivity, "kind" | "payload">[],
 ): boolean {
   const submission = botTurnSubmissions.get(key);
-  if (
-    !submission ||
-    !latestTurn ||
-    latestTurn.turnId === submission.previousTurnId ||
-    latestTurn.state === "running"
-  ) {
-    return false;
-  }
+  if (!submission?.requestMessageId) return false;
+
+  const matchingTurn = latestTurn?.requestMessageId === submission.requestMessageId;
+  if (matchingTurn && latestTurn.state === "running") return false;
+
+  const matchingTurnSettled = matchingTurn;
+  const providerStartFailed = activities.some((activity) => {
+    if (
+      activity.kind !== "provider.turn.start.failed" ||
+      typeof activity.payload !== "object" ||
+      activity.payload === null ||
+      !("requestId" in activity.payload) ||
+      typeof activity.payload.requestId !== "string"
+    ) {
+      return false;
+    }
+    return activity.payload.requestId === submission.requestMessageId;
+  });
+  if (!matchingTurnSettled && !providerStartFailed) return false;
+
   botTurnSubmissions.delete(key);
   return true;
-}
-
-export function scheduleBotTurnSubmissionFallbackRelease(
-  input: {
-    readonly key: string;
-    readonly release: () => void;
-  },
-  delayMs = BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS,
-  maxUnobservedChecks = BOT_TURN_SUBMISSION_MAX_UNOBSERVED_CHECKS,
-): void {
-  const token = botTurnSubmissions.get(input.key)?.token;
-  const generation = botTurnSubmissions.get(input.key)?.observation.generation;
-  let unobservedChecks = 0;
-  const reconcile = () => {
-    const submission = botTurnSubmissions.get(input.key);
-    if (!submission || submission.token !== token) return;
-    const { connected, latestTurn } = submission.observation;
-    const hasNewerTurn = latestTurn ? latestTurn.turnId !== submission.previousTurnId : false;
-    if (latestTurn?.state === "running") {
-      globalThis.setTimeout(reconcile, delayMs);
-      return;
-    }
-    if (
-      !hasNewerTurn &&
-      (!connected || submission.observation.generation === generation) &&
-      ++unobservedChecks < maxUnobservedChecks
-    ) {
-      globalThis.setTimeout(reconcile, delayMs);
-      return;
-    }
-    input.release();
-  };
-  globalThis.setTimeout(reconcile, delayMs);
 }
 
 export async function joinOrStartThreadCreate<T>(input: {

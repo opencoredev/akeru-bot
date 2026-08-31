@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { MessageId } from "./baseSchemas.ts";
 import {
   BotAvatar,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -929,6 +930,7 @@ it.effect("decodes latest turn source proposed plan metadata when present", () =
     const parsed = yield* decodeOrchestrationLatestTurn({
       turnId: "turn-2",
       state: "running",
+      requestMessageId: "msg-2",
       requestedAt: "2026-01-01T00:00:00.000Z",
       startedAt: "2026-01-01T00:00:01.000Z",
       completedAt: null,
@@ -942,6 +944,21 @@ it.effect("decodes latest turn source proposed plan metadata when present", () =
       threadId: "thread-1",
       planId: "plan-1",
     });
+    assert.strictEqual(parsed.requestMessageId, MessageId.make("msg-2"));
+  }),
+);
+
+it.effect("decodes historical latest turns without a request message id", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationLatestTurn({
+      turnId: "turn-2",
+      state: "running",
+      requestedAt: "2026-01-01T00:00:00.000Z",
+      startedAt: null,
+      completedAt: null,
+      assistantMessageId: null,
+    });
+    assert.strictEqual(parsed.requestMessageId, undefined);
   }),
 );
 
