@@ -1,4 +1,5 @@
 export {
+  isInstallablePlugin,
   loadCatalog,
   loadDirectoryCatalog,
   resolveCatalogInstallations,

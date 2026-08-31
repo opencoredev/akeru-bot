@@ -7,6 +7,7 @@ import type { EnvironmentId, McpServer } from "@t3tools/contracts";
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 import {
+  isInstallablePlugin,
   loadDirectoryCatalog,
   type PluginDirectoryDefinition,
   type PluginSkill,
@@ -179,7 +180,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   };
 
   const togglePlugin = async (plugin: PluginDirectoryDefinition, enabled: boolean) => {
-    if (plugin.kind === "mcp-unavailable") return;
+    if (!isInstallablePlugin(plugin)) return;
     const plan = planPluginToggle(plugin, servers, enabled);
     setPendingServerId(plan.mcpServerId);
     if (plan.action === "refresh-and-enable") {

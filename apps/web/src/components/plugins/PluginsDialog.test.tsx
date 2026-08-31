@@ -1,7 +1,11 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
-import { loadDirectoryCatalog, type PluginDirectoryDefinition } from "../../../../../plugins";
+import {
+  isInstallablePlugin,
+  loadDirectoryCatalog,
+  type PluginDirectoryDefinition,
+} from "../../../../../plugins";
 import { PluginDetailsContent } from "./PluginDetails";
 import {
   EMPTY_MCP_SERVER_DRAFT,
@@ -18,7 +22,7 @@ import { planPluginToggle, pluginMcpServerId } from "./pluginRegistry";
 const catalog = loadDirectoryCatalog();
 const firecrawl = catalog.find((plugin) => plugin.id === "firecrawl");
 const executor = catalog.find((plugin) => plugin.id === "executor");
-if (!firecrawl || firecrawl.kind !== "mcp-url" || !executor) {
+if (!firecrawl || !isInstallablePlugin(firecrawl) || firecrawl.kind !== "mcp-url" || !executor) {
   throw new TypeError("Required plugins are missing from the directory.");
 }
 const { kind: _kind, transport: _transport, url: _url, ...pendingBase } = firecrawl;
