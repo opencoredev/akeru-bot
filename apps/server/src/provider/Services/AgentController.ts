@@ -92,5 +92,5 @@ export interface AgentControllerShape {
 }
 
 export class AgentController extends Context.Service<AgentController, AgentControllerShape>()(
-  "t3/provider/Services/AgentController",
+  "akeru-bot/provider/Services/AgentController",
 ) {}

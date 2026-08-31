@@ -17,6 +17,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
+import type { BotId } from "@t3tools/contracts";
 
 import {
   completeAnthropicLogin,
@@ -87,6 +88,41 @@ export interface ProviderStatus {
   connected: boolean;
   /** ms epoch when the current access token expires; refreshed on demand. */
   expiresAt?: number;
+  health:
+    | "missing"
+    | "detected"
+    | "healthy"
+    | "expired"
+    | "revoked"
+    | "failed"
+    | "failed-first-request"
+    | "recovered";
+  lastSuccessfulRequestAt?: string;
+  lastFailedRequest?: { at: string; message: string };
+  nextRetryAt?: string;
+  reconnectAction: string;
+  healthTest: { status: "not-run" | "passed" | "failed"; checkedAt?: string };
+  oauthCheck?: { status: "passed" | "failed"; checkedAt: string };
+  dependentBots: ReadonlyArray<{ id: BotId; name: string }>;
+  dependentRoutines: ReadonlyArray<string>;
+}
+
+interface ProviderHealthRecord {
+  lastSuccessfulRequestAt?: string;
+  lastFailedRequest?: { at: string; message: string };
+  nextRetryAt?: string;
+  healthTest?: { status: "passed" | "failed"; checkedAt: string };
+  oauthCheck?: { status: "passed" | "failed"; checkedAt: string };
+  failureKind?: "request" | "revoked";
+}
+
+type ProviderHealthData = Record<string, ProviderHealthRecord | undefined>;
+
+function oauthFailureKind(cause: unknown): "request" | "revoked" {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return /\b(?:invalid_grant|revoked|unauthori[sz]ed|401|403)\b/i.test(message)
+    ? "revoked"
+    : "request";
 }
 
 type PendingLogin =
@@ -103,12 +139,15 @@ export class SubscriptionAuthService {
   private data: SubscriptionAuthData = {};
   private readonly authPath: string;
   private readonly pendingPath: string;
+  private readonly healthPath: string;
+  private health: ProviderHealthData = {};
   private readonly pendingLogins = new Map<string, PendingLogin>();
   private readonly refreshInFlight = new Map<string, Promise<string | undefined>>();
 
   constructor(authPath: string) {
     this.authPath = authPath;
     this.pendingPath = `${authPath}.pending`;
+    this.healthPath = `${authPath}.health`;
     this.reload();
   }
 
@@ -127,6 +166,8 @@ export class SubscriptionAuthService {
       }
     }
 
+    this.reloadHealth();
+
     this.pendingLogins.clear();
     if (!NodeFS.existsSync(this.pendingPath)) return;
     try {
@@ -138,6 +179,18 @@ export class SubscriptionAuthService {
       }
     } catch {
       this.pendingLogins.clear();
+    }
+  }
+
+  private reloadHealth(): void {
+    if (!NodeFS.existsSync(this.healthPath)) {
+      this.health = {};
+      return;
+    }
+    try {
+      this.health = JSON.parse(NodeFS.readFileSync(this.healthPath, "utf-8")) as ProviderHealthData;
+    } catch {
+      this.health = {};
     }
   }
 
@@ -163,13 +216,185 @@ export class SubscriptionAuthService {
     this.writeSecureJson(this.pendingPath, [...this.pendingLogins.entries()]);
   }
 
-  statuses(): ProviderStatus[] {
+  private saveHealth(): void {
+    this.writeSecureJson(this.healthPath, this.health);
+  }
+
+  statuses(
+    dependentBots: ReadonlyArray<{
+      readonly id: BotId;
+      readonly name: string;
+      readonly provider: SubscriptionProviderId;
+    }> = [],
+    now = Date.now(),
+  ): ProviderStatus[] {
     return SUBSCRIPTION_PROVIDER_IDS.map((provider) => {
       const credential = this.data[provider];
-      return credential
-        ? { provider, connected: true, expiresAt: credential.expires }
-        : { provider, connected: false };
+      const health = this.health[provider];
+      const expired = credential !== undefined && credential.expires <= now;
+      const failedAfterSuccess =
+        health?.lastFailedRequest !== undefined &&
+        (health.lastSuccessfulRequestAt === undefined ||
+          health.lastFailedRequest.at >= health.lastSuccessfulRequestAt);
+      const recovered =
+        health?.lastSuccessfulRequestAt !== undefined &&
+        health.lastFailedRequest !== undefined &&
+        health.lastSuccessfulRequestAt > health.lastFailedRequest.at;
+      const state = !credential
+        ? "missing"
+        : failedAfterSuccess
+          ? health?.failureKind === "revoked"
+            ? "revoked"
+            : health?.lastSuccessfulRequestAt
+              ? "failed"
+              : "failed-first-request"
+          : expired
+            ? "expired"
+            : recovered
+              ? "recovered"
+              : health?.lastSuccessfulRequestAt
+                ? "healthy"
+                : "detected";
+      return {
+        provider,
+        connected: credential !== undefined,
+        ...(credential ? { expiresAt: credential.expires } : {}),
+        health: state,
+        ...(health?.lastSuccessfulRequestAt
+          ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
+          : {}),
+        ...(health?.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
+        ...(health?.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
+        reconnectAction: credential ? "Reconnect account" : "Connect account",
+        healthTest: health?.healthTest ?? { status: "not-run" },
+        ...(health?.oauthCheck ? { oauthCheck: health.oauthCheck } : {}),
+        dependentBots: dependentBots
+          .filter((bot) => bot.provider === provider)
+          .map(({ id, name }) => ({ id, name })),
+        dependentRoutines: [],
+      };
     });
+  }
+
+  recordRequestSuccess(provider: SubscriptionProviderId, at = new Date().toISOString()): void {
+    this.recordHealthSuccess(provider, at);
+  }
+
+  recordProviderInstanceSuccess(instanceId: string, at = new Date().toISOString()): void {
+    this.recordHealthSuccess(`provider:${instanceId}`, at);
+  }
+
+  private recordHealthSuccess(key: string, at: string): void {
+    this.reloadHealth();
+    const previous = this.health[key];
+    const { nextRetryAt: _nextRetryAt, ...rest } = previous ?? {};
+    this.health[key] = {
+      ...rest,
+      lastSuccessfulRequestAt: at,
+      healthTest: { status: "passed", checkedAt: at },
+    };
+    this.saveHealth();
+  }
+
+  recordRequestFailure(
+    provider: SubscriptionProviderId,
+    message: string,
+    at = new Date().toISOString(),
+    failureKind: "request" | "revoked" = "request",
+  ): void {
+    this.recordHealthFailure(provider, message, at, failureKind);
+  }
+
+  recordProviderInstanceFailure(
+    instanceId: string,
+    message: string,
+    at = new Date().toISOString(),
+  ): void {
+    this.recordHealthFailure(`provider:${instanceId}`, message, at, "request");
+  }
+
+  private recordHealthFailure(
+    key: string,
+    message: string,
+    at: string,
+    failureKind: "request" | "revoked",
+  ): void {
+    this.reloadHealth();
+    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
+    this.health[key] = {
+      ...previous,
+      lastFailedRequest: { at, message },
+      failureKind,
+      healthTest: { status: "failed", checkedAt: at },
+    };
+    this.saveHealth();
+  }
+
+  providerInstanceHealth(
+    instanceId: string,
+  ): "healthy" | "failed" | "failed-first-request" | "recovered" | undefined {
+    const health = this.health[`provider:${instanceId}`];
+    if (!health) return undefined;
+    if (
+      health.lastFailedRequest &&
+      (!health.lastSuccessfulRequestAt ||
+        health.lastFailedRequest.at >= health.lastSuccessfulRequestAt)
+    ) {
+      return health.lastSuccessfulRequestAt ? "failed" : "failed-first-request";
+    }
+    if (
+      health.lastSuccessfulRequestAt &&
+      health.lastFailedRequest &&
+      health.lastSuccessfulRequestAt > health.lastFailedRequest.at
+    ) {
+      return "recovered";
+    }
+    return health.lastSuccessfulRequestAt ? "healthy" : undefined;
+  }
+
+  async testHealth(provider: SubscriptionProviderId): Promise<void> {
+    const credential = this.data[provider];
+    if (!credential) {
+      this.recordOAuthFailure(provider, "No account is connected.");
+      return;
+    }
+    try {
+      const refreshed = await this.runRefresh(provider, credential);
+      this.setCredential(provider, refreshed);
+      // Refresh proves the OAuth grant is usable. It does not prove that the
+      // subscription can make a model request, so keep access detected until
+      // the runtime records the first successful provider request.
+      const checkedAt = new Date().toISOString();
+      this.reloadHealth();
+      this.health[provider] = {
+        ...this.health[provider],
+        oauthCheck: { status: "passed", checkedAt },
+      };
+      this.saveHealth();
+    } catch (cause) {
+      this.recordOAuthFailure(
+        provider,
+        cause instanceof Error ? cause.message : "The provider rejected the health request.",
+        oauthFailureKind(cause),
+      );
+    }
+  }
+
+  private recordOAuthFailure(
+    provider: SubscriptionProviderId,
+    message: string,
+    failureKind: "request" | "revoked" = "request",
+  ): void {
+    const checkedAt = new Date().toISOString();
+    this.reloadHealth();
+    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[provider] ?? {};
+    this.health[provider] = {
+      ...previous,
+      lastFailedRequest: { at: checkedAt, message },
+      failureKind,
+      oauthCheck: { status: "failed", checkedAt },
+    };
+    this.saveHealth();
   }
 
   isConnected(provider: SubscriptionProviderId): boolean {
@@ -347,7 +572,10 @@ export class SubscriptionAuthService {
 
   logout(provider: SubscriptionProviderId): void {
     delete this.data[provider];
+    this.reloadHealth();
+    delete this.health[provider];
     this.save();
+    this.saveHealth();
   }
 
   private setCredential(provider: SubscriptionProviderId, credentials: OAuthCredentials): void {
@@ -398,9 +626,14 @@ export class SubscriptionAuthService {
       const refreshed = await this.runRefresh(provider, credential);
       this.setCredential(provider, refreshed);
       return refreshed.access;
-    } catch {
+    } catch (cause) {
       // Refresh failed — the user must re-connect. Keep the stored credential
       // so status still shows which account was linked.
+      this.recordOAuthFailure(
+        provider,
+        cause instanceof Error ? cause.message : "The provider rejected the token refresh.",
+        oauthFailureKind(cause),
+      );
       return undefined;
     }
   }

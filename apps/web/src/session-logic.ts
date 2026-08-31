@@ -124,6 +124,8 @@ export interface PendingApproval {
   detail?: string;
   appName?: string;
   options?: ReadonlyArray<ProviderApprovalOption>;
+  toolName?: string;
+  args?: unknown;
 }
 
 const isProviderRequestKind = Schema.is(ProviderRequestKind);
@@ -439,6 +441,8 @@ export function derivePendingApprovals(
           : null;
     const detail = payload && typeof payload.detail === "string" ? payload.detail : undefined;
     const appName = payload && typeof payload.appName === "string" ? payload.appName : undefined;
+    const toolName = payload && typeof payload.toolName === "string" ? payload.toolName : undefined;
+    const args = payload?.args;
     const options = Array.isArray(payload?.options)
       ? payload.options.filter(isProviderApprovalOption)
       : undefined;
@@ -450,6 +454,8 @@ export function derivePendingApprovals(
         createdAt: activity.createdAt,
         ...(detail ? { detail } : {}),
         ...(appName ? { appName } : {}),
+        ...(toolName ? { toolName } : {}),
+        ...(args !== undefined ? { args } : {}),
         ...(options && options.length > 0 ? { options } : {}),
       });
       continue;

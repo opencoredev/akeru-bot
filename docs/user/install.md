@@ -11,11 +11,11 @@ At least one provider CLI, installed and authenticated. See [Providers](#provide
 ## Run Without Installing
 
 ```bash
-npx t3@latest
+npx akeru-bot@latest
 ```
 
 This starts the T3 Code server on your machine and opens the local web app. Use
-`npx t3@latest --help` for the full CLI reference.
+`npx akeru-bot@latest --help` for the full CLI reference.
 
 ## Desktop App
 

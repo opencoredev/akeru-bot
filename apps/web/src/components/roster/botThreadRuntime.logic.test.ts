@@ -1,15 +1,153 @@
-import { BotId, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  BotId,
+  GroupId,
+  MessageId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  acceptBotTurnSubmission,
   buildBotTurnStartInput,
   buildGroupTurnStartInput,
   findLatestBotThreadTarget,
   findLatestGroupThreadTarget,
   joinOrStartThreadCreate,
+  releaseBotTurnSubmissionAfterObservation,
+  reserveBotTurnSubmission,
+  reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
 
 describe("bot thread runtime", () => {
+  it("shares the turn submission lock across runtime instances", () => {
+    const release = reserveBotTurnSubmission("env-a:bot-akeru");
+    expect(release).not.toBeNull();
+    expect(reserveBotTurnSubmission("env-a:bot-akeru")).toBeNull();
+    release?.();
+  });
+
+  it("retains a reserved submission until the start command responds", () => {
+    const key = "env-a:bot-unaccepted";
+    const release = reserveBotTurnSubmission(key);
+    expect(release).not.toBeNull();
+    expect(
+      releaseBotTurnSubmissionAfterObservation(
+        key,
+        {
+          requestMessageId: MessageId.make("message-unrelated"),
+          state: "completed",
+        },
+        [
+          {
+            kind: "provider.turn.start.failed",
+            payload: { requestId: "message-unrelated" },
+          },
+        ],
+      ),
+    ).toBe(false);
+    expect(reserveBotTurnSubmission(key)).toBeNull();
+    release?.();
+  });
+
+  it("retains an accepted submission until its exact turn settles", () => {
+    const key = "env-a:bot-settlement";
+    const requestMessageId = MessageId.make("message-request");
+    const release = reserveBotTurnSubmission(key);
+    expect(release).not.toBeNull();
+    acceptBotTurnSubmission(key, requestMessageId);
+
+    expect(
+      releaseBotTurnSubmissionAfterObservation(key, { requestMessageId, state: "running" }, []),
+    ).toBe(false);
+    expect(reserveBotTurnSubmission(key)).toBeNull();
+    expect(
+      releaseBotTurnSubmissionAfterObservation(key, { requestMessageId, state: "running" }, [
+        {
+          kind: "provider.turn.start.failed",
+          payload: { requestId: requestMessageId },
+        },
+      ]),
+    ).toBe(false);
+    expect(
+      releaseBotTurnSubmissionAfterObservation(
+        key,
+        { requestMessageId: MessageId.make("message-other"), state: "completed" },
+        [],
+      ),
+    ).toBe(false);
+
+    for (const state of ["completed", "interrupted", "error"] as const) {
+      expect(releaseBotTurnSubmissionAfterObservation(key, { requestMessageId, state }, [])).toBe(
+        true,
+      );
+      const nextRelease = reserveBotTurnSubmission(key);
+      expect(nextRelease).not.toBeNull();
+      if (state !== "error") acceptBotTurnSubmission(key, requestMessageId);
+      else nextRelease?.();
+    }
+  });
+
+  it("releases only for the exact provider start failure", () => {
+    const key = "env-a:bot-start-failure";
+    const requestMessageId = MessageId.make("message-request");
+    const release = reserveBotTurnSubmission(key);
+    expect(release).not.toBeNull();
+    acceptBotTurnSubmission(key, requestMessageId);
+
+    expect(
+      releaseBotTurnSubmissionAfterObservation(key, null, [
+        {
+          kind: "provider.turn.start.failed",
+          payload: { requestId: "message-other" },
+        },
+        { kind: "provider.turn.start.failed", payload: null },
+        { kind: "provider.turn.start.failed", payload: { requestId: 42 } },
+      ]),
+    ).toBe(false);
+    expect(reserveBotTurnSubmission(key)).toBeNull();
+    expect(
+      releaseBotTurnSubmissionAfterObservation(key, null, [
+        {
+          kind: "provider.turn.start.failed",
+          payload: { requestId: "message-request" },
+        },
+      ]),
+    ).toBe(true);
+  });
+
+  it("does not let stale cleanup release a newer submission", () => {
+    const key = "env-a:bot-replaced";
+    const staleRelease = reserveBotTurnSubmission(key);
+    expect(staleRelease).not.toBeNull();
+    staleRelease?.();
+
+    const nextRelease = reserveBotTurnSubmission(key);
+    expect(nextRelease).not.toBeNull();
+    staleRelease?.();
+    expect(reserveBotTurnSubmission(key)).toBeNull();
+    nextRelease?.();
+  });
+
+  it("reconciles a terminal turn received while the bot view was unmounted", () => {
+    const key = "env-a:bot-navigation";
+    const requestMessageId = MessageId.make("message-before-navigation");
+    const staleRelease = reserveBotTurnSubmission(key);
+    expect(staleRelease).not.toBeNull();
+    acceptBotTurnSubmission(key, requestMessageId);
+
+    const nextRelease = reserveBotTurnSubmissionAfterObservation(
+      key,
+      { requestMessageId, state: "completed" },
+      [],
+    );
+    expect(nextRelease).not.toBeNull();
+    staleRelease?.();
+    expect(reserveBotTurnSubmission(key)).toBeNull();
+    nextRelease?.();
+  });
+
   it("shares concurrent initial thread creation", async () => {
     let retained: { threadId: string } | null = null;
     const inFlight = { current: null as Promise<{ threadId: string } | null> | null };

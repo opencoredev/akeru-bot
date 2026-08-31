@@ -1,4 +1,6 @@
 import { CallEndIcon, CallIcon } from "@hugeicons/core-free-icons";
+import { useAtomValue } from "@effect/atom-react";
+import type { SupervisorConnectionState } from "@t3tools/client-runtime/connection";
 import { BotId, type VoiceCallSnapshot } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
@@ -15,6 +17,7 @@ import {
 } from "react";
 
 import type { Bot } from "../roster/types";
+import { resolveStickyBotEngine } from "../roster/botEngineSelection";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
 import { useRosterStore } from "../roster/rosterStore";
 import { Button } from "../ui/button";
@@ -22,8 +25,15 @@ import { AppIcon } from "../ui/app-icon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { usePrimarySettings } from "../../hooks/useSettings";
-import { serverEnvironment } from "../../state/server";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { resolveAppModelSelectionState } from "../../modelSelection";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  sortProviderInstanceEntries,
+} from "../../providerInstances";
+import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { useProjects } from "../../state/entities";
+import { useEnvironmentConnectionState, usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 interface ActiveBrowserCall {
@@ -32,7 +42,22 @@ interface ActiveBrowserCall {
   readonly peer: RTCPeerConnection;
   readonly microphone: MediaStream;
   readonly speaker: HTMLAudioElement;
+  readonly events: RTCDataChannel;
+  stopListeningForDeviceLoss: () => void;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
+  environmentDisconnectTimer: ReturnType<typeof setTimeout> | null;
+}
+
+interface PendingBrowserCall {
+  cancelled: boolean;
+  readonly abortController: AbortController;
+  readonly environmentId: NonNullable<ReturnType<typeof usePrimaryEnvironmentId>>;
+  failure: Error | null;
+  microphone: MediaStream | null;
+  peer: RTCPeerConnection | null;
+  speaker: HTMLAudioElement | null;
+  events: RTCDataChannel | null;
+  stopListeningForDeviceLoss: () => void;
 }
 
 export type VoiceCallUiState = ActiveBrowserCall["call"] | null;
@@ -50,6 +75,9 @@ export function reduceVoiceCallUiState(
 export interface VoiceCallChatHandlers {
   readonly appendTranscript: (role: "user" | "assistant", text: string) => void | Promise<void>;
   readonly sendGoalMessage: (text: string) => boolean | Promise<boolean>;
+  readonly speechStarted: () => void;
+  readonly speechFinished: () => void;
+  readonly sessionFailed: (message: string) => void;
 }
 
 function stringField(value: unknown, field: string): string | null {
@@ -61,7 +89,7 @@ function stringField(value: unknown, field: string): string | null {
 export function handleVoiceChannelMessage(
   raw: string,
   handlers: VoiceCallChatHandlers,
-  reply: (payload: string) => void,
+  reply: (payload: string) => void = () => {},
 ): void {
   let event: unknown;
   try {
@@ -72,7 +100,7 @@ export function handleVoiceChannelMessage(
   const type = stringField(event, "type");
   const transcript = stringField(event, "transcript")?.trim() ?? "";
   if (type === "conversation.item.input_audio_transcription.completed" && transcript.length > 0) {
-    handlers.appendTranscript("user", transcript);
+    void handlers.appendTranscript("user", transcript);
     return;
   }
   if (
@@ -80,7 +108,26 @@ export function handleVoiceChannelMessage(
       type === "response.audio_transcript.done") &&
     transcript.length > 0
   ) {
-    handlers.appendTranscript("assistant", transcript);
+    void handlers.appendTranscript("assistant", transcript);
+    return;
+  }
+  if (type === "output_audio_buffer.started") {
+    handlers.speechStarted();
+    return;
+  }
+  if (type === "output_audio_buffer.stopped") {
+    handlers.speechFinished();
+    return;
+  }
+  if (type === "response.done") {
+    const response =
+      typeof event === "object" && event !== null
+        ? (event as Record<string, unknown>).response
+        : null;
+    const status = stringField(response, "status");
+    if (status !== "completed" && status !== "cancelled" && status !== "incomplete") {
+      handlers.sessionFailed("The voice response failed.");
+    }
     return;
   }
   if (
@@ -123,25 +170,64 @@ export function handleVoiceChannelMessage(
             : { ok: false, error: "The chat did not accept the message." },
         ),
       );
+    return;
   }
+  if (type === "error") {
+    const realtimeError =
+      typeof event === "object" && event !== null
+        ? stringField((event as Record<string, unknown>).error, "message")
+        : null;
+    handlers.sessionFailed(realtimeError ?? "The voice session failed.");
+  }
+}
+
+export function voiceStartErrorDescription(cause: unknown): string {
+  if (cause instanceof DOMException) {
+    switch (cause.name) {
+      case "NotAllowedError":
+      case "SecurityError":
+        return "Allow microphone access, then try again.";
+      case "NotFoundError":
+        return "Connect a microphone, then try again.";
+      case "NotReadableError":
+      case "AbortError":
+        return "The microphone is unavailable. Close other audio apps, then try again.";
+    }
+  }
+  return cause instanceof Error ? cause.message : "Check microphone access, then try again.";
+}
+
+export function listenForMicrophoneLoss(
+  microphone: Pick<MediaStream, "getAudioTracks">,
+  onLost: () => void,
+): () => void {
+  const tracks = microphone.getAudioTracks();
+  tracks.forEach((track) => track.addEventListener("ended", onLost));
+  return () => tracks.forEach((track) => track.removeEventListener("ended", onLost));
 }
 
 interface VoiceCallContextValue {
   readonly activeCall: ActiveBrowserCall["call"] | null;
+  readonly reconnecting: boolean;
   readonly startingBotId: string | null;
-  readonly startOrReturn: (bot: Bot, chatHandlers?: VoiceCallChatHandlers) => void;
+  readonly startOrReturn: (bot: Bot) => void;
   readonly hangup: () => void;
   readonly returnToCall: () => void;
 }
 
 const VoiceCallContext = createContext<VoiceCallContextValue | null>(null);
 
-export function waitForIceGathering(peer: RTCPeerConnection, timeoutMs = 5_000): Promise<void> {
+export function waitForIceGathering(
+  peer: RTCPeerConnection,
+  timeoutMs = 5_000,
+  signal?: AbortSignal,
+): Promise<void> {
   if (peer.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
     const finish = () => {
       clearTimeout(timer);
       peer.removeEventListener("icegatheringstatechange", onChange);
+      signal?.removeEventListener("abort", finish);
       resolve();
     };
     const onChange = () => {
@@ -149,6 +235,7 @@ export function waitForIceGathering(peer: RTCPeerConnection, timeoutMs = 5_000):
     };
     const timer = setTimeout(finish, timeoutMs);
     peer.addEventListener("icegatheringstatechange", onChange);
+    signal?.addEventListener("abort", finish, { once: true });
   });
 }
 
@@ -170,6 +257,12 @@ export function voiceConnectionStateAction(
   return "keep-recovery-window";
 }
 
+export function voiceEnvironmentConnectionLost(
+  connection: SupervisorConnectionState | null,
+): boolean {
+  return connection !== null && connection.phase !== "connected";
+}
+
 export function scheduleVoiceDisconnectTimeout(
   getConnectionState: () => RTCPeerConnectionState,
   onTimeout: (recovered: boolean) => void,
@@ -179,25 +272,152 @@ export function scheduleVoiceDisconnectTimeout(
 
 function stopBrowserCall(active: ActiveBrowserCall): void {
   if (active.disconnectTimer !== null) clearTimeout(active.disconnectTimer);
+  if (active.environmentDisconnectTimer !== null) {
+    clearTimeout(active.environmentDisconnectTimer);
+  }
+  active.stopListeningForDeviceLoss();
+  active.events.onmessage = null;
+  active.events.onerror = null;
+  active.events.onclose = null;
   active.microphone.getTracks().forEach((track) => track.stop());
   active.peer.close();
   active.speaker.pause();
   active.speaker.srcObject = null;
 }
 
+function cleanPendingBrowserCall(pending: PendingBrowserCall): void {
+  pending.abortController.abort();
+  pending.stopListeningForDeviceLoss();
+  if (pending.events) {
+    pending.events.onmessage = null;
+    pending.events.onerror = null;
+    pending.events.onclose = null;
+  }
+  pending.microphone?.getTracks().forEach((track) => track.stop());
+  pending.peer?.close();
+  pending.speaker?.pause();
+  if (pending.speaker) pending.speaker.srcObject = null;
+}
+
 export function VoiceCallProvider({ children }: { readonly children: ReactNode }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  const environmentConnection = useEnvironmentConnectionState(environmentId);
+  const projects = useProjects();
   const startVoiceCall = useAtomCommand(serverEnvironment.startVoiceCall, { reportFailure: false });
   const hangupVoiceCall = useAtomCommand(serverEnvironment.hangupVoiceCall, {
     reportFailure: false,
   });
   const [activeCall, dispatchCall] = useReducer(reduceVoiceCallUiState, null);
+  const [reconnecting, setReconnecting] = useState(false);
   const [startingBotId, setStartingBotId] = useState<string | null>(null);
+  const sessionBotId = startingBotId ?? activeCall?.botId ?? null;
+  const sessionBot = useRosterStore((state) =>
+    sessionBotId === null
+      ? null
+      : (state.bots.find((candidate) => candidate.id === sessionBotId) ?? null),
+  );
+  const settings = usePrimarySettings();
+  const providers = useAtomValue(primaryServerProvidersAtom);
+  const instanceEntries = useMemo(
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+      ),
+    [providers, settings],
+  );
+  const defaultSelection = useMemo(
+    () => resolveAppModelSelectionState(settings, providers),
+    [providers, settings],
+  );
+  const sessionModelSelection = useMemo(
+    () =>
+      sessionBot
+        ? resolveStickyBotEngine({
+            engine: sessionBot.engine,
+            instanceEntries,
+            settings,
+            providers,
+            defaultSelection,
+          })
+        : null,
+    [defaultSelection, instanceEntries, providers, sessionBot, settings],
+  );
+  const runtime = useBotThreadRuntime(sessionBotId ?? "", sessionModelSelection);
+  const runtimeRef = useRef(runtime);
+  runtimeRef.current = runtime;
   const activeRef = useRef<ActiveBrowserCall | null>(null);
+  const mountedRef = useRef(true);
+  const pendingStartRef = useRef<PendingBrowserCall | null>(null);
   const startingBotRef = useRef<string | null>(null);
   const hangupCommandRef = useRef(hangupVoiceCall);
   hangupCommandRef.current = hangupVoiceCall;
+
+  const endBrowserCall = useCallback(
+    (
+      current: ActiveBrowserCall,
+      notice?: {
+        readonly type: "warning" | "error";
+        readonly title: string;
+        readonly description?: string;
+      },
+    ) => {
+      if (activeRef.current !== current) return;
+      activeRef.current = null;
+      setReconnecting(false);
+      stopBrowserCall(current);
+      dispatchCall({ type: "hung-up" });
+      void hangupCommandRef.current({
+        environmentId: current.environmentId,
+        input: { callId: current.call.callId },
+      });
+      if (notice) toastManager.add(notice);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const connection = environmentConnection.data;
+    const pending = pendingStartRef.current;
+    if (
+      pending &&
+      (environmentId !== pending.environmentId || voiceEnvironmentConnectionLost(connection))
+    ) {
+      pending.failure ??= new Error(
+        environmentId !== pending.environmentId
+          ? "The active environment changed."
+          : "The environment connection was lost.",
+      );
+      cleanPendingBrowserCall(pending);
+    }
+    const current = activeRef.current;
+    if (!current) return;
+    if (environmentId !== current.environmentId) {
+      endBrowserCall(current, {
+        type: "warning",
+        title: "Call ended",
+        description: "The active environment changed.",
+      });
+      return;
+    }
+    if (!voiceEnvironmentConnectionLost(connection)) {
+      if (current.environmentDisconnectTimer !== null) {
+        clearTimeout(current.environmentDisconnectTimer);
+        current.environmentDisconnectTimer = null;
+      }
+      setReconnecting(false);
+      return;
+    }
+    setReconnecting(true);
+    current.environmentDisconnectTimer ??= setTimeout(() => {
+      current.environmentDisconnectTimer = null;
+      endBrowserCall(current, {
+        type: "warning",
+        title: "Call connection lost",
+        description: "Start a new call after the environment reconnects.",
+      });
+    }, 5_000);
+  }, [endBrowserCall, environmentConnection.data, environmentId]);
 
   const returnToCall = useCallback(() => {
     const call = activeRef.current?.call;
@@ -207,43 +427,120 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   }, [navigate]);
 
   const startOrReturn = useCallback(
-    (bot: Bot, chatHandlers?: VoiceCallChatHandlers) => {
+    (bot: Bot) => {
       const current = activeRef.current;
       if (current !== null) {
         if (current.call.botId === bot.id) returnToCall();
         else toastManager.add({ type: "warning", title: "A call is already active" });
         return;
       }
-      if (startingBotRef.current !== null || environmentId === null) return;
+      if (startingBotRef.current !== null) return;
+      if (environmentId === null) {
+        toastManager.add({ type: "error", title: "Voice is unavailable" });
+        return;
+      }
+      if (!projects.some((project) => project.environmentId === environmentId)) {
+        toastManager.add({
+          type: "error",
+          title: "Voice is unavailable",
+          description: "Add a project before you call a bot.",
+        });
+        return;
+      }
       startingBotRef.current = bot.id;
       setStartingBotId(bot.id);
       void (async () => {
-        let microphone: MediaStream | null = null;
-        let peer: RTCPeerConnection | null = null;
-        let speaker: HTMLAudioElement | null = null;
+        const pending: PendingBrowserCall = {
+          cancelled: false,
+          abortController: new AbortController(),
+          environmentId,
+          failure: null,
+          microphone: null,
+          peer: null,
+          speaker: null,
+          events: null,
+          stopListeningForDeviceLoss: () => {},
+        };
+        pendingStartRef.current = pending;
         let serverCallId: string | null = null;
         try {
-          microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
-          peer = new RTCPeerConnection();
-          speaker = new Audio();
+          if (!navigator.mediaDevices?.getUserMedia) {
+            throw new DOMException("No microphone API", "NotFoundError");
+          }
+          const microphone = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+            video: false,
+          });
+          pending.microphone = microphone;
+          if (pending.cancelled) {
+            microphone.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          pending.stopListeningForDeviceLoss = listenForMicrophoneLoss(microphone, () => {
+            pending.failure ??= new Error("The microphone disconnected.");
+            pending.peer?.close();
+          });
+          const peer = new RTCPeerConnection();
+          pending.peer = peer;
+          const speaker = new Audio();
+          pending.speaker = speaker;
           speaker.autoplay = true;
           peer.ontrack = (event) => {
             if (!event.streams[0]) return;
-            speaker!.srcObject = event.streams[0];
-            void speaker!.play().catch(() => undefined);
+            speaker.srcObject = event.streams[0];
+            void speaker.play().catch(() => undefined);
           };
-          microphone.getTracks().forEach((track) => peer!.addTrack(track, microphone!));
+          microphone.getTracks().forEach((track) => peer.addTrack(track, microphone));
           const events = peer.createDataChannel("oai-events");
-          if (chatHandlers) {
-            events.onmessage = (channelMessage) => {
-              handleVoiceChannelMessage(String(channelMessage.data), chatHandlers, (payload) => {
-                if (events.readyState === "open") events.send(payload);
+          pending.events = events;
+          events.onerror = () => {
+            pending.failure ??= new Error("The call connection failed.");
+          };
+          events.onclose = () => {
+            pending.failure ??= new Error("The voice session closed.");
+          };
+          const chatHandlers: VoiceCallChatHandlers = {
+            appendTranscript: (role, text) => runtimeRef.current.appendTranscript(role, text),
+            sendGoalMessage: (text) => runtimeRef.current.send(text, []),
+            speechStarted: () => {
+              microphone.getAudioTracks().forEach((track) => {
+                track.enabled = false;
               });
-            };
-          }
+            },
+            speechFinished: () => {
+              microphone.getAudioTracks().forEach((track) => {
+                track.enabled = true;
+              });
+            },
+            sessionFailed: (message) => {
+              const active = activeRef.current;
+              if (active?.events === events) {
+                endBrowserCall(active, {
+                  type: "error",
+                  title: "Voice session failed",
+                  description: message,
+                });
+                return;
+              }
+              pending.failure ??= new Error(message);
+              pending.peer?.close();
+            },
+          };
+          events.onmessage = (channelMessage) =>
+            handleVoiceChannelMessage(String(channelMessage.data), chatHandlers, (payload) => {
+              if (events.readyState === "open") events.send(payload);
+            });
           const offer = await peer.createOffer();
+          if (pending.failure) throw pending.failure;
           await peer.setLocalDescription(offer);
-          await waitForIceGathering(peer);
+          if (pending.failure) throw pending.failure;
+          await waitForIceGathering(peer, 5_000, pending.abortController.signal);
+          if (pending.cancelled) return;
+          if (pending.failure) throw pending.failure;
           const sdp = resolveVoiceCallOfferSdp(peer, offer);
           if (!sdp) throw new Error("The microphone did not produce a call offer.");
           const result = await startVoiceCall({
@@ -257,28 +554,58 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             );
           }
           serverCallId = result.value.call.callId;
+          if (pending.cancelled) {
+            void hangupCommandRef.current({
+              environmentId,
+              input: { callId: serverCallId },
+            });
+            return;
+          }
+          if (pending.failure) throw pending.failure;
           await peer.setRemoteDescription({ type: "answer", sdp: result.value.answerSdp });
+          if (pending.cancelled) {
+            void hangupCommandRef.current({
+              environmentId,
+              input: { callId: serverCallId },
+            });
+            return;
+          }
+          if (pending.failure) throw pending.failure;
           const browserCall: ActiveBrowserCall = {
             call: result.value.call,
             environmentId,
             peer,
             microphone,
             speaker,
+            events,
+            stopListeningForDeviceLoss: pending.stopListeningForDeviceLoss,
             disconnectTimer: null,
+            environmentDisconnectTimer: null,
           };
           activeRef.current = browserCall;
           dispatchCall({ type: "connected", call: browserCall.call });
-          const endDisconnectedCall = () => {
-            if (activeRef.current !== browserCall) return;
-            activeRef.current = null;
-            stopBrowserCall(browserCall);
-            dispatchCall({ type: "hung-up" });
-            void hangupCommandRef.current({
-              environmentId: browserCall.environmentId,
-              input: { callId: browserCall.call.callId },
+          setReconnecting(false);
+          pending.stopListeningForDeviceLoss = () => {};
+          browserCall.stopListeningForDeviceLoss();
+          browserCall.stopListeningForDeviceLoss = listenForMicrophoneLoss(microphone, () =>
+            endBrowserCall(browserCall, {
+              type: "warning",
+              title: "Microphone disconnected",
+              description: "Connect a microphone, then start a new call.",
+            }),
+          );
+          events.onerror = () =>
+            endBrowserCall(browserCall, {
+              type: "error",
+              title: "Call connection failed",
+              description: "Start a new call to continue.",
             });
-            toastManager.add({ type: "warning", title: "Call ended" });
-          };
+          events.onclose = () =>
+            endBrowserCall(browserCall, {
+              type: "warning",
+              title: "Call ended",
+              description: "The voice session closed.",
+            });
           browserCall.peer.onconnectionstatechange = () => {
             const action = voiceConnectionStateAction(browserCall.peer.connectionState);
             if (action === "recovered") {
@@ -286,59 +613,80 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
                 clearTimeout(browserCall.disconnectTimer);
                 browserCall.disconnectTimer = null;
               }
+              setReconnecting(false);
               return;
             }
             if (action === "wait-for-recovery") {
+              setReconnecting(true);
               browserCall.disconnectTimer ??= scheduleVoiceDisconnectTimeout(
                 () => browserCall.peer.connectionState,
                 (recovered) => {
                   browserCall.disconnectTimer = null;
-                  if (!recovered) endDisconnectedCall();
+                  if (!recovered) {
+                    endBrowserCall(browserCall, {
+                      type: "warning",
+                      title: "Call connection lost",
+                      description: "Start a new call to continue.",
+                    });
+                  }
                 },
               );
               return;
             }
-            if (action === "end") endDisconnectedCall();
+            if (action === "end") {
+              endBrowserCall(browserCall, {
+                type: "error",
+                title: "Call connection failed",
+                description: "Start a new call to continue.",
+              });
+            }
           };
         } catch (error) {
-          microphone?.getTracks().forEach((track) => track.stop());
-          peer?.close();
-          if (speaker) speaker.srcObject = null;
+          cleanPendingBrowserCall(pending);
           if (serverCallId !== null) {
             void hangupVoiceCall({ environmentId, input: { callId: serverCallId } });
           }
+          if (pending.cancelled) return;
           toastManager.add({
             type: "error",
             title: "Could not start call",
-            description: error instanceof Error ? error.message : "Check microphone access.",
+            description: voiceStartErrorDescription(error),
           });
         } finally {
+          if (pendingStartRef.current === pending) pendingStartRef.current = null;
           if (startingBotRef.current === bot.id) startingBotRef.current = null;
-          setStartingBotId(null);
+          if (mountedRef.current) setStartingBotId(null);
         }
       })();
     },
-    [environmentId, hangupVoiceCall, returnToCall, startVoiceCall, startingBotId],
+    [endBrowserCall, environmentId, hangupVoiceCall, projects, returnToCall, startVoiceCall],
   );
 
   const hangup = useCallback(() => {
     const current = activeRef.current;
-    if (!current) return;
-    activeRef.current = null;
-    stopBrowserCall(current);
-    dispatchCall({ type: "hung-up" });
-    void hangupVoiceCall({
-      environmentId: current.environmentId,
-      input: { callId: current.call.callId },
-    }).then((result) => {
-      if (result._tag === "Failure") {
-        toastManager.add({ type: "warning", title: "Call ended locally" });
-      }
-    });
-  }, [hangupVoiceCall]);
+    if (current) {
+      endBrowserCall(current);
+      return;
+    }
+    const pending = pendingStartRef.current;
+    if (!pending) return;
+    pending.cancelled = true;
+    cleanPendingBrowserCall(pending);
+    pendingStartRef.current = null;
+    startingBotRef.current = null;
+    setStartingBotId(null);
+  }, [endBrowserCall]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const pending = pendingStartRef.current;
+      if (pending) {
+        pending.cancelled = true;
+        cleanPendingBrowserCall(pending);
+        pendingStartRef.current = null;
+      }
       const current = activeRef.current;
       if (!current) return;
       activeRef.current = null;
@@ -347,13 +695,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
         environmentId: current.environmentId,
         input: { callId: current.call.callId },
       });
-    },
-    [],
-  );
+    };
+  }, []);
 
   const value = useMemo<VoiceCallContextValue>(
-    () => ({ activeCall, startingBotId, startOrReturn, hangup, returnToCall }),
-    [activeCall, hangup, returnToCall, startOrReturn, startingBotId],
+    () => ({ activeCall, reconnecting, startingBotId, startOrReturn, hangup, returnToCall }),
+    [activeCall, hangup, reconnecting, returnToCall, startOrReturn, startingBotId],
   );
 
   return (
@@ -364,7 +711,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   );
 }
 
-function useVoiceCall() {
+export function useVoiceCall() {
   const value = useContext(VoiceCallContext);
   if (!value) throw new Error("Voice call controls must be inside VoiceCallProvider.");
   return value;
@@ -406,26 +753,22 @@ export function BotVoiceCallButtonView({
   );
 }
 
-export function BotVoiceCallButton({ bot }: { readonly bot: Bot }) {
+export function BotVoiceCallButton({
+  bot,
+  disabled = false,
+}: {
+  readonly bot: Bot;
+  readonly disabled?: boolean;
+}) {
   const { activeCall, startingBotId, startOrReturn } = useVoiceCall();
   const globallyEnabled = usePrimarySettings((settings) => settings.voice.enabled);
-  const runtime = useBotThreadRuntime(bot.id, null);
-  const runtimeRef = useRef(runtime);
-  runtimeRef.current = runtime;
-  const chatHandlers = useMemo<VoiceCallChatHandlers>(
-    () => ({
-      appendTranscript: (role, text) => runtimeRef.current.appendTranscript(role, text),
-      sendGoalMessage: (text) => runtimeRef.current.send(text, []),
-    }),
-    [],
-  );
   return (
     <BotVoiceCallButtonView
       bot={bot}
       active={activeCall?.botId === bot.id}
-      disabled={startingBotId !== null}
+      disabled={disabled || startingBotId !== null}
       globallyEnabled={globallyEnabled}
-      onClick={() => startOrReturn(bot, chatHandlers)}
+      onClick={() => startOrReturn(bot)}
     />
   );
 }
@@ -440,7 +783,12 @@ export function SelectedBotVoiceCallButton() {
 }
 
 function VoiceCallBar() {
-  const { activeCall, hangup, returnToCall } = useVoiceCall();
+  const { activeCall, hangup, reconnecting, returnToCall, startingBotId } = useVoiceCall();
+  const startingBotName = useRosterStore((state) =>
+    startingBotId === null
+      ? null
+      : (state.bots.find((candidate) => candidate.id === startingBotId)?.name ?? "Bot"),
+  );
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -450,7 +798,60 @@ function VoiceCallBar() {
     return () => window.clearInterval(timer);
   }, [activeCall]);
 
-  if (!activeCall) return null;
+  if (!activeCall) {
+    return startingBotName ? (
+      <VoiceCallStartingBarView botName={startingBotName} onCancel={hangup} />
+    ) : null;
+  }
+  return (
+    <VoiceCallBarView
+      activeCall={activeCall}
+      reconnecting={reconnecting}
+      now={now}
+      onReturn={returnToCall}
+      onHangup={hangup}
+    />
+  );
+}
+
+export function VoiceCallStartingBarView({
+  botName,
+  onCancel,
+}: {
+  readonly botName: string;
+  readonly onCancel: () => void;
+}) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-2 z-60 flex justify-center px-4">
+      <div className="pointer-events-auto flex h-10 items-center rounded-full border border-border bg-background/95 pl-4 pr-1.5 shadow-lg backdrop-blur">
+        <span className="pr-3 text-sm font-medium">Calling {botName}</span>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="destructive"
+          aria-label={`Cancel call to ${botName}`}
+          onClick={onCancel}
+        >
+          <AppIcon icon={CallEndIcon} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function VoiceCallBarView({
+  activeCall,
+  reconnecting,
+  now,
+  onReturn,
+  onHangup,
+}: {
+  readonly activeCall: ActiveBrowserCall["call"];
+  readonly reconnecting: boolean;
+  readonly now: number;
+  readonly onReturn: () => void;
+  readonly onHangup: () => void;
+}) {
   const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(activeCall.startedAt)) / 1_000));
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = String(elapsedSeconds % 60).padStart(2, "0");
@@ -462,10 +863,17 @@ function VoiceCallBar() {
           type="button"
           aria-label={`Return to call with ${activeCall.botName}`}
           className="flex items-center gap-2 pr-3"
-          onClick={returnToCall}
+          onClick={onReturn}
         >
-          <span className="size-2 rounded-full bg-success" />
+          <span
+            className={
+              reconnecting ? "size-2 rounded-full bg-warning" : "size-2 rounded-full bg-success"
+            }
+          />
           <span className="text-sm font-medium">{activeCall.botName}</span>
+          {reconnecting ? (
+            <span className="text-xs text-muted-foreground">Reconnecting</span>
+          ) : null}
           <span className="text-xs tabular-nums text-muted-foreground">
             {minutes}:{seconds}
           </span>
@@ -476,7 +884,7 @@ function VoiceCallBar() {
           variant="destructive"
           aria-label="Hang up"
           className="rounded-full"
-          onClick={hangup}
+          onClick={onHangup}
         >
           <AppIcon icon={CallEndIcon} />
         </Button>

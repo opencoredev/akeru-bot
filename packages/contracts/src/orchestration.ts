@@ -469,6 +469,7 @@ export const OrchestrationLatestTurn = Schema.Struct({
   startedAt: Schema.NullOr(IsoDateTime),
   completedAt: Schema.NullOr(IsoDateTime),
   assistantMessageId: Schema.NullOr(MessageId),
+  requestMessageId: Schema.optional(Schema.NullOr(MessageId)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
 });

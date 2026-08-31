@@ -99,7 +99,7 @@ jobs:
         run: vp run --filter @t3tools/desktop ensure:electron
 
       - name: Test shipped desktop and shared packages
-        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!t3code-relay' --filter '!@t3tools/monorepo' --filter '!@t3tools/mobile' test
+        run: vp run --parallel --concurrency-limit 4 --filter '!akeru-bot' --filter '!t3code-relay' --filter '!@t3tools/monorepo' --filter '!@t3tools/mobile' test
 
   test_server:
     name: Server tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
@@ -122,7 +122,7 @@ jobs:
 
       - name: Test isolated server shard
         run: >-
-          vp run --filter t3 test
+          vp run --filter akeru-bot test
           --shard ${{ matrix.shard }}/${{ strategy.job-total }}
           --exclude integration/orchestrationEngine.integration.test.ts
 

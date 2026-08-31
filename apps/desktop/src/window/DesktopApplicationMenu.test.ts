@@ -147,6 +147,35 @@ describe("DesktopApplicationMenu", () => {
     }),
   );
 
+  it.effect("routes Help feedback through DesktopWindow", () =>
+    Effect.gen(function* () {
+      const selectedAction = yield* Deferred.make<string>();
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+      yield* configureMenu(selectedAction, applicationMenuTemplate);
+
+      const template = yield* Deferred.await(applicationMenuTemplate);
+      const helpMenu = template.find((item) => item.role === "help");
+      assert.isDefined(helpMenu);
+      if (!Array.isArray(helpMenu.submenu)) {
+        throw new Error("Expected Help menu submenu to be an array.");
+      }
+      const feedbackItem = helpMenu.submenu.find((item) => item.label === "Send Feedback...");
+      assert.isDefined(feedbackItem);
+      if (typeof feedbackItem.click !== "function") {
+        throw new Error("Expected feedback menu item to have a click handler.");
+      }
+
+      feedbackItem.click(
+        {} as Electron.MenuItem,
+        {} as Electron.BrowserWindow,
+        {} as KeyboardEvent,
+      );
+      assert.equal(yield* Deferred.await(selectedAction), "open-feedback");
+    }),
+  );
+
   // Zoom must route through DesktopWindow.zoomMain instead of the Electron
   // zoom roles: the roles zoom whichever webContents has focus, which breaks
   // app zoom while an embedded preview WebContentsView holds focus.

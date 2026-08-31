@@ -1,5 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Analytics01Icon, PlugSocketIcon, Settings02Icon } from "@hugeicons/core-free-icons";
+import {
+  Analytics01Icon,
+  HelpCircleIcon,
+  PlugSocketIcon,
+  Settings02Icon,
+} from "@hugeicons/core-free-icons";
 import type { EnvironmentId, McpServer } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -14,6 +19,7 @@ import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { openSettings } from "../../settingsDialogStore";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openUsage } from "../../usageDialogStore";
+import { openProductFeedback } from "../../productFeedbackStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentMcpServersAtom } from "../../state/mcpServers";
 import { AkeruMark } from "../AkeruMark";
@@ -265,6 +271,10 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     closeMobileSidebar();
     openUsage();
   }, [closeMobileSidebar]);
+  const handleFeedbackClick = useCallback(() => {
+    closeMobileSidebar();
+    openProductFeedback();
+  }, [closeMobileSidebar]);
 
   return (
     <SidebarFooter className="max-h-[min(45dvh,22rem)] shrink-0 overflow-y-auto overscroll-contain p-[var(--sidebar-content-inset)]">
@@ -284,6 +294,11 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}
           label="Settings"
           onClick={handleSettingsClick}
+        />
+        <SidebarUtilityItem
+          icon={<AppIcon className="size-4" icon={HelpCircleIcon} />}
+          label="Feedback"
+          onClick={handleFeedbackClick}
         />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Analytics01Icon} />}

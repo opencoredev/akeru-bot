@@ -15,6 +15,7 @@ import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import BotRosterSidebar from "./roster/BotRosterSidebar";
 import { openSettings } from "~/settingsDialogStore";
+import { openProductFeedback } from "~/productFeedbackStore";
 import {
   resolveSidebarStageFocusRingOffsetClass,
   useSidebarStageBackdropVariant,
@@ -193,6 +194,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     const unsubscribe = onMenuAction((action) => {
       if (action === "open-settings") {
         openSettings();
+      } else if (action === "open-feedback") {
+        openProductFeedback();
       }
     });
 

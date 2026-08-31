@@ -11,6 +11,7 @@ import type {
   TurnId,
 } from "@t3tools/contracts";
 import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   isProviderSendTurnSupportedImageMimeType,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -240,6 +241,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
+import { openProductFeedbackFromToolArgs } from "../../productFeedbackStore";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
@@ -262,6 +264,23 @@ const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="combobox-popup"]',
   '[data-slot="autocomplete-popup"]',
 ].join(",");
+
+export function respondToComposerApproval(
+  approval: PendingApproval | null,
+  requestId: ApprovalRequestId,
+  decision: ProviderApprovalDecision,
+  respond: ChatComposerProps["onRespondToApproval"],
+): Promise<unknown> {
+  if (
+    approval?.requestId === requestId &&
+    approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
+    decision === "accept" &&
+    !openProductFeedbackFromToolArgs(approval.args)
+  ) {
+    return respond(requestId, "decline");
+  }
+  return respond(requestId, decision);
+}
 
 const extendReplacementRangeForTrailingSpace = (
   text: string,
@@ -1061,6 +1080,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
 
   const isComposerApprovalState = activePendingApproval !== null;
+  const respondToApproval = useCallback(
+    (requestId: ApprovalRequestId, decision: ProviderApprovalDecision) =>
+      respondToComposerApproval(activePendingApproval, requestId, decision, onRespondToApproval),
+    [activePendingApproval, onRespondToApproval],
+  );
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const showComposerTopDrawer =
     isComposerApprovalState ||
@@ -2743,7 +2767,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   requestId={activePendingApproval.requestId}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
                   options={activePendingApproval.options}
-                  onRespondToApproval={onRespondToApproval}
+                  onRespondToApproval={respondToApproval}
                 />
               </div>
             </div>
@@ -2773,7 +2797,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   requestId={activePendingApproval.requestId}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
                   options={activePendingApproval.options}
-                  onRespondToApproval={onRespondToApproval}
+                  onRespondToApproval={respondToApproval}
                 />
               </div>
             </div>

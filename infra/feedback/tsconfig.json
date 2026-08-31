@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "WebWorker"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["alchemy.run.ts", "src/**/*.ts"]
+}

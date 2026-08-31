@@ -171,6 +171,7 @@ import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./sett
 import {
   SubscriptionAuthCompleteInput,
   SubscriptionAuthError,
+  SubscriptionAuthHealthTestInput,
   SubscriptionAuthLoginProgress,
   SubscriptionAuthLogoutInput,
   SubscriptionAuthPollInput,
@@ -277,6 +278,7 @@ export const WS_METHODS = {
   subscriptionAuthComplete: "subscriptionAuth.complete",
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
+  subscriptionAuthHealthTest: "subscriptionAuth.healthTest",
   voiceCallGet: "voiceCall.get",
   voiceCallStart: "voiceCall.start",
   voiceCallHangup: "voiceCall.hangup",
@@ -418,6 +420,12 @@ export const WsSubscriptionAuthCancelRpc = Rpc.make(WS_METHODS.subscriptionAuthC
 
 export const WsSubscriptionAuthLogoutRpc = Rpc.make(WS_METHODS.subscriptionAuthLogout, {
   payload: SubscriptionAuthLogoutInput,
+  success: SubscriptionAuthStatuses,
+  error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionAuthHealthTest, {
+  payload: SubscriptionAuthHealthTestInput,
   success: SubscriptionAuthStatuses,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
 });
@@ -945,6 +953,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCompleteRpc,
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
+  WsSubscriptionAuthHealthTestRpc,
   WsVoiceCallGetRpc,
   WsVoiceCallStartRpc,
   WsVoiceCallHangupRpc,

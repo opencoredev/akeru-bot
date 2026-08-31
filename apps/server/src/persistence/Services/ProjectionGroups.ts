@@ -33,4 +33,4 @@ export interface ProjectionGroupRepositoryShape {
 export class ProjectionGroupRepository extends Context.Service<
   ProjectionGroupRepository,
   ProjectionGroupRepositoryShape
->()("t3/persistence/Services/ProjectionGroups/ProjectionGroupRepository") {}
+>()("akeru-bot/persistence/Services/ProjectionGroups/ProjectionGroupRepository") {}

@@ -42,6 +42,31 @@ describe("ServerSettings voice", () => {
   });
 });
 
+describe("ServerSettings product feedback", () => {
+  it("defaults to the Akeru endpoint and remains server patchable", () => {
+    expect(decodeServerSettings({})).toMatchObject({
+      productFeedbackEnabled: true,
+      productFeedbackEndpoint: "https://feedback.akeru.bot/v1/feedback",
+    });
+    expect(
+      decodeServerSettingsPatch({
+        productFeedbackEnabled: false,
+        productFeedbackEndpoint: "http://localhost:8787/v1/feedback",
+      }),
+    ).toEqual({
+      productFeedbackEnabled: false,
+      productFeedbackEndpoint: "http://localhost:8787/v1/feedback",
+    });
+  });
+
+  it("rejects insecure non-loopback and relative endpoints", () => {
+    expect(() =>
+      decodeServerSettingsPatch({ productFeedbackEndpoint: "http://feedback.example.test" }),
+    ).toThrow();
+    expect(() => decodeServerSettingsPatch({ productFeedbackEndpoint: "/api/feedback" })).toThrow();
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");

@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 
 import { BotId, IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
-export const CHATGPT_REALTIME_VOICE_MODEL = "gpt-realtime-2";
+export const CHATGPT_REALTIME_VOICE_MODEL = "gpt-realtime-2.1";
 export const CHATGPT_REALTIME_VOICES = [
   "alloy",
   "ash",

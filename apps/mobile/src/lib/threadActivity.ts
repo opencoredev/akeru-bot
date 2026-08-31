@@ -24,6 +24,7 @@ export interface PendingApproval {
   readonly createdAt: string;
   readonly detail?: string;
   readonly appName?: string;
+  readonly toolName?: string;
   readonly options?: ReadonlyArray<ProviderApprovalOption>;
 }
 
@@ -152,6 +153,7 @@ function requestKindFromRequestType(requestType: unknown): PendingApproval["requ
   switch (requestType) {
     case "command_execution_approval":
     case "exec_command_approval":
+    case "dynamic_tool_call":
       return "command";
     case "file_read_approval":
       return "file-read";
@@ -1393,6 +1395,7 @@ export function derivePendingApprovals(
       : requestKindFromRequestType(payload?.requestType);
     const detail = typeof payload?.detail === "string" ? payload.detail : undefined;
     const appName = typeof payload?.appName === "string" ? payload.appName : undefined;
+    const toolName = typeof payload?.toolName === "string" ? payload.toolName : undefined;
     const options = Array.isArray(payload?.options)
       ? payload.options.filter(isProviderApprovalOption)
       : undefined;
@@ -1404,6 +1407,7 @@ export function derivePendingApprovals(
         createdAt: activity.createdAt,
         ...(detail ? { detail } : {}),
         ...(appName ? { appName } : {}),
+        ...(toolName ? { toolName } : {}),
         ...(options && options.length > 0 ? { options } : {}),
       });
       continue;

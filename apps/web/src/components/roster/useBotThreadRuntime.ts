@@ -9,7 +9,7 @@ import {
   type ModelSelection,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
@@ -18,6 +18,7 @@ import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   useAllEnvironmentShellsBootstrapped,
   useProjects,
+  useThreadActivities,
   useThreadMessages,
   useThreadShell,
   useThreadShells,
@@ -29,9 +30,12 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import {
+  acceptBotTurnSubmission,
   buildBotTurnStartInput,
   findLatestBotThreadTarget,
   joinOrStartThreadCreate,
+  releaseBotTurnSubmissionAfterObservation,
+  reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -113,6 +117,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     retainedThreadRef.current.threadRef = linkedThreadRef;
   }
   const messages = useThreadMessages(linkedThreadRef);
+  const activities = useThreadActivities(linkedThreadRef);
   const defaultProject = useMemo(
     () =>
       bootstrapped && primaryEnvironmentId
@@ -144,6 +149,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!primaryEnvironmentId) return;
+    const submissionKey = `${primaryEnvironmentId}:${botId}`;
+    releaseBotTurnSubmissionAfterObservation(
+      submissionKey,
+      rememberedThread?.latestTurn,
+      activities,
+    );
+  }, [activities, botId, primaryEnvironmentId, rememberedThread?.latestTurn]);
 
   const ensureTranscriptThread = useCallback(
     async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
@@ -203,9 +217,23 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         setError("Add a project before you message a bot.");
         return false;
       }
+      if (rememberedThread?.latestTurn?.state === "running") {
+        setError("Wait for the current reply to finish.");
+        return false;
+      }
       const unsupported = files.find((file) => !file.type.startsWith("image/"));
       if (unsupported) {
         setError("Bot attachments must be images.");
+        return false;
+      }
+      const submissionKey = `${activeProject.environmentId}:${botId}`;
+      const releaseSubmission = reserveBotTurnSubmissionAfterObservation(
+        submissionKey,
+        rememberedThread?.latestTurn,
+        activities,
+      );
+      if (!releaseSubmission) {
+        setError("Wait for the current reply to start.");
         return false;
       }
 
@@ -217,6 +245,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         effectiveModelSelection ?? activeProject.defaultModelSelection ?? appDefaultModelSelection;
       const runtimeMode = bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
       const title = threadTitle(prompt, files);
+      const messageId = newMessageId();
+      let accepted = false;
 
       try {
         const attachments = await Promise.all(
@@ -242,7 +272,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             projectId: activeProject.id,
             title,
             message: {
-              messageId: newMessageId(),
+              messageId,
               role: "user",
               text: prompt,
               attachments,
@@ -259,6 +289,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           return false;
         }
 
+        accepted = true;
+        acceptBotTurnSubmission(submissionKey, messageId);
+        releaseBotTurnSubmissionAfterObservation(
+          submissionKey,
+          rememberedThread?.latestTurn,
+          activities,
+        );
         retainedThreadRef.current.threadRef = currentThreadRef;
         useRosterStore
           .getState()
@@ -272,18 +309,21 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         setError(cause instanceof Error ? cause.message : "Could not send the message.");
         return false;
       } finally {
+        if (!accepted) releaseSubmission();
         sendInFlightRef.current = false;
         setSending(false);
       }
     },
     [
       activeProject,
+      activities,
       appDefaultModelSelection,
       bot,
       botId,
       effectiveModelSelection,
       botReady,
       ensureTranscriptThread,
+      rememberedThread?.latestTurn,
       startTurn,
     ],
   );
@@ -315,6 +355,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     defaultProject: activeProject,
     error,
     linkedThreadRef,
+    latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
     send,
     sending,

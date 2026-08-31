@@ -43,6 +43,10 @@
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
     },
+    "./settings-deep-link": {
+      "types": "./src/settingsDeepLink.ts",
+      "default": "./src/settingsDeepLink.ts"
+    },
     "./relay": {
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"

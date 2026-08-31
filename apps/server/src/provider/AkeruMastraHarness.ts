@@ -7,11 +7,58 @@ import {
 } from "@mastra/core/agent-controller";
 import { createCodingAgent } from "@mastra/core/coding-agent";
 import type { RequestContext } from "@mastra/core/request-context";
+import type { StandardSchemaWithJSON } from "@mastra/core/schema";
+import { createTool } from "@mastra/core/tools";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
+import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  ProductFeedbackToolDraft,
+  type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
+} from "@t3tools/contracts";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
+const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
+  onExcessProperty: "error",
+});
+const productFeedbackToolJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    feedback: { type: "string", minLength: 1, maxLength: 4_000 },
+  },
+  required: ["feedback"],
+} as const;
+
+export const productFeedbackToolInputSchema: StandardSchemaWithJSON<ProductFeedbackToolDraftValue> =
+  {
+    "~standard": {
+      version: 1,
+      vendor: "akeru-effect",
+      validate: (value) => {
+        const decoded = decodeProductFeedbackToolDraft(value);
+        return Exit.isSuccess(decoded)
+          ? { value: decoded.value }
+          : { issues: [{ message: "Invalid product feedback draft." }] };
+      },
+      jsonSchema: {
+        input: () => productFeedbackToolJsonSchema,
+        output: () => productFeedbackToolJsonSchema,
+      },
+    },
+  };
+
+const productFeedbackTool = createTool({
+  id: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  description:
+    "Draft anonymous Akeru Bot product feedback for the user to review and send. This tool never sends feedback.",
+  inputSchema: productFeedbackToolInputSchema,
+  requireApproval: true,
+  execute: async () => ({ status: "draft-opened" as const }),
+});
 
 export interface AkeruMastraState {
   readonly projectPath?: string;
@@ -73,7 +120,11 @@ export async function resolveAkeruTools(
         workspace,
       })
     : {};
-  return { ...workspaceTools, ...options.getThreadTools(threadId) };
+  return {
+    ...workspaceTools,
+    ...options.getThreadTools(threadId),
+    [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]: productFeedbackTool,
+  };
 }
 
 function toolCategory(toolName: string): "read" | "edit" | "execute" | "mcp" | "other" {

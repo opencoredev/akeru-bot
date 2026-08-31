@@ -86,4 +86,4 @@ export interface OrchestrationEngineShape {
 export class OrchestrationEngineService extends Context.Service<
   OrchestrationEngineService,
   OrchestrationEngineShape
->()("t3/orchestration/Services/OrchestrationEngine/OrchestrationEngineService") {}
+>()("akeru-bot/orchestration/Services/OrchestrationEngine/OrchestrationEngineService") {}

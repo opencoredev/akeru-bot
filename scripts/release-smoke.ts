@@ -65,7 +65,7 @@ for (const [needle, label] of [
   ["xcrun stapler staple", "DMG ticket stapling"],
   ["codesign --verify", "app signature verification"],
   ["spctl --assess", "Gatekeeper verification"],
-  ["vp run --filter t3 build", "CLI and web build"],
+  ["vp run --filter akeru-bot build", "CLI and web build"],
   ["--dry-run", "CLI package dry-run"],
   ["vp run --filter @t3tools/marketing typecheck", "marketing typecheck"],
   ["vp run --filter @t3tools/marketing build", "marketing build"],

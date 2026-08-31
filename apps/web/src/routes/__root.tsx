@@ -19,6 +19,7 @@ import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { SettingsDialog } from "../components/settings/SettingsDialog";
 import { PluginsDialog } from "../components/plugins/PluginsDialog";
 import { UsageDialog } from "../components/usage/UsageDialog";
+import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
 import { RootRouteErrorView } from "./RootRouteErrorView";
 import {
   AnchoredToastProvider,
@@ -147,6 +148,7 @@ function RootRouteView() {
         <SettingsDialog />
         <PluginsDialog />
         <UsageDialog />
+        <ProductFeedbackDialog />
         {/* Above the router: a theme draft is judged by walking the app, so the
             editor has to survive navigation away from settings. */}
         <ThemeEditorHost />

@@ -68,6 +68,12 @@ import {
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
+import {
+  buildProviderAccessCapabilities,
+  subscriptionDependentBots,
+} from "./subscription-auth/snapshot.ts";
+import { BotInboxService } from "./bot-inbox/service.ts";
+import { syncConnectorIncidents } from "./bot-inbox/connectorIncidents.ts";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
@@ -487,6 +493,7 @@ const makeWsRpcLayer = (
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
       const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+      const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
@@ -540,6 +547,31 @@ const makeWsRpcLayer = (
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
           requiredScope,
         });
+      const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
+        subscriptionAuth.reload();
+        botInbox.reload();
+        const [providers, bots] = yield* Effect.all([
+          providerRegistry.getProviders,
+          projectionBots
+            .listAll()
+            .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message }))),
+        ]);
+        const dependentBots = subscriptionDependentBots(
+          bots.map((bot) => ({ id: bot.botId, name: bot.name, engine: bot.engine })),
+          providers,
+        );
+        const subscriptionStatuses = subscriptionAuth.statuses(dependentBots);
+
+        syncConnectorIncidents(botInbox, subscriptionStatuses);
+
+        return {
+          providers: subscriptionStatuses,
+          access: buildProviderAccessCapabilities(subscriptionStatuses, providers, (instanceId) =>
+            subscriptionAuth.providerInstanceHealth(instanceId),
+          ),
+          inbox: botInbox.list(),
+        };
+      });
       const authorizeEffect = <A, E, R>(
         requiredScope: AuthEnvironmentScope,
         effect: Effect.Effect<A, E, R>,
@@ -1803,11 +1835,9 @@ const makeWsRpcLayer = (
             },
           ),
         [WS_METHODS.subscriptionAuthList]: (_input) =>
-          observeRpcEffect(
-            WS_METHODS.subscriptionAuthList,
-            Effect.sync(() => ({ providers: subscriptionAuth.statuses() })),
-            { "rpc.aggregate": "server" },
-          ),
+          observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {
+            "rpc.aggregate": "server",
+          }),
         [WS_METHODS.subscriptionAuthStart]: ({ provider }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthStart,
@@ -1858,8 +1888,19 @@ const makeWsRpcLayer = (
             WS_METHODS.subscriptionAuthLogout,
             Effect.sync(() => {
               subscriptionAuth.logout(provider);
-              return { providers: subscriptionAuth.statuses() };
-            }),
+            }).pipe(Effect.andThen(getAccessHealthSnapshot())),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.subscriptionAuthHealthTest]: ({ provider }) =>
+          observeRpcEffect(
+            WS_METHODS.subscriptionAuthHealthTest,
+            Effect.tryPromise({
+              try: () => subscriptionAuth.testHealth(provider),
+              catch: (cause) =>
+                new SubscriptionAuthError({
+                  reason: cause instanceof Error ? cause.message : String(cause),
+                }),
+            }).pipe(Effect.andThen(getAccessHealthSnapshot())),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.voiceCallGet]: (_input) =>

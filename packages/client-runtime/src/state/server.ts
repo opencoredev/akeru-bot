@@ -65,6 +65,13 @@ export interface ServerUpdateTarget {
   readonly input: EnvironmentRpcInput<typeof WS_METHODS.serverUpdateServer>;
 }
 
+export function voiceCallHangupConcurrencyKey(input: {
+  readonly environmentId: EnvironmentId;
+  readonly input: EnvironmentRpcInput<typeof WS_METHODS.voiceCallHangup>;
+}): string {
+  return `${input.environmentId}:${input.input.callId}`;
+}
+
 const IDLE_SERVER_UPDATE_STATE: ServerUpdateState = { status: "idle" };
 const EMPTY_SERVER_UPDATE_STATE_ATOM = Atom.make<ServerUpdateState>(IDLE_SERVER_UPDATE_STATE).pipe(
   Atom.withLabel("environment-data:server:update-state:empty"),
@@ -800,6 +807,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:subscription-auth:logout",
       tag: WS_METHODS.subscriptionAuthLogout,
     }),
+    testSubscriptionAuth: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:subscription-auth:health-test",
+      tag: WS_METHODS.subscriptionAuthHealthTest,
+    }),
     startVoiceCall: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice-call:start",
       tag: WS_METHODS.voiceCallStart,
@@ -813,7 +824,7 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.voiceCallHangup,
       concurrency: {
         mode: "singleFlight",
-        key: ({ environmentId }) => environmentId,
+        key: voiceCallHangupConcurrencyKey,
       },
     }),
     signalProcess: createEnvironmentRpcCommand(runtime, {

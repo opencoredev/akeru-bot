@@ -29,6 +29,7 @@ import {
   type ProviderSession,
   type RuntimeMode,
   type ThreadId,
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -38,6 +39,10 @@ import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import {
+  SubscriptionAuthService,
+  type SubscriptionProviderId,
+} from "../../subscription-auth/service.ts";
 import {
   createAkeruMastraHarness,
   type AkeruMastraHarness,
@@ -160,6 +165,63 @@ function usesMastraCode(provider: ProviderDriverKind): boolean {
   return String(provider) === "codex";
 }
 
+function subscriptionProviderForDriver(
+  provider: ProviderDriverKind,
+): SubscriptionProviderId | undefined {
+  switch (String(provider)) {
+    case "codex":
+      return "openai-codex";
+    case "claudeAgent":
+      return "anthropic";
+    case "cursor":
+      return "cursor";
+    case "grok":
+      return "xai";
+    case "opencode":
+      return "kimi-for-coding";
+    default:
+      return undefined;
+  }
+}
+
+export function recordProviderAccessHealth(
+  subscriptionAuth: SubscriptionAuthService,
+  event: ProviderRuntimeEvent,
+): void {
+  const provider = subscriptionProviderForDriver(event.provider);
+  const providerInstanceId = event.providerInstanceId;
+  if (event.type === "turn.completed") {
+    if (event.payload.state === "failed") {
+      const message = event.payload.errorMessage ?? "The provider request failed.";
+      if (provider) subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      if (providerInstanceId) {
+        subscriptionAuth.recordProviderInstanceFailure(
+          providerInstanceId,
+          message,
+          event.createdAt,
+        );
+      }
+    } else if (event.payload.state === "completed") {
+      if (provider) subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      if (providerInstanceId) {
+        subscriptionAuth.recordProviderInstanceSuccess(providerInstanceId, event.createdAt);
+      }
+    }
+    return;
+  }
+  if (event.type !== "runtime.error" || event.payload.class !== "provider_error") return;
+  if (provider) {
+    subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
+  }
+  if (providerInstanceId) {
+    subscriptionAuth.recordProviderInstanceFailure(
+      providerInstanceId,
+      event.payload.message,
+      event.createdAt,
+    );
+  }
+}
+
 function itemType(
   toolName: string,
 ): "command_execution" | "file_change" | "mcp_tool_call" | "dynamic_tool_call" {
@@ -194,6 +256,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
+    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const mcpManagers = new Map<string, McpManager>();
     const workspaces = new Map<string, Workspace>();
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
@@ -401,13 +464,23 @@ const make = (options?: AgentControllerLiveOptions) =>
             type: "request.opened",
             payload: {
               requestType: "dynamic_tool_call",
-              detail: `Allow ${event.toolName}?`,
+              detail:
+                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+                  ? "Review product feedback"
+                  : `Allow ${event.toolName}?`,
+              toolName: event.toolName,
               args: event.args,
-              options: [
-                { decision: "accept", label: "Allow" },
-                { decision: "acceptForSession", label: "Allow for session" },
-                { decision: "decline", label: "Decline" },
-              ],
+              options:
+                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+                  ? [
+                      { decision: "accept", label: "Add to feedback draft" },
+                      { decision: "decline", label: "Cancel" },
+                    ]
+                  : [
+                      { decision: "accept", label: "Allow" },
+                      { decision: "acceptForSession", label: "Allow for session" },
+                      { decision: "decline", label: "Decline" },
+                    ],
             },
           });
           return;
@@ -591,7 +664,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       yield* runMastra("state.set", () =>
         session.state.set({
           ...(input.cwd ? { projectPath: input.cwd } : {}),
-          yolo: input.runtimeMode === "full-access" || input.runtimeMode === "auto",
+          yolo: false,
         }),
       );
       yield* runMastra("model.switch", () =>
@@ -611,6 +684,12 @@ const make = (options?: AgentControllerLiveOptions) =>
             }),
           ),
         { discard: true },
+      );
+      yield* runMastra("permissions.setForTool", () =>
+        session.permissions.setForTool({
+          toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          policy: "ask",
+        }),
       );
       const createdAt = nowIso();
       const activeWithoutUnsubscribe = {
@@ -763,7 +842,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
       const toolCallId = String(input.requestId);
       const toolName = active.toolNames.get(toolCallId);
-      if (input.decision === "acceptForSession" && toolName) {
+      if (
+        input.decision === "acceptForSession" &&
+        toolName &&
+        toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+      ) {
         yield* runMastra("permissions.setForTool", () =>
           active.session.permissions.setForTool({ toolName, policy: "allow" }),
         );
@@ -889,7 +972,16 @@ const make = (options?: AgentControllerLiveOptions) =>
       rollbackConversation,
       uploadFeedback: legacyProviderBridge.uploadFeedback,
       get streamEvents() {
-        return Stream.merge(legacyProviderBridge.streamEvents, Stream.fromPubSub(runtimeEvents));
+        return Stream.merge(
+          legacyProviderBridge.streamEvents,
+          Stream.fromPubSub(runtimeEvents),
+        ).pipe(
+          Stream.tap((event) =>
+            Effect.sync(() => {
+              recordProviderAccessHealth(subscriptionAuth, event);
+            }),
+          ),
+        );
       },
     });
   });

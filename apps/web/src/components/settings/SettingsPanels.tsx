@@ -33,11 +33,13 @@ import {
   MIN_PROMPT_FONT_SIZE,
   MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   MIN_TERMINAL_FONT_SIZE,
+  ProductFeedbackEndpoint,
 } from "@t3tools/contracts/settings";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
+import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import {
@@ -55,6 +57,7 @@ import {
 } from "../SidebarStageBackdrop";
 import { isElectron } from "../../env";
 import { openSettings } from "../../settingsDialogStore";
+import { openProductFeedback } from "../../productFeedbackStore";
 import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
 import { useCustomThemes } from "../../hooks/useCustomThemes";
 import {
@@ -2259,6 +2262,7 @@ export function GeneralSettingsPanel() {
 
         <SettingsRow
           {...searchableSetting("new-threads")}
+          id="local-execution"
           description="Pick the default workspace mode for newly created draft threads."
           resetAction={
             settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode ||
@@ -2522,6 +2526,57 @@ export function GeneralSettingsPanel() {
             description="Current version of the application."
           />
         )}
+        <SettingsRow
+          title="Product feedback"
+          control={
+            <Switch
+              aria-label="Product feedback"
+              checked={settings.productFeedbackEnabled}
+              onCheckedChange={(productFeedbackEnabled) =>
+                updateSettings({ productFeedbackEnabled })
+              }
+            />
+          }
+        />
+        <SettingsRow
+          title="Feedback endpoint"
+          control={
+            <Input
+              aria-label="Feedback endpoint"
+              className="w-full sm:w-80"
+              defaultValue={settings.productFeedbackEndpoint}
+              key={settings.productFeedbackEndpoint}
+              onBlur={(event) => {
+                const decoded = Schema.decodeUnknownExit(ProductFeedbackEndpoint)(
+                  event.currentTarget.value,
+                );
+                if (Exit.isFailure(decoded)) {
+                  event.currentTarget.value = settings.productFeedbackEndpoint;
+                  toastManager.add({
+                    type: "error",
+                    title: "Use HTTPS or loopback HTTP.",
+                  });
+                  return;
+                }
+                const productFeedbackEndpoint = decoded.value;
+                if (
+                  productFeedbackEndpoint &&
+                  productFeedbackEndpoint !== settings.productFeedbackEndpoint
+                ) {
+                  updateSettings({ productFeedbackEndpoint });
+                }
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          title="Send feedback"
+          control={
+            <Button size="xs" variant="outline" onClick={() => openProductFeedback()}>
+              Send feedback
+            </Button>
+          }
+        />
         <SettingsRow
           {...searchableSetting("diagnostics")}
           description={diagnosticsDescription}

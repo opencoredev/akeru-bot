@@ -67,7 +67,7 @@ vp run --filter @t3tools/marketing build
 Run the CLI package dry-run after the server build has produced `apps/server/dist/client`:
 
 ```sh
-vp run --filter t3 build
+vp run --filter akeru-bot build
 node apps/server/scripts/cli.ts publish --dry-run --app-version 0.0.0-smoke.0 --verbose
 ```
 

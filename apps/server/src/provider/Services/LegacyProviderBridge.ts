@@ -11,4 +11,4 @@ import type { ProviderServiceShape } from "./ProviderService.ts";
 export class LegacyProviderBridge extends Context.Service<
   LegacyProviderBridge,
   ProviderServiceShape
->()("t3/provider/Services/LegacyProviderBridge") {}
+>()("akeru-bot/provider/Services/LegacyProviderBridge") {}

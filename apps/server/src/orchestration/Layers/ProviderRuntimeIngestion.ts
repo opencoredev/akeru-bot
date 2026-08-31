@@ -1,4 +1,5 @@
 import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -17,7 +18,9 @@ import {
   type OrchestrationProposedPlan,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
+  type OrchestrationThreadShell,
   type ProviderRuntimeEvent,
+  ProductFeedbackToolDraft,
 } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -26,6 +29,8 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
@@ -45,6 +50,8 @@ import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
+import { ServerConfig } from "../../config.ts";
+import { BotInboxService } from "../../bot-inbox/service.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -100,6 +107,15 @@ const TASK_DESCRIPTION_BY_TASK_CACHE_CAPACITY = 10_000;
 const TASK_DESCRIPTION_BY_TASK_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
 const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
+const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
+  onExcessProperty: "error",
+});
+
+function boundedFeedbackArgs(toolName: string | undefined, args: unknown): unknown {
+  if (toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME || args === undefined) return undefined;
+  const decoded = decodeProductFeedbackToolDraft(args);
+  return Exit.isSuccess(decoded) ? decoded.value : undefined;
+}
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,
@@ -377,6 +393,7 @@ export function runtimeEventToActivities(
         return [];
       }
       const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
+      const feedbackArgs = boundedFeedbackArgs(event.payload.toolName, event.payload.args);
       return [
         {
           id: event.eventId,
@@ -397,6 +414,8 @@ export function runtimeEventToActivities(
             requestId: toApprovalRequestId(event.requestId),
             ...(requestKind ? { requestKind } : {}),
             requestType: event.payload.requestType,
+            ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
+            ...(feedbackArgs !== undefined ? { args: feedbackArgs } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.appName ? { appName: event.payload.appName } : {}),
             ...(event.payload.options ? { options: event.payload.options } : {}),
@@ -896,6 +915,8 @@ const make = Effect.gen(function* () {
   const agentController = yield* AgentController;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const serverSettingsService = yield* ServerSettingsService;
+  const serverConfig = yield* ServerConfig;
+  const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
@@ -959,6 +980,34 @@ const make = Effect.gen(function* () {
     return yield* projectionSnapshotQuery
       .getThreadShellById(threadId)
       .pipe(Effect.map(Option.getOrUndefined));
+  });
+
+  const syncApprovalInbox = Effect.fn("syncApprovalInbox")(function* (
+    event: Extract<ProviderRuntimeEvent, { type: "request.opened" | "request.resolved" }>,
+    thread: OrchestrationThreadShell,
+  ) {
+    const botId = thread.respondingBotId ?? thread.botId;
+    if (!botId) return;
+    const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+    const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+    if (!bot) return;
+    const incidentKey = `approval:${event.requestId}`;
+    yield* Effect.sync(() => {
+      botInbox.reload();
+      if (event.type === "request.resolved") {
+        botInbox.resolve(incidentKey);
+        return;
+      }
+      botInbox.ensureOpen({
+        incidentKey,
+        kind: "approval-request",
+        botId,
+        botName: bot.name,
+        taskOrRoutine: thread.title,
+        lastFailure: event.payload.detail ?? "This request needs approval.",
+        nextAction: "Open the thread and approve or decline the request.",
+      });
+    });
   });
 
   const rememberAssistantMessageId = (threadId: ThreadId, turnId: TurnId, messageId: MessageId) =>
@@ -1497,6 +1546,9 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const thread = yield* resolveThreadShell(event.threadId);
       if (!thread) return;
+      if (event.type === "request.opened" || event.type === "request.resolved") {
+        yield* syncApprovalInbox(event, thread);
+      }
 
       let loadedThreadDetail: OrchestrationThread | null | undefined;
       const getLoadedThreadDetail = () =>

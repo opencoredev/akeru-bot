@@ -143,6 +143,15 @@ export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationM
 export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
 
+export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru.bot/v1/feedback";
+export const ProductFeedbackEndpoint = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(2_048),
+  Schema.isPattern(
+    /^(?:https:\/\/[a-z0-9.-]+(?::\d+)?|http:\/\/(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?)(?:\/[^\s]*)?$/i,
+  ),
+);
+export type ProductFeedbackEndpoint = typeof ProductFeedbackEndpoint.Type;
+
 /**
  * Defaults for the in-app preview browser, applied whenever a tab is opened
  * without an explicit viewport/zoom/appearance — by the user opening a browser
@@ -639,6 +648,10 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  productFeedbackEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  productFeedbackEndpoint: ProductFeedbackEndpoint.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PRODUCT_FEEDBACK_ENDPOINT)),
+  ),
   /**
    * Whether agents may drive the in-app preview browser. Turning this off
    * withholds the MCP credential, so the `t3-code` server (and with it every
@@ -865,6 +878,8 @@ export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
+  productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
+  productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   voice: Schema.optionalKey(
     Schema.Struct({

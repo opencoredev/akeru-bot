@@ -62,6 +62,27 @@ function makeActivity(overrides: {
 }
 
 describe("derivePendingApprovals", () => {
+  it("keeps feedback tool arguments for the editable draft", () => {
+    const args = { feedback: "The button is unresponsive." };
+    const approvals = derivePendingApprovals([
+      makeActivity({
+        kind: "approval.requested",
+        tone: "approval",
+        payload: {
+          requestId: "feedback-approval",
+          requestType: "dynamic_tool_call",
+          toolName: "akeru_product_feedback",
+          args,
+        },
+      }),
+    ]);
+
+    expect(approvals[0]).toMatchObject({
+      toolName: "akeru_product_feedback",
+      args,
+    });
+  });
+
   it("tracks open approvals and removes resolved ones", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

@@ -72,7 +72,8 @@ export function resolvePluginDialogServers(
 
 export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden";
 export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME =
-  "max-h-[45%] min-h-0 gap-3 overflow-y-auto overscroll-contain px-6 py-5";
+  "max-h-[45%] min-h-0 shrink-0 gap-3 overflow-y-auto overscroll-contain px-6 py-5";
+export const PLUGIN_DIRECTORY_SCROLL_CLASS_NAME = "min-h-0 flex-1 overflow-hidden";
 export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8 px-5 pt-5! pb-5 sm:px-6";
 
 export interface McpServerDraft {
@@ -389,25 +390,27 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
               </div>
             ) : null}
           </DialogHeader>
-          <DialogPanel className={PLUGIN_DIRECTORY_PANEL_CLASS_NAME}>
-            <PluginsCatalog
-              sections={view.kind === "installed" ? installedSections : sections}
-              servers={servers}
-              pendingServerId={pendingServerId}
-              onToggle={(plugin, enabled) => void togglePlugin(plugin, enabled)}
-              onOpen={openPlugin}
-              onViewAll={setFilter}
-            />
-            {view.kind === "installed" ? (
-              <CustomMcpServers
-                servers={customServers}
+          <div className={PLUGIN_DIRECTORY_SCROLL_CLASS_NAME}>
+            <DialogPanel className={PLUGIN_DIRECTORY_PANEL_CLASS_NAME}>
+              <PluginsCatalog
+                sections={view.kind === "installed" ? installedSections : sections}
+                servers={servers}
                 pendingServerId={pendingServerId}
-                onToggle={(server, enabled) => void toggleCustom(server, enabled)}
-                onEdit={openCustomEditor}
-                onDelete={(server) => void removeCustom(server)}
+                onToggle={(plugin, enabled) => void togglePlugin(plugin, enabled)}
+                onOpen={openPlugin}
+                onViewAll={setFilter}
               />
-            ) : null}
-          </DialogPanel>
+              {view.kind === "installed" ? (
+                <CustomMcpServers
+                  servers={customServers}
+                  pendingServerId={pendingServerId}
+                  onToggle={(server, enabled) => void toggleCustom(server, enabled)}
+                  onEdit={openCustomEditor}
+                  onDelete={(server) => void removeCustom(server)}
+                />
+              ) : null}
+            </DialogPanel>
+          </div>
         </>
       )}
       <Dialog open={editorTarget !== null} onOpenChange={(open) => !open && closeEditor()}>

@@ -32,7 +32,7 @@ export const hostFlag = Flag.string("host").pipe(
 );
 export const baseDirFlag = Flag.string("base-dir").pipe(
   Flag.withDescription(
-    "Explicit Akeru Bot data directory; runtime state is stored under userdata (equivalent to AKERU_HOME or T3CODE_HOME).",
+    "Explicit Akeru Bot data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME).",
   ),
   Flag.optional,
 );

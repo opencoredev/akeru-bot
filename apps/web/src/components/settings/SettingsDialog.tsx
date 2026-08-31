@@ -1,4 +1,5 @@
 import {
+  AlertCircleIcon,
   BotIcon,
   CallIcon,
   KeyboardIcon,
@@ -21,6 +22,9 @@ const GeneralSettingsPanel = lazy(async () => ({
 const AppearanceSettingsPanel = lazy(async () => ({
   default: (await import("./SettingsPanels")).AppearanceSettingsPanel,
 }));
+const InboxPanel = lazy(async () => ({
+  default: (await import("./InboxPanel")).InboxPanel,
+}));
 const ProvidersPanel = lazy(async () => ({
   default: (await import("./ProvidersPanel")).ProvidersPanel,
 }));
@@ -42,6 +46,7 @@ const DiagnosticsSettingsPanel = lazy(async () => ({
 
 const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   general: GeneralSettingsPanel,
+  inbox: InboxPanel,
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
   voice: VoiceSettingsPanel,
@@ -61,6 +66,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
   { section: "providers", label: "Providers", icon: BotIcon },
   { section: "voice", label: "Voice", icon: CallIcon },
+  { section: "inbox", label: "Errors", icon: AlertCircleIcon },
   { section: "connections", label: "Connections", icon: Link02Icon },
   { section: "keybindings", label: "Keybindings", icon: KeyboardIcon },
 ];
