@@ -36,7 +36,7 @@ const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(fun
   const getByInstance: ProviderAdapterRegistryShape["getByInstance"] = (instanceId) =>
     registry.getInstance(instanceId).pipe(
       Effect.flatMap((instance) =>
-        instance === undefined
+        instance?.adapter === undefined
           ? Effect.fail(
               new ProviderUnsupportedError({
                 provider: instanceId,

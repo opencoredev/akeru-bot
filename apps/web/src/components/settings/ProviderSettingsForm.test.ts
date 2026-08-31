@@ -49,6 +49,13 @@ describe("ProviderSettingsForm helpers", () => {
     ]);
   });
 
+  it("registers Kimi settings in the provider picker", () => {
+    const kimi = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("kimi")];
+
+    expect(kimi).toMatchObject({ label: "Kimi For Coding" });
+    expect(deriveProviderSettingsFields(kimi!)).toEqual([]);
+  });
+
   it("preserves unknown config keys while omitting empty configurable fields", () => {
     const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
     expect(opencode).toBeDefined();

@@ -3,14 +3,33 @@ import type { ToolsInput } from "@mastra/core/agent";
 import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import { RequestContext } from "@mastra/core/request-context";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME } from "@t3tools/contracts";
+import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME, ProviderDriverKind } from "@t3tools/contracts";
 import { assert, describe, it } from "vite-plus/test";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
-import { resolveAkeruTools } from "./AkeruMastraHarness.ts";
+import { mastraModelId, resolveAkeruMastraModel, resolveAkeruTools } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 
 describe("AkeruMastraHarness", () => {
+  it("keeps Kimi model names on the Kimi subscription transport", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
+    assert.equal(
+      mastraModelId(ProviderDriverKind.make("kimi"), "k3-256k"),
+      "kimi-for-coding/k3-256k",
+    );
+    assert.deepInclude(
+      resolveAkeruMastraModel("kimi-for-coding/k3-256k", authStorage, async () => ({
+        accessToken: "kimi-access",
+        deviceId: "0123456789abcdef0123456789abcdef",
+      })),
+      { provider: "anthropic.messages", modelId: "k3-256k" },
+    );
+    assert.throws(
+      () => resolveAkeruMastraModel("kimi-for-coding/k3-256k", authStorage),
+      "subscription access is unavailable",
+    );
+  });
+
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");

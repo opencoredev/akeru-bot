@@ -214,6 +214,12 @@ export const GrokIcon: Icon = ({ className, ...props }) => (
   </svg>
 );
 
+export const KimiIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 24 24">
+    <image href="/provider-icons/kimi-for-coding.svg" width="24" height="24" />
+  </svg>
+);
+
 export const TraeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 24 24" fill="currentColor">
     {/* Back rectangle: left strip + bottom strip drawn separately — empty bottom-left corner is the gap between them */}

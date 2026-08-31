@@ -69,8 +69,10 @@ export interface ProviderInstance {
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
   readonly snapshot: ServerProviderShape;
-  readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
-  readonly textGeneration: TextGeneration.TextGeneration["Service"];
+  /** Present for legacy/provider-native session transports. Mastra-native drivers omit it. */
+  readonly adapter: ProviderAdapterShape<ProviderAdapterError> | undefined;
+  /** Present when the provider supports app-level title and source-control writing. */
+  readonly textGeneration: TextGeneration.TextGeneration["Service"] | undefined;
 }
 
 export interface ProviderContinuationIdentity {

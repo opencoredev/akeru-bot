@@ -129,15 +129,15 @@ const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
   operation: TextGenerationOp,
   instanceId: ProviderInstanceId,
-): Effect.Effect<ProviderInstance["textGeneration"], TextGenerationError> =>
+): Effect.Effect<NonNullable<ProviderInstance["textGeneration"]>, TextGenerationError> =>
   registry.getInstance(instanceId).pipe(
     Effect.flatMap((instance) =>
-      instance
+      instance?.textGeneration
         ? Effect.succeed(instance.textGeneration)
         : Effect.fail(
             new TextGenerationError({
               operation,
-              detail: `No provider instance registered for id '${instanceId}'.`,
+              detail: `Provider instance '${instanceId}' does not support text generation.`,
             }),
           ),
     ),

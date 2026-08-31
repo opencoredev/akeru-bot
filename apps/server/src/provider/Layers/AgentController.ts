@@ -45,6 +45,7 @@ import {
 } from "../../subscription-auth/service.ts";
 import {
   createAkeruMastraHarness,
+  mastraModelId,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
@@ -127,19 +128,6 @@ function mastraModeId(mode: "default" | "plan"): string {
   return mode === "plan" ? PLAN_MODE_ID : DEFAULT_MODE_ID;
 }
 
-function mastraModelId(provider: ProviderDriverKind, model: string): string {
-  switch (String(provider)) {
-    case "codex":
-      return `openai/${model}`;
-    case "claudeAgent":
-      return `anthropic/${model}`;
-    case "grok":
-      return `xai/${model}`;
-    default:
-      return model.includes("/") ? model : `${provider}/${model}`;
-  }
-}
-
 export function toMcpServerConfigs(servers: readonly McpServer[]): Record<string, McpServerConfig> {
   return Object.fromEntries(
     servers.map((server) => [
@@ -162,7 +150,7 @@ function permissionPolicy(
 }
 
 function usesMastraCode(provider: ProviderDriverKind): boolean {
-  return String(provider) === "codex";
+  return provider === "codex" || provider === "kimi";
 }
 
 function subscriptionProviderForDriver(
@@ -263,6 +251,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const bundle = yield* runMastra("construct", () =>
       makeMastraHarness({
         authStorage,
+        getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
         getThreadTools: (threadId) => mcpManagers.get(threadId)?.getTools() ?? {},
         getThreadWorkspace: (threadId) => workspaces.get(threadId),
       }),

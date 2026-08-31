@@ -40,8 +40,10 @@ import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
+const kimiThreadId = ThreadId.make("thread-mastra-kimi");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
+const kimiInstanceId = ProviderInstanceId.make("kimi");
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -837,6 +839,39 @@ describe("AgentControllerLive", () => {
         expect(bridge.sendTurn).toHaveBeenCalledOnce();
         expect(mastra.createSession).not.toHaveBeenCalled();
         expect(mastra.sendMessage).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("runs the saved Kimi model through Mastra without provider fallback", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: kimiThreadId,
+          engine: { provider: "kimi", model: "k3-256k" },
+          fallback: codexSelection,
+          mode: "default",
+        });
+        const session = yield* controller.startSession(kimiThreadId, {
+          threadId: kimiThreadId,
+          provider: ProviderDriverKind.make("kimi"),
+          providerInstanceId: kimiInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: kimiInstanceId, model: "k3-256k" },
+          runtimeMode: "approval-required",
+        });
+
+        assert.equal(session.provider, "kimi");
+        assert.equal(session.model, "k3-256k");
+        expect(mastra.session.model.switch).toHaveBeenCalledWith({
+          modelId: "kimi-for-coding/k3-256k",
+        });
+        expect(bridge.startSession).not.toHaveBeenCalled();
       }),
       bridge.service,
       mastra.factory,

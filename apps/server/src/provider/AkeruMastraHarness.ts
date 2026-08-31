@@ -13,12 +13,14 @@ import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ProductFeedbackToolDraft,
+  type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
 } from "@t3tools/contracts";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
@@ -69,6 +71,7 @@ export type AkeruMastraSession = Session<AkeruMastraState>;
 
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
+  readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
   readonly getThreadTools: (threadId: string) => ToolsInput;
   readonly getThreadWorkspace: (threadId: string) => Workspace | undefined;
 }
@@ -103,8 +106,33 @@ function controllerResourceId(requestContext: RequestContext): string | undefine
   return typeof value === "string" ? value : undefined;
 }
 
-function codexModelName(modelId: string): string {
-  return modelId.startsWith("openai/") ? modelId.slice("openai/".length) : modelId;
+const MASTRA_MODEL_PREFIX = {
+  codex: "openai",
+  kimi: "kimi-for-coding",
+} as const;
+
+export function mastraModelId(provider: ProviderDriverKind, model: string): string {
+  const trimmed = model.trim();
+  const prefix = MASTRA_MODEL_PREFIX[provider as keyof typeof MASTRA_MODEL_PREFIX];
+  if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
+  const token = `${prefix}/`;
+  return trimmed.startsWith(token) ? trimmed : `${token}${trimmed}`;
+}
+
+export function resolveAkeruMastraModel(
+  modelId: string,
+  authStorage: AuthStorage,
+  getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
+) {
+  const trimmed = modelId.trim();
+  if (trimmed.startsWith("openai/")) {
+    return openaiCodexProvider(trimmed.slice("openai/".length), { authStorage });
+  }
+  if (trimmed.startsWith("kimi-for-coding/")) {
+    if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
+    return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
+  }
+  throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
 }
 
 export async function resolveAkeruTools(
@@ -273,9 +301,11 @@ export async function createAkeruMastraHarness(
     name: "Akeru",
     instructions: AKERU_AGENT_INSTRUCTIONS,
     model: ({ requestContext }) =>
-      openaiCodexProvider(codexModelName(controllerModelId(requestContext)), {
-        authStorage: options.authStorage,
-      }),
+      resolveAkeruMastraModel(
+        controllerModelId(requestContext),
+        options.authStorage,
+        options.getKimiAccess,
+      ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     workspace: undefined,
   });
