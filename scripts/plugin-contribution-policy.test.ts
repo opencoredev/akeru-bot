@@ -171,7 +171,7 @@ describe("plugin contribution policy", () => {
       (job) => job.steps?.map((step) => step.run) ?? [],
     );
 
-    expect(commands).toContain("bun run plugins:check");
+    expect(commands).toContain("node scripts/validate-plugin-catalog.ts");
   });
 
   it("keeps issue routing and the accepted-proposal PR exception coherent", () => {
