@@ -8,7 +8,6 @@ import { HttpClient } from "effect/unstable/http";
 
 import type { PreparedConnection } from "../connection/model.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
-import { ManagedRelayDpopSigner } from "../relay/managedRelay.ts";
 import {
   executeEnvironmentHttpRequest,
   makeEnvironmentHttpApiClient,
@@ -41,7 +40,6 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
 )(function* (input: {
   readonly prepared: PreparedConnection;
   readonly threadId: ThreadId;
-  readonly signer: Option.Option<ManagedRelayDpopSigner["Service"]>;
   readonly timeoutMs?: number;
   readonly window?: ThreadSnapshotWindow;
 }) {
@@ -50,12 +48,7 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
     `/api/orchestration/threads/${input.threadId}`,
   );
   const client = yield* makeEnvironmentHttpApiClient(input.prepared.httpBaseUrl);
-  const headers = yield* buildEnvironmentAuthHeaders(
-    input.prepared.httpAuthorization,
-    "GET",
-    requestUrl,
-    input.signer,
-  );
+  const headers = yield* buildEnvironmentAuthHeaders(input.prepared.httpAuthorization);
   return yield* executeEnvironmentHttpRequest(
     requestUrl,
     input.timeoutMs ?? DEFAULT_THREAD_SNAPSHOT_TIMEOUT_MS,
@@ -80,7 +73,7 @@ export type FetchEnvironmentThreadSnapshotError = RemoteEnvironmentRequestError;
 /**
  * Loads a thread's detail snapshot over HTTP, returning `Option.none()` when it
  * cannot be loaded (so the caller falls back to the socket-embedded snapshot).
- * Decouples the thread state machine from the underlying HTTP + DPoP details and
+ * Decouples the thread state machine from the underlying HTTP details and
  * keeps them out of test contexts.
  */
 export class ThreadSnapshotLoader extends Context.Service<
@@ -102,16 +95,11 @@ export const threadSnapshotLoaderLayer: Layer.Layer<
   ThreadSnapshotLoader,
   Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
-    // Resolve the DPoP signer optionally: it is only needed for relay/DPoP
-    // connections, so the loader must not hard-require it (bearer/primary
-    // connections work without one).
-    const signer = yield* Effect.serviceOption(ManagedRelayDpopSigner);
     return ThreadSnapshotLoader.of({
       load: (prepared: PreparedConnection, threadId: ThreadId, window?: ThreadSnapshotWindow) =>
         fetchEnvironmentThreadSnapshot({
           prepared,
           threadId,
-          signer,
           ...(window !== undefined ? { window } : {}),
         }).pipe(
           Effect.map(Option.some<OrchestrationThreadDetailSnapshot>),

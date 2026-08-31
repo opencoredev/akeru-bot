@@ -13,8 +13,7 @@ Dispatch it from Depot with a version such as `0.0.0-smoke.0`.
 - macOS builds one arm64 DMG with the `dev.leodoes.akeru` bundle identifier.
 - The macOS app uses a Developer ID Application certificate. Electron-builder submits and staples
   the app before it packages the DMG. The workflow submits and staples the DMG separately.
-- Signed apps always include the Electron hardened-runtime and microphone entitlements. Associated
-  Domains entitlements are added only when a Clerk passkey configuration is present.
+- Signed apps always include the Electron hardened-runtime and microphone entitlements.
 - The workflow staples and validates the notarization tickets, then runs `codesign` and `spctl`.
 - Windows builds one unsigned x64 NSIS installer.
 - Linux builds one unsigned x64 AppImage.
@@ -22,8 +21,8 @@ Dispatch it from Depot with a version such as `0.0.0-smoke.0`.
 - The marketing site passes its type check and production build.
 
 Each desktop job uploads its artifact to the workflow run for seven days. The workflow does not
-create tags, create GitHub releases, publish npm packages, deploy the relay, deploy a site, update
-AUR, or send release announcements.
+create tags, create GitHub releases, publish npm packages, deploy a site, update AUR, or send
+release announcements.
 
 ## Depot setup
 

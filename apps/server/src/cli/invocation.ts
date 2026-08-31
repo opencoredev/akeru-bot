@@ -48,7 +48,7 @@ export function suggestedPackageSpec(version: string): string {
 
 /**
  * Render an `akeru <subcommand>` suggestion that matches how this process was
- * launched, so copy/pasting it works. An `npx akeru-bot connect` launch suggests
+ * launched, so copy/pasting it works. An `npx akeru-bot pair` launch suggests
  * `npx akeru-bot serve`, a global install suggests `akeru serve`, and a nightly
  * build keeps the `@nightly` tag.
  */

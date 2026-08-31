@@ -1,11 +1,11 @@
-# Running T3 Code in the Background
+# Running Akeru Bot in the background
 
-On Linux and macOS, T3 Code can run as a background service for your user, so it is ready without
+On Linux and macOS, Akeru Bot can run as a background service for your user, so it is ready without
 keeping a terminal open.
 
-## Manage the Service
+## Manage the service
 
-Install it with the latest T3 Code release:
+Install it with the latest Akeru Bot release:
 
 ```sh
 npx akeru-bot@latest service install
@@ -29,16 +29,16 @@ Stop it and remove it from startup:
 npx akeru-bot@latest service uninstall
 ```
 
-Updating restarts T3 Code briefly. Let active agent work and terminal commands finish first.
+Updating restarts Akeru Bot briefly. Let active agent work and terminal commands finish first.
 If a remote update is already in progress, wait for it to finish before retrying a local update.
 
-The service runs a small stable launcher. Exact T3 Code versions are installed separately, so a
+The service runs a small stable launcher. Exact Akeru Bot versions are installed separately, so a
 failed remote candidate can return to the previous version without rewriting the service
 definition. The launcher snapshots the database before a remote candidate starts, so database
 updates roll back with the server version. An older launcher may require one local
 `service update` before this is available.
 
-## Platform Support
+## Platform support
 
 **Linux** uses a systemd user unit at `~/.config/systemd/user/t3code.service`. The service starts
 when the machine boots and keeps running after you log out (lingering is enabled during install).
@@ -63,11 +63,3 @@ A few more macOS notes:
   on.
 
 **Windows** is not supported yet.
-
-## Using It with T3 Connect
-
-T3 Connect may offer to install the service during setup so the host stays reachable in the
-background. This is only an onboarding shortcut: the service and T3 Connect are managed separately.
-
-Signing out of T3 Connect does not remove the service. Use `akeru service uninstall` when you no longer
-want T3 Code to start in the background.

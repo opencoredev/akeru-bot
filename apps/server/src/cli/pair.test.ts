@@ -194,7 +194,7 @@ describe("akeru pair", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("directs to akeru serve or akeru connect when no server is running", () =>
+  it.effect("directs to akeru serve when no server is running", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-none-test-"));
 
@@ -205,9 +205,8 @@ describe("akeru pair", () => {
       const rendered = String(
         typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
       );
-      assert.include(rendered, "No running T3 Code server found.");
+      assert.include(rendered, "No running Akeru Bot server found.");
       assert.include(rendered, "npx akeru-bot serve");
-      assert.include(rendered, "npx akeru-bot connect");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -236,7 +235,7 @@ describe("akeru pair", () => {
         const rendered = String(
           typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
         );
-        assert.include(rendered, "No running T3 Code server found.");
+        assert.include(rendered, "No running Akeru Bot server found.");
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -262,7 +261,7 @@ describe("akeru pair", () => {
       const rendered = String(
         typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
       );
-      assert.include(rendered, "No running T3 Code server found.");
+      assert.include(rendered, "No running Akeru Bot server found.");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

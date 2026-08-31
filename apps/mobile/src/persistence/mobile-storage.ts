@@ -6,11 +6,7 @@ import { pipe } from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import {
-  isRelayManagedConnection,
-  type SavedRemoteConnection,
-  toStableSavedRemoteConnection,
-} from "../lib/connection";
+import { type SavedRemoteConnection } from "../lib/connection";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 
 const CONNECTIONS_KEY = "t3code.connections";
@@ -152,11 +148,7 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     Effect.map((parsed) =>
       pipe(
         parsed?.connections ?? [],
-        Arr.filter(
-          (connection) =>
-            !!connection.environmentId &&
-            (!!connection.bearerToken?.trim() || isRelayManagedConnection(connection)),
-        ),
+        Arr.filter((connection) => !!connection.environmentId && !!connection.bearerToken?.trim()),
       ),
     ),
   );
@@ -165,15 +157,14 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     connection: SavedRemoteConnection,
   ) {
     const current = yield* loadSavedConnections;
-    const stableConnection = toStableSavedRemoteConnection(connection);
     const next = current.some((entry) => entry.environmentId === connection.environmentId)
       ? pipe(
           current,
           Arr.map((entry) =>
-            entry.environmentId === connection.environmentId ? stableConnection : entry,
+            entry.environmentId === connection.environmentId ? connection : entry,
           ),
         )
-      : pipe(current, Arr.append(stableConnection));
+      : pipe(current, Arr.append(connection));
     yield* writeJson(CONNECTIONS_KEY, { connections: next });
   });
 

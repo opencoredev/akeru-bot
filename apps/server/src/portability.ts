@@ -45,7 +45,7 @@ const ARCHIVE_RECORD_TYPES = [
   "thread",
 ] as const;
 const ARCHIVE_EXCLUSIONS = [
-  "Access tokens, cookies, passwords, secret values, environment variables, pairing and relay credentials",
+  "Access tokens, cookies, passwords, secret values, environment variables, and pairing credentials",
   "Absolute local paths, project scripts, attachments, image avatar files, Git refs, pull request links, and diff blobs",
   "Event identifiers, event sequences, command receipts, provider sessions, and opaque provider configuration",
   "Conversation attachments, raw approval payloads, provider request details, and deleted threads and projects",

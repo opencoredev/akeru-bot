@@ -163,7 +163,6 @@ describe("persistence error correlation", () => {
           scopes,
           subject,
           label: null,
-          proofKeyThumbprint: null,
           createdAt: issuedAt,
           expiresAt,
         }),

@@ -32,7 +32,6 @@ allowBuilds:
   workerd: false
 
 catalog:
-  "@clerk/backend": 3.14.0
   "@effect/atom-react": 4.0.0-beta.103
   "@effect/openapi-generator": 4.0.0-beta.103
   "@effect/platform-bun": 4.0.0-beta.103
@@ -56,7 +55,6 @@ catalog:
   yaml: ^2.9.0
 
 minimumReleaseAgeExclude:
-  - "@clerk/backend@3.14.0"
   - "@distilled.cloud/aws@0.30.2"
   - "@distilled.cloud/axiom@0.30.2"
   - "@distilled.cloud/cloudflare@0.30.2"
@@ -88,7 +86,6 @@ overrides:
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-linux-x64-musl": "-"
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-win32-arm64": "-"
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-win32-x64": "-"
-  "@clerk/backend": "catalog:"
   "@effect/atom-react": "catalog:"
   "@effect/platform-bun": "catalog:"
   "@effect/platform-node": "catalog:"

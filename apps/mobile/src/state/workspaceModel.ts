@@ -9,7 +9,6 @@ export interface WorkspaceEnvironment {
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
   readonly displayUrl: string;
-  readonly isRelayManaged: boolean;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
   readonly connectionErrorTraceId: string | null;
@@ -37,7 +36,6 @@ export function projectWorkspaceEnvironment(
     environmentId: environment.environmentId,
     environmentLabel: environment.label,
     displayUrl: environment.displayUrl ?? "",
-    isRelayManaged: environment.relayManaged,
     connectionState: environment.connection.phase,
     connectionError: environment.connection.error,
     connectionErrorTraceId: environment.connection.traceId,

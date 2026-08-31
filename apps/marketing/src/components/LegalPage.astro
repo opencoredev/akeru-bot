@@ -6,25 +6,25 @@ interface Props {
   readonly description: string;
   readonly heading: string;
   readonly lede: string;
-  readonly effectiveDate: string;
+  readonly status: string;
   readonly lastUpdated: string;
   readonly sections: ReadonlyArray<readonly [id: string, label: string]>;
 }
 
-const { title, description, heading, lede, effectiveDate, lastUpdated, sections } = Astro.props;
+const { title, description, heading, lede, status, lastUpdated, sections } = Astro.props;
 ---
 
 <Layout title={title} description={description} pageClass="legal-document-page">
   <div class="legal-page">
     <a class="legal-index-link" href="/legal"><span aria-hidden="true">&#8592;</span> All legal documents</a>
     <header class="legal-hero">
-      <p class="eyebrow">T3 Tools, Inc. / Legal</p>
+      <p class="eyebrow">Akeru Bot / Legal draft</p>
       <h1>{heading}</h1>
       <p class="legal-lede">{lede}</p>
       <dl class="legal-dates" aria-label="Document dates">
         <div>
-          <dt>Effective Date</dt>
-          <dd>{effectiveDate}</dd>
+          <dt>Status</dt>
+          <dd>{status}</dd>
         </div>
         <div>
           <dt>Last Updated</dt>

@@ -99,7 +99,7 @@ function RootRouteView() {
     };
   }, [pathname]);
 
-  if (pathname === "/pair" || pathname === "/connect" || pathname.startsWith("/connect/")) {
+  if (pathname === "/pair") {
     return (
       <>
         <DocumentTitleSync />

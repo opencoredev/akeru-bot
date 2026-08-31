@@ -75,6 +75,7 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["relay", "relay configuration"],
+  ["clerk", "Clerk configuration"],
   ["publish-aur", "AUR publishing"],
   ["action-gh-release", "GitHub release publishing"],
   ["vercel deploy", "hosted deployment"],

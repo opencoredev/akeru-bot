@@ -5,13 +5,9 @@ import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
 export interface T3CodePublicConfig {
-  readonly relayUrl: string | undefined;
   readonly mobileOtlpTracesUrl: string | undefined;
   readonly mobileOtlpTracesDataset: string | undefined;
   readonly mobileOtlpTracesToken: string | undefined;
-  readonly relayClientOtlpTracesUrl: string | undefined;
-  readonly relayClientOtlpTracesDataset: string | undefined;
-  readonly relayClientOtlpTracesToken: string | undefined;
 }
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -35,12 +31,6 @@ export function loadRepoEnv({
     ...rootEnv,
     ...localEnv,
     ...baseEnv,
-    ...(config.relayUrl
-      ? {
-          T3CODE_RELAY_URL: config.relayUrl,
-          VITE_T3CODE_RELAY_URL: config.relayUrl,
-        }
-      : {}),
     ...(config.mobileOtlpTracesUrl
       ? {
           T3CODE_MOBILE_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
@@ -59,30 +49,11 @@ export function loadRepoEnv({
           EXPO_PUBLIC_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
         }
       : {}),
-    ...(config.relayClientOtlpTracesUrl
-      ? {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
-          VITE_RELAY_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
-        }
-      : {}),
-    ...(config.relayClientOtlpTracesDataset
-      ? {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
-          VITE_RELAY_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
-        }
-      : {}),
-    ...(config.relayClientOtlpTracesToken
-      ? {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
-          VITE_RELAY_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
-        }
-      : {}),
   };
 }
 
 export function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
   return {
-    relayUrl: firstNonEmpty(sources, "T3CODE_RELAY_URL", "VITE_T3CODE_RELAY_URL"),
     mobileOtlpTracesUrl: firstNonEmpty(
       sources,
       "T3CODE_MOBILE_OTLP_TRACES_URL",
@@ -97,21 +68,6 @@ export function resolvePublicConfig(...sources: readonly Environment[]): T3CodeP
       sources,
       "T3CODE_MOBILE_OTLP_TRACES_TOKEN",
       "EXPO_PUBLIC_OTLP_TRACES_TOKEN",
-    ),
-    relayClientOtlpTracesUrl: firstNonEmpty(
-      sources,
-      "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL",
-      "VITE_RELAY_OTLP_TRACES_URL",
-    ),
-    relayClientOtlpTracesDataset: firstNonEmpty(
-      sources,
-      "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET",
-      "VITE_RELAY_OTLP_TRACES_DATASET",
-    ),
-    relayClientOtlpTracesToken: firstNonEmpty(
-      sources,
-      "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN",
-      "VITE_RELAY_OTLP_TRACES_TOKEN",
     ),
   };
 }
