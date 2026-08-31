@@ -1,7 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import { DownloadIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { type ProviderDriverKind, type ProviderInstanceId } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  type ProviderDriverKind,
+  type ProviderInstanceId,
+} from "@t3tools/contracts";
 
 import { primaryServerProvidersAtom, serverEnvironment } from "../state/server";
 import { usePrimaryEnvironment } from "../state/environments";
@@ -27,10 +31,16 @@ const seenProviderUpdateNotificationKeys = new Set<string>();
 type ProviderUpdateToastId = ReturnType<typeof toastManager.add>;
 
 type ActiveProviderUpdateToast =
-  | { readonly kind: "prompt"; readonly key: string; readonly toastId: ProviderUpdateToastId }
+  | {
+      readonly kind: "prompt";
+      readonly key: string;
+      readonly environmentId: EnvironmentId | null;
+      readonly toastId: ProviderUpdateToastId;
+    }
   | {
       readonly kind: "update";
       readonly key: string;
+      readonly environmentId: EnvironmentId;
       readonly providerInstanceIds: ReadonlySet<ProviderInstanceId>;
       readonly providerCount: number;
     };
@@ -135,7 +145,7 @@ export function ProviderUpdatePrimaryNotification() {
   );
 
   const openProviderSettings = useCallback(
-    (toastId?: ProviderUpdateToastId) => {
+    (toastId: ProviderUpdateToastId | undefined, environmentId: EnvironmentId | null) => {
       const activeToast = activeToastRef.current;
       if (toastId !== undefined) {
         toastManager.close(toastId);
@@ -149,14 +159,17 @@ export function ProviderUpdatePrimaryNotification() {
       ) {
         activeToastRef.current = null;
       }
-      openSettings("providers", null, primaryEnvironment?.environmentId ?? null);
+      openSettings("providers", null, environmentId);
     },
-    [primaryEnvironment?.environmentId],
+    [],
   );
 
   useEffect(() => {
     const activeToast = activeToastRef.current;
     if (activeToast?.kind !== "update") {
+      return;
+    }
+    if (primaryEnvironment?.environmentId !== activeToast.environmentId) {
       return;
     }
 
@@ -171,9 +184,12 @@ export function ProviderUpdatePrimaryNotification() {
       return;
     }
 
-    addProviderUpdateToast({ view, openSettings: openProviderSettings });
+    addProviderUpdateToast({
+      view,
+      openSettings: (toastId) => openProviderSettings(toastId, activeToast.environmentId),
+    });
     activeToastRef.current = null;
-  }, [providers, openProviderSettings]);
+  }, [primaryEnvironment?.environmentId, providers, openProviderSettings]);
 
   useEffect(() => {
     const activeToast = activeToastRef.current;
@@ -194,16 +210,17 @@ export function ProviderUpdatePrimaryNotification() {
     seenProviderUpdateNotificationKeys.add(notificationKey);
 
     const initialView = getProviderUpdateInitialToastView({ updateProviders, oneClickProviders });
+    const promptEnvironmentId = primaryEnvironment?.environmentId ?? null;
 
     let toastId!: ProviderUpdateToastId;
     let updateStarted = false;
-    const openSettings = () => openProviderSettings(toastId);
+    const openSettings = () => openProviderSettings(toastId, promptEnvironmentId);
     const dismissPrompt = () => {
       dismissNotificationKey(notificationKey);
     };
 
     const runUpdates = () => {
-      if (updateStarted || oneClickProviders.length === 0 || !primaryEnvironment) {
+      if (updateStarted || oneClickProviders.length === 0 || promptEnvironmentId === null) {
         return;
       }
       updateStarted = true;
@@ -213,6 +230,7 @@ export function ProviderUpdatePrimaryNotification() {
       const activeUpdate: ActiveProviderUpdateToast = {
         kind: "update",
         key: notificationKey,
+        environmentId: promptEnvironmentId,
         providerInstanceIds,
         providerCount,
       };
@@ -225,7 +243,7 @@ export function ProviderUpdatePrimaryNotification() {
         for (const provider of oneClickProviders) {
           results.push(
             await updateProvider({
-              environmentId: primaryEnvironment.environmentId,
+              environmentId: activeUpdate.environmentId,
               input: {
                 provider: provider.driver,
                 instanceId: provider.instanceId,
@@ -243,7 +261,7 @@ export function ProviderUpdatePrimaryNotification() {
         if (failedMessage) {
           addProviderUpdateToast({
             view: getProviderUpdateRejectedToastView(providerCount, failedMessage),
-            openSettings: openProviderSettings,
+            openSettings: (toastId) => openProviderSettings(toastId, activeUpdate.environmentId),
           });
           activeToastRef.current = null;
           return;
@@ -258,7 +276,10 @@ export function ProviderUpdatePrimaryNotification() {
           providerCount,
         });
         if (shouldShowPrimaryProviderUpdateToast(view)) {
-          addProviderUpdateToast({ view, openSettings: openProviderSettings });
+          addProviderUpdateToast({
+            view,
+            openSettings: (toastId) => openProviderSettings(toastId, activeUpdate.environmentId),
+          });
           activeToastRef.current = null;
         }
       })();
@@ -300,7 +321,12 @@ export function ProviderUpdatePrimaryNotification() {
         },
       }),
     );
-    activeToastRef.current = { kind: "prompt", key: notificationKey, toastId };
+    activeToastRef.current = {
+      kind: "prompt",
+      key: notificationKey,
+      environmentId: promptEnvironmentId,
+      toastId,
+    };
   }, [
     updateProvider,
     dismissNotificationKey,
