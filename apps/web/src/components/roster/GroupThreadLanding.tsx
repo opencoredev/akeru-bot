@@ -1,12 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
+import { useThreadActivities } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { SidebarInset } from "../ui/sidebar";
@@ -21,6 +22,8 @@ import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotStepMeter } from "./BotStepMeter";
+import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
@@ -37,6 +40,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
+  const activities = useThreadActivities(runtime.linkedThreadRef);
+  const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
   const presence = useGroupPresence(groupId);
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
@@ -122,6 +127,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">{respondingBot.name}</div>
+                      <BotStepMeter
+                        meter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
+                      />
                       <ChatMarkdown
                         className="mt-1"
                         cwd={runtime.defaultProject?.workspaceRoot}
