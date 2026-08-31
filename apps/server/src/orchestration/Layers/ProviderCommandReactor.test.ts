@@ -69,6 +69,7 @@ import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
+import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asApprovalRequestId = (value: string): ApprovalRequestId => ApprovalRequestId.make(value);
@@ -110,7 +111,7 @@ describe("ProviderCommandReactor", () => {
     );
   });
   let runtime: ManagedRuntime.ManagedRuntime<
-    OrchestrationEngineService | ProviderCommandReactor | ProjectionSnapshotQuery,
+    OrchestrationEngineService | ProviderCommandReactor | ProjectionSnapshotQuery | BotUsageLedger,
     unknown
   > | null = null;
   let scope: Scope.Closeable | null = null;
@@ -173,6 +174,7 @@ describe("ProviderCommandReactor", () => {
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
     readonly botEngine?: { readonly provider: string; readonly model: string } | null;
+    readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly unavailableEngine?: boolean;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
@@ -446,6 +448,7 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(reactorOrchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(ProjectionBotRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory))),
+      Layer.provideMerge(BotUsageLedgerLive.pipe(Layer.provide(SqlitePersistenceMemory))),
       Layer.provideMerge(Layer.succeed(AgentController, service)),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
       Layer.provideMerge(
@@ -504,7 +507,7 @@ describe("ProviderCommandReactor", () => {
           engine: input.botEngine,
           sandbox: "local",
           runtimeMode: "approval-required",
-          usageCap: null,
+          usageCap: input.botUsageCap ?? null,
           groupId: null,
           createdAt: now,
         }),
@@ -586,6 +589,10 @@ describe("ProviderCommandReactor", () => {
       stateDir,
       drain,
       runEffect,
+      summarizeBotUsage: () =>
+        runtime!.runPromise(
+          BotUsageLedger.pipe(Effect.flatMap((ledger) => ledger.summarize(BotId.make("bot-1")))),
+        ),
       get titleRegenerationCompletionDispatchAttempts() {
         return titleRegenerationCompletionDispatchAttempts;
       },
@@ -685,6 +692,85 @@ describe("ProviderCommandReactor", () => {
       },
       botSandbox: "local",
     });
+  });
+
+  it("reserves a configured bot's usage cap and binds the provider turn", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+      botUsageCap: { unit: "tokens", limit: 1_000 },
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-metered-bot"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-metered-bot"),
+          role: "user",
+          text: "meter this turn",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await waitFor(async () => (await harness.summarizeBotUsage()).entries[0]?.turnId === "turn-1");
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.reservedTokens).toBe(1_000);
+    expect(usage.entries).toContainEqual(
+      expect.objectContaining({
+        botId: "bot-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        state: "reserved",
+        reservedTokens: 1_000,
+      }),
+    );
+  });
+
+  it("rejects a new turn after a configured bot reserves its full usage cap", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+      botUsageCap: { unit: "tokens", limit: 1_000 },
+    });
+    const dispatchTurn = (suffix: string) =>
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make(`cmd-turn-start-cap-${suffix}`),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId(`user-message-cap-${suffix}`),
+          role: "user" as const,
+          text: suffix,
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required" as const,
+        createdAt: `2026-01-01T00:00:0${suffix === "first" ? "0" : "1"}.000Z`,
+      });
+
+    await Effect.runPromise(dispatchTurn("first"));
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await Effect.runPromise(dispatchTurn("second"));
+    await harness.drain();
+
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(thread?.activities).toContainEqual(
+      expect.objectContaining({
+        kind: "provider.turn.start.failed",
+        payload: expect.objectContaining({
+          detail: "Bot bot-1 reached its 1000-token usage cap.",
+          requestId: "user-message-cap-second",
+        }),
+      }),
+    );
   });
 
   it("projects a typed failure when the configured bot engine is unavailable", async () => {

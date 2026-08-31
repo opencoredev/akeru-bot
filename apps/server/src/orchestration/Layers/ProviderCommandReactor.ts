@@ -1,4 +1,5 @@
 import {
+  AkeruUsageReservationId,
   type ChatAttachment,
   CommandId,
   EventId,
@@ -36,10 +37,12 @@ import {
 } from "../../provider/Errors.ts";
 import type { AgentControllerError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
+import { botRuntimeResourceScope, botWorkspaceResourceKey } from "../../provider/botWorkspacePool.ts";
 import {
-  botRuntimeResourceScope,
-  botWorkspaceResourceKey,
-} from "../../provider/botWorkspacePool.ts";
+  AKERU_TURN_USAGE_RESERVATION_TOKENS,
+  BotUsageCapExceeded,
+  BotUsageLedger,
+} from "../../usage/BotUsageLedger.ts";
 import { AgentController } from "../../provider/Services/AgentController.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { ProjectionBotRepository } from "../../persistence/Services/ProjectionBots.ts";
@@ -60,6 +63,7 @@ import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isAgentControllerUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
+const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
 export function resolveControllerBotId(
@@ -330,6 +334,7 @@ const make = Effect.gen(function* () {
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const botUsageLedger = yield* BotUsageLedger;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -391,6 +396,8 @@ const make = Effect.gen(function* () {
 
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
+    const capError = isBotUsageCapExceeded(failReason?.error) ? failReason.error : undefined;
+    if (capError) return capError.message;
     const providerError = isProviderAdapterRequestError(failReason?.error)
       ? failReason.error
       : undefined;
@@ -1286,6 +1293,47 @@ const make = Effect.gen(function* () {
         ),
       );
 
+    const respondingBotId = resolveControllerBotId(thread);
+    const respondingBot =
+      respondingBotId === null
+        ? undefined
+        : yield* projectionBotRepository
+            .getById({ botId: respondingBotId })
+            .pipe(Effect.map(Option.getOrUndefined));
+    const reservationId = AkeruUsageReservationId.make(`turn:${event.eventId}`);
+    const reserved =
+      respondingBotId === null
+        ? true
+        : yield* botUsageLedger
+            .reserve({
+              reservationId,
+              sourceKey: `turn-start:${event.eventId}`,
+              botId: respondingBotId,
+              threadId: thread.id,
+              turnId: null,
+              category: "turn",
+              maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
+              capLimit: respondingBot?.usageCap?.limit ?? Number.MAX_SAFE_INTEGER,
+              provider:
+                [
+                  thread.session?.providerName,
+                  event.payload.modelSelection?.instanceId,
+                  respondingBot?.engine?.provider,
+                  thread.modelSelection.instanceId,
+                ].find(isProviderDriverKind) ?? null,
+              model:
+                event.payload.modelSelection?.model ??
+                respondingBot?.engine?.model ??
+                thread.modelSelection.model ??
+                null,
+              createdAt: event.payload.createdAt,
+            })
+            .pipe(
+              Effect.as(true),
+              Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(false))),
+            );
+    if (!reserved) return;
+
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
       messageText: message.text,
@@ -1297,16 +1345,41 @@ const make = Effect.gen(function* () {
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),
-      Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(Option.none()))),
+      Effect.catchCause((cause) =>
+        (respondingBotId === null
+          ? Effect.void
+          : botUsageLedger.settle({
+              reservationId,
+              state: "released",
+              settledAt: event.payload.createdAt,
+            })
+        ).pipe(Effect.andThen(handleTurnStartFailure(cause)), Effect.as(Option.none())),
+      ),
     );
 
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
 
-    yield* agentController
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    yield* agentController.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap((result) =>
+        respondingBotId === null
+          ? Effect.void
+          : botUsageLedger.bindTurn({ reservationId, turnId: result.turnId }),
+      ),
+      Effect.catchCause((cause) =>
+        (respondingBotId === null
+          ? Effect.void
+          : botUsageLedger.settle({
+              reservationId,
+              state: "unavailable",
+              reason: "Provider dispatch failed without token usage.",
+              settledAt: event.payload.createdAt,
+            })
+        ).pipe(Effect.andThen(recoverTurnStartFailure(cause))),
+      ),
+      Effect.forkScoped,
+    );
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (

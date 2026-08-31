@@ -52,6 +52,8 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
+import { resolveControllerBotId } from "./ProviderCommandReactor.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -914,6 +916,7 @@ const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const agentController = yield* AgentController;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
+  const botUsageLedger = yield* BotUsageLedger;
   const serverSettingsService = yield* ServerSettingsService;
   const serverConfig = yield* ServerConfig;
   const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
@@ -1562,6 +1565,62 @@ const make = Effect.gen(function* () {
 
       const now = event.createdAt;
       const eventTurnId = toTurnId(event.turnId);
+      const respondingBotId = resolveControllerBotId(thread);
+      if (
+        respondingBotId !== null &&
+        eventTurnId !== undefined &&
+        event.type === "thread.token-usage.updated"
+      ) {
+        const usage = event.payload.usage;
+        const outputTokens = usage.lastOutputTokens ?? usage.outputTokens ?? 0;
+        yield* botUsageLedger
+          .settleForTurn({
+            botId: respondingBotId,
+            threadId: thread.id,
+            turnId: eventTurnId,
+            state: "reported",
+            inputTokens:
+              usage.lastInputTokens ??
+              usage.inputTokens ??
+              Math.max(0, (usage.lastUsedTokens ?? usage.usedTokens) - outputTokens),
+            outputTokens,
+            reasoningTokens: usage.lastReasoningOutputTokens ?? usage.reasoningOutputTokens ?? null,
+            settledAt: now,
+          })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("provider runtime ingestion failed to record bot usage", {
+                eventId: event.eventId,
+                threadId: thread.id,
+                turnId: eventTurnId,
+                cause: Cause.pretty(cause),
+              }),
+            ),
+          );
+      }
+      if (
+        respondingBotId !== null &&
+        eventTurnId !== undefined &&
+        (event.type === "turn.completed" || event.type === "turn.aborted")
+      ) {
+        yield* botUsageLedger
+          .finalizeForTurn({
+            botId: respondingBotId,
+            threadId: thread.id,
+            turnId: eventTurnId,
+            settledAt: now,
+          })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("provider runtime ingestion failed to finalize bot usage", {
+                eventId: event.eventId,
+                threadId: thread.id,
+                turnId: eventTurnId,
+                cause: Cause.pretty(cause),
+              }),
+            ),
+          );
+      }
       const activeTurnId = thread.session?.activeTurnId ?? null;
       const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
         threadId: thread.id,

@@ -12,6 +12,7 @@ import {
 } from "@t3tools/contracts";
 import {
   ApprovalRequestId,
+  AkeruUsageReservationId,
   BotId,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -58,6 +59,7 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.ts";
 
 function makeTestServerSettingsLayer(overrides: Partial<ServerSettings> = {}) {
   return ServerSettingsService.layerTest(overrides);
@@ -188,7 +190,10 @@ async function waitForThread(
 
 describe("ProviderRuntimeIngestion", () => {
   let runtime: ManagedRuntime.ManagedRuntime<
-    OrchestrationEngineService | ProviderRuntimeIngestionService | ProjectionSnapshotQuery,
+    | OrchestrationEngineService
+    | ProviderRuntimeIngestionService
+    | ProjectionSnapshotQuery
+    | BotUsageLedger,
     unknown
   > | null = null;
   let scope: Scope.Closeable | null = null;
@@ -218,6 +223,7 @@ describe("ProviderRuntimeIngestion", () => {
     serverSettings?: Partial<ServerSettings>;
     threadTitle?: string;
     botOwned?: boolean;
+    botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
   }) {
     const workspaceRoot = makeTempDir("t3-provider-project-");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".git"));
@@ -242,6 +248,7 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(ThreadPlanProgress.layer),
       Layer.provideMerge(SqlitePersistenceMemory),
+      Layer.provideMerge(BotUsageLedgerLive.pipe(Layer.provide(SqlitePersistenceMemory))),
       Layer.provideMerge(Layer.succeed(AgentController, provider.service)),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), workspaceRoot)),
@@ -283,7 +290,7 @@ describe("ProviderRuntimeIngestion", () => {
         },
         sandbox: null,
         runtimeMode: "approval-required",
-        usageCap: null,
+        usageCap: options.botUsageCap ?? null,
         groupId: null,
         createdAt,
       });
@@ -339,6 +346,32 @@ describe("ProviderRuntimeIngestion", () => {
       botInbox: new BotInboxService(
         NodePath.join(workspaceRoot, "userdata", "secrets", "bot-inbox.json"),
       ),
+      reserveBotUsage: (turnId: TurnId) =>
+        runtime!.runPromise(
+          BotUsageLedger.pipe(
+            Effect.flatMap((ledger) =>
+              ledger.reserve({
+                reservationId: AkeruUsageReservationId.make(`test:${turnId}`),
+                sourceKey: `test:${turnId}`,
+                botId: BotId.make("bot-akeru"),
+                threadId: ThreadId.make("thread-1"),
+                turnId,
+                category: "turn",
+                maximumTokens: 1_000,
+                capLimit: 1_000,
+                provider: ProviderDriverKind.make("codex"),
+                model: "gpt-5-codex",
+                createdAt,
+              }),
+            ),
+          ),
+        ),
+      summarizeBotUsage: () =>
+        runtime!.runPromise(
+          BotUsageLedger.pipe(
+            Effect.flatMap((ledger) => ledger.summarize(BotId.make("bot-akeru"))),
+          ),
+        ),
     };
   }
 
@@ -426,6 +459,75 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("turn failed");
+  });
+
+  it("records provider token usage and releases the remaining turn reservation", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = asTurnId("turn-metered");
+    await harness.reserveBotUsage(turnId);
+
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-turn-usage"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      payload: {
+        usage: {
+          usedTokens: 150,
+          inputTokens: 100,
+          outputTokens: 50,
+          reasoningOutputTokens: 20,
+        },
+      },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-usage-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.consumedTokens).toBe(150);
+    expect(usage.reservedTokens).toBe(0);
+    expect(usage.entries[0]).toMatchObject({
+      state: "reported",
+      inputTokens: 100,
+      outputTokens: 50,
+      reasoningTokens: 20,
+      settledAt: "2026-01-01T00:00:02.000Z",
+    });
+  });
+
+  it("charges the reservation when a provider completes without token usage", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = asTurnId("turn-unavailable-usage");
+    await harness.reserveBotUsage(turnId);
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-unavailable-usage-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.consumedTokens).toBe(1_000);
+    expect(usage.reservedTokens).toBe(0);
+    expect(usage.entries[0]).toMatchObject({
+      state: "unavailable",
+      unavailableReason: "Provider completed without token usage.",
+    });
   });
 
   it("applies provider session.state.changed transitions directly", async () => {

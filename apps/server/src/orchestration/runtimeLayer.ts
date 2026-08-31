@@ -4,6 +4,7 @@ import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
 import { ProjectionBotRepositoryLive } from "../persistence/Layers/ProjectionBots.ts";
 import { ProjectionGroupRepositoryLive } from "../persistence/Layers/ProjectionGroups.ts";
+import { BotUsageLedgerLive } from "../usage/BotUsageLedger.ts";
 import { OrchestrationEngineLive } from "./Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./Layers/ProjectionSnapshotQuery.ts";
@@ -25,6 +26,7 @@ export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationProjectionPipelineLayerLive,
   ProjectionBotRepositoryLive,
   ProjectionGroupRepositoryLive,
+  BotUsageLedgerLive,
   // Shared background-liveness and plan-progress registries: written by
   // runtime ingestion, read by the snapshot query. provideMerge feeds the
   // same instance to the snapshot query here and re-exports it for runtime
