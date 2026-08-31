@@ -71,6 +71,8 @@ export function buildProviderAccessCapabilities(
           : status?.connected
             ? "Check OAuth, then send a provider request to verify access."
             : `Connect ${entry.label} in Settings.`,
+      dependentBots: status?.dependentBots ?? [],
+      dependentRoutines: status?.dependentRoutines ?? [],
     };
   });
 
@@ -186,5 +188,5 @@ export function buildProviderAccessCapabilities(
       temporary: true,
       repairAction: "Add a calendar or booking connector when Akeru supports one.",
     },
-  ];
+  ].map((row) => ({ dependentBots: [], dependentRoutines: [], ...row }));
 }

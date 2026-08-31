@@ -441,6 +441,7 @@ const RequestOpenedPayload = Schema.Struct({
   serverId: Schema.optional(TrimmedNonEmptyStringSchema),
   pluginId: Schema.optional(TrimmedNonEmptyStringSchema),
   action: Schema.optional(TrimmedNonEmptyStringSchema),
+  args: Schema.optional(Schema.Unknown),
 });
 export type RequestOpenedPayload = typeof RequestOpenedPayload.Type;
 
