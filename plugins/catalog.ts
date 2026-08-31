@@ -157,7 +157,8 @@ export function loadCatalog(
   assets: AssetModules = catalogAssets,
 ): readonly CatalogPluginDefinition[] {
   return loadDirectoryCatalog(modules, assets).filter(
-    (plugin): plugin is CatalogPluginDefinition => plugin.kind !== "mcp-unavailable",
+    (plugin): plugin is CatalogPluginDefinition =>
+      plugin.catalogStatus === "available" && plugin.kind !== "mcp-unavailable",
   );
 }
 
