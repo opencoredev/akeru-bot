@@ -5,6 +5,7 @@ import {
   AKERU_ARCHIVE_VERSION,
   BotId,
   CommandId,
+  DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   EventId,
   GroupId,
   MessageId,
@@ -199,6 +200,7 @@ export function safeServerSettings(settings: ServerSettings): PortabilitySafeSer
     enableLegacyTokenStreaming: settings.enableLegacyTokenStreaming,
     enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
     enableAgentBrowserAccess: settings.enableAgentBrowserAccess,
+    botSandboxBrowserSharing: settings.botSandboxBrowserSharing,
     backgroundActivity: {
       schemaVersion: 1,
       profile: settings.backgroundActivity.profile,
@@ -269,6 +271,8 @@ function settingsPatchFromPortable(settings: PortabilitySafeServerSettings): Ser
     enableLegacyTokenStreaming: settings.enableLegacyTokenStreaming,
     enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
     enableAgentBrowserAccess: settings.enableAgentBrowserAccess,
+    botSandboxBrowserSharing:
+      settings.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
     backgroundActivity: {
       schemaVersion: 1,
       profile: settings.backgroundActivity.profile,
@@ -918,6 +922,16 @@ function mutableProjectData(data: PortabilityProjectData) {
   };
 }
 
+function portableSettingsWithArchiveDefaults(
+  settings: PortabilitySafeServerSettings,
+): PortabilitySafeServerSettings {
+  return {
+    ...settings,
+    botSandboxBrowserSharing:
+      settings.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+  };
+}
+
 export function portabilityStateChecksum(
   snapshot: OrchestrationReadModel,
   settings: ServerSettings,
@@ -1063,7 +1077,9 @@ export function previewPortabilityImport(
     const importedData =
       record.type === "thread" && projectMatch?.kind === "matched"
         ? { ...record.data, projectId: projectMatch.targetId }
-        : record.data;
+        : record.type === "server-settings"
+          ? portableSettingsWithArchiveDefaults(record.data)
+          : record.data;
     if (!existing) additions.push(item(record));
     else if (
       record.type === "project" &&
@@ -1288,7 +1304,10 @@ export function commandsForPortabilityImport(
   for (const record of archive.records) {
     if (conflictKeys.has(`${record.type}:${record.id}`)) continue;
     if (record.type === "server-settings") {
-      if (canonicalJson(safeServerSettings(settings)) !== canonicalJson(record.data)) {
+      if (
+        canonicalJson(safeServerSettings(settings)) !==
+        canonicalJson(portableSettingsWithArchiveDefaults(record.data))
+      ) {
         settingsPatch = settingsPatchFromPortable(record.data);
         applied += 1;
       }
