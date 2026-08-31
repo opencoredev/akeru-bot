@@ -32,4 +32,4 @@ export interface ProjectionMcpServerRepositoryShape {
 export class ProjectionMcpServerRepository extends Context.Service<
   ProjectionMcpServerRepository,
   ProjectionMcpServerRepositoryShape
->()("t3/persistence/Services/ProjectionMcpServers/ProjectionMcpServerRepository") {}
+>()("akeru-bot/persistence/Services/ProjectionMcpServers/ProjectionMcpServerRepository") {}

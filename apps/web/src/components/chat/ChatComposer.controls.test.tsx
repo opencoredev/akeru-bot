@@ -1,6 +1,11 @@
-import { ApprovalRequestId, OrchestrationProposedPlanId, ThreadId } from "@t3tools/contracts";
+import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  ApprovalRequestId,
+  OrchestrationProposedPlanId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../lib/composerPathSearchState", () => ({
   useComposerPathSearch: () => ({ entries: [], error: null, isPending: false }),
@@ -32,9 +37,18 @@ import {
   makeChatComposerProps,
   makeComposerTestThread,
 } from "../../test/chatComposerProps";
-import { ChatComposer } from "./ChatComposer";
+import { EMPTY_PRODUCT_FEEDBACK_DRAFT, useProductFeedbackStore } from "../../productFeedbackStore";
+import { ChatComposer, respondToComposerApproval } from "./ChatComposer";
 
 const environmentId = composerTestEnvironmentId;
+
+beforeEach(() => {
+  useProductFeedbackStore.setState({
+    open: false,
+    picking: false,
+    draft: EMPTY_PRODUCT_FEEDBACK_DRAFT,
+  });
+});
 
 /** Launch controls LEO-215 removes from the primary composer. */
 function expectNoLaunchControls(markup: string) {
@@ -199,5 +213,57 @@ describe("ChatComposer launch-control removal", () => {
     expect(markup).toContain(">Implement</button>");
     expect(markup).toContain('aria-label="Implementation actions"');
     expectNoLaunchControls(markup);
+  });
+});
+
+describe("ChatComposer product feedback approval", () => {
+  it("opens a valid draft and accepts without sending feedback", async () => {
+    const requestId = ApprovalRequestId.make("feedback-approval");
+    const respond = vi.fn(async () => undefined);
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    await respondToComposerApproval(
+      {
+        requestId,
+        requestKind: "command",
+        createdAt: "2026-08-30T00:00:00.000Z",
+        toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+        args: { feedback: "The action was unclear." },
+      },
+      requestId,
+      "accept",
+      respond,
+    );
+
+    expect(useProductFeedbackStore.getState()).toMatchObject({
+      open: true,
+      draft: { feedback: "The action was unclear." },
+    });
+    expect(respond).toHaveBeenCalledOnce();
+    expect(respond).toHaveBeenCalledWith(requestId, "accept");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("declines invalid feedback arguments without opening a draft", async () => {
+    const requestId = ApprovalRequestId.make("invalid-feedback-approval");
+    const respond = vi.fn(async () => undefined);
+
+    await respondToComposerApproval(
+      {
+        requestId,
+        requestKind: "command",
+        createdAt: "2026-08-30T00:00:00.000Z",
+        toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+        args: { feedback: "x".repeat(5_000) },
+      },
+      requestId,
+      "accept",
+      respond,
+    );
+
+    expect(useProductFeedbackStore.getState().open).toBe(false);
+    expect(respond).toHaveBeenCalledOnce();
+    expect(respond).toHaveBeenCalledWith(requestId, "decline");
   });
 });

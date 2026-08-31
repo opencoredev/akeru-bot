@@ -194,6 +194,24 @@ describe("pending approvals", () => {
 
     expect(derivePendingApprovals([requested, resolved])).toEqual([]);
   });
+
+  it("keeps the tool name needed for mobile feedback handling", () => {
+    const activity = makeActivity({
+      id: EventId.make("approval-feedback"),
+      kind: "approval.requested",
+      summary: "Approval requested",
+      createdAt: "2026-08-30T00:00:00.000Z",
+      payload: {
+        requestId: "req-feedback",
+        requestType: "dynamic_tool_call",
+        toolName: "akeru_product_feedback",
+      },
+    });
+
+    expect(derivePendingApprovals([activity])[0]).toMatchObject({
+      toolName: "akeru_product_feedback",
+    });
+  });
 });
 
 function makeActivity(

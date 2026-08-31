@@ -203,7 +203,7 @@ export class VoiceCallManager extends Context.Service<
     ) => Effect.Effect<VoiceCallSnapshot, VoiceCallError>;
     readonly hangupOwner: (ownerId: string) => Effect.Effect<void>;
   }
->()("t3/voiceCall/VoiceCallManager") {}
+>()("akeru-bot/voiceCall/VoiceCallManager") {}
 
 const make = (options?: VoiceCallManagerOptions) =>
   Effect.gen(function* () {

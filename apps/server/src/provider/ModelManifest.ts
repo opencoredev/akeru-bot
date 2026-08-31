@@ -128,7 +128,7 @@ export class ModelManifest extends Context.Service<
      * the teardown of whichever instance happened to trigger it. */
     readonly refreshInBackground: Effect.Effect<void>;
   }
->()("t3/provider/ModelManifest") {}
+>()("akeru-bot/provider/ModelManifest") {}
 
 /** Constant service for tests and callers that only need the bundled data. */
 export const BundledOnlyModelManifest: ModelManifest["Service"] = {

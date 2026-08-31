@@ -29,6 +29,7 @@ import {
   type ProviderSession,
   type RuntimeMode,
   type ThreadId,
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -401,13 +402,23 @@ const make = (options?: AgentControllerLiveOptions) =>
             type: "request.opened",
             payload: {
               requestType: "dynamic_tool_call",
-              detail: `Allow ${event.toolName}?`,
+              detail:
+                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+                  ? "Review product feedback"
+                  : `Allow ${event.toolName}?`,
+              toolName: event.toolName,
               args: event.args,
-              options: [
-                { decision: "accept", label: "Allow" },
-                { decision: "acceptForSession", label: "Allow for session" },
-                { decision: "decline", label: "Decline" },
-              ],
+              options:
+                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+                  ? [
+                      { decision: "accept", label: "Add to feedback draft" },
+                      { decision: "decline", label: "Cancel" },
+                    ]
+                  : [
+                      { decision: "accept", label: "Allow" },
+                      { decision: "acceptForSession", label: "Allow for session" },
+                      { decision: "decline", label: "Decline" },
+                    ],
             },
           });
           return;
@@ -591,7 +602,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       yield* runMastra("state.set", () =>
         session.state.set({
           ...(input.cwd ? { projectPath: input.cwd } : {}),
-          yolo: input.runtimeMode === "full-access" || input.runtimeMode === "auto",
+          yolo: false,
         }),
       );
       yield* runMastra("model.switch", () =>
@@ -611,6 +622,12 @@ const make = (options?: AgentControllerLiveOptions) =>
             }),
           ),
         { discard: true },
+      );
+      yield* runMastra("permissions.setForTool", () =>
+        session.permissions.setForTool({
+          toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          policy: "ask",
+        }),
       );
       const createdAt = nowIso();
       const activeWithoutUnsubscribe = {
@@ -763,7 +780,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
       const toolCallId = String(input.requestId);
       const toolName = active.toolNames.get(toolCallId);
-      if (input.decision === "acceptForSession" && toolName) {
+      if (
+        input.decision === "acceptForSession" &&
+        toolName &&
+        toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+      ) {
         yield* runMastra("permissions.setForTool", () =>
           active.session.permissions.setForTool({ toolName, policy: "allow" }),
         );

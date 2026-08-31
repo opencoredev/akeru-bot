@@ -40,6 +40,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   LinkIcon,
+  MessageCircleIcon,
   PaletteIcon,
   PuzzleIcon,
   ServerIcon,
@@ -140,6 +141,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { openSettings } from "~/settingsDialogStore";
+import { openProductFeedback } from "~/productFeedbackStore";
 import { openPlugins } from "~/pluginsDialogStore";
 import { openUsage } from "~/usageDialogStore";
 import { COMMAND_PALETTE_META_ICON_CLASS, CommandPaletteMetaDot } from "./ThreadCommandSubtitle";
@@ -1441,6 +1443,17 @@ function OpenCommandPaletteDialog(props: {
     icon: <ChartNoAxesColumnIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       openUsage();
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:feedback",
+    searchTerms: ["feedback", "help", "bug", "idea"],
+    title: "Send feedback",
+    icon: <MessageCircleIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      openProductFeedback();
     },
   });
 

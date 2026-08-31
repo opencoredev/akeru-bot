@@ -50,4 +50,4 @@ export interface ProjectionBotRepositoryShape {
 export class ProjectionBotRepository extends Context.Service<
   ProjectionBotRepository,
   ProjectionBotRepositoryShape
->()("t3/persistence/Services/ProjectionBots/ProjectionBotRepository") {}
+>()("akeru-bot/persistence/Services/ProjectionBots/ProjectionBotRepository") {}

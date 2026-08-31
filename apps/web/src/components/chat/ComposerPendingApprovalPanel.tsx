@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME } from "@t3tools/contracts";
 import { type PendingApproval } from "../../session-logic";
 import { cn } from "~/lib/utils";
 
@@ -13,16 +14,19 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   pendingCount,
   className,
 }: ComposerPendingApprovalPanelProps) {
-  const fallbackLabel =
-    approval.requestKind === "mcp-elicitation"
+  const isProductFeedback = approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+  const fallbackLabel = isProductFeedback
+    ? "Product feedback approval"
+    : approval.requestKind === "mcp-elicitation"
       ? "App access approval"
       : approval.requestKind === "command"
         ? "Command approval"
         : approval.requestKind === "file-read"
           ? "File read approval"
           : "File change approval";
-  const detailAriaLabel =
-    approval.requestKind === "mcp-elicitation"
+  const detailAriaLabel = isProductFeedback
+    ? "Product feedback draft"
+    : approval.requestKind === "mcp-elicitation"
       ? "App access request"
       : approval.requestKind === "command"
         ? "Command"

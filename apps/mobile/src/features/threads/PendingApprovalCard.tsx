@@ -1,7 +1,8 @@
-import type {
-  ApprovalRequestId,
-  ProviderApprovalDecision,
-  ProviderApprovalOption,
+import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  type ApprovalRequestId,
+  type ProviderApprovalDecision,
+  type ProviderApprovalOption,
 } from "@t3tools/contracts";
 import { Pressable, View } from "react-native";
 
@@ -22,9 +23,15 @@ const DEFAULT_APPROVAL_OPTIONS = [
   { decision: "acceptForSession", label: "Allow session" },
   { decision: "decline", label: "Decline" },
 ] satisfies ReadonlyArray<ProviderApprovalOption>;
+const MOBILE_FEEDBACK_OPTIONS = [
+  { decision: "decline", label: "Cancel" },
+] satisfies ReadonlyArray<ProviderApprovalOption>;
 
 export function PendingApprovalCard(props: PendingApprovalCardProps) {
-  const options = props.approval.options ?? DEFAULT_APPROVAL_OPTIONS;
+  const isProductFeedback = props.approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+  const options = isProductFeedback
+    ? MOBILE_FEEDBACK_OPTIONS
+    : (props.approval.options ?? DEFAULT_APPROVAL_OPTIONS);
   // Opaque for the same reason as PendingUserInputCard: nothing blurs the feed
   // behind this card, so a translucent surface bleeds messages through it.
   return (
@@ -33,11 +40,15 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
         Approval needed
       </Text>
       <Text className="font-t3-bold text-lg text-neutral-950 dark:text-neutral-50">
-        {props.approval.appName ?? props.approval.requestKind}
+        {isProductFeedback
+          ? "Product feedback"
+          : (props.approval.appName ?? props.approval.requestKind)}
       </Text>
       {props.approval.detail ? (
         <Text className="font-sans text-sm leading-normal text-neutral-600 dark:text-neutral-400">
-          {props.approval.detail}
+          {isProductFeedback
+            ? "Open Akeru on web or desktop to review this feedback draft."
+            : props.approval.detail}
         </Text>
       ) : null}
       <View className="flex-row flex-wrap gap-2.5">

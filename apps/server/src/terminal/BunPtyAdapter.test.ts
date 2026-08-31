@@ -37,7 +37,7 @@ it.effect("reports unsupported platforms with a structured startup defect", () =
         platform: "win32",
       });
       expect(error.message).toBe(
-        "Bun PTY terminal support is unavailable on win32. Please use Node.js (e.g. by running `npx t3`) instead.",
+        "Bun PTY terminal support is unavailable on win32. Please use Node.js (e.g. by running `npx akeru-bot`) instead.",
       );
     }
   }),

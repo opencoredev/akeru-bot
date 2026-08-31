@@ -7,6 +7,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/core/agent-controller";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ApprovalRequestId,
   McpServerId,
   ProviderDriverKind,
@@ -424,6 +425,55 @@ describe("AgentControllerLive", () => {
         expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Reply once." });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("keeps product feedback approval-gated in full-access mode", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        expect(mastra.session.state.set).toHaveBeenCalledWith(
+          expect.objectContaining({ yolo: false }),
+        );
+        expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
+          toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          policy: "ask",
+        });
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Prepare feedback." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "feedback-tool-1",
+          toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          args: { feedback: "The button failed." },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("feedback-tool-1"),
+          decision: "acceptForSession",
+        });
+
+        expect(mastra.session.permissions.setForTool).not.toHaveBeenCalledWith({
+          toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          policy: "allow",
+        });
+        mastra.finishSend();
       }),
       bridge.service,
       mastra.factory,

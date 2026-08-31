@@ -1,4 +1,5 @@
 import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -18,6 +19,7 @@ import {
   type OrchestrationThread,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
+  ProductFeedbackToolDraft,
 } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -26,6 +28,8 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
@@ -100,6 +104,15 @@ const TASK_DESCRIPTION_BY_TASK_CACHE_CAPACITY = 10_000;
 const TASK_DESCRIPTION_BY_TASK_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
 const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
+const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
+  onExcessProperty: "error",
+});
+
+function boundedFeedbackArgs(toolName: string | undefined, args: unknown): unknown {
+  if (toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME || args === undefined) return undefined;
+  const decoded = decodeProductFeedbackToolDraft(args);
+  return Exit.isSuccess(decoded) ? decoded.value : undefined;
+}
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,
@@ -377,6 +390,7 @@ export function runtimeEventToActivities(
         return [];
       }
       const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
+      const feedbackArgs = boundedFeedbackArgs(event.payload.toolName, event.payload.args);
       return [
         {
           id: event.eventId,
@@ -397,6 +411,8 @@ export function runtimeEventToActivities(
             requestId: toApprovalRequestId(event.requestId),
             ...(requestKind ? { requestKind } : {}),
             requestType: event.payload.requestType,
+            ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
+            ...(feedbackArgs !== undefined ? { args: feedbackArgs } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.appName ? { appName: event.payload.appName } : {}),
             ...(event.payload.options ? { options: event.payload.options } : {}),

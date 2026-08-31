@@ -37,6 +37,11 @@ jobs:
                 color: "fbca04",
                 description: "Issue needs maintainer review and initial categorization.",
               },
+              {
+                name: "via-triage",
+                color: "5319E7",
+                description: "Prepared through Akeru agent triage and approved by the user",
+              },
             ];
 
             for (const label of managedLabels) {

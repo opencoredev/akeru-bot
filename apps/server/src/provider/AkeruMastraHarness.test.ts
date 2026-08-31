@@ -3,10 +3,12 @@ import type { ToolsInput } from "@mastra/core/agent";
 import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import { RequestContext } from "@mastra/core/request-context";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
+import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME } from "@t3tools/contracts";
 import { assert, describe, it } from "vite-plus/test";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import { resolveAkeruTools } from "./AkeruMastraHarness.ts";
+import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 
 describe("AkeruMastraHarness", () => {
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
@@ -36,6 +38,35 @@ describe("AkeruMastraHarness", () => {
     });
 
     assert.containsAllKeys(tools, ["view", "write_file", "execute_command", "exa_search"]);
+    assert.containsAllKeys(tools, [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]);
     await workspace.destroy();
+  });
+
+  it("keeps product feedback draft-only and approval-gated", async () => {
+    const valid = await productFeedbackToolInputSchema["~standard"].validate({
+      feedback: "The button is unresponsive.",
+    });
+    const forbidden = await productFeedbackToolInputSchema["~standard"].validate({
+      feedback: "Private payload",
+      conversation: "full thread",
+    });
+    assert.isUndefined(valid.issues);
+    assert.isDefined(forbidden.issues);
+
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadWorkspace: () => undefined,
+      getThreadTools: () => ({}),
+    });
+    const tool = tools[AKERU_PRODUCT_FEEDBACK_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+    assert.isTrue(tool.requireApproval);
+    assert.deepEqual(await tool.execute?.({ feedback: "The button is unresponsive." }, {}), {
+      status: "draft-opened",
+    });
   });
 });
