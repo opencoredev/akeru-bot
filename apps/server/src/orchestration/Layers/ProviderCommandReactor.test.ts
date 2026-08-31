@@ -780,6 +780,47 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
+  effectIt.effect("releases a configured bot's usage reservation when dispatch fails", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: { provider: "codex", model: "gpt-5-codex" },
+          botUsageCap: { unit: "tokens", limit: 1_000 },
+        }),
+      );
+      harness.sendTurn.mockImplementation(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: ProviderDriverKind.make("codex"),
+            method: "turn/start",
+            detail: "dispatch failed",
+          }),
+        ),
+      );
+
+      yield* harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-dispatch-failure"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-dispatch-failure"),
+          role: "user",
+          text: "fail dispatch",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      yield* Effect.promise(() => harness.drain());
+
+      const usage = yield* Effect.promise(() => harness.summarizeBotUsage());
+      expect(usage.consumedTokens).toBe(0);
+      expect(usage.reservedTokens).toBe(0);
+      expect(usage.entries[0]?.state).toBe("released");
+    }),
+  );
+
   it("projects a typed failure when the configured bot engine is unavailable", async () => {
     const harness = await createHarness({
       botEngine: { provider: "missing", model: "missing-model" },

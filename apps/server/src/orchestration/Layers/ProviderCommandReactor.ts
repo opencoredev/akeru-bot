@@ -1372,8 +1372,7 @@ const make = Effect.gen(function* () {
           ? Effect.void
           : botUsageLedger.settle({
               reservationId,
-              state: "unavailable",
-              reason: "Provider dispatch failed without token usage.",
+              state: "released",
               settledAt: event.payload.createdAt,
             })
         ).pipe(Effect.andThen(recoverTurnStartFailure(cause))),
