@@ -18,6 +18,8 @@ import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import * as Schema from "effect/Schema";
 
+import { buildBotStepMeters, type BotStepMeterData } from "../features/threads/botStepUsage";
+
 export interface PendingApproval {
   readonly requestId: ApprovalRequestId;
   readonly requestKind: ProviderRequestKind;
@@ -102,6 +104,7 @@ type RawThreadFeedEntry =
       readonly id: string;
       readonly createdAt: string;
       readonly message: OrchestrationThread["messages"][number];
+      readonly botStepMeter?: BotStepMeterData;
     }
   | {
       readonly type: "activity";
@@ -339,6 +342,8 @@ function deriveWorkLogEntries(
     if (activity.kind === "task.updated" && !isTerminalBypassUpdate(activity)) continue;
     if (activity.kind === "tool.progress") continue;
     if (activity.kind === "context-window.updated") continue;
+    if (activity.kind === "bot.step-usage.updated") continue;
+    if (activity.kind === "bot.usage-cap.hit") continue;
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
@@ -1555,6 +1560,7 @@ export function buildThreadFeed(
     : loadedMessages;
   const oldestLoadedMessageCreatedAt =
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
+  const botStepMeters = buildBotStepMeters(thread.activities);
   const workLogEntries = deriveWorkLogEntries(thread.activities);
   const entries = Arr.sortWith(
     [
@@ -1563,6 +1569,7 @@ export function buildThreadFeed(
         id: message.id,
         createdAt: message.createdAt,
         message,
+        ...(message.turnId === null ? {} : { botStepMeter: botStepMeters.get(message.turnId) }),
       })),
       ...workLogEntries
         .filter((entry) => {

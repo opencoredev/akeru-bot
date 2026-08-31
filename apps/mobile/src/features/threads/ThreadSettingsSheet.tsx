@@ -1,4 +1,5 @@
 import type {
+  BotUsageCap,
   ModelSelection,
   ProviderOptionDescriptor,
   ProviderOptionSelection,
@@ -27,7 +28,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -59,6 +60,7 @@ import {
   pendingModelAfterPress,
   providerSectionIsCollapsed,
 } from "./thread-settings-sheet-state";
+import { parseBotUsageCapInput } from "./botStepUsage";
 
 /**
  * Everyday harnesses start expanded; every other provider (OpenRouter catalogs
@@ -288,6 +290,8 @@ type ThreadSettingsSessionProps = {
   readonly onUpdateOptionSelections: (selections: ReadonlyArray<ProviderOptionSelection>) => void;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
+  readonly botUsageCap?: BotUsageCap | null;
+  readonly onUpdateBotUsageCap?: (input: string) => Promise<boolean>;
 };
 
 export type ExistingThreadSettingsRouteSession = ThreadSettingsSessionProps & {
@@ -335,6 +339,9 @@ type ThreadSettingsSessionValue = {
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
+  readonly botUsageCapInput: string | undefined;
+  readonly botUsageCapDirty: boolean;
+  readonly botUsageCapValid: boolean;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
   readonly providerExpansionOverrides: ReadonlySet<string>;
   readonly hasLegacyModels: boolean;
@@ -344,12 +351,14 @@ type ThreadSettingsSessionValue = {
   readonly showLegacy: boolean;
   readonly applyOptionChange: (id: string, value: string | boolean) => void;
   readonly commitPendingModel: () => void;
+  readonly commitBotUsageCap: () => Promise<boolean>;
   readonly isApplied: (option: ModelOption) => boolean;
   readonly isDisplayed: (option: ModelOption) => boolean;
   readonly pressModel: (option: ModelOption) => void;
   readonly setProviderFilter: (providerKey: string | null) => void;
   readonly setSearchQuery: (query: string) => void;
   readonly setShowLegacy: (showLegacy: boolean) => void;
+  readonly setBotUsageCapInput: (input: string) => void;
   readonly toggleProvider: (providerKey: string) => void;
 };
 
@@ -366,6 +375,14 @@ function ThreadSettingsSessionProvider(
     () => new Set(),
   );
   const [pendingModel, setPendingModel] = useState<ModelOption | null>(null);
+  const [botUsageCapInput, setBotUsageCapInput] = useState<string | undefined>(() =>
+    props.botUsageCap === undefined ? undefined : (props.botUsageCap?.limit.toString() ?? ""),
+  );
+  const parsedBotUsageCap =
+    botUsageCapInput === undefined ? undefined : parseBotUsageCapInput(botUsageCapInput);
+  const botUsageCapDirty =
+    botUsageCapInput !== undefined && parsedBotUsageCap !== (props.botUsageCap?.limit ?? null);
+  const botUsageCapValid = botUsageCapInput === undefined || parsedBotUsageCap !== undefined;
 
   const isApplied = useCallback(
     (option: ModelOption) =>
@@ -405,6 +422,13 @@ function ThreadSettingsSessionProvider(
       props.onSelectModel(pendingModel);
     }
   }, [pendingModel, props.onSelectModel]);
+  const commitBotUsageCap = useCallback(
+    () =>
+      botUsageCapInput === undefined || !botUsageCapDirty
+        ? Promise.resolve(true)
+        : (props.onUpdateBotUsageCap?.(botUsageCapInput) ?? Promise.resolve(false)),
+    [botUsageCapDirty, botUsageCapInput, props.onUpdateBotUsageCap],
+  );
 
   const applyOptionChange = useCallback(
     (id: string, value: string | boolean) => {
@@ -453,6 +477,9 @@ function ThreadSettingsSessionProvider(
       providerGroups: props.providerGroups,
       runtimeMode: props.runtimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
+      botUsageCapInput,
+      botUsageCapDirty,
+      botUsageCapValid,
       displayedDescriptors,
       providerExpansionOverrides,
       hasLegacyModels,
@@ -462,16 +489,22 @@ function ThreadSettingsSessionProvider(
       showLegacy: showLegacyToggle,
       applyOptionChange,
       commitPendingModel,
+      commitBotUsageCap,
       isApplied,
       isDisplayed,
       pressModel,
       setProviderFilter,
       setSearchQuery,
       setShowLegacy: setShowLegacyToggle,
+      setBotUsageCapInput,
       toggleProvider,
     }),
     [
       applyOptionChange,
+      botUsageCapDirty,
+      botUsageCapInput,
+      botUsageCapValid,
+      commitBotUsageCap,
       commitPendingModel,
       displayedDescriptors,
       providerExpansionOverrides,
@@ -705,7 +738,7 @@ function ThreadSettingsOptionsItem(props: {
         })}
         <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
           <DisclosureRow
-            isLast
+            isLast={session.botUsageCapInput === undefined}
             label="Runtime"
             value={
               RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
@@ -713,6 +746,22 @@ function ThreadSettingsOptionsItem(props: {
             onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
           />
         </Animated.View>
+        {session.botUsageCapInput !== undefined ? (
+          <View className="min-h-14 flex-row items-center gap-3 bg-card px-4 py-2">
+            <Text className="text-sm font-t3-medium text-foreground">Token hard stop</Text>
+            <TextInput
+              accessibilityLabel="Token hard stop"
+              className="min-w-24 flex-1 text-right text-base tabular-nums text-foreground"
+              inputMode="numeric"
+              keyboardType="number-pad"
+              onChangeText={session.setBotUsageCapInput}
+              placeholder="No limit"
+              placeholderTextColorClassName="accent-placeholder"
+              returnKeyType="done"
+              value={session.botUsageCapInput}
+            />
+          </View>
+        ) : null}
       </Animated.View>
 
       {Platform.OS !== "ios" && session.hasLegacyModels ? (
@@ -946,10 +995,20 @@ function ThreadSettingsModelsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ThreadSettingsPickerStackParams>>();
   const usesNativeMailSearchToolbar = Platform.OS === "ios" && NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED;
   const hasCustomCatalogFilter = session.providerFilter !== null || session.showLegacy;
-  const commitAndClose = useCallback(() => {
+  const [saving, setSaving] = useState(false);
+  const hasPendingChanges = session.pendingModel !== null || session.botUsageCapDirty;
+  const commitAndClose = useCallback(async () => {
+    if (!session.botUsageCapValid || saving) return;
+    setSaving(true);
+    const saved = await session.commitBotUsageCap();
+    setSaving(false);
+    if (!saved) {
+      Alert.alert("Could not save bot settings");
+      return;
+    }
     session.commitPendingModel();
     presentation.onClose();
-  }, [presentation, session]);
+  }, [presentation, saving, session]);
   const filterMenu = useMemo(
     () => ({
       title: "Model filters",
@@ -994,9 +1053,10 @@ function ThreadSettingsModelsScreen() {
         <AndroidScreenHeader
           actions={[
             {
-              accessibilityLabel: session.pendingModel ? "Save thread settings" : "Done",
+              accessibilityLabel: hasPendingChanges ? "Save thread settings" : "Done",
+              disabled: saving || !session.botUsageCapValid,
               icon: "checkmark",
-              onPress: commitAndClose,
+              onPress: () => void commitAndClose(),
             },
           ]}
           onBack={presentation.onClose}
@@ -1059,9 +1119,10 @@ function ThreadSettingsModelsScreen() {
       </NativeHeaderToolbar>
       <NativeHeaderToolbar placement="right">
         <NativeHeaderToolbar.Button
-          accessibilityLabel={session.pendingModel ? "Save thread settings" : "Done"}
-          label={session.pendingModel ? "Save" : "Done"}
-          onPress={commitAndClose}
+          accessibilityLabel={hasPendingChanges ? "Save thread settings" : "Done"}
+          disabled={saving || !session.botUsageCapValid}
+          label={hasPendingChanges ? "Save" : "Done"}
+          onPress={() => void commitAndClose()}
         />
       </NativeHeaderToolbar>
       {Platform.OS === "ios" && !usesNativeMailSearchToolbar ? (

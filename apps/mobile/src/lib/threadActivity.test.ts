@@ -252,6 +252,49 @@ function makeThread(
 }
 
 describe("buildThreadFeed", () => {
+  it("attaches bot step usage to its assistant message without a duplicate work row", () => {
+    const turnId = TurnId.make("turn-bot");
+    const thread = makeThread({
+      id: ThreadId.make("thread-bot"),
+      projectId: ProjectId.make("project-1"),
+      title: "Bot thread",
+      messages: [
+        {
+          id: MessageId.make("assistant-bot"),
+          role: "assistant",
+          text: "Done",
+          turnId,
+          streaming: false,
+          createdAt: "2026-08-31T00:00:02.000Z",
+          updatedAt: "2026-08-31T00:00:02.000Z",
+        },
+      ],
+      activities: [
+        makeActivity({
+          id: EventId.make("usage"),
+          kind: "bot.step-usage.updated",
+          summary: "Usage",
+          turnId,
+          createdAt: "2026-08-31T00:00:01.000Z",
+          payload: {
+            botId: "bot-1",
+            engine: { provider: "codex", model: "gpt-5.6-sol" },
+            tokens: 1_200,
+            estimatedCost: { status: "available", usd: 0.42 },
+          },
+        }),
+      ],
+    });
+
+    expect(buildThreadFeed(thread)).toEqual([
+      expect.objectContaining({
+        type: "message",
+        id: "assistant-bot",
+        botStepMeter: expect.objectContaining({ tokens: 1_200, costUsd: 0.42 }),
+      }),
+    ]);
+  });
+
   it("keeps older local feedback before newer messages returned by the server", () => {
     const submission = {
       id: MessageId.make("feedback-command-ordering"),
