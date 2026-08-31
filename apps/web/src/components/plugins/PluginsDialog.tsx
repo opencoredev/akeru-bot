@@ -127,9 +127,10 @@ export function validateMcpServerDraft(draft: McpServerDraft): string | null {
   }
   try {
     const url = new URL(draft.url.trim());
-    return url.protocol === "http:" || url.protocol === "https:"
-      ? null
-      : "URL must start with http:// or https://.";
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "URL must start with http:// or https://.";
+    }
+    return url.username || url.password ? "Store credentials outside the server URL." : null;
   } catch {
     return "Enter a valid HTTP or HTTPS URL.";
   }

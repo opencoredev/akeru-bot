@@ -147,6 +147,17 @@ describe("Plugins dialog content", () => {
     ).toBeNull();
   });
 
+  it("rejects credentials embedded in custom MCP URLs", () => {
+    expect(
+      validateMcpServerDraft({
+        ...EMPTY_MCP_SERVER_DRAFT,
+        name: "Remote tools",
+        transport: "url",
+        url: "https://user:pass@example.com/mcp",
+      }),
+    ).toBe("Store credentials outside the server URL.");
+  });
+
   it("keeps removed builtins editable without absorbing current catalog entries", () => {
     const currentBuiltinServer: McpServer = {
       ...rawServer,
