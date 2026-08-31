@@ -108,6 +108,7 @@ describe("Plugins dialog content", () => {
       <PluginDetailsContent
         plugin={executor}
         server={undefined}
+        activeDependentBotNames={[]}
         pending={false}
         onToggle={noop}
         onRemove={noop}
@@ -134,6 +135,7 @@ describe("Plugins dialog content", () => {
       <PluginDetailsContent
         plugin={pendingPlugin}
         server={undefined}
+        activeDependentBotNames={[]}
         pending={false}
         onToggle={noop}
         onRemove={noop}
@@ -153,6 +155,7 @@ describe("Plugins dialog content", () => {
       <PluginDetailsContent
         plugin={apiKeyPlugin}
         server={undefined}
+        activeDependentBotNames={[]}
         pending={false}
         onToggle={noop}
         onRemove={noop}
@@ -170,6 +173,7 @@ describe("Plugins dialog content", () => {
       <PluginDetailsContent
         plugin={firecrawl}
         server={firecrawlServer}
+        activeDependentBotNames={[]}
         pending={false}
         onToggle={noop}
         onRemove={noop}
@@ -180,6 +184,26 @@ describe("Plugins dialog content", () => {
     );
     expect(markup).toContain('aria-label="Remove Firecrawl"');
     expect(markup).toContain('aria-label="Disable Firecrawl"');
+  });
+
+  it("shows active dependent bots and honest routine availability", () => {
+    const markup = renderToStaticMarkup(
+      <PluginDetailsContent
+        plugin={firecrawl}
+        server={firecrawlServer}
+        activeDependentBotNames={["Research", "Writer"]}
+        pending={false}
+        onToggle={noop}
+        onRemove={noop}
+        onViewDocumentation={noop}
+        onViewSource={noop}
+        onOpenSkill={noop}
+      />,
+    );
+    expect(markup).toContain("Active bots");
+    expect(markup).toContain("Research, Writer");
+    expect(markup).toContain("Routines");
+    expect(markup).toContain("Unavailable until routines ship");
   });
 
   it("keeps Custom MCP edit, disable, and delete behavior", () => {

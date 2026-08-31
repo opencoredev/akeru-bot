@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { loadDirectoryCatalog, type PluginDirectoryDefinition } from "../../../../../plugins";
 import {
   buildPluginSections,
+  pluginActiveDependentBotNames,
   pluginConnectionLabel,
   pluginMatchesQuery,
   pluginPrimaryAction,
@@ -91,45 +92,49 @@ describe("plugin presentation", () => {
     ).toEqual(["context", "firecrawl", "exa", "parallel-search"]);
   });
 
-  it("searches every manifest value exposed by the directory loader", () => {
-    const context = catalog.find((plugin) => plugin.id === "context");
+  it("searches only the directory discovery fields", () => {
     const executor = catalog.find((plugin) => plugin.id === "executor");
-    if (!context || !executor) throw new TypeError("Required directory plugins are missing.");
+    if (!executor) throw new TypeError("Executor is missing from the plugin directory.");
+    const searchPlugin = {
+      ...firecrawl,
+      name: "Manifest name token",
+      title: "Display title token",
+      description: "Description token",
+      tags: ["tag token"],
+      capabilities: ["capability token"],
+      publisher: { ...firecrawl.publisher, name: "Publisher token" },
+    } satisfies PluginDirectoryDefinition;
     for (const query of [
-      "context",
-      "Scrape, extract, parse",
+      "Manifest name token",
+      "Display title token",
+      "Description token",
       "Web",
-      "brand-data",
-      "monitor web changes",
-      "Context.dev",
-      "docs.context.dev",
-      "github.com/context-dot-dev",
-      "Proprietary",
-      "Context.dev brand asset",
-      "mobile",
-      "mcp.context.dev",
-      "ready",
-      "oauth",
-      "Sign in through the Context.dev OAuth flow.",
-      "read-web-data",
-      "Read public web pages",
-      "available",
+      "tag token",
+      "capability token",
+      "Publisher token",
     ]) {
-      expect(pluginMatchesQuery(context, query)).toBe(true);
+      expect(pluginMatchesQuery(searchPlugin, query)).toBe(true);
     }
-    for (const query of [
-      "Useful Software Co.",
-      "bunx",
-      "-y",
-      "Submit a payment",
-      "account-wide",
-      "windows",
-    ]) {
-      expect(pluginMatchesQuery(executor, query)).toBe(true);
+    for (const query of [searchPlugin.url, "available", "mobile", "oauth"]) {
+      expect(pluginMatchesQuery(searchPlugin, query)).toBe(false);
     }
-    expect(pluginMatchesQuery(firecrawl, "skills.sh/firecrawl")).toBe(true);
-    expect(pluginMatchesQuery(apiKeyPlugin, "key-vendor-api-key")).toBe(true);
-    expect(pluginMatchesQuery(pendingPlugin, "approve Akeru as an OAuth client")).toBe(true);
+    expect(pluginMatchesQuery(executor, "bunx")).toBe(false);
+  });
+
+  it("shows active bot dependents only for an enabled installation", () => {
+    const enabledServer = server(true);
+    const bots = [
+      { name: "Research", archivedAt: null, disabledMcpServerIds: [] },
+      { name: "Writer", archivedAt: null, disabledMcpServerIds: [enabledServer.id] },
+      {
+        name: "Archived",
+        archivedAt: "2026-08-01T00:00:00.000Z",
+        disabledMcpServerIds: [],
+      },
+    ];
+    expect(pluginActiveDependentBotNames(enabledServer, bots)).toEqual(["Research"]);
+    expect(pluginActiveDependentBotNames(server(false), bots)).toEqual([]);
+    expect(pluginActiveDependentBotNames(undefined, bots)).toEqual([]);
   });
 
   it("uses state-correct actions without claiming a successful connection", () => {

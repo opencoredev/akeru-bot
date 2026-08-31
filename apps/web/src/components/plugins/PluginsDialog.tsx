@@ -14,6 +14,7 @@ import {
 import { ensureLocalApi } from "../../localApi";
 import { cn } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
+import { environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcpServers";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -40,7 +41,12 @@ import {
   planPluginToggle,
   pluginMcpServerId,
 } from "./pluginRegistry";
-import { buildPluginSections, PLUGIN_FILTERS, type PluginFilter } from "./pluginPresentation";
+import {
+  buildPluginSections,
+  pluginActiveDependentBotNames,
+  PLUGIN_FILTERS,
+  type PluginFilter,
+} from "./pluginPresentation";
 
 const CATALOG = loadDirectoryCatalog();
 
@@ -121,6 +127,7 @@ export function validateMcpServerDraft(draft: McpServerDraft): string | null {
 
 function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
+  const bots = useAtomValue(environmentBotsAtom(environmentId));
   const createServer = useAtomCommand(mcpServerEnvironment.create, { reportFailure: false });
   const updateServer = useAtomCommand(mcpServerEnvironment.update, { reportFailure: false });
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
@@ -142,6 +149,9 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
     installedPluginIds: new Set(installedPlugins.map((plugin) => plugin.id)),
   });
   const validationError = validateMcpServerDraft(draft);
+  const selectedPluginServer = selectedPlugin
+    ? findPluginServer(selectedPlugin, servers)
+    : undefined;
 
   const reportFailure = (
     title: string,
@@ -264,7 +274,8 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
       {selectedPlugin ? (
         <PluginDetails
           plugin={selectedPlugin}
-          server={findPluginServer(selectedPlugin, servers)}
+          server={selectedPluginServer}
+          activeDependentBotNames={pluginActiveDependentBotNames(selectedPluginServer, bots)}
           pending={pendingServerId === pluginMcpServerId(selectedPlugin)}
           onBack={() => setSelectedPlugin(null)}
           onToggle={(enabled) => void togglePlugin(selectedPlugin, enabled)}

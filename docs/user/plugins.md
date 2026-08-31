@@ -1,8 +1,8 @@
 # Plugins
 
-Open **Plugins** from the sidebar or command palette. Use **All**, **Featured**, **Installed**, or one of the eight categories. Search checks the plugin name, description, category, tags, capabilities, publisher, permissions, approvals, platforms, connection details, and other catalog information.
+Open **Plugins** from the sidebar or command palette. Use **All**, **Featured**, **Installed**, or one of the eight categories. Search checks the plugin name, title, description, category, tags, capabilities, and publisher name.
 
-Select a plugin to review its publisher, authentication, hosted or local execution, transport, platform support, permissions, approval classes, setup, documentation, and source. Health shows **Not checked** until Akeru completes a real request. An enabled plugin does not imply a healthy connection.
+Select a plugin to review its publisher, authentication, hosted or local execution, transport, platform support, permissions, approval classes, setup, documentation, source, and active dependent bots. Routines are unavailable until routines ship. Health shows **Not checked** until Akeru completes a real request. An enabled plugin does not imply a healthy connection.
 
 The available action matches the current state:
 

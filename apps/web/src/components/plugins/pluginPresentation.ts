@@ -1,4 +1,4 @@
-import type { McpServer } from "@t3tools/contracts";
+import type { McpServer, OrchestrationBot } from "@t3tools/contracts";
 import {
   PLUGIN_CATEGORIES,
   type PluginCategory,
@@ -25,17 +25,31 @@ export interface PluginPrimaryAction {
   readonly blocker?: string;
 }
 
-function searchableValues(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value);
-  if (Array.isArray(value)) return value.map(searchableValues).join("\n");
-  if (value && typeof value === "object") {
-    return Object.values(value).map(searchableValues).join("\n");
-  }
-  return "";
+export function pluginMatchesQuery(plugin: PluginDirectoryDefinition, query: string): boolean {
+  return [
+    plugin.name,
+    plugin.title,
+    plugin.description,
+    plugin.category,
+    ...plugin.tags,
+    ...plugin.capabilities,
+    plugin.publisher.name,
+  ]
+    .join("\n")
+    .toLocaleLowerCase()
+    .includes(query.trim().toLocaleLowerCase());
 }
 
-export function pluginMatchesQuery(plugin: PluginDirectoryDefinition, query: string): boolean {
-  return searchableValues(plugin).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+type DependentBot = Pick<OrchestrationBot, "name" | "archivedAt" | "disabledMcpServerIds">;
+
+export function pluginActiveDependentBotNames(
+  server: McpServer | undefined,
+  bots: readonly DependentBot[],
+): readonly string[] {
+  if (!server?.enabled) return [];
+  return bots
+    .filter((bot) => bot.archivedAt === null && !bot.disabledMcpServerIds.includes(server.id))
+    .map((bot) => bot.name);
 }
 
 export function buildPluginSections(input: {

@@ -14,6 +14,7 @@ import {
 interface PluginDetailsContentProps {
   readonly plugin: PluginDirectoryDefinition;
   readonly server: McpServer | undefined;
+  readonly activeDependentBotNames: readonly string[];
   readonly pending: boolean;
   readonly onToggle: (enabled: boolean) => void;
   readonly onRemove: () => void;
@@ -31,6 +32,7 @@ function transportLabel(plugin: PluginDirectoryDefinition): string {
 export function PluginDetailsContent({
   plugin,
   server,
+  activeDependentBotNames,
   pending,
   onToggle,
   onRemove,
@@ -131,6 +133,27 @@ export function PluginDetailsContent({
           ) : null}
         </section>
 
+        <section aria-labelledby="plugin-dependents-title">
+          <h3
+            className="mb-2 px-1 text-xs font-medium text-muted-foreground"
+            id="plugin-dependents-title"
+          >
+            Dependents
+          </h3>
+          <dl className="overflow-hidden rounded-xl border bg-muted/35 text-sm">
+            <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
+              <dt className="text-muted-foreground">Active bots</dt>
+              <dd className="text-end font-medium">
+                {activeDependentBotNames.length > 0 ? activeDependentBotNames.join(", ") : "None"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-muted-foreground">Routines</dt>
+              <dd className="font-medium">Unavailable until routines ship</dd>
+            </div>
+          </dl>
+        </section>
+
         <section aria-labelledby="plugin-setup-title">
           <h3
             className="mb-2 px-1 text-xs font-medium text-muted-foreground"
@@ -209,6 +232,7 @@ export function PluginDetailsContent({
 export function PluginDetails({
   plugin,
   server,
+  activeDependentBotNames,
   pending,
   onBack,
   onToggle,
@@ -230,6 +254,7 @@ export function PluginDetails({
       <PluginDetailsContent
         plugin={plugin}
         server={server}
+        activeDependentBotNames={activeDependentBotNames}
         pending={pending}
         onToggle={onToggle}
         onRemove={onRemove}
