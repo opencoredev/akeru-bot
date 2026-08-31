@@ -7,6 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai";
 import { HttpBody, HttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { PNG } from "pngjs";
 
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
@@ -16,6 +17,11 @@ const environmentId = EnvironmentId.make("environment-mcp-test");
 const threadId = ThreadId.make("thread-mcp-test");
 const tabId = PreviewTabId.make("tab-mcp-test");
 const alternateTabId = PreviewTabId.make("tab-mcp-alternate");
+const screenshot = (() => {
+  const png = new PNG({ width: 10, height: 5 });
+  png.data.fill(255);
+  return PNG.sync.write(png).toString("base64");
+})();
 const invocation = {
   environmentId,
   threadId,
@@ -178,7 +184,7 @@ it.effect("registers annotated tools and preserves authenticated request context
                   url: "http://example.test/",
                   title: "Example",
                   loading: false,
-                  visibleText: "Example",
+                  visibleText: "leo@example.com token=secret-value",
                   interactiveElements: [],
                   accessibilityTree: {},
                   consoleEntries: [],
@@ -186,7 +192,7 @@ it.effect("registers annotated tools and preserves authenticated request context
                   actionTimeline: [],
                   screenshot: {
                     mimeType: "image/png",
-                    data: Buffer.from("png").toString("base64"),
+                    data: screenshot,
                     width: 10,
                     height: 5,
                   },
@@ -259,8 +265,13 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(snapshot.isError).toBe(false);
       expect(snapshot.content.some((content) => content.type === "image")).toBe(true);
       expect(snapshot.structuredContent).toMatchObject({
-        screenshot: { mimeType: "image/png", width: 10, height: 5 },
+        visibleText: "[REDACTED] [REDACTED]",
+        screenshot: { mimeType: "image/png", width: 10, height: 5, redacted: true },
       });
+      const image = snapshot.content.find((content) => content.type === "image");
+      if (!image || image.type !== "image") throw new Error("Expected a redacted snapshot image.");
+      const png = PNG.sync.read(Buffer.from(image.data));
+      expect([...png.data.subarray(0, 4)]).toEqual([0, 0, 0, 255]);
       expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
         alternateTabId,
       );

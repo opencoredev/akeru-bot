@@ -10,6 +10,7 @@ import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { redactPreviewSnapshot } from "./PreviewSnapshotRedaction.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
@@ -174,12 +175,14 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
                 readonly [key: string]: unknown;
               };
               const { screenshot, ...page } = snapshot;
+              const redacted = redactPreviewSnapshot(page, screenshot);
               const metadata = {
-                ...page,
+                ...redacted.page,
                 screenshot: {
                   mimeType: screenshot.mimeType,
                   width: screenshot.width,
                   height: screenshot.height,
+                  redacted: redacted.frameRedacted,
                 },
               };
               return Effect.succeed(
@@ -190,7 +193,7 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
                     { type: "text", text: JSON.stringify(metadata) },
                     {
                       type: "image",
-                      data: new Uint8Array(Buffer.from(screenshot.data, "base64")),
+                      data: redacted.screenshot,
                       mimeType: screenshot.mimeType,
                     },
                   ],
