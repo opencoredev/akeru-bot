@@ -31,6 +31,7 @@ const SCOPES: readonly AkeruMemoryTargetScope[] = [
 const decodeMemoryArchive = Schema.decodeUnknownEffect(AkeruMemoryArchiveV2);
 
 type ImportState = {
+  readonly threadRef: ScopedThreadRef;
   readonly archive: AkeruMemoryArchiveV2;
   readonly preview: AkeruMemoryImportPreview;
 };
@@ -90,11 +91,18 @@ export function candidateDecisionInput(
   };
 }
 
-export function importApplyInput(threadRef: ScopedThreadRef, state: ImportState) {
+export function importStateForThread(state: ImportState | null, threadRef: ScopedThreadRef) {
+  return state?.threadRef.environmentId === threadRef.environmentId &&
+    state.threadRef.threadId === threadRef.threadId
+    ? state
+    : null;
+}
+
+export function importApplyInput(state: ImportState) {
   return {
-    environmentId: threadRef.environmentId,
+    environmentId: state.threadRef.environmentId,
     input: {
-      threadId: threadRef.threadId,
+      threadId: state.threadRef.threadId,
       target: "thread" as const,
       archive: state.archive,
       previewHash: state.preview.previewHash,
@@ -286,6 +294,7 @@ export function BotMemorySheet({
   const [error, setError] = useState<string | null>(null);
   const [importState, setImportState] = useState<ImportState | null>(null);
   const [clearPending, setClearPending] = useState(false);
+  const currentImportState = threadRef ? importStateForThread(importState, threadRef) : null;
 
   const runMutation = async (input: Parameters<typeof mutate>[0]) => {
     setBusy(true);
@@ -442,7 +451,7 @@ export function BotMemorySheet({
                             }).then((result) => {
                               setBusy(false);
                               if (result._tag === "Failure") setError(failureMessage(result));
-                              else setImportState({ archive, preview: result.value });
+                              else setImportState({ threadRef, archive, preview: result.value });
                             }),
                           )
                           .catch((cause: unknown) => {
@@ -458,13 +467,13 @@ export function BotMemorySheet({
                     </span>
                   </label>
                 </div>
-                {importState ? (
+                {currentImportState ? (
                   <div
                     className="rounded-lg border border-border p-3"
                     data-testid="memory-import-preview"
                   >
                     <ul className="space-y-1 text-sm">
-                      {importState.preview.items.map((item) => (
+                      {currentImportState.preview.items.map((item) => (
                         <li key={item.rootId}>
                           <span className="font-medium">{item.classification}</span> {item.reason}
                         </li>
@@ -477,13 +486,11 @@ export function BotMemorySheet({
                       onClick={() => {
                         setBusy(true);
                         setError(null);
-                        void applyImport(importApplyInput(threadRef, importState)).then(
-                          (result) => {
-                            setBusy(false);
-                            if (result._tag === "Failure") setError(failureMessage(result));
-                            else setImportState(null);
-                          },
-                        );
+                        void applyImport(importApplyInput(currentImportState)).then((result) => {
+                          setBusy(false);
+                          if (result._tag === "Failure") setError(failureMessage(result));
+                          else setImportState(null);
+                        });
                       }}
                     >
                       Apply import

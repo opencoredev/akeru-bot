@@ -17,6 +17,7 @@ import {
   factDeleteInput,
   factEditInput,
   importApplyInput,
+  importStateForThread,
   memoryErrorMessage,
 } from "./BotMemorySheet";
 import { resolveBotThreadTarget } from "./useBotThreadRef";
@@ -134,15 +135,23 @@ describe("BotMemorySheet", () => {
       conversations: [],
       manifestSha256: "a".repeat(64),
     });
-    const input = importApplyInput(threadRef, {
+    const state = {
+      threadRef,
       archive,
       preview: { previewHash: "b".repeat(64), items: [] },
-    });
+    };
+    const input = importApplyInput(state);
     expect(input.input).toMatchObject({
       threadId: "thread-1",
       target: "thread",
       previewHash: "b".repeat(64),
     });
+    expect(
+      importStateForThread(
+        state,
+        scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("thread-2")),
+      ),
+    ).toBeNull();
   });
 
   it("keeps server failures and falls back for unknown errors", () => {
