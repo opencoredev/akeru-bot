@@ -442,6 +442,7 @@ const buildAppUnderTest = (options?: {
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
     serverRuntimeStartup?: Partial<ServerRuntimeStartup.ServerRuntimeStartup["Service"]>;
+    channelDeliveryStore?: ChannelDeliveryStore.ChannelDeliveryStoreShape | null;
     serverEnvironment?: Partial<ServerEnvironment.ServerEnvironment["Service"]>;
     repositoryIdentityResolver?: Partial<
       RepositoryIdentityResolver.RepositoryIdentityResolver["Service"]
@@ -1021,10 +1022,13 @@ const buildAppUnderTest = (options?: {
       Layer.provideMerge(makeAuthTestLayer()),
       Layer.provideMerge(ServerSecretStore.layer),
       Layer.provideMerge(
-        Layer.succeed(
-          ChannelDeliveryStore.ChannelDeliveryStore,
-          ChannelDeliveryStore.makeMemoryChannelDeliveryStore(),
-        ),
+        options?.layers?.channelDeliveryStore === null
+          ? Layer.empty
+          : Layer.succeed(
+              ChannelDeliveryStore.ChannelDeliveryStore,
+              options?.layers?.channelDeliveryStore ??
+                ChannelDeliveryStore.makeMemoryChannelDeliveryStore(),
+            ),
       ),
       Layer.provide(workspaceAndProjectServicesLayer),
       Layer.provideMerge(FetchHttpClient.layer),
@@ -5301,6 +5305,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     Effect.gen(function* () {
       const bot = makeChannelTestBot();
       const model = { ...makeDefaultOrchestrationReadModel(), bots: [bot] };
+      let enqueuedCommands = 0;
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
@@ -5308,6 +5313,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
           orchestrationEngine: {
             dispatch: () => Effect.succeed({ sequence: 17 }),
+          },
+          serverRuntimeStartup: {
+            enqueueCommand: (effect) =>
+              Effect.sync(() => {
+                enqueuedCommands += 1;
+              }).pipe(Effect.andThen(effect)),
           },
         },
       });
@@ -5337,6 +5348,29 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(wsResult.sequence, 17);
       assert.equal(httpResponse.status, 200);
       assert.equal(httpResult.sequence, 17);
+      assert.equal(enqueuedCommands, 2);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("rejects websocket channel controls without delivery storage", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest({ layers: { channelDeliveryStore: null } });
+
+      const result = yield* Effect.scoped(
+        withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "channel.disconnect",
+            commandId: CommandId.make("cmd-channel-disconnect-no-delivery-store"),
+            botId: BotId.make("bot-1"),
+            provider: "telegram",
+          }),
+        ),
+      ).pipe(Effect.result);
+
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assertInclude(String(result.failure), "Channel delivery storage is unavailable");
+      }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

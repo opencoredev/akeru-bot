@@ -11,6 +11,14 @@ export function canManageChannels(
   return session?.authenticated === true && session.scopes?.includes(AuthAccessWriteScope) === true;
 }
 
+export function resolveChannelSettingsAccess(input: {
+  readonly isPending: boolean;
+  readonly session: Pick<AuthSessionState, "authenticated" | "scopes"> | null;
+}): "pending" | "allowed" | "denied" {
+  if (input.session === null && input.isPending) return "pending";
+  return canManageChannels(input.session) ? "allowed" : "denied";
+}
+
 export function connectedChannelBinding(
   bindings: ReadonlyArray<ChannelBinding> | undefined,
   provider: ChannelProvider,

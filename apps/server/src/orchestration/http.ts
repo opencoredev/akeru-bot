@@ -15,6 +15,7 @@ import * as ChannelCommand from "../channels/ChannelCommand.ts";
 import * as ChannelDeliveryStore from "../channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
   applyAuthenticatedCommandActor,
@@ -45,6 +46,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const channelDeliveryStore = yield* Effect.serviceOption(
       ChannelDeliveryStore.ChannelDeliveryStore,
     );
+    const startup = yield* Effect.serviceOption(ServerRuntimeStartup.ServerRuntimeStartup);
 
     return handlers
       .handle(
@@ -123,37 +125,42 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             if (!principal.scopes.has(AuthAccessWriteScope)) {
               yield* requireEnvironmentScope(AuthAccessWriteScope);
             }
-            const services = Option.all({ secretStore, channelDeliveryStore });
+            const services = Option.all({ secretStore, channelDeliveryStore, startup });
             if (Option.isNone(services)) {
               return yield* failEnvironmentInternal(
                 "orchestration_dispatch_failed",
                 new Error("Channel services are unavailable."),
               );
             }
-            return yield* Effect.tryPromise(() =>
-              ChannelCommand.executeChannelCommand(
-                {
-                  engine: orchestrationEngine,
-                  secretStore: services.value.secretStore,
-                  deliveryStore: services.value.channelDeliveryStore,
-                  readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-                  readThread: (threadId) =>
-                    Effect.runPromise(
-                      projectionSnapshotQuery
-                        .getThreadDetailById(threadId)
-                        .pipe(Effect.map(Option.getOrNull)),
-                    ),
-                  nowIso: () =>
-                    Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
-                  randomUuid: async () => randomUUID(),
-                },
-                command,
-              ),
-            ).pipe(
-              Effect.catch((cause) =>
-                failEnvironmentInternal("orchestration_dispatch_failed", cause),
-              ),
-            );
+            return yield* services.value.startup
+              .enqueueCommand(
+                Effect.tryPromise(() =>
+                  ChannelCommand.executeChannelCommand(
+                    {
+                      engine: orchestrationEngine,
+                      secretStore: services.value.secretStore,
+                      deliveryStore: services.value.channelDeliveryStore,
+                      readModel: () =>
+                        Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+                      readThread: (threadId) =>
+                        Effect.runPromise(
+                          projectionSnapshotQuery
+                            .getThreadDetailById(threadId)
+                            .pipe(Effect.map(Option.getOrNull)),
+                        ),
+                      nowIso: () =>
+                        Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
+                      randomUuid: async () => randomUUID(),
+                    },
+                    command,
+                  ),
+                ),
+              )
+              .pipe(
+                Effect.catch((cause) =>
+                  failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                ),
+              );
           }
           const decodedCommand = yield* normalizeDispatchCommand(command).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),

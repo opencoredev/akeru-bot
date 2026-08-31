@@ -164,6 +164,7 @@ function makeHarness(input: {
   readonly deliveryStore?: ChannelRuntimeDependencies["deliveryStore"];
   readonly secretStore?: ChannelRuntimeDependencies["secretStore"];
   readonly startTransport?: ChannelRuntimeDependencies["startTransport"];
+  readonly failBotUpdate?: (updateIndex: number) => Error | undefined;
 }) {
   let model = makeModel(input.bots ?? [makeBot(BOT_ID)]);
   const threads = [...(input.threads ?? [])];
@@ -171,8 +172,14 @@ function makeHarness(input: {
   const { store: memorySecretStore, values: secrets } = makeMemorySecretStore();
   const secretStore = input.secretStore ?? memorySecretStore;
   let sequence = model.snapshotSequence;
+  let botUpdateIndex = 0;
   const dispatch = (command: OrchestrationCommand) =>
     Effect.sync(() => {
+      if (command.type === "bot.update") {
+        botUpdateIndex += 1;
+        const failure = input.failBotUpdate?.(botUpdateIndex);
+        if (failure) throw failure;
+      }
       commands.push(command);
       sequence += 1;
       const channelBindings = command.type === "bot.update" ? command.channelBindings : undefined;
@@ -528,5 +535,36 @@ describe("channel runtime", () => {
     ).resolves.toBeGreaterThan(0);
     expect(posts).toBe(1);
     expect(markAttempts).toBe(2);
+  });
+
+  it("fills the sent binding on retry after binding persistence fails", async () => {
+    const messageId = MessageId.make("message-binding-retry");
+    const threadId = ThreadId.make("thread-binding-retry");
+    let posts = 0;
+    const harness = makeHarness({
+      failBotUpdate: (updateIndex) =>
+        updateIndex === 2 ? new Error("binding persistence failed") : undefined,
+      threads: [
+        makeThread(threadId, BOT_ID, [
+          makeMessage(MessageId.make("inbound-binding"), "user", "Question", {
+            provider: "telegram",
+            externalThreadId: "chat-binding",
+          }),
+          makeMessage(messageId, "assistant", "Send once and recover"),
+        ]),
+      ],
+      post: async () => void (posts += 1),
+    });
+    await connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+
+    await expect(
+      sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId }),
+    ).rejects.toThrow("binding persistence failed");
+    await expect(
+      sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId }),
+    ).resolves.toBeGreaterThan(0);
+
+    expect(posts).toBe(1);
+    expect(harness.readModel().bots[0]?.channelBindings[0]?.sentMessageIds).toContain(messageId);
   });
 });

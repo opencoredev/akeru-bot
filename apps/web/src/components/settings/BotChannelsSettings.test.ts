@@ -1,7 +1,11 @@
 import { AuthAccessWriteScope, BotId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
+import {
+  canManageChannels,
+  connectedChannelBinding,
+  resolveChannelSettingsAccess,
+} from "../../channelAccess";
 import { bindingFor } from "./BotChannelRows";
 
 describe("bot channel settings", () => {
@@ -57,5 +61,10 @@ describe("bot channel settings", () => {
 
     expect(connectedChannelBinding([disconnected], "telegram")).toBeUndefined();
     expect(connectedChannelBinding([connected], "telegram")).toEqual(connected);
+  });
+
+  it("keeps pending access neutral until the session loads", () => {
+    expect(resolveChannelSettingsAccess({ isPending: true, session: null })).toBe("pending");
+    expect(resolveChannelSettingsAccess({ isPending: false, session: null })).toBe("denied");
   });
 });

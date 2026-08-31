@@ -674,6 +674,29 @@ export async function sendChannelMessage(
         await Effect.runPromise(dependencies.deliveryStore.releaseRequested(input.messageId));
         throw cause;
       }
+      try {
+        await Effect.runPromise(
+          dependencies.deliveryStore.markSent({
+            messageId: input.messageId,
+            sentAt: await dependencies.nowIso(),
+          }),
+        );
+      } catch (cause) {
+        if (!binding.sentMessageIds.includes(input.messageId)) {
+          await replaceBinding(dependencies, {
+            ...binding,
+            sentMessageIds: [...binding.sentMessageIds, input.messageId],
+          });
+        }
+        throw cause;
+      }
+    } else if (claim === "requested") {
+      await Effect.runPromise(
+        dependencies.deliveryStore.markSent({
+          messageId: input.messageId,
+          sentAt: await dependencies.nowIso(),
+        }),
+      );
     }
     const sequence = binding.sentMessageIds.includes(input.messageId)
       ? model.snapshotSequence
@@ -681,12 +704,6 @@ export async function sendChannelMessage(
           ...binding,
           sentMessageIds: [...binding.sentMessageIds, input.messageId],
         });
-    await Effect.runPromise(
-      dependencies.deliveryStore.markSent({
-        messageId: input.messageId,
-        sentAt: await dependencies.nowIso(),
-      }),
-    );
     return sequence;
   });
 }

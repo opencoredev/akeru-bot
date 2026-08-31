@@ -2,11 +2,12 @@ import { useAtomValue } from "@effect/atom-react";
 import { GROUP_SHARED_WORKSPACE_WARNING, type EnvironmentId } from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 
-import { canManageChannels } from "../../channelAccess";
+import { resolveChannelSettingsAccess } from "../../channelAccess";
 import { environmentBotsAtom } from "../../state/bots";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Spinner } from "../ui/spinner";
 import { IMessageChannelRow, TelegramChannelRow, WhatsAppChannelRow } from "./BotChannelRows";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
@@ -21,7 +22,10 @@ export function BotChannelsSettingsPanel() {
   const [selectedBotId, setSelectedBotId] = useState("");
   const bot =
     activeBots.find((candidate) => candidate.id === selectedBotId) ?? activeBots[0] ?? null;
-  const canManage = canManageChannels(session.data);
+  const access = resolveChannelSettingsAccess({
+    isPending: session.isPending,
+    session: session.data,
+  });
 
   return (
     <SettingsPageContainer>
@@ -29,7 +33,11 @@ export function BotChannelsSettingsPanel() {
         <div className="px-4 py-8 text-sm text-muted-foreground">
           {environmentId === null ? "Connect an environment first." : "Create a bot first."}
         </div>
-      ) : !canManage ? (
+      ) : access === "pending" ? (
+        <div className="flex justify-center px-4 py-8 text-muted-foreground">
+          <Spinner aria-label="Loading channel access" />
+        </div>
+      ) : access === "denied" ? (
         <div className="px-4 py-8 text-sm text-muted-foreground">
           Open this environment on its host to manage channels.
         </div>

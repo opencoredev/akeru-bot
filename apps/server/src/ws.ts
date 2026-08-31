@@ -562,7 +562,7 @@ const makeWsRpcLayer = (
       const secretStore = yield* ServerSecretStore.ServerSecretStore;
       const channelDeliveryStore = yield* Effect.serviceOption(
         ChannelDeliveryStore.ChannelDeliveryStore,
-      ).pipe(Effect.map(Option.getOrElse(ChannelDeliveryStore.makeMemoryChannelDeliveryStore)));
+      );
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map(
@@ -1407,6 +1407,11 @@ const makeWsRpcLayer = (
                     message: "Only the environment host can manage external channels.",
                   });
                 }
+                if (Option.isNone(channelDeliveryStore)) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Channel delivery storage is unavailable.",
+                  });
+                }
                 return yield* startup.enqueueCommand(
                   Effect.tryPromise({
                     try: () =>
@@ -1414,7 +1419,7 @@ const makeWsRpcLayer = (
                         {
                           engine: orchestrationEngine,
                           secretStore,
-                          deliveryStore: channelDeliveryStore,
+                          deliveryStore: channelDeliveryStore.value,
                           readModel: () =>
                             Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
                           readThread: (threadId) =>
