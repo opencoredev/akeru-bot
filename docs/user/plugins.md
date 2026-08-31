@@ -1,11 +1,20 @@
 # Plugins
 
-Open **Plugins** from the sidebar or command palette. Browse focused sections such as **Web** and **Work**, or search by plugin name, description, or category. Select a plugin to see what it does, inspect its connector, copy its source link, or open its documentation. Choose **Add** to install it for the current environment and enable it for every bot by default. Use a bot's **Plugins** setting to disable it for that bot. Choose **Added** to disable it for the environment.
+Open **Plugins** from the sidebar or command palette. Use **All**, **Featured**, **Installed**, or one of the eight categories. Search checks the plugin name, description, category, tags, capabilities, publisher, permissions, approvals, platforms, connection details, and other catalog information.
 
-Select the installed and custom count below the title to review active plugins and custom MCP servers. Builtin plugins use their catalog configuration and do not expose transport editing. Akeru Bot stores no plugin credentials in the catalog or MCP registry. Keep credentials in the host environment or the service sign-in flow.
+Select a plugin to review its publisher, authentication, hosted or local execution, transport, platform support, permissions, approval classes, setup, documentation, and source. Health shows **Not checked** until Akeru completes a real request. An enabled plugin does not imply a healthy connection.
 
-Hosted plugins use their public MCP URL. Context.dev, Firecrawl, and Parallel Search start browser-based OAuth. Exa works anonymously and supports optional OAuth for higher limits. Executor starts its official local MCP command through Bun and exposes integrations from the user's Executor account. Plugin details link to verified agent skills when the service publishes them. Akeru Bot does not install separate skill packages when you add an MCP connector.
+The available action matches the current state:
 
-Akeru adds every enabled plugin to each bot unless that bot disables it. A provider change starts a fresh provider session with the same enabled plugins. Re-enabling a builtin plugin refreshes its stored connection recipe before the next session starts.
+- **Add** installs a public or local plugin.
+- **Connect** starts an OAuth connection.
+- **Add key** installs a plugin whose key stays in the host environment.
+- **Disable** stops an enabled plugin without deleting its registration.
+- **Reconnect** refreshes and enables a disabled plugin.
+- **Remove** deletes the plugin registration.
 
-Ask the agent to add a custom MCP server. The agent can configure a local command or remote URL for the current environment. Existing custom servers appear in the installed directory, where you can edit, disable, or delete them. Custom servers operate independently from builtin plugins.
+Approval-pending plugins remain visible, but Akeru disables **Connect** and shows the vendor blocker. Plugins removed from the directory remain under **Installed** until you remove them.
+
+Akeru enables each installed plugin for every bot by default. Use a bot's **Plugins** setting to disable it for that bot. A provider change starts a fresh provider session with the same enabled plugins.
+
+Ask the agent to add a Custom MCP server when a connector is not in the directory. Existing Custom MCP servers remain under **Installed**, where you can edit, disable, or delete them. Akeru stores no plugin credentials in the directory or MCP registry. Keep credentials in the host environment or the service sign-in flow.

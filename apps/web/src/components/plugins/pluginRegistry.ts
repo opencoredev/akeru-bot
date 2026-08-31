@@ -1,9 +1,9 @@
 import { McpServerId, type McpServer, type McpServerConfiguration } from "@t3tools/contracts";
-import type { PluginDefinition } from "../../../../../plugins";
+import type { PluginDefinition, PluginDirectoryDefinition } from "../../../../../plugins";
 
 const BUILTIN_PREFIX = "builtin-";
 
-export function pluginMcpServerId(plugin: PluginDefinition): McpServerId {
+export function pluginMcpServerId(plugin: Pick<PluginDirectoryDefinition, "id">): McpServerId {
   return McpServerId.make(`${BUILTIN_PREFIX}${plugin.id}`);
 }
 
@@ -12,7 +12,7 @@ export function isBuiltinMcpServer(server: McpServer): boolean {
 }
 
 export function findPluginServer(
-  plugin: PluginDefinition,
+  plugin: Pick<PluginDirectoryDefinition, "id">,
   servers: readonly McpServer[],
 ): McpServer | undefined {
   const id = pluginMcpServerId(plugin);

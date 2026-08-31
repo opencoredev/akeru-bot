@@ -1,35 +1,45 @@
-import { ArrowUpRightIcon, CheckIcon, ChevronLeftIcon, LinkIcon } from "lucide-react";
-import type { PluginDefinition, PluginSkill } from "../../../../../plugins";
+import type { McpServer } from "@t3tools/contracts";
+import { ArrowUpRightIcon, ChevronLeftIcon } from "lucide-react";
+import type { PluginDirectoryDefinition, PluginSkill } from "../../../../../plugins";
 import { Button } from "../ui/button";
 import { DialogHeader, DialogPanel, DialogTitle } from "../ui/dialog";
 import { PluginLogoImage } from "./PluginsCatalog";
-
-function connectorAccess(plugin: PluginDefinition): string {
-  if (plugin.kind !== "mcp-url") return "Local";
-  if (plugin.authentication === "oauth") return "OAuth";
-  if (plugin.authentication === "optional-oauth") return "Optional OAuth";
-  return "Public";
-}
+import {
+  pluginBlocker,
+  pluginConnectionLabel,
+  pluginExecutionLabel,
+  pluginPrimaryAction,
+} from "./pluginPresentation";
 
 interface PluginDetailsContentProps {
-  readonly plugin: PluginDefinition;
-  readonly installed: boolean;
+  readonly plugin: PluginDirectoryDefinition;
+  readonly server: McpServer | undefined;
   readonly pending: boolean;
   readonly onToggle: (enabled: boolean) => void;
-  readonly onCopySource: () => void;
+  readonly onRemove: () => void;
+  readonly onViewDocumentation: () => void;
   readonly onViewSource: () => void;
   readonly onOpenSkill: (skill: PluginSkill) => void;
 }
 
+function transportLabel(plugin: PluginDirectoryDefinition): string {
+  if (plugin.kind === "mcp-url") return "Remote URL";
+  if (plugin.kind === "mcp-stdio") return "Local command";
+  return "Unavailable";
+}
+
 export function PluginDetailsContent({
   plugin,
-  installed,
+  server,
   pending,
   onToggle,
-  onCopySource,
+  onRemove,
+  onViewDocumentation,
   onViewSource,
   onOpenSkill,
 }: PluginDetailsContentProps) {
+  const action = pluginPrimaryAction(plugin, server);
+  const blocker = pluginBlocker(plugin);
   return (
     <DialogPanel className="px-6 pt-6! pb-6 sm:px-8">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -46,53 +56,120 @@ export function PluginDetailsContent({
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {plugin.description}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">By {plugin.publisher.name}</p>
             </div>
-            <Button
-              aria-label={`${installed ? "Remove" : "Add"} ${plugin.title}`}
-              className="h-8 min-w-16 rounded-full px-3 text-xs"
-              size="sm"
-              variant={installed ? "secondary" : "default"}
-              disabled={pending}
-              onClick={() => onToggle(!installed)}
-            >
-              {installed ? <CheckIcon className="size-3.5" /> : null}
-              {installed ? "Added" : "Add"}
+            <div className="flex shrink-0 gap-2">
+              {server ? (
+                <Button
+                  aria-label={`Remove ${plugin.title}`}
+                  className="h-8 rounded-full px-3 text-xs"
+                  size="sm"
+                  variant="ghost-muted"
+                  disabled={pending}
+                  onClick={onRemove}
+                >
+                  Remove
+                </Button>
+              ) : null}
+              <Button
+                aria-label={`${action.label} ${plugin.title}`}
+                className="h-8 min-w-16 rounded-full px-3 text-xs"
+                size="sm"
+                variant={server?.enabled ? "secondary" : "default"}
+                disabled={pending || action.enable === null}
+                title={action.blocker}
+                onClick={() => action.enable !== null && onToggle(action.enable)}
+              >
+                {action.label}
+              </Button>
+            </div>
+          </div>
+          {blocker ? (
+            <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+              {blocker}
+            </p>
+          ) : null}
+          <div className="mt-4 flex items-center gap-1 border-t pt-3">
+            <Button size="sm" variant="ghost-muted" onClick={onViewDocumentation}>
+              Documentation
+              <ArrowUpRightIcon className="size-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost-muted" onClick={onViewSource}>
+              Source
+              <ArrowUpRightIcon className="size-3.5" />
             </Button>
           </div>
-          {plugin.docsUrl ? (
-            <div className="mt-4 flex items-center gap-1 border-t pt-3">
-              <Button size="sm" variant="ghost-muted" onClick={onViewSource}>
-                Documentation
-                <ArrowUpRightIcon className="size-3.5" />
-              </Button>
-              <Button
-                aria-label={`Copy ${plugin.title} source link`}
-                size="sm"
-                variant="ghost-muted"
-                onClick={onCopySource}
-              >
-                <LinkIcon className="size-3.5" />
-                Copy link
-              </Button>
-            </div>
+        </section>
+
+        <section aria-labelledby="plugin-connection-title">
+          <h3
+            className="mb-2 px-1 text-xs font-medium text-muted-foreground"
+            id="plugin-connection-title"
+          >
+            Connection
+          </h3>
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border text-sm sm:grid-cols-3">
+            {[
+              ["Authentication", pluginConnectionLabel(plugin)],
+              ["Execution", pluginExecutionLabel(plugin)],
+              ["Transport", transportLabel(plugin)],
+              ["Status", server ? (server.enabled ? "Enabled" : "Disabled") : "Not installed"],
+              ["Health", "Not checked"],
+              ["Platforms", plugin.platforms.join(", ")],
+              ["License", plugin.license],
+            ].map(([label, value]) => (
+              <div className="bg-background px-4 py-3" key={label}>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
+                <dd className="mt-1 font-medium">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {plugin.connection.type === "brokered" ? (
+            <p className="mt-2 px-1 text-xs text-muted-foreground">
+              Brokered by {plugin.connection.broker.name}
+            </p>
           ) : null}
         </section>
 
-        <section aria-labelledby="plugin-connectors-title">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <h3 className="text-xs font-medium text-muted-foreground" id="plugin-connectors-title">
-              Connector
-            </h3>
-            <span className="text-[11px] text-muted-foreground">1 available</span>
+        <section aria-labelledby="plugin-setup-title">
+          <h3
+            className="mb-2 px-1 text-xs font-medium text-muted-foreground"
+            id="plugin-setup-title"
+          >
+            Setup
+          </h3>
+          <div className="space-y-2 rounded-xl border bg-muted/35 px-4 py-3.5 text-sm">
+            {plugin.requiredCredentials.length > 0 ? (
+              <p>Keys: {plugin.requiredCredentials.join(", ")}</p>
+            ) : null}
+            {plugin.setup.map((step) => (
+              <p className="text-muted-foreground" key={step}>
+                {step}
+              </p>
+            ))}
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/35 px-4 py-3.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{plugin.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">MCP connector</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-              {connectorAccess(plugin)}
+        </section>
+
+        <section aria-labelledby="plugin-permissions-title">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h3 className="text-xs font-medium text-muted-foreground" id="plugin-permissions-title">
+              Permissions
+            </h3>
+            <span className="text-[11px] text-muted-foreground">
+              Approvals: {plugin.approvals.length > 0 ? plugin.approvals.join(", ") : "None"}
             </span>
+          </div>
+          <div className="overflow-hidden rounded-xl border bg-muted/35">
+            {plugin.permissions.map((permission) => (
+              <div className="border-b px-4 py-3 last:border-b-0" key={permission.id}>
+                <div className="flex items-start justify-between gap-4">
+                  <p className="text-sm">{permission.description}</p>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {permission.approval === "read" ? "Read" : permission.approval}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -131,11 +208,12 @@ export function PluginDetailsContent({
 
 export function PluginDetails({
   plugin,
-  installed,
+  server,
   pending,
   onBack,
   onToggle,
-  onCopySource,
+  onRemove,
+  onViewDocumentation,
   onViewSource,
   onOpenSkill,
 }: PluginDetailsContentProps & { readonly onBack: () => void }) {
@@ -151,10 +229,11 @@ export function PluginDetails({
       </DialogHeader>
       <PluginDetailsContent
         plugin={plugin}
-        installed={installed}
+        server={server}
         pending={pending}
         onToggle={onToggle}
-        onCopySource={onCopySource}
+        onRemove={onRemove}
+        onViewDocumentation={onViewDocumentation}
         onViewSource={onViewSource}
         onOpenSkill={onOpenSkill}
       />
