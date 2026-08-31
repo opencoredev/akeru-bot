@@ -21,11 +21,11 @@
   "transport": { "type": "url", "url": "https://mcp.slack.com/mcp" },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Slack must approve and register the Akeru OAuth app before Connect can be enabled."
+    "blocker": "Slack must approve and register this OAuth app before Connect can be enabled."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Slack to approve the Akeru OAuth app."],
+  "setup": ["Wait for Slack to approve this OAuth app."],
   "permissions": [
     { "id": "read-slack-data", "description": "Read Slack workspace data.", "approval": "read" },
     { "id": "send-slack-message", "description": "Send a Slack message.", "approval": "send" }

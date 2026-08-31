@@ -29,15 +29,16 @@
   },
   "platforms": ["web", "desktop", "mobile"],
   "transport": {
-    "type": "unavailable"
+    "type": "url",
+    "url": "https://api.githubcopilot.com/mcp/"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru needs a supported GitHub App, OAuth client, or explicit key flow before users can connect."
+    "type": "verification-pending",
+    "blocker": "OAuth and connection lifecycle not verified."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for a supported Akeru GitHub connection flow."],
+  "setup": ["Complete GitHub OAuth and connection lifecycle verification."],
   "permissions": [
     {
       "id": "read-repository-data",
@@ -76,5 +77,5 @@
     }
   ],
   "approvals": ["send", "publishing", "production", "secrets", "delete", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

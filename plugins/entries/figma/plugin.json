@@ -30,11 +30,11 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Figma must add Akeru to the Figma MCP Catalog before its OAuth server accepts this client."
+    "blocker": "Figma must add this client to the Figma MCP Catalog before its OAuth server accepts this client."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Figma to approve Akeru, then connect through Figma OAuth."],
+  "setup": ["Wait for Figma to approve this client, then connect through Figma OAuth."],
   "permissions": [
     {
       "id": "read-designs",

@@ -29,12 +29,12 @@
     "url": "https://mcp.paypal.com/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed PayPal's OAuth connection lifecycle against the first-party hosted MCP server."
+    "type": "verification-pending",
+    "blocker": "OAuth connection lifecycle not verified against the first-party hosted MCP server."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Complete PayPal OAuth lifecycle validation for Akeru, then connect a PayPal account."],
+  "setup": ["Wait for PayPal OAuth lifecycle validation to pass, then connect a PayPal account."],
   "permissions": [
     {
       "id": "read-payment-data",
@@ -63,5 +63,5 @@
     }
   ],
   "approvals": ["send", "pay", "production", "refunds"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

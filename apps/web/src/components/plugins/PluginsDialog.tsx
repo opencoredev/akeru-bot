@@ -71,8 +71,7 @@ export function resolvePluginDialogServers(
 }
 
 export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden";
-export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME =
-  "max-h-[45%] min-h-0 gap-3 overflow-y-auto overscroll-contain px-6 py-5";
+export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME = "shrink-0 gap-3 px-6 pt-5 pb-4";
 export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8 px-5 pt-5! pb-5 sm:px-6";
 
 export interface McpServerDraft {
@@ -322,12 +321,15 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
                 className="h-9 ps-9"
               />
             </div>
-            <div className="flex flex-wrap gap-1.5" aria-label="Plugin sections and categories">
+            <div
+              className="flex gap-1.5 overflow-x-auto pb-1"
+              aria-label="Plugin sections and categories"
+            >
               {PLUGIN_DIRECTORY_FILTERS.map((item) => (
                 <button
                   aria-pressed={filter === item}
                   className={cn(
-                    "cursor-pointer rounded-md border px-2.5 py-1 text-xs outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                    "shrink-0 cursor-pointer rounded-full border px-2.5 py-1 text-xs outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                     filter === item
                       ? "border-transparent bg-accent text-accent-foreground"
                       : "border-border/70 text-muted-foreground hover:bg-muted/60 hover:text-foreground",

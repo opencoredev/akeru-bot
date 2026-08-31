@@ -229,10 +229,17 @@ describe("plugin catalog loader", () => {
       (plugin) => !EXPECTED_INSTALLABLE_IDS.some((id) => id === plugin.id),
     );
     expect(pending).toHaveLength(46);
+    expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
+      16,
+    );
+    expect(
+      pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
+    ).toHaveLength(30);
     for (const plugin of pending) {
-      expect(plugin).toMatchObject({
-        catalogStatus: "approval-pending",
-        connection: { type: "approval-pending", blocker: expect.stringMatching(/\S/) },
+      expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
+      expect(plugin.connection).toMatchObject({
+        type: plugin.catalogStatus,
+        blocker: expect.stringMatching(/\S/),
       });
       expect(isInstallablePlugin(plugin)).toBe(false);
       expect(new Set(plugin.approvals)).toEqual(
@@ -245,25 +252,42 @@ describe("plugin catalog loader", () => {
     }
   });
 
+  it("keeps official vendor endpoints visible while their connection blockers remain", () => {
+    const byId = new Map(loadDirectoryCatalog().map((plugin) => [plugin.id, plugin]));
+    for (const [id, url, status] of [
+      ["github", "https://api.githubcopilot.com/mcp/", "verification-pending"],
+      ["hubspot", "https://mcp.hubspot.com", "approval-pending"],
+      ["vercel", "https://mcp.vercel.com", "approval-pending"],
+    ] as const) {
+      const plugin = byId.get(id);
+      expect(plugin).toMatchObject({
+        kind: "mcp-url",
+        url,
+        connection: { type: status, blocker: expect.stringMatching(/\S/) },
+      });
+      expect(plugin && isInstallablePlugin(plugin)).toBe(false);
+    }
+  });
+
   it("keeps the key, local-loopback, and payment connectors pending", () => {
     const byId = new Map(loadDirectoryCatalog().map((plugin) => [plugin.id, plugin]));
     expect(byId.get("typefully")).toMatchObject({
-      authentication: "api-key",
-      requiredCredentials: ["typefully-api-key"],
+      authentication: "oauth",
+      requiredCredentials: [],
       transport: { type: "url", url: "https://mcp.typefully.com/mcp" },
-      connection: { type: "approval-pending" },
-      catalogStatus: "approval-pending",
+      connection: { type: "verification-pending" },
+      catalogStatus: "verification-pending",
     });
     expect(byId.get("paper")).toMatchObject({
       transport: { type: "url", url: "http://127.0.0.1:29979/mcp" },
-      connection: { type: "approval-pending" },
-      catalogStatus: "approval-pending",
+      connection: { type: "verification-pending" },
+      catalogStatus: "verification-pending",
     });
     expect(byId.get("paypal")).toMatchObject({
       transport: { type: "url", url: "https://mcp.paypal.com/mcp" },
-      connection: { type: "approval-pending" },
+      connection: { type: "verification-pending" },
       approvals: expect.arrayContaining(["send", "pay", "production", "refunds"]),
-      catalogStatus: "approval-pending",
+      catalogStatus: "verification-pending",
     });
   });
 
@@ -311,5 +335,17 @@ describe("plugin catalog loader", () => {
         title: "Removed Vendor",
       },
     ]);
+  });
+
+  it("states blockers and setup as vendor or lifecycle facts, not as host work", () => {
+    const hostActor = /\bAkeru\b/;
+    for (const plugin of loadDirectoryCatalog()) {
+      if (plugin.connection.type === "approval-pending") {
+        expect(plugin.connection.blocker).not.toMatch(hostActor);
+      }
+      for (const step of plugin.setup) {
+        expect(step).not.toMatch(/\bAkeru (?:has|must|needs|completes|to)\b/);
+      }
+    }
   });
 });

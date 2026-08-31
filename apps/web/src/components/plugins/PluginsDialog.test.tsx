@@ -80,6 +80,7 @@ describe("Plugins dialog content", () => {
   it("keeps the directory and details at one fixed size", () => {
     expect(PLUGIN_DIALOG_CLASS_NAME).toContain("h-[min(48rem,90dvh)]");
     expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("border-b");
+    expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("overflow-y-auto");
     expect(PLUGIN_DIRECTORY_PANEL_CLASS_NAME).toContain("pt-5!");
     expect(PLUGIN_DIRECTORY_FILTERS.slice(3)).toEqual(
       PLUGIN_CATEGORIES.filter((category) =>
@@ -105,17 +106,38 @@ describe("Plugins dialog content", () => {
     expect(markup).toContain("Disable Firecrawl");
     expect(markup).toContain("Add Executor");
     expect(markup).toContain("Connect Pending Vendor");
-    expect(markup).toContain("The vendor must approve Akeru as an OAuth client.");
+    expect(markup).toContain(pendingPlugin.description.replaceAll("'", "&#x27;"));
+    expect(markup).toContain("Approval pending");
+    expect(markup).toContain("Verification pending");
+    expect(markup).toContain('title="The vendor must approve Akeru as an OAuth client."');
+    expect(markup).not.toContain(">The vendor must approve Akeru as an OAuth client.<");
     expect(markup).not.toContain(">Added<");
     for (const plugin of catalog) {
       expect(markup).toContain(plugin.logo.src.replaceAll("'", "&#x27;"));
       expect(markup).toContain(`data-plugin-id="${plugin.id}"`);
-      const summary =
-        plugin.connection.type === "approval-pending"
-          ? plugin.connection.blocker
-          : plugin.description;
-      expect(markup).toContain(summary.replaceAll("'", "&#x27;"));
+      expect(markup).toContain(plugin.description.replaceAll("'", "&#x27;"));
     }
+  });
+
+  it("groups the unfiltered directory under one heading per populated category", () => {
+    const markup = renderToStaticMarkup(
+      <PluginsCatalog
+        sections={buildPluginSections({ plugins: catalog, query: "", filter: "All" })}
+        servers={[]}
+        pendingServerId={null}
+        onToggle={noop}
+        onOpen={noop}
+      />,
+    );
+    const populated = PLUGIN_CATEGORIES.filter((category) =>
+      catalog.some((plugin) => !plugin.featured && plugin.category === category),
+    );
+    expect(markup).toContain('aria-label="Featured"');
+    for (const category of populated) {
+      expect(markup).toContain(`aria-label="${category}"`);
+    }
+    expect(markup).not.toContain('aria-label="All"');
+    expect(markup).not.toMatch(/Akeru (?:has|must|needs)/);
   });
 
   it("shows publisher, transport, authentication, permissions, approvals, platforms, and honest health", () => {

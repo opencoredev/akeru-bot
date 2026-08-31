@@ -29,8 +29,8 @@
     "url": "https://mcp.stripe.com"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed Stripe's hosted MCP lifecycle, including OAuth, a real request, and removal."
+    "type": "verification-pending",
+    "blocker": "Hosted MCP lifecycle not verified: OAuth, a real request, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
@@ -78,5 +78,5 @@
     }
   ],
   "approvals": ["send", "pay", "delete", "production", "secrets", "refunds", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

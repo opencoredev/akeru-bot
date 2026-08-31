@@ -29,12 +29,12 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "DocuSign has not published an Akeru-compatible first-party MCP endpoint or approved Akeru's OAuth integration."
+    "blocker": "DocuSign has not published a compatible first-party MCP endpoint or approved this OAuth integration."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
   "setup": [
-    "Wait for DocuSign to publish a supported MCP endpoint and approve Akeru's OAuth integration."
+    "Wait for DocuSign to publish a supported MCP endpoint and approve this OAuth integration."
   ],
   "permissions": [
     {

@@ -29,8 +29,8 @@
     "url": "https://mcp.apollo.io/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed Apollo's hosted MCP lifecycle, including OAuth, a real request, and removal."
+    "type": "verification-pending",
+    "blocker": "Hosted MCP lifecycle not verified: OAuth, a real request, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
@@ -58,5 +58,5 @@
     }
   ],
   "approvals": ["send", "pay", "production"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

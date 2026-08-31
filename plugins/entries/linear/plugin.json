@@ -22,15 +22,15 @@
   "platforms": ["web", "desktop", "mobile"],
   "transport": { "type": "url", "url": "https://mcp.linear.app/mcp" },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru must verify Linear installation, OAuth, safe read and write operations, disable, reconnect, and removal before Connect can be enabled."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: installation, OAuth, safe read and write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Akeru to complete the Linear integration lifecycle."],
+  "setup": ["Wait for the Linear connection lifecycle to pass."],
   "permissions": [
     { "id": "read-linear-data", "description": "Read Linear workspace data.", "approval": "read" }
   ],
   "approvals": [],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

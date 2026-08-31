@@ -29,12 +29,12 @@
     "url": "https://mcp.sentry.dev/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Sentry install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: install, OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes the Sentry connection lifecycle."],
+  "setup": ["Wait for the Sentry connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-observability-data",
@@ -58,5 +58,5 @@
     }
   ],
   "approvals": ["production", "secrets", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

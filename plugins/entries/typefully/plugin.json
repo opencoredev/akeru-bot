@@ -29,16 +29,12 @@
     "url": "https://mcp.typefully.com/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Typefully API-key install, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: OAuth, safe read, approved write, disable, reconnect, and removal."
   },
-  "authentication": "api-key",
-  "requiredCredentials": ["typefully-api-key"],
-  "setup": [
-    "Wait until Akeru completes the Typefully API-key connection lifecycle.",
-    "After verification, use Add key with a Typefully API key from Typefully settings.",
-    "The key stays in Akeru credential storage and never enters prompts or URLs."
-  ],
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for the Typefully OAuth connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-social-content",
@@ -57,5 +53,5 @@
     }
   ],
   "approvals": ["publishing", "delete"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

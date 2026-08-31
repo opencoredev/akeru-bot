@@ -34,7 +34,7 @@ interface DirectoryStdioPlugin extends CatalogPluginBase {
 
 type InstallableConnection = Exclude<
   PluginManifest["connection"],
-  { readonly type: "approval-pending" }
+  { readonly type: "approval-pending" | "verification-pending" }
 >;
 
 export type CatalogPluginDefinition = (DirectoryUrlPlugin | DirectoryStdioPlugin) & {
@@ -167,7 +167,8 @@ export function isInstallablePlugin(plugin: PluginDirectoryDefinition): plugin i
   return (
     plugin.catalogStatus === "available" &&
     plugin.kind !== "mcp-unavailable" &&
-    plugin.connection.type !== "approval-pending"
+    plugin.connection.type !== "approval-pending" &&
+    plugin.connection.type !== "verification-pending"
   );
 }
 

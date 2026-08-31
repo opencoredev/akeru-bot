@@ -30,12 +30,12 @@
     "url": "https://mcp.zernio.com/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed Zernio OAuth and lifecycle verification."
+    "type": "verification-pending",
+    "blocker": "OAuth and connection lifecycle not verified."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes Zernio OAuth and lifecycle verification."],
+  "setup": ["Wait for Zernio OAuth and lifecycle verification to pass."],
   "permissions": [
     {
       "id": "read-social-data",
@@ -79,5 +79,5 @@
     }
   ],
   "approvals": ["publishing", "send", "delete", "pay", "secrets", "account-wide", "production"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

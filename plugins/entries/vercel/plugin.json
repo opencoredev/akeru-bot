@@ -25,15 +25,16 @@
   },
   "platforms": ["web", "desktop", "mobile"],
   "transport": {
-    "type": "unavailable"
+    "type": "url",
+    "url": "https://mcp.vercel.com"
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Vercel must add the Akeru OAuth client to its supported client allowlist."
+    "blocker": "Vercel must add this OAuth client to its supported client allowlist."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Vercel to approve the Akeru OAuth client."],
+  "setup": ["Wait for Vercel to approve this OAuth client."],
   "permissions": [
     {
       "id": "read-project-data",

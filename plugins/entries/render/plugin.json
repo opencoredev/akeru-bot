@@ -29,12 +29,12 @@
     "url": "https://mcp.render.com/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Render install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: install, OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes the Render connection lifecycle."],
+  "setup": ["Wait for the Render connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-render-data",
@@ -63,5 +63,5 @@
     }
   ],
   "approvals": ["production", "secrets", "delete", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

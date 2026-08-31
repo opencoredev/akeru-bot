@@ -29,12 +29,12 @@
     "url": "https://netlify-mcp.netlify.app/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Netlify install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: install, OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes the Netlify connection lifecycle."],
+  "setup": ["Wait for the Netlify connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-netlify-data",
@@ -63,5 +63,5 @@
     }
   ],
   "approvals": ["production", "secrets", "delete", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

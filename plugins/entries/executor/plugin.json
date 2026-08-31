@@ -6,7 +6,6 @@
   "primaryCategory": "Work",
   "tags": ["integrations", "automation", "local"],
   "capabilities": ["use configured integrations", "run local integration tools"],
-  "featuredRank": 5,
   "publisher": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "maintainer": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "documentationUrl": "https://executor.sh/docs",

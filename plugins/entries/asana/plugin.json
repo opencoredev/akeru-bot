@@ -24,11 +24,11 @@
   "transport": { "type": "url", "url": "https://mcp.asana.com/v2/mcp" },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Akeru must register an Asana V2 MCP app and complete its OAuth lifecycle before Connect can be enabled."
+    "blocker": "Asana V2 MCP app registration and OAuth lifecycle are not complete."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Akeru to register and verify an Asana V2 MCP app."],
+  "setup": ["Wait for an Asana V2 MCP app registration to pass verification."],
   "permissions": [
     { "id": "read-asana-data", "description": "Read Asana workspace data.", "approval": "read" },
     {

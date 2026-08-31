@@ -29,12 +29,12 @@
     "url": "https://api.sequenzy.com/v1/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Sequenzy install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: install, OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes the Sequenzy connection lifecycle."],
+  "setup": ["Wait for the Sequenzy connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-marketing-data",
@@ -68,5 +68,5 @@
     }
   ],
   "approvals": ["send", "publishing", "delete", "secrets", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

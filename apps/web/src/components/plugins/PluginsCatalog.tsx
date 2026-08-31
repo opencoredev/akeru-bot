@@ -3,7 +3,11 @@ import { CheckIcon, ChevronRightIcon, PencilIcon, PlusIcon, Trash2Icon } from "l
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
 import { Button } from "../ui/button";
 import { findPluginServer, pluginMcpServerId } from "./pluginRegistry";
-import { pluginBlocker, pluginPrimaryAction, type PluginSection } from "./pluginPresentation";
+import {
+  pluginConnectionLabel,
+  pluginPrimaryAction,
+  type PluginSection,
+} from "./pluginPresentation";
 
 export function PluginLogoImage({
   plugin,
@@ -55,7 +59,6 @@ function PluginRow({
   readonly onOpen: () => void;
 }) {
   const action = pluginPrimaryAction(plugin, server);
-  const blocker = pluginBlocker(plugin);
   return (
     <article
       className="group flex min-w-0 items-center rounded-xl pe-2.5 transition-colors hover:bg-muted/45"
@@ -72,12 +75,14 @@ function PluginRow({
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-medium leading-5">{plugin.title}</h3>
             <span className="shrink-0 text-[11px] text-muted-foreground">{plugin.category}</span>
+            {plugin.connection.type === "approval-pending" ||
+            plugin.connection.type === "verification-pending" ? (
+              <span className="shrink-0 text-[11px] text-warning-foreground">
+                {pluginConnectionLabel(plugin)}
+              </span>
+            ) : null}
           </div>
-          <p
-            className={`truncate text-xs leading-5 ${blocker ? "text-destructive-foreground" : "text-muted-foreground"}`}
-          >
-            {blocker ?? plugin.description}
-          </p>
+          <p className="truncate text-xs leading-5 text-muted-foreground">{plugin.description}</p>
         </div>
         <ChevronRightIcon
           aria-hidden="true"

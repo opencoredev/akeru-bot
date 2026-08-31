@@ -9,7 +9,7 @@ export const PLUGIN_SCHEMA_VERSION = 1 as const;
 
 type PluginPlatform = "web" | "desktop" | "mobile" | "macos" | "windows" | "linux";
 type PluginAuthentication = "none" | "oauth" | "optional-oauth" | "api-key";
-type PluginCatalogStatus = "available" | "approval-pending" | "deprecated";
+type PluginCatalogStatus = "available" | "approval-pending" | "verification-pending" | "deprecated";
 
 interface Party {
   readonly name: string;
@@ -30,7 +30,8 @@ type PluginConnection =
   | { readonly type: "api-key" }
   | { readonly type: "local" }
   | { readonly type: "brokered"; readonly broker: Party }
-  | { readonly type: "approval-pending"; readonly blocker: string };
+  | { readonly type: "approval-pending"; readonly blocker: string }
+  | { readonly type: "verification-pending"; readonly blocker: string };
 
 export interface PluginSkill {
   readonly title: string;
@@ -92,6 +93,7 @@ const AUTHENTICATION: readonly PluginAuthentication[] = [
 const CATALOG_STATUSES: readonly PluginCatalogStatus[] = [
   "available",
   "approval-pending",
+  "verification-pending",
   "deprecated",
 ];
 
@@ -218,10 +220,10 @@ function connection(value: unknown, path: string): PluginConnection {
     exactKeys(input, ["type", "broker"], path);
     return { type: "brokered", broker: party(input.broker, `${path}.broker`) };
   }
-  if (input.type === "approval-pending") {
+  if (input.type === "approval-pending" || input.type === "verification-pending") {
     exactKeys(input, ["type", "blocker"], path);
     return {
-      type: "approval-pending",
+      type: input.type,
       blocker: nonEmptyString(input.blocker, `${path}.blocker`),
     };
   }
@@ -381,7 +383,8 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
   if (
     manifest.authentication === "api-key" &&
     manifest.connection.type !== "api-key" &&
-    manifest.connection.type !== "approval-pending"
+    manifest.connection.type !== "approval-pending" &&
+    manifest.connection.type !== "verification-pending"
   ) {
     throw new TypeError(`Plugin '${manifest.id}' must label its API key connection.`);
   }
@@ -417,6 +420,20 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
     throw new TypeError(`Plugin '${manifest.id}' must label its connection as approval-pending.`);
   }
   if (
+    manifest.connection.type === "verification-pending" &&
+    manifest.catalogStatus !== "verification-pending"
+  ) {
+    throw new TypeError(`Plugin '${manifest.id}' must use verification-pending catalog status.`);
+  }
+  if (
+    manifest.catalogStatus === "verification-pending" &&
+    manifest.connection.type !== "verification-pending"
+  ) {
+    throw new TypeError(
+      `Plugin '${manifest.id}' must label its connection as verification-pending.`,
+    );
+  }
+  if (
     manifest.transport.type === "stdio" &&
     manifest.transport.command.trim() !== manifest.transport.command
   ) {
@@ -445,7 +462,9 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
       !(
         endpoint.protocol === "http:" &&
         local &&
-        (manifest.connection.type === "local" || manifest.connection.type === "approval-pending")
+        (manifest.connection.type === "local" ||
+          manifest.connection.type === "approval-pending" ||
+          manifest.connection.type === "verification-pending")
       )
     ) {
       throw new TypeError(

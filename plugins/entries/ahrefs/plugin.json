@@ -29,12 +29,12 @@
     "url": "https://api.ahrefs.com/mcp/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Ahrefs install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: install, OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes the Ahrefs connection lifecycle."],
+  "setup": ["Wait for the Ahrefs connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-seo-data",
@@ -43,5 +43,5 @@
     }
   ],
   "approvals": [],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

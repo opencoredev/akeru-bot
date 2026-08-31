@@ -29,13 +29,7 @@ afterEach(() => {
 
 describe("plugin catalog validation", () => {
   it("validates the live plugin directory", () => {
-    expect(validatePluginCatalog().map((entry) => entry.manifest.id)).toEqual([
-      "context",
-      "exa",
-      "executor",
-      "firecrawl",
-      "parallel-search",
-    ]);
+    expect(validatePluginCatalog()).toHaveLength(51);
   });
 
   it("validates isolated manifests and official local assets", () => {

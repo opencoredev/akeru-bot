@@ -33,12 +33,12 @@
     "url": "https://mcp.datadoghq.com/v1/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed the Datadog install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: install, OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait until Akeru completes the Datadog connection lifecycle."],
+  "setup": ["Wait for the Datadog connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-observability-data",
@@ -62,5 +62,5 @@
     }
   ],
   "approvals": ["production", "delete", "account-wide"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

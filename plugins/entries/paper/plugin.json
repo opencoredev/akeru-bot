@@ -29,8 +29,8 @@
     "url": "http://127.0.0.1:29979/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed Paper's local MCP lifecycle against the desktop server, including a real request and removal."
+    "type": "verification-pending",
+    "blocker": "Local MCP lifecycle not verified: desktop server connection, a real request, and removal."
   },
   "authentication": "none",
   "requiredCredentials": [],
@@ -53,5 +53,5 @@
     }
   ],
   "approvals": ["delete", "publishing"],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

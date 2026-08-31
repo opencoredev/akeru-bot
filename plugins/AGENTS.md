@@ -12,6 +12,7 @@
 - Preserve an existing plugin `id`. Its MCP server ID remains `builtin-<id>`.
 - Record the current publisher, documentation, logo source, license, and connection health. A valid manifest does not guarantee directory acceptance.
 - Mark a plugin `available` only after its real add, connect, use, disable, re-enable, and remove lifecycle passes in Akeru Bot.
+- Use `verification-pending` when a connection recipe exists but the real lifecycle has not passed.
 - Use `approval-pending` with an explicit blocker when a vendor must approve access.
 - Keep tokens and secrets in the host environment or service sign-in flow. Never put them in a manifest or ask an MCP server to export a provider token or secret.
 - Declare an approval for every applicable send, pay, delete, production, secrets, publishing, signatures, refunds, and account-wide action.

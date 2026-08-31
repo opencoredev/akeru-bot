@@ -21,11 +21,11 @@
   "transport": { "type": "url", "url": "https://mcp.monday.com/mcp" },
   "connection": {
     "type": "approval-pending",
-    "blocker": "monday.com must approve Akeru public dynamic client registration before Connect can be enabled."
+    "blocker": "monday.com must approve public dynamic client registration before Connect can be enabled."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for monday.com to approve Akeru public dynamic client registration."],
+  "setup": ["Wait for monday.com to approve public dynamic client registration."],
   "permissions": [
     {
       "id": "read-monday-data",

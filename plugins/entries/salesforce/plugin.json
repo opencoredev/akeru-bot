@@ -29,12 +29,12 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "A Salesforce administrator must enable MCP and register Akeru as an External Client App in each organization."
+    "blocker": "A Salesforce administrator must enable MCP and register this client as an External Client App in each organization."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
   "setup": [
-    "Ask a Salesforce administrator to enable an MCP server and register Akeru as an External Client App."
+    "Ask a Salesforce administrator to enable an MCP server and register this client as an External Client App."
   ],
   "permissions": [
     {

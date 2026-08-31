@@ -29,11 +29,11 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Framer does not publish a first-party operator MCP endpoint or supported local command."
+    "blocker": "Framer's native External Agent setup does not expose a verified MCP transport."
   },
   "authentication": "none",
   "requiredCredentials": [],
-  "setup": ["Wait for Framer to publish a first-party operator MCP connection recipe."],
+  "setup": ["Wait for Framer to expose a verified MCP transport."],
   "permissions": [
     {
       "id": "read-sites",

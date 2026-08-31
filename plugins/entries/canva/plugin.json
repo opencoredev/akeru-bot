@@ -30,11 +30,11 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Canva must approve Akeru's OAuth redirect registration before this client can connect."
+    "blocker": "Canva must approve this client's OAuth redirect registration."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Canva to approve Akeru's OAuth registration, then connect a Canva account."],
+  "setup": ["Wait for Canva to approve this OAuth registration, then connect a Canva account."],
   "permissions": [
     {
       "id": "read-designs",

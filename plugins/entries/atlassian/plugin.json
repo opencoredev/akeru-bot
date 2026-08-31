@@ -22,12 +22,12 @@
   "platforms": ["web", "desktop", "mobile"],
   "transport": { "type": "url", "url": "https://mcp.atlassian.com/v1/mcp/authv2" },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru must complete Atlassian OAuth client registration and lifecycle verification before Connect can be enabled."
+    "type": "verification-pending",
+    "blocker": "Connection lifecycle not verified: OAuth, safe read, approved write, disable, reconnect, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Akeru to complete the Atlassian OAuth client lifecycle."],
+  "setup": ["Wait for the Atlassian connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-atlassian-data",
@@ -36,5 +36,5 @@
     }
   ],
   "approvals": [],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

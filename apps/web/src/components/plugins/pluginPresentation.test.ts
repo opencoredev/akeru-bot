@@ -1,6 +1,10 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { loadDirectoryCatalog, type PluginDirectoryDefinition } from "../../../../../plugins";
+import {
+  loadDirectoryCatalog,
+  PLUGIN_CATEGORIES,
+  type PluginDirectoryDefinition,
+} from "../../../../../plugins";
 import {
   buildPluginFilters,
   buildPluginSections,
@@ -29,6 +33,17 @@ const pendingPlugin = {
     blocker: "The vendor must approve Akeru as an OAuth client.",
   },
   catalogStatus: "approval-pending",
+} satisfies PluginDirectoryDefinition;
+const verificationPlugin = {
+  ...firecrawl,
+  id: "verification-vendor",
+  name: "Verification Vendor",
+  title: "Verification Vendor",
+  connection: {
+    type: "verification-pending",
+    blocker: "The connection lifecycle still needs verification.",
+  },
+  catalogStatus: "verification-pending",
 } satisfies PluginDirectoryDefinition;
 const apiKeyPlugin = {
   ...firecrawl,
@@ -74,8 +89,8 @@ describe("plugin presentation", () => {
       ]),
     ).toEqual(["All", "Featured", "Installed", "Work", "Web", "Marketing"]);
     expect(
-      buildPluginSections({ plugins: catalog, query: "", filter: "All" })[0]?.plugins.map(
-        (plugin) => plugin.id,
+      buildPluginSections({ plugins: catalog, query: "", filter: "All" }).flatMap((section) =>
+        section.plugins.map((plugin) => plugin.id),
       ),
     ).toHaveLength(51);
     expect(
@@ -96,6 +111,28 @@ describe("plugin presentation", () => {
         (plugin) => plugin.id,
       ),
     ).toEqual(["context", "apify", "exa", "firecrawl", "parallel-search", "tavily"]);
+  });
+
+  it("groups the unfiltered directory into populated category sections", () => {
+    const sections = buildPluginSections({ plugins: catalog, query: "", filter: "All" });
+    expect(sections.map((section) => section.title)).toEqual([
+      "Featured",
+      ...PLUGIN_CATEGORIES.filter((category) =>
+        catalog.some((plugin) => !plugin.featured && plugin.category === category),
+      ),
+    ]);
+    expect(sections.every((section) => section.plugins.length > 0)).toBe(true);
+    expect(sections[0]?.plugins.map((plugin) => plugin.id)).toEqual(["context", "zernio"]);
+    for (const section of sections.slice(1)) {
+      expect(
+        section.plugins.every((plugin) => !plugin.featured && plugin.category === section.title),
+      ).toBe(true);
+    }
+    expect(
+      buildPluginSections({ plugins: catalog, query: "firecrawl", filter: "All" }).map(
+        (section) => section.title,
+      ),
+    ).toEqual(["Search results"]);
   });
 
   it("searches only the directory discovery fields", () => {
@@ -162,5 +199,11 @@ describe("plugin presentation", () => {
     });
     expect(pluginPrimaryAction(pendingPlugin, server(true)).label).toBe("Disable");
     expect(pluginConnectionLabel(pendingPlugin)).toBe("Approval pending");
+    expect(pluginPrimaryAction(verificationPlugin, undefined)).toEqual({
+      label: "Connect",
+      enable: null,
+      blocker: "The connection lifecycle still needs verification.",
+    });
+    expect(pluginConnectionLabel(verificationPlugin)).toBe("Verification pending");
   });
 });

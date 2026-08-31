@@ -29,7 +29,7 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Shopify does not publish a first-party merchant Admin MCP with a stable Akeru connection recipe."
+    "blocker": "Shopify does not publish a first-party merchant Admin MCP with a stable connection recipe."
   },
   "authentication": "none",
   "requiredCredentials": [],

@@ -71,11 +71,23 @@ export function buildPluginSections(input: {
       if (input.filter === "Installed") return input.installedPluginIds?.has(plugin.id) ?? false;
       return plugin.category === input.filter;
     });
-  return [{ title: input.query.trim() ? "Search results" : input.filter, plugins }];
+  if (input.query.trim()) return [{ title: "Search results", plugins }];
+  if (input.filter !== "All") return [{ title: input.filter, plugins }];
+  const featured = plugins.filter((plugin) => plugin.featured);
+  const sections = PLUGIN_CATEGORIES.map((category) => ({
+    title: category,
+    plugins: plugins.filter((plugin) => !plugin.featured && plugin.category === category),
+  })).filter((section) => section.plugins.length > 0);
+  return featured.length > 0 ? [{ title: "Featured", plugins: featured }, ...sections] : sections;
 }
 
 export function pluginBlocker(plugin: PluginDirectoryDefinition): string | null {
-  if (plugin.connection.type === "approval-pending") return plugin.connection.blocker;
+  if (
+    plugin.connection.type === "approval-pending" ||
+    plugin.connection.type === "verification-pending"
+  ) {
+    return plugin.connection.blocker;
+  }
   if (plugin.kind === "mcp-unavailable") return `${plugin.title} has no available connector.`;
   return null;
 }
@@ -97,6 +109,7 @@ export function pluginPrimaryAction(
 
 export function pluginConnectionLabel(plugin: PluginDirectoryDefinition): string {
   if (plugin.connection.type === "approval-pending") return "Approval pending";
+  if (plugin.connection.type === "verification-pending") return "Verification pending";
   if (plugin.connection.type === "local") return "Local";
   if (plugin.authentication === "api-key") return "API key";
   if (plugin.authentication === "oauth" || plugin.authentication === "optional-oauth") {

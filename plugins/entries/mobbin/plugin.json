@@ -29,8 +29,8 @@
     "url": "https://api.mobbin.com/mcp"
   },
   "connection": {
-    "type": "approval-pending",
-    "blocker": "Akeru has not completed Mobbin's hosted MCP lifecycle, including authentication, a real request, and removal."
+    "type": "verification-pending",
+    "blocker": "Hosted MCP lifecycle not verified: authentication, a real request, and removal."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
@@ -43,5 +43,5 @@
     }
   ],
   "approvals": [],
-  "catalogStatus": "approval-pending"
+  "catalogStatus": "verification-pending"
 }

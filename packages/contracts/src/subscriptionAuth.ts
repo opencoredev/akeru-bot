@@ -33,6 +33,7 @@ export const SubscriptionProviderStatus = Schema.Struct({
       "revoked",
       "failed",
       "unsupported",
+      "disabled",
       "failed-first-request",
       "recovered",
     ]),
@@ -67,31 +68,47 @@ export const SubscriptionProviderStatus = Schema.Struct({
 });
 export type SubscriptionProviderStatus = typeof SubscriptionProviderStatus.Type;
 
+export const ProviderAccessStatus = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  accessMethod: Schema.Literals(["subscription-oauth", "api-key", "acp-cli", "browser", "mcp"]),
+  health: Schema.Literals([
+    "missing",
+    "detected",
+    "healthy",
+    "expired",
+    "revoked",
+    "failed",
+    "unsupported",
+    "disabled",
+    "failed-first-request",
+    "recovered",
+  ]),
+  apiAccess: Schema.Literals(["separate", "included", "not-applicable"]),
+  nextAction: TrimmedNonEmptyString,
+  publishedLimit: Schema.optional(TrimmedNonEmptyString),
+  temporary: Schema.optional(Schema.Boolean),
+  repairAction: Schema.optional(TrimmedNonEmptyString),
+  serverId: Schema.optional(TrimmedNonEmptyString),
+  pluginId: Schema.optional(TrimmedNonEmptyString),
+  lastSuccessfulRequestAt: Schema.optional(IsoDateTime),
+  lastFailedRequest: Schema.optional(
+    Schema.Struct({ at: IsoDateTime, message: TrimmedNonEmptyString }),
+  ),
+  nextRetryAt: Schema.optional(IsoDateTime),
+  reconnectAction: Schema.optional(TrimmedNonEmptyString),
+  dependentBots: Schema.Array(Schema.Struct({ id: BotId, name: TrimmedNonEmptyString })).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  dependentRoutines: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+});
+export type ProviderAccessStatus = typeof ProviderAccessStatus.Type;
+
 export const SubscriptionAuthStatuses = Schema.Struct({
   providers: Schema.Array(SubscriptionProviderStatus),
-  access: Schema.Array(
-    Schema.Struct({
-      id: TrimmedNonEmptyString,
-      label: TrimmedNonEmptyString,
-      accessMethod: Schema.Literals(["subscription-oauth", "api-key", "acp-cli", "browser"]),
-      health: Schema.Literals([
-        "missing",
-        "detected",
-        "healthy",
-        "expired",
-        "revoked",
-        "failed",
-        "unsupported",
-        "failed-first-request",
-        "recovered",
-      ]),
-      apiAccess: Schema.Literals(["separate", "included", "not-applicable"]),
-      nextAction: TrimmedNonEmptyString,
-      publishedLimit: Schema.optional(TrimmedNonEmptyString),
-      temporary: Schema.optional(Schema.Boolean),
-      repairAction: Schema.optional(TrimmedNonEmptyString),
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  access: Schema.Array(ProviderAccessStatus).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   inbox: Schema.Array(
     Schema.Struct({
       id: TrimmedNonEmptyString,

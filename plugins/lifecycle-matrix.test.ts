@@ -36,26 +36,36 @@ describe("milestone 13 plugin lifecycle matrix", () => {
 
     const pending = directory.filter((plugin) => !INSTALLABLE_IDS.includes(plugin.id));
     expect(pending).toHaveLength(46);
+    expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
+      16,
+    );
+    expect(
+      pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
+    ).toHaveLength(30);
     for (const plugin of pending) {
-      expect(plugin.catalogStatus).toBe("approval-pending");
+      expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
       expect(plugin.connection).toMatchObject({
-        type: "approval-pending",
+        type: plugin.catalogStatus,
         blocker: expect.stringMatching(/\S/),
       });
       expect(isInstallablePlugin(plugin)).toBe(false);
     }
 
     expect(byId.get("typefully")).toMatchObject({
-      authentication: "api-key",
-      requiredCredentials: ["typefully-api-key"],
-      connection: { type: "approval-pending" },
+      authentication: "oauth",
+      requiredCredentials: [],
+      connection: { type: "verification-pending" },
+    });
+    expect(byId.get("github")).toMatchObject({
+      transport: { type: "url", url: "https://api.githubcopilot.com/mcp/" },
+      connection: { type: "verification-pending" },
     });
     expect(byId.get("paper")).toMatchObject({
       transport: { type: "url", url: "http://127.0.0.1:29979/mcp" },
-      connection: { type: "approval-pending" },
+      connection: { type: "verification-pending" },
     });
     expect(byId.get("paypal")).toMatchObject({
-      connection: { type: "approval-pending" },
+      connection: { type: "verification-pending" },
       approvals: expect.arrayContaining(["send", "pay", "production", "refunds"]),
     });
 

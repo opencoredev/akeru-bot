@@ -18,11 +18,11 @@
   "transport": { "type": "url", "url": "https://mcp.dropbox.com/mcp" },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Dropbox must approve and allowlist the Akeru app before Connect can be enabled."
+    "blocker": "Dropbox must approve and allowlist this app before Connect can be enabled."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for Dropbox to approve and allowlist the Akeru app."],
+  "setup": ["Wait for Dropbox to approve and allowlist this app."],
   "permissions": [
     {
       "id": "read-dropbox-data",

@@ -25,15 +25,16 @@
   },
   "platforms": ["web", "desktop", "mobile"],
   "transport": {
-    "type": "unavailable"
+    "type": "url",
+    "url": "https://mcp.hubspot.com"
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Akeru needs a HubSpot MCP authorization app before users can complete OAuth."
+    "blocker": "Needs a HubSpot MCP authorization app before OAuth can complete."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Wait for the Akeru HubSpot authorization app."],
+  "setup": ["Wait for a HubSpot MCP authorization app."],
   "permissions": [
     {
       "id": "read-crm-data",

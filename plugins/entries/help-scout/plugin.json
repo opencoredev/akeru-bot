@@ -29,7 +29,7 @@
   },
   "connection": {
     "type": "approval-pending",
-    "blocker": "Help Scout has no verified first-party or maintainer-approved MCP server for Akeru."
+    "blocker": "Help Scout has no verified first-party or maintainer-approved MCP server."
   },
   "authentication": "none",
   "requiredCredentials": [],
