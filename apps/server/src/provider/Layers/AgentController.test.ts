@@ -286,7 +286,7 @@ describe("provider access health", () => {
     ["claudeAgent", "anthropic"],
     ["cursor", "cursor"],
     ["grok", "xai"],
-    ["opencode", "kimi-for-coding"],
+    ["kimi", "kimi-for-coding"],
   ] as const)("maps %s runtime requests to %s access health", (driver, provider) => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-map-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");

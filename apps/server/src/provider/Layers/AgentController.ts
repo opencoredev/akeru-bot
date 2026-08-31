@@ -165,7 +165,7 @@ function subscriptionProviderForDriver(
       return "cursor";
     case "grok":
       return "xai";
-    case "opencode":
+    case "kimi":
       return "kimi-for-coding";
     default:
       return undefined;
