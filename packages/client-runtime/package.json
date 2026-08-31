@@ -131,6 +131,10 @@
       "types": "./src/state/server.ts",
       "default": "./src/state/server.ts"
     },
+    "./state/memory": {
+      "types": "./src/state/memory.ts",
+      "default": "./src/state/memory.ts"
+    },
     "./state/bot-inbox": {
       "types": "./src/state/botInbox.ts",
       "default": "./src/state/botInbox.ts"

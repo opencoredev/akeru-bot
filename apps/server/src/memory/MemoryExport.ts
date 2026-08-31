@@ -1,7 +1,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import {
-  AkeruMemoryArchive,
+  AkeruMemoryArchiveV2,
   type AkeruConversationMemorySnapshot,
   type AkeruMemoryArchiveTarget,
   type AkeruMemoryRevision,
@@ -97,7 +97,7 @@ export function exportAkeruMemory(input: {
       })),
       conversations: conversations.map(({ threadId, sha256 }) => ({ threadId, sha256 })),
     });
-    return yield* Schema.decodeUnknownEffect(AkeruMemoryArchive)({
+    return yield* Schema.decodeUnknownEffect(AkeruMemoryArchiveV2)({
       schemaVersion: 2,
       anchorThreadId: input.access.threadId,
       target: input.target,

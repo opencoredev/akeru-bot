@@ -14,6 +14,7 @@ import {
   ProductFeedbackToolDraft,
   classifyAkeruExternalCommand,
   classifyAkeruSensitivePath,
+  type AkeruConversationMemorySnapshot,
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
 } from "@t3tools/contracts";
@@ -89,6 +90,11 @@ export interface AkeruMastraHarness {
     MastraAgentController<AkeruMastraState>,
     "init" | "createSession" | "deleteSession" | "destroy"
   >;
+  readonly clearObservationalMemory?: (threadId: string, resourceId?: string) => Promise<void>;
+  readonly readObservationalMemory?: (
+    threadId: string,
+    resourceId?: string,
+  ) => Promise<AkeruConversationMemorySnapshot>;
   readonly destroy: () => void;
 }
 

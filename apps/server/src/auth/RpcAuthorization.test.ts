@@ -30,6 +30,18 @@ describe("RPC authorization scopes", () => {
     );
   });
 
+  it("separates memory reads from memory changes", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.memoryInspect)).toBe(AuthOrchestrationReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.memoryExport)).toBe(AuthOrchestrationReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.memoryImportPreview)).toBe(
+      AuthOrchestrationReadScope,
+    );
+    expect(requiredScopeForRpcMethod(WS_METHODS.memoryImportApply)).toBe(
+      AuthOrchestrationOperateScope,
+    );
+    expect(requiredScopeForRpcMethod(WS_METHODS.memoryMutate)).toBe(AuthOrchestrationOperateScope);
+  });
+
   it("allows relay status reads without granting relay installation access", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.cloudGetRelayClientStatus)).toBe(
       AuthRelayReadScope,

@@ -9,6 +9,7 @@ import {
   AkeruMemoryCandidate,
   AkeruMemoryCandidateDecision,
   AkeruMemoryExportInput,
+  AkeruMemoryImportPreviewInput,
   AkeruMemoryDecisionReceipt,
   AkeruMemoryPacket,
   AkeruMemoryMutateInput,
@@ -102,6 +103,25 @@ describe("Akeru memory contracts", () => {
         target: "workspace",
       });
       assert.equal(input.target, "workspace");
+    }),
+  );
+
+  it.effect("rejects version 1 import archives at the RPC boundary", () =>
+    Effect.gen(function* () {
+      const result = yield* Schema.decodeUnknownEffect(AkeruMemoryImportPreviewInput)({
+        threadId: "thread-1",
+        target: "thread",
+        archive: {
+          schemaVersion: 1,
+          threadId: "thread-1",
+          complete: true,
+          createdAt: "2026-08-30T21:00:00.000Z",
+          files: [],
+          manifestSha256: "a".repeat(64),
+        },
+      }).pipe(Effect.exit);
+
+      assert.isTrue(result._tag === "Failure");
     }),
   );
 

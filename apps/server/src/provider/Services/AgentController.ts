@@ -1,4 +1,5 @@
 import type {
+  AkeruConversationMemorySnapshot,
   BotEngine,
   ModelSelection,
   ProviderInteractionMode,
@@ -34,6 +35,14 @@ export interface AgentControllerEngineSelection extends AgentControllerAvailable
 }
 
 export interface AgentControllerShape {
+  readonly readConversationMemory?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<AkeruConversationMemorySnapshot, AgentControllerError>;
+
+  readonly clearConversationMemory?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<void, AgentControllerError>;
+
   /** Resolve a thread's selected mode and model to an available Akeru provider instance. */
   readonly resolveEngine: (input: {
     readonly threadId: ThreadId;

@@ -2,6 +2,20 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
+import {
+  AkeruMemoryArchiveV2,
+  AkeruMemoryExportInput,
+  AkeruMemoryImportApplyInput,
+  AkeruMemoryImportApplyResult,
+  AkeruMemoryImportPreview,
+  AkeruMemoryImportPreviewInput,
+  AkeruMemoryInspectInput,
+  AkeruMemoryMutateInput,
+  AkeruMemoryMutationResult,
+  AkeruMemoryOperationError,
+  AkeruMemorySnapshot,
+} from "./akeruMemory.ts";
+
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
 import {
   AuthAccessStreamError,
@@ -305,6 +319,11 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  memoryInspect: "memory.inspect",
+  memoryExport: "memory.export",
+  memoryImportPreview: "memory.importPreview",
+  memoryImportApply: "memory.importApply",
+  memoryMutate: "memory.mutate",
   portabilityExport: "portability.export",
   portabilityPreviewImport: "portability.previewImport",
   portabilityApplyImport: "portability.applyImport",
@@ -556,6 +575,36 @@ export const WsServerGetBackgroundPolicyRpc = Rpc.make(WS_METHODS.serverGetBackg
   payload: Schema.Struct({}),
   success: BackgroundPolicySnapshot,
   error: EnvironmentAuthorizationError,
+});
+
+export const WsMemoryInspectRpc = Rpc.make(WS_METHODS.memoryInspect, {
+  payload: AkeruMemoryInspectInput,
+  success: AkeruMemorySnapshot,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryExportRpc = Rpc.make(WS_METHODS.memoryExport, {
+  payload: AkeruMemoryExportInput,
+  success: AkeruMemoryArchiveV2,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryImportPreviewRpc = Rpc.make(WS_METHODS.memoryImportPreview, {
+  payload: AkeruMemoryImportPreviewInput,
+  success: AkeruMemoryImportPreview,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryImportApplyRpc = Rpc.make(WS_METHODS.memoryImportApply, {
+  payload: AkeruMemoryImportApplyInput,
+  success: AkeruMemoryImportApplyResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryMutateRpc = Rpc.make(WS_METHODS.memoryMutate, {
+  payload: AkeruMemoryMutateInput,
+  success: AkeruMemoryMutationResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
 });
 
 export const WsPortabilityExportRpc = Rpc.make(WS_METHODS.portabilityExport, {
@@ -1015,6 +1064,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsMemoryInspectRpc,
+  WsMemoryExportRpc,
+  WsMemoryImportPreviewRpc,
+  WsMemoryImportApplyRpc,
+  WsMemoryMutateRpc,
   WsPortabilityExportRpc,
   WsPortabilityPreviewImportRpc,
   WsPortabilityApplyImportRpc,

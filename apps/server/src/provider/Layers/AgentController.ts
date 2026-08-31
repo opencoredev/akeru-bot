@@ -1138,6 +1138,18 @@ const make = (options?: AgentControllerLiveOptions) =>
     );
 
     return AgentController.of({
+      readConversationMemory: (threadId) =>
+        bundle.readObservationalMemory
+          ? runMastra("memory.read", () =>
+              bundle.readObservationalMemory!(String(threadId), String(threadId)),
+            )
+          : Effect.succeed({ current: null, history: [] }),
+      clearConversationMemory: (threadId) =>
+        bundle.clearObservationalMemory
+          ? runMastra("memory.clear", () =>
+              bundle.clearObservationalMemory!(String(threadId), String(threadId)),
+            )
+          : Effect.void,
       resolveEngine,
       inspectEngine,
       startSession,

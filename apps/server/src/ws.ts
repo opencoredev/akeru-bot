@@ -10,6 +10,9 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
+  type AkeruMemoryThreadAccess,
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
@@ -96,6 +99,9 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
+import { EntityMemoryRepository } from "./memory/Services/EntityMemoryRepository.ts";
+import { MemoryCandidateRepository } from "./memory/Services/MemoryCandidateRepository.ts";
+import { createMemoryRpcHandlers, memoryOperationError } from "./memory/MemoryRpc.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -469,6 +475,8 @@ const makeWsRpcLayer = (
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
       const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
       const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
+      const entityMemoryRepository = yield* Effect.serviceOption(EntityMemoryRepository);
+      const memoryCandidates = yield* Effect.serviceOption(MemoryCandidateRepository);
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Every command dispatched on this connection carries the connecting
@@ -565,6 +573,91 @@ const makeWsRpcLayer = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
       const relayClient = yield* RelayClient.RelayClient;
+      const memory =
+        Option.isSome(entityMemoryRepository) && Option.isSome(memoryCandidates)
+          ? createMemoryRpcHandlers({
+              repository: entityMemoryRepository.value,
+              candidates: memoryCandidates.value,
+              readConversation: (threadId) =>
+                agentController.readConversationMemory
+                  ? agentController
+                      .readConversationMemory(threadId)
+                      .pipe(
+                        Effect.mapError((cause) => memoryOperationError("readConversation", cause)),
+                      )
+                  : Effect.fail(
+                      memoryOperationError(
+                        "readConversation",
+                        "Conversation memory is unavailable.",
+                      ),
+                    ),
+              clearConversation: (threadId) =>
+                agentController.clearConversationMemory
+                  ? agentController
+                      .clearConversationMemory(threadId)
+                      .pipe(
+                        Effect.mapError((cause) =>
+                          memoryOperationError("clearConversation", cause),
+                        ),
+                      )
+                  : Effect.fail(
+                      memoryOperationError(
+                        "clearConversation",
+                        "Conversation memory is unavailable.",
+                      ),
+                    ),
+            })
+          : null;
+      const requireMemory = (operation: string) =>
+        memory === null
+          ? Effect.fail(memoryOperationError(operation, "Memory is unavailable."))
+          : Effect.succeed(memory);
+      const resolveMemoryAccess = (operation: string, threadId: ThreadId) =>
+        Effect.gen(function* () {
+          const thread = yield* projectionSnapshotQuery
+            .getThreadShellById(threadId)
+            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
+          if (Option.isNone(thread)) {
+            return yield* memoryOperationError(operation, "The thread does not exist.");
+          }
+          const project = yield* projectionSnapshotQuery
+            .getProjectShellById(thread.value.projectId)
+            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
+          if (Option.isNone(project)) {
+            return yield* memoryOperationError(operation, "The thread project does not exist.");
+          }
+          const groupId = thread.value.groupId ?? null;
+          const groupMemberBotIds =
+            groupId === null
+              ? []
+              : yield* projectionGroups.getById({ groupId }).pipe(
+                  Effect.flatMap(
+                    Option.match({
+                      onNone: () =>
+                        Effect.fail(
+                          memoryOperationError(operation, "The thread group does not exist."),
+                        ),
+                      onSome: (group) =>
+                        Effect.succeed(group.members.map((member) => member.botId)),
+                    }),
+                  ),
+                  Effect.mapError((cause) => memoryOperationError(operation, cause)),
+                );
+          return {
+            tenantId: AkeruMemoryTenantId.make("local"),
+            userId: AkeruMemoryUserId.make("owner"),
+            threadId,
+            projectId: thread.value.projectId,
+            workspaceRoot: project.value.workspaceRoot,
+            botId:
+              groupId === null
+                ? (thread.value.respondingBotId ?? thread.value.botId ?? null)
+                : null,
+            groupId,
+            respondingBotId: thread.value.respondingBotId ?? thread.value.botId ?? null,
+            groupMemberBotIds,
+          } satisfies AkeruMemoryThreadAccess;
+        });
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -2160,6 +2253,78 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.memoryInspect]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryInspect,
+            Effect.all({
+              access: resolveMemoryAccess("inspect", input.threadId),
+              memory: requireMemory("inspect"),
+            }).pipe(Effect.flatMap(({ access, memory }) => memory.inspect(access))),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryExport]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryExport,
+            Effect.all({
+              access: resolveMemoryAccess("export", input.threadId),
+              createdAt: nowIso,
+              memory: requireMemory("export"),
+            }).pipe(
+              Effect.flatMap(({ access, createdAt, memory }) =>
+                memory.exportArchive({
+                  access,
+                  target: input.target,
+                  complete: input.complete,
+                  createdAt,
+                }),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryImportPreview]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryImportPreview,
+            Effect.all({
+              access: resolveMemoryAccess("importPreview", input.threadId),
+              memory: requireMemory("importPreview"),
+            }).pipe(
+              Effect.flatMap(({ access, memory }) =>
+                memory.previewImport({
+                  access,
+                  target: input.target,
+                  archive: input.archive,
+                }),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryImportApply]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryImportApply,
+            Effect.all({
+              access: resolveMemoryAccess("importApply", input.threadId),
+              memory: requireMemory("importApply"),
+            }).pipe(
+              Effect.flatMap(({ access, memory }) =>
+                memory.applyImport({
+                  access,
+                  target: input.target,
+                  archive: input.archive,
+                  previewHash: input.previewHash,
+                }),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryMutate]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryMutate,
+            Effect.all({
+              access: resolveMemoryAccess("mutate", input.threadId),
+              memory: requireMemory("mutate"),
+            }).pipe(Effect.flatMap(({ access, memory }) => memory.mutate(access, input.mutation))),
+            { "rpc.aggregate": "memory" },
+          ),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
