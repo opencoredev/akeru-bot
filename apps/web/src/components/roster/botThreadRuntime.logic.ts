@@ -63,6 +63,15 @@ export function releaseBotTurnSubmissionAfterObservation(
   return true;
 }
 
+export function reserveBotTurnSubmissionAfterObservation(
+  key: string,
+  latestTurn: Pick<OrchestrationLatestTurn, "requestMessageId" | "state"> | null | undefined,
+  activities: readonly Pick<OrchestrationThreadActivity, "kind" | "payload">[],
+): (() => void) | null {
+  releaseBotTurnSubmissionAfterObservation(key, latestTurn, activities);
+  return reserveBotTurnSubmission(key);
+}
+
 export async function joinOrStartThreadCreate<T>(input: {
   getRetained: () => T | null;
   inFlight: { current: Promise<T | null> | null };

@@ -17,6 +17,7 @@ import {
   joinOrStartThreadCreate,
   releaseBotTurnSubmissionAfterObservation,
   reserveBotTurnSubmission,
+  reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
 
 describe("bot thread runtime", () => {
@@ -123,6 +124,24 @@ describe("bot thread runtime", () => {
     staleRelease?.();
 
     const nextRelease = reserveBotTurnSubmission(key);
+    expect(nextRelease).not.toBeNull();
+    staleRelease?.();
+    expect(reserveBotTurnSubmission(key)).toBeNull();
+    nextRelease?.();
+  });
+
+  it("reconciles a terminal turn received while the bot view was unmounted", () => {
+    const key = "env-a:bot-navigation";
+    const requestMessageId = MessageId.make("message-before-navigation");
+    const staleRelease = reserveBotTurnSubmission(key);
+    expect(staleRelease).not.toBeNull();
+    acceptBotTurnSubmission(key, requestMessageId);
+
+    const nextRelease = reserveBotTurnSubmissionAfterObservation(
+      key,
+      { requestMessageId, state: "completed" },
+      [],
+    );
     expect(nextRelease).not.toBeNull();
     staleRelease?.();
     expect(reserveBotTurnSubmission(key)).toBeNull();

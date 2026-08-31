@@ -35,7 +35,7 @@ import {
   findLatestBotThreadTarget,
   joinOrStartThreadCreate,
   releaseBotTurnSubmissionAfterObservation,
-  reserveBotTurnSubmission,
+  reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -227,7 +227,11 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         return false;
       }
       const submissionKey = `${activeProject.environmentId}:${botId}`;
-      const releaseSubmission = reserveBotTurnSubmission(submissionKey);
+      const releaseSubmission = reserveBotTurnSubmissionAfterObservation(
+        submissionKey,
+        rememberedThread?.latestTurn,
+        activities,
+      );
       if (!releaseSubmission) {
         setError("Wait for the current reply to start.");
         return false;
