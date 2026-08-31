@@ -5,6 +5,7 @@ import { usePrimarySettings } from "../../hooks/useSettings";
 import { startProductFeedbackElementPicker } from "../../productFeedbackPicker";
 import {
   buildProductFeedbackSubmission,
+  shouldRefreshProductFeedbackChallenge,
   submitProductFeedback,
 } from "../../productFeedbackSubmission";
 import { useProductFeedbackStore } from "../../productFeedbackStore";
@@ -91,6 +92,7 @@ export function ProductFeedbackDialog() {
     | { readonly kind: "failure"; readonly message: string }
   >({ kind: "idle" });
   const [challengeSiteKey, setChallengeSiteKey] = useState<string | null>(null);
+  const [challengeAttempt, setChallengeAttempt] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>();
 
   useEffect(() => {
@@ -141,6 +143,10 @@ export function ProductFeedbackDialog() {
       return;
     }
     setStatus({ kind: "failure", message: result.rejection.message });
+    if (shouldRefreshProductFeedbackChallenge(payload, result)) {
+      setTurnstileToken(undefined);
+      setChallengeAttempt((attempt) => attempt + 1);
+    }
     if (result.rejection.reason === "challenge_required" && result.rejection.challengeSiteKey) {
       setChallengeSiteKey(result.rejection.challengeSiteKey);
     }
@@ -197,7 +203,11 @@ export function ProductFeedbackDialog() {
             />
 
             {challengeSiteKey ? (
-              <TurnstileChallenge siteKey={challengeSiteKey} onToken={setTurnstileToken} />
+              <TurnstileChallenge
+                key={challengeAttempt}
+                siteKey={challengeSiteKey}
+                onToken={setTurnstileToken}
+              />
             ) : null}
 
             {status.kind === "failure" ? (

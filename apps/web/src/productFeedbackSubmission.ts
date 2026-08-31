@@ -82,6 +82,13 @@ export type ProductFeedbackSubmitResult =
   | { readonly ok: true; readonly receipt: ProductFeedbackReceipt }
   | { readonly ok: false; readonly rejection: ProductFeedbackRejection };
 
+export function shouldRefreshProductFeedbackChallenge(
+  submission: ProductFeedbackSubmission,
+  result: ProductFeedbackSubmitResult,
+): boolean {
+  return Boolean(submission.turnstileToken) && !result.ok;
+}
+
 export async function submitProductFeedback(
   endpoint: string,
   submission: ProductFeedbackSubmission,

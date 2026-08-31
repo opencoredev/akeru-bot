@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   buildProductFeedbackSubmission,
   readOrRotateProductFeedbackInstallToken,
+  shouldRefreshProductFeedbackChallenge,
   submitProductFeedback,
 } from "./productFeedbackSubmission";
 
@@ -86,5 +87,30 @@ describe("product feedback submission", () => {
         message: "Akeru could not send the feedback. Your draft is still available.",
       },
     });
+  });
+
+  it("refreshes a consumed verification challenge after a rejected submission", () => {
+    const submission = {
+      ...buildProductFeedbackSubmission({
+        draft: { feedback: "Retry this.", element: null },
+      }),
+      turnstileToken: "consumed-token",
+    };
+
+    expect(
+      shouldRefreshProductFeedbackChallenge(submission, {
+        ok: false,
+        rejection: { reason: "cooldown", message: "Try again." },
+      }),
+    ).toBe(true);
+    expect(
+      shouldRefreshProductFeedbackChallenge(submission, {
+        ok: true,
+        receipt: {
+          feedbackId: "feedback-1",
+          receivedAt: "2026-08-31T00:00:00.000Z",
+        },
+      }),
+    ).toBe(false);
   });
 });
