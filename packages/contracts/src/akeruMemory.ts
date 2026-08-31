@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import * as Effect from "effect/Effect";
 
 import {
   BotId,
@@ -269,7 +270,9 @@ export type AkeruMemorySnapshot = typeof AkeruMemorySnapshot.Type;
 export const AkeruMemoryExportInput = Schema.Struct({
   threadId: ThreadId,
   complete: Schema.Boolean,
-  target: Schema.optional(AkeruMemoryArchiveTarget),
+  target: AkeruMemoryArchiveTarget.pipe(
+    Schema.withDecodingDefault(Effect.succeed("thread" as const)),
+  ),
 });
 export type AkeruMemoryExportInput = typeof AkeruMemoryExportInput.Type;
 
@@ -291,7 +294,7 @@ export type AkeruMemoryImportPreviewItem = typeof AkeruMemoryImportPreviewItem.T
 export const AkeruMemoryImportPreviewInput = Schema.Struct({
   threadId: ThreadId,
   target: AkeruMemoryArchiveTarget,
-  archive: AkeruMemoryArchive,
+  archive: AkeruMemoryArchiveV2,
 });
 export type AkeruMemoryImportPreviewInput = typeof AkeruMemoryImportPreviewInput.Type;
 
@@ -342,7 +345,11 @@ export const AkeruMemoryMutation = Schema.Union([
     memoryId: AkeruMemoryRootId,
     expectedRevision: PositiveInt,
   }),
-  Schema.Struct({ operation: Schema.Literal("fact.delete"), memoryId: AkeruMemoryRootId }),
+  Schema.Struct({
+    operation: Schema.Literal("fact.delete"),
+    memoryId: AkeruMemoryRootId,
+    expectedRevision: PositiveInt,
+  }),
   Schema.Struct({ operation: Schema.Literal("conversation.clear") }),
 ]);
 export type AkeruMemoryMutation = typeof AkeruMemoryMutation.Type;

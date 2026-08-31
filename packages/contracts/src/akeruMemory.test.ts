@@ -167,9 +167,14 @@ describe("Akeru memory contracts", () => {
         threadId: "thread-1",
         mutation: { operation: "database.execute", sql: "DELETE FROM memory" },
       }).pipe(Effect.exit);
+      const deleteWithoutRevision = yield* decode({
+        threadId: "thread-1",
+        mutation: { operation: "fact.delete", memoryId: "root-1" },
+      }).pipe(Effect.exit);
 
       assert.equal(edit.mutation.operation, "fact.edit");
       assert.isTrue(arbitrary._tag === "Failure");
+      assert.isTrue(deleteWithoutRevision._tag === "Failure");
     }),
   );
 });
