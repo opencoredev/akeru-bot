@@ -90,6 +90,7 @@ describe("AkeruMastraHarness", () => {
       getThreadTools: () => ({
         exa_search: pluginTool,
         RestartMcpServers: pluginTool,
+        Shell: pluginTool,
       }),
       syncThreadToolApproval: async (_threadId, _toolName, protectedAction) => {
         approvalPolicies.push(protectedAction);

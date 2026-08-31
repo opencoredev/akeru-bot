@@ -759,7 +759,20 @@ describe("AgentControllerLive", () => {
           input: { command: "pwd" },
           approvalMode: "require-grant" as const,
         };
+        const receiptsFiber = yield* controller.streamEvents.pipe(
+          Stream.filter((event) => event.type === "tool.receipt"),
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
         yield* Effect.promise(() => runtime.execute(execution));
+        const receipts = yield* Fiber.join(receiptsFiber);
+        assert.deepEqual(
+          [...receipts].map((event) => event.payload.phase),
+          ["start", "success"],
+        );
+        assert.isTrue([...receipts].every((event) => event.payload.fatalToThread === false));
         yield* Effect.promise(() =>
           expect(runtime.execute(execution)).rejects.toThrow("Tool 'Shell' requires approval."),
         );
@@ -777,10 +790,20 @@ describe("AgentControllerLive", () => {
           toolName: "Shell",
           args: { command: "pwd" },
         } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "shell-tool-stale",
+          result: "cancelled",
+          isError: true,
+        } as AgentControllerEvent);
         yield* controller.respondToRequest({
           threadId: codexThreadId,
           requestId: ApprovalRequestId.make("shell-tool-stale"),
           decision: "accept",
+        });
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
+          toolCallId: "shell-tool-stale",
+          decision: "approve",
         });
         yield* controller.interruptTurn({ threadId: codexThreadId });
         yield* Effect.promise(() =>

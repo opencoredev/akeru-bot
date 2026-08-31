@@ -1,10 +1,13 @@
+// @effect-diagnostics globalDate:off
 import { RequestContext } from "@mastra/core/request-context";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
   AkeruToolInputSchemas,
+  ThreadId,
   type BotId,
   type AkeruToolDefinition,
   type AkeruToolId,
+  type AkeruToolReceipt,
   type AkeruToolWorkspaceType,
   type RuntimeMode,
   akeruToolRequiresApproval,
@@ -26,6 +29,7 @@ export interface AkeruToolSession {
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
+  readonly onReceipt?: (receipt: AkeruToolReceipt) => void;
 }
 
 export interface AkeruToolExecution {
@@ -116,9 +120,28 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
   const sessions = new Map<string, AkeruToolSession>();
   const grants = new Map<string, { readonly toolId: AkeruToolId; readonly input: string }>();
   const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
-  const clearGrants = (threadId: string) => {
+  const clearApprovals = (threadId: string) => {
     for (const grantKey of grants.keys()) {
       if (grantKey.startsWith(`${threadId}\u0000`)) grants.delete(grantKey);
+    }
+  };
+  const emitReceipt = (
+    input: AkeruToolExecution,
+    phase: AkeruToolReceipt["phase"],
+    details?: Pick<AkeruToolReceipt, "failureCode" | "summary">,
+  ) => {
+    try {
+      options?.onReceipt?.({
+        receiptId: input.toolCallId,
+        toolId: input.toolId,
+        phase,
+        threadId: ThreadId.make(input.threadId),
+        fatalToThread: false,
+        createdAt: new Date().toISOString(),
+        ...details,
+      });
+    } catch {
+      // Receipt observers must not change tool execution.
     }
   };
 
@@ -167,14 +190,14 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
 
   return {
     registerSession: (threadId, session) => {
-      clearGrants(threadId);
+      clearApprovals(threadId);
       sessions.set(threadId, session);
     },
     unregisterSession: (threadId) => {
       sessions.delete(threadId);
-      clearGrants(threadId);
+      clearApprovals(threadId);
     },
-    clearApprovals: clearGrants,
+    clearApprovals,
     toolsForThread,
     requiresApproval: async (threadId, toolId, input) => {
       const session = sessions.get(threadId);
@@ -197,85 +220,104 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       });
     },
     execute: async (input) => {
-      const session = sessions.get(input.threadId);
-      if (!session) throw new Error(`Tool session '${input.threadId}' is not registered.`);
-      const tool = toolsForThread(input.threadId).find(
-        (candidate) => candidate.id === input.toolId,
-      );
-      if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
-      const decoded = await validatedInput(input.toolId, input.input);
-      if (
-        akeruToolRequiresApproval(
-          tool,
-          {
-            localFullAccess: session.runtimeMode === "full-access",
-            workspaceType: session.workspaceType,
-          },
-          decoded,
-        )
-      ) {
-        const grantKey = key(input.threadId, input.toolCallId);
-        const grant = grants.get(grantKey);
-        if (
-          !grant ||
-          input.approvalMode !== "require-grant" ||
-          grant?.toolId !== input.toolId ||
-          grant.input !== canonicalInput(decoded)
-        ) {
-          throw new Error(`Tool '${input.toolId}' requires approval.`);
-        }
-        grants.delete(grantKey);
-      }
-
-      if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
-        const source =
-          input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;
-        const destination =
-          input.toolId === "CopyToBox" ? session.workspace : session.userComputerWorkspace;
-        if (!source?.filesystem || !destination?.filesystem) {
-          throw new Error("Both computer boundaries are required for file copy.");
-        }
-        const sourcePath = requiredString(decoded, "sourcePath");
-        const destinationPath = requiredString(decoded, "destinationPath");
-        await destination.filesystem.writeFile(
-          destinationPath,
-          await source.filesystem.readFile(sourcePath),
-          { recursive: true },
+      let failureCode: NonNullable<AkeruToolReceipt["failureCode"]> = "internal";
+      emitReceipt(input, "start");
+      try {
+        failureCode = "not_found";
+        const session = sessions.get(input.threadId);
+        if (!session) throw new Error(`Tool session '${input.threadId}' is not registered.`);
+        const tool = toolsForThread(input.threadId).find(
+          (candidate) => candidate.id === input.toolId,
         );
-        return { sourcePath, destinationPath };
-      }
-      if (input.toolId === "request_box_help") {
-        if (!options?.onUserActionRequired || !session.botId || !session.botName) {
-          throw new Error("Human handoff is not available for this session.");
-        }
-        await options.onUserActionRequired({
-          botId: session.botId,
-          botName: session.botName,
-          toolId: input.toolId,
-          summary: requiredString(decoded, "message"),
-          nextAction: "Open the bot workspace and complete the requested step.",
-          target: requiredString(decoded, "reason"),
-        });
-        return { requested: true };
-      }
+        if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
 
-      const workspace = workspaceForTool(input.toolId, session);
-      const backends = await toolsForWorkspace(workspace);
-      const backendName = BACKEND_NAMES[input.toolId].find((name) => executable(backends[name]));
-      const backend = backendName ? backends[backendName] : undefined;
-      if (!executable(backend)) throw new Error(`Tool '${input.toolId}' has no backend.`);
-      const backendInput =
-        input.toolId === "AwaitShell" || input.toolId === "AwaitExternalShell"
-          ? { pid: requiredString(decoded, "handleId"), wait: true }
-          : decoded;
-      return backend.execute(backendInput, {
-        workspace,
-        requestContext: new RequestContext(),
-        observe: {
-          span: async <A>(_name: string, run: () => A | Promise<A>) => run(),
-          log: () => undefined,
-        },
-      });
+        failureCode = "validation";
+        const decoded = await validatedInput(input.toolId, input.input);
+        failureCode = "denied";
+        if (
+          akeruToolRequiresApproval(
+            tool,
+            {
+              localFullAccess: session.runtimeMode === "full-access",
+              workspaceType: session.workspaceType,
+            },
+            decoded,
+          )
+        ) {
+          const grantKey = key(input.threadId, input.toolCallId);
+          const grant = grants.get(grantKey);
+          if (
+            !grant ||
+            input.approvalMode !== "require-grant" ||
+            grant.toolId !== input.toolId ||
+            grant.input !== canonicalInput(decoded)
+          ) {
+            throw new Error(`Tool '${input.toolId}' requires approval.`);
+          }
+          grants.delete(grantKey);
+        }
+
+        failureCode = "not_found";
+        let result: unknown;
+        if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
+          const source =
+            input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;
+          const destination =
+            input.toolId === "CopyToBox" ? session.workspace : session.userComputerWorkspace;
+          if (!source?.filesystem || !destination?.filesystem) {
+            throw new Error("Both computer boundaries are required for file copy.");
+          }
+          const sourcePath = requiredString(decoded, "sourcePath");
+          const destinationPath = requiredString(decoded, "destinationPath");
+          failureCode = "internal";
+          await destination.filesystem.writeFile(
+            destinationPath,
+            await source.filesystem.readFile(sourcePath),
+            { recursive: true },
+          );
+          result = { sourcePath, destinationPath };
+        } else if (input.toolId === "request_box_help") {
+          if (!options?.onUserActionRequired || !session.botId || !session.botName) {
+            throw new Error("Human handoff is not available for this session.");
+          }
+          failureCode = "internal";
+          await options.onUserActionRequired({
+            botId: session.botId,
+            botName: session.botName,
+            toolId: input.toolId,
+            summary: requiredString(decoded, "message"),
+            nextAction: "Open the bot workspace and complete the requested step.",
+            target: requiredString(decoded, "reason"),
+          });
+          result = { requested: true };
+        } else {
+          const workspace = workspaceForTool(input.toolId, session);
+          const backends = await toolsForWorkspace(workspace);
+          const backendName = BACKEND_NAMES[input.toolId].find((name) =>
+            executable(backends[name]),
+          );
+          const backend = backendName ? backends[backendName] : undefined;
+          if (!executable(backend)) throw new Error(`Tool '${input.toolId}' has no backend.`);
+          const backendInput =
+            input.toolId === "AwaitShell" || input.toolId === "AwaitExternalShell"
+              ? { pid: requiredString(decoded, "handleId"), wait: true }
+              : decoded;
+          failureCode = "internal";
+          result = await backend.execute(backendInput, {
+            workspace,
+            requestContext: new RequestContext(),
+            observe: {
+              span: async <A>(_name: string, run: () => A | Promise<A>) => run(),
+              log: () => undefined,
+            },
+          });
+        }
+        emitReceipt(input, "success");
+        return result;
+      } catch (cause) {
+        emitReceipt(input, "failure", { failureCode, summary: "Tool execution failed." });
+        throw cause;
+      }
     },
   };
 }

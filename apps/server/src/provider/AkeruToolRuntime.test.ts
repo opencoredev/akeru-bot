@@ -5,7 +5,7 @@ import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { BotId } from "@t3tools/contracts";
+import { BotId, type AkeruToolReceipt } from "@t3tools/contracts";
 
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
@@ -43,7 +43,8 @@ describe("AkeruToolRuntime", () => {
   });
 
   it("requires an exact one-shot grant for local shell commands", async () => {
-    const runtime = createAkeruToolRuntime();
+    const receipts: AkeruToolReceipt[] = [];
+    const runtime = createAkeruToolRuntime({ onReceipt: (receipt) => receipts.push(receipt) });
     runtime.registerSession("thread-1", {
       runtimeMode: "full-access",
       workspaceType: "local",
@@ -57,10 +58,15 @@ describe("AkeruToolRuntime", () => {
       approvalMode: "require-grant" as const,
     };
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
+    expect(receipts[1]).toMatchObject({ failureCode: "denied", fatalToThread: false });
+    receipts.length = 0;
     runtime.grantApproval({ ...execution, input: { command: "echo wrong" } });
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    receipts.length = 0;
     runtime.grantApproval({ ...execution, input: { command: " pwd " } });
     await expect(runtime.execute(execution)).resolves.toBeDefined();
+    expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "success"]);
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
   });
 
@@ -155,7 +161,6 @@ describe("AkeruToolRuntime", () => {
       },
     ]);
   });
-
   it("translates await handles to workspace process ids", async () => {
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-1", {
