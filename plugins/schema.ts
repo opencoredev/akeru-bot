@@ -378,7 +378,11 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
       `Plugin '${manifest.id}' declares credentials without API key authentication.`,
     );
   }
-  if (manifest.authentication === "api-key" && manifest.connection.type !== "api-key") {
+  if (
+    manifest.authentication === "api-key" &&
+    manifest.connection.type !== "api-key" &&
+    manifest.connection.type !== "approval-pending"
+  ) {
     throw new TypeError(`Plugin '${manifest.id}' must label its API key connection.`);
   }
   if (manifest.connection.type === "api-key" && manifest.authentication !== "api-key") {
@@ -438,7 +442,11 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
     const local = ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname);
     if (
       endpoint.protocol !== "https:" &&
-      !(endpoint.protocol === "http:" && local && manifest.connection.type === "local")
+      !(
+        endpoint.protocol === "http:" &&
+        local &&
+        (manifest.connection.type === "local" || manifest.connection.type === "approval-pending")
+      )
     ) {
       throw new TypeError(
         `Plugin '${manifest.id}' endpoint must use HTTPS unless it is a local loopback connection.`,

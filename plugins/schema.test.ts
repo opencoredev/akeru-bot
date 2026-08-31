@@ -90,6 +90,75 @@ describe("plugin catalog schema", () => {
     ).toThrow("broker");
   });
 
+  it("allows pending API key recipes and still requires their credentials", () => {
+    const pendingApiKey = {
+      ...VALID_MANIFEST,
+      connection: {
+        type: "approval-pending",
+        blocker: "The vendor must verify its API key MCP endpoint.",
+      },
+      authentication: "api-key",
+      requiredCredentials: ["example-api-key"],
+      catalogStatus: "approval-pending",
+    } as const;
+    expect(parsePluginManifest(pendingApiKey).connection).toEqual(pendingApiKey.connection);
+    expect(() => parsePluginManifest({ ...pendingApiKey, requiredCredentials: [] })).toThrow(
+      "must name its required API key credentials",
+    );
+    expect(() =>
+      parsePluginManifest({
+        ...pendingApiKey,
+        connection: { type: "local" },
+        catalogStatus: "available",
+      }),
+    ).toThrow("must label its API key connection");
+  });
+
+  it("allows pending loopback recipes but rejects other insecure connections", () => {
+    const pendingLoopback = {
+      ...VALID_MANIFEST,
+      transport: { type: "url", url: "http://127.0.0.1:29979/mcp" },
+      connection: {
+        type: "approval-pending",
+        blocker: "The local MCP recipe still needs verification.",
+      },
+      authentication: "none",
+      catalogStatus: "approval-pending",
+    } as const;
+    expect(parsePluginManifest(pendingLoopback).connection).toEqual(pendingLoopback.connection);
+    expect(() =>
+      parsePluginManifest({
+        ...pendingLoopback,
+        transport: { type: "url", url: "http://example.com/mcp" },
+      }),
+    ).toThrow("endpoint must use HTTPS");
+    expect(() =>
+      parsePluginManifest({
+        ...pendingLoopback,
+        connection: { type: "ready" },
+        catalogStatus: "available",
+      }),
+    ).toThrow("endpoint must use HTTPS");
+  });
+
+  it("requires pending connection and catalog statuses to agree", () => {
+    const pending = {
+      ...VALID_MANIFEST,
+      connection: {
+        type: "approval-pending",
+        blocker: "The vendor must verify its HTTPS MCP endpoint.",
+      },
+      catalogStatus: "approval-pending",
+    } as const;
+    expect(parsePluginManifest(pending).catalogStatus).toBe("approval-pending");
+    expect(() => parsePluginManifest({ ...pending, catalogStatus: "available" })).toThrow(
+      "must use approval-pending catalog status",
+    );
+    expect(() =>
+      parsePluginManifest({ ...VALID_MANIFEST, catalogStatus: "approval-pending" }),
+    ).toThrow("must label its connection as approval-pending");
+  });
+
   it("rejects stdio recipes that expose local paths or credentials", () => {
     const local = {
       ...VALID_MANIFEST,
