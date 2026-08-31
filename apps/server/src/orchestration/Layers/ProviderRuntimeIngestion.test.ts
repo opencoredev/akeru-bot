@@ -534,19 +534,42 @@ describe("ProviderRuntimeIngestion", () => {
     const harness = await createHarness({ botOwned: true });
     const replacementTurnId = asTurnId("turn-replacement");
     await harness.dispatch({
+      type: "thread.turn.start",
+      commandId: CommandId.make("cmd-turn-start-replacement"),
+      threadId: asThreadId("thread-1"),
+      message: {
+        messageId: asMessageId("message-replacement"),
+        role: "user",
+        text: "replace the old turn",
+        attachments: [],
+      },
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required",
+      createdAt: "2026-01-01T00:00:01.000Z",
+    });
+    await harness.dispatch({
       type: "thread.session.set",
       commandId: CommandId.make("cmd-session-replacement-active"),
       threadId: asThreadId("thread-1"),
       session: {
         threadId: asThreadId("thread-1"),
-        status: "running",
+        status: "starting",
         providerName: "codex",
         runtimeMode: "approval-required",
-        activeTurnId: replacementTurnId,
+        activeTurnId: null,
         updatedAt: "2026-01-01T00:00:01.000Z",
         lastError: null,
       },
       createdAt: "2026-01-01T00:00:01.000Z",
+    });
+    harness.setProviderSession({
+      provider: ProviderDriverKind.make("codex"),
+      status: "running",
+      runtimeMode: "approval-required",
+      threadId: asThreadId("thread-1"),
+      activeTurnId: replacementTurnId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      updatedAt: "2026-01-01T00:00:01.000Z",
     });
     await harness.reserveBotUsage(null);
 
@@ -577,6 +600,36 @@ describe("ProviderRuntimeIngestion", () => {
     expect(usage.consumedTokens).toBe(0);
     expect(usage.reservedTokens).toBe(1_000);
     expect(usage.entries[0]).toMatchObject({ state: "reserved", turnId: null });
+
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-replacement-turn-usage"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: replacementTurnId,
+      createdAt: "2026-01-01T00:00:04.000Z",
+      payload: {
+        usage: { usedTokens: 150, inputTokens: 100, outputTokens: 50 },
+      },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-replacement-turn-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: replacementTurnId,
+      createdAt: "2026-01-01T00:00:05.000Z",
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    const settledUsage = await harness.summarizeBotUsage();
+    expect(settledUsage.consumedTokens).toBe(150);
+    expect(settledUsage.reservedTokens).toBe(0);
+    expect(settledUsage.entries[0]).toMatchObject({
+      state: "reported",
+      turnId: replacementTurnId,
+    });
   });
 
   it("applies provider session.state.changed transitions directly", async () => {

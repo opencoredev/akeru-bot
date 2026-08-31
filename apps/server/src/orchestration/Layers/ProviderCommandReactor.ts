@@ -37,7 +37,10 @@ import {
 } from "../../provider/Errors.ts";
 import type { AgentControllerError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
-import { botRuntimeResourceScope, botWorkspaceResourceKey } from "../../provider/botWorkspacePool.ts";
+import {
+  botRuntimeResourceScope,
+  botWorkspaceResourceKey,
+} from "../../provider/botWorkspacePool.ts";
 import {
   AKERU_TURN_USAGE_RESERVATION_TOKENS,
   BotUsageCapExceeded,

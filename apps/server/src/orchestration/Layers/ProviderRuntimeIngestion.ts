@@ -1569,10 +1569,21 @@ const make = Effect.gen(function* () {
       const activeTurnId = thread.session?.activeTurnId ?? null;
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
+      const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
+        threadId: thread.id,
+      });
+      const expectedPendingTurnId = Option.isSome(pendingTurnStart)
+        ? yield* getExpectedProviderTurnIdForThread(thread.id)
+        : undefined;
+      const eventMatchesPendingTurn =
+        Option.isSome(pendingTurnStart) && sameId(expectedPendingTurnId, eventTurnId);
+      const canReconcileUsage =
+        !conflictsWithActiveTurn &&
+        (activeTurnId !== null || Option.isNone(pendingTurnStart) || eventMatchesPendingTurn);
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&
-        !conflictsWithActiveTurn &&
+        canReconcileUsage &&
         event.type === "thread.token-usage.updated"
       ) {
         const usage = event.payload.usage;
@@ -1605,7 +1616,7 @@ const make = Effect.gen(function* () {
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&
-        !conflictsWithActiveTurn &&
+        canReconcileUsage &&
         (event.type === "turn.completed" || event.type === "turn.aborted")
       ) {
         yield* botUsageLedger
@@ -1626,9 +1637,6 @@ const make = Effect.gen(function* () {
             ),
           );
       }
-      const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
-        threadId: thread.id,
-      });
       const hasPendingTurnStart =
         Option.isSome(pendingTurnStart) && thread.session?.status === "starting";
 
@@ -1641,10 +1649,7 @@ const make = Effect.gen(function* () {
       // new turn without ever completing the superseded one. A stale
       // turn.started for some other turn id still gets rejected.
       const conflictingTurnStartIsPendingTurnStart =
-        event.type === "turn.started" && conflictsWithActiveTurn
-          ? sameId(yield* getExpectedProviderTurnIdForThread(thread.id), eventTurnId) &&
-            Option.isSome(pendingTurnStart)
-          : false;
+        event.type === "turn.started" && conflictsWithActiveTurn ? eventMatchesPendingTurn : false;
 
       const shouldApplyThreadLifecycle = (() => {
         if (!STRICT_PROVIDER_LIFECYCLE_GUARD) {
@@ -1665,6 +1670,9 @@ const make = Effect.gen(function* () {
             // Only the active turn may close the lifecycle state.
             if (activeTurnId !== null && eventTurnId !== undefined) {
               return sameId(activeTurnId, eventTurnId);
+            }
+            if (Option.isSome(pendingTurnStart)) {
+              return eventMatchesPendingTurn;
             }
             // No active turn tracked: accept only completions that name their
             // turn (covers a real completion whose turn.started was lost). An
