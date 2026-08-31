@@ -40,6 +40,9 @@ describe("Akeru action classifier", () => {
     ["wrangler deploy", "production"],
     ["cat ~/.ssh/id_rsa", "secrets"],
     ['curl -X POST --data \'{"text":"hello"}\' https://example.com/messages', "send"],
+    ["cd workspace && git push origin main", "publish"],
+    ["find . -name '*.tmp' -delete", "delete"],
+    ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);
     expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);

@@ -322,7 +322,8 @@ function permissionPolicy(
 }
 
 function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string): boolean {
-  if (!manager || BUILTIN_MASTRA_TOOL_NAMES.has(toolName)) return false;
+  if (BUILTIN_MASTRA_TOOL_NAMES.has(toolName)) return false;
+  if (!manager) return true;
   const tools = manager.getTools();
   if (!tools || !Object.hasOwn(tools, toolName)) return true;
   const tool = tools[toolName] as {
