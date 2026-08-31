@@ -8,6 +8,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 
 const privacyPolicyUrl = `${AKERU_MARKETING_SITE_URL}/privacy-policy`;
 const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
@@ -20,7 +21,7 @@ export function PrivacySettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Privacy controls">
         <SettingsRow
-          title="Anonymous analytics"
+          {...searchableSetting("anonymous-analytics")}
           description="Send app version, platform, architecture, client type, and feature events to PostHog. Akeru Bot does not use provider account IDs."
           resetAction={
             settings.analyticsEnabled !== DEFAULT_SERVER_SETTINGS.analyticsEnabled ? (
@@ -41,7 +42,7 @@ export function PrivacySettingsPanel() {
           }
         />
         <SettingsRow
-          title="Product feedback"
+          {...searchableSetting("privacy-product-feedback")}
           description="Send feedback you submit to feedback.akeru.bot. The service keeps submissions for up to 90 days."
           control={
             <Switch
@@ -54,7 +55,7 @@ export function PrivacySettingsPanel() {
           }
         />
         <SettingsRow
-          title="Voice calls"
+          {...searchableSetting("privacy-voice-calls")}
           description="Send live microphone audio and session data to the ChatGPT Realtime service during a call."
           control={
             <Switch
@@ -67,7 +68,7 @@ export function PrivacySettingsPanel() {
           }
         />
         <SettingsRow
-          title="Provider update checks"
+          {...searchableSetting("privacy-provider-update-checks")}
           description="Contact provider release sources to check for newer CLI versions."
           control={
             <Switch

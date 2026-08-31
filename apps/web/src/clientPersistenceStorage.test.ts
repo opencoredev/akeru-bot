@@ -44,8 +44,8 @@ describe("clientPersistenceStorage", () => {
       await import("./clientPersistenceStorage");
     const settings = {
       ...DEFAULT_CLIENT_SETTINGS,
-      acceptedPrivacyPolicyVersion: "2026-08-31",
-      acceptedTermsVersion: "2026-08-31",
+      reviewedPrivacyPolicyVersion: "2026-08-31",
+      reviewedTermsVersion: "2026-08-31",
       timestampFormat: "24-hour" as const,
     };
 

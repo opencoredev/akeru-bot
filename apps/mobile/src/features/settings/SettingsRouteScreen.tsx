@@ -28,7 +28,11 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
-import { resolveSettingsEnvironmentId } from "./SettingsRouteScreen.logic";
+import {
+  privacyControlPatch,
+  type PrivacyControl,
+  resolveSettingsEnvironmentId,
+} from "./SettingsRouteScreen.logic";
 
 type SettingsRouteParams = {
   readonly environmentId?: EnvironmentId | ReadonlyArray<string> | null;
@@ -113,7 +117,9 @@ function LocalSettingsRouteScreen({
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
-        <GeneralSettingsSection environmentId={settingsEnvironmentId} />
+        <GeneralSettingsSection />
+
+        <PrivacySettingsSection environmentId={settingsEnvironmentId} />
 
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
@@ -155,34 +161,62 @@ function ErrorsSettingsSection({
   );
 }
 
-function AnalyticsSettingsSwitch({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
-  const updateSettings = useAtomCommand(serverEnvironment.updateSettings);
-  const [saving, setSaving] = useState(false);
-
-  return (
-    <SettingsSwitchRow
-      disabled={settings === null || saving}
-      icon="chart.bar"
-      label="Analytics"
-      value={settings?.analyticsEnabled ?? true}
-      onValueChange={async (analyticsEnabled) => {
-        setSaving(true);
-        try {
-          await updateSettings({ environmentId, input: { patch: { analyticsEnabled } } });
-        } finally {
-          setSaving(false);
-        }
-      }}
-    />
-  );
-}
-
-function GeneralSettingsSection({
+function PrivacySettingsSection({
   environmentId,
 }: {
   readonly environmentId: EnvironmentId | null;
 }) {
+  if (environmentId === null) return null;
+  return <EnvironmentPrivacySettingsSection environmentId={environmentId} />;
+}
+
+function EnvironmentPrivacySettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId;
+}) {
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
+  if (!settings) return null;
+
+  const updateControl = (control: PrivacyControl, enabled: boolean) => {
+    void updateSettings({
+      environmentId,
+      input: { patch: privacyControlPatch(control, enabled) },
+    });
+  };
+
+  return (
+    <SettingsSection title="Privacy">
+      <SettingsSwitchRow
+        icon="chart.bar.xaxis"
+        label="Anonymous analytics"
+        value={settings.analyticsEnabled}
+        onValueChange={(enabled) => updateControl("analytics", enabled)}
+      />
+      <SettingsSwitchRow
+        icon="text.bubble"
+        label="Product feedback"
+        value={settings.productFeedbackEnabled}
+        onValueChange={(enabled) => updateControl("product-feedback", enabled)}
+      />
+      <SettingsSwitchRow
+        icon="bolt.circle"
+        label="Voice calls"
+        value={settings.voice.enabled}
+        onValueChange={(enabled) => updateControl("voice", enabled)}
+      />
+      <SettingsSwitchRow
+        icon="arrow.clockwise"
+        label="Provider update checks"
+        value={settings.enableProviderUpdateChecks}
+        onValueChange={(enabled) => updateControl("provider-update-checks", enabled)}
+      />
+    </SettingsSection>
+  );
+}
+
+function GeneralSettingsSection() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const autoSettleOnMerge =
@@ -199,17 +233,6 @@ function GeneralSettingsSection({
         onValueChange={(value) => savePreferences({ autoSettleOnMerge: value })}
       />
       <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
-      {environmentId === null ? (
-        <SettingsSwitchRow
-          disabled
-          icon="chart.bar"
-          label="Analytics"
-          value
-          onValueChange={() => {}}
-        />
-      ) : (
-        <AnalyticsSettingsSwitch environmentId={environmentId} />
-      )}
     </SettingsSection>
   );
 }

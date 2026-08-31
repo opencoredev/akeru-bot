@@ -108,4 +108,15 @@ describe("searchSettings", () => {
       targetId: "appearance",
     });
   });
+
+  it("routes privacy controls to Privacy settings", () => {
+    expect(searchSettings("anonymous analytics")[0]).toMatchObject({
+      id: "anonymous-analytics",
+      to: "/settings/privacy",
+    });
+    expect(searchSettings("voice calls")[0]).toMatchObject({
+      id: "privacy-voice-calls",
+      to: "/settings/privacy",
+    });
+  });
 });

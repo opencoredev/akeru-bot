@@ -13,8 +13,8 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
-  acceptedPrivacyPolicyVersion: "",
-  acceptedTermsVersion: "",
+  reviewedPrivacyPolicyVersion: "",
+  reviewedTermsVersion: "",
   appearanceContrast: 100,
   browserDefaultViewport: { _tag: "preset", width: 1024, height: 600, presetId: "nest-hub" },
   browserDefaultZoomFactor: 1.25,

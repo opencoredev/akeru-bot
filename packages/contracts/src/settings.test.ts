@@ -83,17 +83,17 @@ describe("ServerSettings analytics", () => {
 describe("policy records", () => {
   it("keeps policy acceptance local", () => {
     expect(decodeClientSettings({})).toMatchObject({
-      acceptedPrivacyPolicyVersion: "",
-      acceptedTermsVersion: "",
+      reviewedPrivacyPolicyVersion: "",
+      reviewedTermsVersion: "",
     });
     expect(
       decodeClientSettingsPatch({
-        acceptedPrivacyPolicyVersion: "2026-08-31",
-        acceptedTermsVersion: "2026-08-31",
+        reviewedPrivacyPolicyVersion: "2026-08-31",
+        reviewedTermsVersion: "2026-08-31",
       }),
     ).toEqual({
-      acceptedPrivacyPolicyVersion: "2026-08-31",
-      acceptedTermsVersion: "2026-08-31",
+      reviewedPrivacyPolicyVersion: "2026-08-31",
+      reviewedTermsVersion: "2026-08-31",
     });
   });
 });

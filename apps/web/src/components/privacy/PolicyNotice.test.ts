@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { needsPolicyAcceptance, shouldShowPolicyNotice } from "./PolicyNotice";
+import { needsPolicyAcknowledgement, shouldShowPolicyNotice } from "./PolicyNotice";
 
-describe("needsPolicyAcceptance", () => {
+describe("needsPolicyAcknowledgement", () => {
   it("requires each current local policy version", () => {
     expect(
-      needsPolicyAcceptance({
-        acceptedPrivacyPolicyVersion: "",
-        acceptedTermsVersion: "",
+      needsPolicyAcknowledgement({
+        reviewedPrivacyPolicyVersion: "",
+        reviewedTermsVersion: "",
       }),
     ).toBe(true);
     expect(
-      needsPolicyAcceptance({
-        acceptedPrivacyPolicyVersion: "2026-08-31",
-        acceptedTermsVersion: "2026-08-31",
+      needsPolicyAcknowledgement({
+        reviewedPrivacyPolicyVersion: "2026-08-31",
+        reviewedTermsVersion: "2026-08-31",
       }),
     ).toBe(false);
   });
@@ -26,17 +26,17 @@ describe("shouldShowPolicyNotice", () => {
         hydrated: true,
         isDesktop: true,
         isPackaged: true,
-        needsAcceptance: true,
+        needsAcknowledgement: true,
       }),
     ).toBe(true);
 
-    for (const key of ["hydrated", "isDesktop", "isPackaged", "needsAcceptance"] as const) {
+    for (const key of ["hydrated", "isDesktop", "isPackaged", "needsAcknowledgement"] as const) {
       expect(
         shouldShowPolicyNotice({
           hydrated: true,
           isDesktop: true,
           isPackaged: true,
-          needsAcceptance: true,
+          needsAcknowledgement: true,
           [key]: false,
         }),
       ).toBe(false);

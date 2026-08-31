@@ -23,12 +23,12 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 
-export function needsPolicyAcceptance(
-  settings: Pick<ClientSettings, "acceptedPrivacyPolicyVersion" | "acceptedTermsVersion">,
+export function needsPolicyAcknowledgement(
+  settings: Pick<ClientSettings, "reviewedPrivacyPolicyVersion" | "reviewedTermsVersion">,
 ): boolean {
   return (
-    settings.acceptedPrivacyPolicyVersion !== AKERU_PRIVACY_POLICY_VERSION ||
-    settings.acceptedTermsVersion !== AKERU_TERMS_VERSION
+    settings.reviewedPrivacyPolicyVersion !== AKERU_PRIVACY_POLICY_VERSION ||
+    settings.reviewedTermsVersion !== AKERU_TERMS_VERSION
   );
 }
 
@@ -36,9 +36,9 @@ export function shouldShowPolicyNotice(input: {
   readonly hydrated: boolean;
   readonly isDesktop: boolean;
   readonly isPackaged: boolean;
-  readonly needsAcceptance: boolean;
+  readonly needsAcknowledgement: boolean;
 }): boolean {
-  return input.hydrated && input.isDesktop && input.isPackaged && input.needsAcceptance;
+  return input.hydrated && input.isDesktop && input.isPackaged && input.needsAcknowledgement;
 }
 
 export function PolicyNotice() {
@@ -49,7 +49,7 @@ export function PolicyNotice() {
     hydrated,
     isDesktop: isElectron,
     isPackaged: IS_PACKAGED_DESKTOP,
-    needsAcceptance: needsPolicyAcceptance(settings),
+    needsAcknowledgement: needsPolicyAcknowledgement(settings),
   });
 
   return (
@@ -89,12 +89,12 @@ export function PolicyNotice() {
           <Button
             onClick={() =>
               updateSettings({
-                acceptedPrivacyPolicyVersion: AKERU_PRIVACY_POLICY_VERSION,
-                acceptedTermsVersion: AKERU_TERMS_VERSION,
+                reviewedPrivacyPolicyVersion: AKERU_PRIVACY_POLICY_VERSION,
+                reviewedTermsVersion: AKERU_TERMS_VERSION,
               })
             }
           >
-            Accept and continue
+            I reviewed these drafts
           </Button>
         </DialogFooter>
       </DialogPopup>

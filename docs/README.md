@@ -8,6 +8,7 @@
 - [Organizing threads](./user/thread-sidebar.md)
 - [Sending product feedback](./user/product-feedback.md)
 - [Plugins](./user/plugins.md)
+- [Privacy and outbound data](./user/privacy.md)
 - [Review usage](./user/usage.md)
 - [Anonymous usage analytics](./user/analytics.md)
 - [Customize a project icon](./user/project-settings.md)
