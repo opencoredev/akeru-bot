@@ -40,6 +40,11 @@ describe("Akeru tool contracts", () => {
   it("never lets full access bypass protected commands or paths", () => {
     const shell = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalShell")!;
     const read = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalRead")!;
+    const copyFromBox = AKERU_TOOL_CATALOG.find((tool) => tool.id === "CopyFromBox")!;
+    const copyInput = {
+      sourcePath: "/project/.env",
+      destinationPath: "/tmp/exported-env",
+    };
     expect(akeruToolApprovalForInput(shell, { command: "git push origin main" })).toBe(
       "production",
     );
@@ -53,6 +58,8 @@ describe("Akeru tool contracts", () => {
     expect(
       akeruToolRequiresApproval(read, { localFullAccess: true }, { path: "/project/.env" }),
     ).toBe(true);
+    expect(akeruToolApprovalForInput(copyFromBox, copyInput)).toBe("secrets");
+    expect(akeruToolRequiresApproval(copyFromBox, { localFullAccess: true }, copyInput)).toBe(true);
   });
 
   it("decodes non-fatal typed receipts", () => {

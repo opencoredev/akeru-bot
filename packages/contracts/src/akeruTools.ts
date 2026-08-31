@@ -231,12 +231,8 @@ export function akeruToolApprovalForInput(
   if (tool.id === "CopyToBox" && "sourcePath" in input && typeof input.sourcePath === "string") {
     return classifyAkeruSensitivePath(input.sourcePath) ?? tool.approval;
   }
-  if (
-    tool.id === "CopyFromBox" &&
-    "destinationPath" in input &&
-    typeof input.destinationPath === "string"
-  ) {
-    return classifyAkeruSensitivePath(input.destinationPath) ?? tool.approval;
+  if (tool.id === "CopyFromBox" && "sourcePath" in input && typeof input.sourcePath === "string") {
+    return classifyAkeruSensitivePath(input.sourcePath) ?? tool.approval;
   }
   if (tool.id === "Shell" && context?.workspaceType === "local") return "user-computer";
   return tool.approval;
