@@ -152,6 +152,7 @@ function makeMastraHarness() {
       setForCategory: vi.fn(async () => undefined),
       setForTool: vi.fn(async () => undefined),
     },
+    grantTool: vi.fn(),
     subscribe: vi.fn((listener: (event: AgentControllerEvent) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -590,6 +591,10 @@ describe("AgentControllerLive", () => {
           toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
           policy: "ask",
         });
+        expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
+          toolName: "RestartMcpServers",
+          policy: "ask",
+        });
 
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Prepare feedback." });
         mastra.emit({
@@ -609,6 +614,79 @@ describe("AgentControllerLive", () => {
           toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
           policy: "allow",
         });
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("grants one exact Akeru tool call without persisting acceptAlways", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Run pwd." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "shell-tool-1",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("shell-tool-1"),
+          decision: "acceptAlways",
+        });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        const execution = {
+          threadId: String(codexThreadId),
+          toolId: "Shell" as const,
+          toolCallId: "shell-tool-1",
+          input: { command: "pwd" },
+          approvalMode: "require-grant" as const,
+        };
+        yield* Effect.promise(() => runtime.execute(execution));
+        yield* Effect.promise(() =>
+          expect(runtime.execute(execution)).rejects.toThrow("Tool 'Shell' requires approval."),
+        );
+        expect(mastra.session.permissions.setForTool).not.toHaveBeenCalledWith({
+          toolName: "Shell",
+          policy: "allow",
+        });
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "shell-tool-1",
+          decision: "approve",
+        });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "shell-tool-stale",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("shell-tool-stale"),
+          decision: "accept",
+        });
+        yield* Effect.promise(() =>
+          expect(runtime.execute({ ...execution, toolCallId: "shell-tool-stale" })).rejects.toThrow(
+            "Tool 'Shell' requires approval.",
+          ),
+        );
         mastra.finishSend();
       }),
       bridge.service,
@@ -762,6 +840,40 @@ describe("AgentControllerLive", () => {
           "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
         });
         expect(mcpManager.init).toHaveBeenCalledOnce();
+        assert.property(
+          mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
+          "exa_search",
+        );
+        expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
+          toolName: "exa_search",
+          policy: "ask",
+        });
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Search." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "exa-tool-1",
+          toolName: "exa_search",
+          args: { operation: "read" },
+        } as AgentControllerEvent);
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("exa-tool-1"),
+          decision: "acceptForSession",
+        });
+        const syncApproval = mastra.harnessOptions[0]?.syncThreadToolApproval;
+        assert.isDefined(syncApproval);
+        yield* Effect.promise(() => syncApproval(String(codexThreadId), "exa_search", true));
+        expect(mastra.session.permissions.setForTool).toHaveBeenLastCalledWith({
+          toolName: "exa_search",
+          policy: "ask",
+        });
+        yield* Effect.promise(() => syncApproval(String(codexThreadId), "exa_search", false));
+        expect(mastra.session.permissions.setForTool).toHaveBeenLastCalledWith({
+          toolName: "exa_search",
+          policy: "allow",
+        });
+        mastra.finishSend();
 
         yield* controller.stopSession({ threadId: codexThreadId });
         expect(mcpManager.disconnect).toHaveBeenCalledOnce();

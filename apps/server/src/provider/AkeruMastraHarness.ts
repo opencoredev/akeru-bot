@@ -8,11 +8,12 @@ import {
 import { createCodingAgent } from "@mastra/core/coding-agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";
-import { createTool } from "@mastra/core/tools";
-import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
+import { createTool, type NeedsApprovalFn } from "@mastra/core/tools";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ProductFeedbackToolDraft,
+  classifyAkeruExternalCommand,
+  classifyAkeruSensitivePath,
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
 } from "@t3tools/contracts";
@@ -21,6 +22,8 @@ import * as Schema from "effect/Schema";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
+import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
+import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
@@ -73,7 +76,12 @@ export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
   readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
   readonly getThreadTools: (threadId: string) => ToolsInput;
-  readonly getThreadWorkspace: (threadId: string) => Workspace | undefined;
+  readonly syncThreadToolApproval?: (
+    threadId: string,
+    toolName: string,
+    protectedAction: boolean,
+  ) => Promise<void>;
+  readonly toolRuntime: AkeruToolRuntime;
 }
 
 export interface AkeruMastraHarness {
@@ -141,18 +149,36 @@ export async function resolveAkeruTools(
 ): Promise<ToolsInput> {
   const threadId = controllerResourceId(requestContext);
   if (!threadId) return {};
-  const workspace = options.getThreadWorkspace(threadId);
-  const workspaceTools = workspace
-    ? await createWorkspaceTools(workspace, {
-        requestContext: Object.fromEntries(requestContext.entries()),
-        workspace,
-      })
-    : {};
   return {
-    ...workspaceTools,
-    ...options.getThreadTools(threadId),
+    ...approvalAwareTools(threadId, options.getThreadTools(threadId), options),
+    ...createAkeruMastraTools(threadId, options.toolRuntime),
     [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]: productFeedbackTool,
   };
+}
+
+function approvalAwareTools(
+  threadId: string,
+  tools: ToolsInput,
+  options: AkeruMastraHarnessOptions,
+): ToolsInput {
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, tool]) => {
+      const configured = tool as unknown as {
+        readonly requireApproval?: boolean | NeedsApprovalFn;
+        readonly needsApprovalFn?: NeedsApprovalFn;
+      };
+      const existing = configured.needsApprovalFn ?? configured.requireApproval;
+      const needsApproval: NeedsApprovalFn = async (input, context) => {
+        const protectedAction = akeruActionNeedsApproval(name, input);
+        await options.syncThreadToolApproval?.(threadId, name, protectedAction);
+        return (
+          protectedAction ||
+          (typeof existing === "function" ? await existing(input, context) : existing === true)
+        );
+      };
+      return [name, { ...tool, requireApproval: needsApproval, needsApprovalFn: needsApproval }];
+    }),
+  );
 }
 
 export type AkeruToolCategory = "read" | "edit" | "execute" | "mcp" | "other";
@@ -224,6 +250,7 @@ function textTokens(value: string): ReadonlySet<string> {
 
 function criticalActionFromText(value: string): AkeruCriticalAction | null {
   const tokens = textTokens(value);
+  if (tokens.has("restart") && tokens.has("mcp")) return "production";
   for (const [action, actionTokens] of CRITICAL_ACTION_TOKENS) {
     if ([...actionTokens].some((token) => tokens.has(token))) return action;
   }
@@ -261,6 +288,10 @@ function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspec
       const keyedAction = criticalActionFromText(key);
       if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
       if (ACTION_TEXT_KEYS.has(normalizedKey) && typeof entry === "string") {
+        if (normalizedKey === "command") {
+          const action = classifyAkeruExternalCommand(entry);
+          if (action) return { action, hasUnclassifiedIntent: false };
+        }
         const action = criticalActionFromText(entry);
         if (action) return { action, hasUnclassifiedIntent: false };
         if (MUTATING_INTENT_KEYS.has(normalizedKey)) {
@@ -269,6 +300,13 @@ function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspec
             hasUnclassifiedIntent = true;
           }
         }
+      }
+      if (
+        typeof entry === "string" &&
+        (normalizedKey === "path" || normalizedKey.endsWith("path")) &&
+        classifyAkeruSensitivePath(entry)
+      ) {
+        return { action: "secrets", hasUnclassifiedIntent: false };
       }
       if (typeof entry === "object" && entry !== null) pending.push(entry);
     }

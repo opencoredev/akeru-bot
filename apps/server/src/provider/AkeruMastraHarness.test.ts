@@ -1,14 +1,21 @@
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import type { ToolsInput } from "@mastra/core/agent";
-import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import { RequestContext } from "@mastra/core/request-context";
-import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME, ProviderDriverKind } from "@t3tools/contracts";
+import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  AKERU_TOOL_CATALOG,
+  ProviderDriverKind,
+} from "@t3tools/contracts";
 import { assert, describe, it } from "vite-plus/test";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
-import { mastraModelId, resolveAkeruMastraModel, resolveAkeruTools } from "./AkeruMastraHarness.ts";
+import {
+  criticalAkeruAction,
+  mastraModelId,
+  resolveAkeruMastraModel,
+  resolveAkeruTools,
+} from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
+import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
 describe("AkeruMastraHarness", () => {
   it("keeps Kimi model names on the Kimi subscription transport", () => {
@@ -37,28 +44,53 @@ describe("AkeruMastraHarness", () => {
     assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
   });
 
-  it("builds workspace and selected MCP tools from the controller resource", async () => {
-    const workspace = new Workspace({
-      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
-      tools: TOOL_NAME_OVERRIDES,
-    });
+  it("selects implemented runtime tools without dropping approval-aware plugins", async () => {
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", {
       resourceId: "thread-1",
       session: { modelId: "openai/gpt-5.6-sol" },
     });
+    const runtime = {
+      toolsForThread: () => AKERU_TOOL_CATALOG.filter((tool) => tool.id === "Shell"),
+      requiresApproval: async () => true,
+      execute: async () => undefined,
+    } as unknown as AkeruToolRuntime;
+    const pluginTool = { id: "plugin", execute: async () => undefined, requireApproval: false };
+    const approvalPolicies: boolean[] = [];
 
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
-      getThreadWorkspace: (threadId) => (threadId === "thread-1" ? workspace : undefined),
-      getThreadTools: (threadId) =>
-        (threadId === "thread-1" ? { exa_search: {} } : {}) as ToolsInput,
+      getThreadTools: () => ({
+        exa_search: pluginTool,
+        RestartMcpServers: pluginTool,
+      }),
+      syncThreadToolApproval: async (_threadId, _toolName, protectedAction) => {
+        approvalPolicies.push(protectedAction);
+      },
+      toolRuntime: runtime,
     });
 
-    assert.containsAllKeys(tools, ["view", "write_file", "execute_command", "exa_search"]);
-    assert.containsAllKeys(tools, [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]);
-    await workspace.destroy();
+    assert.containsAllKeys(tools, [
+      "Shell",
+      "exa_search",
+      "RestartMcpServers",
+      AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+    ]);
+    assert.notProperty(tools, "Read");
+    assert.notProperty(tools, "execute_command");
+    const restart = tools.RestartMcpServers as unknown as {
+      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
+    };
+    const search = tools.exa_search as unknown as {
+      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
+    };
+    assert.isTrue(await restart.needsApprovalFn({}));
+    assert.isTrue(await search.needsApprovalFn({ operation: "send" }));
+    assert.isTrue(await search.needsApprovalFn({ command: "git push origin main" }));
+    assert.isTrue(await search.needsApprovalFn({ path: ".env" }));
+    assert.isFalse(await search.needsApprovalFn({ operation: "read" }));
+    assert.deepEqual(approvalPolicies, [true, true, true, true, false]);
+    assert.equal(criticalAkeruAction("RestartMcpServers"), "production");
   });
 
   it("keeps product feedback draft-only and approval-gated", async () => {
@@ -76,8 +108,8 @@ describe("AkeruMastraHarness", () => {
     requestContext.setRaw("controller", { resourceId: "thread-1" });
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
-      getThreadWorkspace: () => undefined,
       getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
     });
     const tool = tools[AKERU_PRODUCT_FEEDBACK_TOOL_NAME] as {
       requireApproval?: boolean;

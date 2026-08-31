@@ -18,6 +18,7 @@ import {
   RuntimeItemId,
   RuntimeRequestId,
   TurnId,
+  AKERU_TOOL_CATALOG,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   type McpServer,
   type ModelSelection,
@@ -41,12 +42,14 @@ import {
   type SubscriptionProviderId,
 } from "../../subscription-auth/service.ts";
 import {
+  akeruActionNeedsApproval,
   createAkeruMastraHarness,
   mastraModelId,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
+import { createAkeruToolRuntime, type AkeruToolSession } from "../AkeruToolRuntime.ts";
 import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
 import { AkeruSessionResources } from "../AkeruSessionResources.ts";
 import type { CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
@@ -93,6 +96,9 @@ interface ActiveSession {
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
   readonly toolNames: Map<string, string>;
+  readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
+  readonly connectorSessionApprovals: Set<string>;
+  toolSession: AkeruToolSession;
   readonly workspaceResourceKey: string;
   readonly unsubscribe: () => void;
 }
@@ -289,6 +295,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
     });
+    const toolRuntime = createAkeruToolRuntime();
     const legacyResourceIdentity = new Map<
       string,
       {
@@ -303,8 +310,18 @@ const make = (options?: AgentControllerLiveOptions) =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
+        syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
+          const active = sessions.get(threadId);
+          if (!active || (!protectedAction && !active.connectorSessionApprovals.has(toolName))) {
+            return;
+          }
+          await active.session.permissions.setForTool({
+            toolName,
+            policy: protectedAction ? "ask" : "allow",
+          });
+        },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
-        getThreadWorkspace: (threadId) => sessionResources.getWorkspace(threadId),
+        toolRuntime,
       }),
     );
     yield* runMastra("init", () => bundle.controller.init());
@@ -373,6 +390,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(errorMessage ? { errorMessage } : {}),
         },
       });
+      active.approvalRequests.clear();
       active.activeTurn = null;
       publishSessionState(threadId, active, "ready");
     };
@@ -462,6 +480,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_end": {
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
+          active.approvalRequests.delete(event.toolCallId);
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
@@ -478,6 +497,10 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_approval_required":
           if (!turn) return;
           active.toolNames.set(event.toolCallId, event.toolName);
+          active.approvalRequests.set(event.toolCallId, {
+            name: event.toolName,
+            input: event.args,
+          });
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
           publish({
@@ -498,11 +521,17 @@ const make = (options?: AgentControllerLiveOptions) =>
                       { decision: "accept", label: "Add to feedback draft" },
                       { decision: "decline", label: "Cancel" },
                     ]
-                  : [
-                      { decision: "accept", label: "Allow" },
-                      { decision: "acceptForSession", label: "Allow for session" },
-                      { decision: "decline", label: "Decline" },
-                    ],
+                  : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
+                      akeruActionNeedsApproval(event.toolName, event.args)
+                    ? [
+                        { decision: "accept", label: "Allow" },
+                        { decision: "decline", label: "Decline" },
+                      ]
+                    : [
+                        { decision: "accept", label: "Allow" },
+                        { decision: "acceptForSession", label: "Allow for session" },
+                        { decision: "decline", label: "Decline" },
+                      ],
             },
           });
           return;
@@ -656,6 +685,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.providerInstanceId === resolved.providerInstanceId
       ) {
         existing.runtimeMode = input.runtimeMode;
+        existing.toolSession = { ...existing.toolSession, runtimeMode: input.runtimeMode };
+        toolRuntime.registerSession(key, existing.toolSession);
         return toProviderSession(threadId, existing);
       }
       const existingLegacy = legacyResourceIdentity.get(key);
@@ -722,6 +753,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         );
       }
+      const toolSession: AkeruToolSession = {
+        runtimeMode: input.runtimeMode,
+        workspaceType: resources.workspaceType,
+        workspace: resources.workspace,
+        ...(resources.userComputerWorkspace
+          ? { userComputerWorkspace: resources.userComputerWorkspace }
+          : {}),
+      };
+      toolRuntime.registerSession(key, toolSession);
       const session = yield* runMastra("createSession", () =>
         bundle.controller.createSession({
           id: key,
@@ -733,9 +773,15 @@ const make = (options?: AgentControllerLiveOptions) =>
         }),
       ).pipe(
         Effect.tapError(() =>
-          runMastra("resources.release", () =>
-            sessionResources.release(key, { destroy: true }),
-          ).pipe(Effect.ignoreCause({ log: true })),
+          Effect.all(
+            [
+              runMastra("resources.release", () =>
+                sessionResources.release(key, { destroy: true }),
+              ).pipe(Effect.ignoreCause({ log: true })),
+              Effect.sync(() => toolRuntime.unregisterSession(key)),
+            ],
+            { discard: true },
+          ),
         ),
       );
       yield* runMastra("state.set", () =>
@@ -762,11 +808,18 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         { discard: true },
       );
-      yield* runMastra("permissions.setForTool", () =>
-        session.permissions.setForTool({
-          toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-          policy: "ask",
-        }),
+      yield* Effect.forEach(
+        new Set([
+          ...toolRuntime.toolsForThread(key).map((tool) => tool.id),
+          ...Object.keys(sessionResources.getConnectorTools(key)),
+          AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          "RestartMcpServers",
+        ]),
+        (toolName) =>
+          runMastra("permissions.setForTool", () =>
+            session.permissions.setForTool({ toolName, policy: "ask" }),
+          ),
+        { discard: true },
       );
       const createdAt = nowIso();
       const activeWithoutUnsubscribe = {
@@ -781,6 +834,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         status: "ready" as const,
         activeTurn: null,
         toolNames: new Map<string, string>(),
+        approvalRequests: new Map(),
+        connectorSessionApprovals: new Set<string>(),
+        toolSession,
         workspaceResourceKey,
       };
       const unsubscribe = session.subscribe((event) => {
@@ -918,13 +974,28 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.respondToRequest(input);
       }
+      if (!active.activeTurn) return;
       const toolCallId = String(input.requestId);
-      const toolName = active.toolNames.get(toolCallId);
+      const toolRequest = active.approvalRequests.get(toolCallId);
+      if (!toolRequest) return;
+      active.approvalRequests.delete(toolCallId);
+      const { name: toolName, input: toolInput } = toolRequest;
+      const akeruTool = AKERU_TOOL_CATALOG.find((tool) => tool.id === toolName);
+      if (akeruTool && input.decision !== "decline" && input.decision !== "cancel") {
+        toolRuntime.grantApproval({
+          threadId: key,
+          toolCallId,
+          toolId: akeruTool.id,
+          input: toolInput,
+        });
+      }
       if (
         input.decision === "acceptForSession" &&
-        toolName &&
+        !akeruTool &&
+        !akeruActionNeedsApproval(toolName, toolInput) &&
         toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
       ) {
+        active.connectorSessionApprovals.add(toolName);
         yield* runMastra("permissions.setForTool", () =>
           active.session.permissions.setForTool({ toolName, policy: "allow" }),
         );
@@ -932,7 +1003,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (active.activeTurn) active.activeTurn.waiting = false;
       active.session.respondToToolApproval({
         toolCallId,
-        decision: approvalDecision(input.decision),
+        decision:
+          akeruTool && input.decision !== "decline" && input.decision !== "cancel"
+            ? "approve"
+            : approvalDecision(input.decision),
       });
       publish({
         ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
@@ -1000,6 +1074,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       yield* runMastra("resources.release", () =>
         sessionResources.release(key, { destroy: destroyResources }),
       ).pipe(Effect.ignoreCause({ log: true }));
+      toolRuntime.unregisterSession(key);
       sessions.delete(key);
     });
 
@@ -1030,6 +1105,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("deleteSession", () =>
             bundle.controller.deleteSession({ resourceId: threadId }),
           ).pipe(Effect.ignoreCause({ log: true }));
+          toolRuntime.unregisterSession(threadId);
         }
         legacyResourceIdentity.clear();
         sessions.clear();
@@ -1080,11 +1156,8 @@ function ThreadIdBrand(value: string): ThreadId {
   return value as ThreadId;
 }
 
-function approvalDecision(
-  decision: ProviderApprovalDecision,
-): "approve" | "decline" | "always_allow_category" {
+function approvalDecision(decision: ProviderApprovalDecision): "approve" | "decline" {
   if (decision === "decline" || decision === "cancel") return "decline";
-  if (decision === "acceptAlways") return "always_allow_category";
   return "approve";
 }
 
