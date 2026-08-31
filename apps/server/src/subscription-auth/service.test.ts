@@ -67,6 +67,40 @@ describe("subscription auth storage", () => {
     expect(NodeFS.readFileSync(authPath, "utf-8")).toBe(before);
   });
 
+  it("returns Kimi access only with its persisted device identity", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "kimi-for-coding": {
+          type: "oauth",
+          access: "kimi-access",
+          refresh: "kimi-refresh",
+          expires: Date.now() + 60_000,
+          deviceId: "0123456789abcdef0123456789abcdef",
+        },
+      }),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    await expect(service.getKimiForCodingAccess()).resolves.toEqual({
+      accessToken: "kimi-access",
+      deviceId: "0123456789abcdef0123456789abcdef",
+    });
+
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "kimi-for-coding": {
+          type: "oauth",
+          access: "old-access",
+          refresh: "old-refresh",
+          expires: Date.now() + 60_000,
+        },
+      }),
+    );
+    await expect(service.getKimiForCodingAccess()).resolves.toBeUndefined();
+  });
+
   it("persists pending logins across a server restart", async () => {
     const { authPath } = fixture();
     const first = new SubscriptionAuthService(authPath);

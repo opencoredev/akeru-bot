@@ -6,7 +6,7 @@
  * (`mastracode/sdk/src/auth/providers/kimi-coding.ts`), Apache-2.0.
  *
  * RFC 8628-style device flow against auth.kimi.com. Device metadata headers
- * identify the client; the device id is random per process.
+ * identify the client; one device id follows the account through login and refresh.
  */
 
 import * as NodeCrypto from "node:crypto";
@@ -28,13 +28,21 @@ function asciiHeaderValue(value: string): string {
   return sanitized || "unknown";
 }
 
-const KIMI_DEVICE_HEADERS = {
-  "X-Msh-Platform": "akeru",
-  "X-Msh-Device-Name": asciiHeaderValue(NodeOS.hostname()),
-  "X-Msh-Device-Model": "Akeru server",
-  "X-Msh-Os-Version": asciiHeaderValue(NodeOS.release()),
-  "X-Msh-Device-Id": NodeCrypto.randomUUID().replaceAll("-", ""),
-};
+export function isKimiCodingDeviceId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
+}
+
+export function getKimiCodingDeviceHeaders(deviceId: string): Record<string, string> {
+  if (!isKimiCodingDeviceId(deviceId)) throw new Error("Invalid Kimi For Coding device id");
+  return {
+    "X-Msh-Platform": "akeru",
+    "X-Msh-Version": "0.0.34",
+    "X-Msh-Device-Name": asciiHeaderValue(NodeOS.hostname()),
+    "X-Msh-Device-Model": "Akeru server",
+    "X-Msh-Os-Version": asciiHeaderValue(NodeOS.release()),
+    "X-Msh-Device-Id": deviceId,
+  };
+}
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
@@ -60,7 +68,11 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
   }
 }
 
-function credentialsFromTokenResponse(value: unknown, operation: string): OAuthCredentials {
+function credentialsFromTokenResponse(
+  value: unknown,
+  operation: string,
+  deviceId: string,
+): OAuthCredentials {
   const data = (value ?? {}) as Record<string, unknown>;
   const access = data.access_token;
   const refresh = data.refresh_token;
@@ -76,10 +88,11 @@ function credentialsFromTokenResponse(value: unknown, operation: string): OAuthC
   ) {
     throw new Error(`Kimi For Coding token ${operation} response missing fields`);
   }
-  return { access, refresh, expires: Date.now() + expiresIn * 1000 };
+  return { access, refresh, expires: Date.now() + expiresIn * 1000, deviceId };
 }
 
 export interface KimiDeviceLoginPending {
+  deviceId: string;
   deviceCode: string;
   userCode: string;
   url: string;
@@ -95,10 +108,11 @@ export type KimiDevicePollResult =
 export async function startKimiDeviceLogin(options?: {
   signal?: AbortSignal;
 }): Promise<KimiDeviceLoginPending> {
+  const deviceId = NodeCrypto.randomUUID().replaceAll("-", "");
   const response = await fetch(`${OAUTH_HOST}/api/oauth/device_authorization`, {
     method: "POST",
     headers: {
-      ...KIMI_DEVICE_HEADERS,
+      ...getKimiCodingDeviceHeaders(deviceId),
       "Content-Type": "application/x-www-form-urlencoded",
       Accept: "application/json",
     },
@@ -131,6 +145,7 @@ export async function startKimiDeviceLogin(options?: {
   const interval = data?.interval;
   const expiresIn = data?.expires_in;
   return {
+    deviceId,
     deviceCode,
     userCode,
     url: verificationUriComplete,
@@ -155,7 +170,7 @@ async function pollKimiTokenOnce(
   const response = await fetch(`${OAUTH_HOST}/api/oauth/token`, {
     method: "POST",
     headers: {
-      ...KIMI_DEVICE_HEADERS,
+      ...getKimiCodingDeviceHeaders(pending.deviceId),
       "Content-Type": "application/x-www-form-urlencoded",
       Accept: "application/json",
     },
@@ -169,7 +184,10 @@ async function pollKimiTokenOnce(
   const data = await readJson(response);
   if (response.ok && typeof data?.access_token === "string") {
     try {
-      return { status: "complete", result: credentialsFromTokenResponse(data, "poll") };
+      return {
+        status: "complete",
+        result: credentialsFromTokenResponse(data, "poll", pending.deviceId),
+      };
     } catch (error) {
       return { status: "failed", error: error instanceof Error ? error.message : String(error) };
     }
@@ -241,7 +259,11 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export async function refreshKimiToken(
   refreshToken: string,
   signal?: AbortSignal,
+  deviceId?: string,
 ): Promise<OAuthCredentials> {
+  if (!isKimiCodingDeviceId(deviceId)) {
+    throw new Error("Kimi For Coding credentials have no valid device id. Reconnect the account.");
+  }
   let lastError: Error | undefined;
   for (let attempt = 0; attempt <= REFRESH_MAX_RETRIES; attempt++) {
     if (attempt > 0) await sleep(1000 * 2 ** (attempt - 1), signal);
@@ -250,7 +272,7 @@ export async function refreshKimiToken(
       response = await fetch(`${OAUTH_HOST}/api/oauth/token`, {
         method: "POST",
         headers: {
-          ...KIMI_DEVICE_HEADERS,
+          ...getKimiCodingDeviceHeaders(deviceId),
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
         },
@@ -267,7 +289,7 @@ export async function refreshKimiToken(
       continue;
     }
     const data = await readJson(response);
-    if (response.ok) return credentialsFromTokenResponse(data, "refresh");
+    if (response.ok) return credentialsFromTokenResponse(data, "refresh", deviceId);
 
     const errorSuffix = typeof data?.error === "string" ? ` ${data.error}` : "";
     lastError = new Error(`Kimi For Coding token refresh failed: ${response.status}${errorSuffix}`);

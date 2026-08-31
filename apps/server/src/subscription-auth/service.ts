@@ -37,6 +37,7 @@ import {
   type CursorLoginPending,
 } from "./providers/cursor.ts";
 import {
+  isKimiCodingDeviceId,
   pollKimiDeviceLogin,
   refreshKimiToken,
   startKimiDeviceLogin,
@@ -618,6 +619,15 @@ export class SubscriptionAuthService {
       : undefined;
   }
 
+  async getKimiForCodingAccess(): Promise<
+    { readonly accessToken: string; readonly deviceId: string } | undefined
+  > {
+    this.reload();
+    const accessToken = await this.getAccessToken("kimi-for-coding");
+    const deviceId = this.data["kimi-for-coding"]?.deviceId;
+    return accessToken && isKimiCodingDeviceId(deviceId) ? { accessToken, deviceId } : undefined;
+  }
+
   private async refreshCredential(
     provider: SubscriptionProviderId,
     credential: OAuthCredential,
@@ -652,7 +662,11 @@ export class SubscriptionAuthService {
       case "xai":
         return refreshXAIToken(credential.refresh);
       case "kimi-for-coding":
-        return refreshKimiToken(credential.refresh);
+        return refreshKimiToken(
+          credential.refresh,
+          undefined,
+          typeof credential.deviceId === "string" ? credential.deviceId : undefined,
+        );
     }
   }
 }
