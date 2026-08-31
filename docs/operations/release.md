@@ -1,5 +1,8 @@
 # Release smoke runbook
 
+> Do not publish a signed Akeru Bot build until qualified legal counsel approves the current Terms
+> of Use and Privacy Policy versions in `packages/contracts/src/settings.ts`.
+
 > For Akeru Bot maintainers.
 
 `.depot/workflows/release.yml` validates release inputs without publishing or releasing anything.

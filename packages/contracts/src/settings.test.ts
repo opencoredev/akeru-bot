@@ -80,6 +80,24 @@ describe("ServerSettings analytics", () => {
   });
 });
 
+describe("policy records", () => {
+  it("keeps policy acceptance local", () => {
+    expect(decodeClientSettings({})).toMatchObject({
+      acceptedPrivacyPolicyVersion: "",
+      acceptedTermsVersion: "",
+    });
+    expect(
+      decodeClientSettingsPatch({
+        acceptedPrivacyPolicyVersion: "2026-08-31",
+        acceptedTermsVersion: "2026-08-31",
+      }),
+    ).toEqual({
+      acceptedPrivacyPolicyVersion: "2026-08-31",
+      acceptedTermsVersion: "2026-08-31",
+    });
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");

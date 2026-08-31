@@ -176,12 +176,14 @@ export interface DesktopAppBranding {
   baseName: string;
   stageLabel: DesktopAppStageLabel;
   displayName: string;
+  isPackaged: boolean;
 }
 
 export const DesktopAppBrandingSchema = Schema.Struct({
   baseName: Schema.String,
   stageLabel: DesktopAppStageLabelSchema,
   displayName: Schema.String,
+  isPackaged: Schema.Boolean,
 });
 
 export interface DesktopRuntimeInfo {

@@ -150,6 +150,9 @@ export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200))
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
 
 export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru.bot/v1/feedback";
+export const AKERU_MARKETING_SITE_URL = "https://akeru.bot";
+export const AKERU_PRIVACY_POLICY_VERSION = "2026-08-31";
+export const AKERU_TERMS_VERSION = "2026-08-31";
 export const ProductFeedbackEndpoint = TrimmedNonEmptyString.check(
   Schema.isMaxLength(2_048),
   Schema.isPattern(
@@ -168,6 +171,8 @@ export const DEFAULT_BROWSER_VIEWPORT: PreviewViewportSetting = FILL_PREVIEW_VIE
 export const DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW = true;
 
 export const ClientSettingsSchema = Schema.Struct({
+  acceptedPrivacyPolicyVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  acceptedTermsVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   appearanceContrast: AppearanceContrast.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_APPEARANCE_CONTRAST)),
   ),
@@ -915,6 +920,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   analyticsEnabled: Schema.optionalKey(Schema.Boolean),
   localExecutionMode: Schema.optionalKey(LocalExecutionMode),
+  analyticsEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
@@ -975,6 +981,8 @@ export const ServerSettingsPatch = Schema.Struct({
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
+  acceptedPrivacyPolicyVersion: Schema.optionalKey(TrimmedString),
+  acceptedTermsVersion: Schema.optionalKey(TrimmedString),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
