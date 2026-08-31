@@ -19,9 +19,6 @@ import {
   type AuthEnvironmentScope,
   AuthSessionId,
   AkeruBotUsageReadError,
-  AkeruMemoryOperationError,
-  AkeruMemoryTenantId,
-  AkeruMemoryUserId,
   BotId,
   ClientSurface,
   CommandId,
@@ -74,7 +71,6 @@ import {
   type TerminalMetadataStreamEvent,
   WS_METHODS,
   WsRpcGroup,
-  type AkeruMemoryThreadAccess,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
@@ -750,66 +746,6 @@ const makeWsRpcLayer = (
               message: cause instanceof Error ? cause.message : fallbackMessage,
               cause,
             });
-      const memoryOperationError = (operation: "inspect" | "mutate", cause: unknown) =>
-        new AkeruMemoryOperationError({
-          operation,
-          detail: cause instanceof Error ? cause.message : "The memory operation failed.",
-        });
-      const resolveMemoryAccess = (operation: "inspect" | "mutate", threadId: ThreadId) =>
-        Effect.gen(function* () {
-          const thread = yield* projectionSnapshotQuery
-            .getThreadShellById(threadId)
-            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
-          if (Option.isNone(thread)) {
-            return yield* new AkeruMemoryOperationError({
-              operation,
-              detail: "The thread does not exist.",
-            });
-          }
-          const project = yield* projectionSnapshotQuery
-            .getProjectShellById(thread.value.projectId)
-            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
-          if (Option.isNone(project)) {
-            return yield* new AkeruMemoryOperationError({
-              operation,
-              detail: "The thread project does not exist.",
-            });
-          }
-          const groupId = thread.value.groupId ?? null;
-          const groupMemberBotIds =
-            groupId === null
-              ? []
-              : yield* projectionGroups.getById({ groupId }).pipe(
-                  Effect.mapError((cause) => memoryOperationError(operation, cause)),
-                  Effect.flatMap(
-                    Option.match({
-                      onNone: () =>
-                        Effect.fail(
-                          new AkeruMemoryOperationError({
-                            operation,
-                            detail: "The thread group does not exist.",
-                          }),
-                        ),
-                      onSome: (group) =>
-                        Effect.succeed(group.members.map((member) => member.botId)),
-                    }),
-                  ),
-                );
-          return {
-            tenantId: AkeruMemoryTenantId.make("local"),
-            userId: AkeruMemoryUserId.make("owner"),
-            threadId,
-            projectId: thread.value.projectId,
-            workspaceRoot: project.value.workspaceRoot,
-            botId:
-              groupId === null
-                ? (thread.value.respondingBotId ?? thread.value.botId ?? null)
-                : null,
-            groupId,
-            respondingBotId: thread.value.respondingBotId ?? thread.value.botId ?? null,
-            groupMemberBotIds,
-          } satisfies AkeruMemoryThreadAccess;
-        });
       const randomUUID = crypto.randomUUIDv4.pipe(
         Effect.mapError((cause) =>
           toDispatchCommandError(cause, "Failed to generate orchestration command identifier."),

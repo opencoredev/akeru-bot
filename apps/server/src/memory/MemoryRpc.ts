@@ -55,7 +55,7 @@ const entityFor = (
     case "workspace":
       return {
         entityKind: "workspace" as const,
-        entityId: AkeruMemoryEntityId.make(deriveAkeruWorkspaceId(access.workspaceRoot)),
+        entityId: AkeruMemoryEntityId.make(deriveAkeruWorkspaceId(access.projectId)),
       };
     case "thread":
       return { entityKind: "other" as const, entityId: AkeruMemoryEntityId.make(access.threadId) };
