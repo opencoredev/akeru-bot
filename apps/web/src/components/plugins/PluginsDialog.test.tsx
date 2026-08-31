@@ -8,6 +8,7 @@ import {
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
   PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
+  PLUGIN_DIRECTORY_SCROLL_CLASS_NAME,
   validateMcpServerDraft,
 } from "./PluginsDialog";
 import { CustomMcpServers, PluginsCatalog } from "./PluginsCatalog";
@@ -38,6 +39,13 @@ describe("Plugins dialog content", () => {
   it("keeps section labels clear of the directory header", () => {
     expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("border-b");
     expect(PLUGIN_DIRECTORY_PANEL_CLASS_NAME).toContain("pt-5!");
+  });
+
+  it("keeps the complete filter row visible above the scrolling catalog", () => {
+    expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).toContain("shrink-0");
+    expect(PLUGIN_DIRECTORY_SCROLL_CLASS_NAME).toContain("min-h-0");
+    expect(PLUGIN_DIRECTORY_SCROLL_CLASS_NAME).toContain("flex-1");
+    expect(PLUGIN_DIRECTORY_SCROLL_CLASS_NAME).toContain("overflow-hidden");
   });
 
   it("renders a categorized directory with compact add and configure controls", () => {

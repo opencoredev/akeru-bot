@@ -39,6 +39,10 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import {
+  SubscriptionAuthService,
+  type SubscriptionProviderId,
+} from "../../subscription-auth/service.ts";
+import {
   createAkeruMastraHarness,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
@@ -160,6 +164,63 @@ function usesMastraCode(provider: ProviderDriverKind): boolean {
   return String(provider) === "codex";
 }
 
+function subscriptionProviderForDriver(
+  provider: ProviderDriverKind,
+): SubscriptionProviderId | undefined {
+  switch (String(provider)) {
+    case "codex":
+      return "openai-codex";
+    case "claudeAgent":
+      return "anthropic";
+    case "cursor":
+      return "cursor";
+    case "grok":
+      return "xai";
+    case "opencode":
+      return "kimi-for-coding";
+    default:
+      return undefined;
+  }
+}
+
+export function recordProviderAccessHealth(
+  subscriptionAuth: SubscriptionAuthService,
+  event: ProviderRuntimeEvent,
+): void {
+  const provider = subscriptionProviderForDriver(event.provider);
+  const providerInstanceId = event.providerInstanceId;
+  if (event.type === "turn.completed") {
+    if (event.payload.state === "failed") {
+      const message = event.payload.errorMessage ?? "The provider request failed.";
+      if (provider) subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      if (providerInstanceId) {
+        subscriptionAuth.recordProviderInstanceFailure(
+          providerInstanceId,
+          message,
+          event.createdAt,
+        );
+      }
+    } else if (event.payload.state === "completed") {
+      if (provider) subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      if (providerInstanceId) {
+        subscriptionAuth.recordProviderInstanceSuccess(providerInstanceId, event.createdAt);
+      }
+    }
+    return;
+  }
+  if (event.type !== "runtime.error" || event.payload.class !== "provider_error") return;
+  if (provider) {
+    subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
+  }
+  if (providerInstanceId) {
+    subscriptionAuth.recordProviderInstanceFailure(
+      providerInstanceId,
+      event.payload.message,
+      event.createdAt,
+    );
+  }
+}
+
 function itemType(
   toolName: string,
 ): "command_execution" | "file_change" | "mcp_tool_call" | "dynamic_tool_call" {
@@ -194,6 +255,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
+    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const mcpManagers = new Map<string, McpManager>();
     const workspaces = new Map<string, Workspace>();
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
@@ -889,7 +951,16 @@ const make = (options?: AgentControllerLiveOptions) =>
       rollbackConversation,
       uploadFeedback: legacyProviderBridge.uploadFeedback,
       get streamEvents() {
-        return Stream.merge(legacyProviderBridge.streamEvents, Stream.fromPubSub(runtimeEvents));
+        return Stream.merge(
+          legacyProviderBridge.streamEvents,
+          Stream.fromPubSub(runtimeEvents),
+        ).pipe(
+          Stream.tap((event) =>
+            Effect.sync(() => {
+              recordProviderAccessHealth(subscriptionAuth, event);
+            }),
+          ),
+        );
       },
     });
   });

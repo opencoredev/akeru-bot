@@ -12,6 +12,13 @@ describe("sidebar footer", () => {
     expect(formatEnabledPluginStatus(3)).toBe("3 plugins enabled");
   });
 
+  it("keeps the error inbox in Settings instead of the sidebar", () => {
+    const source = NodeFS.readFileSync(new URL("./SidebarChrome.tsx", import.meta.url), "utf8");
+
+    expect(source).not.toContain("SidebarInboxSummary");
+    expect(source).not.toContain('openSettings("inbox")');
+  });
+
   it("shows the verified remote-access account identity when Clerk is configured", () => {
     const source = NodeFS.readFileSync(
       new URL("../clerk/T3ConnectSidebarSignIn.tsx", import.meta.url),

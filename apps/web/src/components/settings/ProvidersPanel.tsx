@@ -1,4 +1,11 @@
-import { CheckIcon, CopyIcon, ExternalLinkIcon, LoaderIcon, LogOutIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  LoaderIcon,
+  LogOutIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   SubscriptionAuthLoginProgress,
@@ -74,6 +81,38 @@ interface ActiveLogin {
   readonly error: string | null;
 }
 
+const healthLabels: Readonly<Record<NonNullable<SubscriptionProviderStatus["health"]>, string>> = {
+  missing: "Missing",
+  detected: "Detected",
+  healthy: "Healthy",
+  expired: "Expired",
+  revoked: "Revoked",
+  failed: "Failed",
+  unsupported: "Unsupported",
+  "failed-first-request": "First request failed",
+  recovered: "Recovered",
+};
+
+function healthBadgeVariant(health: SubscriptionProviderStatus["health"] | undefined) {
+  if (health === "healthy" || health === "recovered") return "success" as const;
+  if (
+    health === "expired" ||
+    health === "revoked" ||
+    health === "failed" ||
+    health === "failed-first-request"
+  ) {
+    return "error" as const;
+  }
+  if (health === "detected") return "warning" as const;
+  return "secondary" as const;
+}
+
+function formatTimestamp(value: string | number | undefined): string {
+  if (value === undefined) return "Never";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Never" : date.toLocaleString();
+}
+
 function commandError(result: AtomCommandResult<unknown, unknown>): string {
   if (result._tag !== "Failure") return "The request failed.";
   const error = squashAtomCommandFailure(result);
@@ -86,12 +125,14 @@ function ProviderLoginCard({
   busy,
   onConnect,
   onDisconnect,
+  onTest,
 }: {
   readonly definition: SubscriptionProviderDefinition;
   readonly status: SubscriptionProviderStatus | undefined;
   readonly busy: boolean;
   readonly onConnect: () => void;
   readonly onDisconnect: () => void;
+  readonly onTest: () => void;
 }) {
   const connected = status?.connected === true;
   const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
@@ -110,25 +151,37 @@ function ProviderLoginCard({
             />
           )}
           {definition.label}
-          {connected ? (
-            <Badge variant="success" className="h-4 px-1.5 text-[10px]">
-              Connected
-            </Badge>
-          ) : null}
+          <Badge variant={healthBadgeVariant(status?.health)} className="h-4 px-1.5 text-[10px]">
+            {status?.health ? healthLabels[status.health] : connected ? "Detected" : "Missing"}
+          </Badge>
         </span>
       }
       description={definition.description}
       status={definition.subscription}
       control={
         connected ? (
-          <Button size="xs" variant="ghost-muted" disabled={busy} onClick={onDisconnect}>
-            {busy ? (
-              <LoaderIcon className="size-3.5 animate-spin" />
-            ) : (
+          <div className="flex items-center gap-1.5">
+            <Button size="xs" variant="outline" disabled={busy} onClick={onTest}>
+              {busy ? (
+                <LoaderIcon className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCwIcon className="size-3.5" />
+              )}
+              Check OAuth
+            </Button>
+            <Button size="xs" variant="ghost-muted" disabled={busy} onClick={onConnect}>
+              Reconnect
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost-muted"
+              aria-label={`Disconnect ${definition.label}`}
+              disabled={busy}
+              onClick={onDisconnect}
+            >
               <LogOutIcon className="size-3.5" />
-            )}
-            Disconnect
-          </Button>
+            </Button>
+          </div>
         ) : (
           <Button size="xs" variant="outline" disabled={busy} onClick={onConnect}>
             {busy ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
@@ -136,7 +189,50 @@ function ProviderLoginCard({
           </Button>
         )
       }
-    />
+    >
+      {connected ? (
+        <dl className="grid gap-x-6 gap-y-2 border-t border-border/50 py-3 text-xs sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">Last successful request</dt>
+            <dd>{formatTimestamp(status?.lastSuccessfulRequestAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Last failed request</dt>
+            <dd>
+              {status?.lastFailedRequest
+                ? `${formatTimestamp(status.lastFailedRequest.at)} · ${status.lastFailedRequest.message}`
+                : "Never"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">OAuth expiry</dt>
+            <dd>{formatTimestamp(status?.expiresAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Next retry</dt>
+            <dd>
+              {status?.nextRetryAt ? formatTimestamp(status.nextRetryAt) : "No automatic retry"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">OAuth check</dt>
+            <dd>
+              {!status?.oauthCheck
+                ? "Not run"
+                : `${status.oauthCheck.status === "passed" ? "Passed" : "Failed"} · ${formatTimestamp(status.oauthCheck.checkedAt)}`}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Dependent bots</dt>
+            <dd>{status?.dependentBots.map((bot) => bot.name).join(", ") || "None"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Dependent routines</dt>
+            <dd>{status?.dependentRoutines.join(", ") || "Unavailable until routines ship"}</dd>
+          </div>
+        </dl>
+      ) : null}
+    </SettingsRow>
   );
 }
 
@@ -240,6 +336,9 @@ export function ProvidersPanel() {
     reportFailure: false,
   });
   const logoutAuth = useAtomCommand(serverEnvironment.logoutSubscriptionAuth, {
+    reportFailure: false,
+  });
+  const testAuth = useAtomCommand(serverEnvironment.testSubscriptionAuth, {
     reportFailure: false,
   });
 
@@ -353,9 +452,17 @@ export function ProvidersPanel() {
     if (result._tag === "Success") statusQuery.refresh();
   };
 
-  if (activeLogin) {
-    return (
-      <SettingsPageContainer>
+  const testHealth = async (provider: SubscriptionProviderId) => {
+    if (environmentId === null) return;
+    setBusyProvider(provider);
+    const result = await testAuth({ environmentId, input: { provider } });
+    setBusyProvider(null);
+    if (result._tag === "Success") statusQuery.refresh();
+  };
+
+  return (
+    <SettingsPageContainer>
+      {activeLogin ? (
         <SettingsSection title={`Connect ${activeLogin.providerLabel}`}>
           <ActiveLoginPanel
             login={activeLogin}
@@ -366,12 +473,7 @@ export function ProvidersPanel() {
             completing={completing}
           />
         </SettingsSection>
-      </SettingsPageContainer>
-    );
-  }
-
-  return (
-    <SettingsPageContainer>
+      ) : null}
       <SettingsSection title="Subscriptions">
         <div className="px-3 pb-2 text-[13px] leading-[1.45] text-muted-foreground sm:px-4">
           Connect accounts you already pay for. Akeru uses the coding access included with each
@@ -392,6 +494,7 @@ export function ProvidersPanel() {
             busy={busyProvider === definition.id || statusQuery.isPending}
             onConnect={() => void connect(definition)}
             onDisconnect={() => void disconnect(definition.id)}
+            onTest={() => void testHealth(definition.id)}
           />
         ))}
       </SettingsSection>

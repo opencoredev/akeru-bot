@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { selectOpenBotInboxItems } from "../../botInbox";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -15,19 +16,23 @@ import {
 } from "../../providerInstances";
 import { botEnvironment } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { primaryServerProvidersAtom } from "../../state/server";
+import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { openSettings } from "../../settingsDialogStore";
 import { SidebarInset } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { BotActivityStatus } from "./BotActivityStatus";
+import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { BotVoiceCallButton } from "../voice/VoiceCall";
+import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
@@ -76,6 +81,11 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const effectiveModelSelection = stickyEngine;
   const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
   const presence = useBotPresence(botId);
+  const inboxQuery = useEnvironmentQuery(
+    environmentId === null
+      ? null
+      : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
+  );
 
   useEffect(() => {
     if (
@@ -98,6 +108,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   if (!bot || bot.archivedAt !== null) return null;
   const working = runtime.sending || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages, working);
+  const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
 
   return (
     <SidebarInset
@@ -167,16 +178,13 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               )
             )}
             {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
-            {runtime.error ? (
-              <div
-                role="alert"
-                data-testid="bot-chat-error"
-                className="rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-sm text-destructive"
-              >
-                {runtime.error}
-              </div>
-            ) : null}
           </BotConversationScrollArea>
+          <BotInboxAlertStack items={inboxItems} onOpenDetails={() => openSettings("inbox")} />
+          <ThreadErrorBanner
+            error={
+              inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
+            }
+          />
           <BotPromptComposer
             botName={bot.name}
             draftKey={bot.id}

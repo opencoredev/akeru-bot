@@ -1,0 +1,14 @@
+# Connector gap matrix
+
+Akeru Bot prefers a supported connector over a browser login. A browser session is temporary when no connector exists. Settings must show the repair action for each temporary session.
+
+| Launch example              | Preferred access                            | Current support                                                                                             | Browser fallback                                                          | Repair action                                                                                      |
+| --------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Inbox triage                | Authenticated email connector               | No first-party email connector. Executor can expose an email integration only after the user configures it. | Temporary email browser session                                           | Add an email connector or configure it through Executor, then reconnect it.                        |
+| Sourced research brief      | Exa, Context, Firecrawl, or Parallel Search | Supported built-in connectors                                                                               | Use a browser only when the source cannot be reached through a connector. | Reconnect the failed research connector in Settings.                                               |
+| Cheaper-shopping comparison | Shopping or price connector                 | No shopping connector                                                                                       | Temporary shopping browser session                                        | Add a shopping connector when Akeru Bot supports one.                                              |
+| Approved booking            | Calendar or booking connector               | No calendar, travel, or booking connector                                                                   | Temporary booking browser session                                         | Add a calendar or booking connector when Akeru Bot supports one. Approval stays a separate action. |
+
+Detection means that Akeru Bot found a credential, subscription login, key, or CLI. Healthy means that a real provider request passed. OAuth refresh, an installed CLI, and an authenticated CLI probe do not prove provider access.
+
+Consumer subscription access and API billing are separate. ChatGPT, Claude Max, Cursor Pro, SuperGrok, and X Premium+ do not prove billed API access. Akeru Bot cannot distinguish SuperGrok from X Premium+ through the shared xAI login, so it does not report plan-specific X Premium+ health.

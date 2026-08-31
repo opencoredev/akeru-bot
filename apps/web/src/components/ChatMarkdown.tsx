@@ -57,6 +57,7 @@ import { remarkGithubAlerts } from "../markdown-github-alerts";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
+import { SettingsLinkChip } from "./chat/SettingsLinkChip";
 import {
   revealInFileExplorerLabelForKind,
   revealInFileExplorerLabelForOs,
@@ -131,6 +132,7 @@ import {
 } from "~/lib/openPullRequestLink";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
+import { parseSettingsDeepLink } from "../settingsDeepLink";
 import { resolvePathLinkTarget } from "../terminal-links";
 import {
   isBrowserPreviewFile,
@@ -281,7 +283,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), "file"],
+    href: [...(defaultSchema.protocols?.href ?? []), "file", "grokbot"],
     src: [...(defaultSchema.protocols?.src ?? []), "file"],
   },
 } satisfies Parameters<typeof rehypeSanitize>[0];
@@ -1839,6 +1841,7 @@ function ChatMarkdown({
     return buildFileLinkParentSuffixByPath(filePaths);
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
   const markdownUrlTransform = useCallback((href: string) => {
+    if (parseSettingsDeepLink(href)) return href;
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
   // Re-emit highlighted content as markdown so copying out of the rendered
@@ -2105,6 +2108,18 @@ function ChatMarkdown({
       },
       a({ node, href, children, title: _title, ...props }) {
         const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
+        const settingsDestination = parseSettingsDeepLink(normalizedHref);
+        if (settingsDestination) {
+          return (
+            <SettingsLinkChip
+              href={normalizedHref}
+              destination={settingsDestination}
+              {...(props.className ? { className: props.className } : {})}
+            >
+              {children}
+            </SettingsLinkChip>
+          );
+        }
         const fileLinkMeta = normalizedHref
           ? (markdownFileLinkMetaByHref.get(normalizedHref) ??
             resolveMarkdownFileLinkMeta(normalizedHref, cwd))

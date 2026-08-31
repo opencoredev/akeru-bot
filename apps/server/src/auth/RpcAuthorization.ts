@@ -45,6 +45,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscriptionAuthComplete]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscriptionAuthCancel]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscriptionAuthLogout]: AuthOrchestrationOperateScope,
+  [WS_METHODS.subscriptionAuthHealthTest]: AuthOrchestrationOperateScope,
   [WS_METHODS.voiceCallGet]: AuthOrchestrationReadScope,
   [WS_METHODS.voiceCallStart]: AuthOrchestrationOperateScope,
   [WS_METHODS.voiceCallHangup]: AuthOrchestrationOperateScope,

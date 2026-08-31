@@ -8,6 +8,7 @@ import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/cor
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import {
   ApprovalRequestId,
+  EventId,
   McpServerId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -30,9 +31,11 @@ import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
   createAkeruMastraAuthStorage,
   makeAgentControllerLive,
+  recordProviderAccessHealth,
   toMcpServerConfigs,
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
+import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
@@ -272,6 +275,130 @@ describe("toMcpServerConfigs", () => {
       "local-tools": { command: "bunx", args: ["local-tools"] },
     });
   });
+});
+
+describe("provider access health", () => {
+  it.each([
+    ["codex", "openai-codex"],
+    ["claudeAgent", "anthropic"],
+    ["cursor", "cursor"],
+    ["grok", "xai"],
+    ["opencode", "kimi-for-coding"],
+  ] as const)("maps %s runtime requests to %s access health", (driver, provider) => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-map-"));
+    const authPath = NodePath.join(directory, "subscription-auth.json");
+    try {
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          [provider]: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      const providerInstanceId = ProviderInstanceId.make(`instance-${driver}`);
+      const base = {
+        provider: ProviderDriverKind.make(driver),
+        providerInstanceId,
+        threadId: ThreadId.make(`thread-${driver}`),
+      };
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "runtime.error",
+        eventId: EventId.make(`evt-${driver}-failed`),
+        createdAt: "2026-08-30T20:00:00.000Z",
+        payload: { message: "The first request failed.", class: "provider_error" },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === provider),
+      ).toMatchObject({ health: "failed-first-request" });
+      expect(service.providerInstanceHealth(providerInstanceId)).toBe("failed-first-request");
+
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "turn.completed",
+        eventId: EventId.make(`evt-${driver}-recovered`),
+        createdAt: "2026-08-30T20:01:00.000Z",
+        turnId: TurnId.make(`turn-${driver}`),
+        payload: { state: "completed", stopReason: null },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === provider),
+      ).toMatchObject({ health: "recovered" });
+      expect(service.providerInstanceHealth(providerInstanceId)).toBe("recovered");
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("records a failed first request and recovery at the runtime event boundary", () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-health-"));
+    const authPath = NodePath.join(directory, "subscription-auth.json");
+    try {
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          xai: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      const base = {
+        provider: ProviderDriverKind.make("grok"),
+        providerInstanceId: ProviderInstanceId.make("grok"),
+        threadId: ThreadId.make("thread-health"),
+      };
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "runtime.error",
+        eventId: EventId.make("evt-health-failed"),
+        createdAt: "2026-08-30T20:00:00.000Z",
+        payload: { message: "The first request failed.", class: "provider_error" },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === "xai")?.health,
+      ).toBe("failed-first-request");
+      expect(service.providerInstanceHealth("grok")).toBe("failed-first-request");
+
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "turn.completed",
+        eventId: EventId.make("evt-health-recovered"),
+        createdAt: "2026-08-30T20:01:00.000Z",
+        turnId: TurnId.make("turn-health"),
+        payload: { state: "completed", stopReason: null },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === "xai")?.health,
+      ).toBe("recovered");
+      expect(service.providerInstanceHealth("grok")).toBe("recovered");
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["interrupted", "cancelled"] as const)(
+    "does not call a %s turn a successful provider request",
+    (state) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-stop-"));
+      const authPath = NodePath.join(directory, "subscription-auth.json");
+      try {
+        const service = new SubscriptionAuthService(authPath);
+        recordProviderAccessHealth(service, {
+          provider: ProviderDriverKind.make("grok"),
+          providerInstanceId: ProviderInstanceId.make("grok"),
+          threadId: ThreadId.make("thread-stopped"),
+          turnId: TurnId.make("turn-stopped"),
+          type: "turn.completed",
+          eventId: EventId.make(`evt-health-${state}`),
+          createdAt: "2026-08-30T20:00:00.000Z",
+          payload: { state, stopReason: null },
+        });
+
+        expect(service.providerInstanceHealth("grok")).toBeUndefined();
+      } finally {
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("AgentControllerLive", () => {

@@ -11,6 +11,7 @@ import { create } from "zustand";
  */
 export const SETTINGS_SECTIONS = [
   "general",
+  "inbox",
   "appearance",
   "providers",
   "voice",
@@ -25,19 +26,27 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 interface SettingsDialogState {
   /** The open section, or null while the dialog is closed. */
   readonly section: SettingsSection | null;
-  readonly openSettings: (section?: SettingsSection) => void;
+  readonly targetId: string | null;
+  readonly openSettings: (section?: SettingsSection, targetId?: string | null) => void;
+  readonly clearTarget: () => void;
   readonly closeSettings: () => void;
 }
 
 export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
   section: null,
-  openSettings: (section = "general") => set({ section }),
-  closeSettings: () => set({ section: null }),
+  targetId: null,
+  openSettings: (section = "general", targetId = null) => set({ section, targetId }),
+  clearTarget: () => set({ targetId: null }),
+  closeSettings: () => set({ section: null, targetId: null }),
 }));
 
 /** Open the settings modal from outside React. */
-export function openSettings(section?: SettingsSection): void {
-  useSettingsDialogStore.getState().openSettings(section);
+export function openSettings(section?: SettingsSection, targetId?: string | null): void {
+  useSettingsDialogStore.getState().openSettings(section, targetId);
+}
+
+export function clearSettingsTarget(): void {
+  useSettingsDialogStore.getState().clearTarget();
 }
 
 export function closeSettings(): void {
