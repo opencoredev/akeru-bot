@@ -1,5 +1,6 @@
 import {
   AkeruMemoryCandidate,
+  AkeruMemoryCandidateUpdate,
   AkeruMemoryDecisionReceipt,
   AkeruMemoryEntityId,
   type AkeruMemoryRevision,
@@ -36,6 +37,7 @@ const CandidateRow = Schema.Struct({
   sensitive: Schema.Number,
   confidence: Schema.Number,
   affectedBotIds: Schema.String,
+  pendingUpdate: Schema.NullOr(Schema.String),
   status: Schema.String,
   createdAt: Schema.String,
   decidedAt: Schema.NullOr(Schema.String),
@@ -48,7 +50,8 @@ const candidateColumns = `
   initiating_user_id AS initiatingUserId, source_thread_id AS sourceThreadId,
   source_message_id AS sourceMessageId, author_bot_id AS authorBotId,
   fact_text AS fact, target_scope AS scope, sensitive, confidence,
-  affected_bot_ids_json AS affectedBotIds, status, created_at AS createdAt,
+  affected_bot_ids_json AS affectedBotIds, pending_update_json AS pendingUpdate,
+  status, created_at AS createdAt,
   decided_at AS decidedAt, decided_memory_root_id AS decidedMemoryRootId
 `;
 
@@ -57,9 +60,16 @@ const decodeCandidate = Effect.fn("MemoryCandidateRepository.decodeCandidate")(
     const affectedBotIds = yield* Schema.decodeUnknownEffect(
       Schema.fromJsonString(Schema.Array(Schema.String)),
     )(row.affectedBotIds);
+    const pendingUpdate =
+      row.pendingUpdate === null
+        ? null
+        : yield* Schema.decodeUnknownEffect(Schema.fromJsonString(AkeruMemoryCandidateUpdate))(
+            row.pendingUpdate,
+          );
     return yield* Schema.decodeUnknownEffect(AkeruMemoryCandidate)({
       ...row,
       affectedBotIds,
+      pendingUpdate,
       sensitive: row.sensitive === 1,
     });
   },
@@ -67,6 +77,7 @@ const decodeCandidate = Effect.fn("MemoryCandidateRepository.decodeCandidate")(
 );
 
 const encodeBotIds = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
+const encodePendingUpdate = Schema.encodeSync(Schema.fromJsonString(AkeruMemoryCandidateUpdate));
 const encodeValue = Schema.encodeSync(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );
@@ -177,13 +188,14 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
           candidate_id, tenant_id, initiating_user_id, source_thread_id,
           source_message_id, author_bot_id, fact_text, target_scope, sensitive,
           confidence, affected_bot_ids_json, status, created_at, decided_at,
-          decided_memory_root_id
+          decided_memory_root_id, pending_update_json
         ) VALUES (
           ${row.candidateId}, ${row.tenantId}, ${row.initiatingUserId}, ${row.sourceThreadId},
           ${row.sourceMessageId}, ${row.authorBotId}, ${row.fact}, ${row.scope},
           ${row.sensitive ? 1 : 0}, ${row.confidence},
           ${encodeBotIds(row.affectedBotIds)}, ${row.status}, ${row.createdAt},
-          ${row.decidedAt}, ${row.decidedMemoryRootId}
+          ${row.decidedAt}, ${row.decidedMemoryRootId},
+          ${row.pendingUpdate === null ? null : encodePendingUpdate(row.pendingUpdate)}
         )
       `.pipe(Effect.mapError(toPersistenceSqlError("MemoryCandidateRepository.create:query")));
         return row;
@@ -223,9 +235,14 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
         );
         const initialRevision = revision.revision === 1 && revision.supersedesId === null;
         const nextRevision = revision.revision > 1 && revision.supersedesId !== null;
+        const candidateUpdatesExisting = candidate.pendingUpdate !== null;
         if (
           !authorized ||
           (!initialRevision && !nextRevision) ||
+          candidateUpdatesExisting !== nextRevision ||
+          (candidateUpdatesExisting &&
+            (revision.rootId !== candidate.pendingUpdate?.rootId ||
+              revision.revision !== candidate.pendingUpdate.expectedRevision + 1)) ||
           revision.supersededById !== null ||
           revision.approvalState !== "approved" ||
           revision.deletionState !== "active" ||

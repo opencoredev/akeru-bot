@@ -81,6 +81,7 @@ describe("Akeru memory contracts", () => {
         decidedAt: null,
         decidedMemoryRootId: null,
       });
+      assert.isNull(candidate.pendingUpdate);
       const decision = yield* Schema.decodeUnknownEffect(AkeruMemoryCandidateDecision)({
         candidateId: candidate.candidateId,
         decision: "approve",

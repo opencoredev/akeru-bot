@@ -73,6 +73,7 @@ const candidate = (id: string): AkeruMemoryCandidate => ({
   sensitive: false,
   confidence: 0.9,
   affectedBotIds: [access.botId],
+  pendingUpdate: null,
   status: "pending",
   createdAt: "2026-08-30T20:00:00.000Z",
   decidedAt: null,

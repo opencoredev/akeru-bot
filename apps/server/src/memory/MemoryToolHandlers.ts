@@ -27,13 +27,6 @@ export type AkeruMemoryToolHandler = (
   input: Omit<AkeruToolExecution, "toolId"> & { readonly toolId: AkeruMemoryToolId },
 ) => Promise<unknown>;
 
-type PendingUpdate = {
-  readonly rootId: AkeruMemoryRootId;
-  readonly expectedRevision: number;
-};
-
-const pendingUpdates = new WeakMap<MemoryCandidateRepositoryShape, Map<string, PendingUpdate>>();
-
 const nowIso = () => DateTime.formatIso(DateTime.nowUnsafe());
 
 function field(input: unknown, name: string): unknown {
@@ -154,16 +147,6 @@ async function revisionFor(
   } satisfies AkeruMemoryRevision;
 }
 
-function rememberPendingUpdate(
-  candidates: MemoryCandidateRepositoryShape,
-  candidateId: string,
-  update: PendingUpdate,
-) {
-  const updates = pendingUpdates.get(candidates) ?? new Map<string, PendingUpdate>();
-  updates.set(candidateId, update);
-  pendingUpdates.set(candidates, updates);
-}
-
 export async function decideMemoryCandidate(
   repository: EntityMemoryRepositoryShape,
   candidates: MemoryCandidateRepositoryShape,
@@ -188,17 +171,17 @@ export async function decideMemoryCandidate(
         decidedAt,
       }),
     );
-    pendingUpdates.get(candidates)?.delete(candidate.candidateId);
     return receipt;
   }
 
-  const update = pendingUpdates.get(candidates)?.get(candidate.candidateId);
   const current =
-    update === undefined
+    candidate.pendingUpdate === null
       ? undefined
-      : await Effect.runPromise(repository.getCurrent({ access, rootId: update.rootId }));
-  if (current !== undefined && current.revision !== update?.expectedRevision) {
-    throw new Error(`Memory revision ${update?.expectedRevision} is stale.`);
+      : await Effect.runPromise(
+          repository.getCurrent({ access, rootId: candidate.pendingUpdate.rootId }),
+        );
+  if (current !== undefined && current.revision !== candidate.pendingUpdate?.expectedRevision) {
+    throw new Error(`Memory revision ${candidate.pendingUpdate?.expectedRevision} is stale.`);
   }
   const revision = await revisionFor(
     access,
@@ -217,7 +200,6 @@ export async function decideMemoryCandidate(
       decidedAt,
     }),
   );
-  pendingUpdates.get(candidates)?.delete(candidate.candidateId);
   if (current !== undefined) {
     await invalidateDerivedMemory?.({
       rootId: revision.rootId,
@@ -241,6 +223,7 @@ export function createMemoryToolHandlers(
     scope: AkeruMemoryTargetScope,
     sensitive: boolean,
     now: string,
+    update?: { readonly rootId: AkeruMemoryRootId; readonly expectedRevision: number },
   ) => {
     const candidateId = AkeruMemoryCandidateId.make(NodeCrypto.randomUUID());
     return Effect.runPromise(
@@ -258,6 +241,7 @@ export function createMemoryToolHandlers(
           sensitive,
           confidence: 1,
           affectedBotIds: affectedBotIds(access),
+          pendingUpdate: update ?? null,
           status: "pending",
           createdAt: now,
           decidedAt: null,
@@ -313,13 +297,16 @@ export function createMemoryToolHandlers(
           : current.sensitive;
       const fact = stringField(input, "fact");
       const now = nowIso();
-      if (scope !== "private" || sensitive) {
-        const candidate = await createCandidate(fact, scope, sensitive, now);
-        rememberPendingUpdate(candidates, candidate.candidateId, {
+      if (
+        current.partition.scope !== "bot-user" ||
+        current.sensitive ||
+        scope !== "private" ||
+        sensitive
+      ) {
+        return createCandidate(fact, scope, sensitive, now, {
           rootId,
           expectedRevision: expected,
         });
-        return candidate;
       }
       const revision = await revisionFor(access, scope, fact, false, now, current);
       const saved = await Effect.runPromise(

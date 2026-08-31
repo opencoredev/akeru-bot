@@ -69,6 +69,7 @@ import Migration0053 from "./Migrations/053_BotVoiceEnabled.ts";
 import Migration0054 from "./Migrations/054_AkeruEntityMemory.ts";
 import Migration0055 from "./Migrations/055_AkeruMemoryCandidates.ts";
 import Migration0056 from "./Migrations/056_AkeruBotUsageLedger.ts";
+import Migration0057 from "./Migrations/057_AkeruMemoryCandidateUpdates.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -137,6 +138,7 @@ export const migrationEntries = [
   [54, "AkeruEntityMemory", Migration0054],
   [55, "AkeruMemoryCandidates", Migration0055],
   [56, "AkeruBotUsageLedger", Migration0056],
+  [57, "AkeruMemoryCandidateUpdates", Migration0057],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

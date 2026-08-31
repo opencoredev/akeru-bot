@@ -62,6 +62,12 @@ export type AkeruMemoryApprovalState = typeof AkeruMemoryApprovalState.Type;
 export const AkeruMemoryCandidateStatus = Schema.Literals(["pending", "approved", "rejected"]);
 export type AkeruMemoryCandidateStatus = typeof AkeruMemoryCandidateStatus.Type;
 
+export const AkeruMemoryCandidateUpdate = Schema.Struct({
+  rootId: AkeruMemoryRootId,
+  expectedRevision: PositiveInt,
+});
+export type AkeruMemoryCandidateUpdate = typeof AkeruMemoryCandidateUpdate.Type;
+
 export const AkeruMemoryTargetScope = Schema.Literals([
   "private",
   "bot",
@@ -148,6 +154,9 @@ export const AkeruMemoryCandidate = Schema.Struct({
   sensitive: Schema.Boolean,
   confidence: AkeruMemoryConfidence,
   affectedBotIds: Schema.Array(BotId),
+  pendingUpdate: Schema.NullOr(AkeruMemoryCandidateUpdate).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   status: AkeruMemoryCandidateStatus,
   createdAt: IsoDateTime,
   decidedAt: Schema.NullOr(IsoDateTime),

@@ -207,6 +207,12 @@ it.layer(layer)("MemoryToolHandlers", (it) => {
         }),
       )) as { candidateId: string };
 
+      const storedCandidate = (yield* candidates.listPending({ access })).find(
+        (candidate) => candidate.candidateId === pending.candidateId,
+      );
+      assert.equal(storedCandidate?.pendingUpdate?.rootId, saved.rootId);
+      assert.equal(storedCandidate?.pendingUpdate?.expectedRevision, 1);
+
       const before = yield* repository.getCurrent({
         access,
         rootId: AkeruMemoryRootId.make(saved.rootId),
@@ -216,7 +222,7 @@ it.layer(layer)("MemoryToolHandlers", (it) => {
       yield* Effect.promise(() =>
         decideMemoryCandidate(
           repository,
-          candidates,
+          { ...candidates },
           access,
           {
             candidateId: AkeruMemoryCandidateId.make(pending.candidateId),
@@ -234,6 +240,120 @@ it.layer(layer)("MemoryToolHandlers", (it) => {
       assert.equal(after.revision, 2);
       assert.equal(after.fact, "Use Bun.");
       assert.equal(invalidations, 1);
+    }),
+  );
+
+  it.effect("requires review when an update removes shared or sensitive policy", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const candidates = yield* MemoryCandidateRepository;
+      const handlers = createMemoryToolHandlers(repository, candidates, access);
+      const sharedCandidate = (yield* Effect.promise(() =>
+        execute("remember", handlers.remember, {
+          fact: "Shared fact.",
+          scope: "project",
+        }),
+      )) as { candidateId: string };
+      const sensitiveCandidate = (yield* Effect.promise(() =>
+        execute("remember", handlers.remember, {
+          fact: "Sensitive fact.",
+          scope: "private",
+          sensitive: true,
+        }),
+      )) as { candidateId: string };
+      const shared = yield* Effect.promise(() =>
+        decideMemoryCandidate(repository, candidates, access, {
+          candidateId: AkeruMemoryCandidateId.make(sharedCandidate.candidateId),
+          decision: "approve",
+        }),
+      );
+      const sensitive = yield* Effect.promise(() =>
+        decideMemoryCandidate(repository, candidates, access, {
+          candidateId: AkeruMemoryCandidateId.make(sensitiveCandidate.candidateId),
+          decision: "approve",
+        }),
+      );
+
+      const privateUpdate = yield* Effect.promise(() =>
+        execute("update_memory", handlers.update_memory, {
+          memoryId: shared.memoryRootId,
+          expectedRevision: 1,
+          fact: "Private fact.",
+          scope: "private",
+        }),
+      );
+      const nonSensitiveUpdate = yield* Effect.promise(() =>
+        execute("update_memory", handlers.update_memory, {
+          memoryId: sensitive.memoryRootId,
+          expectedRevision: 1,
+          fact: "Non-sensitive fact.",
+          scope: "private",
+          sensitive: false,
+        }),
+      );
+
+      assert.equal((privateUpdate as { status: string }).status, "pending");
+      assert.equal((nonSensitiveUpdate as { status: string }).status, "pending");
+      assert.equal(
+        (yield* repository.getCurrent({
+          access,
+          rootId: AkeruMemoryRootId.make(String(shared.memoryRootId)),
+        })).partition.scope,
+        "project",
+      );
+      assert.isTrue(
+        (yield* repository.getCurrent({
+          access,
+          rootId: AkeruMemoryRootId.make(String(sensitive.memoryRootId)),
+        })).sensitive,
+      );
+    }),
+  );
+
+  it.effect("rejects a persisted pending update when its expected revision is stale", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const candidates = yield* MemoryCandidateRepository;
+      const handlers = createMemoryToolHandlers(repository, candidates, access);
+      const saved = (yield* Effect.promise(() =>
+        execute("remember", handlers.remember, {
+          fact: "Use npm.",
+          scope: "private",
+        }),
+      )) as { rootId: string };
+      const pending = (yield* Effect.promise(() =>
+        execute("update_memory", handlers.update_memory, {
+          memoryId: saved.rootId,
+          expectedRevision: 1,
+          fact: "Use Bun.",
+          scope: "project",
+        }),
+      )) as { candidateId: string };
+      yield* Effect.promise(() =>
+        execute("update_memory", handlers.update_memory, {
+          memoryId: saved.rootId,
+          expectedRevision: 1,
+          fact: "Use pnpm.",
+          scope: "private",
+        }),
+      );
+
+      const failed = yield* Effect.promise(() =>
+        decideMemoryCandidate(repository, { ...candidates }, access, {
+          candidateId: AkeruMemoryCandidateId.make(pending.candidateId),
+          decision: "approve",
+        }).then(
+          () => false,
+          (error) => String(error).includes("stale"),
+        ),
+      );
+      const current = yield* repository.getCurrent({
+        access,
+        rootId: AkeruMemoryRootId.make(saved.rootId),
+      });
+      assert.isTrue(failed);
+      assert.equal(current.revision, 2);
+      assert.equal(current.fact, "Use pnpm.");
     }),
   );
 
