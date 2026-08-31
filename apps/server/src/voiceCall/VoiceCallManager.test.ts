@@ -23,7 +23,7 @@ it("accepts a Codex CLI auth file without auth_mode", () => {
   assert.isUndefined(parseCodexCliAuth("not json"));
 });
 
-it("creates a pinned realtime session through the ChatGPT subscription endpoint", async () => {
+it("creates a current realtime session through the ChatGPT subscription endpoint", async () => {
   const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     assert.equal(String(url), "https://chatgpt.com/backend-api/codex/realtime/calls");
     assert.isNull(new Headers(init?.headers).get("OpenAI-Alpha"));
@@ -31,16 +31,32 @@ it("creates a pinned realtime session through the ChatGPT subscription endpoint"
       readonly session: {
         readonly type: string;
         readonly model: string;
+        readonly instructions: string;
+        readonly output_modalities: ReadonlyArray<string>;
         readonly audio: {
-          readonly input: { readonly turn_detection: { readonly type: string } };
+          readonly input: {
+            readonly turn_detection: {
+              readonly type: string;
+              readonly interrupt_response: boolean;
+            };
+          };
           readonly output: { readonly voice: string };
         };
+        readonly tool_choice: string;
+        readonly tools: ReadonlyArray<{ readonly name: string }>;
       };
     };
     assert.equal(body.session.type, "realtime");
-    assert.equal(body.session.model, "gpt-realtime-2");
+    assert.equal(body.session.model, "gpt-realtime-2.1");
     assert.equal(body.session.audio.output.voice, "marin");
     assert.equal(body.session.audio.input.turn_detection.type, "semantic_vad");
+    assert.isFalse(body.session.audio.input.turn_detection.interrupt_response);
+    assert.equal(body.session.tool_choice, "auto");
+    assert.deepEqual(
+      body.session.tools.map((tool) => tool.name),
+      ["send_to_chat"],
+    );
+    assert.equal(body.session.instructions, "Be concise.");
     return new Response("answer-sdp");
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -159,6 +175,43 @@ it.layer(VoiceDisabledTestLayer)("VoiceCallManager global settings", (it) => {
 });
 
 it.layer(TestLayer)("VoiceCallManager", (it) => {
+  it.effect("releases the one-call lock when session construction fails", () =>
+    Effect.gen(function* () {
+      let constructionAttempts = 0;
+      const failingLayer = layer({
+        getCredential: async () => ({ accessToken: "access", accountId: "account" }),
+        makeSession: () => {
+          constructionAttempts += 1;
+          if (constructionAttempts === 1) throw new Error("session constructor failed");
+          return { negotiate: async () => "answer-sdp" };
+        },
+      }).pipe(
+        Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
+        Layer.provide(ServerSettingsService.layerTest()),
+        Layer.provide(
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "akeru-voice-call-constructor-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      );
+      const result = yield* Effect.provide(
+        Effect.gen(function* () {
+          const manager = yield* VoiceCallManager;
+          const failed = yield* Effect.result(
+            manager.start({ botId, sdp: "offer-sdp" }, "client-1"),
+          );
+          assert.equal(failed._tag, "Failure");
+          assert.deepEqual(yield* manager.get, { status: "idle" });
+          const retry = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-1");
+          assert.equal(retry.answerSdp, "answer-sdp");
+          yield* manager.hangup(retry.call.callId, "client-1");
+        }),
+        failingLayer,
+      );
+      return result;
+    }),
+  );
+
   it.effect("refuses hangup from a different connection owner", () =>
     Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
@@ -176,6 +229,30 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
 
       yield* manager.hangup(first.call.callId, "client-1");
       assert.deepEqual(yield* manager.get, { status: "idle" });
+    }),
+  );
+
+  it.effect("allows only one concurrent start to claim the call lock", () =>
+    Effect.gen(function* () {
+      const manager = yield* VoiceCallManager;
+      const results = yield* Effect.all(
+        [
+          manager.start({ botId, sdp: "first-offer" }, "client-1").pipe(Effect.result),
+          manager.start({ botId, sdp: "second-offer" }, "client-2").pipe(Effect.result),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const successes = results.filter((result) => result._tag === "Success");
+      const failures = results.filter((result) => result._tag === "Failure");
+      assert.lengthOf(successes, 1);
+      assert.lengthOf(failures, 1);
+      assert.equal(failures[0]?.failure.reason, "already-active");
+      const active = yield* manager.get;
+      assert.notEqual(active.status, "idle");
+      if (active.status !== "idle") {
+        const ownerId = results[0]?._tag === "Success" ? "client-1" : "client-2";
+        yield* manager.hangup(active.callId, ownerId);
+      }
     }),
   );
 

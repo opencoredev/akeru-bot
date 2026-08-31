@@ -86,6 +86,6 @@ export function useRelayEnvironmentDiscovery(): Discovery.RelayEnvironmentDiscov
   return useAtomValue(relayEnvironmentDiscovery.stateValueAtom);
 }
 
-export function useEnvironmentConnectionState(environmentId: EnvironmentId) {
-  return useEnvironmentQuery(environmentCatalog.stateAtom(environmentId));
+export function useEnvironmentConnectionState(environmentId: EnvironmentId | null) {
+  return useEnvironmentQuery(environmentId ? environmentCatalog.stateAtom(environmentId) : null);
 }

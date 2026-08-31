@@ -1,4 +1,4 @@
-import * as NodeUrl from "node:url";
+import * as NodeURL from "node:url";
 import * as NodeZlib from "node:zlib";
 
 import tailwindcss from "@tailwindcss/vite";
@@ -15,7 +15,7 @@ import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 
-const reactGrabEntry = NodeUrl.fileURLToPath(import.meta.resolve("react-grab"));
+const reactGrabEntry = NodeURL.fileURLToPath(import.meta.resolve("react-grab"));
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);

@@ -31,8 +31,8 @@ import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
-import { BotVoiceCallButton } from "../voice/VoiceCall";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
@@ -80,6 +80,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   );
   const effectiveModelSelection = stickyEngine;
   const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
+  const voiceCall = useVoiceCall();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
@@ -124,7 +125,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               <span className="truncate text-sm font-medium">{bot.name}</span>
             </div>
             <div data-chat-header-actions className="ml-auto flex items-center">
-              <BotVoiceCallButton bot={bot} />
+              <BotVoiceCallButton
+                bot={bot}
+                disabled={runtime.sending || runtime.latestTurn?.state === "running"}
+              />
             </div>
           </WorkspacePageHeader>
           <BotConversationScrollArea>
@@ -193,6 +197,8 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             draftKey={bot.id}
             disabled={
               runtime.sending ||
+              voiceCall.activeCall?.botId === bot.id ||
+              voiceCall.startingBotId === bot.id ||
               modelUpdatePending ||
               effectiveModelSelection === null ||
               !runtime.botReady ||

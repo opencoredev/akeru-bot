@@ -720,6 +720,7 @@ describe("ProviderCommandReactor", () => {
         kind: "provider.turn.start.failed",
         payload: {
           detail: "Provider instance 'missing' is not available.",
+          requestId: "user-message-missing-bot-engine",
         },
       }),
     );
@@ -811,6 +812,14 @@ describe("ProviderCommandReactor", () => {
       let readModel = yield* Effect.promise(() => harness.readModel());
       let thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
       expect(thread?.session?.lastError).toContain("deterministic startup failure");
+      expect(
+        thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
+      ).toMatchObject({
+        payload: {
+          detail: "deterministic startup failure",
+          requestId: "user-message-provider-failure",
+        },
+      });
       expect(harness.sendTurn).not.toHaveBeenCalled();
 
       failStartup = false;
@@ -2029,6 +2038,7 @@ describe("ProviderCommandReactor", () => {
             detail: expect.stringContaining(
               "cannot switch models after the conversation has started",
             ),
+            requestId: "user-message-restricted-2",
           },
         });
       }),
@@ -3029,6 +3039,7 @@ describe("ProviderCommandReactor", () => {
     ).toMatchObject({
       payload: {
         detail: expect.stringContaining("without a provider instance id"),
+        requestId: "user-message-missing-instance",
       },
     });
   });
@@ -3227,7 +3238,7 @@ describe("ProviderCommandReactor", () => {
       ),
     );
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-for-user-input-error"),
@@ -3245,7 +3256,7 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.activity.append",
         commandId: CommandId.make("cmd-user-input-requested"),
@@ -3278,7 +3289,7 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.user-input.respond",
         commandId: CommandId.make("cmd-user-input-respond-stale"),

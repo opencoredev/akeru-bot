@@ -11,6 +11,7 @@ packages:
 allowBuilds:
   "@google/genai": false
   agent-browser: false
+  better-sqlite3: true
   browser-tabs-lock: false
   bufferutil: false
   core-js: false
@@ -19,6 +20,8 @@ allowBuilds:
   electron-winstaller: false
   esbuild: true
   geckodriver: false
+  isolated-vm: true
+  koffi: true
   msgpackr-extract: true
   msw: false
   node-pty: true

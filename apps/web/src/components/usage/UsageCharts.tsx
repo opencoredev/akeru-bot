@@ -18,7 +18,7 @@ import { Grid } from "../dither-kit/grid";
 import { Tooltip } from "../dither-kit/tooltip";
 import { XAxis } from "../dither-kit/x-axis";
 import { YAxis } from "../dither-kit/y-axis";
-import { ClaudeAI, CursorIcon, type Icon } from "../Icons";
+import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI } from "../Icons";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION, providersWithUsage } from "./usageProviders";
 
 export const PLAN_PROVIDER_PRESENTATION: Record<
@@ -29,10 +29,10 @@ export const PLAN_PROVIDER_PRESENTATION: Record<
     readonly color: DitherColor;
   }
 > = {
-  "openai-codex": { label: "ChatGPT", icon: "/provider-icons/openai.svg", color: "green" },
+  "openai-codex": { label: "ChatGPT", icon: OpenAI, color: "green" },
   anthropic: { label: "Claude", icon: ClaudeAI, color: "orange" },
   cursor: { label: "Cursor", icon: CursorIcon, color: "blue" },
-  xai: { label: "Grok", icon: "/provider-icons/xai.svg", color: "grey" },
+  xai: { label: "Grok", icon: GrokIcon, color: "grey" },
   "kimi-for-coding": {
     label: "Kimi For Coding",
     icon: "/provider-icons/kimi-for-coding.svg",

@@ -1,6 +1,7 @@
 import { assert, describe, it } from "vite-plus/test";
 
 import {
+  APP_BUNDLE_ID,
   makeDevelopmentLauncherScript,
   resolveElectronBinaryPath,
   resolveMacLauncherIconPaths,
@@ -8,6 +9,10 @@ import {
 } from "./electron-launcher.mjs";
 
 describe("electron development launcher", () => {
+  it("uses the Akeru desktop bundle identifier", () => {
+    assert.equal(APP_BUNDLE_ID, "dev.leodoes.akeru");
+  });
+
   it("uses captured values only as fallbacks for a live runner environment", () => {
     const script = makeDevelopmentLauncherScript({
       electronBinaryPath: "/repo/node_modules/electron/Electron",

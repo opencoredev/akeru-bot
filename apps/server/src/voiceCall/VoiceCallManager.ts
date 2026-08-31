@@ -1,6 +1,6 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
@@ -45,6 +45,7 @@ const CodexCliAuth = Schema.Struct({
     account_id: TrimmedNonEmptyString,
   }),
 });
+const decodeCodexCliAuth = Schema.decodeUnknownSync(CodexCliAuth);
 
 interface ChatGptRealtimeSession {
   readonly negotiate: (input: {
@@ -71,7 +72,7 @@ export function parseCodexCliAuth(
   encoded: string,
 ): { readonly accessToken: string; readonly accountId: string } | undefined {
   try {
-    const decoded = Schema.decodeUnknownSync(CodexCliAuth)(JSON.parse(encoded));
+    const decoded = decodeCodexCliAuth(JSON.parse(encoded));
     return { accessToken: decoded.tokens.access_token, accountId: decoded.tokens.account_id };
   } catch {
     return undefined;
@@ -82,7 +83,7 @@ async function getCodexCliCredential(): Promise<
   { readonly accessToken: string; readonly accountId: string } | undefined
 > {
   try {
-    const encoded = await NodeFS.readFile(
+    const encoded = await NodeFSP.readFile(
       NodePath.join(NodeOS.homedir(), ".codex", "auth.json"),
       "utf8",
     );
@@ -114,7 +115,7 @@ export function defaultSession(): ChatGptRealtimeSession {
               input: {
                 format: { type: "audio/pcm", rate: 24_000 },
                 transcription: { model: "gpt-4o-mini-transcribe" },
-                turn_detection: { type: "semantic_vad" },
+                turn_detection: { type: "semantic_vad", interrupt_response: false },
               },
               output: { voice },
             },
@@ -123,13 +124,13 @@ export function defaultSession(): ChatGptRealtimeSession {
                 type: "function",
                 name: "send_to_chat",
                 description:
-                  "Delegate a task to the coding-agent team in the chat thread. The team can read files, run commands, write code, and use tools on the user's machine. Call this for any request that needs execution, then confirm the handoff by voice. Pass the user's request as one clear message.",
+                  "Delegate work to the bot's existing chat thread. Use this for requests that need files, tools, code, the workspace, permissions, or stored memory. Pass the user's request as one clear message.",
                 parameters: {
                   type: "object",
                   properties: {
                     message: {
                       type: "string",
-                      description: "The user's request, cleaned up into one clear chat message.",
+                      description: "The user's request as one clear chat message.",
                     },
                   },
                   required: ["message"],
@@ -178,12 +179,11 @@ function instructionsForBot(bot: {
   return [
     `You are ${bot.name}, the user's ${bot.title}.`,
     bot.description,
-    "Talk like a sharp teammate. Answer first. Use short, plain sentences.",
-    "You are a bot on the user's team. Do not claim to be a person.",
-    "You lead a team of coding agents that work in the chat thread. They can read files, run commands, write code, and use tools on the user's machine. You delegate; they execute.",
-    "For any task that needs files, tools, code, or the user's computer, call send_to_chat with the request as one clear message. Then tell the user you have handed it to the team. Never say the task is impossible for you.",
-    "Only answer directly for conversation, questions you can answer from context, and retelling what the team has already done.",
-    "Context items labeled 'Team update' describe work the chat team finished during this call. Use them when the user asks about progress.",
+    "Speak naturally. Answer first. Keep spoken replies concise.",
+    "You are a bot on the user's team. Do not claim to be a person or always available.",
+    `If the user asks you to stay silent while they talk to someone else, do not answer overheard speech until they address ${bot.name} or ask for a reply.`,
+    "For any request that needs files, tools, code, the workspace, permissions, or stored memory, call send_to_chat with one clear request. Then tell the user that the work continues in the chat.",
+    "Answer ordinary conversation directly in this live voice session.",
   ]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join("\n\n");
@@ -311,12 +311,19 @@ const make = (options?: VoiceCallManagerOptions) =>
         });
       }
 
-      const session = (() => {
-        switch (voiceSettings.provider) {
-          case "chatgpt":
-            return (options?.makeSession ?? defaultSession)();
-        }
-      })();
+      const session = yield* Effect.try({
+        try: () => {
+          switch (voiceSettings.provider) {
+            case "chatgpt":
+              return (options?.makeSession ?? defaultSession)();
+          }
+        },
+        catch: (cause) =>
+          new VoiceCallError({
+            reason: "upstream-failed",
+            message: cause instanceof Error ? cause.message : "Could not create the voice session.",
+          }),
+      }).pipe(Effect.tapError(() => clear(claimed.call.callId)));
       const answerSdp = yield* Effect.tryPromise({
         try: () =>
           session.negotiate({

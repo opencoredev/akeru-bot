@@ -1,0 +1,164 @@
+# Depot CI runs Akeru checks on pull requests and main.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  public_dependencies:
+    name: Public dependency install
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Reject dependencies outside the repository
+        run: node scripts/check-public-dependencies.ts
+
+      - name: Install from the committed lockfile
+        run: vp install --frozen-lockfile
+
+  check:
+    name: Lint, types, and builds
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Reject repository-owned PR assets
+        run: |
+          files="$(git ls-files .github/pr-assets)"
+          if test -n "$files"; then
+            printf 'PR evidence must be uploaded to GitHub, not committed:\n%s\n' "$files" >&2
+            exit 1
+          fi
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Lint
+        run: vp run lint
+
+      - name: Check formatting
+        run: vp run fmt:check
+
+      - name: Typecheck
+        run: vp run typecheck
+
+      - name: Build desktop pipeline
+        run: vp run build:desktop
+
+      - name: Verify preload bundle output
+        run: |
+          test -f apps/desktop/dist-electron/preload.cjs
+          grep -nE "desktopBridge|getLocalEnvironmentBootstrap|PICK_FOLDER_CHANNEL|wsUrl" apps/desktop/dist-electron/preload.cjs
+
+      - name: Build marketing site
+        run: vp run build:marketing
+
+  test:
+    name: Focused workspace tests
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Test shipped desktop and shared packages
+        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!t3code-relay' --filter '!@t3tools/monorepo' --filter '!@t3tools/mobile' test
+
+  test_server:
+    name: Server tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Test isolated server shard
+        run: >-
+          vp run --filter t3 test
+          --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+          --exclude integration/orchestrationEngine.integration.test.ts
+
+  rust:
+    name: Resource monitor
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path native/resource-monitor/Cargo.toml -- --check
+
+      - name: Test
+        run: cargo test --locked --manifest-path native/resource-monitor/Cargo.toml
+
+  release_smoke:
+    name: Release smoke
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Exercise release-only configuration
+        run: vp run release:smoke
