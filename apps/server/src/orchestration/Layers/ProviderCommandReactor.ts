@@ -731,17 +731,21 @@ const make = Effect.gen(function* () {
         mcpServers,
         ...(respondingBotId ? { botId: respondingBotId } : {}),
         ...(respondingBot ? { botName: respondingBot.name } : {}),
-        memoryAccess: {
-          tenantId: AkeruMemoryTenantId.make("local"),
-          userId: AkeruMemoryUserId.make("owner"),
-          threadId,
-          projectId: thread.projectId,
-          workspaceRoot: project?.workspaceRoot ?? effectiveCwd ?? ".",
-          botId: thread.groupId == null ? respondingBotId : null,
-          groupId: thread.groupId ?? null,
-          respondingBotId,
-          groupMemberBotIds: respondingGroup?.members.map((member) => member.botId) ?? [],
-        },
+        ...(project
+          ? {
+              memoryAccess: {
+                tenantId: AkeruMemoryTenantId.make("local"),
+                userId: AkeruMemoryUserId.make("owner"),
+                threadId,
+                projectId: thread.projectId,
+                workspaceRoot: project.workspaceRoot,
+                botId: thread.groupId == null ? respondingBotId : null,
+                groupId: thread.groupId ?? null,
+                respondingBotId,
+                groupMemberBotIds: respondingGroup?.members.map((member) => member.botId) ?? [],
+              },
+            }
+          : {}),
         botSandbox: respondingBot?.sandbox ?? null,
         botSandboxBrowserSharing,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
