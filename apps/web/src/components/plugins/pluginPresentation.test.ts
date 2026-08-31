@@ -54,10 +54,22 @@ function server(enabled: boolean): McpServer {
 
 describe("plugin presentation", () => {
   it("shows only populated directory categories and keeps pending categories discoverable", () => {
-    expect(buildPluginFilters(catalog)).toEqual(["All", "Featured", "Installed", "Work", "Web"]);
+    expect(buildPluginFilters(catalog)).toEqual([
+      "All",
+      "Featured",
+      "Installed",
+      "Work",
+      "Web",
+      "Marketing",
+      "Build",
+      "Design",
+      "Sales",
+      "Support",
+      "Commerce",
+    ]);
     expect(
       buildPluginFilters([
-        ...catalog,
+        ...catalog.filter((plugin) => ["Work", "Web"].includes(plugin.primaryCategory)),
         { ...pendingPlugin, primaryCategory: "Marketing", category: "Marketing" },
       ]),
     ).toEqual(["All", "Featured", "Installed", "Work", "Web", "Marketing"]);
