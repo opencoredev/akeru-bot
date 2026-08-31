@@ -51,6 +51,19 @@ describe("settings dialog store", () => {
     closeSettings();
     expect(useSettingsDialogStore.getState().environmentId).toBeNull();
   });
+
+  it("replaces a stale environment when an entry point names its environment", () => {
+    const secondaryEnvironmentId = EnvironmentId.make("env-secondary");
+    const primaryEnvironmentId = EnvironmentId.make("env-primary");
+    openSettings("inbox", null, secondaryEnvironmentId);
+
+    openSettings("providers", null, primaryEnvironmentId);
+
+    expect(useSettingsDialogStore.getState()).toMatchObject({
+      section: "providers",
+      environmentId: primaryEnvironmentId,
+    });
+  });
 });
 
 describe("legacy settings deep links", () => {

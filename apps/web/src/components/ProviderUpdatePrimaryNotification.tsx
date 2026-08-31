@@ -134,21 +134,25 @@ export function ProviderUpdatePrimaryNotification() {
     [providers, updateProviders],
   );
 
-  const openProviderSettings = useCallback((toastId?: ProviderUpdateToastId) => {
-    const activeToast = activeToastRef.current;
-    if (toastId !== undefined) {
-      toastManager.close(toastId);
-    } else if (activeToast?.kind === "prompt") {
-      toastManager.close(activeToast.toastId);
-    }
-    if (
-      activeToast &&
-      (toastId === undefined || (activeToast.kind === "prompt" && activeToast.toastId === toastId))
-    ) {
-      activeToastRef.current = null;
-    }
-    openSettings("providers");
-  }, []);
+  const openProviderSettings = useCallback(
+    (toastId?: ProviderUpdateToastId) => {
+      const activeToast = activeToastRef.current;
+      if (toastId !== undefined) {
+        toastManager.close(toastId);
+      } else if (activeToast?.kind === "prompt") {
+        toastManager.close(activeToast.toastId);
+      }
+      if (
+        activeToast &&
+        (toastId === undefined ||
+          (activeToast.kind === "prompt" && activeToast.toastId === toastId))
+      ) {
+        activeToastRef.current = null;
+      }
+      openSettings("providers", null, primaryEnvironment?.environmentId ?? null);
+    },
+    [primaryEnvironment?.environmentId],
+  );
 
   useEffect(() => {
     const activeToast = activeToastRef.current;
