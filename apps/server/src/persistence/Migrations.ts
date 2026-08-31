@@ -66,6 +66,8 @@ import Migration0050 from "./Migrations/050_BotProfileMetadata.ts";
 import Migration0051 from "./Migrations/051_BotDisabledMcpServers.ts";
 import Migration0052 from "./Migrations/052_ExecutorPluginCommand.ts";
 import Migration0053 from "./Migrations/053_BotVoiceEnabled.ts";
+import Migration0054 from "./Migrations/054_AkeruEntityMemory.ts";
+import Migration0055 from "./Migrations/055_AkeruMemoryCandidates.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -131,6 +133,8 @@ export const migrationEntries = [
   [51, "BotDisabledMcpServers", Migration0051],
   [52, "ExecutorPluginCommand", Migration0052],
   [53, "BotVoiceEnabled", Migration0053],
+  [54, "AkeruEntityMemory", Migration0054],
+  [55, "AkeruMemoryCandidates", Migration0055],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
