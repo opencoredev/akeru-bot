@@ -226,6 +226,7 @@ describe("Plugins dialog content", () => {
       <CustomMcpServers
         servers={[rawServer]}
         pendingServerId={null}
+        onCreate={noop}
         onToggle={noop}
         onEdit={noop}
         onDelete={noop}
@@ -235,6 +236,7 @@ describe("Plugins dialog content", () => {
     expect(markup).toContain("Disable Raw filesystem");
     expect(markup).toContain("Edit Raw filesystem");
     expect(markup).toContain("Delete Raw filesystem");
+    expect(markup).toContain("Add server");
     expect(validateMcpServerDraft(EMPTY_MCP_SERVER_DRAFT)).toBe("Name is required.");
     expect(
       validateMcpServerDraft({
@@ -244,6 +246,21 @@ describe("Plugins dialog content", () => {
         url: "https://mcp.example.com",
       }),
     ).toBeNull();
+  });
+
+  it("keeps Custom MCP creation reachable when none are installed", () => {
+    const markup = renderToStaticMarkup(
+      <CustomMcpServers
+        servers={[]}
+        pendingServerId={null}
+        onCreate={noop}
+        onToggle={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(markup).toContain("Custom MCP servers");
+    expect(markup).toContain("Add server");
   });
 
   it("keeps removed builtins separate from Custom MCP and makes them removable", () => {

@@ -3,7 +3,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, McpServer } from "@t3tools/contracts";
+import { McpServerId, type EnvironmentId, type McpServer } from "@t3tools/contracts";
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 import {
@@ -13,7 +13,7 @@ import {
   type PluginSkill,
 } from "../../../../../plugins";
 import { ensureLocalApi } from "../../localApi";
-import { cn } from "../../lib/utils";
+import { cn, randomUUID } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
 import { environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -91,7 +91,7 @@ export const EMPTY_MCP_SERVER_DRAFT: McpServerDraft = {
   url: "",
 };
 
-type EditorTarget = { readonly server: McpServer };
+type EditorTarget = { readonly server: McpServer | null };
 
 function draftFromServer(server: McpServer): McpServerDraft {
   return server.transport === "stdio"
@@ -175,6 +175,12 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
     setSubmitAttempted(false);
   };
 
+  const openCustomCreator = () => {
+    setEditorTarget({ server: null });
+    setDraft(EMPTY_MCP_SERVER_DRAFT);
+    setSubmitAttempted(false);
+  };
+
   const closeEditor = () => {
     setEditorTarget(null);
     setSubmitAttempted(false);
@@ -224,7 +230,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   const saveEditor = async () => {
     setSubmitAttempted(true);
     if (!editorTarget || validationError) return;
-    const mcpServerId = editorTarget.server.id;
+    const mcpServerId = editorTarget.server?.id ?? McpServerId.make(randomUUID());
     const configuration =
       draft.transport === "stdio"
         ? {
@@ -238,12 +244,18 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
           }
         : { name: draft.name.trim(), transport: "url" as const, url: draft.url.trim() };
     setPendingServerId(mcpServerId);
-    const result = await updateServer({
-      environmentId,
-      input: { mcpServerId, ...configuration },
-    });
+    const result = editorTarget.server
+      ? await updateServer({ environmentId, input: { mcpServerId, ...configuration } })
+      : await createServer({ environmentId, input: { mcpServerId, ...configuration } });
     setPendingServerId(null);
-    if (!reportFailure("Could not update MCP server", result)) closeEditor();
+    if (
+      !reportFailure(
+        editorTarget.server ? "Could not update MCP server" : "Could not add MCP server",
+        result,
+      )
+    ) {
+      closeEditor();
+    }
   };
 
   const openPlugin = (plugin: PluginDirectoryDefinition) => {
@@ -347,6 +359,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
                 <CustomMcpServers
                   servers={customServers}
                   pendingServerId={pendingServerId}
+                  onCreate={openCustomCreator}
                   onToggle={(server, enabled) => void toggleCustom(server, enabled)}
                   onEdit={openCustomEditor}
                   onDelete={(server) => void removeServer(server)}
@@ -359,7 +372,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
       <Dialog open={editorTarget !== null} onOpenChange={(open) => !open && closeEditor()}>
         <DialogPopup className="max-h-[min(36rem,90dvh)] max-w-lg flex-col overflow-hidden">
           <DialogHeader className="shrink-0 border-b px-6 py-5">
-            <DialogTitle>Edit MCP server</DialogTitle>
+            <DialogTitle>{editorTarget?.server ? "Edit MCP server" : "Add MCP server"}</DialogTitle>
           </DialogHeader>
           <DialogPanel className="space-y-4 px-6 py-5">
             <Field>
@@ -428,7 +441,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
               Cancel
             </Button>
             <Button disabled={pendingServerId !== null} onClick={() => void saveEditor()}>
-              Save
+              {editorTarget?.server ? "Save" : "Add server"}
             </Button>
           </DialogFooter>
         </DialogPopup>

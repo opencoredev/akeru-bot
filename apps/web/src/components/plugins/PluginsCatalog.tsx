@@ -1,5 +1,5 @@
 import type { McpServer } from "@t3tools/contracts";
-import { CheckIcon, ChevronRightIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
 import { Button } from "../ui/button";
 import { findPluginServer, pluginMcpServerId } from "./pluginRegistry";
@@ -199,6 +199,7 @@ function serverDescription(server: McpServer): string {
 interface CustomMcpServersProps {
   readonly servers: readonly McpServer[];
   readonly pendingServerId: string | null;
+  readonly onCreate: () => void;
   readonly onToggle: (server: McpServer, enabled: boolean) => void;
   readonly onEdit: (server: McpServer) => void;
   readonly onDelete: (server: McpServer) => void;
@@ -207,18 +208,24 @@ interface CustomMcpServersProps {
 export function CustomMcpServers({
   servers,
   pendingServerId,
+  onCreate,
   onToggle,
   onEdit,
   onDelete,
 }: CustomMcpServersProps) {
-  if (servers.length === 0) return null;
   return (
     <section aria-labelledby="custom-mcp-title">
       <div className="mb-2 flex items-center justify-between px-2">
         <h2 className="text-xs font-medium text-muted-foreground" id="custom-mcp-title">
           Custom MCP servers
         </h2>
-        <span className="text-xs text-muted-foreground">{servers.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{servers.length}</span>
+          <Button size="sm" variant="ghost-muted" onClick={onCreate}>
+            <PlusIcon className="size-3.5" />
+            Add server
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-x-7 md:grid-cols-2">
         {servers.map((server) => {
