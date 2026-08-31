@@ -1,0 +1,106 @@
+name: Plugin proposal
+description: Propose an MCP plugin for the curated Akeru Bot directory.
+title: "[Plugin]: "
+labels:
+  - "type:plugin"
+  - "status:needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the [admission rules](https://github.com/opencoredev/akeru-bot/blob/main/plugins/README.md) first. A valid manifest does not guarantee acceptance.
+        Use Custom MCP for experimental apps, wrappers, duplicates, and narrow utilities.
+
+  - type: input
+    id: product
+    attributes:
+      label: Product and publisher
+      description: Name the product, accountable publisher, and public publisher URL.
+      placeholder: Acme Search, published by Acme Inc., https://acme.example
+    validations:
+      required: true
+
+  - type: textarea
+    id: demand
+    attributes:
+      label: Active use and request
+      description: Link evidence of active use and the real user or maintainer request for this integration.
+    validations:
+      required: true
+
+  - type: textarea
+    id: akeru_job
+    attributes:
+      label: Akeru Bot job
+      description: Describe one specific job this plugin completes in Akeru Bot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: mcp_ownership
+    attributes:
+      label: MCP ownership
+      description: Link the official MCP server, or explain why its maintained source and owner are trusted.
+    validations:
+      required: true
+
+  - type: textarea
+    id: lifecycle
+    attributes:
+      label: Add and remove test
+      description: Give repeatable steps to add, connect, use, disable, re-enable, and remove the plugin.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logo
+    attributes:
+      label: Logo provenance
+      description: Link the official light and dark logo sources and state the license or permission to use them.
+    validations:
+      required: true
+
+  - type: input
+    id: documentation
+    attributes:
+      label: Current documentation
+      description: Link current setup and reference documentation.
+      placeholder: https://docs.example.com/mcp
+    validations:
+      required: true
+
+  - type: dropdown
+    id: health
+    attributes:
+      label: Current connection health
+      description: Choose the state that works today. Explain an approval blocker below.
+      options:
+        - available
+        - approval-pending
+        - deprecated
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocker
+    attributes:
+      label: Health evidence and approval blocker
+      description: Link the latest connection evidence. If health is approval-pending, name the vendor approval or access that blocks a real connection.
+    validations:
+      required: true
+
+  - type: textarea
+    id: permissions
+    attributes:
+      label: Permissions and approvals
+      description: List each permission. Mark read-only actions as read. Mark every applicable send, pay, delete, production, secrets, publishing, signatures, refunds, and account-wide action for approval.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: credential_safety
+    attributes:
+      label: Credential safety
+      options:
+        - label: The manifest contains no token or secret, and the MCP server does not require Akeru Bot to export a provider token or secret.
+          required: true

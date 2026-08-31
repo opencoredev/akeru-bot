@@ -7,6 +7,8 @@ on:
     paths:
       - .github/ISSUE_TEMPLATE/**
       - .github/workflows/issue-labels.yml
+  pull_request_target:
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
 
 permissions:
@@ -14,6 +16,7 @@ permissions:
 
 jobs:
   sync:
+    if: github.event_name != 'pull_request_target'
     name: Sync issue labels
     runs-on: ubuntu-24.04
     steps:
@@ -41,6 +44,31 @@ jobs:
                 name: "via-triage",
                 color: "5319E7",
                 description: "Prepared through Akeru agent triage and approved by the user",
+              },
+              {
+                name: "type:plugin",
+                color: "5319e7",
+                description: "Plugin catalog contribution.",
+              },
+              {
+                name: "type:provider",
+                color: "0969da",
+                description: "Agent provider contribution.",
+              },
+              {
+                name: "status:needs-triage",
+                color: "fbca04",
+                description: "Proposal needs maintainer review.",
+              },
+              {
+                name: "area:directory",
+                color: "bfdadc",
+                description: "Plugin directory and its user interface.",
+              },
+              {
+                name: "area:connectors",
+                color: "c5def5",
+                description: "Plugin and MCP connector runtime.",
               },
             ];
 
@@ -78,3 +106,17 @@ jobs:
                 });
               }
             }
+
+  label-paths:
+    if: github.event_name == 'pull_request_target'
+    name: Label changed paths
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@v6
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/path-labels.yml
+          sync-labels: true

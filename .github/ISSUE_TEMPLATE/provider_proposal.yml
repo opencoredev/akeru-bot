@@ -1,0 +1,104 @@
+name: Provider proposal
+description: Propose an agent provider for Akeru Bot.
+title: "[Provider]: "
+labels:
+  - "type:provider"
+  - "status:needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A provider needs a maintained runtime, a specific Akeru Bot job, and a testable connection lifecycle.
+        Describe what works today. Do not include tokens or secrets.
+
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and publisher
+      description: Name the provider, accountable publisher, and public publisher URL.
+    validations:
+      required: true
+
+  - type: textarea
+    id: demand
+    attributes:
+      label: Active use and request
+      description: Link evidence of active use and the real user or maintainer request for this provider.
+    validations:
+      required: true
+
+  - type: textarea
+    id: akeru_job
+    attributes:
+      label: Akeru Bot job
+      description: Describe one specific job this provider completes in Akeru Bot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: runtime
+    attributes:
+      label: Official runtime
+      description: Link the official CLI, agent runtime, protocol documentation, and maintained source when public.
+    validations:
+      required: true
+
+  - type: textarea
+    id: lifecycle
+    attributes:
+      label: Add and remove test
+      description: Give repeatable steps to install, authenticate, start a turn, reconnect, sign out, and remove the provider.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logo
+    attributes:
+      label: Logo provenance
+      description: Link the official light and dark logo sources and state the license or permission to use them.
+    validations:
+      required: true
+
+  - type: input
+    id: documentation
+    attributes:
+      label: Current documentation
+      description: Link current installation, authentication, and runtime documentation.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: health
+    attributes:
+      label: Current connection health
+      description: Choose the state that works today. Explain an approval blocker below.
+      options:
+        - available
+        - approval-pending
+        - experimental
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocker
+    attributes:
+      label: Health evidence and approval blocker
+      description: Link the latest connection evidence. If health is approval-pending, name the vendor approval or access that blocks a real connection.
+    validations:
+      required: true
+
+  - type: textarea
+    id: approvals
+    attributes:
+      label: Consequential actions
+      description: Explain how the provider requests approval before send, pay, delete, production, secrets, publishing, signatures, refunds, or account-wide changes.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: credential_safety
+    attributes:
+      label: Credential safety
+      options:
+        - label: This proposal contains no token or secret and does not require Akeru Bot to export a provider token or secret.
+          required: true

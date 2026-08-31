@@ -1,0 +1,40 @@
+"type:plugin":
+  - changed-files:
+      - any-glob-to-any-file: "plugins/**"
+
+"type:provider":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/server/src/provider/builtInDrivers.ts"
+          - "apps/server/src/provider/builtInProviderCatalog.ts"
+          - "apps/server/src/provider/Drivers/**"
+          - "apps/server/src/provider/Layers/**"
+          - "apps/server/src/provider/Services/**"
+          - "apps/server/src/subscription-auth/providers/**"
+
+"area:directory":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/web/src/components/plugins/**"
+          - "apps/web/src/components/settings/PluginsSettings.*"
+          - "apps/web/src/components/sidebar/SidebarChrome.*"
+          - "apps/web/src/components/roster/BotToolsSheet.*"
+          - "apps/web/src/pluginsDialogStore.ts"
+          - "apps/web/src/pluginsDialogStore.test.ts"
+          - "docs/user/plugins.md"
+
+"area:connectors":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/server/src/provider/McpServerConfig.*"
+          - "apps/server/src/provider/Layers/AgentController.*"
+          - "apps/server/src/provider/Services/AgentController.ts"
+          - "apps/server/src/orchestration/Layers/McpServerRegistry.test.ts"
+          - "apps/server/src/bot-inbox/connectorIncidents.*"
+          - "apps/server/src/persistence/Layers/ProjectionMcpServers.ts"
+          - "apps/server/src/persistence/Services/ProjectionMcpServers.ts"
+          - "apps/server/src/persistence/Migrations/047_ProjectionMcpServers.ts"
+          - "apps/server/src/persistence/Migrations/051_BotDisabledMcpServers.ts"
+          - "packages/contracts/src/mcpServer.*"
+          - "packages/client-runtime/src/state/mcpServerCommands.ts"
+          - "apps/web/src/state/mcpServers.ts"

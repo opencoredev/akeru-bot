@@ -7,7 +7,7 @@ You can still open a PR, but please do so knowing there is a high chance
 we may close it without merging it, or never review it.
 
 - Small, focused PRs are strongly preferred. Bug fixes are most likely to be merged.
-- New features will most likely just annoy us.
+- New features will most likely just annoy us. Plugin and provider additions need an accepted proposal issue.
 - 1,000+ line PRs with a bunch of new features will probably get you banned from the repo.
 -->
 
@@ -29,5 +29,6 @@ we may close it without merging it, or never review it.
 
 - [ ] This PR is small and focused
 - [ ] I explained what changed and why
+- [ ] I linked the accepted plugin or provider proposal in **Why**, or this PR does not add one
 - [ ] I included before/after screenshots for any UI changes
 - [ ] I included a video for animation/interaction changes

@@ -60,6 +60,9 @@ jobs:
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
 
+      - name: Validate plugin catalog
+        run: bun run plugins:check
+
       - name: Lint
         run: vp run lint
 
