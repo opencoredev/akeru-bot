@@ -9,6 +9,7 @@ import {
   buildRosterTiles,
   compareRosterBots,
   filterRosterBots,
+  filterRosterGroups,
   DEFAULT_BLOB_COLOR,
   DEFAULT_BLOB_SHAPE,
   formatRosterTimestamp,
@@ -21,6 +22,10 @@ import {
   resolveLatestRosterMessage,
   resolveRosterBotId,
   resolveRosterIndicator,
+  parseRosterBotDragId,
+  parseRosterGroupDropId,
+  rosterBotDragId,
+  rosterGroupDropId,
   BLOB_COLORS,
   BLOB_SHAPES,
   type RosterLastMessage,
@@ -178,6 +183,40 @@ describe("filterRosterBots", () => {
     expect(filterRosterBots(bots, "research").map((entry) => entry.id)).toEqual(["1"]);
     expect(filterRosterBots(bots, "interfaces").map((entry) => entry.id)).toEqual(["2"]);
     expect(filterRosterBots(bots, "nobody")).toEqual([]);
+  });
+});
+
+describe("filterRosterGroups", () => {
+  const bots = [bot({ id: "boss", name: "Akeru" }), bot({ id: "specialist", name: "Mori" })];
+  const groups: Group[] = [
+    {
+      id: "launch",
+      name: "Launch crew",
+      bossBotId: "boss",
+      members: [
+        { kind: "bot", botId: BotId.make("boss"), role: "boss" },
+        { kind: "bot", botId: BotId.make("specialist"), role: "specialist" },
+      ],
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    },
+  ];
+
+  it("matches a group by its name or a member bot name", () => {
+    expect(filterRosterGroups(groups, bots, "launch")).toHaveLength(1);
+    expect(filterRosterGroups(groups, bots, "MORI")).toHaveLength(1);
+    expect(filterRosterGroups(groups, bots, "nobody")).toEqual([]);
+  });
+});
+
+describe("roster drag ids", () => {
+  it("keeps bot and group targets distinct", () => {
+    expect(parseRosterBotDragId(rosterBotDragId("same"))).toBe("same");
+    expect(parseRosterGroupDropId(rosterGroupDropId("same"))).toBe("same");
+    expect(parseRosterBotDragId(rosterGroupDropId("same"))).toBeNull();
+    expect(parseRosterGroupDropId(rosterBotDragId("same"))).toBeNull();
+    expect(parseRosterBotDragId("bot:")).toBeNull();
+    expect(parseRosterGroupDropId("group:")).toBeNull();
   });
 });
 

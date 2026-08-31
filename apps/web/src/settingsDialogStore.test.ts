@@ -82,5 +82,6 @@ describe("legacy settings deep links", () => {
     expect(settingsSectionFromPathname("/settings")).toBe("general");
     expect(settingsSectionFromPathname("/settings/")).toBe("general");
     expect(settingsSectionFromPathname("/settings/archived")).toBe("general");
+    expect(settingsSectionFromPathname("/settings/groups")).toBe("general");
   });
 });

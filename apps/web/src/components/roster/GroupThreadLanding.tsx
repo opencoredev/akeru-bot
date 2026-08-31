@@ -1,7 +1,5 @@
-import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useEffect } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
@@ -33,7 +31,6 @@ export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
 }
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
-  const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const peopleIdentity = useAtomValue(
     environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
@@ -49,10 +46,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
-
-  useEffect(() => {
-    if (!group) void navigate({ to: "/", replace: true });
-  }, [group, navigate]);
 
   if (!group) return null;
   const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
@@ -182,7 +175,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         />
         {boss === null ? (
           <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
-            Choose an active group boss in Settings.
+            Choose an active group boss in the group sidebar.
           </div>
         ) : null}
         <BotPromptComposer

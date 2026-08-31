@@ -19,9 +19,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { BotIcon, PlusIcon, SearchIcon, UsersIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -34,6 +34,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { Button } from "../ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -42,20 +43,27 @@ import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
+import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
+import { GroupMemberStack } from "./GroupMemberStack";
 import {
-  buildGroupedRosterSections,
   buildRosterStrip,
   filterRosterBots,
+  filterRosterGroups,
   formatRosterTimestamp,
   isRecordableChatPath,
   parseChatPath,
   resolveLatestRosterMessage,
   resolveRosterIndicator,
+  groupContainsBot,
+  parseRosterBotDragId,
+  parseRosterGroupDropId,
+  rosterBotDragId,
+  rosterGroupDropId,
   type RosterLastMessage,
   type RosterPresence,
 } from "./roster.logic";
 import { moveRosterBot, useRosterStore } from "./rosterStore";
-import type { Bot, BotAvatar } from "./types";
+import type { Bot, BotAvatar, Group } from "./types";
 import { useServerRosterSync } from "./useServerRoster";
 
 /** Avatar with a yellow needs-you light and a green working light. */
@@ -98,8 +106,10 @@ function RosterAvatar({
  */
 const RosterSidebarHeader = memo(function RosterSidebarHeader({
   onNewBot,
+  onNewGroup,
 }: {
   onNewBot: () => void;
+  onNewGroup: () => void;
 }) {
   return (
     <SidebarHeader
@@ -121,14 +131,13 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
           </span>
         </Link>
         <div className="flex items-center justify-end">
-          <Tooltip>
-            <TooltipTrigger
+          <Menu>
+            <MenuTrigger
               render={
                 <Button
-                  aria-label="New bot"
+                  aria-label="Create"
                   data-testid="roster-new-bot"
                   className="size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]"
-                  onClick={onNewBot}
                   size="icon"
                   variant="ghost"
                 >
@@ -136,8 +145,17 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
                 </Button>
               }
             />
-            <TooltipPopup side="bottom">New bot</TooltipPopup>
-          </Tooltip>
+            <MenuPopup align="end">
+              <MenuItem onClick={onNewBot}>
+                <BotIcon />
+                New bot
+              </MenuItem>
+              <MenuItem onClick={onNewGroup}>
+                <UsersIcon />
+                New group
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
         </div>
       </div>
     </SidebarHeader>
@@ -154,7 +172,9 @@ const BotStripTile = memo(function BotStripTile({
   onSelect: (bot: Bot) => void;
 }) {
   const presence = useBotPresence(bot.id);
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: rosterBotDragId(bot.id),
+  });
   return (
     <li
       ref={setNodeRef}
@@ -224,7 +244,9 @@ const BotRosterRow = memo(function BotRosterRow({
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage, presence === "working");
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: rosterBotDragId(bot.id),
+  });
   return (
     <li
       ref={setNodeRef}
@@ -309,6 +331,50 @@ function RailBotButton({
   );
 }
 
+function GroupRosterRow({
+  group,
+  bots,
+  isActive,
+  onSelect,
+}: {
+  group: Group;
+  bots: readonly Bot[];
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: rosterGroupDropId(group.id) });
+  const members = group.members.filter((member) => member.kind === "bot").length;
+  return (
+    <li ref={setNodeRef} data-testid="roster-group-row" className="list-none">
+      <button
+        type="button"
+        aria-current={isActive || undefined}
+        onClick={onSelect}
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+          isOver
+            ? "bg-sidebar-row-active ring-2 ring-ring"
+            : isActive
+              ? "bg-sidebar-row-active"
+              : "hover:bg-sidebar-row-hover",
+        )}
+      >
+        <GroupMemberStack
+          group={group}
+          bots={bots}
+          ringClassName="ring-sidebar"
+          sizeClassName="size-10"
+          className="w-[3.5rem] shrink-0"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{group.name}</span>
+          <span className="block text-[13px] text-sidebar-muted-foreground">{members} bots</span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
 function RosterDropZone({
   id,
   className,
@@ -346,6 +412,12 @@ export default function BotRosterSidebar() {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const createBotCommand = useAtomCommand(botEnvironment.create, { reportFailure: false });
+  const createGroupCommand = useAtomCommand(botEnvironment.groups.create, {
+    reportFailure: false,
+  });
+  const assignGroupMemberCommand = useAtomCommand(botEnvironment.groups.assignMember, {
+    reportFailure: false,
+  });
   const pathname = useLocation({ select: (location) => location.pathname });
   const { bots, groups, lastMessageByBotId, selectedBotId } = useRosterStore(
     useShallow((state) => ({
@@ -371,9 +443,9 @@ export default function BotRosterSidebar() {
   );
   const pinnedBots = visibleBots.filter((bot) => bot.pinned);
   const unpinnedBots = visibleBots.filter((bot) => !bot.pinned);
-  const groupSections = useMemo(
-    () => buildGroupedRosterSections(visibleBots, groups),
-    [groups, visibleBots],
+  const visibleGroups = useMemo(
+    () => filterRosterGroups(groups, bots, query),
+    [bots, groups, query],
   );
   const activeBot =
     activeBotId === null
@@ -383,21 +455,25 @@ export default function BotRosterSidebar() {
   const resolveDrop = (layout: readonly Bot[], overId: string) => {
     if (overId === "pinned-zone") return { overBotId: null, pinned: true } as const;
     if (overId === "unpinned-zone") return { overBotId: null, pinned: false } as const;
-    const overBot = layout.find((bot) => bot.id === overId);
+    const overBotId = parseRosterBotDragId(overId);
+    const overBot = overBotId ? layout.find((bot) => bot.id === overBotId) : null;
     return overBot ? { overBotId: overBot.id, pinned: overBot.pinned } : null;
   };
   const handleDragStart = ({ active }: DragStartEvent) => {
     dragLayoutRef.current = bots;
-    setActiveBotId(String(active.id));
+    setActiveBotId(parseRosterBotDragId(String(active.id)));
     setDragLayout(bots);
   };
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
     setDragLayout((current) => {
       const layout = current ?? bots;
+      if (parseRosterGroupDropId(String(over.id))) return layout;
       const drop = resolveDrop(layout, String(over.id));
       if (!drop) return layout;
-      const next = moveRosterBot(layout, String(active.id), drop.overBotId, drop.pinned) ?? layout;
+      const activeId = parseRosterBotDragId(String(active.id));
+      if (!activeId) return layout;
+      const next = moveRosterBot(layout, activeId, drop.overBotId, drop.pinned) ?? layout;
       dragLayoutRef.current = next;
       return next;
     });
@@ -407,8 +483,26 @@ export default function BotRosterSidebar() {
     setActiveBotId(null);
     setDragLayout(null);
   };
-  const handleDragEnd = ({ over }: DragEndEvent) => {
-    if (over && dragLayoutRef.current) {
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    const botId = parseRosterBotDragId(String(active.id));
+    const groupId = over ? parseRosterGroupDropId(String(over.id)) : null;
+    const group = groupId ? groups.find((candidate) => candidate.id === groupId) : null;
+    if (botId && group) {
+      if (environmentId && !groupContainsBot(group, botId)) {
+        void assignGroupMemberCommand({
+          environmentId,
+          input: {
+            groupId: GroupId.make(group.id),
+            botId: BotId.make(botId),
+            role: "specialist",
+          },
+        }).then((result) => {
+          if (result._tag === "Failure") {
+            toastManager.add({ type: "error", title: `Could not add bot to ${group.name}` });
+          }
+        });
+      }
+    } else if (over && dragLayoutRef.current) {
       useRosterStore.getState().commitBotLayout(dragLayoutRef.current);
     }
     finishDrag();
@@ -436,8 +530,10 @@ export default function BotRosterSidebar() {
   };
 
   const [newBotOpen, setNewBotOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [pendingCreatedBotId, setPendingCreatedBotId] = useState<string | null>(null);
   const handleNewBot = () => setNewBotOpen(true);
+  const handleNewGroup = () => setNewGroupOpen(true);
   const handleCreateBot = async ({ name, avatar }: { name: string; avatar: BotAvatar }) => {
     if (environmentId === null) {
       toastManager.add({ type: "error", title: "Connect an environment first" });
@@ -468,6 +564,29 @@ export default function BotRosterSidebar() {
     setPendingCreatedBotId(botId);
   };
 
+  const handleCreateGroup = async (input: NewGroupInput) => {
+    if (environmentId === null) {
+      toastManager.add({ type: "error", title: "Connect an environment first" });
+      return;
+    }
+    const groupId = GroupId.make(`group-${randomUUID()}`);
+    const result = await createGroupCommand({
+      environmentId,
+      input: {
+        groupId,
+        name: input.name,
+        bossBotId: BotId.make(input.bossBotId),
+        specialistBotIds: input.specialistBotIds.map((botId) => BotId.make(botId)),
+      },
+    });
+    if (result._tag === "Failure") {
+      toastManager.add({ type: "error", title: "Could not create group" });
+      return;
+    }
+    setNewGroupOpen(false);
+    void navigate({ to: "/groups/$groupId", params: { groupId } });
+  };
+
   useEffect(() => {
     if (pendingCreatedBotId === null) return;
     const bot = bots.find((candidate) => candidate.id === pendingCreatedBotId);
@@ -480,7 +599,7 @@ export default function BotRosterSidebar() {
 
   return (
     <>
-      <RosterSidebarHeader onNewBot={handleNewBot} />
+      <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
       <SidebarContent
         className="gap-0"
         fixedHeader={
@@ -541,7 +660,7 @@ export default function BotRosterSidebar() {
                     className="min-h-24 rounded-xl transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
                   >
                     <SortableContext
-                      items={pinnedBots.map((bot) => bot.id)}
+                      items={pinnedBots.map((bot) => rosterBotDragId(bot.id))}
                       strategy={rectSortingStrategy}
                     >
                       <ul
@@ -570,49 +689,44 @@ export default function BotRosterSidebar() {
                   className="min-h-12 rounded-lg transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
                 >
                   <SortableContext
-                    items={unpinnedBots.map((bot) => bot.id)}
+                    items={unpinnedBots.map((bot) => rosterBotDragId(bot.id))}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="flex flex-col gap-2">
-                      {groupSections.map((section) => (
-                        <section key={section.id} aria-label={section.name}>
-                          <div className="mb-0.5 flex items-baseline gap-2 px-2 py-0.5">
-                            {section.id === "unassigned" ? (
-                              <span className="text-[13px] font-medium text-sidebar-muted-foreground">
-                                {section.name}
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                aria-current={pathname === `/groups/${section.id}` || undefined}
-                                className="rounded text-[13px] font-medium text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                                onClick={() =>
-                                  void navigate({
-                                    to: "/groups/$groupId",
-                                    params: { groupId: section.id },
-                                  })
-                                }
-                              >
-                                {section.name}
-                              </button>
-                            )}
-                          </div>
-                          <ul className="flex min-h-12 flex-col gap-px">
-                            {section.bots.map((bot) => (
-                              <BotRosterRow
-                                key={bot.id}
-                                bot={bot}
-                                lastMessage={lastMessageByBotId[bot.id] ?? null}
-                                isActive={selectedBotId === bot.id}
-                                onSelect={handleSelect}
-                              />
-                            ))}
-                          </ul>
-                        </section>
-                      ))}
+                      {visibleGroups.length > 0 ? (
+                        <ul aria-label="Groups" className="flex flex-col gap-px">
+                          {visibleGroups.map((group) => (
+                            <GroupRosterRow
+                              key={group.id}
+                              group={group}
+                              bots={bots}
+                              isActive={pathname === `/groups/${group.id}`}
+                              onSelect={() =>
+                                void navigate({
+                                  to: "/groups/$groupId",
+                                  params: { groupId: group.id },
+                                })
+                              }
+                            />
+                          ))}
+                        </ul>
+                      ) : null}
+                      <ul aria-label="Bots" className="flex min-h-12 flex-col gap-px">
+                        {unpinnedBots.map((bot) => (
+                          <BotRosterRow
+                            key={bot.id}
+                            bot={bot}
+                            lastMessage={lastMessageByBotId[bot.id] ?? null}
+                            isActive={selectedBotId === bot.id}
+                            onSelect={handleSelect}
+                          />
+                        ))}
+                      </ul>
                     </div>
                   </SortableContext>
-                  {unpinnedBots.length === 0 && pinnedBots.length === 0 ? (
+                  {unpinnedBots.length === 0 &&
+                  pinnedBots.length === 0 &&
+                  visibleGroups.length === 0 ? (
                     <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
                       No bots match
                     </div>
@@ -649,6 +763,14 @@ export default function BotRosterSidebar() {
           open
           onOpenChange={setNewBotOpen}
           onCreate={(input) => void handleCreateBot(input)}
+        />
+      ) : null}
+      {newGroupOpen ? (
+        <NewGroupDialog
+          open
+          bots={bots}
+          onOpenChange={setNewGroupOpen}
+          onCreate={(input) => void handleCreateGroup(input)}
         />
       ) : null}
       <SidebarChromeFooter />

@@ -19,7 +19,6 @@ export const SETTINGS_SECTIONS = [
   "providers",
   "bots",
   "voice",
-  "groups",
   "connections",
   "keybindings",
   "source-control",

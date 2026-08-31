@@ -236,6 +236,39 @@ export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   );
 }
 
+export function filterRosterGroups(
+  groups: readonly Group[],
+  bots: readonly Bot[],
+  query: string,
+): Group[] {
+  const needle = query.trim().toLowerCase();
+  if (needle.length === 0) return [...groups];
+  return groups.filter(
+    (group) =>
+      group.name.toLowerCase().includes(needle) ||
+      groupBotMembers(group, bots).some((bot) => bot.name.toLowerCase().includes(needle)),
+  );
+}
+
+const BOT_DRAG_PREFIX = "bot:";
+const GROUP_DROP_PREFIX = "group:";
+
+export function rosterBotDragId(botId: string): string {
+  return `${BOT_DRAG_PREFIX}${botId}`;
+}
+
+export function rosterGroupDropId(groupId: string): string {
+  return `${GROUP_DROP_PREFIX}${groupId}`;
+}
+
+export function parseRosterBotDragId(id: string): string | null {
+  return id.startsWith(BOT_DRAG_PREFIX) ? id.slice(BOT_DRAG_PREFIX.length) || null : null;
+}
+
+export function parseRosterGroupDropId(id: string): string | null {
+  return id.startsWith(GROUP_DROP_PREFIX) ? id.slice(GROUP_DROP_PREFIX.length) || null : null;
+}
+
 export function isCurrentGroupPerson(
   authorPersonId: string | null | undefined,
   currentPersonId: string | null | undefined,
