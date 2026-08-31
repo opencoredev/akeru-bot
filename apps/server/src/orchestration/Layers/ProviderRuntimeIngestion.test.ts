@@ -632,6 +632,56 @@ describe("ProviderRuntimeIngestion", () => {
     });
   });
 
+  it("records replacement usage before provider turn tracking catches up", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const replacementTurnId = asTurnId("turn-replacement");
+    await harness.dispatch({
+      type: "thread.turn.start",
+      commandId: CommandId.make("cmd-turn-start-replacement"),
+      threadId: asThreadId("thread-1"),
+      message: {
+        messageId: asMessageId("message-replacement"),
+        role: "user",
+        text: "replace the old turn",
+        attachments: [],
+      },
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required",
+      createdAt: "2026-01-01T00:00:01.000Z",
+    });
+    await harness.reserveBotUsage(null);
+
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-replacement-turn-usage"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: replacementTurnId,
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: {
+        usage: { usedTokens: 150, inputTokens: 100, outputTokens: 50 },
+      },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-replacement-turn-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: replacementTurnId,
+      createdAt: "2026-01-01T00:00:03.000Z",
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.consumedTokens).toBe(150);
+    expect(usage.reservedTokens).toBe(0);
+    expect(usage.entries[0]).toMatchObject({
+      state: "reported",
+      turnId: replacementTurnId,
+    });
+  });
+
   it("applies provider session.state.changed transitions directly", async () => {
     const harness = await createHarness();
     const waitingAt = "2026-01-01T00:00:00.000Z";
