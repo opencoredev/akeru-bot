@@ -1,7 +1,12 @@
 import { BotId, EventId, TurnId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildBotStepMeters, buildBotUsageCapPatch, formatBotStepEngine } from "./botStepUsage";
+import {
+  buildBotStepMeters,
+  buildBotUsageCapPatch,
+  formatBotStepEngine,
+  resolveBotUsageCapForProvider,
+} from "./botStepUsage";
 
 function activity(
   id: string,
@@ -50,5 +55,26 @@ describe("mobile bot step usage", () => {
     expect(buildBotUsageCapPatch(botId, " ")).toEqual({ botId, usageCap: null });
     expect(buildBotUsageCapPatch(botId, "1.5")).toBeNull();
     expect(buildBotUsageCapPatch(botId, "0")).toBeNull();
+  });
+
+  it("clears hard stops for occupancy-only providers", () => {
+    const botId = BotId.make("bot-1");
+
+    expect(resolveBotUsageCapForProvider("50000", "cursor")).toEqual({
+      available: false,
+      limit: null,
+    });
+    expect(buildBotUsageCapPatch(botId, "50000", "cursor")).toEqual({
+      botId,
+      usageCap: null,
+    });
+    expect(buildBotUsageCapPatch(botId, "50000", "grok")).toEqual({
+      botId,
+      usageCap: null,
+    });
+    expect(buildBotUsageCapPatch(botId, "50000", "codex")).toEqual({
+      botId,
+      usageCap: { unit: "tokens", limit: 50_000 },
+    });
   });
 });

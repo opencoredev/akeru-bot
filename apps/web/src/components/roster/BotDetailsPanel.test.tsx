@@ -8,6 +8,7 @@ import {
   BotDetailsPanel,
   parseBotUsageCapInput,
   reduceBotDetailsPanelState,
+  resolveBotUsageCapForProvider,
 } from "./BotDetailsPanel";
 import type { Bot } from "./types";
 
@@ -70,6 +71,24 @@ describe("BotDetailsPanel", () => {
     expect(parseBotUsageCapInput(" ")).toEqual({ valid: true, value: null });
     expect(parseBotUsageCapInput("0")).toEqual({ valid: false, value: null });
     expect(parseBotUsageCapInput("1.5")).toEqual({ valid: false, value: null });
+  });
+
+  it("clears hard stops for occupancy-only providers", () => {
+    expect(resolveBotUsageCapForProvider("50000", "cursor")).toEqual({
+      available: false,
+      valid: true,
+      value: null,
+    });
+    expect(resolveBotUsageCapForProvider("50000", "grok")).toEqual({
+      available: false,
+      valid: true,
+      value: null,
+    });
+    expect(resolveBotUsageCapForProvider("50000", "codex")).toEqual({
+      available: true,
+      valid: true,
+      value: { unit: "tokens", limit: 50_000 },
+    });
   });
 
   it("uses the configured right-panel shortcut while open or closed", () => {

@@ -60,7 +60,7 @@ import {
   pendingModelAfterPress,
   providerSectionIsCollapsed,
 } from "./thread-settings-sheet-state";
-import { parseBotUsageCapInput } from "./botStepUsage";
+import { resolveBotUsageCapForProvider } from "./botStepUsage";
 
 /**
  * Everyday harnesses start expanded; every other provider (OpenRouter catalogs
@@ -291,6 +291,7 @@ type ThreadSettingsSessionProps = {
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
   readonly botUsageCap?: BotUsageCap | null;
+  readonly botUsageCapProviderDriver?: string;
   readonly onUpdateBotUsageCap?: (input: string) => Promise<boolean>;
 };
 
@@ -340,6 +341,7 @@ type ThreadSettingsSessionValue = {
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
   readonly botUsageCapInput: string | undefined;
+  readonly botUsageCapAvailable: boolean;
   readonly botUsageCapDirty: boolean;
   readonly botUsageCapValid: boolean;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
@@ -378,8 +380,11 @@ function ThreadSettingsSessionProvider(
   const [botUsageCapInput, setBotUsageCapInput] = useState<string | undefined>(() =>
     props.botUsageCap === undefined ? undefined : (props.botUsageCap?.limit.toString() ?? ""),
   );
-  const parsedBotUsageCap =
-    botUsageCapInput === undefined ? undefined : parseBotUsageCapInput(botUsageCapInput);
+  const resolvedBotUsageCap =
+    botUsageCapInput === undefined
+      ? undefined
+      : resolveBotUsageCapForProvider(botUsageCapInput, props.botUsageCapProviderDriver);
+  const parsedBotUsageCap = resolvedBotUsageCap?.limit;
   const botUsageCapDirty =
     botUsageCapInput !== undefined && parsedBotUsageCap !== (props.botUsageCap?.limit ?? null);
   const botUsageCapValid = botUsageCapInput === undefined || parsedBotUsageCap !== undefined;
@@ -478,6 +483,7 @@ function ThreadSettingsSessionProvider(
       runtimeMode: props.runtimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
       botUsageCapInput,
+      botUsageCapAvailable: resolvedBotUsageCap?.available ?? true,
       botUsageCapDirty,
       botUsageCapValid,
       displayedDescriptors,
@@ -504,6 +510,7 @@ function ThreadSettingsSessionProvider(
       botUsageCapDirty,
       botUsageCapInput,
       botUsageCapValid,
+      resolvedBotUsageCap?.available,
       commitBotUsageCap,
       commitPendingModel,
       displayedDescriptors,
@@ -746,7 +753,7 @@ function ThreadSettingsOptionsItem(props: {
             onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
           />
         </Animated.View>
-        {session.botUsageCapInput !== undefined ? (
+        {session.botUsageCapInput !== undefined && session.botUsageCapAvailable ? (
           <View className="min-h-14 flex-row items-center gap-3 bg-card px-4 py-2">
             <Text className="text-sm font-t3-medium text-foreground">Token hard stop</Text>
             <TextInput
@@ -760,6 +767,11 @@ function ThreadSettingsOptionsItem(props: {
               returnKeyType="done"
               value={session.botUsageCapInput}
             />
+          </View>
+        ) : session.botUsageCapInput !== undefined ? (
+          <View className="min-h-14 flex-row items-center justify-between gap-3 bg-card px-4 py-2">
+            <Text className="text-sm font-t3-medium text-foreground">Token hard stop</Text>
+            <Text className="text-sm text-foreground-muted">Unavailable for this provider</Text>
           </View>
         ) : null}
       </Animated.View>

@@ -638,12 +638,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const updateBotUsageCap = useCallback(
     async (input: string) => {
       if (!bot) return false;
-      const patch = buildBotUsageCapPatch(bot.id, input);
+      const patch = buildBotUsageCapPatch(bot.id, input, currentModelOption?.providerDriver);
       if (!patch) return false;
       const result = await updateBot({ environmentId: props.environmentId, input: patch });
       return result._tag === "Success";
     },
-    [bot, props.environmentId, updateBot],
+    [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
   );
   const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
@@ -660,6 +660,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ...(bot
         ? {
             botUsageCap: bot.usageCap,
+            botUsageCapProviderDriver: currentModelOption?.providerDriver,
             onUpdateBotUsageCap: updateBotUsageCap,
           }
         : {}),

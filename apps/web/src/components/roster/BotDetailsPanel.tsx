@@ -90,6 +90,20 @@ export function parseBotUsageCapInput(input: string): {
   return { valid: true, value: { unit: "tokens", limit } };
 }
 
+export function resolveBotUsageCapForProvider(
+  input: string,
+  providerDriver?: string,
+): {
+  readonly available: boolean;
+  readonly valid: boolean;
+  readonly value: Bot["usageCap"];
+} {
+  if (providerDriver === "cursor" || providerDriver === "grok") {
+    return { available: false, valid: true, value: null };
+  }
+  return { available: true, ...parseBotUsageCapInput(input) };
+}
+
 export interface BotProfileUpdate {
   readonly name: string;
   readonly label: string | null;
@@ -171,9 +185,9 @@ function BotProfileEditor({
   const normalizedLabel = label.trim() || null;
   const normalizedDescription = description.trim() || null;
   const nextEngine: Bot["engine"] = engineChanged && model ? { provider, model } : bot.engine;
-  const parsedUsageCap = parseBotUsageCapInput(usageCap);
+  const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
   const usageCapDirty =
-    !parsedUsageCap.valid || parsedUsageCap.value?.limit !== bot.usageCap?.limit;
+    !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
   const nextSandbox: Bot["sandbox"] = sandbox;
   const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);
   const enabledToolCount = tools.filter(
@@ -317,24 +331,31 @@ function BotProfileEditor({
           </Select>
         </div>
 
-        <label className="block space-y-2 text-sm font-medium">
-          <span>
-            Token hard stop <span className="font-normal text-muted-foreground">(optional)</span>
-          </span>
-          <Input
-            aria-label="Token hard stop"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            step={1}
-            value={usageCap}
-            placeholder="No limit"
-            onChange={(event) => {
-              setUsageCap(event.currentTarget.value);
-              markChanged();
-            }}
-          />
-        </label>
+        {resolvedUsageCap.available ? (
+          <label className="block space-y-2 text-sm font-medium">
+            <span>
+              Token hard stop <span className="font-normal text-muted-foreground">(optional)</span>
+            </span>
+            <Input
+              aria-label="Token hard stop"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={usageCap}
+              placeholder="No limit"
+              onChange={(event) => {
+                setUsageCap(event.currentTarget.value);
+                markChanged();
+              }}
+            />
+          </label>
+        ) : (
+          <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
+            <span className="text-sm font-medium">Token hard stop</span>
+            <span className="text-sm text-muted-foreground">Unavailable for this provider</span>
+          </div>
+        )}
 
         <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
           <span className="text-sm font-medium">Voice calls</span>
@@ -372,7 +393,7 @@ function BotProfileEditor({
         {saved ? <span className="mr-auto text-xs text-success">Saved</span> : null}
         <Button
           size="sm"
-          disabled={saving || !dirty || !name.trim() || !parsedUsageCap.valid || !onSave}
+          disabled={saving || !dirty || !name.trim() || !resolvedUsageCap.valid || !onSave}
           onClick={() => {
             if (!onSave) return;
             setSaving(true);
@@ -381,7 +402,7 @@ function BotProfileEditor({
               label: normalizedLabel,
               description: normalizedDescription,
               engine: nextEngine,
-              usageCap: parsedUsageCap.value,
+              usageCap: resolvedUsageCap.value,
               sandbox: nextSandbox,
               voiceEnabled,
               disabledMcpServerIds,
