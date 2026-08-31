@@ -7,12 +7,17 @@ import {
 
 export type PluginFilter = "All" | "Featured" | "Installed" | PluginCategory;
 
-export const PLUGIN_FILTERS: readonly PluginFilter[] = [
-  "All",
-  "Featured",
-  "Installed",
-  ...PLUGIN_CATEGORIES,
-];
+export function buildPluginFilters(
+  plugins: readonly PluginDirectoryDefinition[],
+): readonly PluginFilter[] {
+  const categories = new Set(plugins.map((plugin) => plugin.category));
+  return [
+    "All",
+    "Featured",
+    "Installed",
+    ...PLUGIN_CATEGORIES.filter((category) => categories.has(category)),
+  ];
+}
 
 export interface PluginSection {
   readonly title: string;

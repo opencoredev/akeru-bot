@@ -4,11 +4,13 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   isInstallablePlugin,
   loadDirectoryCatalog,
+  PLUGIN_CATEGORIES,
   type PluginDirectoryDefinition,
 } from "../../../../../plugins";
 import { PluginDetailsContent } from "./PluginDetails";
 import {
   EMPTY_MCP_SERVER_DRAFT,
+  PLUGIN_DIRECTORY_FILTERS,
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
   PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
@@ -79,6 +81,11 @@ describe("Plugins dialog content", () => {
     expect(PLUGIN_DIALOG_CLASS_NAME).toContain("h-[min(48rem,90dvh)]");
     expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("border-b");
     expect(PLUGIN_DIRECTORY_PANEL_CLASS_NAME).toContain("pt-5!");
+    expect(PLUGIN_DIRECTORY_FILTERS.slice(3)).toEqual(
+      PLUGIN_CATEGORIES.filter((category) =>
+        catalog.some((plugin) => plugin.category === category),
+      ),
+    );
   });
 
   it("renders official logos, short jobs, and state-correct directory actions", () => {

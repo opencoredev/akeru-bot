@@ -43,13 +43,14 @@ import {
   pluginMcpServerId,
 } from "./pluginRegistry";
 import {
+  buildPluginFilters,
   buildPluginSections,
   pluginActiveDependentBotNames,
-  PLUGIN_FILTERS,
   type PluginFilter,
 } from "./pluginPresentation";
 
 const CATALOG = loadDirectoryCatalog();
+export const PLUGIN_DIRECTORY_FILTERS = buildPluginFilters(CATALOG);
 
 export function resolvePluginDialogServers(
   servers: readonly McpServer[],
@@ -310,7 +311,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
               />
             </div>
             <div className="flex flex-wrap gap-1.5" aria-label="Plugin sections and categories">
-              {PLUGIN_FILTERS.map((item) => (
+              {PLUGIN_DIRECTORY_FILTERS.map((item) => (
                 <button
                   aria-pressed={filter === item}
                   className={cn(

@@ -2,12 +2,12 @@ import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { loadDirectoryCatalog, type PluginDirectoryDefinition } from "../../../../../plugins";
 import {
+  buildPluginFilters,
   buildPluginSections,
   pluginActiveDependentBotNames,
   pluginConnectionLabel,
   pluginMatchesQuery,
   pluginPrimaryAction,
-  PLUGIN_FILTERS,
 } from "./pluginPresentation";
 
 const catalog = loadDirectoryCatalog();
@@ -53,20 +53,14 @@ function server(enabled: boolean): McpServer {
 }
 
 describe("plugin presentation", () => {
-  it("makes All, Featured, Installed, and all eight categories first-class filters", () => {
-    expect(PLUGIN_FILTERS).toEqual([
-      "All",
-      "Featured",
-      "Installed",
-      "Work",
-      "Web",
-      "Marketing",
-      "Build",
-      "Design",
-      "Sales",
-      "Support",
-      "Commerce",
-    ]);
+  it("shows only populated directory categories and keeps pending categories discoverable", () => {
+    expect(buildPluginFilters(catalog)).toEqual(["All", "Featured", "Installed", "Work", "Web"]);
+    expect(
+      buildPluginFilters([
+        ...catalog,
+        { ...pendingPlugin, primaryCategory: "Marketing", category: "Marketing" },
+      ]),
+    ).toEqual(["All", "Featured", "Installed", "Work", "Web", "Marketing"]);
     expect(
       buildPluginSections({ plugins: catalog, query: "", filter: "All" })[0]?.plugins.map(
         (plugin) => plugin.id,
