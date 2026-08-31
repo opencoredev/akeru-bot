@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "semrush",
+  "name": "Semrush",
+  "description": "Query SEO, traffic, keyword, and market data.",
+  "primaryCategory": "Marketing",
+  "tags": ["seo", "traffic", "market-research"],
+  "capabilities": ["research keywords", "analyze traffic", "compare market competitors"],
+  "publisher": {
+    "name": "Semrush",
+    "url": "https://www.semrush.com"
+  },
+  "maintainer": {
+    "name": "Semrush",
+    "url": "https://www.semrush.com"
+  },
+  "documentationUrl": "https://developer.semrush.com/api/v4/introduction/semrush-mcp/",
+  "sourceUrl": "https://developer.semrush.com/api/v4/introduction/semrush-mcp/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.semrush.com/__static__/favicon.37cab19e6995.svg",
+      "license": "Semrush brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.semrush.com/v2/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Semrush install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Semrush connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-marketing-data",
+      "description": "Read SEO, traffic, keyword, and market data.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

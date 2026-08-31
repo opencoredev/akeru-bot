@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "figma",
+  "name": "Figma",
+  "description": "Read design context and edit Figma canvases.",
+  "primaryCategory": "Design",
+  "tags": ["prototyping", "figjam", "design-systems"],
+  "capabilities": ["read design context", "create Figma content", "edit Figma content"],
+  "publisher": {
+    "name": "Figma",
+    "url": "https://www.figma.com"
+  },
+  "maintainer": {
+    "name": "Figma",
+    "url": "https://www.figma.com"
+  },
+  "documentationUrl": "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/",
+  "sourceUrl": "https://github.com/figma/mcp-server-guide",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/figma.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.figma.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Figma must add Akeru to the Figma MCP Catalog before its OAuth server accepts this client."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Figma to approve Akeru, then connect through Figma OAuth."],
+  "permissions": [
+    {
+      "id": "read-designs",
+      "description": "Read files, components, variables, and design context.",
+      "approval": "read"
+    },
+    {
+      "id": "edit-designs",
+      "description": "Create or update Figma and FigJam content.",
+      "approval": "publishing"
+    },
+    {
+      "id": "delete-designs",
+      "description": "Delete Figma or FigJam content.",
+      "approval": "delete"
+    }
+  ],
+  "approvals": ["delete", "publishing"],
+  "catalogStatus": "approval-pending"
+}

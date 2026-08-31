@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "id": "lemon-squeezy",
+  "name": "Lemon Squeezy",
+  "description": "Manage Lemon Squeezy stores when an operator MCP becomes available.",
+  "primaryCategory": "Commerce",
+  "tags": ["payments", "subscriptions", "digital-products"],
+  "capabilities": ["read store data", "manage subscriptions", "issue refunds"],
+  "publisher": {
+    "name": "Lemon Squeezy",
+    "url": "https://www.lemonsqueezy.com"
+  },
+  "maintainer": {
+    "name": "Lemon Squeezy",
+    "url": "https://www.lemonsqueezy.com"
+  },
+  "documentationUrl": "https://docs.lemonsqueezy.com/api",
+  "sourceUrl": "https://docs.lemonsqueezy.com/api",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/lemonsqueezy.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Lemon Squeezy does not publish a first-party operator MCP endpoint or supported local command."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Wait for Lemon Squeezy to publish a first-party operator MCP connection recipe."],
+  "permissions": [
+    {
+      "id": "read-store-data",
+      "description": "Read products, orders, customers, subscriptions, and licenses.",
+      "approval": "read"
+    },
+    {
+      "id": "create-billing-actions",
+      "description": "Create checkout or other billing actions.",
+      "approval": "pay"
+    },
+    {
+      "id": "send-store-messages",
+      "description": "Send customer or order communication.",
+      "approval": "send"
+    },
+    {
+      "id": "write-live-store",
+      "description": "Change live products, subscriptions, or store data.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-store-data",
+      "description": "Delete Lemon Squeezy resources.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-secrets",
+      "description": "Manage license keys, webhooks, or other secret-backed settings.",
+      "approval": "secrets"
+    },
+    {
+      "id": "publish-products",
+      "description": "Publish products or checkout content.",
+      "approval": "publishing"
+    },
+    {
+      "id": "issue-refunds",
+      "description": "Issue order or payment refunds.",
+      "approval": "refunds"
+    },
+    {
+      "id": "manage-store",
+      "description": "Change store-wide Lemon Squeezy settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": [
+    "send",
+    "pay",
+    "delete",
+    "production",
+    "secrets",
+    "publishing",
+    "refunds",
+    "account-wide"
+  ],
+  "catalogStatus": "approval-pending"
+}

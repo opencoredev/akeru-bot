@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "tavily",
+  "name": "Tavily",
+  "description": "Search, extract, and crawl public web content.",
+  "primaryCategory": "Web",
+  "tags": ["search", "research", "extraction", "crawling"],
+  "capabilities": ["search the web", "extract page content", "crawl sites"],
+  "publisher": { "name": "Tavily", "url": "https://www.tavily.com" },
+  "maintainer": { "name": "Tavily", "url": "https://www.tavily.com" },
+  "documentationUrl": "https://docs.tavily.com/documentation/mcp",
+  "sourceUrl": "https://github.com/tavily-ai/tavily-mcp",
+  "license": "MIT",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://media.brand.dev/b1c22310-072a-4d37-ae5b-221a55ea3a99.svg",
+      "license": "Tavily trademark; retrieved by Brand.dev"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.tavily.com/mcp/" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru must verify Tavily installation, OAuth, safe search, extraction, and crawl operations, disable, reconnect, and removal before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Akeru to complete the Tavily integration lifecycle."],
+  "permissions": [
+    { "id": "read-web-data", "description": "Read public web content.", "approval": "read" }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

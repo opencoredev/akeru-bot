@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "linear",
+  "name": "Linear",
+  "description": "Read, create, and update Linear issues, projects, and comments.",
+  "primaryCategory": "Work",
+  "tags": ["issues", "projects", "support", "customer-feedback"],
+  "capabilities": [
+    "search issues",
+    "read teams and the viewer profile",
+    "create issues, projects, and comments",
+    "update issues, projects, and comments"
+  ],
+  "publisher": { "name": "Linear", "url": "https://linear.app" },
+  "maintainer": { "name": "Linear", "url": "https://linear.app" },
+  "documentationUrl": "https://linear.app/docs/mcp",
+  "sourceUrl": "https://linear.app/docs/mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": { "sourceUrl": "https://simpleicons.org/?q=linear", "license": "CC0-1.0" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.linear.app/mcp" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru must verify Linear installation, OAuth, safe read and write operations, disable, reconnect, and removal before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Akeru to complete the Linear integration lifecycle."],
+  "permissions": [
+    { "id": "read-linear-data", "description": "Read Linear workspace data.", "approval": "read" }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

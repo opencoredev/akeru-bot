@@ -6,7 +6,6 @@
   "primaryCategory": "Web",
   "tags": ["search", "research", "extraction"],
   "capabilities": ["search the web", "extract URL content", "rank search results"],
-  "featuredRank": 4,
   "publisher": { "name": "Parallel", "url": "https://parallel.ai" },
   "maintainer": { "name": "Parallel", "url": "https://parallel.ai" },
   "documentationUrl": "https://docs.parallel.ai/integrations/mcp/search-mcp",

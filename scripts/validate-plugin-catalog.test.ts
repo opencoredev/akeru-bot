@@ -8,6 +8,59 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { validatePluginCatalog } from "./validate-plugin-catalog.ts";
 
 const temporaryDirectories: string[] = [];
+const EXPECTED_DIRECTORY_IDS = [
+  "ahrefs",
+  "apify",
+  "apollo",
+  "asana",
+  "atlassian",
+  "attio",
+  "canva",
+  "cloudflare",
+  "coda",
+  "context",
+  "customer-io",
+  "datadog",
+  "docusign",
+  "dropbox",
+  "exa",
+  "executor",
+  "figma",
+  "firecrawl",
+  "framer",
+  "github",
+  "help-scout",
+  "hubspot",
+  "intercom",
+  "lemon-squeezy",
+  "linear",
+  "mobbin",
+  "monday",
+  "netlify",
+  "notion",
+  "paddle",
+  "paper",
+  "parallel-search",
+  "paypal",
+  "pipedrive",
+  "posthog",
+  "railway",
+  "render",
+  "salesforce",
+  "semrush",
+  "sentry",
+  "sequenzy",
+  "shopify",
+  "slack",
+  "stripe",
+  "superside",
+  "tavily",
+  "typefully",
+  "vercel",
+  "webflow",
+  "zendesk",
+  "zernio",
+] as const;
 
 function fixtureRoot(): URL {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-plugins-"));
@@ -29,13 +82,10 @@ afterEach(() => {
 
 describe("plugin catalog validation", () => {
   it("validates the live plugin directory", () => {
-    expect(validatePluginCatalog().map((entry) => entry.manifest.id)).toEqual([
-      "context",
-      "exa",
-      "executor",
-      "firecrawl",
-      "parallel-search",
-    ]);
+    const entries = validatePluginCatalog();
+    expect(entries.map((entry) => entry.manifest.id)).toEqual(EXPECTED_DIRECTORY_IDS);
+    expect(entries.map((entry) => entry.directory)).toEqual(EXPECTED_DIRECTORY_IDS);
+    expect(entries).toHaveLength(51);
   });
 
   it("validates isolated manifests and official local assets", () => {

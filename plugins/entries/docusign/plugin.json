@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "id": "docusign",
+  "name": "DocuSign",
+  "description": "Prepare, send, sign, and manage DocuSign agreements.",
+  "primaryCategory": "Commerce",
+  "tags": ["agreements", "esignature", "contracts"],
+  "capabilities": ["read agreements", "send envelopes", "apply signatures"],
+  "publisher": {
+    "name": "DocuSign",
+    "url": "https://www.docusign.com"
+  },
+  "maintainer": {
+    "name": "DocuSign",
+    "url": "https://www.docusign.com"
+  },
+  "documentationUrl": "https://developers.docusign.com",
+  "sourceUrl": "https://developers.docusign.com",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://media.brand.dev/ac000986-f6e8-4b6e-b389-8df5b5ae3873.svg",
+      "license": "DocuSign trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "DocuSign has not published an Akeru-compatible first-party MCP endpoint or approved Akeru's OAuth integration."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": [
+    "Wait for DocuSign to publish a supported MCP endpoint and approve Akeru's OAuth integration."
+  ],
+  "permissions": [
+    {
+      "id": "read-agreements",
+      "description": "Read envelopes, templates, recipients, and agreement status.",
+      "approval": "read"
+    },
+    {
+      "id": "send-envelopes",
+      "description": "Send envelopes or recipient reminders.",
+      "approval": "send"
+    },
+    {
+      "id": "write-live-agreements",
+      "description": "Create or update production agreements and templates.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-agreements",
+      "description": "Delete or void envelopes and templates.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-integration-secrets",
+      "description": "Change integration keys or other secret settings.",
+      "approval": "secrets"
+    },
+    {
+      "id": "apply-signatures",
+      "description": "Apply, request, or complete electronic signatures.",
+      "approval": "signatures"
+    },
+    {
+      "id": "manage-account",
+      "description": "Change account-wide DocuSign settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "delete", "production", "secrets", "signatures", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

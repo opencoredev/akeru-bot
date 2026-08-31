@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "sequenzy",
+  "name": "Sequenzy",
+  "description": "Manage audiences, campaigns, and email delivery.",
+  "primaryCategory": "Marketing",
+  "tags": ["email", "campaigns", "automation"],
+  "capabilities": ["manage email audiences", "build campaigns", "send email"],
+  "publisher": {
+    "name": "Sequenzy",
+    "url": "https://www.sequenzy.com"
+  },
+  "maintainer": {
+    "name": "Sequenzy",
+    "url": "https://www.sequenzy.com"
+  },
+  "documentationUrl": "https://docs.sequenzy.com/concepts/mcp",
+  "sourceUrl": "https://github.com/Sequenzy/mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/Sequenzy/mcp/main/assets/logo.png",
+      "license": "Sequenzy brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://api.sequenzy.com/v1/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Sequenzy install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Sequenzy connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-marketing-data",
+      "description": "Read audiences, campaigns, and delivery results.",
+      "approval": "read"
+    },
+    {
+      "id": "send-email",
+      "description": "Send transactional and campaign email.",
+      "approval": "send"
+    },
+    {
+      "id": "publish-campaigns",
+      "description": "Publish email campaigns.",
+      "approval": "publishing"
+    },
+    {
+      "id": "delete-marketing-data",
+      "description": "Delete audiences, campaigns, or templates.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-api-keys",
+      "description": "Create or revoke API keys.",
+      "approval": "secrets"
+    },
+    {
+      "id": "change-workspace",
+      "description": "Change shared workspace settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "publishing", "delete", "secrets", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

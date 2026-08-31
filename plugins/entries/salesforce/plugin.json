@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "id": "salesforce",
+  "name": "Salesforce",
+  "description": "Read and manage Salesforce CRM data and workflows.",
+  "primaryCategory": "Sales",
+  "tags": ["crm", "pipeline", "customer-data"],
+  "capabilities": ["read CRM records", "update CRM records", "run Salesforce workflows"],
+  "publisher": {
+    "name": "Salesforce",
+    "url": "https://www.salesforce.com"
+  },
+  "maintainer": {
+    "name": "Salesforce",
+    "url": "https://www.salesforce.com"
+  },
+  "documentationUrl": "https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/client-connection-overview.html",
+  "sourceUrl": "https://github.com/forcedotcom/mcp-hosted",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://svgl.app/library/salesforce.svg",
+      "license": "Salesforce trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "A Salesforce administrator must enable MCP and register Akeru as an External Client App in each organization."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": [
+    "Ask a Salesforce administrator to enable an MCP server and register Akeru as an External Client App."
+  ],
+  "permissions": [
+    {
+      "id": "read-crm",
+      "description": "Read Salesforce records, reports, and metadata.",
+      "approval": "read"
+    },
+    {
+      "id": "write-crm",
+      "description": "Create or update production Salesforce records and workflows.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-crm",
+      "description": "Delete Salesforce records or configuration.",
+      "approval": "delete"
+    },
+    {
+      "id": "send-campaigns",
+      "description": "Send messages or launch Salesforce campaigns.",
+      "approval": "send"
+    },
+    {
+      "id": "publish-campaigns",
+      "description": "Publish or activate Salesforce campaigns.",
+      "approval": "publishing"
+    },
+    {
+      "id": "manage-client-app",
+      "description": "Change connected-app credentials or secret settings.",
+      "approval": "secrets"
+    },
+    {
+      "id": "manage-organization",
+      "description": "Change organization-wide Salesforce settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "delete", "production", "secrets", "publishing", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

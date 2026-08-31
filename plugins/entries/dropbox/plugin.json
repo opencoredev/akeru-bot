@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "dropbox",
+  "name": "Dropbox",
+  "description": "Read and delete files in Dropbox.",
+  "primaryCategory": "Work",
+  "tags": ["files", "storage", "documents"],
+  "capabilities": ["identify the user", "read files", "delete files"],
+  "publisher": { "name": "Dropbox", "url": "https://www.dropbox.com" },
+  "maintainer": { "name": "Dropbox", "url": "https://www.dropbox.com" },
+  "documentationUrl": "https://www.dropbox.com/developers",
+  "sourceUrl": "https://www.dropbox.com/developers",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": { "sourceUrl": "https://simpleicons.org/?q=dropbox", "license": "CC0-1.0" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.dropbox.com/mcp" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Dropbox must approve and allowlist the Akeru app before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Dropbox to approve and allowlist the Akeru app."],
+  "permissions": [
+    {
+      "id": "read-dropbox-data",
+      "description": "Read Dropbox account and file data.",
+      "approval": "read"
+    },
+    { "id": "delete-dropbox-file", "description": "Delete a Dropbox file.", "approval": "delete" }
+  ],
+  "approvals": ["delete"],
+  "catalogStatus": "approval-pending"
+}

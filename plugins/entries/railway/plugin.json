@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "railway",
+  "name": "Railway",
+  "description": "Manage projects, services, environments, deploys, and databases.",
+  "primaryCategory": "Build",
+  "tags": ["deployments", "hosting", "infrastructure"],
+  "capabilities": ["manage projects and services", "deploy applications", "provision databases"],
+  "publisher": {
+    "name": "Railway",
+    "url": "https://railway.com"
+  },
+  "maintainer": {
+    "name": "Railway",
+    "url": "https://railway.com"
+  },
+  "documentationUrl": "https://docs.railway.com/ai/mcp-server",
+  "sourceUrl": "https://github.com/railwayapp/railway-mcp-server",
+  "license": "MIT",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/railwayapp/railway-design/master/app/icon.svg",
+      "license": "Railway brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.railway.com"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Railway install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Railway connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-railway-data",
+      "description": "Read projects, services, environments, deploys, and logs.",
+      "approval": "read"
+    },
+    {
+      "id": "change-railway-services",
+      "description": "Change or deploy production services and databases.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-railway-secrets",
+      "description": "Read or change environment variables and secrets.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-railway-resources",
+      "description": "Delete projects, services, environments, or databases.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-railway-workspace",
+      "description": "Change workspace-wide projects and settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

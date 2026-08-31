@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "webflow",
+  "name": "Webflow",
+  "description": "Build, manage, and publish Webflow sites.",
+  "primaryCategory": "Marketing",
+  "tags": ["sites", "cms", "design"],
+  "capabilities": ["edit site designs", "manage CMS content", "publish sites"],
+  "publisher": {
+    "name": "Webflow",
+    "url": "https://webflow.com"
+  },
+  "maintainer": {
+    "name": "Webflow",
+    "url": "https://webflow.com"
+  },
+  "documentationUrl": "https://developers.webflow.com/mcp/reference/getting-started",
+  "sourceUrl": "https://github.com/webflow/mcp-server",
+  "license": "MIT",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://dhygzobemt712.cloudfront.net/Mark/Mark_Logo_Blue.svg",
+      "license": "Webflow brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.webflow.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Webflow install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Webflow connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-site-data",
+      "description": "Read sites, CMS content, assets, and analytics.",
+      "approval": "read"
+    },
+    {
+      "id": "change-sites",
+      "description": "Change site designs, code, settings, and CMS content.",
+      "approval": "production"
+    },
+    {
+      "id": "publish-sites",
+      "description": "Publish site changes.",
+      "approval": "publishing"
+    },
+    {
+      "id": "delete-site-data",
+      "description": "Delete pages, CMS content, assets, or branches.",
+      "approval": "delete"
+    }
+  ],
+  "approvals": ["production", "publishing", "delete"],
+  "catalogStatus": "approval-pending"
+}

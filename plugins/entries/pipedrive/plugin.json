@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "pipedrive",
+  "name": "Pipedrive",
+  "description": "Read and manage deals, contacts, and activities in Pipedrive.",
+  "primaryCategory": "Sales",
+  "tags": ["crm", "deals", "pipeline"],
+  "capabilities": ["read CRM data", "manage deals", "manage sales activities"],
+  "publisher": {
+    "name": "Pipedrive",
+    "url": "https://www.pipedrive.com"
+  },
+  "maintainer": {
+    "name": "Pipedrive",
+    "url": "https://www.pipedrive.com"
+  },
+  "documentationUrl": "https://www.pipedrive.com/en/features/mcp-server",
+  "sourceUrl": "https://www.pipedrive.com/en/features/mcp-server",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://media.brand.dev/c3162eab-3550-4698-84e0-1fbe536f45d1.svg",
+      "license": "Pipedrive trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.pipedrive.ai/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Pipedrive's hosted MCP lifecycle, including OAuth, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect a Pipedrive account through the hosted OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-crm",
+      "description": "Read deals, contacts, activities, and pipelines.",
+      "approval": "read"
+    },
+    {
+      "id": "write-crm",
+      "description": "Create or update production deals, contacts, and activities.",
+      "approval": "production"
+    }
+  ],
+  "approvals": ["production"],
+  "catalogStatus": "approval-pending"
+}

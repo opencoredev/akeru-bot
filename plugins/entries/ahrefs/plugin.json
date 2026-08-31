@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "ahrefs",
+  "name": "Ahrefs",
+  "description": "Query SEO, backlink, keyword, and competitor data.",
+  "primaryCategory": "Marketing",
+  "tags": ["seo", "keywords", "backlinks"],
+  "capabilities": ["analyze backlinks", "research keywords", "compare competitors"],
+  "publisher": {
+    "name": "Ahrefs",
+    "url": "https://ahrefs.com"
+  },
+  "maintainer": {
+    "name": "Ahrefs",
+    "url": "https://ahrefs.com"
+  },
+  "documentationUrl": "https://docs.ahrefs.com/en/mcp/docs/introduction",
+  "sourceUrl": "https://docs.ahrefs.com/en/mcp/docs/introduction",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://static.ahrefs.com/favicon.svg?v=2",
+      "license": "Ahrefs brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://api.ahrefs.com/mcp/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Ahrefs install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Ahrefs connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-seo-data",
+      "description": "Read SEO, backlink, keyword, and competitor data.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

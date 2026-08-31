@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "zendesk",
+  "name": "Zendesk",
+  "description": "Manage Zendesk support work when an operator MCP becomes available.",
+  "primaryCategory": "Support",
+  "tags": ["customer-support", "tickets", "help-center"],
+  "capabilities": ["read tickets", "reply to customers", "manage help content"],
+  "publisher": {
+    "name": "Zendesk",
+    "url": "https://www.zendesk.com"
+  },
+  "maintainer": {
+    "name": "Zendesk",
+    "url": "https://www.zendesk.com"
+  },
+  "documentationUrl": "https://developer.zendesk.com/documentation/",
+  "sourceUrl": "https://developer.zendesk.com/api-reference/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/zendesk.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Zendesk does not publish a first-party operator MCP endpoint or supported local command."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Wait for Zendesk to publish a first-party operator MCP connection recipe."],
+  "permissions": [
+    {
+      "id": "read-support-data",
+      "description": "Read tickets, users, organizations, and help content.",
+      "approval": "read"
+    },
+    {
+      "id": "reply-to-customers",
+      "description": "Send ticket replies or proactive messages.",
+      "approval": "send"
+    },
+    {
+      "id": "write-support-data",
+      "description": "Create or update production support data.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-support-data",
+      "description": "Delete tickets, users, or help content.",
+      "approval": "delete"
+    },
+    {
+      "id": "publish-help-content",
+      "description": "Publish Zendesk help center content.",
+      "approval": "publishing"
+    },
+    {
+      "id": "manage-account",
+      "description": "Change account-wide Zendesk settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "delete", "production", "publishing", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

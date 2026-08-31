@@ -71,7 +71,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "All" })[0]?.plugins.map(
         (plugin) => plugin.id,
       ),
-    ).toEqual(["context", "firecrawl", "exa", "parallel-search", "executor"]);
+    ).toHaveLength(51);
     expect(
       buildPluginSections({
         plugins: catalog,
@@ -84,12 +84,12 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "Featured" })[0]?.plugins.map(
         (plugin) => plugin.id,
       ),
-    ).toEqual(["context", "firecrawl", "exa", "parallel-search", "executor"]);
+    ).toEqual(["context", "zernio"]);
     expect(
       buildPluginSections({ plugins: catalog, query: "", filter: "Web" })[0]?.plugins.map(
         (plugin) => plugin.id,
       ),
-    ).toEqual(["context", "firecrawl", "exa", "parallel-search"]);
+    ).toEqual(["context", "apify", "exa", "firecrawl", "parallel-search", "tavily"]);
   });
 
   it("searches only the directory discovery fields", () => {

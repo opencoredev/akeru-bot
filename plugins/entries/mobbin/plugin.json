@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "mobbin",
+  "name": "Mobbin",
+  "description": "Search real product screens, flows, and design patterns.",
+  "primaryCategory": "Design",
+  "tags": ["design-research", "screens", "user-flows"],
+  "capabilities": ["search product screens", "browse user flows", "find design patterns"],
+  "publisher": {
+    "name": "Mobbin",
+    "url": "https://mobbin.com"
+  },
+  "maintainer": {
+    "name": "Mobbin",
+    "url": "https://mobbin.com"
+  },
+  "documentationUrl": "https://docs.mobbin.com/mcp/introduction",
+  "sourceUrl": "https://github.com/mobbin/mobbin-mcp-server",
+  "license": "MIT",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://mintcdn.com/mobbin-552e5a20/noBj4ZCi1k9sXNQO/logo/light.svg",
+      "license": "Mobbin trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://api.mobbin.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Mobbin's hosted MCP lifecycle, including authentication, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect a paid Mobbin account through the hosted OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-design-library",
+      "description": "Search and read Mobbin screens, flows, and metadata.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

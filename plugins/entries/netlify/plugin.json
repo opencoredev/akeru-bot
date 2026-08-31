@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "netlify",
+  "name": "Netlify",
+  "description": "Manage sites, builds, deploys, logs, and environment settings.",
+  "primaryCategory": "Build",
+  "tags": ["deployments", "hosting", "sites"],
+  "capabilities": ["manage sites", "inspect builds and logs", "deploy projects"],
+  "publisher": {
+    "name": "Netlify",
+    "url": "https://www.netlify.com"
+  },
+  "maintainer": {
+    "name": "Netlify",
+    "url": "https://www.netlify.com"
+  },
+  "documentationUrl": "https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/",
+  "sourceUrl": "https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.netlify.com/favicon/icon.svg",
+      "license": "Netlify brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://netlify-mcp.netlify.app/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Netlify install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Netlify connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-netlify-data",
+      "description": "Read sites, builds, deploys, logs, and account data.",
+      "approval": "read"
+    },
+    {
+      "id": "deploy-sites",
+      "description": "Build or deploy production sites and functions.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-environment-variables",
+      "description": "Read or change environment variables and secrets.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-netlify-resources",
+      "description": "Delete sites, deploys, or account resources.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-netlify-account",
+      "description": "Change team-wide sites, access, and settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

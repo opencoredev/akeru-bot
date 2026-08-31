@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "paddle",
+  "name": "Paddle",
+  "description": "Read and manage Paddle billing, subscriptions, and transactions.",
+  "primaryCategory": "Commerce",
+  "tags": ["payments", "billing", "subscriptions"],
+  "capabilities": ["read billing data", "manage subscriptions", "issue refunds"],
+  "publisher": {
+    "name": "Paddle",
+    "url": "https://www.paddle.com"
+  },
+  "maintainer": {
+    "name": "Paddle",
+    "url": "https://www.paddle.com"
+  },
+  "documentationUrl": "https://developer.paddle.com/sdks/ai/paddle-mcp",
+  "sourceUrl": "https://github.com/PaddleHQ/paddle-mcp-server",
+  "license": "Apache-2.0",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/paddle.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.paddle.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Paddle's hosted MCP lifecycle, including OAuth, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect a live Paddle account through OAuth."],
+  "permissions": [
+    {
+      "id": "read-commerce-data",
+      "description": "Read products, prices, customers, subscriptions, and transactions.",
+      "approval": "read"
+    },
+    {
+      "id": "create-billing-actions",
+      "description": "Create transactions or other billing actions.",
+      "approval": "pay"
+    },
+    {
+      "id": "write-live-data",
+      "description": "Create or update live Paddle billing data.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-commerce-data",
+      "description": "Delete Paddle resources when the API permits it.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-secrets",
+      "description": "Create notification destinations or secret-backed settings.",
+      "approval": "secrets"
+    },
+    {
+      "id": "issue-refunds",
+      "description": "Issue Paddle transaction refunds.",
+      "approval": "refunds"
+    },
+    {
+      "id": "manage-account",
+      "description": "Change account-wide Paddle settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["pay", "delete", "production", "secrets", "refunds", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

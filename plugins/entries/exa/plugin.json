@@ -6,7 +6,6 @@
   "primaryCategory": "Web",
   "tags": ["search", "research", "code-search"],
   "capabilities": ["search the web", "find code", "research topics"],
-  "featuredRank": 3,
   "publisher": { "name": "Exa Labs", "url": "https://exa.ai" },
   "maintainer": { "name": "Exa Labs", "url": "https://exa.ai" },
   "documentationUrl": "https://exa.ai/mcp",

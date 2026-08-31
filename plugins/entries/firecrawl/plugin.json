@@ -6,7 +6,6 @@
   "primaryCategory": "Web",
   "tags": ["search", "scraping", "crawling", "extraction"],
   "capabilities": ["search the web", "crawl sites", "extract structured data"],
-  "featuredRank": 2,
   "publisher": { "name": "Firecrawl", "url": "https://www.firecrawl.dev" },
   "maintainer": { "name": "Firecrawl", "url": "https://www.firecrawl.dev" },
   "documentationUrl": "https://docs.firecrawl.dev/mcp-server/oauth",

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "sentry",
+  "name": "Sentry",
+  "description": "Investigate errors, traces, releases, and project health.",
+  "primaryCategory": "Build",
+  "tags": ["errors", "observability", "tracing"],
+  "capabilities": ["investigate errors", "analyze traces", "manage projects"],
+  "publisher": {
+    "name": "Sentry",
+    "url": "https://sentry.io"
+  },
+  "maintainer": {
+    "name": "Sentry",
+    "url": "https://sentry.io"
+  },
+  "documentationUrl": "https://docs.sentry.io/product/sentry-mcp/",
+  "sourceUrl": "https://github.com/getsentry/sentry-mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://sentry.io/branding/",
+      "license": "Sentry brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.sentry.dev/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Sentry install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Sentry connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-observability-data",
+      "description": "Read issues, traces, releases, projects, and teams.",
+      "approval": "read"
+    },
+    {
+      "id": "change-sentry-projects",
+      "description": "Create or change production projects and issue state.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-dsns",
+      "description": "Read or change project DSNs.",
+      "approval": "secrets"
+    },
+    {
+      "id": "change-organization",
+      "description": "Change organization-wide teams and access.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

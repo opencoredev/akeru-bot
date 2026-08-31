@@ -103,7 +103,11 @@ describe("Plugins dialog content", () => {
     for (const plugin of catalog) {
       expect(markup).toContain(plugin.logo.src.replaceAll("'", "&#x27;"));
       expect(markup).toContain(`data-plugin-id="${plugin.id}"`);
-      expect(markup).toContain(plugin.description);
+      const summary =
+        plugin.connection.type === "approval-pending"
+          ? plugin.connection.blocker
+          : plugin.description;
+      expect(markup).toContain(summary.replaceAll("'", "&#x27;"));
     }
   });
 

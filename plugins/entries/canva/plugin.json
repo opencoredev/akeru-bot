@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "canva",
+  "name": "Canva",
+  "description": "Read and edit Canva designs and brand assets.",
+  "primaryCategory": "Design",
+  "tags": ["brand-assets", "presentations", "prototyping"],
+  "capabilities": ["read designs", "create design content", "manage design assets"],
+  "publisher": {
+    "name": "Canva",
+    "url": "https://www.canva.com"
+  },
+  "maintainer": {
+    "name": "Canva",
+    "url": "https://www.canva.com"
+  },
+  "documentationUrl": "https://www.canva.dev/docs/mcp/",
+  "sourceUrl": "https://www.canva.dev/docs/mcp/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://svgl.app/library/canva.svg",
+      "license": "Canva trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.canva.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Canva must approve Akeru's OAuth redirect registration before this client can connect."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Canva to approve Akeru's OAuth registration, then connect a Canva account."],
+  "permissions": [
+    {
+      "id": "read-designs",
+      "description": "Read designs, folders, assets, and brand kits.",
+      "approval": "read"
+    },
+    {
+      "id": "comment-on-designs",
+      "description": "Post comments on Canva designs.",
+      "approval": "send"
+    },
+    {
+      "id": "edit-designs",
+      "description": "Create or update Canva designs and assets.",
+      "approval": "publishing"
+    }
+  ],
+  "approvals": ["send", "publishing"],
+  "catalogStatus": "approval-pending"
+}

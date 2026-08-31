@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "vercel",
+  "name": "Vercel",
+  "description": "Inspect projects and deployments, query logs, and deploy code.",
+  "primaryCategory": "Build",
+  "tags": ["deployments", "hosting", "frontend"],
+  "capabilities": ["inspect deployments", "query logs", "deploy projects"],
+  "publisher": {
+    "name": "Vercel",
+    "url": "https://vercel.com"
+  },
+  "maintainer": {
+    "name": "Vercel",
+    "url": "https://vercel.com"
+  },
+  "documentationUrl": "https://vercel.com/docs/agent-resources/vercel-mcp",
+  "sourceUrl": "https://vercel.com/docs/agent-resources/vercel-mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://vercel.com/vc-ap-vercel-marketing/_next/static/immutable/media/vercel-light.3_gxxexgi1nmy.svg",
+      "license": "Vercel brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Vercel must add the Akeru OAuth client to its supported client allowlist."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Vercel to approve the Akeru OAuth client."],
+  "permissions": [
+    {
+      "id": "read-project-data",
+      "description": "Read projects, deployments, logs, and analytics.",
+      "approval": "read"
+    },
+    {
+      "id": "deploy-projects",
+      "description": "Deploy code to production projects.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-environment-variables",
+      "description": "Read or change project secrets and environment variables.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-project-data",
+      "description": "Delete projects, deployments, or domains.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-team",
+      "description": "Change team-wide projects and settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}
