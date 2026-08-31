@@ -66,7 +66,7 @@ const stubGroup = {
   id: GroupId.make("group-1"),
   name: "Engineering",
   bossBotId: stubBot.id,
-  members: [{ botId: stubBot.id, role: "boss" as const }],
+  members: [{ kind: "bot" as const, botId: stubBot.id, role: "boss" as const }],
   createdAt: "2026-04-01T00:00:00.000Z",
   updatedAt: "2026-04-01T00:00:00.000Z",
 };

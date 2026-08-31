@@ -88,6 +88,9 @@ function commandToAggregateRef(command: OrchestrationCommand): {
     case "group.delete":
     case "group.member.assign":
     case "group.member.unassign":
+    case "group.person.assign":
+    case "group.person.unassign":
+    case "group.leave":
     case "group.boss.set":
       return {
         aggregateKind: "group",

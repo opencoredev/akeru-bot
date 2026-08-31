@@ -1,3 +1,4 @@
+import { isGroupBotMember } from "@t3tools/contracts";
 import type {
   BotId,
   GroupId,
@@ -264,7 +265,9 @@ export function requireGroupMember(input: {
 }): Effect.Effect<OrchestrationBot, OrchestrationCommandInvariantError> {
   return Effect.gen(function* () {
     const group = yield* requireGroup(input);
-    const member = group.members.find((entry) => entry.botId === input.botId);
+    const member = group.members.find(
+      (entry) => isGroupBotMember(entry) && entry.botId === input.botId,
+    );
     if (!member) {
       return yield* Effect.fail(
         invariantError(

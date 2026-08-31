@@ -2,6 +2,7 @@ import {
   BotId,
   EventId,
   GroupId,
+  isGroupBotMember,
   ProviderInstanceId,
   type OrchestrationCommand,
   type OrchestrationEvent,
@@ -417,7 +418,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: command.createdAt,
         },
       };
-      if (group === null || group.members.some((member) => member.botId === command.botId)) {
+      if (
+        group === null ||
+        group.members.some((member) => isGroupBotMember(member) && member.botId === command.botId)
+      ) {
         return botCreatedEvent;
       }
       return [
@@ -431,7 +435,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           type: "group.member-assigned",
           payload: {
             groupId: group.id,
-            member: { botId: command.botId, role: "specialist" },
+            member: { kind: "bot", botId: command.botId, role: "specialist" },
             updatedAt: command.createdAt,
           },
         },
@@ -452,7 +456,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command.groupId !== undefined && bot.groupId !== null && bot.groupId !== command.groupId
           ? readModel.groups.find((group) => group.id === bot.groupId)
           : undefined;
-      const sourceMembership = sourceGroup?.members.find((member) => member.botId === bot.id);
+      const sourceMembership = sourceGroup?.members
+        .filter(isGroupBotMember)
+        .find((member) => member.botId === bot.id);
       if (sourceGroup && (sourceMembership?.role === "boss" || sourceGroup.bossBotId === bot.id)) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -480,7 +486,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command.groupId !== undefined &&
         targetGroup !== null &&
         targetGroup.id !== bot.groupId &&
-        !targetGroup.members.some((member) => member.botId === bot.id)
+        !targetGroup.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)
       ) {
         events.push({
           ...(yield* withEventBase({
@@ -492,7 +498,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           type: "group.member-assigned",
           payload: {
             groupId: targetGroup.id,
-            member: { botId: bot.id, role: "specialist" },
+            member: { kind: "bot", botId: bot.id, role: "specialist" },
             updatedAt: occurredAt,
           },
         });
@@ -529,6 +535,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "bot.archive": {
       yield* requireBotNotArchived({ readModel, command, botId: command.botId });
+      const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
+      if (bossGroup) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before archiving it.`,
+          }),
+        );
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -579,18 +594,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command.bossBotId,
         ...new Set((command.specialistBotIds ?? []).filter((botId) => botId !== command.bossBotId)),
       ];
-      const memberBots = yield* Effect.forEach(memberBotIds, (botId) =>
+      yield* Effect.forEach(memberBotIds, (botId) =>
         requireBotNotArchived({ readModel, command, botId }),
       );
-      const assignedBot = memberBots.find((bot) => bot.groupId !== null);
-      if (assignedBot) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${assignedBot.id}' already belongs to group '${assignedBot.groupId}'.`,
-          }),
-        );
-      }
 
       const groupCreatedEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
@@ -604,23 +610,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           groupId: command.groupId,
           name: command.name,
           bossBotId: command.bossBotId,
-          members: memberBotIds.map((botId) => ({
-            botId,
-            role: botId === command.bossBotId ? ("boss" as const) : ("specialist" as const),
-          })),
+          members: [
+            ...memberBotIds.map((botId) => ({
+              kind: "bot" as const,
+              botId,
+              role: botId === command.bossBotId ? ("boss" as const) : ("specialist" as const),
+            })),
+            ...(command.creator === undefined ? [] : [command.creator]),
+          ],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
       };
-      const botUpdatedEvents = yield* Effect.forEach(memberBotIds, (botId) =>
-        botGroupUpdatedEvent({
-          botId,
-          groupId: command.groupId,
-          occurredAt: command.createdAt,
-          commandId: command.commandId,
-        }),
-      );
-      return [groupCreatedEvent, ...botUpdatedEvents];
+      return groupCreatedEvent;
     }
 
     case "group.rename": {
@@ -659,10 +661,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         },
       };
       const botUpdatedEvents = yield* Effect.forEach(
-        group.members.filter(
-          (member) =>
-            readModel.bots.find((bot) => bot.id === member.botId)?.groupId === command.groupId,
-        ),
+        group.members
+          .filter(isGroupBotMember)
+          .filter(
+            (member) =>
+              readModel.bots.find((bot) => bot.id === member.botId)?.groupId === command.groupId,
+          ),
         (member) =>
           botGroupUpdatedEvent({
             botId: member.botId,
@@ -671,20 +675,32 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             commandId: command.commandId,
           }),
       );
-      return [deletedEvent, ...botUpdatedEvents];
+      const threadUpdatedEvents = yield* Effect.forEach(
+        readModel.threads.filter((thread) => thread.groupId === command.groupId),
+        Effect.fn(function* (thread) {
+          return {
+            ...(yield* withEventBase({
+              aggregateKind: "thread",
+              aggregateId: thread.id,
+              occurredAt,
+              commandId: command.commandId,
+            })),
+            type: "thread.ownership-updated" as const,
+            payload: {
+              threadId: thread.id,
+              botId: null,
+              groupId: null,
+              updatedAt: occurredAt,
+            },
+          };
+        }),
+      );
+      return [...botUpdatedEvents, ...threadUpdatedEvents, deletedEvent];
     }
 
     case "group.member.assign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
       const bot = yield* requireBotNotArchived({ readModel, command, botId: command.botId });
-      if (bot.groupId !== null && bot.groupId !== command.groupId) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${bot.id}' already belongs to group '${bot.groupId}'.`,
-          }),
-        );
-      }
       if (command.role === "boss" && group.bossBotId !== null && group.bossBotId !== bot.id) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -712,25 +728,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "group.member-assigned",
         payload: {
           groupId: group.id,
-          member: { botId: bot.id, role: command.role },
+          member: { kind: "bot", botId: bot.id, role: command.role },
           updatedAt: occurredAt,
         },
       };
-      if (bot.groupId === group.id) return assignedEvent;
-      return [
-        assignedEvent,
-        yield* botGroupUpdatedEvent({
-          botId: bot.id,
-          groupId: group.id,
-          occurredAt,
-          commandId: command.commandId,
-        }),
-      ];
+      return assignedEvent;
     }
 
     case "group.member.unassign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      const member = group.members.find((entry) => entry.botId === command.botId);
+      const member = group.members
+        .filter(isGroupBotMember)
+        .find((entry) => entry.botId === command.botId);
       if (!member) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -762,17 +771,57 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: occurredAt,
         },
       };
-      const bot = yield* requireBot({ readModel, command, botId: command.botId });
-      if (bot.groupId !== group.id) return unassignedEvent;
-      return [
-        unassignedEvent,
-        yield* botGroupUpdatedEvent({
-          botId: bot.id,
-          groupId: null,
+      return unassignedEvent;
+    }
+
+    case "group.person.assign": {
+      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "group",
+          aggregateId: group.id,
           occurredAt,
           commandId: command.commandId,
-        }),
-      ];
+        })),
+        type: "group.person-assigned",
+        payload: {
+          groupId: group.id,
+          person: command.person,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "group.person.unassign":
+    case "group.leave": {
+      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+      const person = group.members.find(
+        (member) => member.kind === "person" && member.personId === command.personId,
+      );
+      if (!person) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Person '${command.personId}' is not a member of group '${group.id}'.`,
+          }),
+        );
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "group",
+          aggregateId: group.id,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "group.person-unassigned",
+        payload: {
+          groupId: group.id,
+          personId: command.personId,
+          updatedAt: occurredAt,
+        },
+      };
     }
 
     case "group.boss.set": {
@@ -782,14 +831,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         botId: command.bossBotId,
       });
-      if (nextBoss.groupId !== null && nextBoss.groupId !== group.id) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${nextBoss.id}' already belongs to group '${nextBoss.groupId}'.`,
-          }),
-        );
-      }
       if (group.bossBotId === nextBoss.id && command.unassignPreviousBoss === true) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -823,31 +864,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: occurredAt,
         },
       };
-      const events: PlannedOrchestrationEvent[] = [bossSetEvent];
-      if (nextBoss.groupId !== group.id) {
-        events.push(
-          yield* botGroupUpdatedEvent({
-            botId: nextBoss.id,
-            groupId: group.id,
-            occurredAt,
-            commandId: command.commandId,
-          }),
-        );
-      }
-      if (previousBossRole === "unassigned" && previousBossBotId !== null) {
-        const previousBoss = readModel.bots.find((bot) => bot.id === previousBossBotId);
-        if (previousBoss?.groupId === group.id) {
-          events.push(
-            yield* botGroupUpdatedEvent({
-              botId: previousBoss.id,
-              groupId: null,
-              occurredAt,
-              commandId: command.commandId,
-            }),
-          );
-        }
-      }
-      return events;
+      return bossSetEvent;
     }
 
     case "mcp-server.create": {
@@ -1662,6 +1679,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           botId: selectedBotId,
         });
         respondingBotId = selectedBotId;
+        if (
+          command.senderPersonId !== undefined &&
+          !group.members.some(
+            (member) => member.kind === "person" && member.personId === command.senderPersonId,
+          )
+        ) {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `Person '${command.senderPersonId}' is not a member of group '${group.id}'.`,
+            }),
+          );
+        }
       } else if (command.respondingBotId !== undefined) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -1686,6 +1716,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           text: command.message.text,
           attachments: command.message.attachments,
           turnId: null,
+          authorPersonId: command.senderPersonId ?? null,
+          authorDisplayName: command.senderDisplayName ?? null,
           streaming: false,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,

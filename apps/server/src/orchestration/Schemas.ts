@@ -11,6 +11,8 @@ import {
   GroupDeletedPayload as ContractsGroupDeletedPayloadSchema,
   GroupMemberAssignedPayload as ContractsGroupMemberAssignedPayloadSchema,
   GroupMemberUnassignedPayload as ContractsGroupMemberUnassignedPayloadSchema,
+  GroupPersonAssignedPayload as ContractsGroupPersonAssignedPayloadSchema,
+  GroupPersonUnassignedPayload as ContractsGroupPersonUnassignedPayloadSchema,
   GroupBossSetPayload as ContractsGroupBossSetPayloadSchema,
   McpServerCreatedPayload as ContractsMcpServerCreatedPayloadSchema,
   McpServerUpdatedPayload as ContractsMcpServerUpdatedPayloadSchema,
@@ -18,6 +20,7 @@ import {
   McpServerEnabledPayload as ContractsMcpServerEnabledPayloadSchema,
   McpServerDisabledPayload as ContractsMcpServerDisabledPayloadSchema,
   ThreadCreatedPayload as ContractsThreadCreatedPayloadSchema,
+  ThreadOwnershipUpdatedPayload as ContractsThreadOwnershipUpdatedPayloadSchema,
   ThreadArchivedPayload as ContractsThreadArchivedPayloadSchema,
   ThreadSettledPayload as ContractsThreadSettledPayloadSchema,
   ThreadMetaUpdatedPayload as ContractsThreadMetaUpdatedPayloadSchema,
@@ -58,6 +61,8 @@ export const GroupRenamedPayload = ContractsGroupRenamedPayloadSchema;
 export const GroupDeletedPayload = ContractsGroupDeletedPayloadSchema;
 export const GroupMemberAssignedPayload = ContractsGroupMemberAssignedPayloadSchema;
 export const GroupMemberUnassignedPayload = ContractsGroupMemberUnassignedPayloadSchema;
+export const GroupPersonAssignedPayload = ContractsGroupPersonAssignedPayloadSchema;
+export const GroupPersonUnassignedPayload = ContractsGroupPersonUnassignedPayloadSchema;
 export const GroupBossSetPayload = ContractsGroupBossSetPayloadSchema;
 export const McpServerCreatedPayload = ContractsMcpServerCreatedPayloadSchema;
 export const McpServerUpdatedPayload = ContractsMcpServerUpdatedPayloadSchema;
@@ -66,6 +71,7 @@ export const McpServerEnabledPayload = ContractsMcpServerEnabledPayloadSchema;
 export const McpServerDisabledPayload = ContractsMcpServerDisabledPayloadSchema;
 
 export const ThreadCreatedPayload = ContractsThreadCreatedPayloadSchema;
+export const ThreadOwnershipUpdatedPayload = ContractsThreadOwnershipUpdatedPayloadSchema;
 export const ThreadArchivedPayload = ContractsThreadArchivedPayloadSchema;
 export const ThreadSettledPayload = ContractsThreadSettledPayloadSchema;
 export const ThreadMetaUpdatedPayload = ContractsThreadMetaUpdatedPayloadSchema;

@@ -88,6 +88,11 @@ import {
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
 import {
+  applyAuthenticatedCommandActor,
+  applyKnownGroupPerson,
+  canManageGroupPeople,
+} from "./orchestration/AuthenticatedCommand.ts";
+import {
   cleanupFailedUploadedAttachments,
   normalizeDispatchCommand,
 } from "./orchestration/Normalizer.ts";
@@ -658,6 +663,35 @@ const makeWsRpcLayer = (
       const serverEventId = randomUUID.pipe(Effect.map(EventId.make));
       const serverCommandId = (tag: string) =>
         randomUUID.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
+
+      const loadEnvironmentPeople = () =>
+        serverAuth.listClientSessions(currentSessionId).pipe(
+          Effect.map((clientSessions) => {
+            const currentClient = clientSessions.find(
+              (session) => session.sessionId === currentSessionId,
+            );
+            const hostClient = clientSessions.find((session) =>
+              EnvironmentAuth.isEnvironmentHostSessionSubject(session.subject),
+            );
+            return {
+              current: {
+                personId: currentSessionId,
+                displayName:
+                  currentClient?.client.label ??
+                  (EnvironmentAuth.isEnvironmentHostSessionSubject(currentSession.subject)
+                    ? "Host"
+                    : "Paired person"),
+              },
+              host:
+                hostClient === undefined
+                  ? undefined
+                  : {
+                      personId: hostClient.sessionId,
+                      displayName: hostClient.client.label ?? "Host",
+                    },
+            };
+          }),
+        );
 
       const loadAuthAccessSnapshot = () =>
         Effect.all({
@@ -1353,7 +1387,36 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
-              const normalizedCommand = yield* normalizeDispatchCommand(command);
+              const decodedCommand = yield* normalizeDispatchCommand(command);
+              const currentPerson =
+                decodedCommand.type === "group.create" ||
+                decodedCommand.type === "group.leave" ||
+                decodedCommand.type === "thread.turn.start"
+                  ? yield* loadEnvironmentPeople().pipe(Effect.map((people) => people.current))
+                  : undefined;
+              const actorCommand = applyAuthenticatedCommandActor(decodedCommand, {
+                personId: currentSessionId,
+                displayName: currentPerson?.displayName ?? "Paired person",
+              });
+              let normalizedCommand = actorCommand;
+              if (
+                actorCommand.type === "group.person.assign" ||
+                actorCommand.type === "group.person.unassign"
+              ) {
+                if (!canManageGroupPeople(actorCommand, currentSession.scopes)) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Managing group people requires access:write.",
+                  });
+                }
+                const clientSessions = yield* serverAuth.listClientSessions(currentSessionId);
+                const knownPersonCommand = applyKnownGroupPerson(actorCommand, clientSessions);
+                if (!knownPersonCommand) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Only a paired person can be changed in a group.",
+                  });
+                }
+                normalizedCommand = knownPersonCommand;
+              }
               // Archive and settle both mean "done with this thread", so a
               // live provider session must not keep running background work
               // (PR monitors, dev servers, subagent fleets) after either
@@ -1522,7 +1585,21 @@ const makeWsRpcLayer = (
               );
               const bufferedLiveStream = coalesceShellLiveStream(Stream.fromQueue(liveBuffer));
 
-              const loadSnapshot = projectionSnapshotQuery.getShellSnapshot().pipe(
+              const loadSnapshot = Effect.all({
+                snapshot: projectionSnapshotQuery.getShellSnapshot(),
+                people: loadEnvironmentPeople(),
+              }).pipe(
+                Effect.map(({ snapshot, people }) => ({
+                  ...snapshot,
+                  currentPersonId: people.current.personId,
+                  currentPersonDisplayName: people.current.displayName,
+                  ...(people.host === undefined
+                    ? {}
+                    : {
+                        environmentHostPersonId: people.host.personId,
+                        environmentHostDisplayName: people.host.displayName,
+                      }),
+                })),
                 Effect.tapError((cause) =>
                   Effect.logError("orchestration shell snapshot load failed", { cause }),
                 ),

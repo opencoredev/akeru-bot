@@ -1,7 +1,11 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
+  AuthSessionId,
   BotId,
   GROUP_SHARED_WORKSPACE_WARNING,
   GroupId,
+  isGroupBotMember,
+  type AuthClientSession,
   type EnvironmentId,
   type OrchestrationBot,
   type OrchestrationGroup,
@@ -10,28 +14,48 @@ import { Trash2Icon, UserPlusIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { randomUUID } from "../../lib/utils";
-import { botEnvironment } from "../../state/bots";
+import { authEnvironment } from "../../state/auth";
+import {
+  botEnvironment,
+  environmentBotsAtom,
+  environmentGroupsAtom,
+  environmentPeopleAtom,
+} from "../../state/bots";
+import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { toastManager } from "../ui/toast";
-import { SettingsRow, SettingsSection } from "./settingsLayout";
+import { GroupPeopleSettings } from "./GroupPeopleSettings";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 export function availableSpecialists(
-  bots: ReadonlyArray<Pick<OrchestrationBot, "id" | "name" | "archivedAt" | "groupId">>,
-): ReadonlyArray<Pick<OrchestrationBot, "id" | "name" | "archivedAt" | "groupId">> {
-  return bots.filter((bot) => bot.archivedAt === null && bot.groupId === null);
+  bots: ReadonlyArray<Pick<OrchestrationBot, "id" | "name" | "archivedAt">>,
+  group?: Pick<OrchestrationGroup, "members"> | null,
+): ReadonlyArray<Pick<OrchestrationBot, "id" | "name" | "archivedAt">> {
+  return bots.filter(
+    (bot) =>
+      bot.archivedAt === null &&
+      !group?.members.some((member) => isGroupBotMember(member) && member.botId === bot.id),
+  );
 }
+
+const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function GroupSettingsSection({
   environmentId,
   bots,
   groups,
+  people,
+  currentPersonId,
 }: {
   readonly environmentId: EnvironmentId;
   readonly bots: ReadonlyArray<OrchestrationBot>;
   readonly groups: ReadonlyArray<OrchestrationGroup>;
+  readonly people: ReadonlyArray<AuthClientSession>;
+  readonly currentPersonId: AuthSessionId | null;
 }) {
   const createGroup = useAtomCommand(botEnvironment.groups.create, { reportFailure: false });
   const deleteGroup = useAtomCommand(botEnvironment.groups.delete, { reportFailure: false });
@@ -45,14 +69,19 @@ export function GroupSettingsSection({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groups[0]?.id ?? null);
   const [newGroupName, setNewGroupName] = useState("");
   const [newBossId, setNewBossId] = useState<string>(
-    bots.find((bot) => bot.groupId === null && bot.archivedAt === null)?.id ?? "",
+    bots.find((bot) => bot.archivedAt === null)?.id ?? "",
   );
   const [specialistId, setSpecialistId] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
-  const unassignedBots = useMemo(() => availableSpecialists(bots), [bots]);
+  const activeBots = useMemo(() => availableSpecialists(bots), [bots]);
+  const unassignedBots = useMemo(
+    () => availableSpecialists(bots, selectedGroup),
+    [bots, selectedGroup],
+  );
   const members = selectedGroup
     ? selectedGroup.members.flatMap((membership) => {
+        if (!isGroupBotMember(membership)) return [];
         const bot = bots.find((candidate) => candidate.id === membership.botId);
         return bot ? [{ bot, role: membership.role }] : [];
       })
@@ -65,13 +94,13 @@ export function GroupSettingsSection({
   }, [selectedGroup, selectedGroupId]);
 
   useEffect(() => {
-    if (!unassignedBots.some((bot) => bot.id === newBossId)) {
-      setNewBossId(unassignedBots[0]?.id ?? "");
+    if (!activeBots.some((bot) => bot.id === newBossId)) {
+      setNewBossId(activeBots[0]?.id ?? "");
     }
     if (!unassignedBots.some((bot) => bot.id === specialistId)) {
       setSpecialistId("");
     }
-  }, [newBossId, specialistId, unassignedBots]);
+  }, [activeBots, newBossId, specialistId, unassignedBots]);
 
   const run = async (action: () => Promise<{ readonly _tag: string }>, failure: string) => {
     setBusy(true);
@@ -124,7 +153,7 @@ export function GroupSettingsSection({
                 <SelectValue placeholder="Choose boss" />
               </SelectTrigger>
               <SelectPopup>
-                {unassignedBots.map((bot) => (
+                {activeBots.map((bot) => (
                   <SelectItem key={bot.id} value={bot.id}>
                     {bot.name}
                   </SelectItem>
@@ -188,7 +217,7 @@ export function GroupSettingsSection({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
-                  {members.map(({ bot }) => (
+                  {activeBots.map((bot) => (
                     <SelectItem key={bot.id} value={bot.id}>
                       {bot.name}
                     </SelectItem>
@@ -270,7 +299,7 @@ export function GroupSettingsSection({
           />
           <SettingsRow
             title="Delete group"
-            description="Bots return to Unassigned. Threads keep their group owner."
+            description="Threads lose their group owner."
             control={
               <Button
                 disabled={busy}
@@ -286,8 +315,42 @@ export function GroupSettingsSection({
               </Button>
             }
           />
+          <GroupPeopleSettings
+            environmentId={environmentId}
+            group={selectedGroup}
+            people={people}
+            currentPersonId={currentPersonId}
+          />
         </>
       ) : null}
     </SettingsSection>
+  );
+}
+
+export function GroupSettingsPanel() {
+  const environmentId = usePrimaryEnvironmentId();
+  const atomKey = environmentId ?? NO_ENVIRONMENT;
+  const bots = useAtomValue(environmentBotsAtom(atomKey));
+  const groups = useAtomValue(environmentGroupsAtom(atomKey));
+  const currentPerson = useAtomValue(environmentPeopleAtom(atomKey)).current;
+  const accessChanges = useEnvironmentQuery(
+    environmentId === null ? null : authEnvironment.accessChanges({ environmentId, input: null }),
+  );
+  const people =
+    accessChanges.data?.type === "snapshot" ? accessChanges.data.payload.clientSessions : [];
+  return (
+    <SettingsPageContainer>
+      {environmentId === null ? (
+        <div className="px-4 py-8 text-sm text-muted-foreground">Connect an environment first.</div>
+      ) : (
+        <GroupSettingsSection
+          environmentId={environmentId}
+          bots={bots}
+          groups={groups}
+          people={people}
+          currentPersonId={currentPerson?.id ?? null}
+        />
+      )}
+    </SettingsPageContainer>
   );
 }

@@ -31,6 +31,9 @@ const ProvidersPanel = lazy(async () => ({
 const VoiceSettingsPanel = lazy(async () => ({
   default: (await import("./VoiceSettings")).VoiceSettingsPanel,
 }));
+const GroupSettingsPanel = lazy(async () => ({
+  default: (await import("./GroupSettingsSection")).GroupSettingsPanel,
+}));
 const ConnectionsSettings = lazy(async () => ({
   default: (await import("./ConnectionsSettings")).ConnectionsSettings,
 }));
@@ -50,6 +53,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
   voice: VoiceSettingsPanel,
+  groups: GroupSettingsPanel,
   connections: ConnectionsSettings,
   keybindings: KeybindingsSettingsPanel,
   "source-control": SourceControlSettingsPanel,
@@ -66,6 +70,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
   { section: "providers", label: "Providers", icon: BotIcon },
   { section: "voice", label: "Voice", icon: CallIcon },
+  { section: "groups", label: "Groups", icon: BotIcon },
   { section: "inbox", label: "Errors", icon: AlertCircleIcon },
   { section: "connections", label: "Connections", icon: Link02Icon },
   { section: "keybindings", label: "Keybindings", icon: KeyboardIcon },

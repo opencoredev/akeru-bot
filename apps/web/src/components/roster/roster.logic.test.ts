@@ -1,3 +1,4 @@
+import { BotId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -96,7 +97,7 @@ describe("buildGroupedRosterSections", () => {
     id: "group-product",
     name: "Product",
     bossBotId: "assigned",
-    members: [{ botId: "assigned", role: "boss" }],
+    members: [{ kind: "bot", botId: BotId.make("assigned"), role: "boss" }],
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
   };

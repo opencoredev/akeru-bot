@@ -1,4 +1,9 @@
 import type { OrchestrationThreadShell } from "@t3tools/contracts";
+import {
+  isGroupBotMember,
+  isGroupPersonMember,
+  type GroupPersonMembership,
+} from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
 import type { Bot, BotAvatar, BotBlobShape, Group } from "./types";
@@ -231,9 +236,34 @@ export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   );
 }
 
+export function isCurrentGroupPerson(
+  authorPersonId: string | null | undefined,
+  currentPersonId: string | null | undefined,
+  hostPersonId: string | null | undefined,
+): boolean {
+  const resolvedAuthorPersonId = authorPersonId ?? hostPersonId;
+  return resolvedAuthorPersonId != null && resolvedAuthorPersonId === currentPersonId;
+}
+
+export function groupContainsBot(group: Group, botId: string): boolean {
+  return group.members.some((member) => isGroupBotMember(member) && member.botId === botId);
+}
+
+export function groupBotMembers(group: Group, bots: ReadonlyArray<Bot>): ReadonlyArray<Bot> {
+  const memberIds = new Set<string>(
+    group.members.filter(isGroupBotMember).map((member) => member.botId),
+  );
+  return bots.filter((bot) => memberIds.has(bot.id));
+}
+
+export function groupPersonMembers(group: Group): ReadonlyArray<GroupPersonMembership> {
+  return group.members.filter(isGroupPersonMember);
+}
+
 export interface RosterGroupSection {
   readonly id: string;
   readonly name: string;
+  readonly group: Group | null;
   readonly bots: ReadonlyArray<Bot>;
 }
 
@@ -243,14 +273,21 @@ export function buildGroupedRosterSections(
   groups: ReadonlyArray<Group>,
 ): ReadonlyArray<RosterGroupSection> {
   const active = bots.filter((bot) => bot.archivedAt === null && bot.pinned === false);
-  const assigned = groups.flatMap((group) => {
-    const groupBots = active.filter((bot) => bot.groupId === group.id);
-    return groupBots.length > 0 ? [{ id: group.id, name: group.name, bots: groupBots }] : [];
-  });
-  const unassigned = active.filter((bot) => bot.groupId === null);
+  const memberBotIds = new Set<string>(
+    groups.flatMap((group) => group.members.filter(isGroupBotMember).map((member) => member.botId)),
+  );
+  const assigned = groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    group,
+    bots: groupBotMembers(group, active),
+  }));
+  const unassigned = active.filter((bot) => !memberBotIds.has(bot.id));
   return [
     ...assigned,
-    ...(unassigned.length > 0 ? [{ id: "unassigned", name: "Unassigned", bots: unassigned }] : []),
+    ...(unassigned.length > 0
+      ? [{ id: "unassigned", name: "Unassigned", group: null, bots: unassigned }]
+      : []),
   ];
 }
 

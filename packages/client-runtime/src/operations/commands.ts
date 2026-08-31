@@ -40,6 +40,9 @@ export type RenameGroupInput = CommandInput<"group.rename">;
 export type DeleteGroupInput = CommandInput<"group.delete">;
 export type AssignGroupMemberInput = CommandInput<"group.member.assign">;
 export type UnassignGroupMemberInput = CommandInput<"group.member.unassign">;
+export type AssignGroupPersonInput = CommandInput<"group.person.assign">;
+export type UnassignGroupPersonInput = CommandInput<"group.person.unassign">;
+export type LeaveGroupInput = CommandInput<"group.leave">;
 export type SetGroupBossInput = CommandInput<"group.boss.set">;
 export type CreateMcpServerInput = CommandInput<"mcp-server.create">;
 export type UpdateMcpServerInput = CommandInput<"mcp-server.update">;
@@ -282,6 +285,36 @@ export const unassignGroupMember: (input: UnassignGroupMemberInput) => CommandEf
   return yield* dispatch({
     ...input,
     type: "group.member.unassign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const assignGroupPerson: (input: AssignGroupPersonInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.assignGroupPerson",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.person.assign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const unassignGroupPerson: (input: UnassignGroupPersonInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.unassignGroupPerson",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.person.unassign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const leaveGroup: (input: LeaveGroupInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.leaveGroup",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.leave",
     commandId: yield* commandId(input),
   });
 });

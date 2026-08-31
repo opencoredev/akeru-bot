@@ -1,4 +1,4 @@
-import type { McpServerId } from "@t3tools/contracts";
+import type { GroupMembership, McpServerId } from "@t3tools/contracts";
 
 /**
  * Local mirror of the bot roster wire shape the server-side persistence work
@@ -46,7 +46,7 @@ export interface Group {
   id: string;
   name: string;
   bossBotId: string | null;
-  members: ReadonlyArray<{ botId: string; role: "boss" | "specialist" }>;
+  members: ReadonlyArray<GroupMembership>;
   createdAt: string;
   updatedAt: string;
 }

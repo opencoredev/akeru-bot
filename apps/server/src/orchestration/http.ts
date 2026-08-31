@@ -1,4 +1,5 @@
 import {
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
@@ -8,9 +9,16 @@ import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
+import {
+  applyAuthenticatedCommandActor,
+  applyKnownGroupPerson,
+  canManageGroupPeople,
+} from "./AuthenticatedCommand.ts";
 import { cleanupFailedUploadedAttachments, normalizeDispatchCommand } from "./Normalizer.ts";
+import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import {
   annotateEnvironmentRequest,
+  failEnvironmentScopeRequired,
   failEnvironmentInternal,
   failEnvironmentInvalidRequest,
   failEnvironmentNotFound,
@@ -25,6 +33,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
+    const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
 
     return handlers
       .handle(
@@ -92,10 +101,43 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         "dispatch",
         Effect.fn("environment.orchestration.dispatch")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
-          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
-          const normalizedCommand = yield* normalizeDispatchCommand(args.payload).pipe(
+          const principal = yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          const decodedCommand = yield* normalizeDispatchCommand(args.payload).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
+          if (!canManageGroupPeople(decodedCommand, principal.scopes)) {
+            return yield* failEnvironmentScopeRequired(AuthAccessWriteScope);
+          }
+          const needsPeople =
+            decodedCommand.type === "group.create" ||
+            decodedCommand.type === "group.leave" ||
+            decodedCommand.type === "group.person.assign" ||
+            decodedCommand.type === "group.person.unassign" ||
+            decodedCommand.type === "thread.turn.start";
+          const clientSessions = needsPeople
+            ? yield* serverAuth
+                .listClientSessions(principal.sessionId)
+                .pipe(
+                  Effect.catch((cause) =>
+                    failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                  ),
+                )
+            : [];
+          const currentClient = clientSessions.find(
+            (session) => session.sessionId === principal.sessionId,
+          );
+          const actorCommand = applyAuthenticatedCommandActor(decodedCommand, {
+            personId: principal.sessionId,
+            displayName:
+              currentClient?.client.label ??
+              (EnvironmentAuth.isEnvironmentHostSessionSubject(principal.subject)
+                ? "Host"
+                : "Paired person"),
+          });
+          const normalizedCommand = applyKnownGroupPerson(actorCommand, clientSessions);
+          if (!normalizedCommand) {
+            return yield* failEnvironmentInvalidRequest("invalid_command");
+          }
           return yield* orchestrationEngine.dispatch(normalizedCommand).pipe(
             Effect.tapError(() =>
               cleanupFailedUploadedAttachments(args.payload, normalizedCommand),

@@ -5,6 +5,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 import {
   type ArchiveBotInput,
   type AssignGroupMemberInput,
+  type AssignGroupPersonInput,
   type CreateBotInput,
   type CreateGroupInput,
   type DeleteGroupInput,
@@ -12,9 +13,12 @@ import {
   type RestoreBotInput,
   type SetGroupBossInput,
   type UnassignGroupMemberInput,
+  type UnassignGroupPersonInput,
+  type LeaveGroupInput,
   type UpdateBotInput,
   archiveBot,
   assignGroupMember,
+  assignGroupPerson,
   createBot,
   createGroup,
   deleteGroup,
@@ -22,6 +26,8 @@ import {
   restoreBot,
   setGroupBoss,
   unassignGroupMember,
+  unassignGroupPerson,
+  leaveGroup,
   updateBot,
 } from "../operations/commands.ts";
 import { createAtomCommandScheduler, createEnvironmentCommand } from "./runtime.ts";
@@ -29,6 +35,7 @@ import { createAtomCommandScheduler, createEnvironmentCommand } from "./runtime.
 export type {
   ArchiveBotInput,
   AssignGroupMemberInput,
+  AssignGroupPersonInput,
   CreateBotInput,
   CreateGroupInput,
   DeleteGroupInput,
@@ -36,6 +43,8 @@ export type {
   RestoreBotInput,
   SetGroupBossInput,
   UnassignGroupMemberInput,
+  UnassignGroupPersonInput,
+  LeaveGroupInput,
   UpdateBotInput,
 } from "../operations/commands.ts";
 
@@ -107,6 +116,24 @@ export function createBotEnvironmentAtoms<R, E>(
       unassignMember: createEnvironmentCommand(runtime, {
         label: "environment-data:commands:group:member:unassign",
         execute: (input: UnassignGroupMemberInput) => unassignGroupMember(input),
+        scheduler,
+        concurrency: groupConcurrency,
+      }),
+      assignPerson: createEnvironmentCommand(runtime, {
+        label: "environment-data:commands:group:person:assign",
+        execute: (input: AssignGroupPersonInput) => assignGroupPerson(input),
+        scheduler,
+        concurrency: groupConcurrency,
+      }),
+      unassignPerson: createEnvironmentCommand(runtime, {
+        label: "environment-data:commands:group:person:unassign",
+        execute: (input: UnassignGroupPersonInput) => unassignGroupPerson(input),
+        scheduler,
+        concurrency: groupConcurrency,
+      }),
+      leave: createEnvironmentCommand(runtime, {
+        label: "environment-data:commands:group:leave",
+        execute: (input: LeaveGroupInput) => leaveGroup(input),
         scheduler,
         concurrency: groupConcurrency,
       }),

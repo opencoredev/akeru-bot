@@ -11,13 +11,13 @@ const bot = (id: string, groupId: string | null, archivedAt: string | null = nul
 });
 
 describe("group settings", () => {
-  it("offers active unassigned bots as specialists", () => {
+  it("offers every active bot as a specialist", () => {
     expect(
       availableSpecialists([
         bot("free", null),
         bot("assigned", "group-one"),
         bot("archived", null, "2026-08-27T00:00:00.000Z"),
       ]).map((entry) => entry.id),
-    ).toEqual(["free"]);
+    ).toEqual(["free", "assigned"]);
   });
 });

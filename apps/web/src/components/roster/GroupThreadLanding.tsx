@@ -1,9 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useEffect } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
+import { environmentPeopleAtom } from "../../state/bots";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { SidebarInset } from "../ui/sidebar";
@@ -14,15 +17,20 @@ import { BotActivityStatus } from "./BotActivityStatus";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
+import { GroupMemberStack } from "./GroupMemberStack";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { useGroupPresence } from "./botPresence";
+import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  const peopleIdentity = useAtomValue(
+    environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
+  );
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
   );
@@ -40,7 +48,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   }, [group, navigate]);
 
   if (!group) return null;
-  const members = bots.filter((bot) => bot.groupId === group.id && bot.archivedAt === null);
+  const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
   const boss = members.find((bot) => bot.id === group.bossBotId) ?? members[0];
   if (!boss) return null;
   const working = runtime.sending || presence === "working";
@@ -60,16 +68,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader className="border-b border-border">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="flex -space-x-1.5">
-              {members.slice(0, 3).map((bot) => (
-                <BotAvatarView
-                  key={bot.id}
-                  avatar={bot.avatar}
-                  name={bot.name}
-                  className="size-6 ring-2 ring-background"
-                />
-              ))}
-            </div>
+            <GroupMemberStack group={group} bots={bots} ringClassName="ring-background" />
             <span className="truncate text-sm font-medium">{group.name}</span>
           </div>
         </WorkspacePageHeader>
@@ -116,10 +115,28 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   </div>
                 );
               }
+              const current = isCurrentGroupPerson(
+                message.authorPersonId,
+                peopleIdentity.current?.id,
+                peopleIdentity.host?.id,
+              );
               return (
-                <div key={message.id} className="flex justify-end" data-testid="group-user-message">
-                  <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                    <p className="whitespace-pre-wrap">{message.text}</p>
+                <div
+                  key={message.id}
+                  className={current ? "flex justify-end" : "flex justify-start"}
+                  data-testid="group-user-message"
+                >
+                  <div className="max-w-[78%]">
+                    {!current ? (
+                      <div className="mb-1 text-xs font-medium text-muted-foreground">
+                        {message.authorDisplayName ??
+                          peopleIdentity.host?.displayName ??
+                          "Paired person"}
+                      </div>
+                    ) : null}
+                    <div className="rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+                      <p className="whitespace-pre-wrap">{message.text}</p>
+                    </div>
                   </div>
                 </div>
               );

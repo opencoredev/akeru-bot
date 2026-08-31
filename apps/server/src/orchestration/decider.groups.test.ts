@@ -1,4 +1,5 @@
 import {
+  AuthSessionId,
   BotId,
   CommandId,
   EventId,
@@ -65,8 +66,8 @@ function makeGroup(
     name: "Product",
     bossBotId: input.bossBotId ?? BOSS_ID,
     members: input.members ?? [
-      { botId: BOSS_ID, role: "boss" },
-      { botId: SPECIALIST_ID, role: "specialist" },
+      { kind: "bot", botId: BOSS_ID, role: "boss" },
+      { kind: "bot", botId: SPECIALIST_ID, role: "specialist" },
     ],
     createdAt: NOW,
     updatedAt: NOW,
@@ -169,18 +170,117 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       });
       const events = Array.isArray(result) ? result : [result];
 
-      expect(events.map((event) => event.type)).toEqual([
-        "group.created",
-        "bot.updated",
-        "bot.updated",
-      ]);
+      expect(events.map((event) => event.type)).toEqual(["group.created"]);
       const created = events[0];
       if (created?.type !== "group.created") throw new Error("Expected group.created");
       expect(created.payload.bossBotId).toBe(BOSS_ID);
       expect(created.payload.members).toEqual([
-        { botId: BOSS_ID, role: "boss" },
-        { botId: SPECIALIST_ID, role: "specialist" },
+        { kind: "bot", botId: BOSS_ID, role: "boss" },
+        { kind: "bot", botId: SPECIALIST_ID, role: "specialist" },
       ]);
+    }),
+  );
+
+  it.effect("adds the creator as a person member", () =>
+    Effect.gen(function* () {
+      const creator = {
+        kind: "person" as const,
+        personId: AuthSessionId.make("person-creator"),
+        displayName: "Creator",
+      };
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.create",
+          commandId: CommandId.make("cmd-group-create-with-creator"),
+          groupId: GROUP_ID,
+          name: "Product",
+          bossBotId: BOSS_ID,
+          creator,
+          createdAt: NOW,
+        },
+        readModel: makeReadModel({ bots: [makeBot({ id: BOSS_ID })] }),
+      });
+      const events = Array.isArray(result) ? result : [result];
+      const created = events.find((event) => event.type === "group.created");
+
+      if (created?.type !== "group.created") throw new Error("Expected group.created");
+      expect(created.payload.members).toContainEqual(creator);
+    }),
+  );
+
+  it.effect("assigns one bot to several groups", () =>
+    Effect.gen(function* () {
+      const otherGroupId = GroupId.make("group-other");
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.member.assign",
+          commandId: CommandId.make("cmd-multi-group-member"),
+          groupId: GROUP_ID,
+          botId: SPECIALIST_ID,
+          role: "specialist",
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID, groupId: otherGroupId })],
+          groups: [
+            makeGroup({ members: [{ kind: "bot", botId: BOSS_ID, role: "boss" }] }),
+            {
+              ...makeGroup({
+                bossBotId: SPECIALIST_ID,
+                members: [{ kind: "bot", botId: SPECIALIST_ID, role: "boss" }],
+              }),
+              id: otherGroupId,
+            },
+          ],
+        }),
+      });
+      const events = Array.isArray(result) ? result : [result];
+
+      expect(events.map((event) => event.type)).toEqual(["group.member-assigned"]);
+    }),
+  );
+
+  it.effect("rejects archiving a current group boss", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "bot.archive",
+          commandId: CommandId.make("cmd-archive-group-boss"),
+          botId: BOSS_ID,
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID })],
+          groups: [makeGroup()],
+        }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected boss archive invariant error");
+      }
+      expect(error.detail).toContain("Set a new boss before archiving it");
+    }),
+  );
+
+  it.effect("clears group-owned thread ownership when deleting a group", () =>
+    Effect.gen(function* () {
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.delete",
+          commandId: CommandId.make("cmd-delete-group"),
+          groupId: GROUP_ID,
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+          threads: [makeGroupThread()],
+        }),
+      });
+      const events = Array.isArray(result) ? result : [result];
+      const ownership = events.find((event) => event.type === "thread.ownership-updated");
+
+      if (ownership?.type !== "thread.ownership-updated") {
+        throw new Error("Expected thread.ownership-updated");
+      }
+      expect(ownership.payload).toMatchObject({ botId: null, groupId: null });
     }),
   );
 
@@ -202,7 +302,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
               archivedAt: NOW,
             }),
           ],
-          groups: [makeGroup({ members: [{ botId: BOSS_ID, role: "boss" }] })],
+          groups: [makeGroup({ members: [{ kind: "bot", botId: BOSS_ID, role: "boss" }] })],
         }),
       }).pipe(Effect.flip);
 
@@ -224,7 +324,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         },
         readModel: makeReadModel({
           bots: [makeBot({ id: BOSS_ID, groupId: GROUP_ID })],
-          groups: [makeGroup({ members: [{ botId: BOSS_ID, role: "boss" }] })],
+          groups: [makeGroup({ members: [{ kind: "bot", botId: BOSS_ID, role: "boss" }] })],
         }),
       }).pipe(Effect.flip);
 
@@ -256,7 +356,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       });
       const events = Array.isArray(result) ? result : [result];
 
-      expect(events.map((event) => event.type)).toEqual(["group.boss-set", "bot.updated"]);
+      expect(events.map((event) => event.type)).toEqual(["group.boss-set"]);
       const bossSet = events[0];
       if (bossSet?.type !== "group.boss-set") throw new Error("Expected group.boss-set");
       expect(bossSet.payload.previousBossRole).toBe("unassigned");
@@ -348,6 +448,29 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       }
       expect(outsiderError.detail).toContain("not a member");
       expect(archivedError.detail).toContain("archived");
+    }),
+  );
+
+  it.effect("rejects a group turn from a person who is not a member", () =>
+    Effect.gen(function* () {
+      const outsiderId = AuthSessionId.make("person-outsider");
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          ...startTurnCommand(),
+          senderPersonId: outsiderId,
+          senderDisplayName: "Outsider",
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+          threads: [makeGroupThread()],
+        }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected sender membership invariant error");
+      }
+      expect(error.detail).toContain(`Person '${outsiderId}' is not a member`);
     }),
   );
 
