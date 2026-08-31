@@ -142,6 +142,12 @@ export class BotInboxService {
     return changed;
   }
 
+  resolveById(id: string): boolean {
+    this.reload();
+    const incident = this.items.find((item) => item.id === id && item.status === "open");
+    return incident ? this.resolve(incident.incidentKey) : false;
+  }
+
   private save(): void {
     const directory = NodePath.dirname(this.filePath);
     NodeFS.mkdirSync(directory, { recursive: true, mode: 0o700 });

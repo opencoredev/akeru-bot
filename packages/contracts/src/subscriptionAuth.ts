@@ -106,33 +106,39 @@ export const ProviderAccessStatus = Schema.Struct({
 });
 export type ProviderAccessStatus = typeof ProviderAccessStatus.Type;
 
+export const BotInboxItem = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  incidentKey: TrimmedNonEmptyString,
+  kind: Schema.Literals([
+    "oauth-expired",
+    "connector-failure",
+    "routine-failure",
+    "browser-dead",
+    "silence-watchdog-failure",
+    "approval-request",
+  ]),
+  status: Schema.Literals(["open", "resolved"]),
+  botId: BotId,
+  botName: TrimmedNonEmptyString,
+  taskOrRoutine: TrimmedNonEmptyString,
+  lastFailure: TrimmedNonEmptyString,
+  nextAction: TrimmedNonEmptyString,
+  firstSeenAt: IsoDateTime,
+  lastSeenAt: IsoDateTime,
+  resolvedAt: Schema.optional(IsoDateTime),
+  occurrenceCount: Schema.Int.check(Schema.isGreaterThan(0)),
+});
+export type BotInboxItem = typeof BotInboxItem.Type;
+
+export const BotInboxResolveInput = Schema.Struct({
+  id: TrimmedNonEmptyString,
+});
+export type BotInboxResolveInput = typeof BotInboxResolveInput.Type;
+
 export const SubscriptionAuthStatuses = Schema.Struct({
   providers: Schema.Array(SubscriptionProviderStatus),
   access: Schema.Array(ProviderAccessStatus).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  inbox: Schema.Array(
-    Schema.Struct({
-      id: TrimmedNonEmptyString,
-      incidentKey: TrimmedNonEmptyString,
-      kind: Schema.Literals([
-        "oauth-expired",
-        "connector-failure",
-        "routine-failure",
-        "browser-dead",
-        "silence-watchdog-failure",
-        "approval-request",
-      ]),
-      status: Schema.Literals(["open", "resolved"]),
-      botId: BotId,
-      botName: TrimmedNonEmptyString,
-      taskOrRoutine: TrimmedNonEmptyString,
-      lastFailure: TrimmedNonEmptyString,
-      nextAction: TrimmedNonEmptyString,
-      firstSeenAt: IsoDateTime,
-      lastSeenAt: IsoDateTime,
-      resolvedAt: Schema.optional(IsoDateTime),
-      occurrenceCount: Schema.Int.check(Schema.isGreaterThan(0)),
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  inbox: Schema.Array(BotInboxItem).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type SubscriptionAuthStatuses = typeof SubscriptionAuthStatuses.Type;
 

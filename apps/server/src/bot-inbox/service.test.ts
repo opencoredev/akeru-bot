@@ -89,6 +89,15 @@ describe("bot inbox incidents", () => {
     expect(new BotInboxService(filePath).list()).toHaveLength(2);
   });
 
+  it("resolves an open incident by id", () => {
+    const { service } = makeService(["2026-08-30T20:00:00.000Z", "2026-08-30T20:01:00.000Z"]);
+    const item = service.upsert(incident);
+
+    expect(service.resolveById(item.id)).toBe(true);
+    expect(service.list()[0]?.status).toBe("resolved");
+    expect(service.resolveById(item.id)).toBe(false);
+  });
+
   it("preserves incidents written by another service instance", () => {
     const { filePath, service: approvalWriter } = makeService([
       "2026-08-30T20:00:00.000Z",

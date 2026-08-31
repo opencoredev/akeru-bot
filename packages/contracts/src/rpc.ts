@@ -169,6 +169,8 @@ import {
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
+  BotInboxItem,
+  BotInboxResolveInput,
   SubscriptionAuthCompleteInput,
   SubscriptionAuthError,
   SubscriptionAuthHealthTestInput,
@@ -287,6 +289,8 @@ export const WS_METHODS = {
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
   subscriptionAuthHealthTest: "subscriptionAuth.healthTest",
+  botInboxList: "botInbox.list",
+  botInboxResolve: "botInbox.resolve",
   voiceCallGet: "voiceCall.get",
   voiceCallStart: "voiceCall.start",
   voiceCallHangup: "voiceCall.hangup",
@@ -438,6 +442,18 @@ export const WsSubscriptionAuthLogoutRpc = Rpc.make(WS_METHODS.subscriptionAuthL
 export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionAuthHealthTest, {
   payload: SubscriptionAuthHealthTestInput,
   success: SubscriptionAuthStatuses,
+  error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsBotInboxListRpc = Rpc.make(WS_METHODS.botInboxList, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(BotInboxItem),
+  error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsBotInboxResolveRpc = Rpc.make(WS_METHODS.botInboxResolve, {
+  payload: BotInboxResolveInput,
+  success: Schema.Void,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
 });
 
@@ -983,6 +999,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
   WsSubscriptionAuthHealthTestRpc,
+  WsBotInboxListRpc,
+  WsBotInboxResolveRpc,
   WsVoiceCallGetRpc,
   WsVoiceCallStartRpc,
   WsVoiceCallHangupRpc,
