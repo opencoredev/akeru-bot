@@ -3,17 +3,17 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { NodeServices } from "@effect/platform-node";
+import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { describe, expect, it } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
 import { BUILT_IN_DRIVERS } from "../builtInDrivers.ts";
 import { KimiDriver } from "./KimiDriver.ts";
 
 describe("KimiDriver", () => {
-  it("registers one Mastra-native Kimi provider with offline model metadata", async () => {
+  it.effect("registers one Mastra-native Kimi provider with offline model metadata", () => {
     expect(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind))).toContain("kimi");
     const program = Effect.scoped(
       Effect.gen(function* () {
@@ -28,32 +28,33 @@ describe("KimiDriver", () => {
         return { instance, snapshot };
       }),
     );
-    const result = await Effect.runPromise(
-      program.pipe(
-        Effect.provide(
-          ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
-            Layer.provide(NodeServices.layer),
-          ),
+    return program.pipe(
+      Effect.provide(
+        ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
+          Layer.provide(NodeServices.layer),
         ),
       ),
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          expect(result.instance.adapter).toBeUndefined();
+          expect(result.instance.textGeneration).toBeUndefined();
+          expect(result.snapshot).toMatchObject({
+            instanceId: "kimi",
+            driver: "kimi",
+            displayName: "Kimi For Coding",
+            installed: true,
+            auth: { status: "unauthenticated", type: "oauth" },
+            models: expect.arrayContaining([
+              expect.objectContaining({ slug: "k3" }),
+              expect.objectContaining({ slug: "k3-256k" }),
+            ]),
+          });
+        }),
+      ),
     );
-
-    expect(result.instance.adapter).toBeUndefined();
-    expect(result.instance.textGeneration).toBeUndefined();
-    expect(result.snapshot).toMatchObject({
-      instanceId: "kimi",
-      driver: "kimi",
-      displayName: "Kimi For Coding",
-      installed: true,
-      auth: { status: "unauthenticated", type: "oauth" },
-      models: expect.arrayContaining([
-        expect.objectContaining({ slug: "k3" }),
-        expect.objectContaining({ slug: "k3-256k" }),
-      ]),
-    });
   });
 
-  it("refreshes the snapshot after subscription auth changes", async () => {
+  it.effect("refreshes the snapshot after subscription auth changes", () => {
     const program = Effect.scoped(
       Effect.gen(function* () {
         const config = yield* ServerConfig;
@@ -82,19 +83,22 @@ describe("KimiDriver", () => {
         return { before, after, continuationIdentity: instance.continuationIdentity };
       }),
     );
-    const result = await Effect.runPromise(
-      program.pipe(
-        Effect.provide(
-          ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(
-            Layer.provide(NodeServices.layer),
-          ),
+    return program.pipe(
+      Effect.provide(
+        ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(
+          Layer.provide(NodeServices.layer),
         ),
       ),
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          expect(result.before.auth.status).toBe("unauthenticated");
+          expect(result.after.auth.status).toBe("authenticated");
+          expect(result.after.status).toBe("ready");
+          expect(result.after.continuation?.groupKey).toBe(
+            result.continuationIdentity.continuationKey,
+          );
+        }),
+      ),
     );
-
-    expect(result.before.auth.status).toBe("unauthenticated");
-    expect(result.after.auth.status).toBe("authenticated");
-    expect(result.after.status).toBe("ready");
-    expect(result.after.continuation?.groupKey).toBe(result.continuationIdentity.continuationKey);
   });
 });

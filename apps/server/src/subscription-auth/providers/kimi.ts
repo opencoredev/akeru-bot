@@ -225,6 +225,12 @@ export async function pollKimiDeviceLogin(
   pending: KimiDeviceLoginPending,
   options?: { signal?: AbortSignal },
 ): Promise<KimiDevicePollResult> {
+  if (!isKimiCodingDeviceId(pending.deviceId)) {
+    return {
+      status: "failed",
+      error: "Kimi For Coding login is missing its device identity. Restart the login.",
+    };
+  }
   const step = await stepDeviceCodePoll(pending.state, () =>
     pollKimiTokenOnce(pending, options?.signal),
   );
