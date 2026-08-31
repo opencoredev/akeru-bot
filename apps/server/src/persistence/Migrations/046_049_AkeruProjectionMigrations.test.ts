@@ -13,17 +13,20 @@ memoryLayer()("Akeru projection migration slots", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      assert.deepEqual(migrationManifest.slice(-9), [
-        [45, "ProjectionBotsAndGroups"],
-        [46, "ProjectionThreadOwnership"],
-        [47, "ProjectionMcpServers"],
-        [48, "GroupMembershipAndRespondingBots"],
-        [49, "BotRuntimeModeAndUsageCap"],
-        [50, "BotProfileMetadata"],
-        [51, "BotDisabledMcpServers"],
-        [52, "ExecutorPluginCommand"],
-        [53, "BotVoiceEnabled"],
-      ]);
+      assert.deepEqual(
+        migrationManifest.filter(([id]) => id >= 45 && id <= 53),
+        [
+          [45, "ProjectionBotsAndGroups"],
+          [46, "ProjectionThreadOwnership"],
+          [47, "ProjectionMcpServers"],
+          [48, "GroupMembershipAndRespondingBots"],
+          [49, "BotRuntimeModeAndUsageCap"],
+          [50, "BotProfileMetadata"],
+          [51, "BotDisabledMcpServers"],
+          [52, "ExecutorPluginCommand"],
+          [53, "BotVoiceEnabled"],
+        ],
+      );
 
       yield* runMigrations({ toMigrationInclusive: 45 });
       yield* sql`

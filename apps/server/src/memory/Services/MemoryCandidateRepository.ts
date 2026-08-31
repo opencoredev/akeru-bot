@@ -68,4 +68,4 @@ export interface MemoryCandidateRepositoryShape {
 export class MemoryCandidateRepository extends Context.Service<
   MemoryCandidateRepository,
   MemoryCandidateRepositoryShape
->()("t3/memory/Services/MemoryCandidateRepository") {}
+>()("akeru-bot/memory/Services/MemoryCandidateRepository") {}

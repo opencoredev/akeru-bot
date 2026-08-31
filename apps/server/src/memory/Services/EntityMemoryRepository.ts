@@ -169,4 +169,4 @@ export interface EntityMemoryRepositoryShape {
 export class EntityMemoryRepository extends Context.Service<
   EntityMemoryRepository,
   EntityMemoryRepositoryShape
->()("t3/memory/Services/EntityMemoryRepository") {}
+>()("akeru-bot/memory/Services/EntityMemoryRepository") {}
