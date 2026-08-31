@@ -15,7 +15,7 @@ import {
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
-import { Chat, type Adapter } from "chat";
+import { Chat } from "chat";
 import * as Effect from "effect/Effect";
 import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -34,6 +34,18 @@ interface StartedChannel {
   readonly runtime: ChannelRuntimeEntry;
 }
 
+interface InboundChannelMessage {
+  readonly externalThreadId: string;
+  readonly externalSenderId?: string;
+  readonly text: string;
+}
+
+interface ChannelTransportContext {
+  readonly botName: string;
+  readonly subscribedIMessageGroupIds: ReadonlyArray<string>;
+  readonly onIMessageGroupMessage: (input: InboundChannelMessage) => Promise<void>;
+}
+
 type LiveProvider = "telegram" | "imessage";
 type ChannelConnectInput = Extract<
   ClientOrchestrationCommand,
@@ -50,11 +62,8 @@ export interface ChannelRuntimeDependencies {
   readonly randomUuid: () => Promise<string>;
   readonly startTransport?: (
     input: ChannelConnectInput,
-    onDirectMessage: (input: {
-      readonly externalThreadId: string;
-      readonly externalSenderId?: string;
-      readonly text: string;
-    }) => Promise<void>,
+    onDirectMessage: (input: InboundChannelMessage) => Promise<void>,
+    context: ChannelTransportContext,
   ) => Promise<{ readonly externalIdentity: string; readonly runtime: ChannelRuntimeEntry }>;
 }
 
@@ -94,6 +103,34 @@ export const channelThreadId = (
   ThreadId.make(
     `channel-${createHash("sha256").update(`${botId}\0${provider}\0${externalThreadId}`).digest("hex")}`,
   );
+
+const isIMessageDirectThread = (externalThreadId: string) => externalThreadId.includes(";-;");
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const iMessageGroupTrigger = (botName: string) =>
+  new RegExp(`(?:^|[^\\p{L}\\p{N}_])@${escapeRegExp(botName)}(?=$|[^\\p{L}\\p{N}_])`, "iu");
+
+function subscribedIMessageGroupIds(
+  model: OrchestrationReadModel,
+  botId: BotId,
+): ReadonlyArray<string> {
+  const ids = new Set<string>();
+  for (const thread of model.threads) {
+    if (thread.botId !== botId || thread.groupId !== null || thread.deletedAt !== null) continue;
+    for (const message of thread.messages) {
+      const origin = message.channelOrigin;
+      if (
+        origin?.provider === "imessage" &&
+        !isIMessageDirectThread(origin.externalThreadId) &&
+        thread.id === channelThreadId(botId, "imessage", origin.externalThreadId)
+      ) {
+        ids.add(origin.externalThreadId);
+      }
+    }
+  }
+  return [...ids];
+}
 
 export function channelBindingsForRuntime(
   bindings: ReadonlyArray<ChannelBinding>,
@@ -359,6 +396,7 @@ async function startTelegram(
 
 async function startIMessage(
   input: Extract<ChannelConnectInput, { readonly provider: "imessage" }>,
+  context: ChannelTransportContext,
   onDirectMessage: Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1],
 ): Promise<{ readonly externalIdentity: string; readonly runtime: ChannelRuntimeEntry }> {
   const adapter = createiMessageAdapter(
@@ -371,7 +409,7 @@ async function startIMessage(
         },
   );
   const chat = new Chat({
-    userName: "Akeru Bot",
+    userName: context.botName,
     adapters: { imessage: adapter },
     state: createMemoryState(),
   });
@@ -383,7 +421,29 @@ async function startIMessage(
       text: message.text,
     });
   });
+  const onGroupMessage = async (
+    thread: Parameters<Parameters<typeof chat.onSubscribedMessage>[0]>[0],
+    message: Parameters<Parameters<typeof chat.onSubscribedMessage>[0]>[1],
+  ) => {
+    if (adapter.isDM(thread.id) || !message.text.trim()) return;
+    await context.onIMessageGroupMessage({
+      externalThreadId: thread.id,
+      externalSenderId: message.author.userId,
+      text: message.text,
+    });
+  };
+  chat.onNewMention(async (thread, message) => {
+    if (adapter.isDM(thread.id)) return;
+    await thread.subscribe();
+    await onGroupMessage(thread, message);
+  });
+  chat.onSubscribedMessage(onGroupMessage);
   await chat.initialize();
+  await Promise.allSettled(
+    context.subscribedIMessageGroupIds.map((externalThreadId) =>
+      chat.thread(externalThreadId).subscribe(),
+    ),
+  );
   const abort = new AbortController();
   const response = await adapter.startGatewayListener(
     { waitUntil: (task) => void task },
@@ -419,21 +479,36 @@ async function startChannel(
   const model = await dependencies.readModel();
   const bot = model.bots.find((candidate) => candidate.id === input.botId);
   if (!bot || bot.archivedAt !== null) throw new Error(`Bot '${input.botId}' is unavailable.`);
-  const onDirectMessage = (message: {
-    readonly externalThreadId: string;
-    readonly externalSenderId?: string;
-    readonly text: string;
-  }) =>
+  const onDirectMessage = (message: InboundChannelMessage) =>
     dispatchInboundChannelMessage(dependencies, {
       ...message,
       botId: bot.id,
       provider: input.provider,
     });
+  const context: ChannelTransportContext = {
+    botName: bot.name,
+    subscribedIMessageGroupIds:
+      input.provider === "imessage" ? subscribedIMessageGroupIds(model, bot.id) : [],
+    onIMessageGroupMessage: async (message) => {
+      if (
+        input.provider !== "imessage" ||
+        isIMessageDirectThread(message.externalThreadId) ||
+        !iMessageGroupTrigger(bot.name).test(message.text)
+      ) {
+        return;
+      }
+      await dispatchInboundChannelMessage(dependencies, {
+        ...message,
+        botId: bot.id,
+        provider: "imessage",
+      });
+    },
+  };
   const started = dependencies.startTransport
-    ? await dependencies.startTransport(input, onDirectMessage)
+    ? await dependencies.startTransport(input, onDirectMessage, context)
     : input.provider === "telegram"
       ? await startTelegram(bot.id, input.token, onDirectMessage)
-      : await startIMessage(input, onDirectMessage);
+      : await startIMessage(input, context, onDirectMessage);
   return {
     runtime: started.runtime,
     binding: {

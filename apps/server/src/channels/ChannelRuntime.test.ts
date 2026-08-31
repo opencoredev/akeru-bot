@@ -12,10 +12,42 @@ import {
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
+import type { iMessageAdapter } from "@photon-ai/chat-adapter-imessage";
+import { Message as ChatMessage, parseMarkdown, type Adapter, type ChatInstance } from "chat";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
+const photon = vi.hoisted(() => ({
+  adapter: null as iMessageAdapter | null,
+  chat: null as ChatInstance | null,
+  failedSubscription: null as string | null,
+  subscriptionAttempts: [] as string[],
+}));
+
+vi.mock("@photon-ai/chat-adapter-imessage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@photon-ai/chat-adapter-imessage")>();
+  return {
+    ...actual,
+    createiMessageAdapter: (
+      options: Parameters<typeof actual.createiMessageAdapter>[0],
+    ): iMessageAdapter => {
+      const adapter = actual.createiMessageAdapter(options) as iMessageAdapter & Adapter;
+      adapter.initialize = async (chat) => {
+        photon.adapter = adapter;
+        photon.chat = chat;
+      };
+      adapter.startGatewayListener = async () => new Response(null, { status: 200 });
+      adapter.onThreadSubscribe = async (threadId) => {
+        photon.subscriptionAttempts.push(threadId);
+        if (threadId === photon.failedSubscription) throw new Error("invalid group GUID");
+      };
+      adapter.disconnect = async () => undefined;
+      return adapter;
+    },
+  };
+});
 
 import type { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import { createEmptyReadModel } from "../orchestration/projector.ts";
@@ -42,13 +74,14 @@ const PROJECT_ID = ProjectId.make("project-1");
 function makeBot(
   id: BotId,
   input: {
+    readonly name?: string;
     readonly archivedAt?: string | null;
     readonly channelBindings?: ReadonlyArray<ChannelBinding>;
   } = {},
 ): OrchestrationBot {
   return {
     id,
-    name: id,
+    name: input.name ?? id,
     title: "Agent",
     label: null,
     description: null,
@@ -108,6 +141,27 @@ function makeMessage(
   };
 }
 
+function makeChatSdkMessage(threadId: string, id: string, text: string, senderId: string) {
+  return new ChatMessage({
+    id,
+    threadId,
+    text,
+    formatted: parseMarkdown(text),
+    raw: {},
+    author: {
+      userId: senderId,
+      userName: senderId,
+      fullName: senderId,
+      isBot: false,
+      isMe: false,
+    },
+    // @effect-diagnostics-next-line globalDate:off - Chat SDK Message requires a Date fixture.
+    metadata: { dateSent: new Date(NOW), edited: false },
+    attachments: [],
+    isMention: false,
+  });
+}
+
 function makeThread(
   id: ThreadId,
   botId: BotId,
@@ -163,7 +217,7 @@ function makeHarness(input: {
   readonly shutdown?: () => Promise<void>;
   readonly deliveryStore?: ChannelRuntimeDependencies["deliveryStore"];
   readonly secretStore?: ChannelRuntimeDependencies["secretStore"];
-  readonly startTransport?: ChannelRuntimeDependencies["startTransport"];
+  readonly startTransport?: ChannelRuntimeDependencies["startTransport"] | null;
   readonly failBotUpdate?: (updateIndex: number) => Error | undefined;
 }) {
   let model = makeModel(input.bots ?? [makeBot(BOT_ID)]);
@@ -211,15 +265,19 @@ function makeHarness(input: {
     readThread: async (threadId) => threads.find((thread) => thread.id === threadId) ?? null,
     nowIso: async () => NOW,
     randomUuid: async () => `uuid-${commands.length}`,
-    startTransport:
-      input.startTransport ??
-      (async () => ({
-        externalIdentity: "@akeru",
-        runtime: {
-          post: input.post ?? (async () => undefined),
-          shutdown: input.shutdown ?? (async () => undefined),
-        },
-      })),
+    ...(input.startTransport === null
+      ? {}
+      : {
+          startTransport:
+            input.startTransport ??
+            (async () => ({
+              externalIdentity: "@akeru",
+              runtime: {
+                post: input.post ?? (async () => undefined),
+                shutdown: input.shutdown ?? (async () => undefined),
+              },
+            })),
+        }),
   };
   return { commands, dependencies, secrets, readModel: () => model };
 }
@@ -232,8 +290,22 @@ const telegramConnect = (botId: BotId, token = "telegram-token") => ({
   token,
 });
 
+const imessageConnect = (botId: BotId) => ({
+  type: "channel.connect" as const,
+  commandId: CommandId.make(`connect-imessage-${botId}`),
+  botId,
+  provider: "imessage" as const,
+  mode: "hosted" as const,
+  projectId: "photon-project",
+  projectSecret: "photon-secret",
+});
+
 afterEach(async () => {
   await shutdownAllChannels();
+  photon.adapter = null;
+  photon.chat = null;
+  photon.failedSubscription = null;
+  photon.subscriptionAttempts.length = 0;
 });
 
 describe("channel runtime", () => {
@@ -264,6 +336,159 @@ describe("channel runtime", () => {
       externalThreadId: "chat-a",
       externalSenderId: "sender-7",
     });
+  });
+
+  it("keeps DMs automatic and requires the exact bot mention in iMessage groups", async () => {
+    let directMessage:
+      | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
+      | undefined;
+    let transportContext:
+      | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[2]
+      | undefined;
+    const harness = makeHarness({
+      bots: [makeBot(BOT_ID, { name: "Build Bot" })],
+      startTransport: async (_input, onDirectMessage, context) => {
+        directMessage = onDirectMessage;
+        transportContext = context;
+        return {
+          externalIdentity: "Photon hosted",
+          runtime: { post: async () => undefined, shutdown: async () => undefined },
+        };
+      },
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
+    await directMessage?.({
+      externalThreadId: "imessage:iMessage;-;+15551234567",
+      externalSenderId: "+15551234567",
+      text: "DM without a mention",
+    });
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:opaque-family-chat",
+      externalSenderId: "+15557654321",
+      text: "Build Bot should ignore this",
+    });
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:opaque-family-chat",
+      externalSenderId: "+15557654321",
+      text: "@Build Botany should also be ignored",
+    });
+
+    expect(harness.commands.filter((command) => command.type === "thread.turn.start")).toHaveLength(
+      1,
+    );
+
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:opaque-family-chat",
+      externalSenderId: "+15557654321",
+      text: "@build bot check the build",
+    });
+
+    const turns = harness.commands.filter((command) => command.type === "thread.turn.start");
+    expect(turns).toHaveLength(2);
+    expect(
+      harness.commands.find(
+        (command) => command.type === "thread.create" && command.threadId === turns[1]?.threadId,
+      ),
+    ).toMatchObject({ botId: BOT_ID, groupId: null });
+    expect(turns[1]?.message.channelOrigin).toEqual({
+      provider: "imessage",
+      externalThreadId: "imessage:opaque-family-chat",
+      externalSenderId: "+15557654321",
+    });
+  });
+
+  it("routes initial and subscribed iMessage group mentions through Chat SDK", async () => {
+    const groupId = "imessage:opaque-group";
+    const harness = makeHarness({
+      bots: [makeBot(BOT_ID, { name: "Build Bot" })],
+      startTransport: null,
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+    if (!photon.chat || !photon.adapter) throw new Error("Expected the Photon Chat runtime.");
+
+    await photon.chat.processMessage(
+      photon.adapter,
+      groupId,
+      makeChatSdkMessage(groupId, "group-1", "@build bot status", "+15551110000"),
+    );
+    await photon.chat.processMessage(
+      photon.adapter,
+      groupId,
+      makeChatSdkMessage(groupId, "group-2", "background chatter", "+15552220000"),
+    );
+    await photon.chat.processMessage(
+      photon.adapter,
+      groupId,
+      makeChatSdkMessage(groupId, "group-3", "@BUILD BOT continue", "+15552220000"),
+    );
+
+    const turns = harness.commands.filter((command) => command.type === "thread.turn.start");
+    expect(turns).toHaveLength(2);
+    expect(photon.subscriptionAttempts).toEqual([groupId]);
+    expect(turns.map((turn) => turn.message.text)).toEqual([
+      "@build bot status",
+      "@BUILD BOT continue",
+    ]);
+  });
+
+  it("restores durable iMessage group subscriptions for the bot channel", async () => {
+    const groupId = "imessage:opaque-release-team";
+    const badGroupId = "imessage:stale-release-team";
+    const threadId = channelThreadId(BOT_ID, "imessage", groupId);
+    const badThreadId = channelThreadId(BOT_ID, "imessage", badGroupId);
+    const harness = makeHarness({
+      startTransport: null,
+      threads: [
+        makeThread(threadId, BOT_ID, [
+          makeMessage(MessageId.make("group-inbound"), "user", "@Build Bot status", {
+            provider: "imessage",
+            externalThreadId: groupId,
+            externalSenderId: "+15552223333",
+          }),
+        ]),
+        makeThread(badThreadId, BOT_ID, [
+          makeMessage(MessageId.make("bad-group-inbound"), "user", "@Build Bot status", {
+            provider: "imessage",
+            externalThreadId: badGroupId,
+            externalSenderId: "+15553334444",
+          }),
+        ]),
+      ],
+    });
+    photon.failedSubscription = badGroupId;
+
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+    await stopChannelsForBot(BOT_ID);
+    await expect(restoreConnectedChannels(harness.dependencies)).resolves.toEqual([]);
+
+    expect(photon.subscriptionAttempts.filter((id) => id === groupId)).toHaveLength(2);
+    expect(photon.subscriptionAttempts.filter((id) => id === badGroupId)).toHaveLength(2);
+  });
+
+  it("replies to the same iMessage group GUID", async () => {
+    const groupId = "imessage:iMessage;+;project-chat~+15550001111";
+    const messageId = MessageId.make("group-reply");
+    const threadId = channelThreadId(BOT_ID, "imessage", groupId);
+    const posts: Array<{ readonly externalThreadId: string; readonly text: string }> = [];
+    const harness = makeHarness({
+      threads: [
+        makeThread(threadId, BOT_ID, [
+          makeMessage(MessageId.make("group-question"), "user", "@bot-1 status", {
+            provider: "imessage",
+            externalThreadId: groupId,
+            externalSenderId: "+15554445555",
+          }),
+          makeMessage(messageId, "assistant", "Build is green"),
+        ]),
+      ],
+      post: async (externalThreadId, text) => void posts.push({ externalThreadId, text }),
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
+    await sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
+
+    expect(posts).toEqual([{ externalThreadId: groupId, text: "Build is green" }]);
   });
 
   it("rejects inbound messages for archived bots", async () => {
