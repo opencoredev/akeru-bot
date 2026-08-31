@@ -146,6 +146,7 @@ import {
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { PortabilitySettings } from "./PortabilitySettings";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -2512,6 +2513,7 @@ export function GeneralSettingsPanel() {
             </div>
           }
         />
+        <PortabilitySettings />
       </SettingsSection>
 
       <SettingsSection title="About">

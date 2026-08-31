@@ -932,6 +932,7 @@ const McpServerCreateCommand = Schema.Union([
     transport: Schema.Literal("stdio"),
     command: TrimmedNonEmptyString,
     args: Schema.optional(Schema.Array(Schema.String)),
+    enabled: Schema.optional(Schema.Boolean),
     createdAt: IsoDateTime,
   }),
   Schema.Struct({
@@ -941,6 +942,7 @@ const McpServerCreateCommand = Schema.Union([
     name: TrimmedNonEmptyString,
     transport: Schema.Literal("url"),
     url: McpServerUrl,
+    enabled: Schema.optional(Schema.Boolean),
     createdAt: IsoDateTime,
   }),
 ]);

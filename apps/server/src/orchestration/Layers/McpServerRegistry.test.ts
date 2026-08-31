@@ -37,6 +37,33 @@ const registryLayer = it.layer(
 );
 
 registryLayer("MCP server registry", (it) => {
+  it.effect("creates a disabled MCP server when requested", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const snapshots = yield* ProjectionSnapshotQuery;
+      const mcpServerId = McpServerId.make("mcp-disabled-import");
+
+      yield* engine.dispatch({
+        type: "mcp-server.create",
+        commandId: CommandId.make("cmd-mcp-disabled-import"),
+        mcpServerId,
+        name: "Disabled import",
+        transport: "url",
+        url: "https://mcp.example.com/import",
+        enabled: false,
+        createdAt: "2026-08-30T12:00:00.000Z",
+      });
+
+      const snapshot = yield* snapshots.getShellSnapshot();
+      assert.equal(snapshot.mcpServers?.[0]?.enabled, false);
+      yield* engine.dispatch({
+        type: "mcp-server.delete",
+        commandId: CommandId.make("cmd-mcp-disabled-import-delete"),
+        mcpServerId,
+      });
+    }),
+  );
+
   it.effect(
     "round-trips create, update, disable, enable, and delete through the shell projection",
     () =>

@@ -214,7 +214,7 @@ type DecideOrchestrationCommandResult =
   | PlannedOrchestrationEvent
   | ReadonlyArray<PlannedOrchestrationEvent>;
 
-const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
+export const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
   commands,
   readModel,
 }: {
@@ -864,7 +864,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               transport: command.transport,
               command: command.command,
               ...(command.args !== undefined ? { args: command.args } : {}),
-              enabled: true,
+              enabled: command.enabled ?? true,
               createdAt: command.createdAt,
               updatedAt: command.createdAt,
             }
@@ -873,7 +873,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               name: command.name,
               transport: command.transport,
               url: command.url,
-              enabled: true,
+              enabled: command.enabled ?? true,
               createdAt: command.createdAt,
               updatedAt: command.createdAt,
             };

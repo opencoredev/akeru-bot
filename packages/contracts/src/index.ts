@@ -32,4 +32,5 @@ export * from "./previewAutomation.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./voiceCall.ts";
+export * from "./portability.ts";
 export * from "./rpc.ts";

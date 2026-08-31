@@ -36,6 +36,7 @@ import {
   OrchestrationGetSnapshotError,
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
+  PortabilityArchiveError,
   ORCHESTRATION_WS_METHODS,
   type ProjectId,
   type ProjectEntriesFailure,
@@ -49,6 +50,7 @@ import {
   ProviderUploadFeedbackError,
   RelayClientInstallFailedError,
   type RelayClientInstallProgressEvent,
+  type ServerProvider,
   type ServerSelfUpdateError,
   type ServerSelfUpdateProgressEvent,
   type FilesystemBrowseFailure,
@@ -89,6 +91,7 @@ import {
   cleanupFailedUploadedAttachments,
   normalizeDispatchCommand,
 } from "./orchestration/Normalizer.ts";
+import { decideCommandSequence } from "./orchestration/decider.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
@@ -130,6 +133,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -151,6 +155,25 @@ const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchComma
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
+
+const portabilityError = (operation: "export" | "preview" | "apply", cause: unknown) =>
+  new PortabilityArchiveError({
+    operation,
+    message: cause instanceof Error ? cause.message : String(cause),
+  });
+
+const availablePortabilityProviderIds = (providers: ReadonlyArray<ServerProvider>) =>
+  new Set(
+    providers
+      .filter(
+        (provider) =>
+          provider.enabled &&
+          provider.installed &&
+          provider.availability !== "unavailable" &&
+          provider.auth.status !== "unauthenticated",
+      )
+      .map((provider) => provider.instanceId),
+  );
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -1848,6 +1871,101 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "server",
             },
+          ),
+        [WS_METHODS.portabilityExport]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.portabilityExport,
+            Effect.gen(function* () {
+              const [snapshot, settings, exportedAt] = yield* Effect.all([
+                projectionSnapshotQuery.getSnapshot(),
+                serverSettings.getSettings,
+                nowIso,
+              ]);
+              return yield* Effect.try({
+                try: () => {
+                  const archive = Portability.createPortabilityArchive(
+                    snapshot,
+                    settings,
+                    exportedAt,
+                  );
+                  return {
+                    filename: `akeru-${exportedAt.slice(0, 10)}.akeru.archive`,
+                    contents: Portability.serializePortabilityArchive(archive),
+                  };
+                },
+                catch: (cause) => portabilityError("export", cause),
+              });
+            }).pipe(Effect.mapError((cause) => portabilityError("export", cause))),
+            { "rpc.aggregate": "portability" },
+          ),
+        [WS_METHODS.portabilityPreviewImport]: ({ contents }) =>
+          observeRpcEffect(
+            WS_METHODS.portabilityPreviewImport,
+            Effect.gen(function* () {
+              const archive = yield* Effect.try({
+                try: () => Portability.parsePortabilityArchive(contents),
+                catch: (cause) => portabilityError("preview", cause),
+              });
+              const [snapshot, settings, providers] = yield* Effect.all([
+                projectionSnapshotQuery.getSnapshot(),
+                serverSettings.getSettings,
+                providerRegistry.getProviders,
+              ]);
+              return Portability.previewPortabilityImport(
+                archive,
+                snapshot,
+                settings,
+                availablePortabilityProviderIds(providers),
+              );
+            }).pipe(Effect.mapError((cause) => portabilityError("preview", cause))),
+            { "rpc.aggregate": "portability" },
+          ),
+        [WS_METHODS.portabilityApplyImport]: ({
+          contents,
+          expectedSnapshotSequence,
+          expectedStateChecksum,
+        }) =>
+          observeRpcEffect(
+            WS_METHODS.portabilityApplyImport,
+            Effect.gen(function* () {
+              const archive = yield* Effect.try({
+                try: () => Portability.parsePortabilityArchive(contents),
+                catch: (cause) => portabilityError("apply", cause),
+              });
+              const [snapshot, settings, providers] = yield* Effect.all([
+                projectionSnapshotQuery.getSnapshot(),
+                serverSettings.getSettings,
+                providerRegistry.getProviders,
+              ]);
+              const availableProviderIds = availablePortabilityProviderIds(providers);
+              if (
+                !Portability.isPortabilityPreviewCurrent(snapshot, settings, availableProviderIds, {
+                  snapshotSequence: expectedSnapshotSequence,
+                  stateChecksum: expectedStateChecksum,
+                })
+              ) {
+                return yield* portabilityError(
+                  "apply",
+                  new Error("Akeru state changed after the preview. Review the archive again."),
+                );
+              }
+              const plan = Portability.commandsForPortabilityImport(
+                archive,
+                snapshot,
+                settings,
+                availableProviderIds,
+              );
+              yield* decideCommandSequence({ commands: plan.commands, readModel: snapshot }).pipe(
+                Effect.provideService(Crypto.Crypto, crypto),
+              );
+              yield* Effect.forEach(plan.commands, (command) => dispatchFromClient(command), {
+                concurrency: 1,
+                discard: true,
+              });
+              if (plan.settingsPatch) yield* serverSettings.updateSettings(plan.settingsPatch);
+              return { applied: plan.applied, skipped: plan.skipped };
+            }).pipe(Effect.mapError((cause) => portabilityError("apply", cause))),
+            { "rpc.aggregate": "portability" },
           ),
         [WS_METHODS.subscriptionAuthList]: (_input) =>
           observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {

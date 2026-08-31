@@ -197,6 +197,14 @@ import {
   VoiceCallStartInput,
   VoiceCallStartResult,
 } from "./voiceCall.ts";
+import {
+  PortabilityApplyImportInput,
+  PortabilityApplyImportResult,
+  PortabilityArchiveError,
+  PortabilityExportResult,
+  PortabilityImportPreview,
+  PortabilityPreviewImportInput,
+} from "./portability.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -293,6 +301,9 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  portabilityExport: "portability.export",
+  portabilityPreviewImport: "portability.previewImport",
+  portabilityApplyImport: "portability.applyImport",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -529,6 +540,24 @@ export const WsServerGetBackgroundPolicyRpc = Rpc.make(WS_METHODS.serverGetBackg
   payload: Schema.Struct({}),
   success: BackgroundPolicySnapshot,
   error: EnvironmentAuthorizationError,
+});
+
+export const WsPortabilityExportRpc = Rpc.make(WS_METHODS.portabilityExport, {
+  payload: Schema.Struct({}),
+  success: PortabilityExportResult,
+  error: Schema.Union([PortabilityArchiveError, EnvironmentAuthorizationError]),
+});
+
+export const WsPortabilityPreviewImportRpc = Rpc.make(WS_METHODS.portabilityPreviewImport, {
+  payload: PortabilityPreviewImportInput,
+  success: PortabilityImportPreview,
+  error: Schema.Union([PortabilityArchiveError, EnvironmentAuthorizationError]),
+});
+
+export const WsPortabilityApplyImportRpc = Rpc.make(WS_METHODS.portabilityApplyImport, {
+  payload: PortabilityApplyImportInput,
+  success: PortabilityApplyImportResult,
+  error: Schema.Union([PortabilityArchiveError, EnvironmentAuthorizationError]),
 });
 
 export const WsSourceControlLookupRepositoryRpc = Rpc.make(
@@ -968,6 +997,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsPortabilityExportRpc,
+  WsPortabilityPreviewImportRpc,
+  WsPortabilityApplyImportRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsSourceControlLookupRepositoryRpc,
