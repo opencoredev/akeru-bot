@@ -42,6 +42,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotModelPicker } from "./BotModelPicker";
+import { BotUsageSection } from "./BotUsageSection";
 import {
   BOT_SANDBOX_OPTIONS,
   botSandboxChoice,
@@ -250,6 +251,8 @@ function BotProfileEditor({
             )}
           </div>
         </div>
+
+        <BotUsageSection environmentId={environmentId} botId={bot.id} />
 
         <div className="space-y-2">
           <div className="text-sm font-medium">Sandbox</div>
