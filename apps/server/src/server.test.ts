@@ -160,6 +160,7 @@ import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClien
 import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { BotUsageLedger, type BotUsageLedgerShape } from "./usage/BotUsageLedger.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as Data from "effect/Data";
 
@@ -418,6 +419,7 @@ const buildAppUnderTest = (options?: {
     analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
+    botUsageLedger?: Partial<BotUsageLedgerShape>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
@@ -808,6 +810,22 @@ const buildAppUnderTest = (options?: {
             listAll: () => Effect.succeed([]),
             ...options?.layers?.projectionBots,
           } satisfies ProjectionBots.ProjectionBotRepositoryShape),
+          Layer.mock(BotUsageLedger)({
+            summarize: (botId) =>
+              Effect.succeed({
+                botId,
+                consumedTokens: 0,
+                reservedTokens: 0,
+                measurements: {
+                  input: { tokens: 0, unavailableEntries: 0 },
+                  output: { tokens: 0, unavailableEntries: 0 },
+                  observer: { tokens: 0, unavailableEntries: 0 },
+                  reflector: { tokens: 0, unavailableEntries: 0 },
+                },
+                entries: [],
+              }),
+            ...options?.layers?.botUsageLedger,
+          }),
           Layer.succeed(ProjectionGroups.ProjectionGroupRepository, {
             upsert: () => Effect.void,
             getById: () => Effect.succeed(Option.none()),
@@ -4532,6 +4550,87 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.deepEqual(response.issues, []);
       assert.deepEqual(response.keybindings, [resolved]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("publishes typed per-bot usage with the server-owned cap", () =>
+    Effect.gen(function* () {
+      const botId = BotId.make("bot-usage-rpc");
+      const missingBotId = BotId.make("bot-usage-missing");
+      const summarize = vi.fn<BotUsageLedgerShape["summarize"]>(() =>
+        Effect.succeed({
+          botId,
+          consumedTokens: 1_500,
+          reservedTokens: 32_000,
+          measurements: {
+            input: { tokens: 1_000, unavailableEntries: 1 },
+            output: { tokens: 500, unavailableEntries: 1 },
+            observer: { tokens: 120, unavailableEntries: 0 },
+            reflector: { tokens: 80, unavailableEntries: 1 },
+          },
+          entries: [],
+        }),
+      );
+      const bot = {
+        botId,
+        name: "Usage bot",
+        title: "Usage bot",
+        label: null,
+        description: null,
+        disabledMcpServerIds: [],
+        avatar: { kind: "dither" as const, seed: "usage-bot" },
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        sandbox: "local",
+        runtimeMode: "approval-required" as const,
+        usageCap: { unit: "tokens" as const, limit: 64_000 },
+        voiceEnabled: false,
+        groupId: null,
+        archivedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      } satisfies ProjectionBots.ProjectionBot;
+
+      yield* buildAppUnderTest({
+        layers: {
+          projectionBots: {
+            getById: ({ botId: requestedBotId }) =>
+              Effect.succeed(requestedBotId === botId ? Option.some(bot) : Option.none()),
+          },
+          botUsageLedger: { summarize },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            const usage = yield* client[WS_METHODS.botUsage]({ botId });
+            const missing = yield* client[WS_METHODS.botUsage]({ botId: missingBotId }).pipe(
+              Effect.flip,
+            );
+            return { usage, missing };
+          }),
+        ),
+      );
+
+      assert.deepEqual(result.usage.usageCap, { unit: "tokens", limit: 64_000 });
+      assert.equal(result.usage.consumedTokens, 1_500);
+      assert.equal(result.usage.reservedTokens, 32_000);
+      assert.deepEqual(result.usage.measurements, {
+        input: { tokens: 1_000, unavailableEntries: 1 },
+        output: { tokens: 500, unavailableEntries: 1 },
+        observer: { tokens: 120, unavailableEntries: 0 },
+        reflector: { tokens: 80, unavailableEntries: 1 },
+      });
+      assert.deepEqual(result.usage.estimatedCost, { status: "unavailable", usd: null });
+      assert.deepEqual(result.usage.subscriptionPool, {
+        status: "unavailable",
+        used: null,
+        limit: null,
+        unit: null,
+      });
+      assert.equal(result.missing._tag, "AkeruBotUsageReadError");
+      assert.deepEqual(summarize.mock.calls, [[botId]]);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

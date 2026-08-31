@@ -67,6 +67,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.memoryImportPreview]: AuthOrchestrationReadScope,
   [WS_METHODS.memoryImportApply]: AuthOrchestrationOperateScope,
   [WS_METHODS.memoryMutate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botUsage]: AuthOrchestrationReadScope,
   [WS_METHODS.portabilityExport]: AuthOrchestrationReadScope,
   [WS_METHODS.portabilityPreviewImport]: AuthOrchestrationReadScope,
   [WS_METHODS.portabilityApplyImport]: AuthOrchestrationOperateScope,

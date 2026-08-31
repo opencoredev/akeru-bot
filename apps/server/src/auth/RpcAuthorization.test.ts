@@ -42,6 +42,10 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.memoryMutate)).toBe(AuthOrchestrationOperateScope);
   });
 
+  it("allows bot usage reads without granting orchestration changes", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.botUsage)).toBe(AuthOrchestrationReadScope);
+  });
+
   it("allows relay status reads without granting relay installation access", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.cloudGetRelayClientStatus)).toBe(
       AuthRelayReadScope,
