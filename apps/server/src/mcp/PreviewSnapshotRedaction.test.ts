@@ -52,11 +52,21 @@ describe("preview snapshot redaction", () => {
 
   it("redacts secret fields and blanks the screenshot", () => {
     const result = redactPreviewSnapshot(
-      { cookie: ["opaque"], password: 1234, visible: "safe" },
+      {
+        cookie: ["opaque"],
+        password: 1234,
+        visible: "safe",
+        consoleOutput: '{"token":"secret-value"}',
+      },
       testScreenshot(),
     );
 
-    expect(result.page).toEqual({ cookie: "[REDACTED]", password: "[REDACTED]", visible: "safe" });
+    expect(result.page).toEqual({
+      cookie: "[REDACTED]",
+      password: "[REDACTED]",
+      visible: "safe",
+      consoleOutput: '{"[REDACTED]}',
+    });
     const png = PNG.sync.read(Buffer.from(result.screenshot));
     expect([...png.data.subarray(0, 4)]).toEqual([0, 0, 0, 255]);
   });

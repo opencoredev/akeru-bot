@@ -6,7 +6,7 @@ const sensitivePatterns = [
   /\bBearer\s+[A-Z0-9._~+/-]+=*/gi,
   /\b(?:sk|pk|ghp|github_pat|xox[baprs]|AKIA|glpat|npm)[-_A-Z0-9]{8,}\b/gi,
   /\beyJ[A-Z0-9_-]+\.[A-Z0-9_-]+\.[A-Z0-9_-]+\b/gi,
-  /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|session(?:Id)?|clientSecret|aws[_-]?secret[_-]?access[_-]?key)\b\s*[:=]\s*[^\r\n,}]+/gi,
+  /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|session(?:Id)?|clientSecret|aws[_-]?secret[_-]?access[_-]?key)\b["']?\s*[:=]\s*[^\r\n,}]+/gi,
   /\/Users\/[^/\s"'<>]+(?:\/[^\s"'<>]*)?/g,
   /\/home\/[^/\s"'<>]+(?:\/[^\s"'<>]*)?/g,
   /\/root(?:\/[^\s"'<>]*)?/g,
