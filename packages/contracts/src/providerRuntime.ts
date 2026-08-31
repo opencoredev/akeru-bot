@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { AkeruToolReceipt } from "./akeruTools.ts";
 import {
   EnvironmentId,
   EventId,
@@ -186,6 +187,7 @@ const ProviderRuntimeEventType = Schema.Literals([
   "hook.completed",
   "tool.progress",
   "tool.summary",
+  "tool.receipt",
   "auth.status",
   "account.updated",
   "account.rate-limits.updated",
@@ -247,6 +249,7 @@ const ConfigWarningType = Schema.Literal("config.warning");
 const DeprecationNoticeType = Schema.Literal("deprecation.notice");
 const FilesPersistedType = Schema.Literal("files.persisted");
 const ToolDeniedType = Schema.Literal("tool.denied");
+const ToolReceiptType = Schema.Literal("tool.receipt");
 const RuntimeWarningType = Schema.Literal("runtime.warning");
 const RuntimeErrorType = Schema.Literal("runtime.error");
 
@@ -774,6 +777,9 @@ const ToolDeniedPayload = Schema.Struct({
 });
 export type ToolDeniedPayload = typeof ToolDeniedPayload.Type;
 
+const ToolReceiptPayload = AkeruToolReceipt;
+export type ToolReceiptPayload = typeof ToolReceiptPayload.Type;
+
 const RuntimeWarningPayload = Schema.Struct({
   message: TrimmedNonEmptyStringSchema,
   detail: Schema.optional(Schema.Unknown),
@@ -1133,6 +1139,13 @@ const ProviderRuntimeToolDeniedEvent = Schema.Struct({
 });
 export type ProviderRuntimeToolDeniedEvent = typeof ProviderRuntimeToolDeniedEvent.Type;
 
+const ProviderRuntimeToolReceiptEvent = Schema.Struct({
+  ...ProviderRuntimeEventBase.fields,
+  type: ToolReceiptType,
+  payload: ToolReceiptPayload,
+});
+export type ProviderRuntimeToolReceiptEvent = typeof ProviderRuntimeToolReceiptEvent.Type;
+
 const ProviderRuntimeWarningEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RuntimeWarningType,
@@ -1195,6 +1208,7 @@ export const ProviderRuntimeEventV2 = Schema.Union([
   ProviderRuntimeDeprecationNoticeEvent,
   ProviderRuntimeFilesPersistedEvent,
   ProviderRuntimeToolDeniedEvent,
+  ProviderRuntimeToolReceiptEvent,
   ProviderRuntimeWarningEvent,
   ProviderRuntimeErrorEvent,
 ]);
