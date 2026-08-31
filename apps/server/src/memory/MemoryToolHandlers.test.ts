@@ -1,6 +1,8 @@
 import { assert, it } from "@effect/vitest";
 import {
   AkeruMemoryCandidateId,
+  AkeruMemoryEntityId,
+  AkeruMemoryId,
   AkeruMemoryRootId,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
@@ -12,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import { resolveAuthorizedMemoryPartitions } from "./EntityMemoryAccess.ts";
 import { EntityMemoryRepositoryLive } from "./Layers/EntityMemoryRepository.ts";
 import { MemoryCandidateRepositoryLive } from "./Layers/MemoryCandidateRepository.ts";
 import {
@@ -131,6 +134,68 @@ it.layer(layer)("MemoryToolHandlers", (it) => {
       assert.equal(updated.revision, 2);
       assert.equal(invalidations, 1);
       assert.equal((yield* candidates.listPending({ access })).length, pendingCount);
+    }),
+  );
+
+  it.effect("keeps approved private updates in an imported user partition", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const candidates = yield* MemoryCandidateRepository;
+      const handlers = createMemoryToolHandlers(repository, candidates, access);
+      const partition = (yield* resolveAuthorizedMemoryPartitions(access)).find(
+        (candidate) => candidate.scope === "user",
+      );
+      assert.isDefined(partition);
+      const rootId = AkeruMemoryRootId.make("imported-user-root");
+      yield* repository.insert({
+        access,
+        revision: {
+          id: AkeruMemoryId.make("imported-user-revision"),
+          rootId,
+          revision: 1,
+          partition,
+          entityKind: "user",
+          entityId: AkeruMemoryEntityId.make(access.userId),
+          kind: "fact",
+          value: {},
+          fact: "Use npm.",
+          sourceThreadId: access.threadId,
+          sourceMessageId: null,
+          authorBotId: access.botId,
+          initiatingUserId: access.userId,
+          createdAt: "2026-08-31T00:00:00.000Z",
+          confirmedAt: "2026-08-31T00:00:00.000Z",
+          updatedAt: "2026-08-31T00:00:00.000Z",
+          confidence: 1,
+          approvalState: "approved",
+          supersedesId: null,
+          supersededById: null,
+          visibility: "private",
+          deletionState: "active",
+          pinned: false,
+          sensitive: false,
+          affectedBotIds: [access.botId],
+        },
+      });
+      const pending = (yield* Effect.promise(() =>
+        execute("update_memory", handlers.update_memory, {
+          memoryId: rootId,
+          expectedRevision: 1,
+          fact: "Use Bun.",
+          scope: "private",
+        }),
+      )) as { candidateId: string };
+
+      yield* Effect.promise(() =>
+        decideMemoryCandidate(repository, candidates, access, {
+          candidateId: AkeruMemoryCandidateId.make(pending.candidateId),
+          decision: "approve",
+        }),
+      );
+      const current = yield* repository.getCurrent({ access, rootId });
+      assert.equal(current.partition.scope, "user");
+      assert.equal(current.partition.partitionId, partition.partitionId);
+      assert.equal(current.fact, "Use Bun.");
     }),
   );
 

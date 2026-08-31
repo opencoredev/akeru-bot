@@ -117,7 +117,10 @@ async function revisionFor(
   now: string,
   current?: AkeruMemoryRevision,
 ) {
-  const partition = await partitionFor(scope, access);
+  const partition =
+    current?.partition.scope === "user" && scope === "private"
+      ? { ...current.partition, visibility: current.visibility }
+      : await partitionFor(scope, access);
   return {
     ...current,
     id: AkeruMemoryId.make(NodeCrypto.randomUUID()),

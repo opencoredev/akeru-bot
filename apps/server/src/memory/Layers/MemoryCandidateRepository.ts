@@ -116,7 +116,7 @@ const authorizeCandidate = (access: AkeruMemoryThreadAccess, candidate: AkeruMem
 };
 
 const targetScope = (revision: AkeruMemoryRevision): AkeruMemoryTargetScope =>
-  revision.partition.scope === "bot-user"
+  revision.partition.scope === "bot-user" || revision.partition.scope === "user"
     ? "private"
     : (revision.partition.scope as AkeruMemoryTargetScope);
 
