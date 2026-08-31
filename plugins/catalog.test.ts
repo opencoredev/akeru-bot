@@ -1,7 +1,13 @@
 import * as NodeFS from "node:fs";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
-import { loadCatalog, loadDirectoryCatalog, resolveCatalogInstallations } from "./catalog";
+import {
+  isInstallablePlugin,
+  loadCatalog,
+  loadDirectoryCatalog,
+  resolveCatalogInstallations,
+  type PluginDefinition,
+} from "./catalog";
 import { parsePluginManifestJson } from "./schema";
 
 const EXPECTED_IDS = ["context", "firecrawl", "exa", "parallel-search", "executor"];
@@ -62,10 +68,19 @@ describe("plugin catalog loader", () => {
       "./entries/pending-vendor/logo-dark.svg": "/pending-vendor-dark.svg",
     };
 
-    expect(loadDirectoryCatalog(modules, assets)).toMatchObject([
+    const directory = loadDirectoryCatalog(modules, assets);
+    expect(directory).toMatchObject([
       { id: "context", kind: "mcp-url", catalogStatus: "available" },
       { id: "pending-vendor", kind: "mcp-url", catalogStatus: "approval-pending" },
     ]);
+    const pendingPlugin = directory[1];
+    expect(isInstallablePlugin(directory[0]!)).toBe(true);
+    expect(isInstallablePlugin(pendingPlugin!)).toBe(false);
+    if (pendingPlugin?.catalogStatus !== "approval-pending") {
+      throw new Error("Expected the pending vendor in the directory catalog.");
+    }
+    expectTypeOf(pendingPlugin).not.toMatchTypeOf<PluginDefinition>();
+
     const installable = loadCatalog(modules, assets);
     expect(installable.map((plugin) => plugin.id)).toEqual(["context"]);
     expect(
@@ -74,14 +89,20 @@ describe("plugin catalog loader", () => {
           { id: "builtin-pending-vendor", name: "Pending Vendor" },
           { id: "custom-mcp", name: "Custom MCP" },
         ],
-        installable,
+        directory,
       ),
     ).toEqual([
       {
-        kind: "legacy",
+        kind: "catalog",
         serverId: "builtin-pending-vendor",
-        pluginId: "pending-vendor",
-        title: "Pending Vendor",
+        plugin: expect.objectContaining({
+          id: "pending-vendor",
+          catalogStatus: "approval-pending",
+          connection: {
+            type: "approval-pending",
+            blocker: "The vendor must approve Akeru as an OAuth client.",
+          },
+        }),
       },
     ]);
   });
