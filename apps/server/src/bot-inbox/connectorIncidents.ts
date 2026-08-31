@@ -5,9 +5,11 @@ export function syncConnectorIncidents(
   botInbox: BotInboxService,
   statuses: ReadonlyArray<ProviderStatus>,
 ): void {
+  const currentIncidentKeys = new Set<string>();
   for (const status of statuses) {
     for (const bot of status.dependentBots) {
       const incidentKey = `connector:${status.provider}:${bot.id}`;
+      currentIncidentKeys.add(incidentKey);
       if (
         status.health === "expired" ||
         status.health === "revoked" ||
@@ -36,6 +38,16 @@ export function syncConnectorIncidents(
       ) {
         botInbox.resolve(incidentKey);
       }
+    }
+  }
+
+  for (const incident of botInbox.list()) {
+    if (
+      incident.status === "open" &&
+      incident.incidentKey.startsWith("connector:") &&
+      !currentIncidentKeys.has(incident.incidentKey)
+    ) {
+      botInbox.resolve(incident.incidentKey);
     }
   }
 }

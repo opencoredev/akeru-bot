@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { EnvironmentId } from "@t3tools/contracts";
 
 import {
   clearSettingsTarget,
@@ -35,6 +36,20 @@ describe("settings dialog store", () => {
       section: "general",
       targetId: null,
     });
+  });
+
+  it("keeps the originating environment while navigating Settings", () => {
+    const environmentId = EnvironmentId.make("env-secondary");
+    openSettings("inbox", null, environmentId);
+    useSettingsDialogStore.getState().openSettings("voice");
+
+    expect(useSettingsDialogStore.getState()).toMatchObject({
+      section: "voice",
+      environmentId,
+    });
+
+    closeSettings();
+    expect(useSettingsDialogStore.getState().environmentId).toBeNull();
   });
 });
 

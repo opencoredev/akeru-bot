@@ -1,14 +1,14 @@
 import { CircleAlertIcon } from "lucide-react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { Badge } from "../ui/badge";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 export function InboxPanel() {
-  const environmentId = usePrimaryEnvironmentId();
+  const environmentId = useSettingsEnvironmentId();
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
       ? null

@@ -2114,6 +2114,7 @@ function ChatMarkdown({
             <SettingsLinkChip
               href={normalizedHref}
               destination={settingsDestination}
+              environmentId={environmentId}
               {...(props.className ? { className: props.className } : {})}
             >
               {children}

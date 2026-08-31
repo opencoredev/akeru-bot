@@ -179,7 +179,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             )}
             {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
           </BotConversationScrollArea>
-          <BotInboxAlertStack items={inboxItems} onOpenDetails={() => openSettings("inbox")} />
+          <BotInboxAlertStack
+            items={inboxItems}
+            onOpenDetails={() => openSettings("inbox", null, environmentId)}
+          />
           <ThreadErrorBanner
             error={
               inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error

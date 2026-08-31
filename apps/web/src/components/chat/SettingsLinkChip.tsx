@@ -1,4 +1,5 @@
 import { Settings02Icon } from "@hugeicons/core-free-icons";
+import type { EnvironmentId } from "@t3tools/contracts";
 import type { MouseEvent, ReactNode } from "react";
 
 import { openSettings } from "../../settingsDialogStore";
@@ -15,11 +16,13 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 export function SettingsLinkChip({
   href,
   destination,
+  environmentId,
   children,
   className,
 }: {
   readonly href: string;
   readonly destination: SettingsDeepLinkDestination;
+  readonly environmentId: EnvironmentId | null;
   readonly children: ReactNode;
   readonly className?: string;
 }) {
@@ -38,7 +41,7 @@ export function SettingsLinkChip({
             onClick={(event: MouseEvent<HTMLAnchorElement>) => {
               event.preventDefault();
               event.stopPropagation();
-              openSettings(destination.section, destination.targetId);
+              openSettings(destination.section, destination.targetId, environmentId);
             }}
           >
             <AppIcon icon={Settings02Icon} className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />

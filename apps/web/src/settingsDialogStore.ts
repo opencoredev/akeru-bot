@@ -4,6 +4,9 @@
  * `/settings` deep links) lands on the same surface.
  */
 import { create } from "zustand";
+import type { EnvironmentId } from "@t3tools/contracts";
+
+import { usePrimaryEnvironmentId } from "./state/environments";
 
 /**
  * Every panel the dialog can render. Some sections are reachable only from a
@@ -27,7 +30,12 @@ interface SettingsDialogState {
   /** The open section, or null while the dialog is closed. */
   readonly section: SettingsSection | null;
   readonly targetId: string | null;
-  readonly openSettings: (section?: SettingsSection, targetId?: string | null) => void;
+  readonly environmentId: EnvironmentId | null;
+  readonly openSettings: (
+    section?: SettingsSection,
+    targetId?: string | null,
+    environmentId?: EnvironmentId | null,
+  ) => void;
   readonly clearTarget: () => void;
   readonly closeSettings: () => void;
 }
@@ -35,14 +43,30 @@ interface SettingsDialogState {
 export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
   section: null,
   targetId: null,
-  openSettings: (section = "general", targetId = null) => set({ section, targetId }),
+  environmentId: null,
+  openSettings: (section = "general", targetId = null, environmentId) =>
+    set((state) => ({
+      section,
+      targetId,
+      environmentId: environmentId === undefined ? state.environmentId : environmentId,
+    })),
   clearTarget: () => set({ targetId: null }),
-  closeSettings: () => set({ section: null, targetId: null }),
+  closeSettings: () => set({ section: null, targetId: null, environmentId: null }),
 }));
 
 /** Open the settings modal from outside React. */
-export function openSettings(section?: SettingsSection, targetId?: string | null): void {
-  useSettingsDialogStore.getState().openSettings(section, targetId);
+export function openSettings(
+  section?: SettingsSection,
+  targetId?: string | null,
+  environmentId?: EnvironmentId | null,
+): void {
+  useSettingsDialogStore.getState().openSettings(section, targetId, environmentId);
+}
+
+export function useSettingsEnvironmentId(): EnvironmentId | null {
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const environmentId = useSettingsDialogStore((state) => state.environmentId);
+  return environmentId ?? primaryEnvironmentId;
 }
 
 export function clearSettingsTarget(): void {

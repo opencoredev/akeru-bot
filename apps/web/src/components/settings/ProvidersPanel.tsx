@@ -19,7 +19,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -317,7 +317,7 @@ function ActiveLoginPanel({
 }
 
 export function ProvidersPanel() {
-  const environmentId = usePrimaryEnvironmentId();
+  const environmentId = useSettingsEnvironmentId();
   const statusQuery = useEnvironmentQuery(
     environmentId === null
       ? null

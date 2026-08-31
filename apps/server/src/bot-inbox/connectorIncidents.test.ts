@@ -74,6 +74,22 @@ describe("connector inbox incidents", () => {
     expect(inbox.list().filter((item) => item.status === "open")).toHaveLength(0);
   });
 
+  it("resolves the incident when the dependent bot is removed", () => {
+    const inbox = fixture();
+    syncConnectorIncidents(inbox, [status("failed")]);
+    syncConnectorIncidents(inbox, [{ ...status("failed"), dependentBots: [] }]);
+
+    expect(inbox.list()[0]?.status).toBe("resolved");
+  });
+
+  it("resolves the incident when the provider status is removed", () => {
+    const inbox = fixture();
+    syncConnectorIncidents(inbox, [status("failed")]);
+    syncConnectorIncidents(inbox, []);
+
+    expect(inbox.list()[0]?.status).toBe("resolved");
+  });
+
   it.each([
     ["expired", "oauth-expired"],
     ["revoked", "connector-failure"],
