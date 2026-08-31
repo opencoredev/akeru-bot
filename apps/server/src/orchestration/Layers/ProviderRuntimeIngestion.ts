@@ -1,3 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+
 import {
   ApprovalRequestId,
   type AssistantDeliveryMode,
@@ -9,6 +12,7 @@ import {
   CheckpointRef,
   classifyTaskAgentKind,
   EventId,
+  EnvironmentId,
   isToolLifecycleItemType,
   ThreadId,
   type ThreadTokenUsageSnapshot,
@@ -17,6 +21,7 @@ import {
   type OrchestrationProposedPlan,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
+  type OrchestrationThreadShell,
   type ProviderRuntimeEvent,
 } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
@@ -45,9 +50,20 @@ import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
+import { ServerConfig } from "../../config.ts";
+import { BotInboxService } from "../../bot-inbox/service.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
+
+function readEnvironmentId(environmentIdPath: string): EnvironmentId | undefined {
+  try {
+    const value = NodeFS.readFileSync(environmentIdPath, "utf-8").trim();
+    return value.length > 0 ? EnvironmentId.make(value) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // Fallback when the in-memory description cache no longer has the task name
 // (server restart, session-exit sweep, TTL/capacity eviction): earlier
@@ -364,6 +380,7 @@ function taskLinkageActivityFields(payload: Record<string, unknown>): Record<str
 export function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
   taskTitle?: string,
+  environmentId?: EnvironmentId,
 ): ReadonlyArray<OrchestrationThreadActivity> {
   const maybeSequence = (() => {
     const eventWithSequence = event as ProviderRuntimeEvent & { sessionSequence?: number };
@@ -395,11 +412,21 @@ export function runtimeEventToActivities(
                     : "Approval requested",
           payload: {
             requestId: toApprovalRequestId(event.requestId),
+            threadId: event.threadId,
+            ...(event.turnId ? { turnId: event.turnId } : {}),
+            ...((event.environmentId ?? environmentId)
+              ? { environmentId: event.environmentId ?? environmentId }
+              : {}),
             ...(requestKind ? { requestKind } : {}),
             requestType: event.payload.requestType,
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.appName ? { appName: event.payload.appName } : {}),
             ...(event.payload.options ? { options: event.payload.options } : {}),
+            ...(event.payload.args !== undefined ? { args: event.payload.args } : {}),
+            ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
+            ...(event.payload.serverId ? { serverId: event.payload.serverId } : {}),
+            ...(event.payload.pluginId ? { pluginId: event.payload.pluginId } : {}),
+            ...(event.payload.action ? { action: event.payload.action } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -896,6 +923,9 @@ const make = Effect.gen(function* () {
   const agentController = yield* AgentController;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const serverSettingsService = yield* ServerSettingsService;
+  const serverConfig = yield* ServerConfig;
+  const environmentId = readEnvironmentId(serverConfig.environmentIdPath);
+  const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
@@ -959,6 +989,35 @@ const make = Effect.gen(function* () {
     return yield* projectionSnapshotQuery
       .getThreadShellById(threadId)
       .pipe(Effect.map(Option.getOrUndefined));
+  });
+
+  const syncApprovalInbox = Effect.fn("syncApprovalInbox")(function* (
+    event: Extract<ProviderRuntimeEvent, { type: "request.opened" | "request.resolved" }>,
+    thread: OrchestrationThreadShell,
+  ) {
+    if (event.payload.requestType === "tool_user_input") return;
+    const botId = thread.respondingBotId ?? thread.botId;
+    if (!botId) return;
+    const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+    const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+    if (!bot) return;
+    const incidentKey = `approval:${event.requestId}`;
+    yield* Effect.sync(() => {
+      botInbox.reload();
+      if (event.type === "request.resolved") {
+        botInbox.resolve(incidentKey);
+        return;
+      }
+      botInbox.ensureOpen({
+        incidentKey,
+        kind: "approval-request",
+        botId,
+        botName: bot.name,
+        taskOrRoutine: thread.title,
+        lastFailure: event.payload.detail ?? "This request needs approval.",
+        nextAction: "Open the thread and approve or decline the request.",
+      });
+    });
   });
 
   const rememberAssistantMessageId = (threadId: ThreadId, turnId: TurnId, messageId: MessageId) =>
@@ -1497,6 +1556,9 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const thread = yield* resolveThreadShell(event.threadId);
       if (!thread) return;
+      if (event.type === "request.opened" || event.type === "request.resolved") {
+        yield* syncApprovalInbox(event, thread);
+      }
 
       let loadedThreadDetail: OrchestrationThread | null | undefined;
       const getLoadedThreadDetail = () =>
@@ -2027,7 +2089,7 @@ const make = Effect.gen(function* () {
         }
       }
 
-      const activities = runtimeEventToActivities(event, taskTitle);
+      const activities = runtimeEventToActivities(event, taskTitle, environmentId);
       yield* Effect.forEach(activities, (activity) =>
         providerCommandId(event, "thread-activity-append").pipe(
           Effect.flatMap((commandId) =>

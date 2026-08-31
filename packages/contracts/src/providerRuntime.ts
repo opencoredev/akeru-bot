@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
+  EnvironmentId,
   EventId,
   IsoDateTime,
   NonNegativeInt,
@@ -256,6 +257,7 @@ const ProviderRuntimeEventBase = Schema.Struct({
   // for the routing-key-vs-driver-id distinction. Once every emitter
   // populates it (post-slice-4), routing flips to instance-id-only.
   providerInstanceId: Schema.optional(ProviderInstanceId),
+  environmentId: Schema.optional(EnvironmentId),
   threadId: ThreadId,
   createdAt: IsoDateTime,
   turnId: Schema.optional(TurnId),
@@ -436,6 +438,10 @@ const RequestOpenedPayload = Schema.Struct({
   appName: Schema.optional(TrimmedNonEmptyStringSchema),
   options: Schema.optional(Schema.Array(ProviderApprovalOption)),
   args: Schema.optional(Schema.Unknown),
+  toolName: Schema.optional(TrimmedNonEmptyStringSchema),
+  serverId: Schema.optional(TrimmedNonEmptyStringSchema),
+  pluginId: Schema.optional(TrimmedNonEmptyStringSchema),
+  action: Schema.optional(TrimmedNonEmptyStringSchema),
 });
 export type RequestOpenedPayload = typeof RequestOpenedPayload.Type;
 

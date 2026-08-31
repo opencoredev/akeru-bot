@@ -6,7 +6,11 @@ import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace
 import { assert, describe, it } from "vite-plus/test";
 
 import { AKERU_AGENT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
-import { resolveAkeruTools } from "./AkeruMastraHarness.ts";
+import {
+  akeruActionNeedsApproval,
+  criticalAkeruAction,
+  resolveAkeruTools,
+} from "./AkeruMastraHarness.ts";
 
 describe("AkeruMastraHarness", () => {
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
@@ -14,6 +18,30 @@ describe("AkeruMastraHarness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
     assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
+  });
+
+  it("classifies every protected action without scanning inert content", () => {
+    assert.equal(criticalAkeruAction("gmail_send_message"), "send");
+    assert.equal(criticalAkeruAction("stripe_charge_customer"), "pay");
+    assert.equal(criticalAkeruAction("storage_delete_object"), "delete");
+    assert.equal(criticalAkeruAction("vercel_deploy"), "production");
+    assert.equal(criticalAkeruAction("vault_get_secret"), "secrets");
+    assert.equal(criticalAkeruAction("wordpress_publish_post"), "publish");
+    assert.equal(criticalAkeruAction("docusign_create_signature"), "sign");
+    assert.equal(criticalAkeruAction("stripe_refund_payment"), "refund");
+    assert.equal(criticalAkeruAction("admin_update_account"), "account");
+    assert.equal(
+      criticalAkeruAction("api_request", { options: { deliveryMode: "broadcast" } }),
+      "publish",
+    );
+    assert.isTrue(akeruActionNeedsApproval("api_request", { operation: "synchronize" }));
+    assert.isFalse(akeruActionNeedsApproval("api_request", { method: "GET" }));
+    assert.isFalse(
+      akeruActionNeedsApproval("write_file", {
+        content: "Draft copy about sending, refunds, secrets, and production.",
+      }),
+    );
+    assert.isFalse(akeruActionNeedsApproval("write_file", { path: "notes/delete-me.txt" }));
   });
 
   it("builds workspace and selected MCP tools from the controller resource", async () => {

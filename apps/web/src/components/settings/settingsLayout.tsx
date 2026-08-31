@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { cn } from "../../lib/utils";
+import { clearSettingsTarget, useSettingsDialogStore } from "../../settingsDialogStore";
 import { WorkspacePageContainer, type WorkspacePageWidth } from "../WorkspacePageContainer";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -242,10 +243,14 @@ export function SettingsPageContainer({
 }) {
   const navigate = useNavigate();
   const hash = useLocation({ select: (location) => location.hash });
-  const targetId = hash.replace(/^#/, "") || null;
+  const dialogTargetId = useSettingsDialogStore((state) => state.targetId);
+  const hashTargetId = hash.replace(/^#/, "") || null;
+  const targetId = dialogTargetId ?? hashTargetId;
   const clearTargetHash = useCallback(() => {
-    void navigate({ hash: "", replace: true, resetScroll: false, hashScrollIntoView: false });
-  }, [navigate]);
+    clearSettingsTarget();
+    if (hashTargetId)
+      void navigate({ hash: "", replace: true, resetScroll: false, hashScrollIntoView: false });
+  }, [hashTargetId, navigate]);
 
   return (
     <SettingsSearchTargetProvider targetId={targetId} onTargetHandled={clearTargetHash}>

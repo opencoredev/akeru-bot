@@ -39,10 +39,19 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import {
+  SubscriptionAuthService,
+  type SubscriptionProviderId,
+} from "../../subscription-auth/service.ts";
+import {
+  akeruActionNeedsApproval,
+  akeruToolCategory,
+  criticalAkeruAction,
   createAkeruMastraHarness,
+  type AkeruCriticalAction,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
+  type AkeruToolCategory,
 } from "../AkeruMastraHarness.ts";
 import { createBotWorkspace, type CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
 import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
@@ -83,7 +92,16 @@ interface ActiveSession {
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
   readonly toolNames: Map<string, string>;
+  readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
+}
+
+interface PendingApproval {
+  readonly toolName: string;
+  readonly args: unknown;
+  readonly action: AkeruCriticalAction | "unclassified";
+  readonly serverId?: string;
+  readonly pluginId?: string;
 }
 
 export interface AgentControllerLiveOptions {
@@ -146,18 +164,89 @@ export function toMcpServerConfigs(servers: readonly McpServer[]): Record<string
   );
 }
 
-function permissionPolicy(
-  runtimeMode: RuntimeMode,
-  category: "read" | "edit" | "execute" | "mcp" | "other",
-): "allow" | "ask" {
+function permissionPolicy(runtimeMode: RuntimeMode, category: AkeruToolCategory): "allow" | "ask" {
   if (runtimeMode === "full-access" || runtimeMode === "auto") return "allow";
   if (category === "read") return "allow";
   if (runtimeMode === "auto-accept-edits" && category === "edit") return "allow";
   return "ask";
 }
 
+function approvalDetail(toolName: string, oneUseApproval: boolean): string {
+  return oneUseApproval
+    ? `Allow ${toolName}? This approval applies only to the pending action. It does not undo completed work.`
+    : `Allow ${toolName}?`;
+}
+
+function mcpAttribution(
+  active: Pick<ActiveSession, "mcpServerIds">,
+  toolName: string,
+): { readonly serverId: string; readonly pluginId?: string } | undefined {
+  const serverId = active.mcpServerIds
+    .map(String)
+    .toSorted((left, right) => right.length - left.length)
+    .find((candidate) => toolName.startsWith(`${candidate}_`));
+  if (!serverId) return undefined;
+  return {
+    serverId,
+    ...(serverId.startsWith("builtin-") ? { pluginId: serverId.slice("builtin-".length) } : {}),
+  };
+}
+
 function usesMastraCode(provider: ProviderDriverKind): boolean {
   return String(provider) === "codex";
+}
+
+function subscriptionProviderForRuntime(
+  provider: ProviderDriverKind,
+  providerInstanceId: ProviderInstanceId | undefined,
+): SubscriptionProviderId | undefined {
+  const instanceId = String(providerInstanceId);
+  if (String(provider) === "codex" && instanceId === "codex") return "openai-codex";
+  if (String(provider) === "claudeAgent" && instanceId === "claudeAgent") return "anthropic";
+  if (String(provider) === "cursor" && instanceId === "cursor") return "cursor";
+  if (String(provider) === "grok" && instanceId === "grok") return "xai";
+  if (String(provider) === "opencode" && instanceId === "kimi-for-coding") {
+    return "kimi-for-coding";
+  }
+  return undefined;
+}
+
+export function recordProviderAccessHealth(
+  subscriptionAuth: SubscriptionAuthService,
+  event: ProviderRuntimeEvent,
+): void {
+  const provider = subscriptionProviderForRuntime(event.provider, event.providerInstanceId);
+  const providerInstanceId = event.providerInstanceId;
+  if (event.type === "turn.completed") {
+    if (event.payload.state === "failed") {
+      const message = event.payload.errorMessage ?? "The provider request failed.";
+      if (provider) subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      if (providerInstanceId) {
+        subscriptionAuth.recordProviderInstanceFailure(
+          providerInstanceId,
+          message,
+          event.createdAt,
+        );
+      }
+    } else if (event.payload.state === "completed") {
+      if (provider) subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      if (providerInstanceId) {
+        subscriptionAuth.recordProviderInstanceSuccess(providerInstanceId, event.createdAt);
+      }
+    }
+    return;
+  }
+  if (event.type !== "runtime.error" || event.payload.class !== "provider_error") return;
+  if (provider) {
+    subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
+  }
+  if (providerInstanceId) {
+    subscriptionAuth.recordProviderInstanceFailure(
+      providerInstanceId,
+      event.payload.message,
+      event.createdAt,
+    );
+  }
 }
 
 function itemType(
@@ -194,6 +283,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
+    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const mcpManagers = new Map<string, McpManager>();
     const workspaces = new Map<string, Workspace>();
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
@@ -377,6 +467,20 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_end": {
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
+          const mcp = mcpAttribution(active, toolName);
+          if (mcp && !event.denied) {
+            if (event.isError) {
+              subscriptionAuth.recordMcpRequestFailure(
+                mcp.serverId,
+                typeof event.result === "string" && event.result.trim().length > 0
+                  ? event.result
+                  : "The MCP request failed.",
+              );
+            } else {
+              subscriptionAuth.recordMcpRequestSuccess(mcp.serverId);
+            }
+          }
+          active.pendingApprovals.delete(event.toolCallId);
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
@@ -390,9 +494,29 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
           return;
         }
-        case "tool_approval_required":
+        case "tool_approval_required": {
           if (!turn) return;
           active.toolNames.set(event.toolCallId, event.toolName);
+          const mcp = mcpAttribution(active, event.toolName);
+          const action = criticalAkeruAction(event.toolName, event.args);
+          const oneUseApproval =
+            mcp !== undefined || akeruActionNeedsApproval(event.toolName, event.args);
+          if (
+            !oneUseApproval &&
+            permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) === "allow"
+          ) {
+            active.session.respondToToolApproval({
+              toolCallId: event.toolCallId,
+              decision: "approve",
+            });
+            return;
+          }
+          active.pendingApprovals.set(event.toolCallId, {
+            toolName: event.toolName,
+            args: event.args,
+            action: action ?? "unclassified",
+            ...mcp,
+          });
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
           publish({
@@ -401,16 +525,19 @@ const make = (options?: AgentControllerLiveOptions) =>
             type: "request.opened",
             payload: {
               requestType: "dynamic_tool_call",
-              detail: `Allow ${event.toolName}?`,
+              detail: approvalDetail(event.toolName, oneUseApproval),
               args: event.args,
+              toolName: event.toolName,
+              action: action ?? "unclassified",
+              ...mcp,
               options: [
-                { decision: "accept", label: "Allow" },
-                { decision: "acceptForSession", label: "Allow for session" },
                 { decision: "decline", label: "Decline" },
+                { decision: "accept", label: oneUseApproval ? "Approve" : "Allow" },
               ],
             },
           });
           return;
+        }
         case "tool_suspended":
           if (!turn) return;
           active.toolNames.set(event.toolCallId, event.toolName);
@@ -561,6 +688,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           toMcpServerConfigs(mcpServers),
         );
         yield* runMastra("mcp.init", () => manager.init());
+        for (const status of manager.getServerStatuses()) {
+          if (!status.connected) {
+            subscriptionAuth.recordMcpRequestFailure(
+              status.name,
+              status.error ?? "The MCP server failed to connect.",
+            );
+          }
+        }
         mcpManagers.set(key, manager);
       }
       const workspace = yield* runMastra("workspace.create", () =>
@@ -591,7 +726,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       yield* runMastra("state.set", () =>
         session.state.set({
           ...(input.cwd ? { projectPath: input.cwd } : {}),
-          yolo: input.runtimeMode === "full-access" || input.runtimeMode === "auto",
+          yolo: false,
         }),
       );
       yield* runMastra("model.switch", () =>
@@ -605,10 +740,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ["read", "edit", "execute", "mcp", "other"] as const,
         (category) =>
           runMastra("permissions.setForCategory", () =>
-            session.permissions.setForCategory({
-              category,
-              policy: permissionPolicy(input.runtimeMode, category),
-            }),
+            session.permissions.setForCategory({ category, policy: "ask" }),
           ),
         { discard: true },
       );
@@ -625,6 +757,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         status: "ready" as const,
         activeTurn: null,
         toolNames: new Map<string, string>(),
+        pendingApprovals: new Map<string, PendingApproval>(),
       };
       const unsubscribe = session.subscribe((event) => {
         const active = sessions.get(key);
@@ -762,22 +895,21 @@ const make = (options?: AgentControllerLiveOptions) =>
         return yield* legacyProviderBridge.respondToRequest(input);
       }
       const toolCallId = String(input.requestId);
-      const toolName = active.toolNames.get(toolCallId);
-      if (input.decision === "acceptForSession" && toolName) {
-        yield* runMastra("permissions.setForTool", () =>
-          active.session.permissions.setForTool({ toolName, policy: "allow" }),
-        );
-      }
+      if (!active.pendingApprovals.delete(toolCallId)) return;
+      const decision =
+        input.decision === "acceptForSession" || input.decision === "acceptAlways"
+          ? "accept"
+          : input.decision;
       if (active.activeTurn) active.activeTurn.waiting = false;
       active.session.respondToToolApproval({
         toolCallId,
-        decision: approvalDecision(input.decision),
+        decision: approvalDecision(decision),
       });
       publish({
         ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
         requestId: RuntimeRequestId.make(toolCallId),
         type: "request.resolved",
-        payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
+        payload: { requestType: "dynamic_tool_call" as const, decision },
       });
       publishSessionState(input.threadId, active, "running");
     });
@@ -889,7 +1021,16 @@ const make = (options?: AgentControllerLiveOptions) =>
       rollbackConversation,
       uploadFeedback: legacyProviderBridge.uploadFeedback,
       get streamEvents() {
-        return Stream.merge(legacyProviderBridge.streamEvents, Stream.fromPubSub(runtimeEvents));
+        return Stream.merge(
+          legacyProviderBridge.streamEvents,
+          Stream.fromPubSub(runtimeEvents),
+        ).pipe(
+          Stream.tap((event) =>
+            Effect.sync(() => {
+              recordProviderAccessHealth(subscriptionAuth, event);
+            }),
+          ),
+        );
       },
     });
   });

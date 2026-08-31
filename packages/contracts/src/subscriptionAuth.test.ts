@@ -20,7 +20,58 @@ describe("subscription auth contracts", () => {
       provider: "openai-codex",
       connected: true,
       expiresAt: 123,
+      dependentBots: [],
+      dependentRoutines: [],
     });
+  });
+
+  it("decodes every access-health state and action-required inbox data", () => {
+    const healthStates = [
+      "missing",
+      "detected",
+      "healthy",
+      "expired",
+      "revoked",
+      "failed",
+      "unsupported",
+      "failed-first-request",
+      "recovered",
+    ] as const;
+    for (const health of healthStates) {
+      expect(
+        decodeStatuses({
+          providers: [{ provider: "xai", connected: true, health }],
+          access: [
+            {
+              id: `access-${health}`,
+              label: "Temporary email browser",
+              accessMethod: "browser",
+              health,
+              apiAccess: "not-applicable",
+              nextAction: "Use an email connector.",
+              temporary: true,
+              repairAction: "Add an email connector, then reconnect it.",
+            },
+          ],
+          inbox: [
+            {
+              id: `incident-${health}`,
+              incidentKey: `connector:xai:${health}`,
+              kind: "connector-failure",
+              status: "open",
+              botId: "bot-akeru",
+              botName: "Akeru",
+              taskOrRoutine: "Morning research",
+              lastFailure: "The provider request failed.",
+              nextAction: "Reconnect the provider.",
+              firstSeenAt: "2026-08-30T20:00:00.000Z",
+              lastSeenAt: "2026-08-30T20:00:00.000Z",
+              occurrenceCount: 1,
+            },
+          ],
+        }).access[0],
+      ).toMatchObject({ health, temporary: true });
+    }
   });
 
   it("decodes a remote-safe device login", () => {

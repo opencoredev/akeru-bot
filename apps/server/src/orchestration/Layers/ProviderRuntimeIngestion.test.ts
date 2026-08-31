@@ -12,6 +12,7 @@ import {
 } from "@t3tools/contracts";
 import {
   ApprovalRequestId,
+  BotId,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
@@ -19,6 +20,7 @@ import {
   type OrchestrationCommand,
   ProjectId,
   ProviderItemId,
+  RuntimeRequestId,
   type ServerSettings,
   ThreadId,
   TurnId,
@@ -55,6 +57,7 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { BotInboxService } from "../../bot-inbox/service.ts";
 
 function makeTestServerSettingsLayer(overrides: Partial<ServerSettings> = {}) {
   return ServerSettingsService.layerTest(overrides);
@@ -214,9 +217,15 @@ describe("ProviderRuntimeIngestion", () => {
   async function createHarness(options?: {
     serverSettings?: Partial<ServerSettings>;
     threadTitle?: string;
+    botOwned?: boolean;
   }) {
     const workspaceRoot = makeTempDir("t3-provider-project-");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".git"));
+    NodeFS.mkdirSync(NodePath.join(workspaceRoot, "userdata"), { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(workspaceRoot, "userdata", "environment-id"),
+      "environment-test\n",
+    );
     const provider = createAgentControllerHarness();
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
@@ -240,7 +249,7 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(Layer.succeed(AgentController, provider.service)),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
-      Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+      Layer.provideMerge(ServerConfig.layerTest(process.cwd(), workspaceRoot)),
       Layer.provideMerge(NodeServices.layer),
     );
     runtime = ManagedRuntime.make(layer);
@@ -265,11 +274,31 @@ describe("ProviderRuntimeIngestion", () => {
       },
       createdAt,
     });
+    if (options?.botOwned) {
+      await dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-bot-create"),
+        botId: BotId.make("bot-akeru"),
+        name: "Akeru",
+        title: "Research bot",
+        avatar: { kind: "dither", seed: "akeru" },
+        engine: {
+          provider: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        sandbox: null,
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt,
+      });
+    }
     await dispatch({
       type: "thread.create",
       commandId: CommandId.make("cmd-thread-create"),
       threadId: ThreadId.make("thread-1"),
       projectId: asProjectId("project-1"),
+      ...(options?.botOwned ? { botId: BotId.make("bot-akeru") } : {}),
       title: options?.threadTitle ?? "Thread",
       modelSelection: {
         instanceId: ProviderInstanceId.make("codex"),
@@ -312,8 +341,69 @@ describe("ProviderRuntimeIngestion", () => {
       emit: provider.emit,
       setProviderSession: provider.setSession,
       drain,
+      botInbox: new BotInboxService(
+        NodePath.join(workspaceRoot, "userdata", "secrets", "bot-inbox.json"),
+      ),
     };
   }
+
+  it("opens and resolves bot inbox approval incidents from runtime requests", async () => {
+    const harness = await createHarness({ botOwned: true, threadTitle: "Morning research" });
+    const base = {
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      requestId: RuntimeRequestId.make("approval-1"),
+    };
+
+    harness.emit({
+      ...base,
+      type: "request.opened",
+      eventId: asEventId("evt-approval-opened"),
+      payload: {
+        requestType: "command_execution_approval",
+        detail: "Allow the booking command?",
+      },
+    });
+    await harness.drain();
+    harness.botInbox.reload();
+    expect(harness.botInbox.list()).toEqual([
+      expect.objectContaining({
+        kind: "approval-request",
+        status: "open",
+        botName: "Akeru",
+        taskOrRoutine: "Morning research",
+        lastFailure: "Allow the booking command?",
+      }),
+    ]);
+
+    harness.emit({
+      ...base,
+      type: "request.resolved",
+      eventId: asEventId("evt-approval-resolved"),
+      payload: {
+        requestType: "command_execution_approval",
+        decision: "accept",
+      },
+    });
+    await harness.drain();
+    harness.botInbox.reload();
+    expect(harness.botInbox.list()[0]?.status).toBe("resolved");
+
+    harness.emit({
+      ...base,
+      requestId: RuntimeRequestId.make("user-input-1"),
+      type: "request.opened",
+      eventId: asEventId("evt-user-input-opened"),
+      payload: {
+        requestType: "tool_user_input",
+        detail: "Choose a value.",
+      },
+    });
+    await harness.drain();
+    harness.botInbox.reload();
+    expect(harness.botInbox.list()).toHaveLength(1);
+  });
 
   it("maps turn started/completed events into thread session updates", async () => {
     const harness = await createHarness();
@@ -2620,10 +2710,16 @@ describe("ProviderRuntimeIngestion", () => {
       provider: ProviderDriverKind.make("codex"),
       createdAt: now,
       threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-approval"),
       requestId: ApprovalRequestId.make("req-open"),
       payload: {
         requestType: "command_execution_approval",
         detail: "pwd",
+        args: { command: "pwd" },
+        toolName: "execute_command",
+        serverId: "builtin-executor",
+        pluginId: "executor",
+        action: "production",
       },
     });
 
@@ -2664,6 +2760,16 @@ describe("ProviderRuntimeIngestion", () => {
         : undefined;
     expect(requestedPayload?.requestKind).toBe("command");
     expect(requestedPayload?.requestType).toBe("command_execution_approval");
+    expect(requestedPayload).toMatchObject({
+      environmentId: "environment-test",
+      threadId: "thread-1",
+      turnId: "turn-approval",
+      args: { command: "pwd" },
+      toolName: "execute_command",
+      serverId: "builtin-executor",
+      pluginId: "executor",
+      action: "production",
+    });
 
     const resolved = thread?.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-request-resolved",

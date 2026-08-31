@@ -111,6 +111,7 @@ import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import { useAssetUrl, useAssetUrlState } from "../../state/assets";
 import { resolveWorkspaceRelativeFilePath } from "../files/filePath";
 import { MARKDOWN_IMAGE_MAX_WIDTH, resolveMarkdownImageDisplaySize } from "./markdownImageSize";
+import { resolveMobileSettingsHealthTarget } from "../settings/settingsDeepLink";
 
 const WIDE_MARKDOWN_BLOCK_OPTIONS = {
   includeOrderedLists: Platform.OS === "android",
@@ -708,6 +709,17 @@ function useMarkdownStyles(
       highlightCode: boolean,
     ): CustomRenderers => ({
       link: ({ children, href = "" }) => {
+        if (resolveMobileSettingsHealthTarget(href) !== null) {
+          return (
+            <NativeText
+              className="font-t3-bold underline"
+              onPress={() => onLinkPress(href)}
+              style={{ color: markdownLinkColor }}
+            >
+              {children}
+            </NativeText>
+          );
+        }
         const presentation = resolveMarkdownLinkPresentation(href);
         if (presentation.kind === "file") {
           return (
@@ -1580,6 +1592,22 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const userBubbleColor = useThemeColor("--color-user-bubble");
   const onMarkdownLinkPress = useCallback(
     (href: string) => {
+      const settingsTarget = resolveMobileSettingsHealthTarget(href);
+      if (settingsTarget !== null) {
+        void Haptics.selectionAsync();
+        navigation.navigate("SettingsSheet", {
+          screen: "SettingsContent",
+          params: {
+            screen: "SettingsProviderHealth",
+            params: {
+              environmentId: props.environmentId,
+              target: settingsTarget,
+            },
+          },
+        });
+        return;
+      }
+      if (/^t3code(?:-dev)?:/i.test(href.trim())) return;
       const presentation = resolveMarkdownLinkPresentation(href);
       if (presentation.kind === "file") {
         const relativePath = resolveWorkspaceRelativeFilePath(

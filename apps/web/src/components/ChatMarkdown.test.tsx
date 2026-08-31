@@ -104,6 +104,18 @@ describe("ChatMarkdown file option chips", () => {
   });
 });
 
+describe("ChatMarkdown settings chips", () => {
+  it("opens the exact Settings pane without an external-browser target", () => {
+    const html = renderToStaticMarkup(
+      <ChatMarkdown cwd={undefined} text="[Error inbox](t3code://app/v1/settings?id=bot-inbox)" />,
+    );
+
+    expect(html).toContain("chat-markdown-settings-link");
+    expect(html).toContain("Open Settings &gt; Errors");
+    expect(html).not.toContain('target="_blank"');
+  });
+});
+
 describe("shouldUseMarkdownFileBrowserPrimaryAction", () => {
   it("uses the browser when it is the only available primary action", () => {
     expect(

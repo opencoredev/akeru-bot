@@ -807,6 +807,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:subscription-auth:logout",
       tag: WS_METHODS.subscriptionAuthLogout,
     }),
+    testSubscriptionAuth: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:subscription-auth:health-test",
+      tag: WS_METHODS.subscriptionAuthHealthTest,
+    }),
     startVoiceCall: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice-call:start",
       tag: WS_METHODS.voiceCallStart,

@@ -8,6 +8,7 @@ import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/cor
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import {
   ApprovalRequestId,
+  EventId,
   McpServerId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -30,9 +31,11 @@ import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
   createAkeruMastraAuthStorage,
   makeAgentControllerLive,
+  recordProviderAccessHealth,
   toMcpServerConfigs,
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
+import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
@@ -274,6 +277,204 @@ describe("toMcpServerConfigs", () => {
   });
 });
 
+describe("provider access health", () => {
+  it.each([
+    ["codex", "codex", "openai-codex"],
+    ["claudeAgent", "claudeAgent", "anthropic"],
+    ["cursor", "cursor", "cursor"],
+    ["grok", "grok", "xai"],
+    ["opencode", "kimi-for-coding", "kimi-for-coding"],
+  ] as const)("maps %s runtime requests to %s access health", (driver, instanceId, provider) => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-map-"));
+    const authPath = NodePath.join(directory, "subscription-auth.json");
+    try {
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          [provider]: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      const providerInstanceId = ProviderInstanceId.make(instanceId);
+      const base = {
+        provider: ProviderDriverKind.make(driver),
+        providerInstanceId,
+        threadId: ThreadId.make(`thread-${driver}`),
+      };
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "runtime.error",
+        eventId: EventId.make(`evt-${driver}-failed`),
+        createdAt: "2026-08-30T20:00:00.000Z",
+        payload: { message: "The first request failed.", class: "provider_error" },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === provider),
+      ).toMatchObject({ health: "failed-first-request" });
+      expect(service.providerInstanceHealth(providerInstanceId)).toBe("failed-first-request");
+
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "turn.completed",
+        eventId: EventId.make(`evt-${driver}-recovered`),
+        createdAt: "2026-08-30T20:01:00.000Z",
+        turnId: TurnId.make(`turn-${driver}`),
+        payload: { state: "completed", stopReason: null },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === provider),
+      ).toMatchObject({ health: "recovered" });
+      expect(service.providerInstanceHealth(providerInstanceId)).toBe("recovered");
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not label generic OpenCode access as Kimi For Coding", () => {
+    const { authPath, directory } = (() => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-opencode-map-"));
+      return { directory, authPath: NodePath.join(directory, "subscription-auth.json") };
+    })();
+    try {
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          "kimi-for-coding": {
+            type: "oauth",
+            access: "a",
+            refresh: "r",
+            expires: 1_900_000_000_000,
+          },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      recordProviderAccessHealth(service, {
+        provider: ProviderDriverKind.make("opencode"),
+        providerInstanceId: ProviderInstanceId.make("my-opencode"),
+        threadId: ThreadId.make("thread-opencode"),
+        type: "runtime.error",
+        eventId: EventId.make("evt-opencode-failed"),
+        createdAt: "2026-08-30T20:00:00.000Z",
+        payload: { message: "The first request failed.", class: "provider_error" },
+      });
+
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === "kimi-for-coding")
+          ?.health,
+      ).toBe("detected");
+      expect(service.providerInstanceHealth("my-opencode")).toBe("failed-first-request");
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not label a custom Codex instance as ChatGPT access", () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-codex-map-"));
+    const authPath = NodePath.join(directory, "subscription-auth.json");
+    try {
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          "openai-codex": {
+            type: "oauth",
+            access: "a",
+            refresh: "r",
+            expires: 1_900_000_000_000,
+          },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      recordProviderAccessHealth(service, {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: ProviderInstanceId.make("custom-openai"),
+        threadId: ThreadId.make("thread-custom-codex"),
+        type: "runtime.error",
+        eventId: EventId.make("evt-custom-codex-failed"),
+        createdAt: "2026-08-30T20:00:00.000Z",
+        payload: { message: "The API request failed.", class: "provider_error" },
+      });
+
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === "openai-codex")
+          ?.health,
+      ).toBe("detected");
+      expect(service.providerInstanceHealth("custom-openai")).toBe("failed-first-request");
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("records a failed first request and recovery at the runtime event boundary", () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-health-"));
+    const authPath = NodePath.join(directory, "subscription-auth.json");
+    try {
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          xai: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      const base = {
+        provider: ProviderDriverKind.make("grok"),
+        providerInstanceId: ProviderInstanceId.make("grok"),
+        threadId: ThreadId.make("thread-health"),
+      };
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "runtime.error",
+        eventId: EventId.make("evt-health-failed"),
+        createdAt: "2026-08-30T20:00:00.000Z",
+        payload: { message: "The first request failed.", class: "provider_error" },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === "xai")?.health,
+      ).toBe("failed-first-request");
+      expect(service.providerInstanceHealth("grok")).toBe("failed-first-request");
+
+      recordProviderAccessHealth(service, {
+        ...base,
+        type: "turn.completed",
+        eventId: EventId.make("evt-health-recovered"),
+        createdAt: "2026-08-30T20:01:00.000Z",
+        turnId: TurnId.make("turn-health"),
+        payload: { state: "completed", stopReason: null },
+      });
+      expect(
+        service.statuses([], 1_800_000_000_000).find((item) => item.provider === "xai")?.health,
+      ).toBe("recovered");
+      expect(service.providerInstanceHealth("grok")).toBe("recovered");
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["interrupted", "cancelled"] as const)(
+    "does not call a %s turn a successful provider request",
+    (state) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-stop-"));
+      const authPath = NodePath.join(directory, "subscription-auth.json");
+      try {
+        const service = new SubscriptionAuthService(authPath);
+        recordProviderAccessHealth(service, {
+          provider: ProviderDriverKind.make("grok"),
+          providerInstanceId: ProviderInstanceId.make("grok"),
+          threadId: ThreadId.make("thread-stopped"),
+          turnId: TurnId.make("turn-stopped"),
+          type: "turn.completed",
+          eventId: EventId.make(`evt-health-${state}`),
+          createdAt: "2026-08-30T20:00:00.000Z",
+          payload: { state, stopReason: null },
+        });
+
+        expect(service.providerInstanceHealth("grok")).toBeUndefined();
+      } finally {
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+});
+
 describe("AgentControllerLive", () => {
   it.effect("reads Akeru subscription credentials through Mastra AuthStorage", () =>
     Effect.gen(function* () {
@@ -479,6 +680,191 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("keeps protected actions behind exact one-use approvals in full access", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        expect(mastra.session.state.set).toHaveBeenCalledWith({
+          projectPath: process.cwd(),
+          yolo: false,
+        });
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Use tools." });
+
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "safe-command",
+          toolName: "execute_command",
+          args: { command: "bun test" },
+        } as AgentControllerEvent);
+        const protectedCalls = [
+          ["send-call", "gmail_send_message", { to: "person@example.com" }],
+          ["pay-call", "stripe_charge_customer", { amount: 100 }],
+          ["delete-call", "storage_delete_object", { key: "report" }],
+          ["prod-call", "execute_command", { command: "bun run release --prod" }],
+          ["secret-call", "vault_get_secret", { name: "stripe" }],
+          ["publish-call", "wordpress_publish_post", { slug: "launch" }],
+          ["sign-call", "docusign_create_signature", { document: "contract" }],
+          ["refund-call", "stripe_refund_payment", { paymentId: "pay-1" }],
+          ["account-call", "admin_update_account", { role: "owner" }],
+        ] as const;
+        for (const [toolCallId, toolName, args] of protectedCalls) {
+          mastra.emit({
+            type: "tool_approval_required",
+            toolCallId,
+            toolName,
+            args,
+          } as AgentControllerEvent);
+        }
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "safe-command",
+          decision: "approve",
+        });
+        const requests = events.filter((event) => event.type === "request.opened");
+        assert.equal(requests.length, protectedCalls.length);
+        assert.deepInclude(requests[0]?.payload, {
+          toolName: "gmail_send_message",
+          action: "send",
+          args: { to: "person@example.com" },
+          options: [
+            { decision: "decline", label: "Decline" },
+            { decision: "accept", label: "Approve" },
+          ],
+        });
+
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("send-call"),
+          decision: "acceptForSession",
+        });
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("send-call"),
+          decision: "accept",
+        });
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("not-pending"),
+          decision: "accept",
+        });
+        expect(mastra.session.permissions.setForTool).not.toHaveBeenCalled();
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledTimes(2);
+        expect(mastra.session.respondToToolApproval).toHaveBeenLastCalledWith({
+          toolCallId: "send-call",
+          decision: "approve",
+        });
+
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "send-call-again",
+          toolName: "gmail_send_message",
+          args: { to: "different@example.com" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        assert.equal(events.filter((event) => event.type === "request.opened").length, 10);
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("ignores MCP read-only annotations and retains builtin plugin attribution", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const mcpManager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({
+        "builtin-exa_search": { mcp: { annotations: { readOnlyHint: true } } },
+      })),
+      getServerStatuses: vi.fn(() => [
+        {
+          name: "builtin-exa",
+          connected: true,
+          toolCount: 1,
+          toolNames: ["builtin-exa_search"],
+          transport: "http" as const,
+        },
+      ]),
+    };
+    const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> = vi.fn(
+      () => mcpManager as never,
+    );
+    const exaServer = {
+      id: McpServerId.make("builtin-exa"),
+      name: "Exa",
+      transport: "url" as const,
+      url: "https://mcp.exa.ai/mcp",
+      enabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          mcpServers: [exaServer],
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Search." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "mcp-call",
+          toolName: "builtin-exa_search",
+          args: { query: "Akeru" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        const request = events.find((event) => event.type === "request.opened");
+        assert.deepInclude(request?.payload, {
+          toolName: "builtin-exa_search",
+          serverId: "builtin-exa",
+          pluginId: "exa",
+          action: "unclassified",
+          args: { query: "Akeru" },
+        });
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+      makeMcpManager,
+    );
+  });
+
   it.effect("reads persisted image attachments for Mastra turns", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -541,7 +927,16 @@ describe("AgentControllerLive", () => {
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ exa_search: {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {} })),
+      getServerStatuses: vi.fn(() => [
+        {
+          name: "builtin-exa",
+          connected: true,
+          toolCount: 1,
+          toolNames: ["builtin-exa_search"],
+          transport: "http" as const,
+        },
+      ]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> =

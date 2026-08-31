@@ -1,9 +1,17 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { selectOpenBotInboxItems } from "../../botInbox";
+import { openSettings } from "../../settingsDialogStore";
+import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
+import ChatMarkdown from "../ChatMarkdown";
 import { SidebarInset } from "../ui/sidebar";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotActivityStatus } from "./BotActivityStatus";
+import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { visibleBotChatMessages } from "./botConversationPresentation";
@@ -14,12 +22,18 @@ import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const navigate = useNavigate();
+  const environmentId = usePrimaryEnvironmentId();
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
   const presence = useGroupPresence(groupId);
+  const inboxQuery = useEnvironmentQuery(
+    environmentId === null
+      ? null
+      : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
+  );
 
   useEffect(() => {
     if (!group) void navigate({ to: "/", replace: true });
@@ -32,6 +46,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const working = runtime.sending || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages, working);
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
+  const inboxItems = selectOpenBotInboxItems(
+    inboxQuery.data?.inbox ?? [],
+    new Set(members.map((bot) => bot.id)),
+  );
 
   return (
     <SidebarInset
@@ -88,9 +106,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     />
                     <div className="min-w-0 max-w-[85%]">
                       <div className="text-sm font-medium">{respondingBot.name}</div>
-                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90">
-                        {message.text}
-                      </p>
+                      <ChatMarkdown
+                        className="mt-1"
+                        cwd={runtime.defaultProject?.workspaceRoot}
+                        text={message.text}
+                        threadRef={runtime.linkedThreadRef ?? undefined}
+                      />
                     </div>
                   </div>
                 );
@@ -105,15 +126,16 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             })
           )}
           {working ? <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} /> : null}
-          {runtime.error ? (
-            <div
-              role="alert"
-              className="rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-sm text-destructive"
-            >
-              {runtime.error}
-            </div>
-          ) : null}
         </BotConversationScrollArea>
+        <BotInboxAlertStack
+          items={inboxItems}
+          onOpenDetails={() => openSettings("inbox", null, environmentId)}
+        />
+        <ThreadErrorBanner
+          error={
+            inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
+          }
+        />
         <BotPromptComposer
           botName={group.name}
           draftKey={`group:${group.id}`}

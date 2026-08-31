@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { SubscriptionAuthService } from "./service.ts";
 
@@ -38,6 +38,11 @@ describe("subscription auth storage", () => {
       provider: "anthropic",
       connected: true,
       expiresAt: 1_800_000_000_000,
+      health: "detected",
+      reconnectAction: "Reconnect account",
+      healthTest: { status: "not-run" },
+      dependentBots: [],
+      dependentRoutines: [],
     });
     expect(JSON.stringify(service.statuses())).not.toContain("secret-access");
     expect(JSON.stringify(service.statuses())).not.toContain("secret-refresh");
@@ -85,5 +90,170 @@ describe("subscription auth storage", () => {
     service.logout("cursor");
     expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8"))).toEqual({});
     expect(NodeFS.statSync(authPath).mode & 0o777).toBe(0o600);
+  });
+
+  it("reports expiry, failure, and recovery without calling detection healthy", () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({ anthropic: { type: "oauth", access: "a", refresh: "r", expires: 100 } }),
+    );
+    const service = new SubscriptionAuthService(authPath);
+
+    expect(service.statuses([], 101)[0]?.health).toBe("expired");
+    service.recordRequestFailure("anthropic", "OAuth was revoked.", "2026-08-30T20:00:00.000Z");
+    expect(service.statuses([], 50)[0]?.health).toBe("failed-first-request");
+    service.recordRequestSuccess("anthropic", "2026-08-30T20:01:00.000Z");
+    expect(service.statuses([], 50)[0]?.health).toBe("recovered");
+    service.recordRequestFailure("anthropic", "OAuth was revoked.", "2026-08-30T20:02:00.000Z");
+    expect(service.statuses([], 50)[0]?.health).toBe("failed");
+    service.recordRequestFailure(
+      "anthropic",
+      "OAuth was revoked.",
+      "2026-08-30T20:03:00.000Z",
+      "revoked",
+    );
+    expect(service.statuses([], 50)[0]?.health).toBe("revoked");
+  });
+
+  it("does not call an automatic OAuth refresh a successful provider request", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({ xai: { type: "oauth", access: "a", refresh: "r", expires: 0 } }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ access_token: "refreshed", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    await service.getAccessToken("xai");
+
+    expect(service.statuses().find((status) => status.provider === "xai")?.health).toBe("detected");
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps an OAuth check separate from a real provider health test", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({ xai: { type: "oauth", access: "a", refresh: "r", expires: 0 } }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ access_token: "refreshed", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    await service.testHealth("xai");
+
+    expect(service.statuses().find((status) => status.provider === "xai")).toMatchObject({
+      health: "detected",
+      healthTest: { status: "not-run" },
+      oauthCheck: { status: "passed" },
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("clears a disconnected health-check failure after a new login", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    await service.testHealth("anthropic");
+    expect(service.statuses().find((status) => status.provider === "anthropic")?.health).toBe(
+      "missing",
+    );
+
+    const started = await service.startLogin("anthropic");
+    const state = new URL(started.url).searchParams.get("state");
+    expect(state).toBeTruthy();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: "connected",
+            refresh_token: "refresh",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    await expect(service.completeLogin(started.loginId, `code#${state}`)).resolves.toEqual({
+      status: "connected",
+    });
+    expect(service.statuses().find((status) => status.provider === "anthropic")).toMatchObject({
+      connected: true,
+      health: "detected",
+      healthTest: { status: "not-run" },
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("tracks provider-instance failure and recovery from real requests", () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+
+    service.recordProviderInstanceFailure(
+      "grok",
+      "The first request failed.",
+      "2026-08-30T20:00:00.000Z",
+    );
+    expect(service.providerInstanceHealth("grok")).toBe("failed-first-request");
+    service.recordProviderInstanceSuccess("grok", "2026-08-30T20:01:00.000Z");
+    expect(service.providerInstanceHealth("grok")).toBe("recovered");
+    expect(new SubscriptionAuthService(authPath).providerInstanceHealth("grok")).toBe("recovered");
+  });
+
+  it("tracks MCP failure and recovery from real tool requests", () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+
+    service.recordMcpRequestFailure(
+      "builtin-executor",
+      "Executor failed.",
+      "2026-08-30T20:00:00.000Z",
+    );
+    expect(service.mcpRequestHealth("builtin-executor")).toMatchObject({
+      health: "failed-first-request",
+      lastFailedRequest: { message: "Executor failed." },
+    });
+    service.recordMcpRequestSuccess("builtin-executor", "2026-08-30T20:01:00.000Z");
+    expect(
+      new SubscriptionAuthService(authPath).mcpRequestHealth("builtin-executor"),
+    ).toMatchObject({
+      health: "recovered",
+      lastSuccessfulRequestAt: "2026-08-30T20:01:00.000Z",
+    });
+  });
+
+  it("preserves health updates written by another service instance", () => {
+    const { authPath } = fixture();
+    const providerRuntime = new SubscriptionAuthService(authPath);
+    const rpcRuntime = new SubscriptionAuthService(authPath);
+
+    providerRuntime.recordProviderInstanceSuccess("grok", "2026-08-30T20:00:00.000Z");
+    rpcRuntime.recordRequestFailure(
+      "xai",
+      "The OAuth grant was revoked.",
+      "2026-08-30T20:01:00.000Z",
+      "revoked",
+    );
+
+    const restarted = new SubscriptionAuthService(authPath);
+    expect(restarted.providerInstanceHealth("grok")).toBe("healthy");
+    expect(restarted.statuses().find((status) => status.provider === "xai")).toMatchObject({
+      health: "missing",
+      lastFailedRequest: { message: "The OAuth grant was revoked." },
+    });
   });
 });
