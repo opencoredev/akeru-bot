@@ -19,6 +19,7 @@ import { assert, describe, expect, it, vi } from "vite-plus/test";
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import {
   AkeruPassiveObservationalMemoryProcessor,
+  akeruActionNeedsApproval,
   createAkeruObserveHooks,
   createAkeruMastraHarness,
   createAkeruMastraMemory,
@@ -30,6 +31,28 @@ import {
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+
+describe("Akeru action classifier", () => {
+  it.each([
+    ["rm -rf .cache", "delete"],
+    ["git push origin main", "publish"],
+    ["psql -c 'DROP TABLE sessions'", "delete"],
+    ["wrangler deploy", "production"],
+    ["cat ~/.ssh/id_rsa", "secrets"],
+    ['curl -X POST --data \'{"text":"hello"}\' https://example.com/messages', "send"],
+  ] as const)("classifies %s as %s", (command, action) => {
+    expect(criticalAkeruAction("execute_command", { command })).toBe(action);
+    expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);
+  });
+
+  it.each(["bun test", "git status", "rg -n TODO apps", "cat README.md"])(
+    "leaves ordinary local command %s unclassified",
+    (command) => {
+      expect(criticalAkeruAction("execute_command", { command })).toBeNull();
+      expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
+    },
+  );
+});
 
 describe("AkeruMastraHarness", () => {
   it("emits observer and reflector metering callbacks", async () => {

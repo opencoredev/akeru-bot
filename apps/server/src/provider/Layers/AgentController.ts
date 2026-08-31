@@ -9,6 +9,7 @@ import {
   type McpManager,
   type McpServerConfig,
 } from "@mastra/code-sdk/mcp/index";
+import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import type {
   AgentControllerEvent,
   MastraDBMessage,
@@ -117,6 +118,9 @@ import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 
 const DEFAULT_MODE_ID = "build";
 const PLAN_MODE_ID = "plan";
+const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
+  Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
+);
 type MastraSession = AkeruMastraSession;
 
 interface ResolvedEngine {
@@ -318,8 +322,9 @@ function permissionPolicy(
 }
 
 function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string): boolean {
-  const tools = manager?.getTools();
-  if (!tools || !Object.hasOwn(tools, toolName)) return false;
+  if (!manager || BUILTIN_MASTRA_TOOL_NAMES.has(toolName)) return false;
+  const tools = manager.getTools();
+  if (!tools || !Object.hasOwn(tools, toolName)) return true;
   const tool = tools[toolName] as {
     readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } };
   };
@@ -795,15 +800,32 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
     };
 
-    const cancelPendingApprovals = (threadId: ThreadId, active: ActiveSession) => {
-      for (const requestId of active.approvalRequests.keys()) {
-        publish({
-          ...baseEvent(threadId, active, active.activeTurn?.turnId),
-          requestId: RuntimeRequestId.make(requestId),
-          type: "request.resolved",
-          payload: { requestType: "dynamic_tool_call", decision: "cancel" },
-        });
+    const cancelPendingApproval = (
+      threadId: ThreadId,
+      active: ActiveSession,
+      requestId: string,
+      pending: PendingApproval,
+    ) => {
+      publish({
+        ...baseEvent(threadId, active, active.activeTurn?.turnId),
+        requestId: RuntimeRequestId.make(requestId),
+        type: "request.resolved",
+        payload: {
+          requestType: "dynamic_tool_call",
+          decision: "cancel",
+          actor: "system",
+          target: pending.toolName,
+          action: pending.action,
+          outcome: "cancelled",
+        },
+      });
+    };
+
+    const cancelAllPendingApprovals = (threadId: ThreadId, active: ActiveSession) => {
+      for (const [requestId, pending] of active.pendingApprovals) {
+        cancelPendingApproval(threadId, active, requestId, pending);
       }
+      active.pendingApprovals.clear();
       active.approvalRequests.clear();
       toolRuntime.clearApprovals(String(threadId));
     };
@@ -819,7 +841,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       queueTurnMemory(threadId, active, turn);
       turn.finished = true;
       completeAssistantMessages(threadId, active, turn);
-      cancelPendingApprovals(threadId, active);
+      cancelAllPendingApprovals(threadId, active);
       publish({
         ...baseEvent(threadId, active, turn.turnId),
         type: "turn.completed",
@@ -847,7 +869,6 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           });
       }
-      active.pendingApprovals.clear();
       active.activeTurn = null;
       publishSessionState(threadId, active, "ready");
     };
@@ -957,14 +978,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_end": {
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
-          if (active.approvalRequests.delete(event.toolCallId)) {
-            publish({
-              ...baseEvent(threadId, active, turn.turnId),
-              requestId: RuntimeRequestId.make(event.toolCallId),
-              type: "request.resolved",
-              payload: { requestType: "dynamic_tool_call", decision: "cancel" },
-            });
-          }
+          active.approvalRequests.delete(event.toolCallId);
           active.toolNames.delete(event.toolCallId);
           const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
           if (mcpServerId && !event.denied) {
@@ -979,7 +993,11 @@ const make = (options?: AgentControllerLiveOptions) =>
             toolName,
             event.isError || event.denied ? "failure" : "success",
           );
-          active.pendingApprovals.delete(event.toolCallId);
+          const pending = active.pendingApprovals.get(event.toolCallId);
+          if (pending) {
+            cancelPendingApproval(threadId, active, event.toolCallId, pending);
+            active.pendingApprovals.delete(event.toolCallId);
+          }
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
@@ -1816,8 +1834,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (active.activeTurn) {
         finishTurn(input.threadId, active, "interrupted");
       } else {
-        cancelPendingApprovals(input.threadId, active);
-        active.pendingApprovals.clear();
+        cancelAllPendingApprovals(input.threadId, active);
       }
       active.unsubscribe();
       publishSessionState(input.threadId, active, "stopped");

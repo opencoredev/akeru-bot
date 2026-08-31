@@ -1466,7 +1466,87 @@ describe("AgentControllerLive", () => {
     );
   });
 
-  it.effect("cancels pending approvals when the turn or session ends", () => {
+  it.effect("fails closed for MCP tools missing from the manager index", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const mcpManager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({
+        indexed_read: { mcp: { annotations: { readOnlyHint: true } } },
+      })),
+    };
+    const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> = vi.fn(
+      () => mcpManager as never,
+    );
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          mcpServers: [
+            {
+              id: McpServerId.make("mcp-test"),
+              name: "Test MCP",
+              transport: "url",
+              url: "https://example.com/mcp",
+              enabled: true,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        });
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Use tools." });
+        for (const [toolCallId, toolName, args] of [
+          ["builtin-safe", "execute_command", { command: "bun test" }],
+          ["indexed-read", "indexed_read", { query: "status" }],
+          ["missing-index", "new_mcp_tool", { value: "unknown" }],
+        ] as const) {
+          mastra.emit({
+            type: "tool_approval_required",
+            toolCallId,
+            toolName,
+            args,
+          } as AgentControllerEvent);
+        }
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "builtin-safe",
+          decision: "approve",
+        });
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "indexed-read",
+          decision: "approve",
+        });
+        expect(events.filter((event) => event.type === "request.opened")).toEqual([
+          expect.objectContaining({
+            requestId: "missing-index",
+            payload: expect.objectContaining({ target: "new_mcp_tool" }),
+          }),
+        ]);
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+      makeMcpManager,
+    );
+  });
+
+  it.effect("resolves pending approvals when a turn or session ends", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -1482,71 +1562,59 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const events: ProviderRuntimeEvent[] = [];
-        const expectCancelledOnce = (requestId: string) =>
-          expect(
-            events.filter(
-              (event) => event.type === "request.resolved" && event.requestId === requestId,
-            ),
-          ).toEqual([
-            expect.objectContaining({
-              payload: { requestType: "dynamic_tool_call", decision: "cancel" },
-            }),
-          ]);
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
         yield* Effect.yieldNow;
 
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Run pwd." });
-        mastra.emit({
-          type: "tool_approval_required",
-          toolCallId: "turn-expiry",
-          toolName: "Shell",
-          args: { command: "pwd" },
-        } as AgentControllerEvent);
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Finish." });
+        for (const requestId of ["finish-1", "finish-2"]) {
+          mastra.emit({
+            type: "tool_approval_required",
+            toolCallId: requestId,
+            toolName: "gmail_send_message",
+            args: { to: "person@example.com" },
+          } as AgentControllerEvent);
+        }
         mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
         mastra.finishSend();
         yield* Effect.yieldNow;
-        yield* Effect.yieldNow;
 
-        expectCancelledOnce("turn-expiry");
-        yield* controller.respondToRequest({
-          threadId: codexThreadId,
-          requestId: ApprovalRequestId.make("turn-expiry"),
-          decision: "accept",
-        });
-        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
-
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Run pwd again." });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Interrupt." });
         mastra.emit({
           type: "tool_approval_required",
-          toolCallId: "tool-end-expiry",
-          toolName: "Shell",
-          args: { command: "pwd" },
+          toolCallId: "interrupt-1",
+          toolName: "gmail_send_message",
+          args: { to: "person@example.com" },
         } as AgentControllerEvent);
-        mastra.emit({
-          type: "tool_end",
-          toolCallId: "tool-end-expiry",
-          result: "cancelled",
-          isError: false,
-          denied: true,
-        } as AgentControllerEvent);
+        yield* controller.interruptTurn({ threadId: codexThreadId });
         yield* Effect.yieldNow;
-        yield* Effect.yieldNow;
-        expectCancelledOnce("tool-end-expiry");
 
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Stop." });
         mastra.emit({
           type: "tool_approval_required",
-          toolCallId: "session-expiry",
-          toolName: "Shell",
-          args: { command: "pwd" },
+          toolCallId: "stop-1",
+          toolName: "gmail_send_message",
+          args: { to: "person@example.com" },
         } as AgentControllerEvent);
         yield* controller.stopSession({ threadId: codexThreadId });
         yield* Effect.yieldNow;
-        yield* Effect.yieldNow;
 
-        expectCancelledOnce("session-expiry");
+        const resolved = events.filter((event) => event.type === "request.resolved");
+        expect(resolved.map((event) => event.requestId)).toEqual([
+          "finish-1",
+          "finish-2",
+          "interrupt-1",
+          "stop-1",
+        ]);
+        for (const event of resolved) {
+          expect(event.payload).toMatchObject({
+            decision: "cancel",
+            actor: "system",
+            outcome: "cancelled",
+          });
+        }
         yield* Fiber.interrupt(eventsFiber);
       }),
       bridge.service,
