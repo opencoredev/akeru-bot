@@ -23,6 +23,7 @@ const botTurnSubmissions = new Map<
 >();
 
 export const BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS = 15_000;
+export const BOT_TURN_SUBMISSION_MAX_UNOBSERVED_CHECKS = 4;
 
 export function reserveBotTurnSubmission(
   key: string,
@@ -75,17 +76,24 @@ export function scheduleBotTurnSubmissionFallbackRelease(
     readonly release: () => void;
   },
   delayMs = BOT_TURN_SUBMISSION_FALLBACK_RELEASE_MS,
+  maxUnobservedChecks = BOT_TURN_SUBMISSION_MAX_UNOBSERVED_CHECKS,
 ): void {
   const token = botTurnSubmissions.get(input.key)?.token;
   const generation = botTurnSubmissions.get(input.key)?.observation.generation;
+  let unobservedChecks = 0;
   const reconcile = () => {
     const submission = botTurnSubmissions.get(input.key);
     if (!submission || submission.token !== token) return;
     const { connected, latestTurn } = submission.observation;
     const hasNewerTurn = latestTurn ? latestTurn.turnId !== submission.previousTurnId : false;
+    if (latestTurn?.state === "running") {
+      globalThis.setTimeout(reconcile, delayMs);
+      return;
+    }
     if (
-      latestTurn?.state === "running" ||
-      (!hasNewerTurn && (!connected || submission.observation.generation === generation))
+      !hasNewerTurn &&
+      (!connected || submission.observation.generation === generation) &&
+      ++unobservedChecks < maxUnobservedChecks
     ) {
       globalThis.setTimeout(reconcile, delayMs);
       return;

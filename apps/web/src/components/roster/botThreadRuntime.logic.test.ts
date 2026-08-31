@@ -216,6 +216,52 @@ describe("bot thread runtime", () => {
     nextRelease?.();
   });
 
+  it("releases an unobserved submission after the connected grace window", () => {
+    vi.useFakeTimers();
+    const release = reserveBotTurnSubmission("env-a:bot-connected-stable", "turn-old");
+    expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-connected-stable", {
+      connected: true,
+      generation: 1,
+      latestTurn: { turnId: "turn-old", state: "completed" },
+    });
+    scheduleBotTurnSubmissionFallbackRelease(
+      { key: "env-a:bot-connected-stable", release: release as () => void },
+      1_000,
+      2,
+    );
+
+    vi.advanceTimersByTime(1_000);
+    expect(reserveBotTurnSubmission("env-a:bot-connected-stable")).toBeNull();
+    vi.advanceTimersByTime(1_000);
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-connected-stable");
+    expect(nextRelease).not.toBeNull();
+    nextRelease?.();
+  });
+
+  it("releases an unobserved submission after the disconnected grace window", () => {
+    vi.useFakeTimers();
+    const release = reserveBotTurnSubmission("env-a:bot-disconnected-stable", "turn-old");
+    expect(release).not.toBeNull();
+    observeBotTurnSubmission("env-a:bot-disconnected-stable", {
+      connected: false,
+      generation: 1,
+      latestTurn: { turnId: "turn-old", state: "completed" },
+    });
+    scheduleBotTurnSubmissionFallbackRelease(
+      { key: "env-a:bot-disconnected-stable", release: release as () => void },
+      1_000,
+      2,
+    );
+
+    vi.advanceTimersByTime(1_000);
+    expect(reserveBotTurnSubmission("env-a:bot-disconnected-stable")).toBeNull();
+    vi.advanceTimersByTime(1_000);
+    const nextRelease = reserveBotTurnSubmission("env-a:bot-disconnected-stable");
+    expect(nextRelease).not.toBeNull();
+    nextRelease?.();
+  });
+
   it("does not let stale fallback cleanup release a newer submission", () => {
     vi.useFakeTimers();
     const release = reserveBotTurnSubmission("env-a:bot-replaced", "turn-old");
