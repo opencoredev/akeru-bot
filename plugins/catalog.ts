@@ -16,7 +16,7 @@ interface CatalogPluginBase extends Omit<PluginManifest, "logo"> {
   readonly builtin: true;
 }
 
-interface CatalogUrlPlugin extends CatalogPluginBase {
+interface DirectoryUrlPlugin extends CatalogPluginBase {
   readonly kind: "mcp-url";
   readonly transport: Extract<PluginManifest["transport"], { readonly type: "url" }>;
   readonly url: string;
@@ -24,7 +24,7 @@ interface CatalogUrlPlugin extends CatalogPluginBase {
   readonly args?: never;
 }
 
-interface CatalogStdioPlugin extends CatalogPluginBase {
+interface DirectoryStdioPlugin extends CatalogPluginBase {
   readonly kind: "mcp-stdio";
   readonly transport: Extract<PluginManifest["transport"], { readonly type: "stdio" }>;
   readonly command: string;
@@ -32,7 +32,15 @@ interface CatalogStdioPlugin extends CatalogPluginBase {
   readonly url?: never;
 }
 
-export type CatalogPluginDefinition = CatalogUrlPlugin | CatalogStdioPlugin;
+type InstallableConnection = Exclude<
+  PluginManifest["connection"],
+  { readonly type: "approval-pending" }
+>;
+
+export type CatalogPluginDefinition = (DirectoryUrlPlugin | DirectoryStdioPlugin) & {
+  readonly catalogStatus: "available";
+  readonly connection: InstallableConnection;
+};
 
 interface PendingPluginDefinition extends CatalogPluginBase {
   readonly kind: "mcp-unavailable";
@@ -42,7 +50,10 @@ interface PendingPluginDefinition extends CatalogPluginBase {
   readonly args?: never;
 }
 
-export type PluginDirectoryDefinition = CatalogPluginDefinition | PendingPluginDefinition;
+export type PluginDirectoryDefinition =
+  | DirectoryUrlPlugin
+  | DirectoryStdioPlugin
+  | PendingPluginDefinition;
 
 export type PluginDefinition = CatalogPluginDefinition;
 export type { PluginSkill };
@@ -152,14 +163,19 @@ export function loadDirectoryCatalog(
   return Object.freeze(plugins.toSorted(comparePluginOrder));
 }
 
+export function isInstallablePlugin(plugin: PluginDirectoryDefinition): plugin is PluginDefinition {
+  return (
+    plugin.catalogStatus === "available" &&
+    plugin.kind !== "mcp-unavailable" &&
+    plugin.connection.type !== "approval-pending"
+  );
+}
+
 export function loadCatalog(
   modules: CatalogModules = catalogModules,
   assets: AssetModules = catalogAssets,
 ): readonly CatalogPluginDefinition[] {
-  return loadDirectoryCatalog(modules, assets).filter(
-    (plugin): plugin is CatalogPluginDefinition =>
-      plugin.catalogStatus === "available" && plugin.kind !== "mcp-unavailable",
-  );
+  return loadDirectoryCatalog(modules, assets).filter(isInstallablePlugin);
 }
 
 const BUILTIN_PREFIX = "builtin-";
@@ -168,7 +184,7 @@ export type CatalogInstallation =
   | {
       readonly kind: "catalog";
       readonly serverId: string;
-      readonly plugin: PluginDefinition;
+      readonly plugin: PluginDirectoryDefinition;
     }
   | {
       readonly kind: "legacy";
@@ -179,7 +195,7 @@ export type CatalogInstallation =
 
 export function resolveCatalogInstallations(
   installed: readonly { readonly id: string; readonly name: string }[],
-  catalog: readonly PluginDefinition[] = loadCatalog(),
+  catalog: readonly PluginDirectoryDefinition[] = loadDirectoryCatalog(),
 ): readonly CatalogInstallation[] {
   const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
   return installed.flatMap((server): readonly CatalogInstallation[] => {
