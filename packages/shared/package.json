@@ -83,6 +83,10 @@
       "types": "./src/serverSettings.ts",
       "import": "./src/serverSettings.ts"
     },
+    "./sensitiveDataRedaction": {
+      "types": "./src/sensitiveDataRedaction.ts",
+      "import": "./src/sensitiveDataRedaction.ts"
+    },
     "./backgroundActivitySettings": {
       "types": "./src/backgroundActivitySettings.ts",
       "import": "./src/backgroundActivitySettings.ts"

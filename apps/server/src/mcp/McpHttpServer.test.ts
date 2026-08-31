@@ -173,6 +173,19 @@ it.effect("registers annotated tools and preserves authenticated request context
       yield* Stream.runForEach(events, (event) => {
         if (event.type === "connected") return Effect.void;
         routedRequests.push(event.request);
+        if (event.request.operation === "navigate") {
+          return broker.respond({
+            clientId: "mcp-test-client",
+            connectionId: event.connectionId,
+            requestId: event.request.requestId,
+            ok: false,
+            error: {
+              _tag: "PreviewAutomationExecutionError",
+              message: "host cause: provider-secret",
+              detail: { token: "provider-secret" },
+            },
+          });
+        }
         return broker.respond({
           clientId: "mcp-test-client",
           connectionId: event.connectionId,
@@ -318,6 +331,20 @@ it.effect("registers annotated tools and preserves authenticated request context
         {
           type: "text",
           text: '{"id":"recording-1","tabId":"tab-mcp-test","path":"[REDACTED]","mimeType":"video/webm","sizeBytes":123,"createdAt":"2026-01-01T00:00:00Z"}',
+        },
+      ]);
+
+      const navigation = yield* server
+        .callTool({ name: "preview_navigate", arguments: { url: "https://example.test" } })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(navigation.isError).toBe(true);
+      expect(navigation.content).toEqual([
+        {
+          type: "text",
+          text: "Preview automation navigate failed on client mcp-test-client.",
         },
       ]);
 

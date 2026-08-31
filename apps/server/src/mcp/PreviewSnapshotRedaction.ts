@@ -3,10 +3,9 @@ import {
   PreviewAutomationSnapshot,
   type PreviewAutomationOperation,
 } from "@t3tools/contracts";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 import * as Schema from "effect/Schema";
 import { PNG } from "pngjs";
-
-import { redactSensitiveText } from "./SensitiveDataRedaction.ts";
 
 const REDACTED = "[REDACTED]";
 export const MAX_SCREENSHOT_BYTES = 20 * 1_024 * 1_024;
@@ -38,6 +37,21 @@ function redactValue(value: unknown, fieldName?: string): { value: unknown; reda
     entries.push([key, result.value]);
   }
   return { value: Object.fromEntries(entries), redacted };
+}
+
+function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
+  if (Array.isArray(value)) {
+    for (const item of value) rejectScreenshotPayload(item);
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  if (
+    Object.hasOwn(value, "data") &&
+    (fieldName === "screenshot" || Object.hasOwn(value, "mimeType"))
+  ) {
+    throw new Error("Unredacted screenshot data is not provider-safe.");
+  }
+  for (const [key, item] of Object.entries(value)) rejectScreenshotPayload(item, key);
 }
 
 function readPngDimensions(bytes: Uint8Array) {
@@ -118,20 +132,23 @@ export function redactProviderVisiblePreviewResult(
   if (operation === "evaluate") {
     return { redactionStatus: "omitted-unverified-preview-evaluation" };
   }
+  if (operation === "snapshot") {
+    const snapshot = decodeSnapshot(input);
+    const { accessibilityTree: _accessibilityTree, screenshot, ...page } = snapshot;
+    const redacted = redactPreviewSnapshot(page, screenshot);
+    return {
+      ...redacted.page,
+      accessibilityTree: { redactionStatus: "omitted-unverified-accessibility-tree" },
+      screenshot: {
+        ...screenshot,
+        data: Buffer.from(redacted.screenshot).toString("base64"),
+      },
+    };
+  }
+
+  rejectScreenshotPayload(input);
   if (operation === "recordingStop") {
     return { ...decodeRecordingArtifact(input), path: REDACTED };
   }
-  if (operation !== "snapshot") return redactValue(input).value;
-
-  const snapshot = decodeSnapshot(input);
-  const { accessibilityTree: _accessibilityTree, screenshot, ...page } = snapshot;
-  const redacted = redactPreviewSnapshot(page, screenshot);
-  return {
-    ...redacted.page,
-    accessibilityTree: { redactionStatus: "omitted-unverified-accessibility-tree" },
-    screenshot: {
-      ...screenshot,
-      data: Buffer.from(redacted.screenshot).toString("base64"),
-    },
-  };
+  return redactValue(input).value;
 }

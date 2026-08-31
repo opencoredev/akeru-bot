@@ -139,10 +139,42 @@ it.effect("fails closed when a provider-bound frame cannot be masked", () =>
       yield* Effect.yieldNow;
 
       const error = yield* broker
-        .invoke({ scope, operation: "snapshot", input: {} })
+        .invoke<void>({ scope, operation: "snapshot", input: {} })
         .pipe(Effect.flip);
 
       expect(error).toBeInstanceOf(PreviewAutomationMalformedResponseError);
+    }),
+  ),
+);
+
+it.effect("rejects screenshot payloads from non-snapshot operations", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const requests = requestsFrom(yield* broker.connect(makeHost()));
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: true,
+          result:
+            request.operation === "status"
+              ? { data: "raw pixels", mimeType: "image/png" }
+              : { screenshot: { data: "raw pixels" } },
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+
+      const statusError = yield* broker
+        .invoke<void>({ scope, operation: "status", input: {} })
+        .pipe(Effect.flip);
+      const navigateError = yield* broker
+        .invoke<void>({ scope, operation: "navigate", input: { url: "https://example.test" } })
+        .pipe(Effect.flip);
+
+      expect(statusError).toBeInstanceOf(PreviewAutomationMalformedResponseError);
+      expect(navigateError).toBeInstanceOf(PreviewAutomationMalformedResponseError);
     }),
   ),
 );

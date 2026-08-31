@@ -1,12 +1,12 @@
 import { PNG } from "pngjs";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 
 import {
   redactComputerScreenshot,
   redactPreviewSnapshot,
   redactProviderVisiblePreviewResult,
 } from "./PreviewSnapshotRedaction.ts";
-import { redactSensitiveText } from "./SensitiveDataRedaction.ts";
 
 function testScreenshot() {
   const png = new PNG({ width: 2, height: 2 });

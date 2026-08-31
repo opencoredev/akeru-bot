@@ -79,6 +79,37 @@ describe("preview annotations", () => {
     expect(await previewAnnotationScreenshotFile(annotation)).toBeNull();
   });
 
+  it("redacts annotation text and element context before provider egress", () => {
+    const result = buildPreviewAnnotationPrompt({
+      ...annotation,
+      pageTitle: "leo@example.com",
+      comment: "token=annotation-secret",
+      elements: [
+        {
+          id: "element_1",
+          rect: { x: 0, y: 0, width: 10, height: 10 },
+          element: {
+            pageUrl: "file:///Users/leo/private-preview.html",
+            pageTitle: "Private",
+            tagName: "input",
+            selector: "#secret",
+            htmlPreview: '<input value="token=element-secret">',
+            componentName: "SecretInput",
+            source: null,
+            stack: [],
+            styles: "color: red",
+            pickedAt: "2026-06-11T00:00:00.000Z",
+          },
+        },
+      ],
+    });
+
+    expect(result).not.toContain("leo@example.com");
+    expect(result).not.toContain("annotation-secret");
+    expect(result).not.toContain("Users/leo");
+    expect(result).not.toContain("element-secret");
+  });
+
   it("extracts multiple trailing annotations one at a time", () => {
     const first = appendPreviewAnnotationPrompt("Fix this", annotation);
     const secondAnnotation = { ...annotation, id: "annotation_2", pageTitle: "Details" };

@@ -1,4 +1,5 @@
 import type { PreviewAnnotationPayload } from "@t3tools/contracts";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 import { buildElementContextBlock, normalizeElementContextSelection } from "./elementContext";
 
 const TRAILING_PREVIEW_ANNOTATION_BLOCK_PATTERN =
@@ -55,7 +56,8 @@ export function buildPreviewAnnotationPrompt(annotation: PreviewAnnotationPayloa
     .filter((context) => context !== null);
   const elementBlock = buildElementContextBlock(elementContexts);
   if (elementBlock) lines.push(elementBlock);
-  return ["<preview_annotation>", ...lines, "</preview_annotation>"].join("\n");
+  return redactSensitiveText(["<preview_annotation>", ...lines, "</preview_annotation>"].join("\n"))
+    .value;
 }
 
 export function appendPreviewAnnotationPrompt(
