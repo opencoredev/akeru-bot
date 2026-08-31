@@ -7,6 +7,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { SidebarInset } from "../ui/sidebar";
+import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotActivityStatus } from "./BotActivityStatus";
@@ -105,9 +106,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     />
                     <div className="min-w-0 max-w-[85%]">
                       <div className="text-sm font-medium">{respondingBot.name}</div>
-                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90">
-                        {message.text}
-                      </p>
+                      <ChatMarkdown
+                        className="mt-1"
+                        cwd={runtime.defaultProject?.workspaceRoot}
+                        text={message.text}
+                        threadRef={runtime.linkedThreadRef ?? undefined}
+                      />
                     </div>
                   </div>
                 );

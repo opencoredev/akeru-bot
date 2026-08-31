@@ -1,5 +1,6 @@
 import { useAuth, useUser } from "@clerk/expo";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId } from "@t3tools/contracts";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useNavigation } from "@react-navigation/native";
@@ -103,7 +104,8 @@ export function SettingsRouteScreen() {
 function LocalSettingsRouteScreen() {
   const insets = useSafeAreaInsets();
   const { savedConnectionsById } = useSavedRemoteConnections();
-  const environmentCount = Object.keys(savedConnectionsById).length;
+  const connections = Object.values(savedConnectionsById);
+  const environmentCount = connections.length;
 
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
@@ -125,7 +127,7 @@ function LocalSettingsRouteScreen() {
           />
         </SettingsSection>
 
-        <ErrorsSettingsSection />
+        <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
         <GeneralSettingsSection />
 
@@ -513,7 +515,7 @@ function ConfiguredSettingsRouteScreen() {
           />
         </SettingsSection>
 
-        <ErrorsSettingsSection />
+        <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
         <GeneralSettingsSection />
 
@@ -531,8 +533,13 @@ function ConfiguredSettingsRouteScreen() {
   );
 }
 
-function ErrorsSettingsSection() {
+function ErrorsSettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
   const navigation = useNavigation();
+  if (environmentId === null) return null;
   return (
     <SettingsSection title="Health">
       <SettingsRow
@@ -543,7 +550,7 @@ function ErrorsSettingsSection() {
             screen: "SettingsContent",
             params: {
               screen: "SettingsProviderHealth",
-              params: { target: "bot-inbox" },
+              params: { environmentId, target: "bot-inbox" },
             },
           })
         }
