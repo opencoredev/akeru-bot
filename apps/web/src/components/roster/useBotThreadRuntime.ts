@@ -181,10 +181,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
                 effectiveModelSelection ??
                 activeProject.defaultModelSelection ??
                 appDefaultModelSelection,
-              runtimeMode: resolveBotRuntimeMode(
-                bot?.sandbox ?? null,
-                settings.localExecutionMode,
-              ),
+              runtimeMode: resolveBotRuntimeMode(bot?.sandbox ?? null, settings.localExecutionMode),
               interactionMode: DEFAULT_INTERACTION_MODE,
               branch: null,
               worktreePath: null,
