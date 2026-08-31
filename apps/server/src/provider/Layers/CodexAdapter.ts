@@ -867,7 +867,6 @@ function mapToRuntimeEvents(
                 options: elicitationApproval.options,
               }
             : {}),
-          ...(event.payload !== undefined ? { args: event.payload } : {}),
         },
       },
     ];

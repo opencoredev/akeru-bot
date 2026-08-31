@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
+  ProviderAccessStatus,
   SubscriptionProviderId,
   SubscriptionProviderStatus,
 } from "@t3tools/contracts";
@@ -62,8 +63,8 @@ const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] = [
   {
     id: "xai",
     label: "Grok",
-    subscription: "SuperGrok or X Premium+",
-    description: "Use Grok through your xAI subscription.",
+    subscription: "Shared xAI login",
+    description: "Connect an xAI login for Grok. Akeru cannot verify SuperGrok or X Premium+.",
     icon: "/provider-icons/xai.svg",
   },
   {
@@ -94,7 +95,9 @@ const healthLabels: Readonly<Record<NonNullable<SubscriptionProviderStatus["heal
   recovered: "Recovered",
 };
 
-function healthBadgeVariant(health: SubscriptionProviderStatus["health"] | undefined) {
+function healthBadgeVariant(
+  health: SubscriptionProviderStatus["health"] | ProviderAccessStatus["health"] | undefined,
+) {
   if (health === "healthy" || health === "recovered") return "success" as const;
   if (
     health === "expired" ||
@@ -106,6 +109,76 @@ function healthBadgeVariant(health: SubscriptionProviderStatus["health"] | undef
   }
   if (health === "detected") return "warning" as const;
   return "secondary" as const;
+}
+
+const accessMethodLabels: Readonly<Record<ProviderAccessStatus["accessMethod"], string>> = {
+  "subscription-oauth": "Subscription plan",
+  "api-key": "API key",
+  "acp-cli": "CLI",
+  browser: "Browser",
+  mcp: "MCP",
+};
+
+export function selectVisibleProviderAccess(
+  access: ReadonlyArray<ProviderAccessStatus>,
+): ReadonlyArray<ProviderAccessStatus> {
+  return access.filter(
+    (item) => item.accessMethod !== "subscription-oauth" || item.health === "unsupported",
+  );
+}
+
+export function ProviderAccessSection({
+  access,
+}: {
+  readonly access: ReadonlyArray<ProviderAccessStatus>;
+}) {
+  const rows = selectVisibleProviderAccess(access);
+  if (rows.length === 0) return null;
+
+  return (
+    <SettingsSection title="Provider access">
+      {rows.map((item) => (
+        <SettingsRow
+          key={item.id}
+          title={
+            <span className="flex items-center gap-2">
+              {item.label}
+              <Badge variant={healthBadgeVariant(item.health)} className="h-4 px-1.5 text-[10px]">
+                {healthLabels[item.health]}
+              </Badge>
+            </span>
+          }
+          description={item.nextAction}
+          status={accessMethodLabels[item.accessMethod]}
+        >
+          {item.repairAction || item.lastFailedRequest || item.dependentBots.length > 0 ? (
+            <dl className="grid gap-x-6 gap-y-2 border-t border-border/50 py-3 text-xs sm:grid-cols-2">
+              {item.repairAction ? (
+                <div>
+                  <dt className="text-muted-foreground">Repair</dt>
+                  <dd>{item.repairAction}</dd>
+                </div>
+              ) : null}
+              {item.lastFailedRequest ? (
+                <div>
+                  <dt className="text-muted-foreground">Last failed request</dt>
+                  <dd>
+                    {formatTimestamp(item.lastFailedRequest.at)} · {item.lastFailedRequest.message}
+                  </dd>
+                </div>
+              ) : null}
+              {item.dependentBots.length > 0 ? (
+                <div>
+                  <dt className="text-muted-foreground">Dependent bots</dt>
+                  <dd>{item.dependentBots.map((bot) => bot.name).join(", ")}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+        </SettingsRow>
+      ))}
+    </SettingsSection>
+  );
 }
 
 function formatTimestamp(value: string | number | undefined): string {
@@ -352,6 +425,7 @@ export function ProvidersPanel() {
     () => new Map(statusQuery.data?.providers.map((status) => [status.provider, status]) ?? []),
     [statusQuery.data],
   );
+  const providerAccess = statusQuery.data?.access ?? [];
 
   const settleLogin = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
@@ -504,6 +578,8 @@ export function ProvidersPanel() {
           />
         ))}
       </SettingsSection>
+
+      <ProviderAccessSection access={providerAccess} />
 
       <SettingsSection title="How credentials are used">
         <SettingsRow

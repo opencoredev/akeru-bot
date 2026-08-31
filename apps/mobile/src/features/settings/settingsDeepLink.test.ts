@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveMobileSettingsHealthTarget } from "./settingsDeepLink";
+import { resolveMobileSettingsDestination } from "./settingsDeepLink";
 
 describe("mobile Settings chat links", () => {
   it.each(["local-execution", "bot-inbox"] as const)("opens the %s target", (target) => {
-    expect(resolveMobileSettingsHealthTarget(`t3code://app/v1/settings?id=${target}`)).toBe(target);
+    expect(resolveMobileSettingsDestination(`t3code://app/v1/settings?id=${target}`)).toEqual({
+      kind: "health",
+      target,
+    });
+  });
+
+  it.each([
+    ["general", { kind: "root" }],
+    ["appearance", { kind: "screen", screen: "SettingsAppearance" }],
+    ["connections", { kind: "screen", screen: "SettingsEnvironments" }],
+  ] as const)("opens the supported %s screen", (id, destination) => {
+    expect(resolveMobileSettingsDestination(`t3code://app/v1/settings?id=${id}`)).toEqual(
+      destination,
+    );
   });
 
   it.each([
@@ -15,6 +28,6 @@ describe("mobile Settings chat links", () => {
     "t3code://app/v1/settings?id=provider-access#health",
     "t3code://other/v1/settings?id=provider-access",
   ])("rejects unsupported or malformed destination %s", (href) => {
-    expect(resolveMobileSettingsHealthTarget(href)).toBeNull();
+    expect(resolveMobileSettingsDestination(href)).toBeNull();
   });
 });

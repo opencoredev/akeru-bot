@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { BotId, type SubscriptionAuthStatuses } from "@t3tools/contracts";
 
-import { selectOpenBotInboxItems } from "../../botInbox";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 
 type BotInboxItem = SubscriptionAuthStatuses["inbox"][number];
@@ -26,20 +25,6 @@ function incident(overrides: Partial<BotInboxItem> = {}): BotInboxItem {
 }
 
 describe("bot inbox alerts", () => {
-  it("shows only open incidents for the visible bots, newest first", () => {
-    const selected = selectOpenBotInboxItems(
-      [
-        incident({ id: "older" }),
-        incident({ id: "resolved", status: "resolved" }),
-        incident({ id: "other", botId: BotId.make("bot-2") }),
-        incident({ id: "newer", lastSeenAt: "2026-08-30T11:00:00.000Z" }),
-      ],
-      new Set(["bot-1"]),
-    );
-
-    expect(selected.map((item) => item.id)).toEqual(["newer", "older"]);
-  });
-
   it("renders the incident through the existing composer alert", () => {
     const markup = renderToStaticMarkup(
       <BotInboxAlertStack items={[incident()]} onOpenDetails={() => {}} />,

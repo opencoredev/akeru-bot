@@ -699,7 +699,6 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                         permissionRequest.detail ??
                         encodeJsonStringForDiagnostics(params)?.slice(0, 2000) ??
                         "[unserializable params]",
-                      args: params,
                       source: "acp.jsonrpc",
                       method: "session/request_permission",
                       rawPayload: params,

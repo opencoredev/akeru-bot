@@ -1,5 +1,6 @@
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
+import { selectOpenBotInboxItems } from "@t3tools/client-runtime/bot-inbox";
 import type { EnvironmentId, SubscriptionAuthStatuses } from "@t3tools/contracts";
 import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,12 +11,14 @@ import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { SettingsSection } from "./components/SettingsSection";
 
-export type SettingsProviderHealthParams = {
-  readonly environmentId: EnvironmentId;
-  readonly target: "local-execution" | "bot-inbox";
-} & Record<string, unknown>;
+export type SettingsProviderHealthParams = (
+  | { readonly environmentId: EnvironmentId; readonly target: "local-execution" }
+  | { readonly environmentId?: EnvironmentId; readonly target: "bot-inbox" }
+) &
+  Record<string, unknown>;
 
 function Field(props: { readonly label: string; readonly value: string }) {
   return (
@@ -26,10 +29,16 @@ function Field(props: { readonly label: string; readonly value: string }) {
   );
 }
 
-function BotInbox({ data }: { readonly data: SubscriptionAuthStatuses }) {
-  const openItems = data.inbox.filter((item) => item.status === "open");
+function BotInbox({
+  data,
+  title = "Error inbox",
+}: {
+  readonly data: SubscriptionAuthStatuses;
+  readonly title?: string;
+}) {
+  const openItems = selectOpenBotInboxItems(data.inbox);
   return (
-    <SettingsSection title="Error inbox" card>
+    <SettingsSection title={title} card>
       {openItems.length === 0 ? (
         <Text className="p-4 text-sm text-foreground-muted">No open items.</Text>
       ) : (
@@ -47,6 +56,52 @@ function BotInbox({ data }: { readonly data: SubscriptionAuthStatuses }) {
       )}
     </SettingsSection>
   );
+}
+
+function EnvironmentBotInbox({
+  environmentId,
+  label,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+}) {
+  const query = useEnvironmentQuery(
+    serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
+  );
+  if (query.error) {
+    return (
+      <SettingsSection title={label} card>
+        <Text className="p-4 text-sm text-danger">{query.error}</Text>
+      </SettingsSection>
+    );
+  }
+  if (!query.data) {
+    return (
+      <SettingsSection title={label} card>
+        <Text className="p-4 text-sm text-foreground-muted">Loading errors…</Text>
+      </SettingsSection>
+    );
+  }
+  return <BotInbox data={query.data} title={label} />;
+}
+
+function AllEnvironmentBotInboxes() {
+  const { savedConnectionsById } = useSavedRemoteConnections();
+  const connections = Object.values(savedConnectionsById);
+  if (connections.length === 0) {
+    return (
+      <SettingsSection title="Error inbox" card>
+        <Text className="p-4 text-sm text-foreground-muted">No environments connected.</Text>
+      </SettingsSection>
+    );
+  }
+  return connections.map((connection) => (
+    <EnvironmentBotInbox
+      key={connection.environmentId}
+      environmentId={connection.environmentId}
+      label={connection.environmentLabel}
+    />
+  ));
 }
 
 function LocalExecution({ environmentId }: { readonly environmentId: EnvironmentId }) {
@@ -99,17 +154,21 @@ export function SettingsProviderHealthRouteScreen({
 }: StaticScreenProps<SettingsProviderHealthParams>) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const inboxEnvironmentId =
+    route.params.target === "bot-inbox" ? route.params.environmentId : undefined;
   const query = useEnvironmentQuery(
-    route.params.target === "local-execution"
+    route.params.target === "local-execution" || inboxEnvironmentId === undefined
       ? null
       : serverEnvironment.subscriptionAuth({
-          environmentId: route.params.environmentId,
+          environmentId: inboxEnvironmentId,
           input: {},
         }),
   );
   const section =
     route.params.target === "local-execution" ? (
       <LocalExecution environmentId={route.params.environmentId} />
+    ) : inboxEnvironmentId === undefined ? (
+      <AllEnvironmentBotInboxes />
     ) : query.data ? (
       <BotInbox data={query.data} />
     ) : null;
@@ -128,9 +187,13 @@ export function SettingsProviderHealthRouteScreen({
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-        refreshControl={<RefreshControl refreshing={query.isPending} onRefresh={query.refresh} />}
+        refreshControl={
+          inboxEnvironmentId === undefined ? undefined : (
+            <RefreshControl refreshing={query.isPending} onRefresh={query.refresh} />
+          )
+        }
       >
-        {route.params.target === "local-execution" ? (
+        {route.params.target === "local-execution" || inboxEnvironmentId === undefined ? (
           section
         ) : query.error ? (
           <Text className="py-16 text-center text-sm text-danger">{query.error}</Text>

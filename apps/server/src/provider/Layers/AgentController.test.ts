@@ -715,7 +715,11 @@ describe("AgentControllerLive", () => {
           args: { command: "bun test" },
         } as AgentControllerEvent);
         const protectedCalls = [
-          ["send-call", "gmail_send_message", { to: "person@example.com" }],
+          [
+            "send-call",
+            "gmail_send_message",
+            { to: "person@example.com", token: "secret-token", body: "private file body" },
+          ],
           ["pay-call", "stripe_charge_customer", { amount: 100 }],
           ["delete-call", "storage_delete_object", { key: "report" }],
           ["prod-call", "execute_command", { command: "bun run release --prod" }],
@@ -744,12 +748,14 @@ describe("AgentControllerLive", () => {
         assert.deepInclude(requests[0]?.payload, {
           toolName: "gmail_send_message",
           action: "send",
-          args: { to: "person@example.com" },
           options: [
             { decision: "decline", label: "Decline" },
             { decision: "accept", label: "Approve" },
           ],
         });
+        expect(requests[0]?.payload).not.toHaveProperty("args");
+        expect(JSON.stringify(requests[0]?.payload)).not.toContain("secret-token");
+        expect(JSON.stringify(requests[0]?.payload)).not.toContain("private file body");
 
         yield* controller.respondToRequest({
           threadId: codexThreadId,
@@ -844,7 +850,7 @@ describe("AgentControllerLive", () => {
           type: "tool_approval_required",
           toolCallId: "mcp-call",
           toolName: "builtin-exa_search",
-          args: { query: "Akeru" },
+          args: { query: "Akeru", token: "secret-token", body: "private file body" },
         } as AgentControllerEvent);
         yield* Effect.yieldNow;
 
@@ -853,9 +859,11 @@ describe("AgentControllerLive", () => {
           toolName: "builtin-exa_search",
           serverId: "builtin-exa",
           pluginId: "exa",
-          action: "unclassified",
-          args: { query: "Akeru" },
+          action: "secrets",
         });
+        expect(request?.payload).not.toHaveProperty("args");
+        expect(JSON.stringify(request?.payload)).not.toContain("secret-token");
+        expect(JSON.stringify(request?.payload)).not.toContain("private file body");
         expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
         yield* Fiber.interrupt(eventsFiber);
       }),

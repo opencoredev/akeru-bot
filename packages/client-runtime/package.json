@@ -47,6 +47,10 @@
       "types": "./src/settingsDeepLink.ts",
       "default": "./src/settingsDeepLink.ts"
     },
+    "./bot-inbox": {
+      "types": "./src/botInbox.ts",
+      "default": "./src/botInbox.ts"
+    },
     "./relay": {
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"

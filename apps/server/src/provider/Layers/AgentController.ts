@@ -526,7 +526,6 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               requestType: "dynamic_tool_call",
               detail: approvalDetail(event.toolName, oneUseApproval),
-              args: event.args,
               toolName: event.toolName,
               action: action ?? "unclassified",
               ...mcp,

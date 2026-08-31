@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { selectOpenBotInboxItems } from "../../botInbox";
+import { selectOpenBotInboxItems } from "@t3tools/client-runtime/bot-inbox";
 import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";

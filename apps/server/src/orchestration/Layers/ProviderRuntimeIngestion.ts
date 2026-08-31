@@ -422,7 +422,6 @@ export function runtimeEventToActivities(
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.appName ? { appName: event.payload.appName } : {}),
             ...(event.payload.options ? { options: event.payload.options } : {}),
-            ...(event.payload.args !== undefined ? { args: event.payload.args } : {}),
             ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
             ...(event.payload.serverId ? { serverId: event.payload.serverId } : {}),
             ...(event.payload.pluginId ? { pluginId: event.payload.pluginId } : {}),

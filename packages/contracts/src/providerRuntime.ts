@@ -437,7 +437,6 @@ const RequestOpenedPayload = Schema.Struct({
   detail: Schema.optional(TrimmedNonEmptyStringSchema),
   appName: Schema.optional(TrimmedNonEmptyStringSchema),
   options: Schema.optional(Schema.Array(ProviderApprovalOption)),
-  args: Schema.optional(Schema.Unknown),
   toolName: Schema.optional(TrimmedNonEmptyStringSchema),
   serverId: Schema.optional(TrimmedNonEmptyStringSchema),
   pluginId: Schema.optional(TrimmedNonEmptyStringSchema),

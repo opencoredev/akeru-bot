@@ -2703,6 +2703,9 @@ describe("ProviderRuntimeIngestion", () => {
   it("maps canonical request events into approval activities with requestKind", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
+    const unsafeApprovalArgs = {
+      args: { command: "pwd", token: "secret-token", body: "private file body" },
+    } as const;
 
     harness.emit({
       type: "request.opened",
@@ -2715,7 +2718,7 @@ describe("ProviderRuntimeIngestion", () => {
       payload: {
         requestType: "command_execution_approval",
         detail: "pwd",
-        args: { command: "pwd" },
+        ...unsafeApprovalArgs,
         toolName: "execute_command",
         serverId: "builtin-executor",
         pluginId: "executor",
@@ -2764,12 +2767,14 @@ describe("ProviderRuntimeIngestion", () => {
       environmentId: "environment-test",
       threadId: "thread-1",
       turnId: "turn-approval",
-      args: { command: "pwd" },
       toolName: "execute_command",
       serverId: "builtin-executor",
       pluginId: "executor",
       action: "production",
     });
+    expect(requestedPayload).not.toHaveProperty("args");
+    expect(JSON.stringify(requestedPayload)).not.toContain("secret-token");
+    expect(JSON.stringify(requestedPayload)).not.toContain("private file body");
 
     const resolved = thread?.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-request-resolved",

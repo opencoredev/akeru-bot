@@ -1,6 +1,6 @@
 import { CircleAlertIcon } from "lucide-react";
 
-import type { BotInboxItem } from "../../botInbox";
+import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { Button } from "../ui/button";
 import { ComposerBannerStack } from "../chat/ComposerBannerStack";
 

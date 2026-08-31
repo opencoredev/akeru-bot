@@ -971,7 +971,6 @@ export function makeOpenCodeAdapter(
                 event.properties.patterns.length > 0
                   ? event.properties.patterns.join("\n")
                   : event.properties.permission,
-              args: event.properties.metadata,
             },
           });
           break;

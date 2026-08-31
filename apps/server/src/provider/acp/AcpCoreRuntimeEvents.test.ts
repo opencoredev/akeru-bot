@@ -36,7 +36,6 @@ describe("AcpCoreRuntimeEvents", () => {
         requestId: RuntimeRequestId.make("request-1"),
         permissionRequest,
         detail: "cat package.json",
-        args: { command: ["cat", "package.json"] },
         source: "acp.jsonrpc",
         method: "session/request_permission",
         rawPayload: { sessionId: "session-1" },
@@ -86,7 +85,6 @@ describe("AcpCoreRuntimeEvents", () => {
         makeAcpRequestOpenedEvent({
           ...request,
           detail: kind,
-          args: {},
           source: "acp.jsonrpc",
           method: "session/request_permission",
           rawPayload: { sessionId: "session-1" },

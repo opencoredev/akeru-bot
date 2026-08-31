@@ -1,11 +1,24 @@
 import { CircleAlertIcon } from "lucide-react";
 
-import { selectOpenBotInboxItems } from "../../botInbox";
+import { selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import { openPlugins } from "../../pluginsDialogStore";
+import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+
+export type InboxRepairDestination = "providers" | "plugins";
+
+export function inboxRepairDestination(item: BotInboxItem): InboxRepairDestination | null {
+  if (item.incidentKey.startsWith("access:mcp-")) return "plugins";
+  if (item.incidentKey.startsWith("connector:") || item.incidentKey.startsWith("access:")) {
+    return "providers";
+  }
+  return null;
+}
 
 export function InboxPanel() {
   const environmentId = useSettingsEnvironmentId();
@@ -35,25 +48,51 @@ export function InboxPanel() {
           />
         ) : (
           openItems.map((item) => (
-            <SettingsRow
-              key={item.id}
-              title={
-                <span className="flex items-center gap-2">
-                  <CircleAlertIcon className="size-4 text-destructive" />
-                  {item.botName} · {item.taskOrRoutine}
-                </span>
-              }
-              description={item.lastFailure}
-              status={`Next: ${item.nextAction}`}
-              control={
-                <Badge variant="error">
-                  {item.occurrenceCount > 1 ? `${item.occurrenceCount} events` : "Action needed"}
-                </Badge>
-              }
-            />
+            <InboxIncidentRow key={item.id} item={item} environmentId={environmentId} />
           ))
         )}
       </SettingsSection>
     </SettingsPageContainer>
+  );
+}
+
+function InboxIncidentRow({
+  item,
+  environmentId,
+}: {
+  readonly item: BotInboxItem;
+  readonly environmentId: ReturnType<typeof useSettingsEnvironmentId>;
+}) {
+  const destination = inboxRepairDestination(item);
+  const openRepair = () => {
+    if (destination === "plugins") {
+      openPlugins();
+      return;
+    }
+    if (destination === "providers") openSettings("providers", null, environmentId);
+  };
+
+  return (
+    <SettingsRow
+      title={
+        <span className="flex items-center gap-2">
+          <CircleAlertIcon className="size-4 text-destructive" />
+          {item.botName} · {item.taskOrRoutine}
+        </span>
+      }
+      description={item.lastFailure}
+      status={item.nextAction}
+      control={
+        destination ? (
+          <Button size="xs" variant="outline" onClick={openRepair}>
+            {destination === "plugins" ? "Open Plugins" : "Open Providers"}
+          </Button>
+        ) : (
+          <Badge variant="error">
+            {item.occurrenceCount > 1 ? `${item.occurrenceCount} events` : "Action needed"}
+          </Badge>
+        )
+      }
+    />
   );
 }

@@ -1,8 +1,18 @@
 import { parseSettingsDeepLinkId } from "@t3tools/client-runtime/settings-deep-link";
 
 export type MobileSettingsHealthTarget = "local-execution" | "bot-inbox";
+export type MobileSettingsDestination =
+  | { readonly kind: "root" }
+  | { readonly kind: "screen"; readonly screen: "SettingsAppearance" | "SettingsEnvironments" }
+  | { readonly kind: "health"; readonly target: MobileSettingsHealthTarget };
 
-export function resolveMobileSettingsHealthTarget(href: string): MobileSettingsHealthTarget | null {
+export function resolveMobileSettingsDestination(href: string): MobileSettingsDestination | null {
   const id = parseSettingsDeepLinkId(href);
-  return id === "local-execution" || id === "bot-inbox" ? id : null;
+  if (id === "general") return { kind: "root" };
+  if (id === "appearance") return { kind: "screen", screen: "SettingsAppearance" };
+  if (id === "connections") return { kind: "screen", screen: "SettingsEnvironments" };
+  if (id === "local-execution" || id === "bot-inbox") {
+    return { kind: "health", target: id };
+  }
+  return null;
 }

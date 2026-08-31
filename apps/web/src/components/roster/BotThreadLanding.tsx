@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
-import { selectOpenBotInboxItems } from "../../botInbox";
+import { selectOpenBotInboxItems } from "@t3tools/client-runtime/bot-inbox";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,

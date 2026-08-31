@@ -125,6 +125,8 @@ function LocalSettingsRouteScreen() {
           />
         </SettingsSection>
 
+        <ErrorsSettingsSection />
+
         <GeneralSettingsSection />
 
         <SettingsSection title="Appearance">
@@ -511,6 +513,8 @@ function ConfiguredSettingsRouteScreen() {
           />
         </SettingsSection>
 
+        <ErrorsSettingsSection />
+
         <GeneralSettingsSection />
 
         <SettingsSection title="Appearance">
@@ -524,6 +528,27 @@ function ConfiguredSettingsRouteScreen() {
         <AppSettingsSection />
       </ScrollView>
     </View>
+  );
+}
+
+function ErrorsSettingsSection() {
+  const navigation = useNavigation();
+  return (
+    <SettingsSection title="Health">
+      <SettingsRow
+        icon="exclamationmark.triangle"
+        label="Errors"
+        onPress={() =>
+          navigation.navigate("SettingsSheet", {
+            screen: "SettingsContent",
+            params: {
+              screen: "SettingsProviderHealth",
+              params: { target: "bot-inbox" },
+            },
+          })
+        }
+      />
+    </SettingsSection>
   );
 }
 
