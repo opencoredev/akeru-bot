@@ -56,13 +56,6 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
         submission: decoded.value,
       };
     },
-    hasDuplicateSince: async (coarseIpHash, contentHash, since) =>
-      (await database
-        .prepare(
-          "SELECT feedback_id FROM akeru_feedback_inbox WHERE coarse_ip_hash = ? AND content_hash = ? AND received_at >= ? LIMIT 1",
-        )
-        .bind(coarseIpHash, contentHash, since)
-        .first()) !== null,
     tryInsert: async (feedback, constraints) => {
       const result = await database
         .prepare(

@@ -30,13 +30,6 @@ function makeRepository() {
       rows
         .filter((row) => row.installHash === hash)
         .toSorted((left, right) => right.receivedAt.localeCompare(left.receivedAt))[0] ?? null,
-    hasDuplicateSince: async (coarseIpHash, contentHash, since) =>
-      rows.some(
-        (row) =>
-          row.coarseIpHash === coarseIpHash &&
-          row.contentHash === contentHash &&
-          row.receivedAt >= since,
-      ),
     tryInsert: async (row, constraints) => {
       if (
         rows.filter(

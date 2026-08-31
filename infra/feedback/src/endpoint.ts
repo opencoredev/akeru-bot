@@ -33,11 +33,6 @@ export interface StoredProductFeedback {
 export interface ProductFeedbackRepository {
   readonly countByCoarseIpHashSince: (coarseIpHash: string, since: string) => Promise<number>;
   readonly findLatestByInstallHash: (installHash: string) => Promise<StoredProductFeedback | null>;
-  readonly hasDuplicateSince: (
-    coarseIpHash: string,
-    contentHash: string,
-    since: string,
-  ) => Promise<boolean>;
   readonly tryInsert: (
     feedback: StoredProductFeedback,
     constraints: {
@@ -308,18 +303,6 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
         }
       }
 
-      const duplicate = await options.repository.hasDuplicateSince(
-        coarseIpHash,
-        contentHash,
-        isoSecondsBefore(current, PRODUCT_FEEDBACK_DUPLICATE_WINDOW_SECONDS),
-      );
-      if (duplicate) {
-        return rejection(409, {
-          reason: "duplicate",
-          message: "This feedback was already received.",
-        });
-      }
-
       const feedbackId = `fb_${randomId()}`;
       const receivedAt = current.toISOString();
       const expiresAt = new Date(
@@ -367,7 +350,6 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
           message: "This feedback was already received.",
         });
       }
-      await options.repository.deleteExpired(receivedAt).catch(() => undefined);
       return receipt({ feedbackId, receivedAt });
     } catch {
       return rejection(500, {
