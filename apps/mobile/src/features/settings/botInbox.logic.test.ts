@@ -2,7 +2,7 @@ import { BotId } from "@t3tools/contracts";
 import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { settingsInboxView } from "./botInbox.logic";
+import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
 
 function incident(overrides: Partial<BotInboxItem> = {}): BotInboxItem {
   return {
@@ -27,7 +27,7 @@ describe("settingsInboxView", () => {
     expect(
       settingsInboxView({
         error: "Environment disconnected",
-        data: { inbox: [incident()] },
+        data: [incident()],
       }),
     ).toEqual({ kind: "error", message: "Environment disconnected" });
   });
@@ -39,13 +39,11 @@ describe("settingsInboxView", () => {
   it("drops resolved items and sorts the newest open incident first", () => {
     const view = settingsInboxView({
       error: null,
-      data: {
-        inbox: [
-          incident({ id: "older" }),
-          incident({ id: "resolved", status: "resolved" }),
-          incident({ id: "newer", lastSeenAt: "2026-08-30T11:00:00.000Z" }),
-        ],
-      },
+      data: [
+        incident({ id: "older" }),
+        incident({ id: "resolved", status: "resolved" }),
+        incident({ id: "newer", lastSeenAt: "2026-08-30T11:00:00.000Z" }),
+      ],
     });
 
     expect(view).toEqual({
@@ -61,8 +59,15 @@ describe("settingsInboxView", () => {
     expect(
       settingsInboxView({
         error: null,
-        data: { inbox: [incident({ status: "resolved" })] },
+        data: [incident({ status: "resolved" })],
       }),
     ).toEqual({ kind: "ready", items: [] });
+  });
+});
+
+describe("canResolveInboxItem", () => {
+  it("keeps connector incidents open until their dependency recovers", () => {
+    expect(canResolveInboxItem(incident())).toBe(false);
+    expect(canResolveInboxItem(incident({ kind: "approval-request" }))).toBe(true);
   });
 });

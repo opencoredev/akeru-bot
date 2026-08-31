@@ -1,16 +1,17 @@
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, SubscriptionAuthStatuses } from "@t3tools/contracts";
+import type { BotInboxItem, EnvironmentId } from "@t3tools/contracts";
 import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
+import { botInboxEnvironment } from "../../state/botInbox";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { settingsInboxView } from "./botInbox.logic";
+import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
 import { SettingsSection } from "./components/SettingsSection";
 
 export type SettingsProviderHealthParams = {
@@ -27,7 +28,14 @@ function Field(props: { readonly label: string; readonly value: string }) {
   );
 }
 
-function BotInbox({ items }: { readonly items: SubscriptionAuthStatuses["inbox"] }) {
+function BotInbox({
+  environmentId,
+  items,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly items: ReadonlyArray<BotInboxItem>;
+}) {
+  const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
   return (
     <SettingsSection title="Error inbox" card>
       {items.length === 0 ? (
@@ -42,6 +50,17 @@ function BotInbox({ items }: { readonly items: SubscriptionAuthStatuses["inbox"]
             <Field label="Task or routine" value={item.taskOrRoutine} />
             <Field label="Last failure" value={item.lastFailure} />
             <Field label="Next action" value={item.nextAction} />
+            {canResolveInboxItem(item) ? (
+              <Pressable
+                accessibilityRole="button"
+                className="self-start rounded-[12px] bg-subtle px-3 py-2"
+                onPress={() => {
+                  void resolveIncident({ environmentId, input: { id: item.id } });
+                }}
+              >
+                <Text className="text-sm font-t3-medium text-foreground">Resolve</Text>
+              </Pressable>
+            ) : null}
           </View>
         ))
       )}
@@ -102,7 +121,7 @@ export function SettingsProviderHealthRouteScreen({
   const query = useEnvironmentQuery(
     route.params.target === "local-execution"
       ? null
-      : serverEnvironment.subscriptionAuth({
+      : botInboxEnvironment.list({
           environmentId: route.params.environmentId,
           input: {},
         }),
@@ -115,7 +134,7 @@ export function SettingsProviderHealthRouteScreen({
     route.params.target === "local-execution" ? (
       <LocalExecution environmentId={route.params.environmentId} />
     ) : inboxView?.kind === "ready" ? (
-      <BotInbox items={inboxView.items} />
+      <BotInbox environmentId={route.params.environmentId} items={inboxView.items} />
     ) : null;
 
   return (
@@ -140,7 +159,7 @@ export function SettingsProviderHealthRouteScreen({
           <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
         ) : inboxView?.kind === "loading" ? (
           <Text className="py-16 text-center text-sm text-foreground-muted">
-            Loading provider health…
+            Loading bot inbox…
           </Text>
         ) : (
           section
