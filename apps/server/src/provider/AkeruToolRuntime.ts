@@ -106,6 +106,11 @@ export function createAkeruToolRuntime(): AkeruToolRuntime {
   const sessions = new Map<string, AkeruToolSession>();
   const grants = new Map<string, { readonly toolId: AkeruToolId; readonly input: string }>();
   const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
+  const clearGrants = (threadId: string) => {
+    for (const grantKey of grants.keys()) {
+      if (grantKey.startsWith(`${threadId}\u0000`)) grants.delete(grantKey);
+    }
+  };
 
   const implementedTools = (session: AkeruToolSession) => {
     const tools = new Set<AkeruToolId>();
@@ -149,13 +154,12 @@ export function createAkeruToolRuntime(): AkeruToolRuntime {
 
   return {
     registerSession: (threadId, session) => {
+      clearGrants(threadId);
       sessions.set(threadId, session);
     },
     unregisterSession: (threadId) => {
       sessions.delete(threadId);
-      for (const grantKey of grants.keys()) {
-        if (grantKey.startsWith(`${threadId}\u0000`)) grants.delete(grantKey);
-      }
+      clearGrants(threadId);
     },
     toolsForThread,
     requiresApproval: async (threadId, toolId, input) => {

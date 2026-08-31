@@ -88,6 +88,37 @@ describe("AkeruToolRuntime", () => {
     );
   });
 
+  it("invalidates approvals when the thread workspace changes", async () => {
+    const runtime = createAkeruToolRuntime();
+    const original = workspace("original");
+    const replacement = workspace("replacement");
+    const user = workspace("user");
+    await user.filesystem?.writeFile(".env", "SECRET=value");
+    runtime.registerSession("thread-1", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      workspace: original,
+      userComputerWorkspace: user,
+    });
+    const execution = {
+      threadId: "thread-1",
+      toolId: "CopyToBox" as const,
+      toolCallId: "tool-copy",
+      input: { sourcePath: ".env", destinationPath: ".env" },
+      approvalMode: "require-grant" as const,
+    };
+    runtime.grantApproval(execution);
+    runtime.registerSession("thread-1", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      workspace: replacement,
+      userComputerWorkspace: user,
+    });
+
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    await expect(replacement.filesystem?.readFile(".env")).rejects.toThrow();
+  });
+
   it("translates await handles to workspace process ids", async () => {
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-1", {
