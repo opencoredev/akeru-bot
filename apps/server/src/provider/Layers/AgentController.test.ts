@@ -561,6 +561,36 @@ describe("AgentControllerLive", () => {
 
         expect(insert).toHaveBeenCalledOnce();
         expect(create).toHaveBeenCalledOnce();
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              events.push(event);
+            }),
+          ),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Remember this." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "memory-approval",
+          toolName: "remember",
+          args: { fact: "The project uses Bun.", scope: "project" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        expect(events.find((event) => event.type === "request.opened")).toMatchObject({
+          payload: {
+            options: [
+              { decision: "accept", label: "Allow" },
+              { decision: "decline", label: "Decline" },
+            ],
+          },
+        });
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        mastra.finishSend();
+        yield* Fiber.interrupt(eventsFiber);
       }),
       bridge.service,
       mastra.factory,

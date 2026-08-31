@@ -554,6 +554,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                       { decision: "decline", label: "Cancel" },
                     ]
                   : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
+                      isMemoryToolId(event.toolName) ||
                       akeruActionNeedsApproval(event.toolName, event.args)
                     ? [
                         { decision: "accept", label: "Allow" },
