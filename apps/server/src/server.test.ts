@@ -4596,6 +4596,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             assert.equal(failed[0]?.botId, bot.botId);
             assert.equal(failed[0]?.lastFailure, "The first request failed.");
 
+            yield* client[WS_METHODS.botInboxResolve]({ id: failed[0]!.id });
+            assert.deepEqual(yield* client[WS_METHODS.botInboxList]({}), []);
+
             yield* fileSystem.writeFileString(
               `${authPath}.health`,
               // @effect-diagnostics-next-line preferSchemaOverJson:off
@@ -4612,6 +4615,24 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             );
 
             assert.deepEqual(yield* client[WS_METHODS.botInboxList]({}), []);
+
+            yield* fileSystem.writeFileString(
+              `${authPath}.health`,
+              // @effect-diagnostics-next-line preferSchemaOverJson:off
+              JSON.stringify({
+                xai: {
+                  lastFailedRequest: {
+                    at: "2026-08-30T20:02:00.000Z",
+                    message: "The first request failed.",
+                  },
+                  failureKind: "request",
+                },
+              }),
+            );
+
+            const reopened = yield* client[WS_METHODS.botInboxList]({});
+            assert.equal(reopened.length, 1);
+            assert.notEqual(reopened[0]?.id, failed[0]?.id);
           }),
         ),
       );

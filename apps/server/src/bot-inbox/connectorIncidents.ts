@@ -43,7 +43,7 @@ export function syncConnectorIncidents(
 
   for (const incident of botInbox.list()) {
     if (
-      incident.status === "open" &&
+      (incident.status === "open" || incident.acknowledgedAt !== undefined) &&
       incident.incidentKey.startsWith("connector:") &&
       !currentIncidentKeys.has(incident.incidentKey)
     ) {

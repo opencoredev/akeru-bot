@@ -74,6 +74,21 @@ describe("connector inbox incidents", () => {
     expect(inbox.list().filter((item) => item.status === "open")).toHaveLength(0);
   });
 
+  it("keeps an acknowledged failure closed until the connector recovers", () => {
+    const inbox = fixture();
+    syncConnectorIncidents(inbox, [status("failed")]);
+    const first = inbox.list()[0]!;
+    inbox.resolveById(first.id);
+
+    syncConnectorIncidents(inbox, [status("failed")]);
+    expect(inbox.list().filter((item) => item.status === "open")).toHaveLength(0);
+
+    syncConnectorIncidents(inbox, [status("recovered")]);
+    syncConnectorIncidents(inbox, [status("failed")]);
+    const reopened = inbox.list().find((item) => item.status === "open");
+    expect(reopened?.id).not.toBe(first.id);
+  });
+
   it("resolves the incident when the dependent bot is removed", () => {
     const inbox = fixture();
     syncConnectorIncidents(inbox, [status("failed")]);
@@ -85,9 +100,12 @@ describe("connector inbox incidents", () => {
   it("resolves the incident when the provider status is removed", () => {
     const inbox = fixture();
     syncConnectorIncidents(inbox, [status("failed")]);
+    const first = inbox.list()[0]!;
+    inbox.resolveById(first.id);
     syncConnectorIncidents(inbox, []);
+    syncConnectorIncidents(inbox, [status("failed")]);
 
-    expect(inbox.list()[0]?.status).toBe("resolved");
+    expect(inbox.list().find((item) => item.status === "open")?.id).not.toBe(first.id);
   });
 
   it.each([
