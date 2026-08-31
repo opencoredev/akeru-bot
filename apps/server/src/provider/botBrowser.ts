@@ -507,10 +507,9 @@ export function createBotBrowserTools(rpc: BotBrowserRpc): ToolsInput {
       inputSchema: z.object({}),
       execute: async () => {
         const snapshot = await call("tree", {});
-        const redacted = redactSensitiveText(snapshot).value;
         return {
-          snapshot: redacted.slice(0, MAX_SNAPSHOT_LENGTH),
-          truncated: redacted.length > MAX_SNAPSHOT_LENGTH,
+          snapshot: snapshot.slice(0, MAX_SNAPSHOT_LENGTH),
+          truncated: snapshot.length > MAX_SNAPSHOT_LENGTH,
         };
       },
     }),

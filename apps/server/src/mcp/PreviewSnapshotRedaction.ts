@@ -10,6 +10,7 @@ import { PNG } from "pngjs";
 const REDACTED = "[REDACTED]";
 export const MAX_SCREENSHOT_BYTES = 20 * 1_024 * 1_024;
 const MAX_SCREENSHOT_PIXELS = 16_000_000;
+const screenshotField = /^(?:screenshot|image|frame)$/i;
 const secretField =
   /^(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|cookie|set-cookie|session|sessionId|clientSecret|awsSecretAccessKey|(?:artifact|chat|file|log|recording|upload)?path)$/i;
 const decodeSnapshot = Schema.decodeUnknownSync(PreviewAutomationSnapshot);
@@ -40,6 +41,9 @@ function redactValue(value: unknown, fieldName?: string): { value: unknown; reda
 }
 
 function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
+  if (typeof value === "string" && fieldName && screenshotField.test(fieldName)) {
+    throw new Error("Unredacted screenshot data is not provider-safe.");
+  }
   if (Array.isArray(value)) {
     for (const item of value) rejectScreenshotPayload(item);
     return;
@@ -47,7 +51,8 @@ function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
   if (typeof value !== "object" || value === null) return;
   if (
     Object.hasOwn(value, "data") &&
-    (fieldName === "screenshot" || Object.hasOwn(value, "mimeType"))
+    ((fieldName !== undefined && screenshotField.test(fieldName)) ||
+      Object.hasOwn(value, "mimeType"))
   ) {
     throw new Error("Unredacted screenshot data is not provider-safe.");
   }
@@ -120,7 +125,7 @@ export function redactPreviewSnapshot(
   }
   return {
     page: redactedPage.value as Readonly<Record<string, unknown>>,
-    screenshot: blankPng(bytes),
+    screenshot: redactComputerScreenshot({ mediaType: "image/png", data: bytes }).data,
     frameRedacted: true,
   };
 }
