@@ -468,6 +468,33 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("rejects conversation memory calls when the harness has no memory", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const readError = yield* controller.readConversationMemory!(codexThreadId).pipe(
+          Effect.flip,
+        );
+        const clearError = yield* controller.clearConversationMemory!(codexThreadId).pipe(
+          Effect.flip,
+        );
+
+        assert.deepInclude(readError, {
+          _tag: "AgentControllerRuntimeError",
+          operation: "memory.read",
+        });
+        assert.deepInclude(clearError, {
+          _tag: "AgentControllerRuntimeError",
+          operation: "memory.clear",
+        });
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
     const layer = makeAgentControllerLive().pipe(
