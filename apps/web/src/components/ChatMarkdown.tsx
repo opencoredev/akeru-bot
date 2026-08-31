@@ -108,7 +108,7 @@ import { useAssetUrlState } from "../assets/assetUrls";
 import { cn } from "../lib/utils";
 import { useRemoteOpenResolution, type RemoteOpenMode } from "../remoteOpen";
 import { useRightPanelStore } from "../rightPanelStore";
-import { readThreadShell, useProjects } from "../state/entities";
+import { readThreadShell } from "../state/entities";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { assetEnvironment } from "../state/assets";
@@ -124,12 +124,7 @@ import {
   pickWorkspaceBasenameMatch,
   WORKSPACE_BASENAME_LOOKUP_LIMIT,
 } from "../workspaceBasenameLookup";
-import {
-  findProjectForChangeRequest,
-  matchesLinkedPullRequestUrl,
-  parseChangeRequestUrl,
-  useOpenChangeRequestLink,
-} from "~/lib/openPullRequestLink";
+import { matchesLinkedPullRequestUrl, useOpenChangeRequestLink } from "~/lib/openPullRequestLink";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import { parseSettingsDeepLink } from "../settingsDeepLink";
@@ -1771,10 +1766,6 @@ function ChatMarkdown({
   );
   const preparedConnection = usePreparedConnection(environmentId);
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
-  const threadServerConfig = useAtomValue(
-    serverEnvironment.configValueAtom(threadRef?.environmentId ?? environmentId),
-  );
-  const projects = useProjects();
   const availableEditors = serverConfig?.availableEditors ?? [];
   const [preferredEditor] = usePreferredEditor(availableEditors);
   const preferredEditorMenuLabel = openInEditorMenuLabel(preferredEditor);
