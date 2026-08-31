@@ -31,10 +31,7 @@ import {
   EntityMemoryImportError,
 } from "../Services/EntityMemoryRepository.ts";
 import { encodeMemoryArchiveJson } from "../MemoryArchiveJson.ts";
-import {
-  MemoryRevisionWriteLock,
-  MemoryRevisionWriteLockLive,
-} from "../Services/MemoryRevisionWriteLock.ts";
+import { MemoryRevisionWriteLock } from "../Services/MemoryRevisionWriteLock.ts";
 
 const EntityMemoryDbRow = Schema.Struct({
   id: AkeruMemoryId,
@@ -983,4 +980,4 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
 export const EntityMemoryRepositoryLive = Layer.effect(
   EntityMemoryRepository,
   makeEntityMemoryRepository,
-).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+);

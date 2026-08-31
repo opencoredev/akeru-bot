@@ -22,10 +22,7 @@ import {
   MemoryCandidateRepository,
   type MemoryCandidateRepositoryShape,
 } from "../Services/MemoryCandidateRepository.ts";
-import {
-  MemoryRevisionWriteLock,
-  MemoryRevisionWriteLockLive,
-} from "../Services/MemoryRevisionWriteLock.ts";
+import { MemoryRevisionWriteLock } from "../Services/MemoryRevisionWriteLock.ts";
 
 const CandidateRow = Schema.Struct({
   candidateId: Schema.String,
@@ -430,4 +427,4 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
 export const MemoryCandidateRepositoryLive = Layer.effect(
   MemoryCandidateRepository,
   makeMemoryCandidateRepository,
-).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+);

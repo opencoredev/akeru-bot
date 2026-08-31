@@ -23,6 +23,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Cause from "effect/Cause";
 import * as Layer from "effect/Layer";
+import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import {
@@ -31,12 +32,20 @@ import {
 } from "../../persistence/Layers/Sqlite.ts";
 import { EntityMemoryRepository } from "../Services/EntityMemoryRepository.ts";
 import { MemoryCandidateRepository } from "../Services/MemoryCandidateRepository.ts";
+import {
+  MemoryRevisionWriteLock,
+  MemoryRevisionWriteLockLive,
+} from "../Services/MemoryRevisionWriteLock.ts";
 import { EntityMemoryRepositoryLive } from "./EntityMemoryRepository.ts";
 import { MemoryCandidateRepositoryLive } from "./MemoryCandidateRepository.ts";
 
+const repositoriesLive = Layer.mergeAll(
+  EntityMemoryRepositoryLive,
+  MemoryCandidateRepositoryLive,
+).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+
 const layer = Layer.mergeAll(
-  EntityMemoryRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
-  MemoryCandidateRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
+  repositoriesLive.pipe(Layer.provide(SqlitePersistenceMemory)),
   SqlitePersistenceMemory,
 );
 
@@ -78,8 +87,7 @@ it("preserves candidates and decision receipts after repository restart", () =>
     const dbPath = NodePath.join(directory, "state.sqlite");
     const persistence = makeSqlitePersistenceLive(dbPath).pipe(Layer.provide(NodeServices.layer));
     const restartedLayer = Layer.mergeAll(
-      EntityMemoryRepositoryLive.pipe(Layer.provide(persistence)),
-      MemoryCandidateRepositoryLive.pipe(Layer.provide(persistence)),
+      repositoriesLive.pipe(Layer.provide(persistence)),
       persistence,
     );
     const candidateId = AkeruMemoryCandidateId.make("candidate-restart");
@@ -127,6 +135,27 @@ it("preserves candidates and decision receipts after repository restart", () =>
     }).pipe(Effect.provide(restartedLayer));
     NodeFS.rmSync(directory, { recursive: true, force: true });
   }));
+
+it("shares one revision write lock between both repositories", () => {
+  let constructions = 0;
+  const countedLock = Layer.effect(
+    MemoryRevisionWriteLock,
+    Effect.gen(function* () {
+      constructions++;
+      return yield* Semaphore.make(1);
+    }),
+  );
+  const countedRepositories = Layer.mergeAll(
+    EntityMemoryRepositoryLive,
+    MemoryCandidateRepositoryLive,
+  ).pipe(Layer.provide(countedLock), Layer.provide(SqlitePersistenceMemory));
+
+  return Effect.gen(function* () {
+    yield* EntityMemoryRepository;
+    yield* MemoryCandidateRepository;
+    assert.equal(constructions, 1);
+  }).pipe(Effect.provide(countedRepositories));
+});
 
 const approvedRevision = (id: string): AkeruMemoryRevision => ({
   id: AkeruMemoryId.make(`${id}-revision`),

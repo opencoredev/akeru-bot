@@ -32,13 +32,17 @@ import {
   EntityMemoryRepository,
   type EntityMemoryRepositoryShape,
 } from "../Services/EntityMemoryRepository.ts";
+import { MemoryRevisionWriteLockLive } from "../Services/MemoryRevisionWriteLock.ts";
 import { EntityMemoryRepositoryLive } from "./EntityMemoryRepository.ts";
 import { deriveAkeruWorkspaceId, resolveMemoryArchivePartitions } from "../EntityMemoryAccess.ts";
 import { exportAkeruMemory } from "../MemoryExport.ts";
 import { applyAkeruMemoryImport, previewAkeruMemoryImport } from "../MemoryImport.ts";
 
 const repositoryLayer = Layer.mergeAll(
-  EntityMemoryRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
+  EntityMemoryRepositoryLive.pipe(
+    Layer.provide(MemoryRevisionWriteLockLive),
+    Layer.provide(SqlitePersistenceMemory),
+  ),
   SqlitePersistenceMemory,
 );
 
@@ -84,6 +88,7 @@ it("preserves revision history and FTS recall after repository restart", () =>
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-memory-restart-"));
     const dbPath = NodePath.join(directory, "state.sqlite");
     const restartedLayer = EntityMemoryRepositoryLive.pipe(
+      Layer.provide(MemoryRevisionWriteLockLive),
       Layer.provideMerge(makeSqlitePersistenceLive(dbPath).pipe(Layer.provide(NodeServices.layer))),
     );
     const rootId = AkeruMemoryRootId.make("restart-memory-root");
