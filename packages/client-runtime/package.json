@@ -135,6 +135,10 @@
       "types": "./src/state/memory.ts",
       "default": "./src/state/memory.ts"
     },
+    "./state/bot-usage": {
+      "types": "./src/state/botUsage.ts",
+      "default": "./src/state/botUsage.ts"
+    },
     "./state/bot-inbox": {
       "types": "./src/state/botInbox.ts",
       "default": "./src/state/botInbox.ts"
