@@ -3,8 +3,12 @@ import { PuzzleIcon, SearchIcon, ServerIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { loadCatalog, type PluginDefinition } from "../../../../../plugins";
-import { findPluginServer, isBuiltinMcpServer } from "../plugins/pluginRegistry";
+import {
+  loadCatalog,
+  resolveCatalogInstallations,
+  type PluginDefinition,
+} from "../../../../../plugins";
+import { isBuiltinMcpServer } from "../plugins/pluginRegistry";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
@@ -41,20 +45,30 @@ export function buildBotToolItems(
   servers: readonly McpServer[],
   catalog: readonly PluginDefinition[] = CATALOG,
 ): readonly BotToolItem[] {
-  const plugins = catalog.flatMap((plugin) => {
-    const server = findPluginServer(plugin, servers);
-    return server?.enabled
+  const serversById = new Map<string, McpServer>(servers.map((server) => [server.id, server]));
+  const plugins = resolveCatalogInstallations(servers, catalog).flatMap((installation) => {
+    const server = serversById.get(installation.serverId);
+    if (!server?.enabled) return [];
+    return installation.kind === "catalog"
       ? [
           {
             id: server.id,
             kind: "plugin" as const,
-            name: plugin.title,
-            description: plugin.description,
+            name: installation.plugin.title,
+            description: installation.plugin.description,
             workspaceEnabled: true,
-            logo: plugin.logo,
+            logo: installation.plugin.logo,
           },
         ]
-      : [];
+      : [
+          {
+            id: server.id,
+            kind: "plugin" as const,
+            name: installation.title,
+            description: mcpDescription(server),
+            workspaceEnabled: true,
+          },
+        ];
   });
   const mcpServers = servers
     .filter((server) => server.enabled && !isBuiltinMcpServer(server))

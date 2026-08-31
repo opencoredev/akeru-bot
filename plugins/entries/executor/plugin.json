@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "executor",
+  "name": "Executor",
+  "description": "Use the integrations configured in your local Executor account.",
+  "primaryCategory": "Work",
+  "tags": ["integrations", "automation", "local"],
+  "capabilities": ["use configured integrations", "run local integration tools"],
+  "featuredRank": 5,
+  "publisher": { "name": "Useful Software Co.", "url": "https://executor.sh" },
+  "maintainer": { "name": "Useful Software Co.", "url": "https://executor.sh" },
+  "documentationUrl": "https://executor.sh/docs",
+  "sourceUrl": "https://github.com/UsefulSoftwareCo/executor",
+  "license": "MIT",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://executor.sh/favicon-192.png",
+      "license": "Executor brand asset"
+    }
+  },
+  "platforms": ["macos", "windows", "linux"],
+  "transport": { "type": "stdio", "command": "bunx", "args": ["-y", "executor", "mcp"] },
+  "connection": { "type": "local" },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Sign in to Executor locally, then start its MCP command."],
+  "permissions": [
+    {
+      "id": "read-integrations",
+      "description": "Read data from configured integrations.",
+      "approval": "read"
+    },
+    { "id": "send-content", "description": "Send messages or other content.", "approval": "send" },
+    { "id": "make-payment", "description": "Submit a payment.", "approval": "pay" },
+    { "id": "delete-data", "description": "Delete integration data.", "approval": "delete" },
+    {
+      "id": "change-production",
+      "description": "Change production systems.",
+      "approval": "production"
+    },
+    {
+      "id": "access-secrets",
+      "description": "Access or change secret settings.",
+      "approval": "secrets"
+    },
+    {
+      "id": "publish-content",
+      "description": "Publish content to an external audience.",
+      "approval": "publishing"
+    },
+    {
+      "id": "create-signature",
+      "description": "Create or apply a signature.",
+      "approval": "signatures"
+    },
+    { "id": "issue-refund", "description": "Issue a payment refund.", "approval": "refunds" },
+    {
+      "id": "change-account",
+      "description": "Change account-wide settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": [
+    "send",
+    "pay",
+    "delete",
+    "production",
+    "secrets",
+    "publishing",
+    "signatures",
+    "refunds",
+    "account-wide"
+  ],
+  "catalogStatus": "available"
+}

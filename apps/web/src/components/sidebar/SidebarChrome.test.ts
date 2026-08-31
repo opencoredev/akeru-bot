@@ -1,15 +1,42 @@
 // @effect-diagnostics nodeBuiltinImport:off - This integration guard reads related source files.
 import * as NodeFS from "node:fs";
+import { McpServerId, type McpServer } from "@t3tools/contracts";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatEnabledPluginStatus } from "./SidebarChrome";
+import { loadCatalog } from "../../../../../plugins";
+import { formatEnabledPluginStatus, summarizeEnabledPlugins } from "./SidebarChrome";
+
+const catalogPlugin = loadCatalog().find((plugin) => plugin.id === "exa");
+if (!catalogPlugin) throw new TypeError("Exa must remain in the plugin catalog.");
+
+function server(id: string, enabled = true): McpServer {
+  return {
+    id: McpServerId.make(id),
+    name: id,
+    transport: "url",
+    url: "https://mcp.example.com",
+    enabled,
+    createdAt: "2026-08-27T00:00:00.000Z",
+    updatedAt: "2026-08-27T00:00:00.000Z",
+  };
+}
 
 describe("sidebar footer", () => {
   it("describes real enabled state without claiming an account connection", () => {
     expect(formatEnabledPluginStatus(0)).toBe("No plugins enabled");
     expect(formatEnabledPluginStatus(1)).toBe("1 plugin enabled");
     expect(formatEnabledPluginStatus(3)).toBe("3 plugins enabled");
+  });
+
+  it("counts removed builtins and custom MCP servers without inventing catalog logos", () => {
+    const summary = summarizeEnabledPlugins(
+      [server("builtin-exa"), server("builtin-removed-vendor"), server("custom-mcp")],
+      [catalogPlugin],
+    );
+
+    expect(summary.enabledCount).toBe(3);
+    expect(summary.enabledPlugins).toEqual([catalogPlugin]);
   });
 
   it("shows the verified remote-access account identity when Clerk is configured", () => {

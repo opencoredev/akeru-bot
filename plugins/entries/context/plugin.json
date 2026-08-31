@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "context",
+  "name": "Context.dev",
+  "description": "Scrape, extract, parse, enrich, and monitor web data.",
+  "primaryCategory": "Web",
+  "tags": ["scraping", "extraction", "monitoring", "brand-data"],
+  "capabilities": ["scrape pages", "extract structured data", "monitor web changes"],
+  "featuredRank": 1,
+  "publisher": { "name": "Context.dev", "url": "https://www.context.dev" },
+  "maintainer": { "name": "Context.dev", "url": "https://www.context.dev" },
+  "documentationUrl": "https://docs.context.dev/install-mcp",
+  "sourceUrl": "https://github.com/context-dot-dev",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.context.dev/home/context_dev_logo_icon.svg",
+      "license": "Context.dev brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.context.dev/mcp" },
+  "connection": { "type": "ready" },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Sign in through the Context.dev OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-web-data",
+      "description": "Read public web pages and Context.dev extraction results.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "available"
+}

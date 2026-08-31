@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "exa",
+  "name": "Exa",
+  "description": "Search the web, find code, and run focused research.",
+  "primaryCategory": "Web",
+  "tags": ["search", "research", "code-search"],
+  "capabilities": ["search the web", "find code", "research topics"],
+  "featuredRank": 3,
+  "publisher": { "name": "Exa Labs", "url": "https://exa.ai" },
+  "maintainer": { "name": "Exa Labs", "url": "https://exa.ai" },
+  "documentationUrl": "https://exa.ai/mcp",
+  "sourceUrl": "https://github.com/exa-labs/exa-mcp-server",
+  "license": "MIT",
+  "logo": {
+    "provenance": { "sourceUrl": "https://exa.ai", "license": "Exa brand asset" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.exa.ai/mcp" },
+  "connection": { "type": "ready" },
+  "authentication": "optional-oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect with OAuth for higher limits or continue without authentication."],
+  "permissions": [
+    {
+      "id": "read-search-results",
+      "description": "Read public web and code search results.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "available",
+  "skills": [
+    {
+      "title": "Exa Search",
+      "description": "Search the web through the Exa CLI.",
+      "url": "https://skills.sh/exa-labs/agent-skills/exa-search"
+    }
+  ]
+}

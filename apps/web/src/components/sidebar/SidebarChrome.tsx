@@ -1,10 +1,14 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Analytics01Icon, PlugSocketIcon, Settings02Icon } from "@hugeicons/core-free-icons";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, McpServer } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
-import { loadCatalog } from "../../../../../plugins";
+import {
+  loadCatalog,
+  resolveCatalogInstallations,
+  type PluginDefinition,
+} from "../../../../../plugins";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { openSettings } from "../../settingsDialogStore";
@@ -15,7 +19,7 @@ import { environmentMcpServersAtom } from "../../state/mcpServers";
 import { AkeruMark } from "../AkeruMark";
 import { T3ConnectSidebarAvatar, T3ConnectSidebarSignIn } from "../clerk/T3ConnectSidebarSignIn";
 import { PluginLogoImage } from "../plugins/PluginsCatalog";
-import { findPluginServer, isBuiltinMcpServer } from "../plugins/pluginRegistry";
+import { isBuiltinMcpServer } from "../plugins/pluginRegistry";
 import { cn } from "../../lib/utils";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -116,6 +120,29 @@ export function formatEnabledPluginStatus(enabledCount: number): string {
   return `${enabledCount} ${enabledCount === 1 ? "plugin" : "plugins"} enabled`;
 }
 
+export function summarizeEnabledPlugins(
+  servers: readonly McpServer[],
+  catalog: readonly PluginDefinition[] = PLUGIN_CATALOG,
+): { readonly enabledPlugins: readonly PluginDefinition[]; readonly enabledCount: number } {
+  const enabledIds = new Set<string>(
+    servers.filter((server) => server.enabled).map((server) => server.id),
+  );
+  const installations = resolveCatalogInstallations(servers, catalog);
+  const enabledPluginIds = new Set(
+    installations.flatMap((installation) =>
+      installation.kind === "catalog" && enabledIds.has(installation.serverId)
+        ? [installation.plugin.id]
+        : [],
+    ),
+  );
+  return {
+    enabledPlugins: catalog.filter((plugin) => enabledPluginIds.has(plugin.id)),
+    enabledCount:
+      installations.filter((installation) => enabledIds.has(installation.serverId)).length +
+      servers.filter((server) => server.enabled && !isBuiltinMcpServer(server)).length,
+  };
+}
+
 function SidebarPluginSummaryForEnvironment({
   environmentId,
   onClick,
@@ -124,13 +151,7 @@ function SidebarPluginSummaryForEnvironment({
   readonly onClick: () => void;
 }) {
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
-  const enabledPlugins = PLUGIN_CATALOG.filter(
-    (plugin) => findPluginServer(plugin, servers)?.enabled,
-  );
-  const enabledCustomCount = servers.filter(
-    (server) => server.enabled && !isBuiltinMcpServer(server),
-  ).length;
-  const enabledCount = enabledPlugins.length + enabledCustomCount;
+  const { enabledCount, enabledPlugins } = summarizeEnabledPlugins(servers);
   const statusLabel = formatEnabledPluginStatus(enabledCount);
 
   return (

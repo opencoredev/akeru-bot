@@ -8,6 +8,7 @@ import {
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
   PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
+  resolvePluginDialogServers,
   validateMcpServerDraft,
 } from "./PluginsDialog";
 import { CustomMcpServers, PluginsCatalog } from "./PluginsCatalog";
@@ -27,6 +28,12 @@ const rawServer: McpServer = {
   enabled: true,
   createdAt: "2026-08-27T00:00:00.000Z",
   updatedAt: "2026-08-27T00:00:00.000Z",
+};
+
+const removedBuiltinServer: McpServer = {
+  ...rawServer,
+  id: McpServerId.make("builtin-removed-vendor"),
+  name: "Removed Vendor",
 };
 
 describe("Plugins dialog content", () => {
@@ -52,17 +59,16 @@ describe("Plugins dialog content", () => {
       />,
     );
     expect(markup).toContain("Featured");
-    expect(markup).toContain("Data Extraction");
-    expect(markup).toContain("Search");
+    expect(markup).toContain("Web");
+    expect(markup).toContain("Work");
     expect(markup).toContain("Add Firecrawl");
     expect(markup).toContain("Open Firecrawl");
     expect(markup).toContain("cursor-pointer");
     expect(markup).not.toContain("Configure Firecrawl");
-    expect(markup).toContain("/plugin-logos/context.png");
-    expect(markup).toContain("/plugin-logos/firecrawl.svg");
-    expect(markup).toContain("/plugin-logos/exa.svg");
-    expect(markup).toContain("/plugin-logos/parallel.svg");
-    for (const plugin of catalog) expect(markup).toContain(`data-plugin-id="${plugin.id}"`);
+    for (const plugin of catalog) {
+      expect(markup).toContain(plugin.logo.src.replaceAll("'", "&#x27;"));
+      expect(markup).toContain(`data-plugin-id="${plugin.id}"`);
+    }
   });
 
   it("shows plugin information instead of transport configuration", () => {
@@ -139,5 +145,26 @@ describe("Plugins dialog content", () => {
         url: "https://mcp.example.com",
       }),
     ).toBeNull();
+  });
+
+  it("keeps removed builtins editable without absorbing current catalog entries", () => {
+    const currentBuiltinServer: McpServer = {
+      ...rawServer,
+      id: McpServerId.make("builtin-firecrawl"),
+      name: "Firecrawl",
+      transport: "url",
+      url: "https://mcp.firecrawl.dev/v2/mcp-oauth",
+    };
+    const resolved = resolvePluginDialogServers([
+      currentBuiltinServer,
+      removedBuiltinServer,
+      rawServer,
+    ]);
+
+    expect(resolved.installedPlugins.map((plugin) => plugin.id)).toEqual(["firecrawl"]);
+    expect(resolved.customServers.map((server) => server.id)).toEqual([
+      "builtin-removed-vendor",
+      "raw-filesystem",
+    ]);
   });
 });

@@ -14,19 +14,24 @@ describe("plugin presentation", () => {
     expect(sections[0]?.title).toBe("Featured");
     expect(sections[0]?.plugins.map((plugin) => plugin.id)).toEqual([
       "context",
-      "exa",
-      "executor",
       "firecrawl",
+      "exa",
       "parallel-search",
+      "executor",
     ]);
-    expect(sections.some((section) => section.title === "Data Extraction")).toBe(true);
-    expect(sections.some((section) => section.title === "Search")).toBe(true);
+    expect(sections.some((section) => section.title === "Web")).toBe(true);
+    expect(sections.some((section) => section.title === "Work")).toBe(true);
     expect(PLUGIN_FILTERS).toEqual([
       "All",
       "Featured",
-      "Data Extraction",
-      "Search",
-      "Productivity",
+      "Work",
+      "Web",
+      "Marketing",
+      "Build",
+      "Design",
+      "Sales",
+      "Support",
+      "Commerce",
     ]);
   });
 
@@ -39,19 +44,21 @@ describe("plugin presentation", () => {
   });
 
   it("filters by category and search text", () => {
-    const searchPlugins = buildPluginSections({
+    const webPlugins = buildPluginSections({
       plugins: catalog,
       query: "",
-      filter: "Search",
+      filter: "Web",
     });
-    expect(searchPlugins[0]?.plugins.map((plugin) => plugin.id)).toEqual([
+    expect(webPlugins[0]?.plugins.map((plugin) => plugin.id)).toEqual([
+      "context",
+      "firecrawl",
       "exa",
       "parallel-search",
     ]);
 
     const extraction = buildPluginSections({
       plugins: catalog,
-      query: "data extraction",
+      query: "scrape",
       filter: "All",
     });
     expect(extraction[0]?.plugins.map((plugin) => plugin.id)).toEqual(["context", "firecrawl"]);
