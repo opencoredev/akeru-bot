@@ -21,8 +21,10 @@ import {
 } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
@@ -1097,6 +1099,43 @@ describe("AgentControllerLive", () => {
 
       expect(secondDestroy).toHaveBeenCalledOnce();
       expect(secondBrowser.close).toHaveBeenCalledOnce();
+    });
+  });
+
+  it.effect("waits for observational memory shutdown before closing the controller scope", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const destroyStarted = Promise.withResolvers<void>();
+    const destroyReleased = Promise.withResolvers<void>();
+    const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (
+      options,
+    ) => {
+      const harness = await mastra.factory(options);
+      return {
+        ...harness,
+        destroy: async () => {
+          destroyStarted.resolve();
+          await destroyReleased.promise;
+        },
+      };
+    };
+
+    return Effect.gen(function* () {
+      const scope = yield* Scope.make("sequential");
+      yield* Layer.buildWithScope(makeLayer(bridge.service, factory), scope);
+      let scopeClosed = false;
+      const closeScope = yield* Scope.close(scope, Exit.void).pipe(
+        Effect.tap(() => Effect.sync(() => (scopeClosed = true))),
+        Effect.forkScoped,
+      );
+
+      yield* Effect.promise(() => destroyStarted.promise);
+      yield* Effect.yieldNow;
+      expect(scopeClosed).toBe(false);
+
+      destroyReleased.resolve();
+      yield* Fiber.join(closeScope);
+      expect(scopeClosed).toBe(true);
     });
   });
 

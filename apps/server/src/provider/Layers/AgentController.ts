@@ -1159,7 +1159,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         yield* runMastra("destroy", () => bundle.controller.destroy()).pipe(
           Effect.ignoreCause({ log: true }),
         );
-        bundle.destroy();
+        yield* runMastra("bundle.destroy", async () => bundle.destroy()).pipe(
+          Effect.ignoreCause({ log: true }),
+        );
       }),
     );
 

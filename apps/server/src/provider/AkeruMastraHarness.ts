@@ -1,4 +1,4 @@
-import { pathToFileURL } from "node:url";
+import * as NodeURL from "node:url";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
@@ -239,7 +239,7 @@ export async function createAkeruMastraMemory(
 ) {
   const storage = new LibSQLStore({
     id: "akeru-observational-memory",
-    url: pathToFileURL(options.memoryDbPath).toString(),
+    url: NodeURL.pathToFileURL(options.memoryDbPath).toString(),
     connectionTimeoutMs: 5_000,
   });
   await storage.init();
