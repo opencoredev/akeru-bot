@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "typefully",
+  "name": "Typefully",
+  "description": "Draft, schedule, and publish social posts.",
+  "primaryCategory": "Marketing",
+  "tags": ["social", "writing", "scheduling"],
+  "capabilities": ["draft social posts", "schedule posts", "publish posts"],
+  "publisher": {
+    "name": "Typefully",
+    "url": "https://typefully.com"
+  },
+  "maintainer": {
+    "name": "Typefully",
+    "url": "https://typefully.com"
+  },
+  "documentationUrl": "https://typefully.com/ai-agents",
+  "sourceUrl": "https://typefully.com/ai-agents",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://typefully.com/icon/safari-pinned-tab.svg",
+      "license": "Typefully brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.typefully.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Typefully API-key install, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "api-key",
+  "requiredCredentials": ["typefully-api-key"],
+  "setup": [
+    "Wait until Akeru completes the Typefully API-key connection lifecycle.",
+    "After verification, use Add key with a Typefully API key from Typefully settings.",
+    "The key stays in Akeru credential storage and never enters prompts or URLs."
+  ],
+  "permissions": [
+    {
+      "id": "read-social-content",
+      "description": "Read drafts, scheduled posts, and publishing results.",
+      "approval": "read"
+    },
+    {
+      "id": "publish-social-content",
+      "description": "Schedule or publish social posts.",
+      "approval": "publishing"
+    },
+    {
+      "id": "delete-social-content",
+      "description": "Delete drafts or scheduled posts.",
+      "approval": "delete"
+    }
+  ],
+  "approvals": ["publishing", "delete"],
+  "catalogStatus": "approval-pending"
+}

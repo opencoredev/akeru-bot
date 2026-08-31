@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "cloudflare",
+  "name": "Cloudflare",
+  "description": "Manage Cloudflare zones, Workers, storage, and account services.",
+  "primaryCategory": "Build",
+  "tags": ["edge", "dns", "workers"],
+  "capabilities": ["manage zones and DNS", "deploy Workers", "manage Cloudflare storage"],
+  "publisher": {
+    "name": "Cloudflare",
+    "url": "https://www.cloudflare.com"
+  },
+  "maintainer": {
+    "name": "Cloudflare",
+    "url": "https://www.cloudflare.com"
+  },
+  "documentationUrl": "https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/",
+  "sourceUrl": "https://github.com/cloudflare/mcp-server-cloudflare",
+  "license": "Apache-2.0",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.cloudflare.com/logo.svg",
+      "license": "Cloudflare brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.cloudflare.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Cloudflare install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Cloudflare connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-cloudflare-data",
+      "description": "Read zones, Workers, storage, logs, and account data.",
+      "approval": "read"
+    },
+    {
+      "id": "change-cloudflare-services",
+      "description": "Change production zones, Workers, storage, and security services.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-cloudflare-secrets",
+      "description": "Read or change Workers secrets and credentials.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-cloudflare-resources",
+      "description": "Delete zones, Workers, storage, or other resources.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-cloudflare-account",
+      "description": "Change account-wide settings and access.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

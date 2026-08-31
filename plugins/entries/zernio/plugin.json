@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "id": "zernio",
+  "name": "Zernio",
+  "description": "Publish, schedule, and manage social content across connected accounts.",
+  "primaryCategory": "Marketing",
+  "tags": ["social", "publishing", "scheduling"],
+  "capabilities": ["publish social posts", "schedule social posts", "manage connected accounts"],
+  "featuredRank": 2,
+  "publisher": {
+    "name": "Zernio",
+    "url": "https://zernio.com"
+  },
+  "maintainer": {
+    "name": "Zernio",
+    "url": "https://zernio.com"
+  },
+  "documentationUrl": "https://docs.zernio.com/mcp",
+  "sourceUrl": "https://docs.zernio.com/mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://docs.zernio.com/icon.svg",
+      "license": "Zernio brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.zernio.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Zernio OAuth and lifecycle verification."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes Zernio OAuth and lifecycle verification."],
+  "permissions": [
+    {
+      "id": "read-social-data",
+      "description": "Read connected accounts, posts, analytics, campaigns, and inbox conversations.",
+      "approval": "read"
+    },
+    {
+      "id": "publish-social-content",
+      "description": "Publish or schedule content on connected social accounts.",
+      "approval": "publishing"
+    },
+    {
+      "id": "send-messages",
+      "description": "Send messages or broadcasts to connected audiences.",
+      "approval": "send"
+    },
+    {
+      "id": "delete-social-data",
+      "description": "Delete posts, campaigns, messages, or connected resources.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-billing",
+      "description": "Change paid plans or other billed Zernio services.",
+      "approval": "pay"
+    },
+    {
+      "id": "manage-integration-secrets",
+      "description": "Read or change API keys, webhooks, or other integration secrets.",
+      "approval": "secrets"
+    },
+    {
+      "id": "change-workspace",
+      "description": "Change workspace-wide accounts, members, or settings.",
+      "approval": "account-wide"
+    },
+    {
+      "id": "change-production-automation",
+      "description": "Change live automations, campaigns, or production integrations.",
+      "approval": "production"
+    }
+  ],
+  "approvals": ["publishing", "send", "delete", "pay", "secrets", "account-wide", "production"],
+  "catalogStatus": "approval-pending"
+}

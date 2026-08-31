@@ -839,6 +839,49 @@ describe("CheckpointReactor", () => {
     ).toBe("v1\n");
   });
 
+  it("does not capture a checkpoint for imported conversation history", async () => {
+    const harness = await createHarness({
+      hasSession: false,
+      seedFilesystemCheckpoints: false,
+      threadWorktreePath: null,
+    });
+    const createdAt = "2026-01-01T00:00:00.000Z";
+
+    await runtime!.runPromise(
+      harness.engine.dispatch({
+        type: "thread.history.restore",
+        commandId: CommandId.make("cmd-import-history"),
+        threadId: ThreadId.make("thread-1"),
+        messages: [
+          {
+            id: MessageId.make("message-imported"),
+            role: "user",
+            text: "Imported history",
+            turnId: null,
+            streaming: false,
+            createdAt,
+            updatedAt: createdAt,
+          },
+        ],
+        proposedPlans: [],
+        activities: [],
+        settledOverride: null,
+        settledAt: null,
+        snoozedUntil: null,
+        snoozedAt: null,
+        pinnedAt: null,
+        pinOrderKey: null,
+        archivedAt: null,
+        updatedAt: createdAt,
+      }),
+    );
+    await harness.drain();
+
+    expect(
+      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0)),
+    ).toBe(false);
+  });
+
   it("captures turn completion checkpoint from project workspace root when provider session cwd is unavailable", async () => {
     const harness = await createHarness({
       hasSession: false,
@@ -1043,7 +1086,7 @@ describe("CheckpointReactor", () => {
       }),
     );
 
-    await Effect.runPromise(
+    await runtime!.runPromise(
       harness.engine.dispatch({
         type: "thread.checkpoint.revert",
         commandId: CommandId.make("cmd-revert-request"),

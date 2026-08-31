@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "hubspot",
+  "name": "HubSpot",
+  "description": "Read and update CRM records, deals, tickets, and engagements.",
+  "primaryCategory": "Marketing",
+  "tags": ["crm", "sales", "marketing"],
+  "capabilities": ["read CRM records", "update CRM records", "create tasks and notes"],
+  "publisher": {
+    "name": "HubSpot",
+    "url": "https://www.hubspot.com"
+  },
+  "maintainer": {
+    "name": "HubSpot",
+    "url": "https://www.hubspot.com"
+  },
+  "documentationUrl": "https://developers.hubspot.com/docs/apps/developer-platform/build-apps/integrate-with-the-remote-hubspot-mcp-server",
+  "sourceUrl": "https://developers.hubspot.com/ai-tools/mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.hubspot.com/hubfs/HubSpot_Logos/HSLogo_color.svg",
+      "license": "HubSpot brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru needs a HubSpot MCP authorization app before users can complete OAuth."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for the Akeru HubSpot authorization app."],
+  "permissions": [
+    {
+      "id": "read-crm-data",
+      "description": "Read CRM records, owners, teams, and marketing data.",
+      "approval": "read"
+    },
+    {
+      "id": "change-crm-records",
+      "description": "Create or update shared CRM records and engagements.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["account-wide"],
+  "catalogStatus": "approval-pending"
+}

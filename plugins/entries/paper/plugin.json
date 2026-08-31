@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "paper",
+  "name": "Paper",
+  "description": "Read and edit designs in the Paper desktop app.",
+  "primaryCategory": "Design",
+  "tags": ["canvas", "prototyping", "local"],
+  "capabilities": ["read design canvases", "create design elements", "edit design elements"],
+  "publisher": {
+    "name": "Paper",
+    "url": "https://paper.design"
+  },
+  "maintainer": {
+    "name": "Paper",
+    "url": "https://paper.design"
+  },
+  "documentationUrl": "https://paper.design/docs/mcp",
+  "sourceUrl": "https://github.com/paper-design",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://svgl.app/library/paper.svg",
+      "license": "Paper trademark"
+    }
+  },
+  "platforms": ["macos", "windows"],
+  "transport": {
+    "type": "url",
+    "url": "http://127.0.0.1:29979/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Paper's local MCP lifecycle against the desktop server, including a real request and removal."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Open a file in Paper Desktop, then connect to its local MCP server."],
+  "permissions": [
+    {
+      "id": "read-designs",
+      "description": "Read canvases and design details.",
+      "approval": "read"
+    },
+    {
+      "id": "edit-designs",
+      "description": "Create or update canvas elements and styles.",
+      "approval": "publishing"
+    },
+    {
+      "id": "delete-designs",
+      "description": "Delete nodes from a Paper canvas.",
+      "approval": "delete"
+    }
+  ],
+  "approvals": ["delete", "publishing"],
+  "catalogStatus": "approval-pending"
+}

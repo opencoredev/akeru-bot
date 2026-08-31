@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "monday",
+  "name": "monday.com",
+  "description": "Read monday.com boards and items.",
+  "primaryCategory": "Work",
+  "tags": ["boards", "projects", "work-management"],
+  "capabilities": ["list boards", "read board items"],
+  "publisher": { "name": "monday.com", "url": "https://monday.com" },
+  "maintainer": { "name": "monday.com", "url": "https://monday.com" },
+  "documentationUrl": "https://developer.monday.com/apps/docs/mondaycom-mcp-integration",
+  "sourceUrl": "https://developer.monday.com/apps/docs/mondaycom-mcp-integration",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.vectorlogo.zone/logos/monday/monday-icon.svg",
+      "license": "monday.com trademark; vector from VectorLogoZone"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.monday.com/mcp" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "monday.com must approve Akeru public dynamic client registration before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for monday.com to approve Akeru public dynamic client registration."],
+  "permissions": [
+    {
+      "id": "read-monday-data",
+      "description": "Read monday.com workspace data.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

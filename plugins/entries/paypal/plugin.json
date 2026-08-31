@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "paypal",
+  "name": "PayPal",
+  "description": "Read and manage PayPal payments, orders, and refunds.",
+  "primaryCategory": "Commerce",
+  "tags": ["payments", "checkout", "refunds"],
+  "capabilities": ["read payment data", "send payment requests", "issue refunds"],
+  "publisher": {
+    "name": "PayPal",
+    "url": "https://www.paypal.com"
+  },
+  "maintainer": {
+    "name": "PayPal",
+    "url": "https://www.paypal.com"
+  },
+  "documentationUrl": "https://github.com/paypal/paypal-mcp-server",
+  "sourceUrl": "https://github.com/paypal/paypal-mcp-server",
+  "license": "Apache-2.0",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/paypal.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.paypal.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed PayPal's OAuth connection lifecycle against the first-party hosted MCP server."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Complete PayPal OAuth lifecycle validation for Akeru, then connect a PayPal account."],
+  "permissions": [
+    {
+      "id": "read-payment-data",
+      "description": "Read orders, payments, disputes, and transaction details.",
+      "approval": "read"
+    },
+    {
+      "id": "create-payments",
+      "description": "Create or capture PayPal payments and orders.",
+      "approval": "pay"
+    },
+    {
+      "id": "send-payment-requests",
+      "description": "Send invoices, payment links, or other requests.",
+      "approval": "send"
+    },
+    {
+      "id": "write-live-data",
+      "description": "Create or update live PayPal commerce data.",
+      "approval": "production"
+    },
+    {
+      "id": "issue-refunds",
+      "description": "Issue PayPal payment refunds.",
+      "approval": "refunds"
+    }
+  ],
+  "approvals": ["send", "pay", "production", "refunds"],
+  "catalogStatus": "approval-pending"
+}

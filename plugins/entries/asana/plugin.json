@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "asana",
+  "name": "Asana",
+  "description": "Read, create, update, and delete Asana projects and tasks.",
+  "primaryCategory": "Work",
+  "tags": ["projects", "tasks", "work-management"],
+  "capabilities": [
+    "read projects and tasks",
+    "create projects and tasks",
+    "update tasks",
+    "delete tasks",
+    "add comments and status updates"
+  ],
+  "publisher": { "name": "Asana", "url": "https://asana.com" },
+  "maintainer": { "name": "Asana", "url": "https://asana.com" },
+  "documentationUrl": "https://developers.asana.com/docs/mcp-tools-reference",
+  "sourceUrl": "https://developers.asana.com/docs/mcp-server",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": { "sourceUrl": "https://simpleicons.org/?q=asana", "license": "CC0-1.0" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.asana.com/v2/mcp" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru must register an Asana V2 MCP app and complete its OAuth lifecycle before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Akeru to register and verify an Asana V2 MCP app."],
+  "permissions": [
+    { "id": "read-asana-data", "description": "Read Asana workspace data.", "approval": "read" },
+    {
+      "id": "delete-asana-task",
+      "description": "Permanently delete an Asana task.",
+      "approval": "delete"
+    }
+  ],
+  "approvals": ["delete"],
+  "catalogStatus": "approval-pending"
+}

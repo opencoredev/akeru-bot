@@ -84,7 +84,6 @@ export function makeAcpRequestOpenedEvent(input: {
   readonly requestId: RuntimeRequestId;
   readonly permissionRequest: AcpPermissionRequest;
   readonly detail: string;
-  readonly args: unknown;
   readonly source: AcpAdapterRawSource;
   readonly method: string;
   readonly rawPayload: unknown;
@@ -99,7 +98,6 @@ export function makeAcpRequestOpenedEvent(input: {
     payload: {
       requestType: canonicalRequestTypeFromAcpKind(input.permissionRequest.kind),
       detail: input.detail,
-      args: input.args,
     },
     raw: {
       source: input.source,

@@ -44,6 +44,13 @@ resolves the selected Codex model through an explicit subscription `AuthStorage`
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
+Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves only
+the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
+that sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
+an account. Unknown mutating intent also asks. The pending approval map binds the response to the
+exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
+as one-use approval.
+
 Claude, Cursor, Grok, and OpenCode keep their existing adapters. [`LegacyProviderBridge`][bridge]
 routes those providers through `ProviderService` and forwards their canonical runtime events. Claude
 receives the same general-purpose Akeru instructions and enabled MCP servers. A provider change stops

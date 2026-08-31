@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "apollo",
+  "name": "Apollo",
+  "description": "Research prospects and manage Apollo sales workflows.",
+  "primaryCategory": "Sales",
+  "tags": ["sales-intelligence", "prospecting", "outreach"],
+  "capabilities": ["search prospects", "enrich contacts", "manage outreach"],
+  "publisher": {
+    "name": "Apollo.io",
+    "url": "https://www.apollo.io"
+  },
+  "maintainer": {
+    "name": "Apollo.io",
+    "url": "https://www.apollo.io"
+  },
+  "documentationUrl": "https://docs.apollo.io/docs/apollo-mcp",
+  "sourceUrl": "https://docs.apollo.io/docs/apollo-mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://svgl.app/library/apollo-io.svg",
+      "license": "Apollo.io trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.apollo.io/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Apollo's hosted MCP lifecycle, including OAuth, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Turn off model training in the AI client, then connect Apollo through OAuth."],
+  "permissions": [
+    {
+      "id": "read-sales-data",
+      "description": "Search and read people, companies, contacts, and campaigns.",
+      "approval": "read"
+    },
+    {
+      "id": "send-outreach",
+      "description": "Send emails and enroll contacts in outreach campaigns.",
+      "approval": "send"
+    },
+    {
+      "id": "purchase-services",
+      "description": "Purchase email accounts, domains, or other Apollo services.",
+      "approval": "pay"
+    },
+    {
+      "id": "write-sales-data",
+      "description": "Create or update production contacts, opportunities, and campaigns.",
+      "approval": "production"
+    }
+  ],
+  "approvals": ["send", "pay", "production"],
+  "catalogStatus": "approval-pending"
+}

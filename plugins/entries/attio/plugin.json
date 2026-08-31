@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "attio",
+  "name": "Attio",
+  "description": "Search and manage records, notes, tasks, and pipelines in Attio.",
+  "primaryCategory": "Sales",
+  "tags": ["crm", "pipeline", "tasks"],
+  "capabilities": ["search CRM records", "update CRM records", "manage sales tasks"],
+  "publisher": {
+    "name": "Attio",
+    "url": "https://attio.com"
+  },
+  "maintainer": {
+    "name": "Attio",
+    "url": "https://attio.com"
+  },
+  "documentationUrl": "https://docs.attio.com/mcp/overview",
+  "sourceUrl": "https://docs.attio.com/mcp/overview",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://media.brand.dev/4ec826c2-b0a0-4c5e-a25e-ad2c5367ee78.svg",
+      "license": "Attio trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.attio.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Attio's hosted MCP lifecycle, including OAuth, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect an Attio workspace through the hosted OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-workspace",
+      "description": "Read records, notes, tasks, and workspace metadata.",
+      "approval": "read"
+    },
+    {
+      "id": "write-records",
+      "description": "Create or update production CRM records, notes, and tasks.",
+      "approval": "production"
+    },
+    {
+      "id": "post-comments",
+      "description": "Post comments or replies in Attio.",
+      "approval": "send"
+    },
+    {
+      "id": "delete-comments",
+      "description": "Delete comments and their replies.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-workspace",
+      "description": "Change workspace lists, fields, or permissions.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "delete", "production", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

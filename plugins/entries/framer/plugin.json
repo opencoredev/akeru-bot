@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "framer",
+  "name": "Framer",
+  "description": "Manage Framer sites when a first-party operator MCP becomes available.",
+  "primaryCategory": "Design",
+  "tags": ["websites", "cms", "publishing"],
+  "capabilities": ["read site content", "edit site content", "publish sites"],
+  "publisher": {
+    "name": "Framer",
+    "url": "https://www.framer.com"
+  },
+  "maintainer": {
+    "name": "Framer",
+    "url": "https://www.framer.com"
+  },
+  "documentationUrl": "https://www.framer.com/agents/external/",
+  "sourceUrl": "https://www.framer.com/agents/external/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/framer.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Framer does not publish a first-party operator MCP endpoint or supported local command."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Wait for Framer to publish a first-party operator MCP connection recipe."],
+  "permissions": [
+    {
+      "id": "read-sites",
+      "description": "Read Framer projects and site content.",
+      "approval": "read"
+    },
+    {
+      "id": "change-sites",
+      "description": "Change live Framer content or CMS data.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-site-data",
+      "description": "Delete Framer CMS data.",
+      "approval": "delete"
+    },
+    {
+      "id": "publish-sites",
+      "description": "Publish a Framer site.",
+      "approval": "publishing"
+    }
+  ],
+  "approvals": ["delete", "production", "publishing"],
+  "catalogStatus": "approval-pending"
+}

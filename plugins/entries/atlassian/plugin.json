@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "atlassian",
+  "name": "Atlassian",
+  "description": "Read, create, and update Jira and Confluence work.",
+  "primaryCategory": "Work",
+  "tags": ["jira", "confluence", "issues", "knowledge"],
+  "capabilities": [
+    "search Jira and Confluence",
+    "read Jira issues and Confluence pages",
+    "create and update Jira issues",
+    "create and update Confluence pages and comments"
+  ],
+  "publisher": { "name": "Atlassian", "url": "https://www.atlassian.com" },
+  "maintainer": { "name": "Atlassian", "url": "https://www.atlassian.com" },
+  "documentationUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/supported-tools/",
+  "sourceUrl": "https://www.atlassian.com/platform/remote-mcp-server",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": { "sourceUrl": "https://simpleicons.org/?q=atlassian", "license": "CC0-1.0" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.atlassian.com/v1/mcp/authv2" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru must complete Atlassian OAuth client registration and lifecycle verification before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Akeru to complete the Atlassian OAuth client lifecycle."],
+  "permissions": [
+    {
+      "id": "read-atlassian-data",
+      "description": "Read Jira and Confluence data.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "approval-pending"
+}

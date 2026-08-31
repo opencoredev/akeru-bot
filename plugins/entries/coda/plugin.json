@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "coda",
+  "name": "Coda",
+  "description": "Read, create, update, and delete content in Coda docs.",
+  "primaryCategory": "Work",
+  "tags": ["documents", "tables", "knowledge"],
+  "capabilities": [
+    "read docs and tables",
+    "create Coda content",
+    "update Coda content",
+    "delete Coda content"
+  ],
+  "publisher": { "name": "Coda", "url": "https://coda.io" },
+  "maintainer": { "name": "Coda", "url": "https://coda.io" },
+  "documentationUrl": "https://coda.io/developers/apis/v1",
+  "sourceUrl": "https://coda.io/developers/apis/v1",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": { "sourceUrl": "https://simpleicons.org/?q=coda", "license": "CC0-1.0" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://coda.io/apis/mcp" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru must verify Coda installation, OAuth, safe read and write operations, disable, reconnect, and removal before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Akeru to complete the Coda integration lifecycle."],
+  "permissions": [
+    { "id": "read-coda-data", "description": "Read Coda docs and tables.", "approval": "read" },
+    { "id": "delete-coda-data", "description": "Delete Coda content.", "approval": "delete" }
+  ],
+  "approvals": ["delete"],
+  "catalogStatus": "approval-pending"
+}

@@ -24,7 +24,9 @@ Supervised.
 unattended until it finishes or asks a question of its own.
 
 Approvals appear inline in the conversation. Approve or reject one and the agent continues from
-there.
+there. The Codex runtime still asks before every MCP tool call and actions that send, pay, delete,
+deploy, publish, expose secrets, sign, refund, or change an account. This applies in every mode.
+Each approval applies only to the pending action.
 
 ## Choosing a Mode
 
@@ -41,7 +43,7 @@ shell commands.
 Each provider maps these modes onto its own approval and sandbox settings. Codex, for example,
 translates the mode into its approval policy and sandbox level, so **Supervised** runs the CLI
 with prompting enabled and a restricted workspace while **Full access** disables both. The
-labels above describe what you get; the exact per-provider translation is internal and may
-change.
+protected-action gate still applies after this provider mapping. The exact per-provider translation
+is internal and may change.
 
 Mobile offers the same four modes with the same labels and descriptions.

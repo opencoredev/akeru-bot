@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "id": "stripe",
+  "name": "Stripe",
+  "description": "Read and manage Stripe payments, billing, and account data.",
+  "primaryCategory": "Commerce",
+  "tags": ["payments", "billing", "subscriptions"],
+  "capabilities": ["read payment data", "manage billing records", "issue refunds"],
+  "publisher": {
+    "name": "Stripe",
+    "url": "https://stripe.com"
+  },
+  "maintainer": {
+    "name": "Stripe",
+    "url": "https://stripe.com"
+  },
+  "documentationUrl": "https://docs.stripe.com/mcp",
+  "sourceUrl": "https://docs.stripe.com/mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/stripe.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.stripe.com"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Stripe's hosted MCP lifecycle, including OAuth, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect a Stripe account through OAuth and choose sandbox or live mode."],
+  "permissions": [
+    {
+      "id": "read-commerce-data",
+      "description": "Read customers, payments, products, subscriptions, and reports.",
+      "approval": "read"
+    },
+    {
+      "id": "create-payments",
+      "description": "Create payment, invoice, payout, or billing actions.",
+      "approval": "pay"
+    },
+    {
+      "id": "send-billing",
+      "description": "Send invoices or other billing communication.",
+      "approval": "send"
+    },
+    {
+      "id": "write-live-data",
+      "description": "Create or update live Stripe data.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-commerce-data",
+      "description": "Delete Stripe resources when the API permits it.",
+      "approval": "delete"
+    },
+    {
+      "id": "manage-secrets",
+      "description": "Create webhook endpoints or other secret-backed settings.",
+      "approval": "secrets"
+    },
+    {
+      "id": "issue-refunds",
+      "description": "Issue Stripe refunds.",
+      "approval": "refunds"
+    },
+    {
+      "id": "manage-account",
+      "description": "Change account-wide Stripe resources or settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "pay", "delete", "production", "secrets", "refunds", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

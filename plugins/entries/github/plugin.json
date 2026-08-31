@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "github",
+  "name": "GitHub",
+  "description": "Work with repositories, issues, pull requests, actions, and releases.",
+  "primaryCategory": "Build",
+  "tags": ["git", "code", "collaboration"],
+  "capabilities": [
+    "read repositories",
+    "manage issues and pull requests",
+    "run repository actions"
+  ],
+  "publisher": {
+    "name": "GitHub",
+    "url": "https://github.com"
+  },
+  "maintainer": {
+    "name": "GitHub",
+    "url": "https://github.com"
+  },
+  "documentationUrl": "https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/set-up-the-github-mcp-server",
+  "sourceUrl": "https://github.com/github/github-mcp-server",
+  "license": "MIT",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://github.githubassets.com/favicons/favicon.svg",
+      "license": "GitHub brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru needs a supported GitHub App, OAuth client, or explicit key flow before users can connect."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for a supported Akeru GitHub connection flow."],
+  "permissions": [
+    {
+      "id": "read-repository-data",
+      "description": "Read repositories, issues, pull requests, actions, and releases.",
+      "approval": "read"
+    },
+    {
+      "id": "send-github-content",
+      "description": "Create issues, comments, reviews, or discussions.",
+      "approval": "send"
+    },
+    {
+      "id": "publish-releases",
+      "description": "Publish releases or packages.",
+      "approval": "publishing"
+    },
+    {
+      "id": "change-repositories",
+      "description": "Change production code, branches, workflows, or settings.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-repository-secrets",
+      "description": "Read or change repository and action secrets.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-repository-data",
+      "description": "Delete repository data or resources.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-organization",
+      "description": "Change organization-wide repositories, teams, or access.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "publishing", "production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

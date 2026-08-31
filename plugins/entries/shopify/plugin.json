@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "id": "shopify",
+  "name": "Shopify Admin",
+  "description": "Manage Shopify stores when a merchant operator MCP becomes available.",
+  "primaryCategory": "Commerce",
+  "tags": ["ecommerce", "storefront", "orders"],
+  "capabilities": ["read store data", "manage products and orders", "publish storefront content"],
+  "publisher": {
+    "name": "Shopify",
+    "url": "https://www.shopify.com"
+  },
+  "maintainer": {
+    "name": "Shopify",
+    "url": "https://www.shopify.com"
+  },
+  "documentationUrl": "https://shopify.dev/docs/api/admin",
+  "sourceUrl": "https://shopify.dev/docs/api/admin",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/shopify.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Shopify does not publish a first-party merchant Admin MCP with a stable Akeru connection recipe."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Wait for Shopify to publish a first-party merchant Admin MCP connection recipe."],
+  "permissions": [
+    {
+      "id": "read-store-data",
+      "description": "Read products, customers, orders, inventory, and store settings.",
+      "approval": "read"
+    },
+    {
+      "id": "charge-customers",
+      "description": "Create payment or order charges.",
+      "approval": "pay"
+    },
+    {
+      "id": "send-store-messages",
+      "description": "Send customer or order messages.",
+      "approval": "send"
+    },
+    {
+      "id": "write-live-store",
+      "description": "Change products, orders, inventory, or live store settings.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-store-data",
+      "description": "Delete Shopify Admin resources.",
+      "approval": "delete"
+    },
+    {
+      "id": "publish-store-content",
+      "description": "Publish products, pages, or storefront content.",
+      "approval": "publishing"
+    },
+    {
+      "id": "issue-refunds",
+      "description": "Issue order or payment refunds.",
+      "approval": "refunds"
+    },
+    {
+      "id": "manage-store",
+      "description": "Change store-wide Shopify settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "pay", "delete", "production", "publishing", "refunds", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

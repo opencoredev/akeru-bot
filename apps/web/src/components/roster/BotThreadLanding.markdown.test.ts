@@ -5,12 +5,16 @@ import { describe, expect, it } from "vite-plus/test";
 
 describe("BotThreadLanding message formatting", () => {
   it("renders assistant messages with the shared rich markdown component", () => {
-    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+    const sources = ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"].map((file) =>
+      NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8"),
+    );
 
-    expect(source).toContain('import ChatMarkdown from "../ChatMarkdown"');
-    expect(source).toContain("<ChatMarkdown");
-    expect(source).toContain("cwd={runtime.defaultProject?.workspaceRoot}");
-    expect(source).toContain("threadRef={runtime.linkedThreadRef ?? undefined}");
+    for (const source of sources) {
+      expect(source).toContain('import ChatMarkdown from "../ChatMarkdown"');
+      expect(source).toContain("<ChatMarkdown");
+      expect(source).toContain("cwd={runtime.defaultProject?.workspaceRoot}");
+      expect(source).toContain("threadRef={runtime.linkedThreadRef ?? undefined}");
+    }
   });
 
   it("uses the free-scrolling conversation area instead of end-justified overflow", () => {

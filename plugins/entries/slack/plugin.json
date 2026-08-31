@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "slack",
+  "name": "Slack",
+  "description": "Search Slack conversations and send messages.",
+  "primaryCategory": "Work",
+  "tags": ["messaging", "channels", "collaboration"],
+  "capabilities": ["search messages", "read channels", "send messages"],
+  "publisher": { "name": "Slack", "url": "https://slack.com" },
+  "maintainer": { "name": "Slack", "url": "https://slack.com" },
+  "documentationUrl": "https://docs.slack.dev/ai/slack-mcp-server/",
+  "sourceUrl": "https://docs.slack.dev/ai/slack-mcp-server/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://www.vectorlogo.zone/logos/slack/slack-icon.svg",
+      "license": "Slack trademark; vector from VectorLogoZone"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.slack.com/mcp" },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Slack must approve and register the Akeru OAuth app before Connect can be enabled."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait for Slack to approve the Akeru OAuth app."],
+  "permissions": [
+    { "id": "read-slack-data", "description": "Read Slack workspace data.", "approval": "read" },
+    { "id": "send-slack-message", "description": "Send a Slack message.", "approval": "send" }
+  ],
+  "approvals": ["send"],
+  "catalogStatus": "approval-pending"
+}

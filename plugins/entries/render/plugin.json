@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "render",
+  "name": "Render",
+  "description": "Manage services, deploys, jobs, databases, and logs.",
+  "primaryCategory": "Build",
+  "tags": ["deployments", "hosting", "databases"],
+  "capabilities": ["manage services", "deploy applications", "inspect logs and metrics"],
+  "publisher": {
+    "name": "Render",
+    "url": "https://render.com"
+  },
+  "maintainer": {
+    "name": "Render",
+    "url": "https://render.com"
+  },
+  "documentationUrl": "https://render.com/docs/mcp-server",
+  "sourceUrl": "https://render.com/docs/mcp-server",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://render.com/brand/render_1105076560.svg",
+      "license": "Render brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.render.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Render install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Render connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-render-data",
+      "description": "Read services, deploys, jobs, databases, logs, and metrics.",
+      "approval": "read"
+    },
+    {
+      "id": "change-render-services",
+      "description": "Change or deploy production services, jobs, and databases.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-render-secrets",
+      "description": "Read or change environment variables and secrets.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-render-resources",
+      "description": "Delete services, deploys, jobs, or databases.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-render-workspace",
+      "description": "Change workspace-wide services and settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "posthog",
+  "name": "PostHog",
+  "description": "Query product data and manage analytics, flags, experiments, and errors.",
+  "primaryCategory": "Marketing",
+  "tags": ["analytics", "experiments", "feature-flags"],
+  "capabilities": [
+    "query product analytics",
+    "manage feature flags and experiments",
+    "triage errors"
+  ],
+  "publisher": {
+    "name": "PostHog",
+    "url": "https://posthog.com"
+  },
+  "maintainer": {
+    "name": "PostHog",
+    "url": "https://posthog.com"
+  },
+  "documentationUrl": "https://posthog.com/docs/model-context-protocol",
+  "sourceUrl": "https://github.com/PostHog/posthog/tree/master/services/mcp",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://posthog.com/favicon.svg",
+      "license": "PostHog brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.posthog.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the PostHog install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the PostHog connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-product-data",
+      "description": "Read analytics, recordings, errors, and product settings.",
+      "approval": "read"
+    },
+    {
+      "id": "change-feature-flags",
+      "description": "Create or change feature flags and experiments.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-destinations",
+      "description": "Change destinations and their credentials.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-product-settings",
+      "description": "Delete shared analytics configuration.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-organization",
+      "description": "Change organization-wide settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "customer-io",
+  "name": "Customer.io",
+  "description": "Manage customer profiles, campaigns, and messages.",
+  "primaryCategory": "Marketing",
+  "tags": ["email", "automation", "support"],
+  "capabilities": ["manage customer profiles", "build campaigns", "send customer messages"],
+  "publisher": {
+    "name": "Customer.io",
+    "url": "https://customer.io"
+  },
+  "maintainer": {
+    "name": "Customer.io",
+    "url": "https://customer.io"
+  },
+  "documentationUrl": "https://docs.customer.io/ai/mcp/get-started/",
+  "sourceUrl": "https://docs.customer.io/ai/mcp/get-started/",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://customer.io/favicon.svg",
+      "license": "Customer.io brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.customer.io/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed the Customer.io install, OAuth, safe-read, approved-write, disable, reconnect, and removal lifecycle."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Wait until Akeru completes the Customer.io connection lifecycle."],
+  "permissions": [
+    {
+      "id": "read-customer-data",
+      "description": "Read profiles, segments, campaigns, and delivery results.",
+      "approval": "read"
+    },
+    {
+      "id": "send-customer-messages",
+      "description": "Send email, push, SMS, or in-app messages.",
+      "approval": "send"
+    },
+    {
+      "id": "publish-campaigns",
+      "description": "Publish customer campaigns.",
+      "approval": "publishing"
+    },
+    {
+      "id": "change-live-workflows",
+      "description": "Change live campaign and automation workflows.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-credentials",
+      "description": "Change webhook and integration credentials.",
+      "approval": "secrets"
+    },
+    {
+      "id": "delete-customer-data",
+      "description": "Delete profiles, campaigns, or content.",
+      "approval": "delete"
+    },
+    {
+      "id": "change-workspace",
+      "description": "Change workspace-wide settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "publishing", "production", "secrets", "delete", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

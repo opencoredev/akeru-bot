@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "intercom",
+  "name": "Intercom",
+  "description": "Read customer conversations and manage help content in Intercom.",
+  "primaryCategory": "Support",
+  "tags": ["customer-support", "inbox", "help-center"],
+  "capabilities": ["search conversations", "read customer records", "manage help content"],
+  "publisher": {
+    "name": "Intercom",
+    "url": "https://www.intercom.com"
+  },
+  "maintainer": {
+    "name": "Intercom",
+    "url": "https://www.intercom.com"
+  },
+  "documentationUrl": "https://developers.intercom.com/docs/guides/mcp",
+  "sourceUrl": "https://github.com/intercom/intercom-mcp-server",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/intercom.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://mcp.intercom.com/mcp"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Akeru has not completed Intercom's hosted MCP lifecycle, including OAuth, a real request, and removal."
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect an Intercom workspace through the hosted OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-support-data",
+      "description": "Read conversations, contacts, companies, and help content.",
+      "approval": "read"
+    },
+    {
+      "id": "write-help-content",
+      "description": "Create or update production help center articles.",
+      "approval": "production"
+    },
+    {
+      "id": "publish-help-content",
+      "description": "Publish help center articles.",
+      "approval": "publishing"
+    }
+  ],
+  "approvals": ["production", "publishing"],
+  "catalogStatus": "approval-pending"
+}

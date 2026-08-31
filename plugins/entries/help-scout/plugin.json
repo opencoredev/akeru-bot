@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "help-scout",
+  "name": "Help Scout",
+  "description": "Manage Help Scout support work when a verified MCP becomes available.",
+  "primaryCategory": "Support",
+  "tags": ["customer-support", "mailbox", "docs"],
+  "capabilities": ["read conversations", "reply to customers", "manage docs"],
+  "publisher": {
+    "name": "Help Scout",
+    "url": "https://www.helpscout.com"
+  },
+  "maintainer": {
+    "name": "Help Scout",
+    "url": "https://www.helpscout.com"
+  },
+  "documentationUrl": "https://developer.helpscout.com",
+  "sourceUrl": "https://developer.helpscout.com",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/helpscout.svg",
+      "license": "CC0-1.0"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Help Scout has no verified first-party or maintainer-approved MCP server for Akeru."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": [
+    "Wait for Help Scout or an approved maintainer to publish a verified MCP connection recipe."
+  ],
+  "permissions": [
+    {
+      "id": "read-support-data",
+      "description": "Read mailboxes, conversations, customers, reports, and docs.",
+      "approval": "read"
+    },
+    {
+      "id": "reply-to-customers",
+      "description": "Send replies, notes, or new conversations.",
+      "approval": "send"
+    },
+    {
+      "id": "write-support-data",
+      "description": "Create or update production support data and workflows.",
+      "approval": "production"
+    },
+    {
+      "id": "delete-support-data",
+      "description": "Delete conversations, customers, or docs.",
+      "approval": "delete"
+    },
+    {
+      "id": "publish-docs",
+      "description": "Create or publish Help Scout Docs content.",
+      "approval": "publishing"
+    },
+    {
+      "id": "manage-account",
+      "description": "Change account-wide Help Scout settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "delete", "production", "publishing", "account-wide"],
+  "catalogStatus": "approval-pending"
+}

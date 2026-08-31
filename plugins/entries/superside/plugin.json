@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "superside",
+  "name": "Superside",
+  "description": "Work with Superside projects when an operator MCP becomes available.",
+  "primaryCategory": "Design",
+  "tags": ["creative-services", "projects", "brand-assets"],
+  "capabilities": ["read creative projects", "send creative briefs", "manage delivered assets"],
+  "publisher": {
+    "name": "Superside",
+    "url": "https://www.superside.com"
+  },
+  "maintainer": {
+    "name": "Superside",
+    "url": "https://www.superside.com"
+  },
+  "documentationUrl": "https://www.superside.com",
+  "sourceUrl": "https://www.superside.com",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://media.brand.dev/d061da3b-f414-4fa4-9232-9b3ff1676cc4.svg",
+      "license": "Superside trademark"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "unavailable"
+  },
+  "connection": {
+    "type": "approval-pending",
+    "blocker": "Superside does not publish a first-party operator MCP endpoint or supported local command."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": ["Wait for Superside to publish a first-party operator MCP connection recipe."],
+  "permissions": [
+    {
+      "id": "read-projects",
+      "description": "Read creative projects, briefs, and delivered assets.",
+      "approval": "read"
+    },
+    {
+      "id": "send-briefs",
+      "description": "Send creative briefs or project messages.",
+      "approval": "send"
+    },
+    {
+      "id": "publish-assets",
+      "description": "Approve or publish delivered creative assets.",
+      "approval": "publishing"
+    }
+  ],
+  "approvals": ["send", "publishing"],
+  "catalogStatus": "approval-pending"
+}
