@@ -632,9 +632,9 @@ describe("ProviderRuntimeIngestion", () => {
     });
   });
 
-  it("records replacement usage before provider turn tracking catches up", async () => {
+  it("does not claim a replacement reservation without a provider turn identity", async () => {
     const harness = await createHarness({ botOwned: true });
-    const replacementTurnId = asTurnId("turn-replacement");
+    const untrackedTurnId = asTurnId("turn-untracked");
     await harness.dispatch({
       type: "thread.turn.start",
       commandId: CommandId.make("cmd-turn-start-replacement"),
@@ -656,7 +656,7 @@ describe("ProviderRuntimeIngestion", () => {
       eventId: asEventId("evt-replacement-turn-usage"),
       provider: ProviderDriverKind.make("codex"),
       threadId: asThreadId("thread-1"),
-      turnId: replacementTurnId,
+      turnId: untrackedTurnId,
       createdAt: "2026-01-01T00:00:02.000Z",
       payload: {
         usage: { usedTokens: 150, inputTokens: 100, outputTokens: 50 },
@@ -667,18 +667,18 @@ describe("ProviderRuntimeIngestion", () => {
       eventId: asEventId("evt-replacement-turn-completed"),
       provider: ProviderDriverKind.make("codex"),
       threadId: asThreadId("thread-1"),
-      turnId: replacementTurnId,
+      turnId: untrackedTurnId,
       createdAt: "2026-01-01T00:00:03.000Z",
       payload: { state: "completed" },
     });
     await harness.drain();
 
     const usage = await harness.summarizeBotUsage();
-    expect(usage.consumedTokens).toBe(150);
-    expect(usage.reservedTokens).toBe(0);
+    expect(usage.consumedTokens).toBe(0);
+    expect(usage.reservedTokens).toBe(1_000);
     expect(usage.entries[0]).toMatchObject({
-      state: "reported",
-      turnId: replacementTurnId,
+      state: "reserved",
+      turnId: null,
     });
   });
 
