@@ -84,6 +84,7 @@ interface ActiveTurn {
   assistantCompleted: boolean;
   waiting: boolean;
   finished: boolean;
+  memoryQueued: boolean;
 }
 
 interface ActiveSession {
@@ -317,6 +318,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
+        memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);
           if (!active || (!protectedAction && !active.connectorSessionApprovals.has(toolName))) {
@@ -335,6 +337,28 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     const publish = (event: ProviderRuntimeEvent) => {
       PubSub.publishUnsafe(runtimeEvents, event);
+    };
+
+    const queueTurnMemory = (threadId: ThreadId, active: ActiveSession, turn: ActiveTurn) => {
+      const resolved = resolvedByThread.get(String(threadId));
+      if (turn.memoryQueued || !bundle.observeAfterTurn || !resolved) return;
+      turn.memoryQueued = true;
+      void bundle
+        .observeAfterTurn({
+          threadId: String(threadId),
+          resourceId: String(threadId),
+          modelId: resolved.mastraModelId,
+        })
+        .catch((cause) => {
+          turn.memoryQueued = false;
+          Effect.runFork(
+            Effect.logWarning("Akeru background observational memory failed.", {
+              threadId,
+              turnId: turn.turnId,
+              cause,
+            }),
+          );
+        });
     };
 
     const baseEvent = (
@@ -379,6 +403,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     ) => {
       const turn = active.activeTurn;
       if (!turn || turn.finished) return;
+      queueTurnMemory(threadId, active, turn);
       turn.finished = true;
       if (turn.assistantStarted && !turn.assistantCompleted) {
         turn.assistantCompleted = true;
@@ -934,6 +959,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           assistantCompleted: false,
           waiting: false,
           finished: false,
+          memoryQueued: false,
         };
         active.status = "running";
         publish({

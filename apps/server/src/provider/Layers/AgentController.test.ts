@@ -452,7 +452,7 @@ describe("AgentControllerLive", () => {
     ),
   );
 
-  it.effect("passes Akeru subscription auth to the custom memory-free harness", () => {
+  it.effect("passes Akeru subscription auth and memory storage to the custom harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -461,7 +461,7 @@ describe("AgentControllerLive", () => {
         const options = mastra.harnessOptions[0];
         assert.isDefined(options);
         assert.isDefined(options.authStorage);
-        assert.notProperty(options, "memory");
+        assert.match(options.memoryDbPath, /mastra-observational-memory\.sqlite$/);
       }),
       bridge.service,
       mastra.factory,
