@@ -38,6 +38,54 @@ describe("plugin catalog loader", () => {
     ).toMatchObject({ id: "pending-vendor", kind: "mcp-unavailable" });
   });
 
+  it("shows pending URL entries without making them installable", () => {
+    const context = manifest("context");
+    const pending = {
+      ...context,
+      id: "pending-vendor",
+      name: "Pending Vendor",
+      transport: { type: "url", url: "https://mcp.pending.example/mcp" },
+      connection: {
+        type: "approval-pending",
+        blocker: "The vendor must approve Akeru as an OAuth client.",
+      },
+      catalogStatus: "approval-pending",
+    };
+    const modules = {
+      "./entries/context/plugin.json": context,
+      "./entries/pending-vendor/plugin.json": pending,
+    };
+    const assets = {
+      "./entries/context/logo.svg": "/context.svg",
+      "./entries/context/logo-dark.svg": "/context-dark.svg",
+      "./entries/pending-vendor/logo.svg": "/pending-vendor.svg",
+      "./entries/pending-vendor/logo-dark.svg": "/pending-vendor-dark.svg",
+    };
+
+    expect(loadDirectoryCatalog(modules, assets)).toMatchObject([
+      { id: "context", kind: "mcp-url", catalogStatus: "available" },
+      { id: "pending-vendor", kind: "mcp-url", catalogStatus: "approval-pending" },
+    ]);
+    const installable = loadCatalog(modules, assets);
+    expect(installable.map((plugin) => plugin.id)).toEqual(["context"]);
+    expect(
+      resolveCatalogInstallations(
+        [
+          { id: "builtin-pending-vendor", name: "Pending Vendor" },
+          { id: "custom-mcp", name: "Custom MCP" },
+        ],
+        installable,
+      ),
+    ).toEqual([
+      {
+        kind: "legacy",
+        serverId: "builtin-pending-vendor",
+        pluginId: "pending-vendor",
+        title: "Pending Vendor",
+      },
+    ]);
+  });
+
   it("migrates the five identities and working recipes", () => {
     const catalog = loadCatalog();
     expect(catalog.map((plugin) => plugin.id)).toEqual(EXPECTED_IDS);
