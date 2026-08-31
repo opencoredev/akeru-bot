@@ -788,15 +788,7 @@ describe("ProviderCommandReactor", () => {
           botUsageCap: { unit: "tokens", limit: 1_000 },
         }),
       );
-      harness.sendTurn.mockImplementation(() =>
-        Effect.fail(
-          new ProviderAdapterRequestError({
-            provider: ProviderDriverKind.make("codex"),
-            method: "turn/start",
-            detail: "dispatch failed",
-          }),
-        ),
-      );
+      harness.sendTurn.mockImplementation(() => Effect.die("dispatch failed"));
 
       yield* harness.engine.dispatch({
         type: "thread.turn.start",
