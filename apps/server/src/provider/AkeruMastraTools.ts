@@ -4,12 +4,23 @@ import { AkeruToolInputSchemas } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
 
-import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import {
+  isMemoryToolId,
+  type AkeruRuntimeToolId,
+  type AkeruToolRuntime,
+} from "./AkeruToolRuntime.ts";
+import { AkeruMemoryToolInputSchemas } from "../memory/MemoryToolHandlers.ts";
+
+function inputSchema(toolId: AkeruRuntimeToolId) {
+  return isMemoryToolId(toolId)
+    ? AkeruMemoryToolInputSchemas[toolId]
+    : AkeruToolInputSchemas[toolId];
+}
 
 export function createAkeruMastraTools(threadId: string, runtime: AkeruToolRuntime): ToolsInput {
   return Object.fromEntries(
     runtime.toolsForThread(threadId).map((definition) => {
-      const schema = AkeruToolInputSchemas[definition.id];
+      const schema = inputSchema(definition.id);
       const standardSchema = Schema.toStandardJSONSchemaV1(schema);
       const approval = (input: unknown) => runtime.requiresApproval(threadId, definition.id, input);
       const tool = createTool({

@@ -1,4 +1,6 @@
 import {
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
   AkeruUsageReservationId,
   type ChatAttachment,
   CommandId,
@@ -696,6 +698,12 @@ const make = Effect.gen(function* () {
         : yield* projectionBotRepository
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
+    const respondingGroup =
+      thread.groupId == null
+        ? undefined
+        : (yield* projectionSnapshotQuery.getCommandReadModel()).groups.find(
+            (group) => group.id === thread.groupId,
+          );
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: project ? [project] : [],
@@ -723,6 +731,17 @@ const make = Effect.gen(function* () {
         mcpServers,
         ...(respondingBotId ? { botId: respondingBotId } : {}),
         ...(respondingBot ? { botName: respondingBot.name } : {}),
+        memoryAccess: {
+          tenantId: AkeruMemoryTenantId.make("local"),
+          userId: AkeruMemoryUserId.make("owner"),
+          threadId,
+          projectId: thread.projectId,
+          workspaceRoot: project?.workspaceRoot ?? effectiveCwd ?? ".",
+          botId: thread.groupId == null ? respondingBotId : null,
+          groupId: thread.groupId ?? null,
+          respondingBotId,
+          groupMemberBotIds: respondingGroup?.members.map((member) => member.botId) ?? [],
+        },
         botSandbox: respondingBot?.sandbox ?? null,
         botSandboxBrowserSharing,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),

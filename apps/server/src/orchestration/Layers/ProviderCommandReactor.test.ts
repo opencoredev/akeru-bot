@@ -649,6 +649,17 @@ describe("ProviderCommandReactor", () => {
         model: "gpt-5-codex",
       },
       mcpServers: [],
+      memoryAccess: {
+        tenantId: "local",
+        userId: "owner",
+        threadId: "thread-1",
+        projectId: "project-1",
+        workspaceRoot: "/tmp/provider-project",
+        botId: null,
+        groupId: null,
+        respondingBotId: null,
+        groupMemberBotIds: [],
+      },
       botSandbox: null,
       runtimeMode: "approval-required",
     });

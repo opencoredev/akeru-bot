@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { BotId } from "@t3tools/contracts";
 
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -40,6 +40,47 @@ describe("AkeruToolRuntime", () => {
       "Read",
       "AwaitShell",
     ]);
+  });
+
+  it("exposes registered memory handlers and protects sensitive writes", async () => {
+    const remember = vi.fn(async () => ({ saved: true }));
+    const unavailable = vi.fn(async () => undefined);
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-memory", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      memoryHandlers: {
+        recall_memory: unavailable,
+        remember,
+        update_memory: unavailable,
+        forget_memory: unavailable,
+      },
+    });
+
+    expect(runtime.toolsForThread("thread-memory").map((tool) => tool.id)).toEqual([
+      "recall_memory",
+      "remember",
+      "update_memory",
+      "forget_memory",
+    ]);
+    const privateWrite = {
+      threadId: "thread-memory",
+      toolId: "remember" as const,
+      toolCallId: "private-write",
+      input: { fact: "The user prefers vim.", scope: "private" },
+      approvalMode: "require-grant" as const,
+    };
+    await expect(runtime.execute(privateWrite)).resolves.toEqual({ saved: true });
+
+    const sensitiveWrite = {
+      ...privateWrite,
+      toolCallId: "sensitive-write",
+      input: { fact: "  The user prefers vim.  ", scope: "private", sensitive: true },
+    };
+    await expect(runtime.execute(sensitiveWrite)).rejects.toThrow("requires approval");
+    runtime.grantApproval(sensitiveWrite);
+    await expect(runtime.execute(sensitiveWrite)).resolves.toEqual({ saved: true });
+    expect(remember).toHaveBeenCalledTimes(2);
   });
 
   it("requires an exact one-shot grant for local shell commands", async () => {

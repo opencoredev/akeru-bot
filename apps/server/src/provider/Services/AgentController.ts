@@ -1,5 +1,6 @@
 import type {
   AkeruConversationMemorySnapshot,
+  AkeruMemoryThreadAccess,
   BotEngine,
   ModelSelection,
   ProviderInteractionMode,
@@ -58,7 +59,7 @@ export interface AgentControllerShape {
 
   readonly startSession: (
     threadId: ThreadId,
-    input: ProviderSessionStartInput,
+    input: ProviderSessionStartInput & { readonly memoryAccess?: AkeruMemoryThreadAccess },
   ) => Effect.Effect<ProviderSession, AgentControllerError>;
 
   readonly sendTurn: (
