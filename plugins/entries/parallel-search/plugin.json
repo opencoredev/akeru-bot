@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "parallel-search",
+  "name": "Parallel Search",
+  "description": "Search the web and extract token-efficient content from URLs.",
+  "primaryCategory": "Web",
+  "tags": ["search", "research", "extraction"],
+  "capabilities": ["search the web", "extract URL content", "rank search results"],
+  "featuredRank": 4,
+  "publisher": { "name": "Parallel", "url": "https://parallel.ai" },
+  "maintainer": { "name": "Parallel", "url": "https://parallel.ai" },
+  "documentationUrl": "https://docs.parallel.ai/integrations/mcp/search-mcp",
+  "sourceUrl": "https://github.com/parallel-web/parallel-agent-skills",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": { "sourceUrl": "https://parallel.ai", "license": "Parallel brand asset" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://search.parallel.ai/mcp-oauth" },
+  "connection": { "type": "ready" },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Sign in through the Parallel OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-search-results",
+      "description": "Read public web search and extraction results.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "available",
+  "skills": [
+    {
+      "title": "Parallel Web Search",
+      "description": "Run ranked web searches through the Parallel CLI.",
+      "url": "https://skills.sh/parallel-web/parallel-agent-skills/parallel-web-search"
+    }
+  ]
+}

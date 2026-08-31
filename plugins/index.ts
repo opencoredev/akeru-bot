@@ -1,35 +1,24 @@
-import type { PluginDefinition } from "./definePlugin";
-
-interface PluginModule {
-  readonly default: PluginDefinition;
-}
-
-const catalogModules = import.meta.glob<PluginModule>(
-  ["./*.ts", "!./definePlugin.ts", "!./index.ts", "!./*.test.ts"],
-  { eager: true },
-);
-
-export function loadCatalog(
-  modules: Readonly<Record<string, PluginModule>> = catalogModules,
-): readonly PluginDefinition[] {
-  const plugins = Object.entries(modules).map(([path, module]) => {
-    if (!module.default)
-      throw new TypeError(`Plugin module '${path}' must export a default plugin.`);
-    return module.default;
-  });
-  const ids = new Set<string>();
-  for (const plugin of plugins) {
-    if (ids.has(plugin.id)) throw new TypeError(`Duplicate plugin id '${plugin.id}'.`);
-    ids.add(plugin.id);
-  }
-  return Object.freeze(plugins.toSorted((left, right) => left.title.localeCompare(right.title)));
-}
-
-export { PLUGIN_CATEGORIES } from "./definePlugin";
-export type {
-  PluginCategory,
-  PluginDefinition,
-  PluginKind,
-  PluginLogo,
-  PluginSkill,
-} from "./definePlugin";
+export {
+  loadCatalog,
+  loadDirectoryCatalog,
+  resolveCatalogInstallations,
+  type CatalogInstallation,
+  type CatalogPluginDefinition,
+  type PluginDefinition,
+  type PluginDirectoryDefinition,
+  type PluginLogo,
+  type PluginSkill,
+} from "./catalog";
+export {
+  PLUGIN_APPROVAL_CLASSES,
+  PLUGIN_CATEGORIES,
+  type CatalogCategory,
+  type PluginApprovalClass,
+  type PluginCategory,
+} from "./categories";
+export {
+  parsePluginManifest,
+  parsePluginManifestJson,
+  PLUGIN_SCHEMA_VERSION,
+  type PluginManifest,
+} from "./schema";

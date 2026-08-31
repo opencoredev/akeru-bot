@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "firecrawl",
+  "name": "Firecrawl",
+  "description": "Search, scrape, and extract structured data from the web.",
+  "primaryCategory": "Web",
+  "tags": ["search", "scraping", "crawling", "extraction"],
+  "capabilities": ["search the web", "crawl sites", "extract structured data"],
+  "featuredRank": 2,
+  "publisher": { "name": "Firecrawl", "url": "https://www.firecrawl.dev" },
+  "maintainer": { "name": "Firecrawl", "url": "https://www.firecrawl.dev" },
+  "documentationUrl": "https://docs.firecrawl.dev/mcp-server/oauth",
+  "sourceUrl": "https://github.com/mendableai/firecrawl-mcp-server",
+  "license": "MIT",
+  "logo": {
+    "provenance": { "sourceUrl": "https://www.firecrawl.dev", "license": "Firecrawl brand asset" }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://mcp.firecrawl.dev/v2/mcp-oauth" },
+  "connection": { "type": "ready" },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Sign in through the Firecrawl OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-web-data",
+      "description": "Read public web pages and Firecrawl extraction results.",
+      "approval": "read"
+    }
+  ],
+  "approvals": [],
+  "catalogStatus": "available",
+  "skills": [
+    {
+      "title": "Firecrawl CLI",
+      "description": "Search, scrape, crawl, and extract through the Firecrawl CLI.",
+      "url": "https://skills.sh/firecrawl/cli/firecrawl"
+    }
+  ]
+}

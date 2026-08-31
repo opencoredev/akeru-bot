@@ -1,93 +1,122 @@
 import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 
-import context from "./context";
-import { loadCatalog } from "./index";
+import { loadCatalog, loadDirectoryCatalog, resolveCatalogInstallations } from "./catalog";
+import { parsePluginManifestJson } from "./schema";
 
-const CATALOG_IDS = ["context", "exa", "executor", "firecrawl", "parallel-search"];
-const DISALLOWED_ID_PART = ["pipe", "dream"].join("");
+const EXPECTED_IDS = ["context", "firecrawl", "exa", "parallel-search", "executor"];
 
-describe("plugin catalog", () => {
-  it("loads the focused builtin catalog with unique launch recipes", () => {
-    const catalog = loadCatalog();
-    const ids = catalog.map((plugin) => plugin.id);
-    expect(ids.toSorted()).toEqual(CATALOG_IDS);
-    expect(new Set(ids).size).toBe(catalog.length);
-    expect(ids.some((id) => id.includes(DISALLOWED_ID_PART))).toBe(false);
-    for (const plugin of catalog) {
-      expect(plugin.builtin).toBe(true);
-      expect(plugin.featured).toBe(true);
-      expect(plugin.title.trim()).not.toBe("");
-      expect(plugin.description.trim()).not.toBe("");
-      expect(plugin.category.trim()).not.toBe("");
-      expect(
-        NodeFS.existsSync(new URL(`../apps/web/public${plugin.logo.src}`, import.meta.url)),
-      ).toBe(true);
-      if (plugin.logo.darkSrc) {
-        expect(
-          NodeFS.existsSync(new URL(`../apps/web/public${plugin.logo.darkSrc}`, import.meta.url)),
-        ).toBe(true);
-      }
-      if (plugin.docsUrl) expect(plugin.docsUrl).toMatch(/^https:\/\//);
-      for (const skill of plugin.skills ?? []) {
-        expect(skill.title.trim()).not.toBe("");
-        expect(skill.description.trim()).not.toBe("");
-        expect(skill.url).toMatch(/^https:\/\/skills\.sh\//);
-      }
-      if (plugin.kind === "mcp-url") {
-        expect(plugin.url).toMatch(/^https:\/\//);
-        expect(["none", "oauth", "optional-oauth"]).toContain(plugin.authentication);
-      } else {
-        expect(plugin.command.trim()).not.toBe("");
-      }
-    }
+function manifest(id: string) {
+  return parsePluginManifestJson(
+    NodeFS.readFileSync(new URL(`./entries/${id}/plugin.json`, import.meta.url), "utf8"),
+    id,
+  );
+}
+
+describe("plugin catalog loader", () => {
+  it("loads unavailable entries for the directory without installing them", () => {
+    const context = manifest("context");
+    const pending = {
+      ...context,
+      id: "pending-vendor",
+      name: "Pending Vendor",
+      transport: { type: "unavailable" },
+      connection: {
+        type: "approval-pending",
+        blocker: "The vendor must approve Akeru as an OAuth client.",
+      },
+      catalogStatus: "approval-pending",
+    };
+    expect(
+      loadDirectoryCatalog(
+        { "./entries/pending-vendor/plugin.json": pending },
+        {
+          "./entries/pending-vendor/logo.svg": "/pending-vendor.svg",
+          "./entries/pending-vendor/logo-dark.svg": "/pending-vendor-dark.svg",
+        },
+      )[0],
+    ).toMatchObject({ id: "pending-vendor", kind: "mcp-unavailable" });
   });
 
-  it("keeps the verified hosted services in focused sections", () => {
-    const byId = new Map(loadCatalog().map((plugin) => [plugin.id, plugin]));
+  it("migrates the five identities and working recipes", () => {
+    const catalog = loadCatalog();
+    expect(catalog.map((plugin) => plugin.id)).toEqual(EXPECTED_IDS);
+    expect(catalog.map((plugin) => `builtin-${plugin.id}`)).toEqual(
+      EXPECTED_IDS.map((id) => `builtin-${id}`),
+    );
+    expect(catalog.map((plugin) => plugin.featuredRank)).toEqual([1, 2, 3, 4, 5]);
+    expect(catalog.map((plugin) => plugin.category)).toEqual(["Web", "Web", "Web", "Web", "Work"]);
+    expect(catalog.every((plugin) => plugin.logo.src.length > 0)).toBe(true);
 
+    const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
     expect(byId.get("context")).toMatchObject({
-      category: "Data Extraction",
+      kind: "mcp-url",
       url: "https://mcp.context.dev/mcp",
       authentication: "oauth",
     });
-    expect(byId.get("firecrawl")).toMatchObject({
-      category: "Data Extraction",
-      url: "https://mcp.firecrawl.dev/v2/mcp-oauth",
-      authentication: "oauth",
-    });
     expect(byId.get("exa")).toMatchObject({
-      category: "Search",
+      kind: "mcp-url",
       url: "https://mcp.exa.ai/mcp",
       authentication: "optional-oauth",
     });
-    expect(byId.get("parallel-search")).toMatchObject({
-      category: "Search",
-      url: "https://search.parallel.ai/mcp-oauth",
-      authentication: "oauth",
-    });
     expect(byId.get("executor")).toMatchObject({
-      category: "Productivity",
+      kind: "mcp-stdio",
       command: "bunx",
       args: ["-y", "executor", "mcp"],
     });
-    expect(byId.get("firecrawl")?.skills?.[0]?.url).toBe(
-      "https://skills.sh/firecrawl/cli/firecrawl",
-    );
-    expect(byId.get("exa")?.skills?.[0]?.url).toBe(
-      "https://skills.sh/exa-labs/agent-skills/exa-search",
-    );
-    expect(byId.get("parallel-search")?.skills?.[0]?.url).toBe(
-      "https://skills.sh/parallel-web/parallel-agent-skills/parallel-web-search",
+    expect(byId.get("firecrawl")).toMatchObject({
+      kind: "mcp-url",
+      url: "https://mcp.firecrawl.dev/v2/mcp-oauth",
+      authentication: "oauth",
+    });
+    expect(byId.get("parallel-search")).toMatchObject({
+      kind: "mcp-url",
+      url: "https://search.parallel.ai/mcp-oauth",
+      authentication: "oauth",
+    });
+  });
+
+  it("rejects duplicate ids and mismatched isolated directories", () => {
+    const context = manifest("context");
+    const assets = {
+      "./entries/context/logo.svg": "/context.svg",
+      "./entries/context/logo-dark.svg": "/context-dark.svg",
+      "./entries/context-copy/logo.svg": "/context-copy.svg",
+      "./entries/context-copy/logo-dark.svg": "/context-copy-dark.svg",
+    };
+    expect(() =>
+      loadCatalog(
+        {
+          "./entries/context/plugin.json": context,
+          "./entries/context-copy/plugin.json": context,
+        },
+        assets,
+      ),
+    ).toThrow("Duplicate plugin id 'context'");
+    expect(() => loadCatalog({ "./entries/wrong/plugin.json": context }, assets)).toThrow(
+      "must live in entries/context",
     );
   });
 
-  it("rejects duplicate ids", () => {
-    expect(() =>
-      loadCatalog({
-        "./context.ts": { default: context },
-        "./context-copy.ts": { default: context },
-      }),
-    ).toThrow("Duplicate plugin id 'context'");
+  it("keeps removed builtins visible and Custom MCP independent", () => {
+    const catalog = loadCatalog();
+    expect(
+      resolveCatalogInstallations(
+        [
+          { id: "builtin-exa", name: "Exa" },
+          { id: "builtin-removed-vendor", name: "Removed Vendor" },
+          { id: "custom-mcp", name: "Custom MCP" },
+        ],
+        catalog,
+      ),
+    ).toEqual([
+      { kind: "catalog", serverId: "builtin-exa", plugin: catalog[2] },
+      {
+        kind: "legacy",
+        serverId: "builtin-removed-vendor",
+        pluginId: "removed-vendor",
+        title: "Removed Vendor",
+      },
+    ]);
   });
 });

@@ -1,20 +1,11 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { PluginDefinition } from "../../../../../plugins";
+import { loadCatalog } from "../../../../../plugins";
 import { buildBotToolItems, planBotToolToggle } from "./BotToolsSheet";
 
-const installedPlugin: PluginDefinition = {
-  id: "exa",
-  title: "Exa",
-  description: "Search the web.",
-  category: "Search",
-  logo: { src: "/plugin-logos/exa.svg" },
-  kind: "mcp-url",
-  authentication: "optional-oauth",
-  url: "https://mcp.exa.ai/mcp",
-  builtin: true,
-};
+const installedPlugin = loadCatalog().find((plugin) => plugin.id === "exa");
+if (!installedPlugin) throw new TypeError("Exa must remain in the plugin catalog.");
 
 const globalServer: McpServer = {
   id: McpServerId.make("builtin-exa"),
@@ -40,6 +31,24 @@ describe("bot plugin exclusions", () => {
 
   it("hides workspace-disabled tools from bot overrides", () => {
     expect(buildBotToolItems([{ ...globalServer, enabled: false }], [installedPlugin])).toEqual([]);
+  });
+
+  it("keeps an enabled removed builtin available as a per-bot tool", () => {
+    const removedServer: McpServer = {
+      ...globalServer,
+      id: McpServerId.make("builtin-removed-vendor"),
+      name: "Removed Vendor",
+    };
+
+    expect(buildBotToolItems([removedServer], [installedPlugin])).toEqual([
+      {
+        id: "builtin-removed-vendor",
+        kind: "plugin",
+        name: "Removed Vendor",
+        description: "https://mcp.exa.ai/mcp",
+        workspaceEnabled: true,
+      },
+    ]);
   });
 
   it("stores only per-bot exclusions when a bot disables a plugin", () => {

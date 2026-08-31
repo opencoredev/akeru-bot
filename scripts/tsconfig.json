@@ -2,8 +2,9 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    "rootDir": "..",
     "types": ["node"],
     "lib": ["ESNext", "esnext.disposable"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "../plugins/categories.ts", "../plugins/schema.ts"]
 }

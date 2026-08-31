@@ -6,7 +6,12 @@ import {
 import type { EnvironmentId, McpServer } from "@t3tools/contracts";
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import { loadCatalog, type PluginDefinition, type PluginSkill } from "../../../../../plugins";
+import {
+  loadCatalog,
+  resolveCatalogInstallations,
+  type PluginDefinition,
+  type PluginSkill,
+} from "../../../../../plugins";
 import { ensureLocalApi } from "../../localApi";
 import { cn } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
@@ -44,6 +49,26 @@ import {
 } from "./pluginPresentation";
 
 const CATALOG = loadCatalog();
+
+export function resolvePluginDialogServers(
+  servers: readonly McpServer[],
+  catalog: readonly PluginDefinition[] = CATALOG,
+): {
+  readonly installedPlugins: readonly PluginDefinition[];
+  readonly customServers: readonly McpServer[];
+} {
+  const legacyIds = new Set(
+    resolveCatalogInstallations(servers, catalog).flatMap((installation) =>
+      installation.kind === "legacy" ? [installation.serverId] : [],
+    ),
+  );
+  return {
+    installedPlugins: catalog.filter((plugin) => findPluginServer(plugin, servers)?.enabled),
+    customServers: servers.filter(
+      (server) => !isBuiltinMcpServer(server) || legacyIds.has(server.id),
+    ),
+  };
+}
 
 export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden";
 export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME =
@@ -128,8 +153,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
     () => buildPluginSections({ plugins: CATALOG, query, filter }),
     [filter, query],
   );
-  const customServers = servers.filter((server) => !isBuiltinMcpServer(server));
-  const installedPlugins = CATALOG.filter((plugin) => findPluginServer(plugin, servers)?.enabled);
+  const { customServers, installedPlugins } = resolvePluginDialogServers(servers);
   const installedSections = buildInstalledPluginSection({ plugins: installedPlugins, query });
   const validationError = validateMcpServerDraft(draft);
 

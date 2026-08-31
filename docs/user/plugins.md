@@ -1,6 +1,6 @@
 # Plugins
 
-Open **Plugins** from the sidebar or command palette. Browse focused sections such as **Data Extraction** and **Search**, or search by plugin name, description, or category. Select a plugin to see what it does, inspect its connector, copy its source link, or open its documentation. Choose **Add** to install it for the current environment and enable it for every bot by default. Use a bot's **Plugins** setting to disable it for that bot. Choose **Added** to disable it for the environment.
+Open **Plugins** from the sidebar or command palette. Browse focused sections such as **Web** and **Work**, or search by plugin name, description, or category. Select a plugin to see what it does, inspect its connector, copy its source link, or open its documentation. Choose **Add** to install it for the current environment and enable it for every bot by default. Use a bot's **Plugins** setting to disable it for that bot. Choose **Added** to disable it for the environment.
 
 Select the installed and custom count below the title to review active plugins and custom MCP servers. Builtin plugins use their catalog configuration and do not expose transport editing. Akeru Bot stores no plugin credentials in the catalog or MCP registry. Keep credentials in the host environment or the service sign-in flow.
 
