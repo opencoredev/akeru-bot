@@ -631,14 +631,18 @@ describe("AgentControllerLive", () => {
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
-        yield* controller.startSession(codexThreadId, {
+        const sessionInput = {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
           providerInstanceId: codexInstanceId,
           modelSelection: codexSelection,
+          botSandboxBrowserSharing: "shared" as const,
+          runtimeMode: "full-access" as const,
+        };
+        yield* controller.startSession(codexThreadId, {
+          ...sessionInput,
           botId: BotId.make("bot-one"),
           botName: "Research bot",
-          runtimeMode: "full-access",
         });
 
         const runtime = mastra.harnessOptions[0]?.toolRuntime;
@@ -663,6 +667,21 @@ describe("AgentControllerLive", () => {
             lastFailure: "Complete the CAPTCHA.",
           },
         ]);
+        yield* controller.startSession(codexThreadId, sessionInput);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).not.toContain(
+          "request_box_help",
+        );
+        yield* Effect.promise(() =>
+          expect(
+            runtime.execute({
+              threadId: String(codexThreadId),
+              toolId: "request_box_help",
+              toolCallId: "stale-handoff",
+              input: { reason: "captcha", message: "Complete the CAPTCHA." },
+              approvalMode: "require-grant",
+            }),
+          ).rejects.toThrow("Tool 'request_box_help' is not available for this turn."),
+        );
       }),
       bridge.service,
       mastra.factory,

@@ -693,8 +693,11 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.providerInstanceId === resolved.providerInstanceId
       ) {
         existing.runtimeMode = input.runtimeMode;
+        const toolSession = { ...existing.toolSession };
+        delete toolSession.botId;
+        delete toolSession.botName;
         existing.toolSession = {
-          ...existing.toolSession,
+          ...toolSession,
           runtimeMode: input.runtimeMode,
           ...(input.botId ? { botId: input.botId } : {}),
           ...(input.botName ? { botName: input.botName } : {}),
