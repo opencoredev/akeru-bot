@@ -307,6 +307,25 @@ export const BotUsageCap = Schema.Struct({
 });
 export type BotUsageCap = typeof BotUsageCap.Type;
 
+export const ChannelProvider = Schema.Literals(["telegram", "imessage", "whatsapp"]);
+export type ChannelProvider = typeof ChannelProvider.Type;
+export const ChannelBindingStatus = Schema.Literals([
+  "disconnected",
+  "connected",
+  "needs-reconnect",
+  "not-live",
+]);
+export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
+export const ChannelBinding = Schema.Struct({
+  botId: BotId,
+  provider: ChannelProvider,
+  status: ChannelBindingStatus,
+  externalIdentity: Schema.NullOr(TrimmedNonEmptyString),
+  connectedAt: Schema.NullOr(IsoDateTime),
+  sentMessageIds: Schema.Array(MessageId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+});
+export type ChannelBinding = typeof ChannelBinding.Type;
+
 export const OrchestrationBot = Schema.Struct({
   id: BotId,
   name: TrimmedNonEmptyString,
@@ -324,6 +343,9 @@ export const OrchestrationBot = Schema.Struct({
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  channelBindings: Schema.Array(ChannelBinding).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   groupId: Schema.NullOr(GroupId),
   archivedAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,
@@ -372,6 +394,13 @@ export const OrchestrationGroup = Schema.Struct({
 });
 export type OrchestrationGroup = typeof OrchestrationGroup.Type;
 
+export const ChannelMessageOrigin = Schema.Struct({
+  provider: Schema.Literals(["telegram", "imessage"]),
+  externalThreadId: TrimmedNonEmptyString,
+  externalSenderId: Schema.optional(TrimmedNonEmptyString),
+});
+export type ChannelMessageOrigin = typeof ChannelMessageOrigin.Type;
+
 export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
@@ -384,6 +413,7 @@ export const OrchestrationMessage = Schema.Struct({
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   authorPersonId: Schema.optional(Schema.NullOr(AuthSessionId)),
   authorDisplayName: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -884,6 +914,25 @@ const BotUpdateCommand = Schema.Struct({
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
+  groupId: Schema.optional(Schema.NullOr(GroupId)),
+});
+
+const ClientBotUpdateCommand = Schema.Struct({
+  type: Schema.Literal("bot.update"),
+  commandId: CommandId,
+  botId: BotId,
+  name: Schema.optional(TrimmedNonEmptyString),
+  title: Schema.optional(TrimmedNonEmptyString),
+  label: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+  disabledMcpServerIds: Schema.optional(Schema.Array(McpServerId)),
+  avatar: Schema.optional(BotAvatar),
+  engine: Schema.optional(Schema.NullOr(BotEngine)),
+  sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
+  runtimeMode: Schema.optional(RuntimeMode),
+  usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
 
@@ -897,6 +946,57 @@ const BotRestoreCommand = Schema.Struct({
   type: Schema.Literal("bot.restore"),
   commandId: CommandId,
   botId: BotId,
+});
+
+const ChannelConnectCommand = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("telegram"),
+    token: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("hosted"),
+    projectId: TrimmedNonEmptyString,
+    projectSecret: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("self-hosted"),
+    serverUrl: TrimmedNonEmptyString,
+    apiKey: TrimmedNonEmptyString,
+    phone: Schema.optional(TrimmedNonEmptyString),
+  }),
+]);
+
+const ChannelDisconnectCommand = Schema.Struct({
+  type: Schema.Literal("channel.disconnect"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: ChannelProvider,
+});
+
+const ChannelReconnectCommand = Schema.Struct({
+  type: Schema.Literal("channel.reconnect"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: Schema.Literals(["telegram", "imessage"]),
+});
+
+const ChannelSendCommand = Schema.Struct({
+  type: Schema.Literal("channel.send"),
+  commandId: CommandId,
+  botId: BotId,
+  threadId: ThreadId,
+  messageId: MessageId,
 });
 
 const GroupCreateCommand = Schema.Struct({
@@ -1215,6 +1315,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(ChatAttachment),
+    channelOrigin: Schema.optional(ChannelMessageOrigin),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -1361,9 +1462,13 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   BotCreateCommand,
-  BotUpdateCommand,
+  ClientBotUpdateCommand,
   BotArchiveCommand,
   BotRestoreCommand,
+  ChannelConnectCommand,
+  ChannelDisconnectCommand,
+  ChannelReconnectCommand,
+  ChannelSendCommand,
   GroupCreateCommand,
   GroupRenameCommand,
   GroupDeleteCommand,
@@ -1619,6 +1724,9 @@ export const BotCreatedPayload = Schema.Struct({
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  channelBindings: Schema.Array(ChannelBinding).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   groupId: Schema.NullOr(GroupId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1637,6 +1745,7 @@ export const BotUpdatedPayload = Schema.Struct({
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
   updatedAt: IsoDateTime,
 });
@@ -1856,6 +1965,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   authorPersonId: Schema.optional(Schema.NullOr(AuthSessionId)),
   authorDisplayName: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

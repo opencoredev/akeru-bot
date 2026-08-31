@@ -1,4 +1,16 @@
-import type { OrchestrationMessage } from "@t3tools/contracts";
+import type { ChannelMessageOrigin, OrchestrationMessage } from "@t3tools/contracts";
+
+export function channelOriginForAssistantMessage(
+  messages: ReadonlyArray<OrchestrationMessage>,
+  assistantIndex: number,
+): ChannelMessageOrigin | null {
+  if (messages[assistantIndex]?.role !== "assistant") return null;
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return message.channelOrigin ?? null;
+  }
+  return null;
+}
 
 /**
  * Bot chat shows each user message and one final assistant answer per turn.

@@ -1,4 +1,4 @@
-import type { GroupMembership, McpServerId } from "@t3tools/contracts";
+import type { ChannelBinding, GroupMembership, McpServerId } from "@t3tools/contracts";
 
 /**
  * Local mirror of the bot roster wire shape the server-side persistence work
@@ -35,6 +35,7 @@ export interface Bot {
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   usageCap: { unit: "tokens"; limit: number } | null;
   voiceEnabled: boolean;
+  channelBindings?: ReadonlyArray<ChannelBinding>;
   groupId: string | null;
   pinned: boolean;
   archivedAt: string | null;

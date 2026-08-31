@@ -1,5 +1,6 @@
 import * as Layer from "effect/Layer";
 
+import { ChannelDeliveryStoreLive } from "../channels/ChannelDeliveryStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
 import { ProjectionBotRepositoryLive } from "../persistence/Layers/ProjectionBots.ts";
@@ -25,6 +26,7 @@ export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationProjectionPipelineLayerLive,
   ProjectionBotRepositoryLive,
   ProjectionGroupRepositoryLive,
+  ChannelDeliveryStoreLive,
   // Shared background-liveness and plan-progress registries: written by
   // runtime ingestion, read by the snapshot query. provideMerge feeds the
   // same instance to the snapshot query here and re-exports it for runtime

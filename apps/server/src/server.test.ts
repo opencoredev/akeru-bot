@@ -8,6 +8,7 @@ import {
   AuthAccessTokenType,
   AuthEnvironmentBootstrapTokenType,
   AuthTokenExchangeGrantType,
+  BotId,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
@@ -148,6 +149,7 @@ import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
@@ -252,6 +254,26 @@ const makeDefaultOrchestrationReadModel = () => {
     ],
   };
 };
+
+const makeChannelTestBot = () => ({
+  id: BotId.make("bot-channel-test"),
+  name: "Channel bot",
+  title: "Agent",
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "dither" as const, seed: "channel-bot" },
+  engine: null,
+  sandbox: "local" as const,
+  runtimeMode: "full-access" as const,
+  usageCap: null,
+  voiceEnabled: false,
+  channelBindings: [],
+  groupId: null,
+  archivedAt: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 const makeDefaultOrchestrationThreadShell = (
   overrides: Partial<OrchestrationThreadShell> = {},
@@ -998,6 +1020,12 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provideMerge(makeAuthTestLayer()),
       Layer.provideMerge(ServerSecretStore.layer),
+      Layer.provideMerge(
+        Layer.succeed(
+          ChannelDeliveryStore.ChannelDeliveryStore,
+          ChannelDeliveryStore.makeMemoryChannelDeliveryStore(),
+        ),
+      ),
       Layer.provide(workspaceAndProjectServicesLayer),
       Layer.provideMerge(FetchHttpClient.layer),
       Layer.provide(layerConfig),
@@ -5230,6 +5258,160 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.isAtLeast(response.sequence, 0);
       assert.equal(stat.type, "Directory");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("rejects channel controls from paired non-host sessions", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const ownerCookie = yield* getAuthenticatedSessionCookieHeader();
+      const pairingResponse = yield* HttpClient.post("/api/auth/pairing-token", {
+        headers: { cookie: ownerCookie },
+        body: yield* HttpBody.json({}),
+      });
+      const pairing = (yield* pairingResponse.json) as { readonly credential: string };
+      const pairedCookie = yield* getAuthenticatedSessionCookieHeader(pairing.credential);
+      const wsUrl = appendSessionCookieToWsUrl(
+        yield* getWsServerUrl("/ws", { authenticated: false }),
+        pairedCookie,
+      );
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "channel.disconnect",
+            commandId: CommandId.make("cmd-channel-disconnect-non-host"),
+            botId: BotId.make("bot-1"),
+            provider: "telegram",
+          }),
+        ),
+      ).pipe(Effect.result);
+
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assertInclude(
+          String(result.failure),
+          "Only the environment host can manage external channels",
+        );
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("allows access-write sessions to control channels over websocket and HTTP", () =>
+    Effect.gen(function* () {
+      const bot = makeChannelTestBot();
+      const model = { ...makeDefaultOrchestrationReadModel(), bots: [bot] };
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getCommandReadModel: () => Effect.succeed(model),
+          },
+          orchestrationEngine: {
+            dispatch: () => Effect.succeed({ sequence: 17 }),
+          },
+        },
+      });
+
+      const wsResult = yield* Effect.scoped(
+        withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "channel.disconnect",
+            commandId: CommandId.make("cmd-channel-disconnect-ws-host"),
+            botId: bot.id,
+            provider: "telegram",
+          }),
+        ),
+      );
+      const cookie = yield* getAuthenticatedSessionCookieHeader();
+      const httpResponse = yield* HttpClient.post("/api/orchestration/dispatch", {
+        headers: { cookie },
+        body: yield* HttpBody.json({
+          type: "channel.disconnect",
+          commandId: CommandId.make("cmd-channel-disconnect-http-host"),
+          botId: bot.id,
+          provider: "telegram",
+        }),
+      });
+      const httpResult = (yield* httpResponse.json) as { readonly sequence: number };
+
+      assert.equal(wsResult.sequence, 17);
+      assert.equal(httpResponse.status, 200);
+      assert.equal(httpResult.sequence, 17);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("rejects HTTP channel controls without access write scope", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+      const ownerCookie = yield* getAuthenticatedSessionCookieHeader();
+      const pairingResponse = yield* HttpClient.post("/api/auth/pairing-token", {
+        headers: { cookie: ownerCookie },
+        body: yield* HttpBody.json({}),
+      });
+      const pairing = (yield* pairingResponse.json) as { readonly credential: string };
+      const pairedCookie = yield* getAuthenticatedSessionCookieHeader(pairing.credential);
+
+      const response = yield* HttpClient.post("/api/orchestration/dispatch", {
+        headers: { cookie: pairedCookie },
+        body: yield* HttpBody.json({
+          type: "channel.disconnect",
+          commandId: CommandId.make("cmd-channel-disconnect-http-paired"),
+          botId: BotId.make("bot-1"),
+          provider: "telegram",
+        }),
+      });
+      const body = (yield* response.json) as { readonly requiredScope?: string };
+
+      assert.equal(response.status, 403);
+      assert.equal(body.requiredScope, "access:write");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("marks stopped channel bindings for reconnect in HTTP shell snapshots", () =>
+    Effect.gen(function* () {
+      const bot = makeChannelTestBot();
+      const connectedAt = "2026-01-01T00:00:00.000Z";
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getShellSnapshot: () =>
+              Effect.succeed({
+                snapshotSequence: 3,
+                bots: [
+                  {
+                    ...bot,
+                    channelBindings: [
+                      {
+                        botId: bot.id,
+                        provider: "telegram",
+                        status: "connected",
+                        externalIdentity: "@akeru",
+                        connectedAt,
+                        sentMessageIds: [],
+                      },
+                    ],
+                  },
+                ],
+                groups: [],
+                projects: [],
+                threads: [],
+                updatedAt: connectedAt,
+              }),
+          },
+        },
+      });
+      const cookie = yield* getAuthenticatedSessionCookieHeader();
+      const response = yield* HttpClient.get("/api/orchestration/shell", {
+        headers: { cookie },
+      });
+      const shell = (yield* response.json) as {
+        readonly bots: ReadonlyArray<{
+          readonly channelBindings: ReadonlyArray<{ readonly status: string }>;
+        }>;
+      };
+
+      assert.equal(response.status, 200);
+      assert.equal(shell.bots[0]?.channelBindings[0]?.status, "needs-reconnect");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

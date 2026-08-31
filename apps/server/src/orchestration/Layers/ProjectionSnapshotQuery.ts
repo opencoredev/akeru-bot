@@ -3,7 +3,9 @@ import {
   BotEngine,
   BotId,
   BotUsageCap,
+  ChannelBinding,
   ChatAttachment,
+  ChannelMessageOrigin,
   CheckpointRef,
   GroupMembership,
   IsoDateTime,
@@ -92,6 +94,7 @@ const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
     engine: Schema.NullOr(Schema.fromJsonString(BotEngine)),
     usageCap: Schema.NullOr(Schema.fromJsonString(BotUsageCap)),
     disabledMcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)),
+    channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
     voiceEnabled: Schema.Number,
   }),
 );
@@ -108,6 +111,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
+    channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
   }),
 );
 const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
@@ -375,6 +379,7 @@ function mapBotRow(row: Schema.Schema.Type<typeof ProjectionBotDbRowSchema>): Or
     runtimeMode: row.runtimeMode,
     usageCap: row.usageCap,
     voiceEnabled: row.voiceEnabled === 1,
+    channelBindings: row.channelBindings ?? [],
     groupId: row.groupId,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
@@ -484,7 +489,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         bot_id AS "botId", name, title, label, description,
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
-        usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled", group_id AS "groupId",
+        usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled",
+        channel_bindings_json AS "channelBindings", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
       ORDER BY created_at ASC, bot_id ASC
@@ -645,6 +651,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          channel_origin_json AS "channelOrigin",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -1102,6 +1109,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          channel_origin_json AS "channelOrigin",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -1350,6 +1358,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          channel_origin_json AS "channelOrigin",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -1725,6 +1734,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   respondingBotId: row.respondingBotId ?? null,
                   authorPersonId: row.authorPersonId ?? null,
                   authorDisplayName: row.authorDisplayName ?? null,
+                  channelOrigin: row.channelOrigin,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
@@ -2914,6 +2924,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             respondingBotId: row.respondingBotId ?? null,
             authorPersonId: row.authorPersonId ?? null,
             authorDisplayName: row.authorDisplayName ?? null,
+            channelOrigin: row.channelOrigin,
             streaming: row.isStreaming === 1,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,

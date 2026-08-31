@@ -50,6 +50,7 @@ function makeBot(input: {
     runtimeMode: "full-access",
     usageCap: null,
     voiceEnabled: false,
+    channelBindings: [],
     groupId: input.groupId ?? null,
     archivedAt: input.archivedAt ?? null,
     createdAt: NOW,

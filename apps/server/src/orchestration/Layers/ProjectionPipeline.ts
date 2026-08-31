@@ -605,6 +605,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               runtimeMode: event.payload.runtimeMode,
               usageCap: event.payload.usageCap,
               voiceEnabled: event.payload.voiceEnabled,
+              channelBindings: event.payload.channelBindings,
               groupId: event.payload.groupId,
               archivedAt: null,
               createdAt: event.payload.createdAt,
@@ -634,6 +635,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               ...(event.payload.usageCap !== undefined ? { usageCap: event.payload.usageCap } : {}),
               ...(event.payload.voiceEnabled !== undefined
                 ? { voiceEnabled: event.payload.voiceEnabled }
+                : {}),
+              ...(event.payload.channelBindings !== undefined
+                ? { channelBindings: event.payload.channelBindings }
                 : {}),
               ...(event.payload.groupId !== undefined ? { groupId: event.payload.groupId } : {}),
               updatedAt: event.payload.updatedAt,
@@ -1300,6 +1304,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             authorPersonId: event.payload.authorPersonId ?? previousMessage?.authorPersonId ?? null,
             authorDisplayName:
               event.payload.authorDisplayName ?? previousMessage?.authorDisplayName ?? null,
+            channelOrigin: event.payload.channelOrigin ?? previousMessage?.channelOrigin ?? null,
             role: event.payload.role,
             text: nextText,
             ...(nextAttachments !== undefined ? { attachments: [...nextAttachments] } : {}),

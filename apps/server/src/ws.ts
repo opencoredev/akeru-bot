@@ -80,6 +80,9 @@ import { syncConnectorIncidents } from "./bot-inbox/connectorIncidents.ts";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
+import * as ChannelCommand from "./channels/ChannelCommand.ts";
+import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -133,6 +136,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -555,6 +559,10 @@ const makeWsRpcLayer = (
         ),
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const secretStore = yield* ServerSecretStore.ServerSecretStore;
+      const channelDeliveryStore = yield* Effect.serviceOption(
+        ChannelDeliveryStore.ChannelDeliveryStore,
+      ).pipe(Effect.map(Option.getOrElse(ChannelDeliveryStore.makeMemoryChannelDeliveryStore)));
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map(
@@ -900,6 +908,9 @@ const makeWsRpcLayer = (
                     runtimeMode: nextBot.runtimeMode,
                     usageCap: nextBot.usageCap,
                     voiceEnabled: nextBot.voiceEnabled,
+                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                      nextBot.channelBindings ?? [],
+                    ),
                     groupId: nextBot.groupId,
                     archivedAt: nextBot.archivedAt,
                     createdAt: nextBot.createdAt,
@@ -1390,6 +1401,41 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
+              if (ChannelCommand.isChannelCommand(command)) {
+                if (!currentSession.scopes.includes(AuthAccessWriteScope)) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Only the environment host can manage external channels.",
+                  });
+                }
+                return yield* startup.enqueueCommand(
+                  Effect.tryPromise({
+                    try: () =>
+                      ChannelCommand.executeChannelCommand(
+                        {
+                          engine: orchestrationEngine,
+                          secretStore,
+                          deliveryStore: channelDeliveryStore,
+                          readModel: () =>
+                            Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+                          readThread: (threadId) =>
+                            Effect.runPromise(
+                              projectionSnapshotQuery
+                                .getThreadDetailById(threadId)
+                                .pipe(Effect.map(Option.getOrNull)),
+                            ),
+                          nowIso: () => Effect.runPromise(nowIso),
+                          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
+                        },
+                        command,
+                      ),
+                    catch: (cause) =>
+                      new OrchestrationDispatchCommandError({
+                        message: cause instanceof Error ? cause.message : "Channel command failed.",
+                        cause,
+                      }),
+                  }),
+                );
+              }
               const decodedCommand = yield* normalizeDispatchCommand(command);
               const currentPerson =
                 decodedCommand.type === "group.create" ||
@@ -1457,6 +1503,11 @@ const makeWsRpcLayer = (
                 Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
               );
               yield* recordClientCommandAnalytics(normalizedCommand);
+              if (normalizedCommand.type === "bot.archive") {
+                yield* Effect.promise(() =>
+                  ChannelRuntime.stopChannelsForBot(normalizedCommand.botId),
+                );
+              }
               if (parkingCommand) {
                 const parkingKind = parkingCommand.type === "thread.archive" ? "archive" : "settle";
                 if (shouldStopSessionAfterCommand) {
@@ -1603,6 +1654,12 @@ const makeWsRpcLayer = (
                         environmentHostPersonId: people.host.personId,
                         environmentHostDisplayName: people.host.displayName,
                       }),
+                  bots: snapshot.bots.map((bot) => ({
+                    ...bot,
+                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                      bot.channelBindings ?? [],
+                    ),
+                  })),
                 })),
                 Effect.tapError((cause) =>
                   Effect.logError("orchestration shell snapshot load failed", { cause }),
@@ -1688,6 +1745,15 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot,
             projectionSnapshotQuery.getArchivedShellSnapshot().pipe(
+              Effect.map((snapshot) => ({
+                ...snapshot,
+                bots: snapshot.bots.map((bot) => ({
+                  ...bot,
+                  channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                    bot.channelBindings ?? [],
+                  ),
+                })),
+              })),
               Effect.tapError((cause) =>
                 Effect.logError("orchestration archived shell snapshot load failed", { cause }),
               ),

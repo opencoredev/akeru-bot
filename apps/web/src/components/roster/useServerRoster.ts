@@ -49,6 +49,7 @@ export function useServerRosterSync(): void {
       bots: bots.map((bot) => ({
         ...bot,
         avatar: { ...bot.avatar },
+        channelBindings: bot.channelBindings ?? [],
         pinned: false,
       })),
       groups: groups.map((group) => ({ ...group })),

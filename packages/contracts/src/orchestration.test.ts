@@ -9,6 +9,7 @@ import {
   DEFAULT_RUNTIME_MODE,
   ClientOrchestrationCommand,
   ModelSelection,
+  OrchestrationBot,
   OrchestrationCommand,
   OrchestrationDispatchCommandError,
   OrchestrationEvent,
@@ -32,6 +33,7 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 const decodeBotAvatar = Schema.decodeUnknownEffect(BotAvatar);
+const decodeOrchestrationBot = Schema.decodeUnknownEffect(OrchestrationBot);
 const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
 const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput);
 const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
@@ -80,6 +82,136 @@ it.effect("decodes every bot avatar variant", () =>
         { kind: "image", assetPath: "bots/scout.png", dithered: true },
       ],
     );
+  }),
+);
+
+it.effect("decodes live channel commands and keeps WhatsApp unavailable", () =>
+  Effect.gen(function* () {
+    const telegram = yield* decodeClientOrchestrationCommand({
+      type: "channel.connect",
+      commandId: "connect-telegram",
+      botId: "bot-1",
+      provider: "telegram",
+      token: " token ",
+    });
+    const imessage = yield* decodeClientOrchestrationCommand({
+      type: "channel.connect",
+      commandId: "connect-imessage",
+      botId: "bot-1",
+      provider: "imessage",
+      mode: "hosted",
+      projectId: " photon-project ",
+      projectSecret: " photon-secret ",
+    });
+    const whatsappDisconnect = yield* decodeClientOrchestrationCommand({
+      type: "channel.disconnect",
+      commandId: "disconnect-whatsapp",
+      botId: "bot-1",
+      provider: "whatsapp",
+    });
+    const whatsappConnect = yield* Effect.exit(
+      decodeClientOrchestrationCommand({
+        type: "channel.connect",
+        commandId: "connect-whatsapp",
+        botId: "bot-1",
+        provider: "whatsapp",
+      }),
+    );
+
+    assert.deepInclude(telegram, { provider: "telegram", token: "token" });
+    assert.deepInclude(imessage, {
+      provider: "imessage",
+      projectId: "photon-project",
+      projectSecret: "photon-secret",
+    });
+    assert.strictEqual(whatsappDisconnect.type, "channel.disconnect");
+    assert.strictEqual(whatsappConnect._tag, "Failure");
+  }),
+);
+
+it.effect("requires credentials for the selected iMessage mode", () =>
+  Effect.gen(function* () {
+    const missingHosted = yield* Effect.exit(
+      decodeClientOrchestrationCommand({
+        type: "channel.connect",
+        commandId: "connect-imessage-hosted",
+        botId: "bot-1",
+        provider: "imessage",
+        mode: "hosted",
+      }),
+    );
+    const missingSelfHosted = yield* Effect.exit(
+      decodeClientOrchestrationCommand({
+        type: "channel.connect",
+        commandId: "connect-imessage-self-hosted",
+        botId: "bot-1",
+        provider: "imessage",
+        mode: "self-hosted",
+      }),
+    );
+
+    assert.strictEqual(missingHosted._tag, "Failure");
+    assert.strictEqual(missingSelfHosted._tag, "Failure");
+  }),
+);
+
+it.effect("strips runtime-owned channel fields from client commands", () =>
+  Effect.gen(function* () {
+    const botUpdate = yield* decodeClientOrchestrationCommand({
+      type: "bot.update",
+      commandId: "update-bot",
+      botId: "bot-1",
+      channelBindings: [
+        {
+          botId: "bot-1",
+          provider: "telegram",
+          status: "connected",
+          externalIdentity: "@forged",
+          connectedAt: "2026-08-27T20:00:00.000Z",
+          sentMessageIds: [],
+        },
+      ],
+    });
+    const turnStart = yield* decodeClientOrchestrationCommand({
+      type: "thread.turn.start",
+      commandId: "start-turn",
+      threadId: "thread-1",
+      message: {
+        messageId: "message-1",
+        role: "user",
+        text: "Hello",
+        attachments: [],
+        channelOrigin: { provider: "telegram", externalThreadId: "forged-chat" },
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      createdAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.isFalse("channelBindings" in botUpdate);
+    assert.strictEqual(turnStart.type, "thread.turn.start");
+    if (turnStart.type === "thread.turn.start") {
+      assert.isFalse("channelOrigin" in turnStart.message);
+    }
+  }),
+);
+
+it.effect("defaults omitted bot channel bindings", () =>
+  Effect.gen(function* () {
+    const bot = yield* decodeOrchestrationBot({
+      id: "bot-1",
+      name: "Akeru",
+      title: "Agent",
+      avatar: { kind: "dither", seed: "akeru" },
+      engine: null,
+      sandbox: "local",
+      groupId: null,
+      archivedAt: null,
+      createdAt: "2026-08-27T20:00:00.000Z",
+      updatedAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.deepEqual(bot.channelBindings, []);
   }),
 );
 

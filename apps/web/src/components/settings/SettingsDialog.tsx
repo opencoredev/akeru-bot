@@ -28,6 +28,9 @@ const InboxPanel = lazy(async () => ({
 const ProvidersPanel = lazy(async () => ({
   default: (await import("./ProvidersPanel")).ProvidersPanel,
 }));
+const BotChannelsSettingsPanel = lazy(async () => ({
+  default: (await import("./BotChannelsSettings")).BotChannelsSettingsPanel,
+}));
 const VoiceSettingsPanel = lazy(async () => ({
   default: (await import("./VoiceSettings")).VoiceSettingsPanel,
 }));
@@ -52,6 +55,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   inbox: InboxPanel,
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
+  bots: BotChannelsSettingsPanel,
   voice: VoiceSettingsPanel,
   groups: GroupSettingsPanel,
   connections: ConnectionsSettings,
@@ -69,6 +73,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { section: "general", label: "General", icon: Settings02Icon },
   { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
   { section: "providers", label: "Providers", icon: BotIcon },
+  { section: "bots", label: "Bots", icon: BotIcon },
   { section: "voice", label: "Voice", icon: CallIcon },
   { section: "groups", label: "Groups", icon: BotIcon },
   { section: "inbox", label: "Errors", icon: AlertCircleIcon },

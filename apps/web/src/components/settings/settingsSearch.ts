@@ -5,6 +5,7 @@ export type SettingsPath =
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
+  | "/settings/bots"
   | "/settings/voice"
   | "/settings/integrations"
   | "/settings/source-control"
@@ -16,6 +17,7 @@ export interface SettingsSearchItem {
   readonly title: string;
   readonly to: SettingsPath;
   readonly targetId?: string;
+  readonly keywords?: ReadonlyArray<string>;
   // Its row only renders in the desktop app, so a browser result would land on
   // an anchor that isn't there.
   readonly desktopOnly?: boolean;
@@ -30,6 +32,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
   "/settings/providers": "Providers",
+  "/settings/bots": "Bots",
   "/settings/voice": "Voice",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
@@ -236,6 +239,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/providers",
   },
   {
+    id: "bot-channels",
+    title: "Bot channels",
+    to: "/settings/bots",
+    keywords: ["Telegram", "iMessage", "Photon", "WhatsApp"],
+  },
+  {
     id: "agent-browser-access",
     title: "Agent browser access",
     to: "/settings/integrations",
@@ -320,6 +329,8 @@ export function searchSettings(
   return items.filter(
     (item) =>
       (isElectron || item.desktopOnly !== true) &&
-      normalizeSearchText(item.title).includes(normalizedQuery),
+      [item.title, ...(item.keywords ?? [])].some((value) =>
+        normalizeSearchText(value).includes(normalizedQuery),
+      ),
   );
 }

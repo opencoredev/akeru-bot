@@ -56,6 +56,7 @@ const stubBot = {
   runtimeMode: "full-access" as const,
   usageCap: null,
   voiceEnabled: false,
+  channelBindings: [],
   groupId: null,
   archivedAt: null,
   createdAt: "2026-04-01T00:00:00.000Z",

@@ -448,6 +448,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           runtimeMode: command.runtimeMode,
           usageCap: command.usageCap,
           voiceEnabled: command.voiceEnabled ?? false,
+          channelBindings: [],
           groupId: command.groupId,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -561,6 +562,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.runtimeMode !== undefined ? { runtimeMode: command.runtimeMode } : {}),
           ...(command.usageCap !== undefined ? { usageCap: command.usageCap } : {}),
           ...(command.voiceEnabled !== undefined ? { voiceEnabled: command.voiceEnabled } : {}),
+          ...(command.channelBindings !== undefined
+            ? { channelBindings: command.channelBindings }
+            : {}),
           ...(command.groupId !== undefined ? { groupId: command.groupId } : {}),
           updatedAt: occurredAt,
         },
@@ -1785,6 +1789,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.message.channelOrigin !== undefined
+            ? { channelOrigin: command.message.channelOrigin }
+            : {}),
           turnId: null,
           authorPersonId: command.senderPersonId ?? null,
           authorDisplayName: command.senderDisplayName ?? null,

@@ -337,6 +337,7 @@ export function projectEvent(
             runtimeMode: payload.runtimeMode,
             usageCap: payload.usageCap,
             voiceEnabled: payload.voiceEnabled,
+            channelBindings: payload.channelBindings,
             groupId: payload.groupId,
             archivedAt: null,
             createdAt: payload.createdAt,
@@ -370,6 +371,9 @@ export function projectEvent(
             ...(payload.runtimeMode !== undefined ? { runtimeMode: payload.runtimeMode } : {}),
             ...(payload.usageCap !== undefined ? { usageCap: payload.usageCap } : {}),
             ...(payload.voiceEnabled !== undefined ? { voiceEnabled: payload.voiceEnabled } : {}),
+            ...(payload.channelBindings !== undefined
+              ? { channelBindings: payload.channelBindings }
+              : {}),
             ...(payload.groupId !== undefined ? { groupId: payload.groupId } : {}),
             updatedAt: payload.updatedAt,
           }),
@@ -861,6 +865,9 @@ export function projectEvent(
               : {}),
             ...(payload.authorDisplayName !== undefined
               ? { authorDisplayName: payload.authorDisplayName }
+              : {}),
+            ...(payload.channelOrigin !== undefined
+              ? { channelOrigin: payload.channelOrigin }
               : {}),
             streaming: payload.streaming,
             createdAt: payload.createdAt,

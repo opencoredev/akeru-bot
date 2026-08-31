@@ -1,0 +1,692 @@
+import { createHash } from "node:crypto";
+
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { TelegramProvider } from "@mastra/telegram";
+import { createiMessageAdapter } from "@photon-ai/chat-adapter-imessage";
+import {
+  BotId,
+  CommandId,
+  MessageId,
+  ProviderInstanceId,
+  ThreadId,
+  type ChannelBinding,
+  type ChannelProvider,
+  type ClientOrchestrationCommand,
+  type OrchestrationReadModel,
+  type OrchestrationThread,
+} from "@t3tools/contracts";
+import { Chat, type Adapter } from "chat";
+import * as Effect from "effect/Effect";
+import type * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+
+import type { ServerSecretStore } from "../auth/ServerSecretStore.ts";
+import type * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
+import type { ChannelDeliveryStoreShape } from "./ChannelDeliveryStore.ts";
+
+interface ChannelRuntimeEntry {
+  readonly post: (externalThreadId: string, text: string) => Promise<void>;
+  readonly shutdown: () => Promise<void>;
+}
+
+interface StartedChannel {
+  readonly binding: ChannelBinding;
+  readonly runtime: ChannelRuntimeEntry;
+}
+
+type LiveProvider = "telegram" | "imessage";
+type ChannelConnectInput = Extract<
+  ClientOrchestrationCommand,
+  { readonly type: "channel.connect" }
+>;
+
+export interface ChannelRuntimeDependencies {
+  readonly engine: OrchestrationEngine.OrchestrationEngineShape;
+  readonly secretStore: ServerSecretStore["Service"];
+  readonly deliveryStore: ChannelDeliveryStoreShape;
+  readonly readModel: () => Promise<OrchestrationReadModel>;
+  readonly readThread: (threadId: ThreadId) => Promise<OrchestrationThread | null>;
+  readonly nowIso: () => Promise<string>;
+  readonly randomUuid: () => Promise<string>;
+  readonly startTransport?: (
+    input: ChannelConnectInput,
+    onDirectMessage: (input: {
+      readonly externalThreadId: string;
+      readonly externalSenderId?: string;
+      readonly text: string;
+    }) => Promise<void>,
+  ) => Promise<{ readonly externalIdentity: string; readonly runtime: ChannelRuntimeEntry }>;
+}
+
+const runtimes = new Map<string, ChannelRuntimeEntry>();
+const inboundQueues = new Map<string, Promise<void>>();
+const bindingQueues = new Map<string, Promise<void>>();
+const operationQueues = new Map<string, Promise<void>>();
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+const StoredChannelSecret = Schema.Union([
+  Schema.Struct({ provider: Schema.Literal("telegram"), token: Schema.String }),
+  Schema.Struct({
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literals(["hosted", "self-hosted"]),
+    projectId: Schema.optional(Schema.String),
+    projectSecret: Schema.optional(Schema.String),
+    serverUrl: Schema.optional(Schema.String),
+    apiKey: Schema.optional(Schema.String),
+    phone: Schema.optional(Schema.String),
+  }),
+]);
+type StoredChannelSecret = typeof StoredChannelSecret.Type;
+const decodeStoredChannelSecret = Schema.decodeUnknownEffect(StoredChannelSecret);
+
+const runtimeKey = (botId: string, provider: ChannelProvider) => `${botId}:${provider}`;
+const operationKey = (botId: BotId, provider: ChannelProvider) =>
+  provider === "telegram" ? provider : runtimeKey(botId, provider);
+const secretName = (botId: BotId, provider: ChannelProvider) =>
+  `channel-${provider}-${createHash("sha256").update(botId).digest("hex")}`;
+
+export const channelThreadId = (
+  botId: BotId,
+  provider: LiveProvider,
+  externalThreadId: string,
+): ThreadId =>
+  ThreadId.make(
+    `channel-${createHash("sha256").update(`${botId}\0${provider}\0${externalThreadId}`).digest("hex")}`,
+  );
+
+export function channelBindingsForRuntime(
+  bindings: ReadonlyArray<ChannelBinding>,
+  isRunning: (botId: BotId, provider: ChannelProvider) => boolean = (botId, provider) =>
+    runtimes.has(runtimeKey(botId, provider)),
+): ReadonlyArray<ChannelBinding> {
+  return bindings.map((binding) =>
+    binding.status === "connected" && !isRunning(binding.botId, binding.provider)
+      ? { ...binding, status: "needs-reconnect" }
+      : binding,
+  );
+}
+
+const randomId = async (dependencies: ChannelRuntimeDependencies, prefix: string) =>
+  `${prefix}-${await dependencies.randomUuid()}`;
+
+async function loadSecret(
+  dependencies: ChannelRuntimeDependencies,
+  botId: BotId,
+  provider: LiveProvider,
+): Promise<StoredChannelSecret | null> {
+  const stored = await Effect.runPromise(dependencies.secretStore.get(secretName(botId, provider)));
+  if (stored._tag === "None") return null;
+  const raw: unknown = JSON.parse(decoder.decode(stored.value));
+  return Effect.runPromise(decodeStoredChannelSecret(raw));
+}
+
+async function assertTelegramTokenAvailable(
+  dependencies: ChannelRuntimeDependencies,
+  botId: BotId,
+  token: string,
+): Promise<void> {
+  const model = await dependencies.readModel();
+  for (const bot of model.bots) {
+    if (bot.id === botId || bot.archivedAt !== null) continue;
+    if (!(bot.channelBindings ?? []).some((binding) => binding.provider === "telegram")) continue;
+    const secret = await loadSecret(dependencies, bot.id, "telegram").catch(() => null);
+    if (secret?.provider === "telegram" && secret.token === token) {
+      throw new Error("This Telegram bot is already connected to another bot.");
+    }
+  }
+}
+
+export async function dispatchInboundChannelMessage(
+  dependencies: ChannelRuntimeDependencies,
+  input: {
+    readonly botId: BotId;
+    readonly provider: LiveProvider;
+    readonly externalThreadId: string;
+    readonly externalSenderId?: string;
+    readonly text: string;
+  },
+): Promise<void> {
+  const threadId = channelThreadId(input.botId, input.provider, input.externalThreadId);
+  const previous = inboundQueues.get(threadId) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const model = await dependencies.readModel();
+      const bot = model.bots.find(
+        (candidate) => candidate.id === input.botId && candidate.archivedAt === null,
+      );
+      if (!bot) throw new Error(`Bot '${input.botId}' is unavailable.`);
+      const project = model.projects.find((candidate) => candidate.deletedAt === null);
+      if (!project) throw new Error("A project is required before a channel can start a turn.");
+      const modelSelection = bot.engine
+        ? { instanceId: ProviderInstanceId.make(bot.engine.provider), model: bot.engine.model }
+        : project.defaultModelSelection;
+      if (!modelSelection)
+        throw new Error(`Bot '${bot.name}' needs a model before channel messages.`);
+
+      const existing = model.threads.find(
+        (thread) => thread.id === threadId && thread.deletedAt === null,
+      );
+      const createdAt = await dependencies.nowIso();
+      if (!existing) {
+        await Effect.runPromise(
+          dependencies.engine.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(await randomId(dependencies, "channel-create")),
+            threadId,
+            projectId: project.id,
+            botId: bot.id,
+            groupId: null,
+            title: bot.name,
+            modelSelection,
+            runtimeMode: bot.runtimeMode,
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdAt,
+          }),
+        );
+      } else if (existing.botId !== bot.id || existing.groupId != null) {
+        throw new Error(`Channel thread '${threadId}' belongs to another owner.`);
+      }
+
+      await Effect.runPromise(
+        dependencies.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(await randomId(dependencies, "channel-turn")),
+          threadId,
+          message: {
+            messageId: MessageId.make(await randomId(dependencies, "channel-message")),
+            role: "user",
+            text: input.text,
+            attachments: [],
+            channelOrigin: {
+              provider: input.provider,
+              externalThreadId: input.externalThreadId,
+              ...(input.externalSenderId ? { externalSenderId: input.externalSenderId } : {}),
+            },
+          },
+          modelSelection,
+          runtimeMode: bot.runtimeMode,
+          interactionMode: "default",
+          createdAt,
+        }),
+      );
+    });
+  inboundQueues.set(threadId, next);
+  try {
+    await next;
+  } finally {
+    if (inboundQueues.get(threadId) === next) inboundQueues.delete(threadId);
+  }
+}
+
+async function replaceBinding(
+  dependencies: ChannelRuntimeDependencies,
+  binding: ChannelBinding,
+): Promise<number> {
+  const previous = bindingQueues.get(binding.botId) ?? Promise.resolve();
+  const operation = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const model = await dependencies.readModel();
+      const bot = model.bots.find((candidate) => candidate.id === binding.botId);
+      if (!bot) throw new Error(`Bot '${binding.botId}' does not exist.`);
+      const previousBinding = (bot.channelBindings ?? []).find(
+        (candidate) => candidate.provider === binding.provider,
+      );
+      const nextBinding = {
+        ...binding,
+        sentMessageIds:
+          binding.sentMessageIds.length > 0
+            ? binding.sentMessageIds
+            : (previousBinding?.sentMessageIds ?? []),
+      };
+      const receipt = await Effect.runPromise(
+        dependencies.engine.dispatch({
+          type: "bot.update",
+          commandId: CommandId.make(await randomId(dependencies, "channel-binding")),
+          botId: bot.id,
+          channelBindings: [
+            ...(bot.channelBindings ?? []).filter(
+              (candidate) => candidate.provider !== binding.provider,
+            ),
+            nextBinding,
+          ],
+        }),
+      );
+      return receipt.sequence;
+    });
+  const queued = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  bindingQueues.set(binding.botId, queued);
+  try {
+    return await operation;
+  } finally {
+    if (bindingQueues.get(binding.botId) === queued) bindingQueues.delete(binding.botId);
+  }
+}
+
+async function withChannelOperation<A>(
+  botId: BotId,
+  provider: ChannelProvider,
+  operation: () => Promise<A>,
+): Promise<A> {
+  const key = operationKey(botId, provider);
+  const previous = operationQueues.get(key) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const queued = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  operationQueues.set(key, queued);
+  try {
+    return await result;
+  } finally {
+    if (operationQueues.get(key) === queued) operationQueues.delete(key);
+  }
+}
+
+async function stopRuntime(botId: BotId, provider: ChannelProvider): Promise<void> {
+  const key = runtimeKey(botId, provider);
+  const runtime = runtimes.get(key);
+  if (!runtime) return;
+  runtimes.delete(key);
+  await runtime.shutdown();
+}
+
+export async function stopChannelsForBot(botId: BotId): Promise<void> {
+  await Promise.allSettled(
+    (["telegram", "imessage"] as const).map((provider) => stopRuntime(botId, provider)),
+  );
+}
+
+export async function shutdownAllChannels(): Promise<void> {
+  const entries = [...runtimes.values()];
+  runtimes.clear();
+  inboundQueues.clear();
+  bindingQueues.clear();
+  operationQueues.clear();
+  await Promise.allSettled(entries.map((entry) => entry.shutdown()));
+}
+
+async function startTelegram(
+  botId: BotId,
+  token: string,
+  onDirectMessage: Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1],
+): Promise<{ readonly externalIdentity: string; readonly runtime: ChannelRuntimeEntry }> {
+  const provider = new TelegramProvider({ mode: "polling", commands: [] });
+  const connected = await provider.connect(botId, { botToken: token, commands: [] });
+  if (connected.type !== "immediate") throw new Error("Telegram did not connect immediately.");
+  const installation = await provider.getInstallation(botId);
+  const adapter = provider.getAdapter(connected.installationId);
+  if (!installation || !adapter) throw new Error("Telegram did not create an active adapter.");
+  if (!adapter.botUserId) throw new Error("Telegram did not identify the connected bot.");
+  const activeAdapter = Object.assign(adapter, { botUserId: adapter.botUserId });
+  const chat = new Chat({
+    userName: installation.username ?? "Akeru Bot",
+    adapters: { telegram: activeAdapter },
+    state: createMemoryState(),
+  });
+  chat.onDirectMessage(async (thread, message) => {
+    if (!message.text.trim()) return;
+    await onDirectMessage({
+      externalThreadId: thread.id,
+      externalSenderId: message.author.userId,
+      text: message.text,
+    });
+  });
+  try {
+    await chat.initialize();
+  } catch (cause) {
+    await provider.disconnect(botId).catch(() => undefined);
+    throw cause;
+  }
+  return {
+    externalIdentity: installation.username ? `@${installation.username}` : botId,
+    runtime: {
+      post: async (externalThreadId, text) => void (await chat.thread(externalThreadId).post(text)),
+      shutdown: async () => {
+        await chat.shutdown();
+        await provider.disconnect(botId).catch(() => undefined);
+      },
+    },
+  };
+}
+
+async function startIMessage(
+  input: Extract<ChannelConnectInput, { readonly provider: "imessage" }>,
+  onDirectMessage: Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1],
+): Promise<{ readonly externalIdentity: string; readonly runtime: ChannelRuntimeEntry }> {
+  const adapter = createiMessageAdapter(
+    input.mode === "hosted"
+      ? { projectId: input.projectId, projectSecret: input.projectSecret }
+      : {
+          serverUrl: input.serverUrl,
+          apiKey: input.apiKey,
+          ...(input.phone ? { phone: input.phone } : {}),
+        },
+  );
+  const chat = new Chat({
+    userName: "Akeru Bot",
+    adapters: { imessage: adapter },
+    state: createMemoryState(),
+  });
+  chat.onDirectMessage(async (thread, message) => {
+    if (!message.text.trim()) return;
+    await onDirectMessage({
+      externalThreadId: thread.id,
+      externalSenderId: message.author.userId,
+      text: message.text,
+    });
+  });
+  await chat.initialize();
+  const abort = new AbortController();
+  const response = await adapter.startGatewayListener(
+    { waitUntil: (task) => void task },
+    undefined,
+    abort.signal,
+  );
+  if (!response.ok) {
+    abort.abort();
+    await chat.shutdown();
+    throw new Error(`Photon gateway failed with status ${response.status}.`);
+  }
+  return {
+    externalIdentity:
+      input.mode === "self-hosted" && input.phone
+        ? input.phone
+        : input.mode === "hosted"
+          ? "Photon hosted"
+          : "Photon self-hosted",
+    runtime: {
+      post: async (externalThreadId, text) => void (await chat.thread(externalThreadId).post(text)),
+      shutdown: async () => {
+        abort.abort();
+        await chat.shutdown();
+      },
+    },
+  };
+}
+
+async function startChannel(
+  dependencies: ChannelRuntimeDependencies,
+  input: ChannelConnectInput,
+): Promise<StartedChannel> {
+  const model = await dependencies.readModel();
+  const bot = model.bots.find((candidate) => candidate.id === input.botId);
+  if (!bot || bot.archivedAt !== null) throw new Error(`Bot '${input.botId}' is unavailable.`);
+  const onDirectMessage = (message: {
+    readonly externalThreadId: string;
+    readonly externalSenderId?: string;
+    readonly text: string;
+  }) =>
+    dispatchInboundChannelMessage(dependencies, {
+      ...message,
+      botId: bot.id,
+      provider: input.provider,
+    });
+  const started = dependencies.startTransport
+    ? await dependencies.startTransport(input, onDirectMessage)
+    : input.provider === "telegram"
+      ? await startTelegram(bot.id, input.token, onDirectMessage)
+      : await startIMessage(input, onDirectMessage);
+  return {
+    runtime: started.runtime,
+    binding: {
+      botId: bot.id,
+      provider: input.provider,
+      status: "connected",
+      externalIdentity: started.externalIdentity,
+      connectedAt: await dependencies.nowIso(),
+      sentMessageIds: [],
+    },
+  };
+}
+
+async function commitStartedChannel(
+  dependencies: ChannelRuntimeDependencies,
+  started: StartedChannel,
+  secret?: StoredChannelSecret,
+): Promise<number> {
+  const key = runtimeKey(started.binding.botId, started.binding.provider);
+  const previousRuntime = runtimes.get(key);
+  const name = secretName(started.binding.botId, started.binding.provider);
+  let previousSecret: Option.Option<Uint8Array> | undefined;
+  try {
+    previousSecret = await Effect.runPromise(dependencies.secretStore.get(name));
+    runtimes.set(key, started.runtime);
+    if (secret) {
+      await Effect.runPromise(
+        dependencies.secretStore.set(name, encoder.encode(JSON.stringify(secret))),
+      );
+    }
+    const sequence = await replaceBinding(dependencies, started.binding);
+    if (previousRuntime && previousRuntime !== started.runtime) {
+      await previousRuntime.shutdown().catch(() => undefined);
+    }
+    return sequence;
+  } catch (cause) {
+    if (previousRuntime) runtimes.set(key, previousRuntime);
+    else runtimes.delete(key);
+    await started.runtime.shutdown().catch(() => undefined);
+    if (previousSecret?._tag === "Some") {
+      await Effect.runPromise(dependencies.secretStore.set(name, previousSecret.value)).catch(
+        () => undefined,
+      );
+    } else if (previousSecret?._tag === "None") {
+      await Effect.runPromise(dependencies.secretStore.remove(name)).catch(() => undefined);
+    }
+    throw cause;
+  }
+}
+
+export async function connectChannel(
+  dependencies: ChannelRuntimeDependencies,
+  input: ChannelConnectInput,
+): Promise<number> {
+  return withChannelOperation(input.botId, input.provider, async () => {
+    if (input.provider === "telegram") {
+      await assertTelegramTokenAvailable(dependencies, input.botId, input.token);
+    }
+    const started = await startChannel(dependencies, input);
+    const secret: StoredChannelSecret =
+      input.provider === "telegram"
+        ? { provider: "telegram", token: input.token }
+        : input.mode === "hosted"
+          ? {
+              provider: "imessage",
+              mode: "hosted",
+              projectId: input.projectId,
+              projectSecret: input.projectSecret,
+            }
+          : {
+              provider: "imessage",
+              mode: "self-hosted",
+              serverUrl: input.serverUrl,
+              apiKey: input.apiKey,
+              ...(input.phone ? { phone: input.phone } : {}),
+            };
+    return commitStartedChannel(dependencies, started, secret);
+  });
+}
+
+export async function disconnectChannel(
+  dependencies: ChannelRuntimeDependencies,
+  botId: BotId,
+  provider: ChannelProvider,
+): Promise<number> {
+  return withChannelOperation(botId, provider, async () => {
+    const name = secretName(botId, provider);
+    const previousSecret = await Effect.runPromise(dependencies.secretStore.get(name));
+    await Effect.runPromise(dependencies.secretStore.remove(name));
+    let sequence: number;
+    try {
+      sequence = await replaceBinding(dependencies, {
+        botId,
+        provider,
+        status: provider === "whatsapp" ? "not-live" : "disconnected",
+        externalIdentity: null,
+        connectedAt: null,
+        sentMessageIds: [],
+      });
+    } catch (cause) {
+      if (previousSecret._tag === "Some") {
+        await Effect.runPromise(dependencies.secretStore.set(name, previousSecret.value)).catch(
+          () => undefined,
+        );
+      }
+      throw cause;
+    }
+    await stopRuntime(botId, provider);
+    return sequence;
+  });
+}
+
+export async function reconnectChannel(
+  dependencies: ChannelRuntimeDependencies,
+  botId: BotId,
+  provider: LiveProvider,
+): Promise<number> {
+  return withChannelOperation(botId, provider, async () => {
+    const secret = await loadSecret(dependencies, botId, provider);
+    if (!secret || secret.provider !== provider)
+      throw new Error(`No saved ${provider} credentials.`);
+    const commandId = CommandId.make(await randomId(dependencies, "channel-reconnect"));
+    const input: ChannelConnectInput =
+      secret.provider === "telegram"
+        ? { type: "channel.connect", commandId, botId, provider: "telegram", token: secret.token }
+        : secret.mode === "hosted"
+          ? (() => {
+              if (!secret.projectId || !secret.projectSecret) {
+                throw new Error("Saved Photon hosted credentials are incomplete.");
+              }
+              return {
+                type: "channel.connect",
+                commandId,
+                botId,
+                provider: "imessage",
+                mode: "hosted",
+                projectId: secret.projectId,
+                projectSecret: secret.projectSecret,
+              } as const;
+            })()
+          : (() => {
+              if (!secret.serverUrl || !secret.apiKey) {
+                throw new Error("Saved Photon self-hosted credentials are incomplete.");
+              }
+              return {
+                type: "channel.connect",
+                commandId,
+                botId,
+                provider: "imessage",
+                mode: "self-hosted",
+                serverUrl: secret.serverUrl,
+                apiKey: secret.apiKey,
+                ...(secret.phone ? { phone: secret.phone } : {}),
+              } as const;
+            })();
+    const started = await startChannel(dependencies, input);
+    return commitStartedChannel(dependencies, started);
+  });
+}
+
+export async function restoreConnectedChannels(
+  dependencies: ChannelRuntimeDependencies,
+): Promise<
+  ReadonlyArray<{ readonly botId: BotId; readonly provider: LiveProvider; readonly cause: unknown }>
+> {
+  const model = await dependencies.readModel();
+  const candidates = model.bots.flatMap((bot) =>
+    bot.archivedAt === null
+      ? (bot.channelBindings ?? []).flatMap((binding) =>
+          (binding.provider === "telegram" || binding.provider === "imessage") &&
+          (binding.status === "connected" || binding.status === "needs-reconnect")
+            ? [{ botId: bot.id, provider: binding.provider }]
+            : [],
+        )
+      : [],
+  );
+  const results = await Promise.allSettled(
+    candidates.map(async (candidate) => {
+      await reconnectChannel(dependencies, candidate.botId, candidate.provider);
+    }),
+  );
+  return results.flatMap((result, index) =>
+    result.status === "rejected" ? [{ ...candidates[index]!, cause: result.reason }] : [],
+  );
+}
+
+export async function sendChannelMessage(
+  dependencies: ChannelRuntimeDependencies,
+  input: { readonly botId: BotId; readonly threadId: ThreadId; readonly messageId: MessageId },
+): Promise<number> {
+  const thread = await dependencies.readThread(input.threadId);
+  const messageIndex = thread?.messages.findIndex(
+    (message) => message.id === input.messageId && message.role === "assistant",
+  );
+  if (!thread || thread.botId !== input.botId || messageIndex === undefined || messageIndex < 0) {
+    throw new Error("Channel reply approval does not match this bot thread.");
+  }
+  const origin = thread.messages
+    .slice(0, messageIndex)
+    .toReversed()
+    .find((message) => message.role === "user")?.channelOrigin;
+  if (!origin) throw new Error("Channel reply approval does not match an inbound channel message.");
+  const approvedMessage = thread.messages[messageIndex];
+  if (!approvedMessage?.text.trim()) throw new Error("Channel reply is empty.");
+
+  return withChannelOperation(input.botId, origin.provider, async () => {
+    const model = await dependencies.readModel();
+    const bot = model.bots.find((candidate) => candidate.id === input.botId);
+    const binding = bot?.channelBindings?.find(
+      (candidate) => candidate.provider === origin.provider,
+    );
+    if (!bot || bot.archivedAt !== null || !binding)
+      throw new Error("Channel binding is unavailable.");
+    const claim = await Effect.runPromise(
+      dependencies.deliveryStore.claim({
+        messageId: input.messageId,
+        botId: input.botId,
+        threadId: input.threadId,
+        provider: origin.provider,
+        externalThreadId: origin.externalThreadId,
+        requestedAt: await dependencies.nowIso(),
+      }),
+    );
+    if (claim === "requested" && !binding.sentMessageIds.includes(input.messageId)) {
+      throw new Error("This channel reply has an unfinished delivery attempt.");
+    }
+    if (claim === "claimed") {
+      const runtime = runtimes.get(runtimeKey(input.botId, origin.provider));
+      if (!runtime) {
+        await Effect.runPromise(dependencies.deliveryStore.releaseRequested(input.messageId));
+        throw new Error(
+          `${origin.provider === "imessage" ? "iMessage" : "Telegram"} needs reconnect before this reply can send.`,
+        );
+      }
+      try {
+        await runtime.post(origin.externalThreadId, approvedMessage.text);
+      } catch (cause) {
+        await Effect.runPromise(dependencies.deliveryStore.releaseRequested(input.messageId));
+        throw cause;
+      }
+    }
+    const sequence = binding.sentMessageIds.includes(input.messageId)
+      ? model.snapshotSequence
+      : await replaceBinding(dependencies, {
+          ...binding,
+          sentMessageIds: [...binding.sentMessageIds, input.messageId],
+        });
+    await Effect.runPromise(
+      dependencies.deliveryStore.markSent({
+        messageId: input.messageId,
+        sentAt: await dependencies.nowIso(),
+      }),
+    );
+    return sequence;
+  });
+}

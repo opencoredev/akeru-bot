@@ -35,6 +35,10 @@ export type CreateBotInput = CommandInput<"bot.create">;
 export type UpdateBotInput = CommandInput<"bot.update">;
 export type ArchiveBotInput = CommandInput<"bot.archive">;
 export type RestoreBotInput = CommandInput<"bot.restore">;
+export type ConnectChannelInput = CommandInput<"channel.connect">;
+export type DisconnectChannelInput = CommandInput<"channel.disconnect">;
+export type ReconnectChannelInput = CommandInput<"channel.reconnect">;
+export type SendChannelMessageInput = CommandInput<"channel.send">;
 export type CreateGroupInput = CommandInput<"group.create">;
 export type RenameGroupInput = CommandInput<"group.rename">;
 export type DeleteGroupInput = CommandInput<"group.delete">;
@@ -325,6 +329,46 @@ export const setGroupBoss: (input: SetGroupBossInput) => CommandEffect = Effect.
   return yield* dispatch({
     ...input,
     type: "group.boss.set",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const connectChannel: (input: ConnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.connectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.connect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const disconnectChannel: (input: DisconnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.disconnectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.disconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const reconnectChannel: (input: ReconnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.reconnectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.reconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const sendChannelMessage: (input: SendChannelMessageInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.sendChannelMessage",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.send",
     commandId: yield* commandId(input),
   });
 });

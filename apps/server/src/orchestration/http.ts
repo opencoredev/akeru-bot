@@ -1,13 +1,20 @@
+import { randomUUID } from "node:crypto";
+
 import {
   AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
+import * as ChannelCommand from "../channels/ChannelCommand.ts";
+import * as ChannelDeliveryStore from "../channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
   applyAuthenticatedCommandActor,
@@ -34,6 +41,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+    const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
+    const channelDeliveryStore = yield* Effect.serviceOption(
+      ChannelDeliveryStore.ChannelDeliveryStore,
+    );
 
     return handlers
       .handle(
@@ -60,13 +71,18 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.shellSnapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
-          return yield* projectionSnapshotQuery
-            .getShellSnapshot()
-            .pipe(
-              Effect.catch((cause) =>
-                failEnvironmentInternal("orchestration_snapshot_failed", cause),
-              ),
-            );
+          return yield* projectionSnapshotQuery.getShellSnapshot().pipe(
+            Effect.map((snapshot) => ({
+              ...snapshot,
+              bots: snapshot.bots.map((bot) => ({
+                ...bot,
+                channelBindings: ChannelRuntime.channelBindingsForRuntime(bot.channelBindings),
+              })),
+            })),
+            Effect.catch((cause) =>
+              failEnvironmentInternal("orchestration_snapshot_failed", cause),
+            ),
+          );
         }),
       )
       .handle(
@@ -102,7 +118,44 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.dispatch")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           const principal = yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
-          const decodedCommand = yield* normalizeDispatchCommand(args.payload).pipe(
+          const command = args.payload;
+          if (ChannelCommand.isChannelCommand(command)) {
+            if (!principal.scopes.has(AuthAccessWriteScope)) {
+              yield* requireEnvironmentScope(AuthAccessWriteScope);
+            }
+            const services = Option.all({ secretStore, channelDeliveryStore });
+            if (Option.isNone(services)) {
+              return yield* failEnvironmentInternal(
+                "orchestration_dispatch_failed",
+                new Error("Channel services are unavailable."),
+              );
+            }
+            return yield* Effect.tryPromise(() =>
+              ChannelCommand.executeChannelCommand(
+                {
+                  engine: orchestrationEngine,
+                  secretStore: services.value.secretStore,
+                  deliveryStore: services.value.channelDeliveryStore,
+                  readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+                  readThread: (threadId) =>
+                    Effect.runPromise(
+                      projectionSnapshotQuery
+                        .getThreadDetailById(threadId)
+                        .pipe(Effect.map(Option.getOrNull)),
+                    ),
+                  nowIso: () =>
+                    Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
+                  randomUuid: async () => randomUUID(),
+                },
+                command,
+              ),
+            ).pipe(
+              Effect.catch((cause) =>
+                failEnvironmentInternal("orchestration_dispatch_failed", cause),
+              ),
+            );
+          }
+          const decodedCommand = yield* normalizeDispatchCommand(command).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
           if (!canManageGroupPeople(decodedCommand, principal.scopes)) {
