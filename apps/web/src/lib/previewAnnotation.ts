@@ -48,7 +48,7 @@ export function buildPreviewAnnotationPrompt(annotation: PreviewAnnotationPayloa
     }
   }
   if (annotation.screenshot) {
-    lines.push("The attached screenshot is the annotated preview crop.");
+    lines.push("Screenshot omitted because local pixel redaction is unavailable.");
   }
   const elementContexts = annotation.elements
     .map((target) => normalizeElementContextSelection(target.element))
@@ -100,12 +100,7 @@ export function extractTrailingPreviewAnnotation(prompt: string): ExtractedPrevi
 }
 
 export async function previewAnnotationScreenshotFile(
-  annotation: PreviewAnnotationPayload,
+  _annotation: PreviewAnnotationPayload,
 ): Promise<File | null> {
-  if (!annotation.screenshot) return null;
-  const response = await fetch(annotation.screenshot.dataUrl);
-  const blob = await response.blob();
-  return new File([blob], `preview-annotation-${annotation.id}.png`, {
-    type: blob.type || "image/png",
-  });
+  return null;
 }

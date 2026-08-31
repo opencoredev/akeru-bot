@@ -197,16 +197,31 @@ it.effect("registers annotated tools and preserves authenticated request context
                     height: 5,
                   },
                 }
-              : event.request.operation === "press"
-                ? undefined
-                : {
-                    available: true,
-                    visible: true,
-                    tabId,
-                    url: "http://example.test/",
-                    title: "Example",
-                    loading: false,
-                  },
+              : event.request.operation === "evaluate"
+                ? {
+                    arbitrary: "unrecognizable-secret",
+                    chatPath: "/Users/leo/.akeru/chat.json",
+                    screenshot,
+                  }
+                : event.request.operation === "recordingStop"
+                  ? {
+                      id: "recording-1",
+                      tabId,
+                      path: "/Users/leo/.akeru/browser-artifacts/recording.webm",
+                      mimeType: "video/webm",
+                      sizeBytes: 123,
+                      createdAt: "2026-01-01T00:00:00Z",
+                    }
+                  : event.request.operation === "press"
+                    ? undefined
+                    : {
+                        available: true,
+                        visible: true,
+                        tabId,
+                        url: "http://example.test/",
+                        title: "Example",
+                        loading: false,
+                      },
         });
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -275,6 +290,36 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
         alternateTabId,
       );
+
+      const evaluation = yield* server
+        .callTool({ name: "preview_evaluate", arguments: { expression: "document.body" } })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(evaluation.structuredContent).toEqual({
+        redactionStatus: "omitted-unverified-preview-evaluation",
+      });
+      expect(evaluation.content).toEqual([
+        {
+          type: "text",
+          text: '{"redactionStatus":"omitted-unverified-preview-evaluation"}',
+        },
+      ]);
+
+      const recording = yield* server
+        .callTool({ name: "preview_recording_stop", arguments: {} })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(recording.structuredContent).toMatchObject({ path: "[REDACTED]" });
+      expect(recording.content).toEqual([
+        {
+          type: "text",
+          text: '{"id":"recording-1","tabId":"tab-mcp-test","path":"[REDACTED]","mimeType":"video/webm","sizeBytes":123,"createdAt":"2026-01-01T00:00:00Z"}',
+        },
+      ]);
 
       const actionRequests = [
         { name: "preview_click", arguments: { x: 10, y: 10 } },

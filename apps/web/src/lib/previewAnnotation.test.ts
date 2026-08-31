@@ -5,6 +5,7 @@ import {
   appendPreviewAnnotationPrompt,
   buildPreviewAnnotationPrompt,
   extractTrailingPreviewAnnotation,
+  previewAnnotationScreenshotFile,
 } from "./previewAnnotation";
 
 const annotation: PreviewAnnotationPayload = {
@@ -45,13 +46,13 @@ const annotation: PreviewAnnotationPayload = {
 };
 
 describe("preview annotations", () => {
-  it("describes regions, drawings, styles, and screenshot context", () => {
+  it("describes regions, drawings, styles, and an omitted screenshot", () => {
     const result = buildPreviewAnnotationPrompt(annotation);
     expect(result).toContain("Make these cards feel related.");
     expect(result).toContain("1 marked region");
     expect(result).toContain("1 drawing");
     expect(result).toContain("border-radius: 4px → 16px");
-    expect(result).toContain("attached screenshot");
+    expect(result).toContain("Screenshot omitted because local pixel redaction is unavailable.");
   });
 
   it("appends to an existing composer prompt", () => {
@@ -70,8 +71,12 @@ describe("preview annotations", () => {
     expect(result.annotation).toMatchObject({
       title: "Example",
       targetSummary: "1 marked region, 1 drawing.",
-      hasScreenshot: true,
+      hasScreenshot: false,
     });
+  });
+
+  it("does not turn raw preview pixels into a provider attachment", async () => {
+    expect(await previewAnnotationScreenshotFile(annotation)).toBeNull();
   });
 
   it("extracts multiple trailing annotations one at a time", () => {
