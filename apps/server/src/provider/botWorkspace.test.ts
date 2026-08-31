@@ -15,7 +15,7 @@ import {
 describe("createBotWorkspace", () => {
   it("classifies every managed provider", () => {
     expect(isRemoteBotSandbox("local")).toBe(false);
-    for (const sandbox of ["e2b", "daytona", "vercel", "akeru-cloud", "upstash"] as const) {
+    for (const sandbox of ["vercel", "akeru-cloud", "upstash"] as const) {
       expect(isRemoteBotSandbox(sandbox)).toBe(true);
     }
   });
@@ -62,7 +62,7 @@ describe("createBotWorkspace", () => {
     await remote.destroy();
   });
 
-  it.each(["e2b", "daytona", "vercel", "upstash", "akeru-cloud"] as const)(
+  it.each(["vercel", "upstash", "akeru-cloud"] as const)(
     "fails closed while the %s adapter is unavailable",
     async (sandbox) => {
       await expect(

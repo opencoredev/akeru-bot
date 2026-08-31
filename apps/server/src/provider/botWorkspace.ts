@@ -5,7 +5,7 @@ import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import type { BotSandbox } from "@t3tools/contracts";
 
-export const REMOTE_BOT_SANDBOXES = ["e2b", "daytona", "vercel", "akeru-cloud", "upstash"] as const;
+export const REMOTE_BOT_SANDBOXES = ["vercel", "akeru-cloud", "upstash"] as const;
 export type RemoteBotSandbox = (typeof REMOTE_BOT_SANDBOXES)[number];
 
 export function isRemoteBotSandbox(
