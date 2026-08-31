@@ -59,6 +59,7 @@ function makeSnapshot(
       threads,
       bots: [],
       groups: [],
+      delegations: [],
       updatedAt: "2026-06-04T00:00:00.000Z",
     },
   };

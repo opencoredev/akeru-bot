@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
@@ -6,6 +8,7 @@ import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { SidebarInset } from "../ui/sidebar";
 import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
@@ -15,12 +18,15 @@ import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
+import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { useGroupPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
+
+const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const navigate = useNavigate();
@@ -37,6 +43,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
 
   useEffect(() => {
     if (!group) void navigate({ to: "/", replace: true });
@@ -54,6 +61,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     inboxQuery.data?.inbox ?? [],
     new Set(members.map((bot) => bot.id)),
   );
+  const delegations = runtime.linkedThreadRef
+    ? (snapshot?.delegations.filter(
+        (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
+      ) ?? [])
+    : [];
 
   return (
     <SidebarInset
@@ -138,6 +150,13 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
             />
           ) : null}
+          {delegations.map((delegation) => (
+            <DelegationCard
+              key={delegation.delegationId}
+              delegation={delegation}
+              childBot={bots.find((candidate) => candidate.id === delegation.childBotId) ?? null}
+            />
+          ))}
           {working ? <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} /> : null}
         </BotConversationScrollArea>
         <BotInboxAlertStack

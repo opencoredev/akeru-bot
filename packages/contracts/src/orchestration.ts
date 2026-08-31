@@ -647,6 +647,9 @@ export const OrchestrationShellSnapshot = Schema.Struct({
   projects: Schema.Array(OrchestrationProjectShell),
   bots: Schema.Array(OrchestrationBot).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   groups: Schema.Array(OrchestrationGroup).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  delegations: Schema.Array(Schema.suspend(() => AkeruDelegationRecord)).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
   threads: Schema.Array(OrchestrationThreadShell),
   updatedAt: IsoDateTime,
@@ -688,6 +691,11 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("mcp-server-removed"),
     sequence: NonNegativeInt,
     mcpServerId: McpServerId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("delegation-upserted"),
+    sequence: NonNegativeInt,
+    delegation: Schema.suspend(() => AkeruDelegationRecord),
   }),
   Schema.Struct({
     kind: Schema.Literal("thread-upserted"),

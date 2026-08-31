@@ -17,6 +17,7 @@ import {
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
   OrchestrationReadModel,
+  OrchestrationShellSnapshot,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
@@ -47,6 +48,7 @@ const decodeThreadTurnStartRequestedPayload = Schema.decodeUnknownEffect(
 );
 const decodeOrchestrationLatestTurn = Schema.decodeUnknownEffect(OrchestrationLatestTurn);
 const decodeOrchestrationReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
+const decodeOrchestrationShellSnapshot = Schema.decodeUnknownEffect(OrchestrationShellSnapshot);
 const decodeOrchestrationProposedPlan = Schema.decodeUnknownEffect(OrchestrationProposedPlan);
 const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSession);
 const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread);
@@ -609,6 +611,19 @@ it.effect("defaults delegations when decoding historical read models", () =>
       updatedAt: "2026-08-31T12:00:00.000Z",
     });
     assert.deepEqual(readModel.delegations, []);
+  }),
+);
+
+it.effect("defaults delegations when decoding historical shell snapshots", () =>
+  Effect.gen(function* () {
+    const snapshot = yield* decodeOrchestrationShellSnapshot({
+      snapshotSequence: 1,
+      projects: [],
+      threads: [],
+      updatedAt: "2026-08-31T00:00:00.000Z",
+    });
+
+    assert.deepEqual(snapshot.delegations, []);
   }),
 );
 

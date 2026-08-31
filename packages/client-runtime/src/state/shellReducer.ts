@@ -64,6 +64,18 @@ export function applyShellStreamEvent(
         ),
         snapshotSequence: event.sequence,
       };
+    case "delegation-upserted": {
+      const delegations = snapshot.delegations.some(
+        (delegation) => delegation.delegationId === event.delegation.delegationId,
+      )
+        ? Arr.map(snapshot.delegations, (delegation) =>
+            delegation.delegationId === event.delegation.delegationId
+              ? event.delegation
+              : delegation,
+          )
+        : Arr.append(snapshot.delegations, event.delegation);
+      return { ...snapshot, delegations, snapshotSequence: event.sequence };
+    }
     case "thread-upserted": {
       const threads = snapshot.threads.some((t) => t.id === event.thread.id)
         ? Arr.map(snapshot.threads, (t) => (t.id === event.thread.id ? event.thread : t))

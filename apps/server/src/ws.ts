@@ -872,6 +872,15 @@ const makeWsRpcLayer = (
                 mcpServerId: event.payload.mcpServerId,
               }),
             );
+          case "delegation.created":
+          case "delegation.updated":
+            return Effect.succeed(
+              Option.some({
+                kind: "delegation-upserted" as const,
+                sequence: event.sequence,
+                delegation: event.payload.delegation,
+              }),
+            );
           case "thread.deleted":
           case "thread.archived":
             return Effect.succeed(

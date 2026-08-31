@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AkeruDelegationRecord,
   BotId,
   GroupId,
   McpServerId,
@@ -8,6 +9,7 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@t3tools/contracts";
 
 import { applyShellStreamEvent } from "./shellReducer.ts";
@@ -16,10 +18,46 @@ const baseSnapshot: OrchestrationShellSnapshot = {
   snapshotSequence: 0,
   bots: [],
   groups: [],
+  delegations: [],
   projects: [],
   threads: [],
   updatedAt: "2026-04-01T00:00:00.000Z",
 };
+
+const stubDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord)({
+  delegationId: "delegation-1",
+  parentDelegationId: null,
+  parentBotId: "bot-parent",
+  childBotId: "bot-child",
+  parentThreadId: "thread-parent",
+  childThreadId: null,
+  parentTurnId: "turn-parent",
+  childTurnId: null,
+  ancestorBotIds: ["bot-parent"],
+  depth: 1,
+  task: "Compare the release options.",
+  expectedResult: "A short comparison.",
+  deadline: null,
+  access: {
+    allowedToolIds: ["Read"],
+    memoryScopes: ["project"],
+    sandbox: "local",
+    runtimeMode: "approval-required",
+    hasUserComputer: false,
+    enabledMcpServerIds: [],
+    disabledMcpServerIds: [],
+    approvalCeiling: "none",
+  },
+  state: "queued",
+  billedBotId: "bot-child",
+  result: null,
+  failure: null,
+  keep: false,
+  createdAt: "2026-04-01T00:00:00.000Z",
+  updatedAt: "2026-04-01T00:00:00.000Z",
+  startedAt: null,
+  completedAt: null,
+});
 
 const stubProject = {
   id: ProjectId.make("project-1"),
@@ -257,6 +295,25 @@ describe("applyShellStreamEvent", () => {
 
       expect(next.groups).toHaveLength(0);
       expect(next.snapshotSequence).toBe(8);
+    });
+  });
+
+  describe("delegation-upserted", () => {
+    it("adds and updates a delegation by id", () => {
+      const added = applyShellStreamEvent(baseSnapshot, {
+        kind: "delegation-upserted",
+        sequence: 9,
+        delegation: stubDelegation,
+      });
+      const updated = applyShellStreamEvent(added, {
+        kind: "delegation-upserted",
+        sequence: 10,
+        delegation: { ...stubDelegation, state: "running", startedAt: stubDelegation.createdAt },
+      });
+
+      expect(updated.delegations).toHaveLength(1);
+      expect(updated.delegations[0]?.state).toBe("running");
+      expect(updated.snapshotSequence).toBe(10);
     });
   });
 
