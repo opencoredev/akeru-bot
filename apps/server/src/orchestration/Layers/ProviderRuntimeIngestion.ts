@@ -1566,9 +1566,13 @@ const make = Effect.gen(function* () {
       const now = event.createdAt;
       const eventTurnId = toTurnId(event.turnId);
       const respondingBotId = resolveControllerBotId(thread);
+      const activeTurnId = thread.session?.activeTurnId ?? null;
+      const conflictsWithActiveTurn =
+        activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&
+        !conflictsWithActiveTurn &&
         event.type === "thread.token-usage.updated"
       ) {
         const usage = event.payload.usage;
@@ -1601,6 +1605,7 @@ const make = Effect.gen(function* () {
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&
+        !conflictsWithActiveTurn &&
         (event.type === "turn.completed" || event.type === "turn.aborted")
       ) {
         yield* botUsageLedger
@@ -1621,15 +1626,12 @@ const make = Effect.gen(function* () {
             ),
           );
       }
-      const activeTurnId = thread.session?.activeTurnId ?? null;
       const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
         threadId: thread.id,
       });
       const hasPendingTurnStart =
         Option.isSome(pendingTurnStart) && thread.session?.status === "starting";
 
-      const conflictsWithActiveTurn =
-        activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
       const missingTurnForActiveTurn = activeTurnId !== null && eventTurnId === undefined;
 
       // A turn.started that conflicts with the active turn is legitimate when

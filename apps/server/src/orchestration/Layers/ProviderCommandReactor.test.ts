@@ -175,6 +175,7 @@ describe("ProviderCommandReactor", () => {
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
     readonly botEngine?: { readonly provider: string; readonly model: string } | null;
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
+    readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
@@ -444,11 +445,20 @@ describe("ProviderCommandReactor", () => {
         } satisfies OrchestrationEngineService["Service"];
       }),
     ).pipe(Layer.provide(orchestrationLayer));
+    const botUsageLedgerLayer = Layer.effect(
+      BotUsageLedger,
+      BotUsageLedger.pipe(
+        Effect.map((ledger) => ({
+          ...ledger,
+          bindTurn: input?.bindTurnFailure ? () => Effect.die("bind failed") : ledger.bindTurn,
+        })),
+      ),
+    ).pipe(Layer.provide(BotUsageLedgerLive.pipe(Layer.provide(SqlitePersistenceMemory))));
     const layer = ProviderCommandReactorLive.pipe(
       Layer.provideMerge(reactorOrchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(ProjectionBotRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory))),
-      Layer.provideMerge(BotUsageLedgerLive.pipe(Layer.provide(SqlitePersistenceMemory))),
+      Layer.provideMerge(botUsageLedgerLayer),
       Layer.provideMerge(Layer.succeed(AgentController, service)),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
       Layer.provideMerge(
@@ -810,6 +820,43 @@ describe("ProviderCommandReactor", () => {
       expect(usage.consumedTokens).toBe(0);
       expect(usage.reservedTokens).toBe(0);
       expect(usage.entries[0]?.state).toBe("released");
+    }),
+  );
+
+  effectIt.effect("charges a configured bot's usage reservation when turn binding fails", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: { provider: "codex", model: "gpt-5-codex" },
+          botUsageCap: { unit: "tokens", limit: 1_000 },
+          bindTurnFailure: true,
+        }),
+      );
+
+      yield* harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bind-failure"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bind-failure"),
+          role: "user",
+          text: "fail binding",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      yield* Effect.promise(() => harness.drain());
+
+      const usage = yield* Effect.promise(() => harness.summarizeBotUsage());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+      expect(usage.consumedTokens).toBe(1_000);
+      expect(usage.reservedTokens).toBe(0);
+      expect(usage.entries[0]).toMatchObject({
+        state: "unavailable",
+        unavailableReason: "Usage reservation could not bind to the provider turn.",
+      });
     }),
   );
 

@@ -1365,7 +1365,25 @@ const make = Effect.gen(function* () {
       Effect.tap((result) =>
         respondingBotId === null
           ? Effect.void
-          : botUsageLedger.bindTurn({ reservationId, turnId: result.turnId }),
+          : botUsageLedger.bindTurn({ reservationId, turnId: result.turnId }).pipe(
+              Effect.catchCause(() =>
+                botUsageLedger
+                  .settle({
+                    reservationId,
+                    state: "unavailable",
+                    reason: "Usage reservation could not bind to the provider turn.",
+                    settledAt: event.payload.createdAt,
+                  })
+                  .pipe(
+                    Effect.catchCause((settleCause) =>
+                      Effect.logWarning("failed to charge an unbound bot usage reservation", {
+                        reservationId,
+                        cause: Cause.pretty(settleCause),
+                      }),
+                    ),
+                  ),
+              ),
+            ),
       ),
       Effect.catchCause((cause) =>
         (respondingBotId === null

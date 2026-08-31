@@ -346,7 +346,7 @@ describe("ProviderRuntimeIngestion", () => {
       botInbox: new BotInboxService(
         NodePath.join(workspaceRoot, "userdata", "secrets", "bot-inbox.json"),
       ),
-      reserveBotUsage: (turnId: TurnId) =>
+      reserveBotUsage: (turnId: TurnId | null) =>
         runtime!.runPromise(
           BotUsageLedger.pipe(
             Effect.flatMap((ledger) =>
@@ -528,6 +528,55 @@ describe("ProviderRuntimeIngestion", () => {
       state: "unavailable",
       unavailableReason: "Provider completed without token usage.",
     });
+  });
+
+  it("does not charge a replacement reservation from stale turn events", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const replacementTurnId = asTurnId("turn-replacement");
+    await harness.dispatch({
+      type: "thread.session.set",
+      commandId: CommandId.make("cmd-session-replacement-active"),
+      threadId: asThreadId("thread-1"),
+      session: {
+        threadId: asThreadId("thread-1"),
+        status: "running",
+        providerName: "codex",
+        runtimeMode: "approval-required",
+        activeTurnId: replacementTurnId,
+        updatedAt: "2026-01-01T00:00:01.000Z",
+        lastError: null,
+      },
+      createdAt: "2026-01-01T00:00:01.000Z",
+    });
+    await harness.reserveBotUsage(null);
+
+    const staleTurnId = asTurnId("turn-stale");
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-stale-turn-usage"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: staleTurnId,
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: {
+        usage: { usedTokens: 150, inputTokens: 100, outputTokens: 50 },
+      },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-stale-turn-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: staleTurnId,
+      createdAt: "2026-01-01T00:00:03.000Z",
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.consumedTokens).toBe(0);
+    expect(usage.reservedTokens).toBe(1_000);
+    expect(usage.entries[0]).toMatchObject({ state: "reserved", turnId: null });
   });
 
   it("applies provider session.state.changed transitions directly", async () => {
