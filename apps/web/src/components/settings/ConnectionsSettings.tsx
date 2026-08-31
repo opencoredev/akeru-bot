@@ -39,7 +39,7 @@ import * as Option from "effect/Option";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { cn } from "../../lib/utils";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
-import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
+import { resolveDesktopPairingUrl } from "./pairingUrls";
 import {
   applyWslEnableSelection,
   isQrShareableEndpoint,
@@ -104,8 +104,6 @@ import {
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
 } from "~/versionSkew";
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
-import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -128,7 +126,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { serverEnvironment } from "~/state/server";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
-import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
@@ -475,12 +472,6 @@ function resolveAdvertisedEndpointPairingUrl(
   endpoint: AdvertisedEndpoint,
   credential: string,
 ): string {
-  if (endpoint.compatibility.hostedHttpsApp === "compatible") {
-    return (
-      resolveHostedPairingUrl(endpoint.httpBaseUrl, credential) ??
-      resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential)
-    );
-  }
   return resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential);
 }
 
@@ -489,19 +480,7 @@ function resolveCurrentOriginPairingUrl(credential: string): string {
   return setPairingTokenOnUrl(url, credential).toString();
 }
 
-function isHostedAppPairingUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.pathname === "/pair" && url.searchParams.has("host");
-  } catch {
-    return false;
-  }
-}
-
-function endpointShareHint(endpoint: AdvertisedEndpoint, url: string): string {
-  if (isHostedAppPairingUrl(url)) {
-    return "Opens the hosted app, no install needed";
-  }
+function endpointShareHint(endpoint: AdvertisedEndpoint): string {
   switch (endpoint.reachability) {
     case "lan":
       return "Devices on the same network";
@@ -549,13 +528,6 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
     () => resolveCurrentOriginPairingUrl(pairingLink.credential),
     [pairingLink.credential],
   );
-  const hostedPairingUrl = useMemo(
-    () =>
-      endpointUrl != null && endpointUrl !== ""
-        ? resolveHostedPairingUrl(endpointUrl, pairingLink.credential)
-        : null,
-    [endpointUrl, pairingLink.credential],
-  );
   const endpointPairingUrl = useMemo(() => {
     const endpoint = selectPairingEndpoint(endpoints, defaultEndpointKey);
     return endpoint ? resolveAdvertisedEndpointPairingUrl(endpoint, pairingLink.credential) : null;
@@ -579,7 +551,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         preferenceKey: endpointDefaultPreferenceKey(endpoint),
         label: endpoint.label,
         url,
-        detail: endpointShareHint(endpoint, url),
+        detail: endpointShareHint(endpoint),
         qrShareable: isQrShareableEndpoint(endpoint),
       });
     }
@@ -588,7 +560,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const shareablePairingUrl =
     endpointPairingUrl ??
     (endpointUrl != null && endpointUrl !== ""
-      ? (hostedPairingUrl ?? resolveDesktopPairingUrl(endpointUrl, pairingLink.credential))
+      ? resolveDesktopPairingUrl(endpointUrl, pairingLink.credential)
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl);
@@ -597,7 +569,6 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const [failedCopyValue, setFailedCopyValue] = useState<string | null>(null);
   const revealValue = failedCopyValue ?? shareablePairingUrl ?? pairingLink.credential;
   const isRevealValueUrl = revealValue !== pairingLink.credential;
-  const isRevealValueHostedAppPairingUrl = isRevealValueUrl && isHostedAppPairingUrl(revealValue);
   // Never render a QR for a loopback URL, even in the manual-copy fallback.
   const isRevealValueQrShareable =
     endpointCopyOptions.find((option) => option.url === revealValue)?.qrShareable ?? true;
@@ -608,23 +579,16 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
 
   const { copyToClipboard } = useCopyToClipboard<{
     value: string;
-    kind: "code" | "hosted-link" | "link";
+    kind: "code" | "link";
   }>({
     onCopy: ({ kind }) => {
       toastManager.add({
         type: "success",
-        title:
-          kind === "hosted-link"
-            ? "Hosted app link copied"
-            : kind === "link"
-              ? "Pairing URL copied"
-              : "Pairing code copied",
+        title: kind === "link" ? "Pairing URL copied" : "Pairing code copied",
         description:
-          kind === "hosted-link"
-            ? "Open it in the browser on the device you want to connect."
-            : kind === "link"
-              ? "Open it in the client you want to pair to this environment."
-              : "Paste it into another client to finish pairing.",
+          kind === "link"
+            ? "Open it in the client you want to pair to this environment."
+            : "Paste it into another client to finish pairing.",
       });
     },
     onError: (error, { value, kind }) => {
@@ -636,11 +600,9 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         stackedThreadToast({
           type: "error",
           title: canCopyToClipboard
-            ? kind === "hosted-link"
-              ? "Could not copy hosted app link"
-              : kind === "link"
-                ? "Could not copy pairing URL"
-                : "Could not copy pairing code"
+            ? kind === "link"
+              ? "Could not copy pairing URL"
+              : "Could not copy pairing code"
             : "Clipboard copy unavailable",
           description: canCopyToClipboard ? error.message : "Showing the full value instead.",
         }),
@@ -649,15 +611,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   });
 
   const copyPairingValue = useCallback(
-    (value: string, kind: "code" | "hosted-link" | "link") => {
+    (value: string, kind: "code" | "link") => {
       copyToClipboard(value, { value, kind });
     },
     [copyToClipboard],
-  );
-
-  const copyKindForUrl = useCallback(
-    (url: string): "hosted-link" | "link" => (isHostedAppPairingUrl(url) ? "hosted-link" : "link"),
-    [],
   );
 
   const handleCopyCode = useCallback(() => {
@@ -741,18 +698,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
             )}
             <DialogPopup className="max-w-md">
               <DialogHeader>
-                <DialogTitle>
-                  {isRevealValueUrl
-                    ? isRevealValueHostedAppPairingUrl
-                      ? "Hosted app pairing link"
-                      : "Pairing link"
-                    : "Pairing code"}
-                </DialogTitle>
+                <DialogTitle>{isRevealValueUrl ? "Pairing link" : "Pairing code"}</DialogTitle>
                 <DialogDescription>
                   {isRevealValueUrl
-                    ? isRevealValueHostedAppPairingUrl
-                      ? "Clipboard copy is unavailable here. Open or manually copy this hosted app link on the device you want to connect."
-                      : "Clipboard copy is unavailable here. Open or manually copy this full pairing URL on the device you want to connect."
+                    ? "Clipboard copy is unavailable here. Open or manually copy this full pairing URL on the device you want to connect."
                     : "Clipboard copy is unavailable here. Manually copy this code into another client."}
                 </DialogDescription>
               </DialogHeader>
@@ -861,7 +810,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 size="xs"
                 variant="ghost"
                 className="shrink-0"
-                onClick={() => copyPairingValue(qrPairingUrl, copyKindForUrl(qrPairingUrl))}
+                onClick={() => copyPairingValue(qrPairingUrl, "link")}
               >
                 Copy link
               </Button>
@@ -1577,137 +1526,7 @@ const DesktopSshHostRow = memo(function DesktopSshHostRow({
   );
 });
 
-function CloudLinkSwitch({
-  checked,
-  disabled,
-  disabledReason,
-  onCheckedChange,
-  ariaLabel = "Enable remote access",
-}: {
-  readonly checked: boolean;
-  readonly disabled: boolean;
-  readonly disabledReason: string | null;
-  readonly onCheckedChange?: (enabled: boolean) => void;
-  readonly ariaLabel?: string;
-}) {
-  const control = (
-    <Switch
-      aria-label={ariaLabel}
-      checked={checked}
-      disabled={disabled}
-      {...(onCheckedChange ? { onCheckedChange } : {})}
-    />
-  );
-  return disabledReason ? (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex">{control}</span>} />
-      <TooltipPopup side="top">{disabledReason}</TooltipPopup>
-    </Tooltip>
-  ) : (
-    control
-  );
-}
-
-function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: boolean }) {
-  const {
-    isSignedIn,
-    linkState: primaryCloudLinkState,
-    managedTunnelActive,
-    publishAgentActivity,
-    operationError,
-    reconcileCloudState,
-  } = useCloudLinkController();
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
-
-  const disabledReason = !isSignedIn
-    ? "Sign in to manage this environment."
-    : !canManageRelay
-      ? "Your session does not have permission to manage remote access."
-      : null;
-  const isBusy = isUpdating || isUpdatingPreference;
-
-  const updateManagedTunnel = async (enabled: boolean) => {
-    setIsUpdating(true);
-    const ok = await reconcileCloudState({ managedTunnel: enabled, publish: publishAgentActivity });
-    if (ok) {
-      // Turning the tunnel off while publishing stays on downgrades the link
-      // rather than removing it — say so instead of claiming an unlink.
-      toastManager.add({
-        type: "success",
-        title: enabled
-          ? "Environment linked"
-          : publishAgentActivity
-            ? "Managed tunnel disabled"
-            : "Environment unlinked",
-        description: enabled
-          ? "This environment is available through its managed tunnel."
-          : publishAgentActivity
-            ? "The managed tunnel was removed. Agent activity publishing stays on."
-            : "This environment is no longer available through its managed tunnel.",
-      });
-    }
-    setIsUpdating(false);
-  };
-
-  const updatePublishAgentActivity = async (enabled: boolean) => {
-    setIsUpdatingPreference(true);
-    const ok = await reconcileCloudState({ managedTunnel: managedTunnelActive, publish: enabled });
-    if (ok) {
-      toastManager.add({
-        type: "success",
-        title: enabled ? "Agent activity enabled" : "Agent activity disabled",
-        description: enabled
-          ? "This environment publishes agent activity to your mobile clients."
-          : "This environment will stop publishing agent activity.",
-      });
-    }
-    setIsUpdatingPreference(false);
-  };
-
-  return (
-    <>
-      {window.desktopBridge ? (
-        <SettingsRow
-          title="Remote access"
-          description={
-            managedTunnelActive
-              ? "This environment is available to your other devices through its managed tunnel."
-              : "Make this environment available to your other devices through a managed tunnel."
-          }
-          status={operationError ?? primaryCloudLinkState.error}
-          control={
-            <CloudLinkSwitch
-              checked={managedTunnelActive}
-              disabled={!canManageRelay || !isSignedIn || primaryCloudLinkState.isPending || isBusy}
-              disabledReason={disabledReason}
-              onCheckedChange={(enabled) => void updateManagedTunnel(enabled)}
-            />
-          }
-        />
-      ) : null}
-      <SettingsRow
-        title="Publish agent activity"
-        description="Send activity from this environment to your mobile clients for push notifications and Live Activities. Works without a managed tunnel."
-        control={
-          <CloudLinkSwitch
-            ariaLabel="Publish agent activity to mobile clients"
-            checked={publishAgentActivity}
-            disabled={!canManageRelay || !isSignedIn || primaryCloudLinkState.isPending || isBusy}
-            disabledReason={disabledReason}
-            onCheckedChange={(enabled) => void updatePublishAgentActivity(enabled)}
-          />
-        }
-      />
-    </>
-  );
-}
-
-function CloudLinkRow({ canManageRelay }: { readonly canManageRelay: boolean }) {
-  return hasCloudPublicConfig() ? <ConfiguredCloudLinkRow canManageRelay={canManageRelay} /> : null;
-}
-
-function EmptyRemoteEnvironments({ cloudEnabled = true }: { readonly cloudEnabled?: boolean }) {
+function EmptyRemoteEnvironments() {
   return (
     <Empty className="min-h-52">
       <EmptyMedia variant="icon">
@@ -1715,32 +1534,10 @@ function EmptyRemoteEnvironments({ cloudEnabled = true }: { readonly cloudEnable
       </EmptyMedia>
       <EmptyHeader>
         <EmptyTitle>No saved remote environments</EmptyTitle>
-        <EmptyDescription>
-          {cloudEnabled
-            ? "Click “Add environment” to pair another environment, or connect one of your linked environments."
-            : "Click “Add environment” to pair another environment."}
-        </EmptyDescription>
+        <EmptyDescription>Click “Add environment” to pair another environment.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
-}
-
-function CloudRemoteEnvironmentRows({
-  primaryEnvironmentId,
-  savedEnvironments,
-}: {
-  readonly primaryEnvironmentId: EnvironmentId | null;
-  readonly savedEnvironments: ReadonlyArray<EnvironmentPresentation>;
-}) {
-  return hasCloudPublicConfig() ? (
-    <CloudEnvironmentConnectRows
-      primaryEnvironmentId={primaryEnvironmentId}
-      savedEnvironments={savedEnvironments}
-      empty={<EmptyRemoteEnvironments />}
-    />
-  ) : savedEnvironments.length === 0 ? (
-    <EmptyRemoteEnvironments cloudEnabled={false} />
-  ) : null;
 }
 
 export function ConnectionsSettings() {
@@ -1879,7 +1676,6 @@ export function ConnectionsSettings() {
     (state) => state.setDefaultAdvertisedEndpointKey,
   );
   const canManageLocalBackend = currentSessionScopes?.includes(AuthAccessWriteScope) ?? false;
-  const canManageRelay = currentSessionScopes?.includes(AuthRelayWriteScope) ?? false;
   const authAccessChanges = useEnvironmentQuery(
     canManageLocalBackend && primaryEnvironmentId !== null
       ? authEnvironment.accessChanges({
@@ -3066,13 +2862,9 @@ export function ConnectionsSettings() {
                 {renderEndpointRows("endpoint-rail")}
                 {renderTailscaleRow()}
                 {renderWslRow()}
-                <CloudLinkRow canManageRelay={canManageRelay} />
               </>
             ) : (
-              <>
-                {renderDisabledNetworkAccessRow()}
-                <CloudLinkRow canManageRelay={canManageRelay} />
-              </>
+              <>{renderDisabledNetworkAccessRow()}</>
             )}
           </SettingsSection>
 
@@ -3376,7 +3168,6 @@ export function ConnectionsSettings() {
             title="Administrative access"
             description="Pairing links and client-session management require the access:write scope for this backend."
           />
-          <CloudLinkRow canManageRelay={canManageRelay} />
         </SettingsSection>
       )}
 
@@ -3453,10 +3244,7 @@ export function ConnectionsSettings() {
             onRemove={handleRemoveSavedBackend}
           />
         ))}
-        <CloudRemoteEnvironmentRows
-          primaryEnvironmentId={primaryEnvironmentId}
-          savedEnvironments={savedEnvironments}
-        />
+        {savedEnvironments.length === 0 ? <EmptyRemoteEnvironments /> : null}
       </SettingsSection>
     </SettingsPageContainer>
   );

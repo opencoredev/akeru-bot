@@ -32,7 +32,6 @@ import { environmentSnapshotAtom } from "../../state/shell";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { AkeruMark } from "../AkeruMark";
-import { T3ConnectSidebarAvatar, T3ConnectSidebarSignIn } from "../clerk/T3ConnectSidebarSignIn";
 import { PluginLogoImage } from "../plugins/PluginsCatalog";
 import { isBuiltinMcpServer } from "../plugins/pluginRegistry";
 import { cn } from "../../lib/utils";
@@ -403,10 +402,6 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       <SidebarMenu>
         <SidebarPluginSummary onClick={handlePluginsClick} />
       </SidebarMenu>
-      <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-        <T3ConnectSidebarSignIn />
-        <T3ConnectSidebarAvatar />
-      </div>
       <SidebarMenu className="flex-row items-center gap-1 group-data-[collapsible=icon]:flex-col">
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}

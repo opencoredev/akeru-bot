@@ -18,13 +18,6 @@ describe("loadRepoEnv", () => {
   it("does not project cloud configuration for an unconfigured clone", () => {
     const env = loadRepoEnv({ baseEnv: {}, repoRoot: makeTemporaryDirectory() });
 
-    expect(env.T3CODE_CLERK_PUBLISHABLE_KEY).toBeUndefined();
-    expect(env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID).toBeUndefined();
-    expect(env.VITE_CLERK_PUBLISHABLE_KEY).toBeUndefined();
-    expect(env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY).toBeUndefined();
-    expect(env.T3CODE_CLERK_JWT_TEMPLATE).toBeUndefined();
-    expect(env.VITE_CLERK_JWT_TEMPLATE).toBeUndefined();
-    expect(env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE).toBeUndefined();
     expect(env.T3CODE_RELAY_URL).toBeUndefined();
     expect(env.VITE_T3CODE_RELAY_URL).toBeUndefined();
     expect(env.T3CODE_MOBILE_OTLP_TRACES_URL).toBeUndefined();
@@ -45,11 +38,11 @@ describe("loadRepoEnv", () => {
     const repoRoot = makeTemporaryDirectory();
     NodeFS.writeFileSync(
       NodePath.join(repoRoot, ".env"),
-      "T3CODE_CLERK_PUBLISHABLE_KEY=pk_root\nT3CODE_CLERK_JWT_TEMPLATE=template_root\nT3CODE_CLERK_CLI_OAUTH_CLIENT_ID=oauth_root\nT3CODE_RELAY_URL=https://root.example.test\n",
+      "T3CODE_RELAY_URL=https://root.example.test\n",
     );
     NodeFS.writeFileSync(
       NodePath.join(repoRoot, ".env.local"),
-      "T3CODE_CLERK_PUBLISHABLE_KEY=pk_local\nT3CODE_CLERK_JWT_TEMPLATE=template_local\nT3CODE_CLERK_CLI_OAUTH_CLIENT_ID=oauth_local\nT3CODE_RELAY_URL=https://local.example.test\n",
+      "T3CODE_RELAY_URL=https://local.example.test\n",
     );
 
     expect(loadRepoEnv({ baseEnv: {}, repoRoot }).T3CODE_RELAY_URL).toBe(
@@ -58,21 +51,11 @@ describe("loadRepoEnv", () => {
     expect(
       loadRepoEnv({
         baseEnv: {
-          T3CODE_CLERK_PUBLISHABLE_KEY: "pk_ci",
-          T3CODE_CLERK_JWT_TEMPLATE: "template_ci",
-          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_ci",
           T3CODE_RELAY_URL: "https://ci.example.test",
         },
         repoRoot,
       }),
     ).toMatchObject({
-      T3CODE_CLERK_PUBLISHABLE_KEY: "pk_ci",
-      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_ci",
-      VITE_CLERK_PUBLISHABLE_KEY: "pk_ci",
-      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_ci",
-      T3CODE_CLERK_JWT_TEMPLATE: "template_ci",
-      VITE_CLERK_JWT_TEMPLATE: "template_ci",
-      EXPO_PUBLIC_CLERK_JWT_TEMPLATE: "template_ci",
       T3CODE_RELAY_URL: "https://ci.example.test",
       VITE_T3CODE_RELAY_URL: "https://ci.example.test",
     });
@@ -81,18 +64,12 @@ describe("loadRepoEnv", () => {
   it("accepts legacy framework aliases as root overrides", () => {
     expect(
       resolvePublicConfig({
-        VITE_CLERK_PUBLISHABLE_KEY: "pk_legacy",
-        VITE_CLERK_JWT_TEMPLATE: "template_legacy",
-        T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_canonical",
         VITE_T3CODE_RELAY_URL: "https://legacy.example.test",
         EXPO_PUBLIC_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
         EXPO_PUBLIC_OTLP_TRACES_DATASET: "mobile-traces",
         EXPO_PUBLIC_OTLP_TRACES_TOKEN: "mobile-token",
       }),
     ).toEqual({
-      clerkPublishableKey: "pk_legacy",
-      clerkJwtTemplate: "template_legacy",
-      clerkCliOAuthClientId: "oauth_canonical",
       relayUrl: "https://legacy.example.test",
       mobileOtlpTracesUrl: "https://api.axiom.co/v1/traces",
       mobileOtlpTracesDataset: "mobile-traces",

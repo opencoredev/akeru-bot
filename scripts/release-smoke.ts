@@ -74,7 +74,6 @@ for (const [needle, label] of [
 }
 
 for (const [needle, label] of [
-  ["clerk", "Clerk configuration"],
   ["relay", "relay configuration"],
   ["publish-aur", "AUR publishing"],
   ["action-gh-release", "GitHub release publishing"],
@@ -90,7 +89,6 @@ for (const [needle, label] of [
   ["blacksmith", "private CI runners"],
   ["thread-transfer", "thread transfer reporting"],
   ["mobile_native", "mobile production checks"],
-  ["clerk", "Clerk bundle checks"],
 ] as const) {
   assertOmits(ciWorkflow, needle, `CI workflow still contains ${label}.`);
 }

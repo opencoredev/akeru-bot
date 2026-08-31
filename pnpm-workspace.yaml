@@ -33,12 +33,6 @@ allowBuilds:
 
 catalog:
   "@clerk/backend": 3.14.0
-  "@clerk/clerk-js": 6.30.1
-  "@clerk/electron": 0.0.37
-  "@clerk/electron-passkeys": 0.0.3
-  "@clerk/expo": 4.2.0
-  "@clerk/react": 6.14.7
-  "@clerk/shared": 4.30.1
   "@effect/atom-react": 4.0.0-beta.103
   "@effect/openapi-generator": 4.0.0-beta.103
   "@effect/platform-bun": 4.0.0-beta.103
@@ -63,11 +57,6 @@ catalog:
 
 minimumReleaseAgeExclude:
   - "@clerk/backend@3.14.0"
-  - "@clerk/clerk-js@6.30.1"
-  - "@clerk/electron@0.0.37"
-  - "@clerk/expo@4.2.0"
-  - "@clerk/react@6.14.7"
-  - "@clerk/shared@4.30.1"
   - "@distilled.cloud/aws@0.30.2"
   - "@distilled.cloud/axiom@0.30.2"
   - "@distilled.cloud/cloudflare@0.30.2"
@@ -100,18 +89,6 @@ overrides:
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-win32-arm64": "-"
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-win32-x64": "-"
   "@clerk/backend": "catalog:"
-  "@clerk/clerk-js": "catalog:"
-  "@clerk/clerk-js>@base-org/account": "-"
-  "@clerk/clerk-js>@coinbase/wallet-sdk": "-"
-  "@clerk/clerk-js>@solana/wallet-adapter-base": "-"
-  "@clerk/clerk-js>@solana/wallet-adapter-react": "-"
-  "@clerk/clerk-js>@solana/wallet-standard": "-"
-  "@clerk/clerk-js>@wallet-standard/core": "-"
-  "@clerk/electron": "catalog:"
-  "@clerk/electron-passkeys": "catalog:"
-  "@clerk/expo": "catalog:"
-  "@clerk/react": "catalog:"
-  "@clerk/shared": "catalog:"
   "@effect/atom-react": "catalog:"
   "@effect/platform-bun": "catalog:"
   "@effect/platform-node": "catalog:"
@@ -131,9 +108,6 @@ overrides:
   yaml: "catalog:"
 
 packageExtensions:
-  "@clerk/expo@*":
-    dependencies:
-      "@expo/config-plugins": 56.0.9
   "@effect/vitest@*":
     dependencies:
       vite-plus: "catalog:"
@@ -145,7 +119,6 @@ packageExtensions:
       vite: "catalog:"
 
 patchedDependencies:
-  "@clerk/expo@4.2.0": patches/@clerk__expo@4.2.0.patch
   "@effect/vitest@4.0.0-beta.103": patches/@effect__vitest@4.0.0-beta.103.patch
   "@expo/metro-config@56.0.14": patches/@expo%2Fmetro-config@56.0.14.patch
   "@ff-labs/fff-node@0.9.4": patches/@ff-labs__fff-node@0.9.4.patch

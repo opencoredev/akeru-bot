@@ -139,16 +139,6 @@ describe("sidebar footer", () => {
     expect(source).not.toContain('openSettings("inbox")');
   });
 
-  it("shows the verified remote-access account identity when Clerk is configured", () => {
-    const source = NodeFS.readFileSync(
-      new URL("../clerk/T3ConnectSidebarSignIn.tsx", import.meta.url),
-      "utf8",
-    );
-
-    expect(source).toContain("showName");
-    expect(source).toContain("Sign in for remote access");
-  });
-
   it("creates manual and first-run bots with approval required", () => {
     const rosterSource = NodeFS.readFileSync(
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),

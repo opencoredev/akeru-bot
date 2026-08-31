@@ -47,18 +47,6 @@ overrides:
   '@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-win32-arm64': '-'
   '@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-win32-x64': '-'
   '@clerk/backend': 3.14.0
-  '@clerk/clerk-js': 6.30.1
-  '@clerk/clerk-js>@base-org/account': '-'
-  '@clerk/clerk-js>@coinbase/wallet-sdk': '-'
-  '@clerk/clerk-js>@solana/wallet-adapter-base': '-'
-  '@clerk/clerk-js>@solana/wallet-adapter-react': '-'
-  '@clerk/clerk-js>@solana/wallet-standard': '-'
-  '@clerk/clerk-js>@wallet-standard/core': '-'
-  '@clerk/electron': 0.0.37
-  '@clerk/electron-passkeys': 0.0.3
-  '@clerk/expo': 4.2.0
-  '@clerk/react': 6.14.7
-  '@clerk/shared': 4.30.1
   '@effect/atom-react': 4.0.0-beta.103
   '@effect/platform-bun': 4.0.0-beta.103
   '@effect/platform-node': 4.0.0-beta.103
@@ -77,10 +65,9 @@ overrides:
   vite: npm:@voidzero-dev/vite-plus-core@0.2.2
   yaml: ^2.9.0
 
-packageExtensionsChecksum: sha256-CUzzeefpj3gNFrCKNBhV9FOaniNbrLdKyIhWQyXuaiE=
+packageExtensionsChecksum: sha256-FV3+2NW/9MFbunJaPsMxvO0LAzyfccoPtPiKoIXAwUU=
 
 patchedDependencies:
-  '@clerk/expo@4.2.0': 72e426f44fc1cde16fc2cbba3d1e96cdca7c6d957faa73d0fe6b43948608a6c1
   '@effect/vitest@4.0.0-beta.103': a16b1e870d8c29e4a98b17cc4c638a4ff471753d8ca3487f78a22b759caf951b
   '@expo/metro-config@56.0.14': 8cb08b5bb7051ed9d2dbe46a2c293c5a1e17f1bd6ddf30de27909e18c921ff46
   '@ff-labs/fff-node@0.9.4': ab9ff544009e1891cfe3930105862d3699007f38922a79f3c98d90018deca368
@@ -121,12 +108,6 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@clerk/electron':
-        specifier: 0.0.37
-        version: 0.0.37(@clerk/electron-passkeys@0.0.3)(electron-store@8.2.0)(electron@41.5.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@clerk/electron-passkeys':
-        specifier: 0.0.3
-        version: 0.0.3
       '@effect/platform-node':
         specifier: 4.0.0-beta.103
         version: 4.0.0-beta.103(bufferutil@4.1.0)(effect@4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6))(ioredis@5.11.0)(utf-8-validate@6.0.6)
@@ -207,9 +188,6 @@ importers:
       '@callstack/liquid-glass':
         specifier: ^0.7.1
         version: 0.7.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
-      '@clerk/expo':
-        specifier: 4.2.0
-        version: 4.2.0(patch_hash=72e426f44fc1cde16fc2cbba3d1e96cdca7c6d957faa73d0fe6b43948608a6c1)(expo-auth-session@56.0.14(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3))(expo-constants@56.0.18)(expo-crypto@56.0.4(expo@56.0.12))(expo-secure-store@56.0.4(expo@56.0.12))(expo-web-browser@56.0.5(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)))(expo@56.0.12)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)(typescript@6.0.3)
       '@effect/atom-react':
         specifier: 4.0.0-beta.103
         version: 4.0.0-beta.103(effect@4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6))(react@19.2.3)(scheduler@0.27.0)
@@ -566,12 +544,6 @@ importers:
       '@base-ui/react':
         specifier: ^1.4.1
         version: 1.5.0(@types/react@19.2.16)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@clerk/electron':
-        specifier: 0.0.37
-        version: 0.0.37(@clerk/electron-passkeys@0.0.3)(electron-store@8.2.0)(electron@41.5.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@clerk/react':
-        specifier: 6.14.7
-        version: 6.14.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -2216,97 +2188,6 @@ packages:
   '@clerk/backend@3.14.0':
     resolution: {integrity: sha512-WsphTvDFHDuQilKI7dyVE5qmt7USu8qSrujAq6SqpEHbVFfNBfINDNuzxlF9M2skOTfHFfgiTE8Jjb1egIBGLg==}
     engines: {node: '>=20.9.0'}
-
-  '@clerk/clerk-js@6.30.1':
-    resolution: {integrity: sha512-ipsUhTf1uPJ5az4eiLOCM1Qz8z0I4kl54N6RtnL3VbxezwptPEUHx1PlHnHKUjTCV/PHNVq/3vht9w+8VLOoHw==}
-    engines: {node: '>=20.9.0'}
-
-  '@clerk/electron-passkeys-darwin-arm64@0.0.3':
-    resolution: {integrity: sha512-oAlrd+GLqP0oREP3hNRc6yNZhXGaQgJss9iCWRQqXjpw1yZD1ZU+L+E2Gfg84vMj/NSUhxbU0Djy0RXhmeUwgg==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@clerk/electron-passkeys-darwin-x64@0.0.3':
-    resolution: {integrity: sha512-0UPAWQEni7o8gjWwd2sP97fPshJmT2w5b8eV/jOPVSP8NqIcFCm5yIFSEx1SfB53LGfzB01A4iEGi2pxiCHqyQ==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@clerk/electron-passkeys-win32-arm64-msvc@0.0.3':
-    resolution: {integrity: sha512-bbRvifm9A/gfPkwC1UyMyF9sYGEs0aen7J2kCcaOIW3K0PXcAbHtsR/gnx4dT0bjFdd21vSa2zlIdERvHc1BiA==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@clerk/electron-passkeys-win32-x64-msvc@0.0.3':
-    resolution: {integrity: sha512-gFaVqKlOKTF2SJ3lMwkZ0oonycQn93p1qSrp5kzzeZBeQ+tGB3gQnjXecrhQy21AzDUyWqVJJ8KrP2HRAwifWg==}
-    cpu: [x64]
-    os: [win32]
-
-  '@clerk/electron-passkeys@0.0.3':
-    resolution: {integrity: sha512-OHhIe88qDL+FxyBalXdXNHAS5eEramr6Rerp+6iNkfkjqT8rx4hHNmfpmjg5/T1/am8QfknbOBZkqoXZlCrjPg==}
-    engines: {node: '>=20.9.0'}
-
-  '@clerk/electron@0.0.37':
-    resolution: {integrity: sha512-NsATM6rMISdL1K3mlKVPqZpDUA4h+uWmbGv8h9PK3zYfnwMgSpDKRX2y341Lt0fhz+eWkZpMU5SQmlZPNqwiww==}
-    engines: {node: '>=20.9.0'}
-    peerDependencies:
-      '@clerk/electron-passkeys': 0.0.3
-      electron: '>=28'
-      electron-store: ^8.2.0
-      react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
-      react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
-    peerDependenciesMeta:
-      '@clerk/electron-passkeys':
-        optional: true
-      electron-store:
-        optional: true
-      react-dom:
-        optional: true
-
-  '@clerk/expo@4.2.0':
-    resolution: {integrity: sha512-S2TYZn1Tltm/gXfe9J1NCuLRCmQX/3gfD0c+i/B1RWGbIJpSZX7KGRzvW70ABaqrK9IUcribLVmMN6unmpuCtQ==}
-    engines: {node: '>=20.9.0'}
-    peerDependencies:
-      '@clerk/expo-google-signin': '>=0.1.0'
-      '@clerk/expo-passkeys': '>=0.0.6'
-      expo: '>=54 <58'
-      expo-apple-authentication: '>=7.0.0'
-      expo-auth-session: '>=5'
-      expo-constants: '>=12'
-      expo-crypto: '>=12'
-      expo-local-authentication: '>=13.5.0'
-      expo-secure-store: '>=12.4.0'
-      expo-web-browser: '>=12.5.0'
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-      react-native: '>=0.75'
-    peerDependenciesMeta:
-      '@clerk/expo-google-signin':
-        optional: true
-      '@clerk/expo-passkeys':
-        optional: true
-      expo-apple-authentication:
-        optional: true
-      expo-auth-session:
-        optional: true
-      expo-constants:
-        optional: true
-      expo-crypto:
-        optional: true
-      expo-local-authentication:
-        optional: true
-      expo-secure-store:
-        optional: true
-      expo-web-browser:
-        optional: true
-      react-dom:
-        optional: true
-
-  '@clerk/react@6.14.7':
-    resolution: {integrity: sha512-+d+VqD4nZR3vBn5UU++H96zloHFDe+Ll0sGwMmLXnHtoIs9oMx91GaGXzXo9rU83kl660EfAmgeWcsLMfWnOYg==}
-    engines: {node: '>=20.9.0'}
-    peerDependencies:
-      react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
-      react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
 
   '@clerk/shared@4.30.1':
     resolution: {integrity: sha512-Mawatm7CTKZXBqIW8t/z9LfoAKgOHtRRxROpnJ4VIkTdgzj/mmAZhPOPjzUttPXXtulR1uLWisvQXEMNeF/jTQ==}
@@ -5645,13 +5526,6 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@stripe/stripe-js@5.6.0':
-    resolution: {integrity: sha512-w8CEY73X/7tw2KKlL3iOk679V9bWseE4GzNz3zlaYxcTjmcmWOathRb0emgo/QQ3eoNzmq68+2Y2gxluAv3xGw==}
-    engines: {node: '>=12.16'}
-
-  '@swc/helpers@0.5.21':
-    resolution: {integrity: sha512-jI/VAmtdjB/RnI8GTnokyX7Ug8c+g+ffD6QRLa6XQewtnGyukKkKSk3wLTM3b5cjt1jNh9x0jfVlagdN2gDKQg==}
-
   '@szmarczak/http-timer@4.0.6':
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
     engines: {node: '>=10'}
@@ -6622,12 +6496,6 @@ packages:
     resolution: {integrity: sha512-pULv0waMlnKAUUxrsuAOa0ADONGRuhdHORtuXVgClNlScDB5YjImCV8DZrE1SicaROyE6MwGkH8CLJ+o4Nx07g==}
     engines: {bun: '>=0.7.0', deno: '>=1.0.0', node: '>=18.0.0'}
 
-  '@zxcvbn-ts/core@3.0.4':
-    resolution: {integrity: sha512-aQeiT0F09FuJaAqNrxynlAwZ2mW/1MdXakKWNmGM1Qp/VaY6CnB/GfnMS2T8gB2231Esp1/maCWd8vTG4OuShw==}
-
-  '@zxcvbn-ts/language-common@3.0.4':
-    resolution: {integrity: sha512-viSNNnRYtc7ULXzxrQIVUNwHAPSXRtoIwy/Tq4XQQdIknBzw4vz36lQLF6mvhMlTIlpjoN/Z1GFu/fwiAlUSsw==}
-
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -6754,9 +6622,6 @@ packages:
         optional: true
       ws:
         optional: true
-
-  alien-signals@2.0.6:
-    resolution: {integrity: sha512-P3TxJSe31bUHBiblg59oU1PpaWPtmxF9GhJ/cB7OkgJ0qN/ifFSKUI25/v8ZhsT+lIG6ac8DpTOplXxORX6F3Q==}
 
   am-i-vibing@0.4.0:
     resolution: {integrity: sha512-MxT4XZL7pzLHpuvhDKdMaQHMGGkJDLluKBLsbstn+8wv9sWcFT6h+0ve9qkml95amVTZtZV83gQe2hY+ojgHLg==}
@@ -7052,9 +6917,6 @@ packages:
   bare-url@2.5.2:
     resolution: {integrity: sha512-L13PCJzKG8RGvx8V1/DdMi12ERhC3tprr7/8a94BxpmnRsFqxh5XZNdhtMxu5HPkRshYOOWRGY8lDP7ZhpG9Cg==}
 
-  base-64@1.0.0:
-    resolution: {integrity: sha512-kwDPIFCGx0NZHog36dj+tHiwP4QMzsZ3AgMViUBKI0+V5n4U0ufTCUMhnQ04diaRI8EX/QcPfql7zlhZ7j4zgg==}
-
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
@@ -7138,9 +7000,6 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
-
-  browser-tabs-lock@1.3.0:
-    resolution: {integrity: sha512-g6nHaobTiT0eMZ7jh16YpD2kcjAp+PInbiVq3M1x6KKaEIVhT4v9oURNIpZLOZ3LQbQ3XYfNhMAb/9hzNLIWrw==}
 
   browserslist@4.28.2:
     resolution: {integrity: sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg==}
@@ -7541,9 +7400,6 @@ packages:
   core-js-compat@3.49.0:
     resolution: {integrity: sha512-VQXt1jr9cBz03b331DFDCCP90b3fanciLkgiOoy8SBHy06gNf+vQ1A3WFLqG7I8TipYIKeYK9wxd0tUrvHcOZA==}
 
-  core-js@3.47.0:
-    resolution: {integrity: sha512-c3Q2VVkGAUyupsjRnaNX6u8Dq2vAdzm9iuPj5FW0fRxzlxgq9Q39MDq10IvmQSpLgHQNyQzQmOo6bgGHmH3NNg==}
-
   core-util-is@1.0.2:
     resolution: {integrity: sha512-3lqz5YjWTYnW6dlDa5TLaTCcShfar1e40rmcJVwCBJC6mWlFuj0eCHIElmG1g5kyuJ/GD+8Wn4FFCcz4gJPfaQ==}
 
@@ -7584,10 +7440,6 @@ packages:
 
   crossws@0.3.5:
     resolution: {integrity: sha512-ojKiDvcmByhwa8YYqbQI/hg7MEU0NC03+pSdEq4ZUnZR9xXpwk7E43SMNGkn+JxJGPFtNvQ48+vV2p+P1ml5PA==}
-
-  crypto-js@4.2.0:
-    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
-    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
@@ -8805,10 +8657,6 @@ packages:
 
   fastdom@1.0.12:
     resolution: {integrity: sha512-LB+xjSTEbjHE1cWsxu+tN2Xqr1kpi+V9aADI7sVM5ZMaXyYGPHULQMzpJMYqOTULK/73pUkWVzzObFRBkPr+hg==}
-
-  fastest-levenshtein@1.0.16:
-    resolution: {integrity: sha512-eRnCtTTtGZFpQCwhJiUOuxPQWRXVKYDn0b2PeHfXL6/Zi53SLAzAHfVhVWK2AryC/WH05kGfxhFIPvTF0SXQzg==}
-    engines: {node: '>= 4.9.1'}
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
@@ -11579,11 +11427,6 @@ packages:
     resolution: {integrity: sha512-boT/vIRgj6zZKBpfTPJJiYWMbZE9duBMOwPK6kCSTgxsS947IFMOq9OgIFkpWZTB7t229H24pDRkh3W9ZK/J1A==}
     peerDependencies:
       react: '*'
-      react-native: '*'
-
-  react-native-url-polyfill@4.0.0:
-    resolution: {integrity: sha512-eqYM3wBAA0eL1sPYbBAoNfbES3+NkgcxUdelQ7QzmoVtqKB5qGG0U13MPTRUroAWK+y2EoJFS3MZUK0fwTf0pA==}
-    peerDependencies:
       react-native: '*'
 
   react-native-webview@13.16.1:
@@ -14975,119 +14818,6 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
-
-  '@clerk/clerk-js@6.30.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@clerk/shared': 4.30.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@stripe/stripe-js': 5.6.0
-      '@swc/helpers': 0.5.21
-      '@tanstack/query-core': 5.100.14
-      '@zxcvbn-ts/core': 3.0.4
-      '@zxcvbn-ts/language-common': 3.0.4
-      alien-signals: 2.0.6
-      browser-tabs-lock: 1.3.0
-      core-js: 3.47.0
-      crypto-js: 4.2.0
-      dequal: 2.0.3
-    transitivePeerDependencies:
-      - react
-      - react-dom
-
-  '@clerk/clerk-js@6.30.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
-    dependencies:
-      '@clerk/shared': 4.30.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@stripe/stripe-js': 5.6.0
-      '@swc/helpers': 0.5.21
-      '@tanstack/query-core': 5.100.14
-      '@zxcvbn-ts/core': 3.0.4
-      '@zxcvbn-ts/language-common': 3.0.4
-      alien-signals: 2.0.6
-      browser-tabs-lock: 1.3.0
-      core-js: 3.47.0
-      crypto-js: 4.2.0
-      dequal: 2.0.3
-    transitivePeerDependencies:
-      - react
-      - react-dom
-
-  '@clerk/electron-passkeys-darwin-arm64@0.0.3':
-    optional: true
-
-  '@clerk/electron-passkeys-darwin-x64@0.0.3':
-    optional: true
-
-  '@clerk/electron-passkeys-win32-arm64-msvc@0.0.3':
-    optional: true
-
-  '@clerk/electron-passkeys-win32-x64-msvc@0.0.3':
-    optional: true
-
-  '@clerk/electron-passkeys@0.0.3':
-    optionalDependencies:
-      '@clerk/electron-passkeys-darwin-arm64': 0.0.3
-      '@clerk/electron-passkeys-darwin-x64': 0.0.3
-      '@clerk/electron-passkeys-win32-arm64-msvc': 0.0.3
-      '@clerk/electron-passkeys-win32-x64-msvc': 0.0.3
-
-  '@clerk/electron@0.0.37(@clerk/electron-passkeys@0.0.3)(electron-store@8.2.0)(electron@41.5.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
-    dependencies:
-      '@clerk/clerk-js': 6.30.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@clerk/react': 6.14.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@clerk/shared': 4.30.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      electron: 41.5.0
-      react: 19.2.6
-      tslib: 2.8.1
-    optionalDependencies:
-      '@clerk/electron-passkeys': 0.0.3
-      electron-store: 8.2.0
-      react-dom: 19.2.6(react@19.2.6)
-
-  '@clerk/expo@4.2.0(patch_hash=72e426f44fc1cde16fc2cbba3d1e96cdca7c6d957faa73d0fe6b43948608a6c1)(expo-auth-session@56.0.14(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3))(expo-constants@56.0.18)(expo-crypto@56.0.4(expo@56.0.12))(expo-secure-store@56.0.4(expo@56.0.12))(expo-web-browser@56.0.5(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)))(expo@56.0.12)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)(typescript@6.0.3)':
-    dependencies:
-      '@clerk/clerk-js': 6.30.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@clerk/react': 6.14.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@clerk/shared': 4.30.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@expo/config-plugins': 56.0.9(typescript@6.0.3)
-      base-64: 1.0.0
-      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
-      react: 19.2.3
-      react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
-      react-native-url-polyfill: 4.0.0(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))
-      tslib: 2.8.1
-    optionalDependencies:
-      expo-auth-session: 56.0.14(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
-      expo-constants: 56.0.18(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))
-      expo-crypto: 56.0.4(expo@56.0.12)
-      expo-secure-store: 56.0.4(expo@56.0.12)
-      expo-web-browser: 56.0.5(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))
-      react-dom: 19.2.3(react@19.2.3)
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-
-  '@clerk/react@6.14.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@clerk/shared': 4.30.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-      tslib: 2.8.1
-
-  '@clerk/react@6.14.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
-    dependencies:
-      '@clerk/shared': 4.30.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
-      tslib: 2.8.1
-
-  '@clerk/shared@4.30.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@tanstack/query-core': 5.100.14
-      dequal: 2.0.3
-      glob-to-regexp: 0.4.1
-      js-cookie: 3.0.7
-    optionalDependencies:
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
 
   '@clerk/shared@4.30.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
@@ -18997,12 +18727,6 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@stripe/stripe-js@5.6.0': {}
-
-  '@swc/helpers@0.5.21':
-    dependencies:
-      tslib: 2.8.1
-
   '@szmarczak/http-timer@4.0.6':
     dependencies:
       defer-to-connect: 2.0.1
@@ -19968,12 +19692,6 @@ snapshots:
 
   '@zip.js/zip.js@2.8.60': {}
 
-  '@zxcvbn-ts/core@3.0.4':
-    dependencies:
-      fastest-levenshtein: 1.0.16
-
-  '@zxcvbn-ts/language-common@3.0.4': {}
-
   abbrev@4.0.0: {}
 
   abort-controller@3.0.0:
@@ -20213,8 +19931,6 @@ snapshots:
       - socks
       - utf-8-validate
       - workerd
-
-  alien-signals@2.0.6: {}
 
   am-i-vibing@0.4.0:
     dependencies:
@@ -20713,8 +20429,6 @@ snapshots:
     dependencies:
       bare-path: 3.1.1
 
-  base-64@1.0.0: {}
-
   base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.10.33: {}
@@ -20804,10 +20518,6 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
-
-  browser-tabs-lock@1.3.0:
-    dependencies:
-      lodash: 4.18.1
 
   browserslist@4.28.2:
     dependencies:
@@ -21227,8 +20937,6 @@ snapshots:
     dependencies:
       browserslist: 4.28.2
 
-  core-js@3.47.0: {}
-
   core-util-is@1.0.2: {}
 
   cors@2.8.6:
@@ -21270,8 +20978,6 @@ snapshots:
   crossws@0.3.5:
     dependencies:
       uncrypto: 0.1.3
-
-  crypto-js@4.2.0: {}
 
   css-select@5.2.2:
     dependencies:
@@ -22779,8 +22485,6 @@ snapshots:
   fastdom@1.0.12:
     dependencies:
       strictdom: 1.0.1
-
-  fastest-levenshtein@1.0.16: {}
 
   fastq@1.20.1:
     dependencies:
@@ -26001,10 +25705,6 @@ snapshots:
       react: 19.2.3
       react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
       warn-once: 0.1.1
-
-  react-native-url-polyfill@4.0.0(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)):
-    dependencies:
-      react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
 
   react-native-webview@13.16.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3):
     dependencies:

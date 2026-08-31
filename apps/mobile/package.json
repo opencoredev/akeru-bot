@@ -44,7 +44,6 @@
   },
   "dependencies": {
     "@callstack/liquid-glass": "^0.7.1",
-    "@clerk/expo": "catalog:",
     "@effect/atom-react": "catalog:",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo/metro-runtime": "~56.0.15",
