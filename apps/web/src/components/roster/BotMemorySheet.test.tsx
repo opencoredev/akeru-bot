@@ -19,6 +19,7 @@ import {
   importApplyInput,
   memoryErrorMessage,
 } from "./BotMemorySheet";
+import { resolveBotThreadTarget } from "./useBotThreadRef";
 
 const threadRef = scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("thread-1"));
 const decodeArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
@@ -156,5 +157,33 @@ describe("BotMemorySheet", () => {
     );
     expect(route).toContain("useBotThreadRef(botId)");
     expect(route).toContain("threadRef={threadRef}");
+  });
+
+  it("keeps memory bound to the selected bot conversation", () => {
+    expect(
+      resolveBotThreadTarget(
+        "bot-1",
+        "env-1",
+        [
+          {
+            environmentId: "env-1",
+            id: "thread-selected",
+            botId: "bot-1",
+            updatedAt: "2026-08-30T00:00:00.000Z",
+            archivedAt: null,
+            deletedAt: null,
+          },
+          {
+            environmentId: "env-1",
+            id: "thread-newer",
+            botId: "bot-1",
+            updatedAt: "2026-08-31T00:00:00.000Z",
+            archivedAt: null,
+            deletedAt: null,
+          },
+        ],
+        "/env-1/thread-selected",
+      ),
+    ).toMatchObject({ threadId: "thread-selected" });
   });
 });
