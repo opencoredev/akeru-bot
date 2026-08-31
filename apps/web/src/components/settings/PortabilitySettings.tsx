@@ -128,9 +128,14 @@ function ImportPreview({ preview }: { readonly preview: PortabilityImportPreview
 }
 
 function importResultDescription(result: PortabilityApplyImportResult): string {
-  return result.skipped > 0
-    ? `${result.applied} applied. ${result.skipped} skipped.`
-    : `${result.applied} applied.`;
+  const counts = [
+    `${result.applied} applied`,
+    ...(result.skipped > 0 ? [`${result.skipped} skipped`] : []),
+    ...(result.failed > 0 ? [`${result.failed} failed`] : []),
+    ...(result.partial > 0 ? [`${result.partial} partly applied`] : []),
+  ];
+  const firstFailure = result.failures[0];
+  return `${counts.join(". ")}.${firstFailure ? ` ${firstFailure.title}: ${firstFailure.message}` : ""}`;
 }
 
 export function PortabilitySettings() {
@@ -147,6 +152,7 @@ export function PortabilitySettings() {
   });
   const [pending, setPending] = useState<"export" | "preview" | "apply" | null>(null);
   const [importState, setImportState] = useState<ImportPreviewState | null>(null);
+  const [applyResult, setApplyResult] = useState<PortabilityApplyImportResult | null>(null);
 
   const handleExport = async () => {
     if (environmentId === null) return;
@@ -163,6 +169,7 @@ export function PortabilitySettings() {
 
   const handleFile = async (file: File) => {
     if (environmentId === null) return;
+    setApplyResult(null);
     const fileError = portabilityArchiveFileError(file.size);
     if (fileError) {
       toastManager.add({ type: "error", title: "Could not read archive", description: fileError });
@@ -204,10 +211,12 @@ export function PortabilitySettings() {
       reportFailure("Could not import archive", result);
       return;
     }
-    setImportState(null);
+    const hasFailures = result.value.failed > 0 || result.value.partial > 0;
+    if (hasFailures) setApplyResult(result.value);
+    else setImportState(null);
     toastManager.add({
-      type: "success",
-      title: "Archive imported",
+      type: hasFailures ? "error" : "success",
+      title: hasFailures ? "Archive partly imported" : "Archive imported",
       description: importResultDescription(result.value),
     });
   };
@@ -216,7 +225,7 @@ export function PortabilitySettings() {
     <>
       <SettingsRow
         {...searchableSetting("data-portability")}
-        description="Export safe settings and workspace metadata, or preview an archive before import."
+        description="Export safe settings, workspaces, and conversation history, or preview an archive before import."
         control={
           <div className="flex items-center gap-1.5">
             <Button
@@ -254,7 +263,10 @@ export function PortabilitySettings() {
       <Dialog
         open={importState !== null}
         onOpenChange={(open) => {
-          if (!open && pending !== "apply") setImportState(null);
+          if (!open && pending !== "apply") {
+            setImportState(null);
+            setApplyResult(null);
+          }
         }}
       >
         <DialogPopup className="max-w-2xl">
@@ -266,6 +278,22 @@ export function PortabilitySettings() {
           </DialogHeader>
           <DialogPanel>
             {importState ? <ImportPreview preview={importState.preview} /> : null}
+            {applyResult && applyResult.failures.length > 0 ? (
+              <section className="mt-5 space-y-1.5">
+                <h3 className="text-xs font-semibold text-destructive">Restore failures</h3>
+                <ul className="space-y-2 text-xs text-muted-foreground">
+                  {applyResult.failures.map((failure) => (
+                    <li key={`${failure.recordType}:${failure.id}`}>
+                      <span className="font-medium text-foreground/80">{failure.title}</span>
+                      <span className="block">
+                        {failure.partial ? "Partly applied. " : "Not applied. "}
+                        {failure.message}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </DialogPanel>
           <DialogFooter>
             <Button
@@ -279,6 +307,7 @@ export function PortabilitySettings() {
               disabled={
                 importState === null ||
                 pending === "apply" ||
+                applyResult !== null ||
                 !canApplyPortabilityPreview(importState.preview)
               }
               onClick={() => void handleApply()}

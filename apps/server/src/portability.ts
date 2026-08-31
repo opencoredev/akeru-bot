@@ -5,13 +5,17 @@ import {
   AKERU_ARCHIVE_VERSION,
   BotId,
   CommandId,
+  EventId,
   GroupId,
+  MessageId,
   McpServerId,
   PortabilityArchive,
+  ProjectId,
   ThreadId,
   type PortabilityArchiveRecord,
   type PortabilityImportItem,
   type PortabilityImportPreview,
+  type PortabilityProjectData,
   type PortabilitySafeServerSettings,
   type OrchestrationCommand,
   type OrchestrationReadModel,
@@ -37,7 +41,7 @@ const ARCHIVE_EXCLUSIONS = [
   "Access tokens, cookies, passwords, secret values, environment variables, pairing and relay credentials",
   "Absolute local paths, project scripts, attachments, image avatar files, Git refs, pull request links, and diff blobs",
   "Event identifiers, event sequences, command receipts, provider sessions, and opaque provider configuration",
-  "Conversation messages, proposed plans, and approval history",
+  "Conversation attachments, raw approval payloads, provider request details, and deleted threads and projects",
 ] as const;
 
 function canonicalValue(value: unknown): unknown {
@@ -90,6 +94,10 @@ function safeText(value: string): string {
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/gi, "$1[credentials removed]@")
     .replace(/\bBearer\s+\S+/gi, "[secret removed]")
     .replace(/\b(?:sk|ghp|github_pat|xox[baprs])-[_A-Za-z0-9-]+\b/gi, "[secret removed]")
+    .replace(/\b(?:glpat-|npm_)[_A-Za-z0-9-]+\b/gi, "[secret removed]")
+    .replace(/\b(?:sk|rk)_(?:live|test)_[_A-Za-z0-9-]+\b/gi, "[secret removed]")
+    .replace(/\bAIza[_A-Za-z0-9-]{20,}\b/g, "[secret removed]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[secret removed]")
     .replace(/\bxai-[_A-Za-z0-9-]+\b/gi, "[secret removed]")
     .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, "[secret removed]")
     .replace(/\b(?:authorization|cookie|set-cookie)\s*:\s*[^\r\n]+/gi, "[secret removed]")
@@ -102,6 +110,42 @@ function safeText(value: string): string {
     .replace(/(^|[\s"'`(])\/(?:[^/\s"'`)]+\/)*[^/\s"'`)]+/gm, "$1[local path removed]")
     .replace(/(^|[\s"'`(])~\/(?:[^/\s"'`)]+\/)*[^/\s"'`)]+/gm, "$1[local path removed]")
     .replace(/[A-Za-z]:\\(?:[^\s\\]+\\)+[^\s\\]+/g, "[local path removed]");
+}
+
+function portableProjectData(
+  project: OrchestrationReadModel["projects"][number],
+): PortabilityProjectData {
+  const repository = project.repositoryIdentity
+    ? Object.fromEntries(
+        Object.entries({
+          displayName:
+            project.repositoryIdentity.displayName === undefined
+              ? undefined
+              : safeText(project.repositoryIdentity.displayName),
+          provider:
+            project.repositoryIdentity.provider === undefined
+              ? undefined
+              : safeText(project.repositoryIdentity.provider),
+          owner:
+            project.repositoryIdentity.owner === undefined
+              ? undefined
+              : safeText(project.repositoryIdentity.owner),
+          name:
+            project.repositoryIdentity.name === undefined
+              ? undefined
+              : safeText(project.repositoryIdentity.name),
+        }).filter(([, value]) => value !== undefined),
+      )
+    : undefined;
+  return {
+    title: safeText(project.title),
+    workspaceName: safeText(basename(project.workspaceRoot) || project.title),
+    ...(repository && Object.keys(repository).length > 0 ? { repository } : {}),
+    defaultModelSelection: project.defaultModelSelection,
+    ...(project.defaultThreadEnvMode !== undefined
+      ? { defaultThreadEnvMode: project.defaultThreadEnvMode }
+      : {}),
+  };
 }
 
 function safeMcpArgs(args: readonly string[] | undefined): string[] | undefined {
@@ -292,11 +336,28 @@ function withChecksum(record: RecordCore): PortabilityArchiveRecord {
   return { ...record, checksum: portabilityChecksum(record) } as PortabilityArchiveRecord;
 }
 
+function portableId(prefix: string, value: unknown): string {
+  return `${prefix}-${portabilityChecksum(value).slice(0, 32)}`;
+}
+
+const APPROVAL_ACTIVITY_KINDS = new Set([
+  "approval.requested",
+  "approval.resolved",
+  "provider.approval.respond.failed",
+]);
+
+function stringField(payload: unknown, key: string): string | undefined {
+  if (typeof payload !== "object" || payload === null) return undefined;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim().length > 0 ? safeText(value) : undefined;
+}
+
 export function portableRecords(
   snapshot: OrchestrationReadModel,
   settings: ServerSettings,
 ): PortabilityArchiveRecord[] {
   const mcpServerIds = new Set((snapshot.mcpServers ?? []).map((server) => server.id));
+  const threadIds = new Set(snapshot.threads.map((thread) => thread.id));
   const records: RecordCore[] = [
     {
       type: "server-settings",
@@ -347,61 +408,135 @@ export function portableRecords(
         members: [...group.members].sort((left, right) => left.botId.localeCompare(right.botId)),
       },
     })),
-    ...snapshot.projects.map((project) => {
-      const repository = project.repositoryIdentity
-        ? Object.fromEntries(
-            Object.entries({
-              displayName:
-                project.repositoryIdentity.displayName === undefined
-                  ? undefined
-                  : safeText(project.repositoryIdentity.displayName),
-              provider:
-                project.repositoryIdentity.provider === undefined
-                  ? undefined
-                  : safeText(project.repositoryIdentity.provider),
-              owner:
-                project.repositoryIdentity.owner === undefined
-                  ? undefined
-                  : safeText(project.repositoryIdentity.owner),
-              name:
-                project.repositoryIdentity.name === undefined
-                  ? undefined
-                  : safeText(project.repositoryIdentity.name),
-            }).filter(([, value]) => value !== undefined),
-          )
-        : undefined;
-      return {
+    ...snapshot.projects
+      .filter((project) => project.deletedAt === null)
+      .map((project) => ({
         type: "project" as const,
         id: project.id,
         updatedAt: project.updatedAt,
-        data: {
-          title: safeText(project.title),
-          workspaceName: safeText(basename(project.workspaceRoot) || project.title),
-          ...(repository && Object.keys(repository).length > 0 ? { repository } : {}),
-          defaultModelSelection: project.defaultModelSelection,
-          ...(project.defaultThreadEnvMode !== undefined
-            ? { defaultThreadEnvMode: project.defaultThreadEnvMode }
-            : {}),
-        },
-      };
-    }),
-    ...snapshot.threads.map((thread) => ({
-      type: "thread" as const,
-      id: thread.id,
-      updatedAt: thread.updatedAt,
-      data: {
-        projectId: thread.projectId,
-        ...(thread.botId !== undefined ? { botId: thread.botId } : {}),
-        ...(thread.groupId !== undefined ? { groupId: thread.groupId } : {}),
-        title: safeText(thread.title),
-        modelSelection: thread.modelSelection,
-        runtimeMode: thread.runtimeMode,
-        interactionMode: thread.interactionMode,
-        createdAt: thread.createdAt,
-        archivedAt: thread.archivedAt,
-        ...(thread.pinnedAt !== undefined ? { pinnedAt: thread.pinnedAt } : {}),
-      },
-    })),
+        data: portableProjectData(project),
+      })),
+    ...snapshot.threads
+      .filter((thread) => thread.deletedAt === null)
+      .map((thread) => {
+        const messages = [...thread.messages]
+          .toSorted(
+            (left, right) =>
+              left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+          )
+          .map((message, index) => {
+            const data = {
+              role: message.role,
+              text: safeText(message.text),
+              ...(message.respondingBotId !== undefined &&
+              (message.respondingBotId === null ||
+                snapshot.bots.some((bot) => bot.id === message.respondingBotId))
+                ? { respondingBotId: message.respondingBotId }
+                : {}),
+              createdAt: message.createdAt,
+              updatedAt: message.updatedAt,
+            };
+            return {
+              id: MessageId.make(portableId("message", { threadId: thread.id, index, ...data })),
+              ...data,
+            };
+          });
+        const proposedPlans = [...thread.proposedPlans]
+          .toSorted(
+            (left, right) =>
+              left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+          )
+          .map((plan, index) => {
+            const data = {
+              planMarkdown: safeText(plan.planMarkdown),
+              implementedAt: plan.implementedAt,
+              implementationThreadId:
+                plan.implementationThreadId !== null && threadIds.has(plan.implementationThreadId)
+                  ? plan.implementationThreadId
+                  : null,
+              createdAt: plan.createdAt,
+              updatedAt: plan.updatedAt,
+            };
+            return {
+              id: portableId("plan", { threadId: thread.id, index, ...data }),
+              ...data,
+            };
+          });
+        const approvalHistory = thread.activities
+          .flatMap((activity) => {
+            const archivedKind = stringField(activity.payload, "originalKind");
+            const originalKind = APPROVAL_ACTIVITY_KINDS.has(activity.kind)
+              ? activity.kind
+              : activity.kind === "approval.history" &&
+                  archivedKind !== undefined &&
+                  APPROVAL_ACTIVITY_KINDS.has(archivedKind)
+                ? archivedKind
+                : undefined;
+            if (originalKind === undefined) return [];
+            const requestId = stringField(activity.payload, "requestId");
+            const requestKind = stringField(activity.payload, "requestKind");
+            const requestType = stringField(activity.payload, "requestType");
+            const decision = stringField(activity.payload, "decision");
+            return [
+              {
+                originalKind: originalKind as
+                  | "approval.requested"
+                  | "approval.resolved"
+                  | "provider.approval.respond.failed",
+                summary: safeText(activity.summary),
+                ...(requestId ? { requestId } : {}),
+                ...(requestKind ? { requestKind } : {}),
+                ...(requestType ? { requestType } : {}),
+                ...(decision ? { decision } : {}),
+                provider:
+                  stringField(activity.payload, "provider") ?? thread.modelSelection.instanceId,
+                createdAt: activity.createdAt,
+              },
+            ];
+          })
+          .toSorted(
+            (left, right) =>
+              left.createdAt.localeCompare(right.createdAt) ||
+              canonicalJson(left).localeCompare(canonicalJson(right)),
+          )
+          .map((activity, index) => ({
+            id: EventId.make(portableId("approval", { threadId: thread.id, index, ...activity })),
+            ...activity,
+          }));
+        return {
+          type: "thread" as const,
+          id: thread.id,
+          updatedAt: thread.updatedAt,
+          data: {
+            projectId: thread.projectId,
+            ...(thread.botId !== undefined ? { botId: thread.botId } : {}),
+            ...(thread.groupId !== undefined ? { groupId: thread.groupId } : {}),
+            title: safeText(thread.title),
+            modelSelection: thread.modelSelection,
+            runtimeMode: thread.runtimeMode,
+            interactionMode: thread.interactionMode,
+            createdAt: thread.createdAt,
+            archivedAt: thread.archivedAt,
+            settledOverride:
+              thread.settledOverride === "settled" || thread.settledAt !== null
+                ? ("settled" as const)
+                : thread.settledOverride === "active"
+                  ? ("active" as const)
+                  : null,
+            settledAt:
+              thread.settledOverride === "settled" || thread.settledAt !== null
+                ? (thread.settledAt ?? thread.updatedAt)
+                : null,
+            snoozedUntil: thread.snoozedUntil && thread.snoozedAt ? thread.snoozedUntil : null,
+            snoozedAt: thread.snoozedUntil && thread.snoozedAt ? thread.snoozedAt : null,
+            pinnedAt: thread.pinnedAt ?? null,
+            pinOrderKey: thread.pinOrderKey ?? null,
+            messages,
+            proposedPlans,
+            approvalHistory,
+          },
+        };
+      }),
   ];
   return records
     .sort((left, right) =>
@@ -506,6 +641,31 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
   }
   if (record.type === "thread") {
     assertSafeImportedText(`Thread '${record.id}' title`, record.data.title);
+    for (const message of record.data.messages) {
+      assertSafeImportedText(`Thread '${record.id}' message`, message.text);
+    }
+    for (const plan of record.data.proposedPlans) {
+      assertSafeImportedText(`Thread '${record.id}' proposed plan`, plan.planMarkdown);
+    }
+    for (const approval of record.data.approvalHistory) {
+      assertSafeImportedText(`Thread '${record.id}' approval summary`, approval.summary);
+      assertSafeImportedText(`Thread '${record.id}' approval provider`, approval.provider);
+      for (const value of [
+        approval.requestId,
+        approval.requestKind,
+        approval.requestType,
+        approval.decision,
+      ]) {
+        if (value !== undefined)
+          assertSafeImportedText(`Thread '${record.id}' approval field`, value);
+      }
+    }
+    if (
+      (record.data.settledOverride === "settled") !== (record.data.settledAt !== null) ||
+      (record.data.snoozedUntil === null) !== (record.data.snoozedAt === null)
+    ) {
+      throw new Error(`Thread '${record.id}' has inconsistent lifecycle timestamps.`);
+    }
   }
 }
 
@@ -548,6 +708,9 @@ export function parsePortabilityArchive(contents: string) {
   );
   const projectIds = new Set(
     archive.records.filter((record) => record.type === "project").map((record) => record.id),
+  );
+  const threadIds = new Set(
+    archive.records.filter((record) => record.type === "thread").map((record) => record.id),
   );
   const groupIds = new Set(
     archive.records.filter((record) => record.type === "group").map((record) => record.id),
@@ -601,6 +764,23 @@ export function parsePortabilityArchive(contents: string) {
       if (record.data.groupId && !groupIds.has(record.data.groupId)) {
         throw new Error(`Thread '${record.id}' references missing group '${record.data.groupId}'.`);
       }
+      const missingRespondingBot = record.data.messages.find(
+        (message) => message.respondingBotId && !botIds.has(message.respondingBotId),
+      )?.respondingBotId;
+      if (missingRespondingBot) {
+        throw new Error(
+          `Thread '${record.id}' message references missing bot '${missingRespondingBot}'.`,
+        );
+      }
+      const missingImplementationThread = record.data.proposedPlans.find(
+        (plan) =>
+          plan.implementationThreadId !== null && !threadIds.has(plan.implementationThreadId),
+      )?.implementationThreadId;
+      if (missingImplementationThread) {
+        throw new Error(
+          `Thread '${record.id}' plan references missing thread '${missingImplementationThread}'.`,
+        );
+      }
     }
   }
   return archive;
@@ -616,6 +796,126 @@ function item(record: PortabilityArchiveRecord): PortabilityImportItem {
           ? record.data.name
           : record.data.title;
   return { recordType: record.type, id: record.id, title };
+}
+
+type ProjectRestoreMatch =
+  | { readonly kind: "matched"; readonly targetId: ProjectId }
+  | { readonly kind: "conflict" }
+  | { readonly kind: "unsupported"; readonly reason: string };
+
+function normalizedIdentityPart(value: string | undefined): string | undefined {
+  return value?.trim().toLocaleLowerCase("en-US");
+}
+
+function repositoriesMatch(
+  source: PortabilityProjectData["repository"],
+  target: PortabilityProjectData["repository"],
+): boolean {
+  if (!source || !target) return false;
+  const sourceProvider = normalizedIdentityPart(source.provider);
+  const targetProvider = normalizedIdentityPart(target.provider);
+  if (sourceProvider !== targetProvider) return false;
+  const sourceOwner = normalizedIdentityPart(source.owner);
+  const targetOwner = normalizedIdentityPart(target.owner);
+  const sourceName = normalizedIdentityPart(source.name);
+  const targetName = normalizedIdentityPart(target.name);
+  if (sourceOwner && targetOwner && sourceName && targetName) {
+    return sourceOwner === targetOwner && sourceName === targetName;
+  }
+  const sourceDisplayName = normalizedIdentityPart(source.displayName);
+  const targetDisplayName = normalizedIdentityPart(target.displayName);
+  return sourceDisplayName !== undefined && sourceDisplayName === targetDisplayName;
+}
+
+function resolveProjectRestoreMatches(
+  archive: PortabilityArchive,
+  snapshot: OrchestrationReadModel,
+): Map<string, ProjectRestoreMatch> {
+  const sourceProjects = archive.records.filter((record) => record.type === "project");
+  const targets = snapshot.projects
+    .filter((project) => project.deletedAt === null)
+    .map((project) => ({ project, data: portableProjectData(project) }));
+  const matches = new Map<string, ProjectRestoreMatch>();
+
+  for (const source of sourceProjects) {
+    const repositoryCandidates = source.data.repository
+      ? targets.filter((target) =>
+          repositoriesMatch(source.data.repository, target.data.repository),
+        )
+      : [];
+    if (repositoryCandidates.length === 1) {
+      matches.set(source.id, {
+        kind: "matched",
+        targetId: repositoryCandidates[0]!.project.id,
+      });
+      continue;
+    }
+    if (repositoryCandidates.length > 1) {
+      const workspaceCandidates = repositoryCandidates.filter(
+        (target) => target.data.workspaceName === source.data.workspaceName,
+      );
+      if (workspaceCandidates.length === 1) {
+        matches.set(source.id, {
+          kind: "matched",
+          targetId: workspaceCandidates[0]!.project.id,
+        });
+      } else {
+        matches.set(source.id, {
+          kind: "conflict",
+        });
+      }
+      continue;
+    }
+
+    const workspaceCandidates = targets.filter(
+      (target) =>
+        target.data.workspaceName === source.data.workspaceName &&
+        (source.data.repository === undefined || target.data.repository === undefined),
+    );
+    if (workspaceCandidates.length === 1) {
+      matches.set(source.id, {
+        kind: "matched",
+        targetId: workspaceCandidates[0]!.project.id,
+      });
+    } else if (workspaceCandidates.length > 1) {
+      matches.set(source.id, {
+        kind: "conflict",
+      });
+    } else {
+      matches.set(source.id, {
+        kind: "unsupported",
+        reason: "No existing target project matches this repository or workspace name.",
+      });
+    }
+  }
+
+  const sourceIdsByTarget = new Map<string, string[]>();
+  for (const [sourceId, match] of matches) {
+    if (match.kind !== "matched") continue;
+    const sourceIds = sourceIdsByTarget.get(match.targetId) ?? [];
+    sourceIds.push(sourceId);
+    sourceIdsByTarget.set(match.targetId, sourceIds);
+  }
+  for (const [targetId, sourceIds] of sourceIdsByTarget) {
+    if (sourceIds.length < 2) continue;
+    const exactId = sourceIds.find((sourceId) => sourceId === targetId);
+    for (const sourceId of sourceIds) {
+      if (sourceId === exactId) continue;
+      matches.set(sourceId, {
+        kind: "conflict",
+      });
+    }
+  }
+
+  return matches;
+}
+
+function mutableProjectData(data: PortabilityProjectData) {
+  return {
+    title: data.title,
+    defaultModelSelection: data.defaultModelSelection,
+    defaultThreadEnvMode: data.defaultThreadEnvMode ?? null,
+  };
 }
 
 export function portabilityStateChecksum(
@@ -651,10 +951,13 @@ export function previewPortabilityImport(
   const current = new Map(
     portableRecords(snapshot, settings).map((record) => [`${record.type}:${record.id}`, record]),
   );
+  const projectMatches = resolveProjectRestoreMatches(archive, snapshot);
   const additions: PortabilityImportItem[] = [];
   const changes: PortabilityImportItem[] = [];
   const conflicts: PortabilityImportItem[] = [];
-  const currentProjectIds = new Set(snapshot.projects.map((project) => project.id));
+  const deletedThreadIds = new Set<string>(
+    snapshot.threads.filter((thread) => thread.deletedAt !== null).map((thread) => thread.id),
+  );
   const currentBotGroupIds = new Map(snapshot.bots.map((bot) => [bot.id, bot.groupId]));
   const enabledMcpServerIds = new Set(
     (snapshot.mcpServers ?? []).filter((server) => server.enabled).map((server) => server.id),
@@ -666,7 +969,16 @@ export function previewPortabilityImport(
           ? [record.data.engine.provider]
           : record.type === "thread"
             ? [record.data.modelSelection.instanceId]
-            : []
+            : record.type === "project" && record.data.defaultModelSelection
+              ? [record.data.defaultModelSelection.instanceId]
+              : record.type === "server-settings"
+                ? [
+                    record.data.textGenerationModelSelection.instanceId,
+                    ...(record.data.sourceControlWriterModelSelection
+                      ? [record.data.sourceControlWriterModelSelection.instanceId]
+                      : []),
+                  ]
+                : []
         ).filter((provider) => !availableProviderIds.has(provider)),
       ),
     ),
@@ -696,20 +1008,43 @@ export function previewPortabilityImport(
         : [];
     }),
   );
-  const unsupportedCounts = new Map<"project" | "thread", number>();
+  const unsupportedCounts = new Map<
+    string,
+    { kind: "project" | "thread"; count: number; reason: string }
+  >();
+  const addUnsupported = (kind: "project" | "thread", reason: string) => {
+    const key = `${kind}:${reason}`;
+    const existing = unsupportedCounts.get(key);
+    unsupportedCounts.set(key, { kind, count: (existing?.count ?? 0) + 1, reason });
+  };
   for (const record of archive.records) {
-    if (
-      record.type === "project" ||
-      (record.type === "thread" && !currentProjectIds.has(record.data.projectId))
-    ) {
-      unsupportedCounts.set(record.type, (unsupportedCounts.get(record.type) ?? 0) + 1);
+    const projectMatch =
+      record.type === "project"
+        ? projectMatches.get(record.id)
+        : record.type === "thread"
+          ? projectMatches.get(record.data.projectId)
+          : undefined;
+    if (projectMatch?.kind === "unsupported") {
+      addUnsupported(record.type as "project" | "thread", projectMatch.reason);
+      continue;
+    }
+    if (projectMatch?.kind === "conflict") {
+      conflicts.push(item(record));
       continue;
     }
     if (
       (record.type === "bot" && unavailableBotIds.has(record.id)) ||
+      (record.type === "server-settings" &&
+        (missingProviderIds.has(record.data.textGenerationModelSelection.instanceId) ||
+          (record.data.sourceControlWriterModelSelection !== null &&
+            missingProviderIds.has(record.data.sourceControlWriterModelSelection.instanceId)))) ||
+      (record.type === "project" &&
+        record.data.defaultModelSelection !== null &&
+        missingProviderIds.has(record.data.defaultModelSelection.instanceId)) ||
       (record.type === "group" && unavailableGroupIds.has(record.id)) ||
       (record.type === "thread" &&
-        (missingProviderIds.has(record.data.modelSelection.instanceId) ||
+        (deletedThreadIds.has(record.id) ||
+          missingProviderIds.has(record.data.modelSelection.instanceId) ||
           (record.data.botId !== undefined &&
             record.data.botId !== null &&
             unavailableBotIds.has(record.data.botId)) ||
@@ -720,9 +1055,24 @@ export function previewPortabilityImport(
       conflicts.push(item(record));
       continue;
     }
-    const existing = current.get(`${record.type}:${record.id}`);
+    const existingKey =
+      record.type === "project" && projectMatch?.kind === "matched"
+        ? `project:${projectMatch.targetId}`
+        : `${record.type}:${record.id}`;
+    const existing = current.get(existingKey);
+    const importedData =
+      record.type === "thread" && projectMatch?.kind === "matched"
+        ? { ...record.data, projectId: projectMatch.targetId }
+        : record.data;
     if (!existing) additions.push(item(record));
-    else if (canonicalJson(existing.data) === canonicalJson(record.data)) {
+    else if (
+      record.type === "project" &&
+      existing.type === "project" &&
+      canonicalJson(mutableProjectData(existing.data)) ===
+        canonicalJson(mutableProjectData(record.data))
+    ) {
+      continue;
+    } else if (canonicalJson(existing.data) === canonicalJson(importedData)) {
       if (record.type === "mcp-server" && enabledMcpServerIds.has(McpServerId.make(record.id))) {
         changes.push(item(record));
       }
@@ -730,9 +1080,23 @@ export function previewPortabilityImport(
     } else if (
       record.type === "thread" &&
       existing.type === "thread" &&
-      (existing.data.projectId !== record.data.projectId ||
+      (existing.data.projectId !==
+        (projectMatch?.kind === "matched" ? projectMatch.targetId : record.data.projectId) ||
         existing.data.botId !== record.data.botId ||
-        existing.data.groupId !== record.data.groupId)
+        existing.data.groupId !== record.data.groupId ||
+        ((existing.data.messages.length > 0 ||
+          existing.data.proposedPlans.length > 0 ||
+          existing.data.approvalHistory.length > 0) &&
+          canonicalJson({
+            messages: existing.data.messages,
+            proposedPlans: existing.data.proposedPlans,
+            approvalHistory: existing.data.approvalHistory,
+          }) !==
+            canonicalJson({
+              messages: record.data.messages,
+              proposedPlans: record.data.proposedPlans,
+              approvalHistory: record.data.approvalHistory,
+            })))
     ) {
       conflicts.push(item(record));
     } else if (existing.updatedAt > record.updatedAt) {
@@ -752,26 +1116,32 @@ export function previewPortabilityImport(
       "Local paths, image avatar files, Git state, and event identifiers",
     ],
     unsupported: [
-      ...[...unsupportedCounts.entries()].map(([kind, count]) => ({
-        kind,
-        count,
-        reason:
-          kind === "project"
-            ? "Project roots are local absolute paths and require manual workspace mapping."
-            : "The target project is not mapped on this environment.",
-      })),
-      { kind: "jobs" as const, count: 0, reason: "This build has no jobs projection." },
-      { kind: "memory" as const, count: 0, reason: "This build has no durable memory projection." },
-      { kind: "routines" as const, count: 0, reason: "This build has no routines projection." },
+      ...unsupportedCounts.values(),
+      {
+        kind: "jobs" as const,
+        count: 0,
+        reason: "The Akeru read model has no jobs collection or repository.",
+      },
+      {
+        kind: "memory" as const,
+        count: 0,
+        reason: "The Akeru read model has no durable memory collection or repository.",
+      },
+      {
+        kind: "routines" as const,
+        count: 0,
+        reason: "The Akeru read model has no routines collection or repository.",
+      },
       {
         kind: "skill-assignments" as const,
         count: 0,
-        reason: "This build has no skill assignment projection.",
+        reason: "Provider skill discovery exists, but Akeru has no persisted skill assignments.",
       },
       {
         kind: "usage-history" as const,
         count: 0,
-        reason: "Usage comes from provider transcript files, not an Akeru projection.",
+        reason:
+          "Usage is read from provider-owned transcripts. Akeru has no usage import repository.",
       },
     ],
   };
@@ -795,6 +1165,81 @@ function mcpCommand(
   } as OrchestrationCommand;
 }
 
+function itemForCommand(
+  command: OrchestrationCommand,
+  records: readonly PortabilityArchiveRecord[],
+  projectSourceIdByTarget: ReadonlyMap<string, string>,
+): PortabilityImportItem {
+  const key = (() => {
+    switch (command.type) {
+      case "project.create":
+      case "project.meta.update":
+      case "project.delete":
+        return `project:${projectSourceIdByTarget.get(command.projectId) ?? command.projectId}`;
+      case "bot.create":
+      case "bot.update":
+      case "bot.archive":
+      case "bot.restore":
+        return `bot:${command.botId}`;
+      case "group.create":
+      case "group.rename":
+      case "group.delete":
+      case "group.member.assign":
+      case "group.member.unassign":
+      case "group.boss.set":
+        return `group:${command.groupId}`;
+      case "mcp-server.create":
+      case "mcp-server.update":
+      case "mcp-server.delete":
+      case "mcp-server.enable":
+      case "mcp-server.disable":
+        return `mcp-server:${command.mcpServerId}`;
+      default:
+        return `thread:${command.threadId}`;
+    }
+  })();
+  const record = records.find((entry) => `${entry.type}:${entry.id}` === key);
+  if (!record) throw new Error(`Restore command '${command.type}' has no archive record.`);
+  return item(record);
+}
+
+export interface PortabilityApplyOutcome {
+  readonly item: PortabilityImportItem;
+  readonly succeeded: boolean;
+  readonly message?: string;
+}
+
+export function summarizePortabilityApply(
+  outcomes: readonly PortabilityApplyOutcome[],
+  skipped: number,
+) {
+  const byRecord = new Map<
+    string,
+    { item: PortabilityImportItem; succeeded: number; messages: string[] }
+  >();
+  for (const outcome of outcomes) {
+    const key = `${outcome.item.recordType}:${outcome.item.id}`;
+    const state = byRecord.get(key) ?? { item: outcome.item, succeeded: 0, messages: [] };
+    if (outcome.succeeded) state.succeeded += 1;
+    else state.messages.push(outcome.message ?? "Restore operation failed.");
+    byRecord.set(key, state);
+  }
+  const failures = [...byRecord.values()]
+    .filter((state) => state.messages.length > 0)
+    .map((state) => ({
+      ...state.item,
+      partial: state.succeeded > 0,
+      message: state.messages.join(" "),
+    }));
+  return {
+    applied: [...byRecord.values()].filter((state) => state.messages.length === 0).length,
+    skipped,
+    failed: failures.filter((failure) => !failure.partial).length,
+    partial: failures.filter((failure) => failure.partial).length,
+    failures,
+  };
+}
+
 export function commandsForPortabilityImport(
   archive: PortabilityArchive,
   snapshot: OrchestrationReadModel,
@@ -802,16 +1247,28 @@ export function commandsForPortabilityImport(
   availableProviderIds: ReadonlySet<string>,
 ): {
   commands: OrchestrationCommand[];
+  commandItems: PortabilityImportItem[];
   settingsPatch?: ServerSettingsPatch;
+  settingsItem?: PortabilityImportItem;
   applied: number;
   skipped: number;
 } {
   const preview = previewPortabilityImport(archive, snapshot, settings, availableProviderIds);
+  const projectMatches = resolveProjectRestoreMatches(archive, snapshot);
+  const projectSourceIdByTarget = new Map(
+    [...projectMatches.entries()].flatMap(([sourceId, match]) =>
+      match.kind === "matched" ? [[match.targetId, sourceId] as const] : [],
+    ),
+  );
   const conflictKeys = new Set(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`));
   const mcpById = new Map((snapshot.mcpServers ?? []).map((server) => [server.id, server]));
+  const projectsById = new Map(snapshot.projects.map((project) => [project.id, project]));
   const botsById = new Map(snapshot.bots.map((bot) => [bot.id, bot]));
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
   const threadsById = new Map(snapshot.threads.map((thread) => [thread.id, thread]));
+  const currentRecords = new Map(
+    portableRecords(snapshot, settings).map((record) => [`${record.type}:${record.id}`, record]),
+  );
   const referencedBotIds = new Set(
     archive.records.flatMap((record) =>
       record.type === "group"
@@ -859,6 +1316,31 @@ export function commandsForPortabilityImport(
   }
 
   for (const record of archive.records) {
+    if (record.type !== "project" || conflictKeys.has(`project:${record.id}`)) continue;
+    const match = projectMatches.get(record.id);
+    if (match?.kind !== "matched") continue;
+    const existing = projectsById.get(match.targetId);
+    if (!existing) continue;
+    const defaultThreadEnvMode = record.data.defaultThreadEnvMode ?? null;
+    if (
+      existing.title !== record.data.title ||
+      canonicalJson(existing.defaultModelSelection) !==
+        canonicalJson(record.data.defaultModelSelection) ||
+      (existing.defaultThreadEnvMode ?? null) !== defaultThreadEnvMode
+    ) {
+      commands.push({
+        type: "project.meta.update",
+        commandId: nextCommandId(),
+        projectId: existing.id,
+        title: record.data.title,
+        defaultModelSelection: record.data.defaultModelSelection,
+        defaultThreadEnvMode,
+      });
+      applied += 1;
+    }
+  }
+
+  for (const record of archive.records) {
     if (record.type !== "bot" || conflictKeys.has(`bot:${record.id}`)) continue;
     const existing = botsById.get(BotId.make(record.id));
     const fields = {
@@ -876,11 +1358,7 @@ export function commandsForPortabilityImport(
     } as const;
     const changed =
       !existing ||
-      canonicalJson(
-        portableRecords({ ...snapshot, bots: [existing] }, settings).find(
-          (entry) => entry.type === "bot",
-        )?.data,
-      ) !== canonicalJson(record.data);
+      canonicalJson(currentRecords.get(`bot:${record.id}`)?.data) !== canonicalJson(record.data);
     if (!existing) {
       commands.push({
         type: "bot.create",
@@ -981,36 +1459,30 @@ export function commandsForPortabilityImport(
       }
     }
     if (
-      canonicalJson(
-        portableRecords({ ...snapshot, groups: [existing] }, settings).find(
-          (entry) => entry.type === "group",
-        )?.data,
-      ) !== canonicalJson(record.data)
+      canonicalJson(currentRecords.get(`group:${record.id}`)?.data) !== canonicalJson(record.data)
     ) {
       applied += 1;
     }
   }
 
-  const availableProjectIds = new Set(snapshot.projects.map((project) => project.id));
   for (const record of archive.records) {
+    const projectMatch =
+      record.type === "thread" ? projectMatches.get(record.data.projectId) : undefined;
     if (
       record.type !== "thread" ||
       conflictKeys.has(`thread:${record.id}`) ||
-      !availableProjectIds.has(record.data.projectId)
+      projectMatch?.kind !== "matched"
     ) {
       continue;
     }
     const existing = threadsById.get(ThreadId.make(record.id));
-    const existingArchived = existing !== undefined && existing.archivedAt !== null;
-    const targetArchived = record.data.archivedAt !== null;
-    const pinChanged = Boolean(record.data.pinnedAt) !== Boolean(existing?.pinnedAt);
-    const unarchiveFirst = existingArchived && (pinChanged || !targetArchived);
+    const existingRecord = existing ? currentRecords.get(`thread:${record.id}`) : undefined;
     if (!existing) {
       commands.push({
         type: "thread.create",
         commandId: nextCommandId(),
         threadId: ThreadId.make(record.id),
-        projectId: record.data.projectId,
+        projectId: projectMatch.targetId,
         ...(record.data.botId !== undefined ? { botId: record.data.botId } : {}),
         ...(record.data.groupId !== undefined ? { groupId: record.data.groupId } : {}),
         title: record.data.title,
@@ -1022,13 +1494,6 @@ export function commandsForPortabilityImport(
         createdAt: record.data.createdAt,
       });
     } else {
-      if (unarchiveFirst) {
-        commands.push({
-          type: "thread.unarchive",
-          commandId: nextCommandId(),
-          threadId: existing.id,
-        });
-      }
       if (
         existing.title !== record.data.title ||
         canonicalJson(existing.modelSelection) !== canonicalJson(record.data.modelSelection)
@@ -1060,35 +1525,114 @@ export function commandsForPortabilityImport(
         });
       }
     }
-    if (record.data.pinnedAt && !existing?.pinnedAt) {
+    const historyData = {
+      messages: record.data.messages,
+      proposedPlans: record.data.proposedPlans,
+      approvalHistory: record.data.approvalHistory,
+      settledOverride: record.data.settledOverride,
+      settledAt: record.data.settledAt,
+      snoozedUntil: record.data.snoozedUntil,
+      snoozedAt: record.data.snoozedAt,
+      pinnedAt: record.data.pinnedAt ?? null,
+      pinOrderKey: record.data.pinOrderKey ?? null,
+      archivedAt: record.data.archivedAt,
+    };
+    const existingHistoryData =
+      existingRecord?.type === "thread"
+        ? {
+            messages: existingRecord.data.messages,
+            proposedPlans: existingRecord.data.proposedPlans,
+            approvalHistory: existingRecord.data.approvalHistory,
+            settledOverride: existingRecord.data.settledOverride,
+            settledAt: existingRecord.data.settledAt,
+            snoozedUntil: existingRecord.data.snoozedUntil,
+            snoozedAt: existingRecord.data.snoozedAt,
+            pinnedAt: existingRecord.data.pinnedAt ?? null,
+            pinOrderKey: existingRecord.data.pinOrderKey ?? null,
+            archivedAt: existingRecord.data.archivedAt,
+          }
+        : undefined;
+    const hasHistoryState =
+      record.data.messages.length > 0 ||
+      record.data.proposedPlans.length > 0 ||
+      record.data.approvalHistory.length > 0 ||
+      record.data.settledOverride !== null ||
+      record.data.snoozedUntil !== null ||
+      record.data.pinnedAt != null ||
+      record.data.archivedAt !== null;
+    const restoreConversation =
+      existing === undefined ||
+      (existing.messages.length === 0 &&
+        existing.proposedPlans.length === 0 &&
+        existing.activities.every((activity) => activity.kind !== "approval.history"));
+    if (
+      (existingHistoryData === undefined && hasHistoryState) ||
+      (existingHistoryData !== undefined &&
+        canonicalJson(existingHistoryData) !== canonicalJson(historyData))
+    ) {
       commands.push({
-        type: "thread.pin",
+        type: "thread.history.restore",
         commandId: nextCommandId(),
         threadId: ThreadId.make(record.id),
-      });
-    } else if (!record.data.pinnedAt && existing?.pinnedAt) {
-      commands.push({
-        type: "thread.unpin",
-        commandId: nextCommandId(),
-        threadId: ThreadId.make(record.id),
+        messages: restoreConversation
+          ? record.data.messages.map((message) => ({
+              ...message,
+              turnId: null,
+              streaming: false,
+            }))
+          : [],
+        proposedPlans: restoreConversation
+          ? record.data.proposedPlans.map((plan) => ({
+              ...plan,
+              turnId: null,
+            }))
+          : [],
+        activities: restoreConversation
+          ? record.data.approvalHistory.map((approval) => ({
+              id: approval.id,
+              tone: "approval" as const,
+              kind: "approval.history",
+              summary: approval.summary,
+              payload: {
+                originalKind: approval.originalKind,
+                ...(approval.requestId ? { requestId: approval.requestId } : {}),
+                ...(approval.requestKind ? { requestKind: approval.requestKind } : {}),
+                ...(approval.requestType ? { requestType: approval.requestType } : {}),
+                ...(approval.decision ? { decision: approval.decision } : {}),
+                provider: approval.provider,
+              },
+              turnId: null,
+              createdAt: approval.createdAt,
+            }))
+          : [],
+        settledOverride: record.data.settledOverride,
+        settledAt: record.data.settledAt,
+        snoozedUntil: record.data.snoozedUntil,
+        snoozedAt: record.data.snoozedAt,
+        pinnedAt: record.data.pinnedAt ?? null,
+        pinOrderKey: record.data.pinOrderKey ?? null,
+        archivedAt: record.data.archivedAt,
+        updatedAt: record.updatedAt,
       });
     }
-    if (targetArchived && (!existingArchived || unarchiveFirst)) {
-      commands.push({
-        type: "thread.archive",
-        commandId: nextCommandId(),
-        threadId: ThreadId.make(record.id),
-      });
-    }
-    const existingRecord = existing
-      ? portableRecords({ ...snapshot, threads: [existing] }, settings).find(
-          (entry) => entry.type === "thread",
-        )
-      : undefined;
-    if (!existing || canonicalJson(existingRecord?.data) !== canonicalJson(record.data))
+    const importedData = { ...record.data, projectId: projectMatch.targetId };
+    if (!existing || canonicalJson(existingRecord?.data) !== canonicalJson(importedData))
       applied += 1;
   }
 
   commands.push(...deferredBotArchiveCommands);
-  return { commands, ...(settingsPatch ? { settingsPatch } : {}), applied, skipped };
+  return {
+    commands,
+    commandItems: commands.map((command) =>
+      itemForCommand(command, archive.records, projectSourceIdByTarget),
+    ),
+    ...(settingsPatch
+      ? {
+          settingsPatch,
+          settingsItem: item(archive.records.find((record) => record.type === "server-settings")!),
+        }
+      : {}),
+    applied,
+    skipped,
+  };
 }

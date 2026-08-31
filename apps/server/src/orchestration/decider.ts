@@ -2130,6 +2130,153 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       return [unsettledEvent, activityAppendedEvent];
     }
 
+    case "thread.history.restore": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      const eventBase = (occurredAt: string) =>
+        withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+          metadata: { importedHistory: true },
+        });
+
+      for (const message of command.messages) {
+        events.push({
+          ...(yield* eventBase(message.updatedAt)),
+          type: "thread.message-sent",
+          payload: {
+            threadId: command.threadId,
+            messageId: message.id,
+            role: message.role,
+            text: message.text,
+            turnId: null,
+            ...(message.respondingBotId !== undefined
+              ? { respondingBotId: message.respondingBotId }
+              : {}),
+            streaming: false,
+            createdAt: message.createdAt,
+            updatedAt: message.updatedAt,
+          },
+        });
+      }
+      for (const proposedPlan of command.proposedPlans) {
+        events.push({
+          ...(yield* eventBase(proposedPlan.updatedAt)),
+          type: "thread.proposed-plan-upserted",
+          payload: { threadId: command.threadId, proposedPlan },
+        });
+      }
+      for (const activity of command.activities) {
+        events.push({
+          ...(yield* eventBase(activity.createdAt)),
+          type: "thread.activity-appended",
+          payload: { threadId: command.threadId, activity },
+        });
+      }
+
+      if (
+        command.settledOverride !== thread.settledOverride ||
+        command.settledAt !== thread.settledAt
+      ) {
+        if (command.settledOverride === "settled") {
+          const settledAt = command.settledAt ?? command.updatedAt;
+          events.push({
+            ...(yield* eventBase(settledAt)),
+            type: "thread.settled",
+            payload: { threadId: command.threadId, settledAt, updatedAt: command.updatedAt },
+          });
+        } else {
+          events.push({
+            ...(yield* eventBase(command.updatedAt)),
+            type: "thread.unsettled",
+            payload: {
+              threadId: command.threadId,
+              reason: command.settledOverride === "active" ? "user" : "activity",
+              updatedAt: command.updatedAt,
+            },
+          });
+        }
+      }
+      if (
+        command.snoozedUntil !== (thread.snoozedUntil ?? null) ||
+        command.snoozedAt !== (thread.snoozedAt ?? null)
+      ) {
+        if (command.snoozedUntil !== null) {
+          events.push({
+            ...(yield* eventBase(command.snoozedAt ?? command.updatedAt)),
+            type: "thread.snoozed",
+            payload: {
+              threadId: command.threadId,
+              snoozedUntil: command.snoozedUntil,
+              snoozedAt: command.snoozedAt ?? command.updatedAt,
+              updatedAt: command.updatedAt,
+            },
+          });
+        } else {
+          events.push({
+            ...(yield* eventBase(command.updatedAt)),
+            type: "thread.unsnoozed",
+            payload: { threadId: command.threadId, reason: "user", updatedAt: command.updatedAt },
+          });
+        }
+      }
+      if (
+        command.pinnedAt !== (thread.pinnedAt ?? null) ||
+        command.pinOrderKey !== (thread.pinOrderKey ?? null)
+      ) {
+        if (command.pinnedAt !== null) {
+          events.push({
+            ...(yield* eventBase(command.pinnedAt)),
+            type: "thread.pinned",
+            payload: {
+              threadId: command.threadId,
+              pinnedAt: command.pinnedAt,
+              ...(command.pinOrderKey !== null ? { pinOrderKey: command.pinOrderKey } : {}),
+              updatedAt: command.updatedAt,
+            },
+          });
+        } else {
+          events.push({
+            ...(yield* eventBase(command.updatedAt)),
+            type: "thread.unpinned",
+            payload: { threadId: command.threadId, updatedAt: command.updatedAt },
+          });
+        }
+      }
+      if (command.archivedAt !== thread.archivedAt) {
+        if (command.archivedAt !== null) {
+          events.push({
+            ...(yield* eventBase(command.archivedAt)),
+            type: "thread.archived",
+            payload: {
+              threadId: command.threadId,
+              archivedAt: command.archivedAt,
+              updatedAt: command.updatedAt,
+            },
+          });
+        } else {
+          events.push({
+            ...(yield* eventBase(command.updatedAt)),
+            type: "thread.unarchived",
+            payload: { threadId: command.threadId, updatedAt: command.updatedAt },
+          });
+        }
+      }
+      if (events.length === 0) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' history already matches the restore command.`,
+        });
+      }
+      return events;
+    }
+
     default: {
       command satisfies never;
       const fallback = command as never as { type: string };

@@ -2,10 +2,13 @@ import * as Schema from "effect/Schema";
 
 import {
   BotId,
+  EventId,
   GroupId,
   IsoDateTime,
+  MessageId,
   NonNegativeInt,
   ProjectId,
+  ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { ThreadEnvMode } from "./environment.ts";
@@ -17,6 +20,8 @@ import {
   BotUsageCap,
   GroupMembership,
   ModelSelection,
+  OrchestrationMessageRole,
+  OrchestrationProposedPlanId,
   ProviderInteractionMode,
   RuntimeMode,
 } from "./orchestration.ts";
@@ -127,7 +132,49 @@ export const PortabilityThreadData = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   createdAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime),
+  settledOverride: Schema.NullOr(Schema.Literals(["settled", "active"])),
+  settledAt: Schema.NullOr(IsoDateTime),
+  snoozedUntil: Schema.NullOr(IsoDateTime),
+  snoozedAt: Schema.NullOr(IsoDateTime),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  messages: Schema.Array(
+    Schema.Struct({
+      id: MessageId,
+      role: OrchestrationMessageRole,
+      text: Schema.String,
+      respondingBotId: Schema.optional(Schema.NullOr(BotId)),
+      createdAt: IsoDateTime,
+      updatedAt: IsoDateTime,
+    }),
+  ),
+  proposedPlans: Schema.Array(
+    Schema.Struct({
+      id: OrchestrationProposedPlanId,
+      planMarkdown: TrimmedNonEmptyString,
+      implementedAt: Schema.NullOr(IsoDateTime),
+      implementationThreadId: Schema.NullOr(ThreadId),
+      createdAt: IsoDateTime,
+      updatedAt: IsoDateTime,
+    }),
+  ),
+  approvalHistory: Schema.Array(
+    Schema.Struct({
+      id: EventId,
+      originalKind: Schema.Literals([
+        "approval.requested",
+        "approval.resolved",
+        "provider.approval.respond.failed",
+      ]),
+      summary: TrimmedNonEmptyString,
+      requestId: Schema.optional(TrimmedNonEmptyString),
+      requestKind: Schema.optional(TrimmedNonEmptyString),
+      requestType: Schema.optional(TrimmedNonEmptyString),
+      decision: Schema.optional(TrimmedNonEmptyString),
+      provider: TrimmedNonEmptyString,
+      createdAt: IsoDateTime,
+    }),
+  ),
 });
 export type PortabilityThreadData = typeof PortabilityThreadData.Type;
 
@@ -246,6 +293,17 @@ export type PortabilityApplyImportInput = typeof PortabilityApplyImportInput.Typ
 export const PortabilityApplyImportResult = Schema.Struct({
   applied: NonNegativeInt,
   skipped: NonNegativeInt,
+  failed: NonNegativeInt,
+  partial: NonNegativeInt,
+  failures: Schema.Array(
+    Schema.Struct({
+      recordType: PortabilityImportItem.fields.recordType,
+      id: TrimmedNonEmptyString,
+      title: TrimmedNonEmptyString,
+      partial: Schema.Boolean,
+      message: TrimmedNonEmptyString,
+    }),
+  ),
 });
 export type PortabilityApplyImportResult = typeof PortabilityApplyImportResult.Type;
 

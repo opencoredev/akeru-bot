@@ -31,6 +31,7 @@ import {
   portableRecords,
   previewPortabilityImport,
   serializePortabilityArchive,
+  summarizePortabilityApply,
 } from "./portability.ts";
 
 const NOW = "2026-08-30T12:00:00.000Z";
@@ -127,6 +128,10 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
           "-----BEGIN PRIVATE KEY-----\nprivate-key-value\n-----END PRIVATE KEY-----",
           "postgres://user:hunter2@example.com/database",
           "xai-private-value",
+          "eyJhbGciOiJIUzI1NiJ9.cHJpdmF0ZQ.c2lnbmF0dXJl",
+          "npm_private-package-token",
+          "glpat-private-gitlab-token",
+          "sk_live_private-stripe-token",
           "~/.ssh/id_rsa",
         ].join("\n"),
         disabledMcpServerIds: [STDIO_MCP_ID, McpServerId.make("deleted-server")],
@@ -179,6 +184,7 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
         settledOverride: null,
         settledAt: null,
         snoozedUntil: LATER,
+        snoozedAt: NOW,
         pinnedAt: NOW,
         deletedAt: null,
         messages: [
@@ -207,7 +213,17 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
             updatedAt: NOW,
           },
         ],
-        proposedPlans: [],
+        proposedPlans: [
+          {
+            id: "plan-private",
+            turnId: null,
+            planMarkdown: "Read /Users/leo/private.txt with token=private-plan-token",
+            implementedAt: null,
+            implementationThreadId: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+          },
+        ],
         activities: [
           {
             id: EventId.make("event-private"),
@@ -308,6 +324,8 @@ describe("portability archive", () => {
       "diff --git",
       "message-secret",
       "event-private",
+      "plan-private",
+      "private-plan-token",
       "approval-secret",
       '"sequence": 991',
       "private-branch",
@@ -317,6 +335,10 @@ describe("portability archive", () => {
       "private-key-value",
       "hunter2",
       "xai-private-value",
+      "eyJhbGciOiJIUzI1NiJ9",
+      "npm_private-package-token",
+      "glpat-private-gitlab-token",
+      "sk_live_private-stripe-token",
       "~/.ssh/id_rsa",
     ]) {
       expect(text).not.toContain(excluded);
@@ -326,6 +348,65 @@ describe("portability archive", () => {
     expect(text).toContain('"--safe"');
     expect(text).toContain('"url": "https://example.com/mcp"');
     expect(text).toContain('"avatar": {\n          "kind": "dither"');
+    expect(text).toContain('"approvalHistory"');
+    expect(text).toContain('"messages"');
+    expect(text).toContain('"proposedPlans"');
+  });
+
+  it("omits deleted threads and projects and does not restore over them", () => {
+    const base = makeSnapshot();
+    const deletedProjectId = ProjectId.make("project-deleted");
+    const deletedThreadId = ThreadId.make("thread-deleted");
+    const snapshot = {
+      ...base,
+      projects: [
+        ...base.projects,
+        {
+          ...base.projects[0]!,
+          id: deletedProjectId,
+          title: "Deleted secret project",
+          deletedAt: NOW,
+        },
+      ],
+      threads: [
+        ...base.threads,
+        {
+          ...base.threads[0]!,
+          id: deletedThreadId,
+          title: "Deleted secret thread",
+          deletedAt: NOW,
+        },
+      ],
+    };
+    const text = serializePortabilityArchive(
+      createPortabilityArchive(snapshot, makeSettings(), NOW),
+    );
+    expect(text).not.toContain("Deleted secret project");
+    expect(text).not.toContain("Deleted secret thread");
+    expect(text).not.toContain("project-deleted");
+    expect(text).not.toContain("thread-deleted");
+
+    const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+    const target = {
+      ...base,
+      threads: [{ ...base.threads[0]!, deletedAt: NOW }],
+    };
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    expect(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`)).toContain(
+      "thread:thread-portable",
+    );
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    expect(plan.commands.filter((command) => command.type.startsWith("thread."))).toEqual([]);
   });
 
   it("rejects tampering, unsafe MCP recipes, bad counts, and broken references", () => {
@@ -459,7 +540,6 @@ describe("portability import", () => {
     expect(preview.skippedSecrets).toHaveLength(3);
     expect(preview.unsupported).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: "project", count: 1 }),
         expect.objectContaining({ kind: "jobs", count: 0 }),
         expect.objectContaining({ kind: "memory", count: 0 }),
         expect.objectContaining({ kind: "routines", count: 0 }),
@@ -479,7 +559,13 @@ describe("portability import", () => {
       "mcp-server",
       "mcp-server",
     ]);
-    expect(preview.conflicts.map((entry) => entry.recordType)).toEqual(["bot", "group", "thread"]);
+    expect(preview.conflicts.map((entry) => entry.recordType)).toEqual([
+      "bot",
+      "group",
+      "project",
+      "server-settings",
+      "thread",
+    ]);
   });
 
   it("reports newer target records and unrestorable groups as conflicts", () => {
@@ -513,6 +599,40 @@ describe("portability import", () => {
       `group:${GROUP_ID}`,
       `mcp-server:${URL_MCP_ID}`,
     ]);
+  });
+
+  it("conflicts with different existing conversation history", () => {
+    const source = makeSnapshot();
+    const target = makeSnapshot({
+      threads: [
+        {
+          ...makeSnapshot().threads[0]!,
+          messages: [
+            {
+              ...makeSnapshot().threads[0]!.messages[0]!,
+              text: "Target-only conversation",
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+        },
+      ],
+    });
+    const archive = createPortabilityArchive(source, makeSettings(), NOW);
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.conflicts).toContainEqual(
+      expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
+    );
+    expect(
+      commandsForPortabilityImport(archive, target, makeSettings(), AVAILABLE_PROVIDER_IDS)
+        .commands,
+    ).not.toContainEqual(expect.objectContaining({ type: "thread.history.restore" }));
   });
 
   it("conflicts a group whose member belongs to another target group", () => {
@@ -553,6 +673,196 @@ describe("portability import", () => {
       id: "server-settings",
       title: "Server settings",
     });
+  });
+
+  it("updates safe project fields only when the workspace reference matches", () => {
+    const sourceProject = {
+      ...makeSnapshot().projects[0]!,
+      title: "Renamed portable project",
+      defaultThreadEnvMode: "worktree" as const,
+      updatedAt: LATER,
+    };
+    const source = makeSnapshot({ projects: [sourceProject], updatedAt: LATER });
+    const archive = createPortabilityArchive(source, makeSettings(), LATER);
+    const target = makeSnapshot();
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.changes).toContainEqual(
+      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
+    );
+    expect(plan.commands).toContainEqual({
+      type: "project.meta.update",
+      commandId: expect.any(String),
+      projectId: PROJECT_ID,
+      title: "Renamed portable project",
+      defaultModelSelection: sourceProject.defaultModelSelection,
+      defaultThreadEnvMode: "worktree",
+    });
+    expect(plan.commands).not.toContainEqual(
+      expect.objectContaining({ type: "project.meta.update", workspaceRoot: expect.anything() }),
+    );
+  });
+
+  it("maps projects and threads to a different target project ID by repository identity", () => {
+    const targetProjectId = ProjectId.make("project-target");
+    const sourceProject = {
+      ...makeSnapshot().projects[0]!,
+      title: "Renamed portable project",
+      updatedAt: LATER,
+    };
+    const archive = createPortabilityArchive(
+      makeSnapshot({ projects: [sourceProject], updatedAt: LATER }),
+      makeSettings(),
+      LATER,
+    );
+    const target = makeSnapshot({
+      projects: [
+        {
+          ...makeSnapshot().projects[0]!,
+          id: targetProjectId,
+          title: "Local project",
+          workspaceRoot: "/Volumes/code/private-clone",
+        },
+      ],
+      threads: [],
+    });
+
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.changes).toContainEqual(
+      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
+    );
+    expect(preview.additions).toContainEqual(
+      expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
+    );
+    expect(plan.commands).toContainEqual(
+      expect.objectContaining({ type: "project.meta.update", projectId: targetProjectId }),
+    );
+    expect(plan.commands).toContainEqual(
+      expect.objectContaining({ type: "thread.create", projectId: targetProjectId }),
+    );
+    expect(plan.commandItems).toContainEqual(
+      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
+    );
+  });
+
+  it("uses an unambiguous workspace name when repository identity is unavailable", () => {
+    const targetProjectId = ProjectId.make("project-target");
+    const source = makeSnapshot({
+      projects: [{ ...makeSnapshot().projects[0]!, repositoryIdentity: null }],
+    });
+    const target = makeSnapshot({
+      projects: [
+        {
+          ...makeSnapshot().projects[0]!,
+          id: targetProjectId,
+          workspaceRoot: "/Volumes/code/portable-project",
+          repositoryIdentity: null,
+        },
+      ],
+      threads: [],
+    });
+    const archive = createPortabilityArchive(source, makeSettings(), NOW);
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(plan.commands).toContainEqual(
+      expect.objectContaining({ type: "thread.create", projectId: targetProjectId }),
+    );
+  });
+
+  it("reports ambiguous project matches as conflicts", () => {
+    const source = makeSnapshot();
+    const baseProject = source.projects[0]!;
+    const target = makeSnapshot({
+      projects: [
+        {
+          ...baseProject,
+          id: ProjectId.make("project-target-a"),
+          workspaceRoot: "/Volumes/a/portable-project",
+        },
+        {
+          ...baseProject,
+          id: ProjectId.make("project-target-b"),
+          workspaceRoot: "/Volumes/b/portable-project",
+        },
+      ],
+      threads: [],
+    });
+    const archive = createPortabilityArchive(source, makeSettings(), NOW);
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
+        expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
+      ]),
+    );
+    expect(plan.commands.some((command) => command.type.startsWith("project."))).toBe(false);
+    expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
+  });
+
+  it("reports missing project matches as unsupported", () => {
+    const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+    const target = makeSnapshot({ projects: [], threads: [] });
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.unsupported).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "project", count: 1 }),
+        expect.objectContaining({ kind: "thread", count: 1 }),
+      ]),
+    );
+    expect(plan.commands.some((command) => command.type.startsWith("project."))).toBe(false);
+    expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
   });
 
   it("rejects a stale preview token when projection state changes", () => {
@@ -636,7 +946,7 @@ describe("portability import", () => {
         "bot.create",
         "group.create",
         "thread.create",
-        "thread.pin",
+        "thread.history.restore",
       ]),
     );
     expect(first.commands).toContainEqual(
@@ -677,9 +987,35 @@ describe("portability import", () => {
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     ).commands;
+    const historyCommand = commands.find((command) => command.type === "thread.history.restore");
 
     return decideCommandSequence({ commands, readModel: target }).pipe(
-      Effect.tap((events) => Effect.sync(() => expect(events.length).toBeGreaterThan(0))),
+      Effect.tap((events) =>
+        Effect.sync(() => {
+          expect(events.length).toBeGreaterThan(0);
+          expect(events.map((event) => event.type)).toEqual(
+            expect.arrayContaining([
+              "thread.message-sent",
+              "thread.proposed-plan-upserted",
+              "thread.activity-appended",
+              "thread.snoozed",
+              "thread.pinned",
+            ]),
+          );
+          expect(
+            events.find((event) => event.type === "thread.activity-appended")?.payload,
+          ).toEqual(
+            expect.objectContaining({
+              activity: expect.objectContaining({ kind: "approval.history" }),
+            }),
+          );
+          expect(
+            events
+              .filter((event) => event.commandId === historyCommand?.commandId)
+              .every((event) => event.metadata.importedHistory === true),
+          ).toBe(true);
+        }),
+      ),
       Effect.provide(NodeServices.layer),
     );
   });
@@ -747,11 +1083,13 @@ describe("portability import", () => {
     expect(archiveIndex).toBeGreaterThan(threadIndex);
   });
 
-  it("unarchives a thread before changing its pin and archives it again", () => {
+  it("restores conversation history and lifecycle without starting a provider turn", () => {
     const archivedThread = { ...makeSnapshot().threads[0]!, archivedAt: NOW, pinnedAt: NOW };
     const source = makeSnapshot({ threads: [archivedThread] });
     const target = makeSnapshot({
-      threads: [{ ...archivedThread, pinnedAt: null }],
+      threads: [
+        { ...archivedThread, pinnedAt: null, messages: [], proposedPlans: [], activities: [] },
+      ],
     });
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
@@ -759,13 +1097,45 @@ describe("portability import", () => {
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     ).commands;
-    const unarchiveIndex = commands.findIndex((command) => command.type === "thread.unarchive");
-    const pinIndex = commands.findIndex((command) => command.type === "thread.pin");
-    const archiveIndex = commands.findIndex((command) => command.type === "thread.archive");
+    const restore = commands.find((command) => command.type === "thread.history.restore");
 
-    expect(unarchiveIndex).toBeGreaterThanOrEqual(0);
-    expect(pinIndex).toBeGreaterThan(unarchiveIndex);
-    expect(archiveIndex).toBeGreaterThan(pinIndex);
+    expect(restore).toMatchObject({
+      type: "thread.history.restore",
+      archivedAt: NOW,
+      pinnedAt: NOW,
+      snoozedUntil: LATER,
+    });
+    expect(restore?.messages).toHaveLength(2);
+    expect(restore?.proposedPlans).toHaveLength(1);
+    expect(restore?.activities).toEqual([
+      expect.objectContaining({ kind: "approval.history", payload: expect.any(Object) }),
+    ]);
+    expect(commands).not.toContainEqual(expect.objectContaining({ type: "thread.turn.start" }));
+  });
+
+  it("reports failed and partly applied records separately", () => {
+    const botItem = { recordType: "bot" as const, id: BOT_ID, title: "Akeru" };
+    const groupItem = { recordType: "group" as const, id: GROUP_ID, title: "Builders" };
+
+    expect(
+      summarizePortabilityApply(
+        [
+          { item: botItem, succeeded: true },
+          { item: botItem, succeeded: false, message: "Archive step failed." },
+          { item: groupItem, succeeded: false, message: "Group restore failed." },
+        ],
+        2,
+      ),
+    ).toEqual({
+      applied: 0,
+      skipped: 2,
+      failed: 1,
+      partial: 1,
+      failures: [
+        { ...botItem, partial: true, message: "Archive step failed." },
+        { ...groupItem, partial: false, message: "Group restore failed." },
+      ],
+    });
   });
 
   it("derives the current projection only from safe records", () => {

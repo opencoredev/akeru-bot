@@ -1958,12 +1958,42 @@ const makeWsRpcLayer = (
               yield* decideCommandSequence({ commands: plan.commands, readModel: snapshot }).pipe(
                 Effect.provideService(Crypto.Crypto, crypto),
               );
-              yield* Effect.forEach(plan.commands, (command) => dispatchFromClient(command), {
-                concurrency: 1,
-                discard: true,
-              });
-              if (plan.settingsPatch) yield* serverSettings.updateSettings(plan.settingsPatch);
-              return { applied: plan.applied, skipped: plan.skipped };
+              const outcomes = yield* Effect.forEach(
+                plan.commands,
+                (command, index) =>
+                  dispatchFromClient(command).pipe(
+                    Effect.match({
+                      onFailure: (cause) => ({
+                        item: plan.commandItems[index]!,
+                        succeeded: false,
+                        message: cause.message,
+                      }),
+                      onSuccess: () => ({
+                        item: plan.commandItems[index]!,
+                        succeeded: true,
+                      }),
+                    }),
+                  ),
+                { concurrency: 1 },
+              );
+              if (plan.settingsPatch && plan.settingsItem) {
+                outcomes.push(
+                  yield* serverSettings.updateSettings(plan.settingsPatch).pipe(
+                    Effect.match({
+                      onFailure: (cause) => ({
+                        item: plan.settingsItem!,
+                        succeeded: false,
+                        message: cause.message,
+                      }),
+                      onSuccess: () => ({
+                        item: plan.settingsItem!,
+                        succeeded: true,
+                      }),
+                    }),
+                  ),
+                );
+              }
+              return Portability.summarizePortabilityApply(outcomes, plan.skipped);
             }).pipe(Effect.mapError((cause) => portabilityError("apply", cause))),
             { "rpc.aggregate": "portability" },
           ),
