@@ -10,6 +10,7 @@ import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { settingsInboxView } from "./botInbox.logic";
 import { SettingsSection } from "./components/SettingsSection";
 
 export type SettingsProviderHealthParams = {
@@ -26,14 +27,13 @@ function Field(props: { readonly label: string; readonly value: string }) {
   );
 }
 
-function BotInbox({ data }: { readonly data: SubscriptionAuthStatuses }) {
-  const openItems = data.inbox.filter((item) => item.status === "open");
+function BotInbox({ items }: { readonly items: SubscriptionAuthStatuses["inbox"] }) {
   return (
     <SettingsSection title="Error inbox" card>
-      {openItems.length === 0 ? (
+      {items.length === 0 ? (
         <Text className="p-4 text-sm text-foreground-muted">No open items.</Text>
       ) : (
-        openItems.map((item, index) => (
+        items.map((item, index) => (
           <View
             key={item.id}
             className={index === 0 ? "gap-2 p-4" : "gap-2 border-t border-border-subtle p-4"}
@@ -107,11 +107,15 @@ export function SettingsProviderHealthRouteScreen({
           input: {},
         }),
   );
+  const inboxView =
+    route.params.target === "bot-inbox"
+      ? settingsInboxView({ error: query.error, data: query.data })
+      : null;
   const section =
     route.params.target === "local-execution" ? (
       <LocalExecution environmentId={route.params.environmentId} />
-    ) : query.data ? (
-      <BotInbox data={query.data} />
+    ) : inboxView?.kind === "ready" ? (
+      <BotInbox items={inboxView.items} />
     ) : null;
 
   return (
@@ -132,9 +136,9 @@ export function SettingsProviderHealthRouteScreen({
       >
         {route.params.target === "local-execution" ? (
           section
-        ) : query.error ? (
-          <Text className="py-16 text-center text-sm text-danger">{query.error}</Text>
-        ) : query.data === null ? (
+        ) : inboxView?.kind === "error" ? (
+          <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
+        ) : inboxView?.kind === "loading" ? (
           <Text className="py-16 text-center text-sm text-foreground-muted">
             Loading provider health…
           </Text>
