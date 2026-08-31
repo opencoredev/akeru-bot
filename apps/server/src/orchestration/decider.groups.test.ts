@@ -26,6 +26,7 @@ import { createEmptyReadModel, projectEvent } from "./projector.ts";
 const NOW = "2026-08-27T12:00:00.000Z";
 const BOSS_ID = BotId.make("bot-boss");
 const SPECIALIST_ID = BotId.make("bot-specialist");
+const OTHER_SPECIALIST_ID = BotId.make("bot-other-specialist");
 const GROUP_ID = GroupId.make("group-product");
 const PERSON_ID = AuthSessionId.make("person-member");
 const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
@@ -191,6 +192,28 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
+  it.effect("rejects group creation with fewer than two distinct active bots", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.create",
+          commandId: CommandId.make("cmd-group-create-one-bot"),
+          groupId: GROUP_ID,
+          name: "Product",
+          bossBotId: BOSS_ID,
+          specialistBotIds: [BOSS_ID],
+          createdAt: NOW,
+        },
+        readModel: makeReadModel({ bots: [makeBot({ id: BOSS_ID })] }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected minimum group size invariant error");
+      }
+      expect(error.detail).toContain("at least two active bots");
+    }),
+  );
+
   it.effect("adds the creator as a person member", () =>
     Effect.gen(function* () {
       const creator = {
@@ -205,10 +228,13 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           groupId: GROUP_ID,
           name: "Product",
           bossBotId: BOSS_ID,
+          specialistBotIds: [SPECIALIST_ID],
           creator,
           createdAt: NOW,
         },
-        readModel: makeReadModel({ bots: [makeBot({ id: BOSS_ID })] }),
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+        }),
       });
       const events = Array.isArray(result) ? result : [result];
       const created = events.find((event) => event.type === "group.created");
@@ -267,6 +293,63 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         throw new Error("Expected boss archive invariant error");
       }
       expect(error.detail).toContain("Set a new boss before archiving it");
+    }),
+  );
+
+  it.effect("rejects archiving a bot when its group would have fewer than two active bots", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "bot.archive",
+          commandId: CommandId.make("cmd-archive-group-specialist"),
+          botId: SPECIALIST_ID,
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+        }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected minimum group size invariant error");
+      }
+      expect(error.detail).toContain("at least two active bots");
+    }),
+  );
+
+  it.effect("rejects a legacy bot group move that would leave one active bot", () =>
+    Effect.gen(function* () {
+      const targetGroupId = GroupId.make("group-target");
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "bot.update",
+          commandId: CommandId.make("cmd-move-group-specialist"),
+          botId: SPECIALIST_ID,
+          groupId: targetGroupId,
+        },
+        readModel: makeReadModel({
+          bots: [
+            makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
+            makeBot({ id: SPECIALIST_ID, groupId: GROUP_ID }),
+            makeBot({ id: OTHER_SPECIALIST_ID, groupId: targetGroupId }),
+          ],
+          groups: [
+            makeGroup(),
+            {
+              ...makeGroup({
+                bossBotId: OTHER_SPECIALIST_ID,
+                members: [{ kind: "bot", botId: OTHER_SPECIALIST_ID, role: "boss" }],
+              }),
+              id: targetGroupId,
+            },
+          ],
+        }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected minimum group size invariant error");
+      }
+      expect(error.detail).toContain("at least two active bots");
     }),
   );
 
@@ -600,6 +683,51 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
+  it.effect("rejects unassigning a bot when the group would have fewer than two active bots", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.member.unassign",
+          commandId: CommandId.make("cmd-member-unassign-specialist"),
+          groupId: GROUP_ID,
+          botId: SPECIALIST_ID,
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+        }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected minimum group size invariant error");
+      }
+      expect(error.detail).toContain("at least two active bots");
+    }),
+  );
+
+  it.effect("rejects replacing and removing the boss when one active bot would remain", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.boss.set",
+          commandId: CommandId.make("cmd-boss-set-one-remaining"),
+          groupId: GROUP_ID,
+          bossBotId: SPECIALIST_ID,
+          unassignPreviousBoss: true,
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+        }),
+      }).pipe(Effect.flip);
+
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected minimum group size invariant error");
+      }
+      expect(error.detail).toContain("at least two active bots");
+    }),
+  );
+
   it.effect("sets a new boss and unassigns the previous boss atomically", () =>
     Effect.gen(function* () {
       const result = yield* decideOrchestrationCommand({
@@ -614,8 +742,17 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           bots: [
             makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
             makeBot({ id: SPECIALIST_ID, groupId: GROUP_ID }),
+            makeBot({ id: OTHER_SPECIALIST_ID, groupId: GROUP_ID }),
           ],
-          groups: [makeGroup()],
+          groups: [
+            makeGroup({
+              members: [
+                { kind: "bot", botId: BOSS_ID, role: "boss" },
+                { kind: "bot", botId: SPECIALIST_ID, role: "specialist" },
+                { kind: "bot", botId: OTHER_SPECIALIST_ID, role: "specialist" },
+              ],
+            }),
+          ],
         }),
       });
       const events = Array.isArray(result) ? result : [result];
