@@ -303,7 +303,10 @@ export const makeOrchestrationIntegrationHarness = (
           Layer.provide(providerEventLoggersLayer),
         );
     const legacyProviderLayer = LegacyProviderBridgeLive.pipe(Layer.provide(providerLayer));
-    const agentControllerLayer = AgentControllerLive.pipe(Layer.provide(legacyProviderLayer));
+    const agentControllerLayer = AgentControllerLive.pipe(
+      Layer.provide(legacyProviderLayer),
+      Layer.provide(BotUsageLedgerLive),
+    );
     const providerRegistryLayer = makeProviderRegistryLayer();
 
     const checkpointStoreLayer = CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistry.layer));

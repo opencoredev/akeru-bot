@@ -18,6 +18,10 @@ import {
   type AuthAccessStreamEvent,
   type AuthEnvironmentScope,
   AuthSessionId,
+  AkeruBotUsageReadError,
+  AkeruMemoryOperationError,
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
   BotId,
   ClientSurface,
   CommandId,
@@ -70,6 +74,7 @@ import {
   type TerminalMetadataStreamEvent,
   WS_METHODS,
   WsRpcGroup,
+  type AkeruMemoryThreadAccess,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
@@ -139,6 +144,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { BotUsageLedger } from "./usage/BotUsageLedger.ts";
 import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -477,6 +483,7 @@ const makeWsRpcLayer = (
       const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
       const entityMemoryRepository = yield* Effect.serviceOption(EntityMemoryRepository);
       const memoryCandidates = yield* Effect.serviceOption(MemoryCandidateRepository);
+      const botUsageLedger = yield* BotUsageLedger;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Every command dispatched on this connection carries the connecting
@@ -743,6 +750,66 @@ const makeWsRpcLayer = (
               message: cause instanceof Error ? cause.message : fallbackMessage,
               cause,
             });
+      const memoryOperationError = (operation: "inspect" | "mutate", cause: unknown) =>
+        new AkeruMemoryOperationError({
+          operation,
+          detail: cause instanceof Error ? cause.message : "The memory operation failed.",
+        });
+      const resolveMemoryAccess = (operation: "inspect" | "mutate", threadId: ThreadId) =>
+        Effect.gen(function* () {
+          const thread = yield* projectionSnapshotQuery
+            .getThreadShellById(threadId)
+            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
+          if (Option.isNone(thread)) {
+            return yield* new AkeruMemoryOperationError({
+              operation,
+              detail: "The thread does not exist.",
+            });
+          }
+          const project = yield* projectionSnapshotQuery
+            .getProjectShellById(thread.value.projectId)
+            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
+          if (Option.isNone(project)) {
+            return yield* new AkeruMemoryOperationError({
+              operation,
+              detail: "The thread project does not exist.",
+            });
+          }
+          const groupId = thread.value.groupId ?? null;
+          const groupMemberBotIds =
+            groupId === null
+              ? []
+              : yield* projectionGroups.getById({ groupId }).pipe(
+                  Effect.mapError((cause) => memoryOperationError(operation, cause)),
+                  Effect.flatMap(
+                    Option.match({
+                      onNone: () =>
+                        Effect.fail(
+                          new AkeruMemoryOperationError({
+                            operation,
+                            detail: "The thread group does not exist.",
+                          }),
+                        ),
+                      onSome: (group) =>
+                        Effect.succeed(group.members.map((member) => member.botId)),
+                    }),
+                  ),
+                );
+          return {
+            tenantId: AkeruMemoryTenantId.make("local"),
+            userId: AkeruMemoryUserId.make("owner"),
+            threadId,
+            projectId: thread.value.projectId,
+            workspaceRoot: project.value.workspaceRoot,
+            botId:
+              groupId === null
+                ? (thread.value.respondingBotId ?? thread.value.botId ?? null)
+                : null,
+            groupId,
+            respondingBotId: thread.value.respondingBotId ?? thread.value.botId ?? null,
+            groupMemberBotIds,
+          } satisfies AkeruMemoryThreadAccess;
+        });
       const randomUUID = crypto.randomUUIDv4.pipe(
         Effect.mapError((cause) =>
           toDispatchCommandError(cause, "Failed to generate orchestration command identifier."),
@@ -2079,6 +2146,48 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.botUsage]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.botUsage,
+            Effect.gen(function* () {
+              const bot = yield* projectionBots.getById({ botId: input.botId }).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new AkeruBotUsageReadError({
+                      botId: input.botId,
+                      detail: cause.message,
+                    }),
+                ),
+              );
+              if (Option.isNone(bot)) {
+                return yield* new AkeruBotUsageReadError({
+                  botId: input.botId,
+                  detail: `Bot ${input.botId} was not found.`,
+                });
+              }
+              const summary = yield* botUsageLedger.summarize(input.botId).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new AkeruBotUsageReadError({
+                      botId: input.botId,
+                      detail: cause.message,
+                    }),
+                ),
+              );
+              return {
+                ...summary,
+                usageCap: bot.value.usageCap,
+                estimatedCost: { status: "unavailable", usd: null },
+                subscriptionPool: {
+                  status: "unavailable",
+                  used: null,
+                  limit: null,
+                  unit: null,
+                },
+              };
+            }),
+            { "rpc.aggregate": "bot" },
+          ),
         [WS_METHODS.botInboxList]: (_input) =>
           observeRpcEffect(
             WS_METHODS.botInboxList,

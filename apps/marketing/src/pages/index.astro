@@ -36,12 +36,6 @@ const freeFeatures = [
   "Your data stays on your machine",
   "MIT licensed, fork it any time",
 ];
-
-const cloudFeatures = [
-  "Hosted sandboxes for your teammates",
-  "Remote browser sessions",
-  "Sync across your devices",
-];
 ---
 
 <Layout>
@@ -105,7 +99,7 @@ const cloudFeatures = [
   <section id="pricing" class="sec sec-pricing">
     <h2 class="sec-title">Free. Forever.</h2>
     <p class="pricing-sub">
-      The app costs nothing and never will. We only charge for optional cloud extras.
+      The app costs nothing and never will. Bring the subscriptions you already pay for.
     </p>
     <div class="pricing-cards">
       <div class="price-card">
@@ -126,29 +120,6 @@ const cloudFeatures = [
             ))
           }
         </ul>
-      </div>
-      <div class="price-card price-card--cloud">
-        <div class="price-head">
-          <div class="price-name-row">
-            <span class="price-name">Akeru Cloud</span>
-            <span class="price-badge">COMING SOON</span>
-          </div>
-          <div class="price-line">
-            <span class="price-big">Paid</span>
-            <span class="price-small">for the cloud stuff only</span>
-          </div>
-        </div>
-        <ul class="price-features">
-          {
-            cloudFeatures.map((feature) => (
-              <li>
-                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5L4.5 9L10 3.5" fill="none" stroke="var(--color-primary)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                {feature}
-              </li>
-            ))
-          }
-        </ul>
-        <p class="price-note">The app never moves behind it.</p>
       </div>
     </div>
   </section>
@@ -457,7 +428,7 @@ const cloudFeatures = [
     display: flex;
     align-items: stretch;
     margin-top: 44px;
-    width: 760px;
+    width: 380px;
     max-width: 100%;
     gap: 20px;
   }
@@ -465,16 +436,12 @@ const cloudFeatures = [
   .price-card {
     display: flex;
     flex-direction: column;
-    width: 50%;
+    width: 100%;
     padding: 28px;
     border-radius: var(--radius-lg);
     background-color: var(--color-card);
     border: 1px solid var(--color-border);
     gap: 22px;
-  }
-
-  .price-card--cloud {
-    border-color: var(--color-primary);
   }
 
   .price-head {
@@ -483,28 +450,11 @@ const cloudFeatures = [
     gap: 6px;
   }
 
-  .price-name-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
   .price-name {
     font-size: 14px;
     line-height: 18px;
     font-weight: 600;
     color: var(--color-foreground);
-  }
-
-  .price-badge {
-    font-size: 11px;
-    line-height: 14px;
-    letter-spacing: 0.06em;
-    font-weight: 500;
-    color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    border-radius: 999px;
-    padding: 2px 8px;
   }
 
   .price-line {
@@ -544,13 +494,6 @@ const cloudFeatures = [
 
   .price-features svg {
     flex-shrink: 0;
-  }
-
-  .price-note {
-    padding-top: 4px;
-    font-size: 12.5px;
-    line-height: 17px;
-    color: var(--color-muted-foreground);
   }
 
   /* ── Final CTA ── */

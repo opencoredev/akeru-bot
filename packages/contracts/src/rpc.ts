@@ -15,6 +15,7 @@ import {
   AkeruMemoryOperationError,
   AkeruMemorySnapshot,
 } from "./akeruMemory.ts";
+import { AkeruBotUsageInput, AkeruBotUsageReadError, AkeruBotUsageSnapshot } from "./akeruUsage.ts";
 
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
 import {
@@ -324,6 +325,7 @@ export const WS_METHODS = {
   memoryImportPreview: "memory.importPreview",
   memoryImportApply: "memory.importApply",
   memoryMutate: "memory.mutate",
+  botUsage: "bot.usage",
   portabilityExport: "portability.export",
   portabilityPreviewImport: "portability.previewImport",
   portabilityApplyImport: "portability.applyImport",
@@ -605,6 +607,12 @@ export const WsMemoryMutateRpc = Rpc.make(WS_METHODS.memoryMutate, {
   payload: AkeruMemoryMutateInput,
   success: AkeruMemoryMutationResult,
   error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsBotUsageRpc = Rpc.make(WS_METHODS.botUsage, {
+  payload: AkeruBotUsageInput,
+  success: AkeruBotUsageSnapshot,
+  error: Schema.Union([AkeruBotUsageReadError, EnvironmentAuthorizationError]),
 });
 
 export const WsPortabilityExportRpc = Rpc.make(WS_METHODS.portabilityExport, {
@@ -1069,6 +1077,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsMemoryImportPreviewRpc,
   WsMemoryImportApplyRpc,
   WsMemoryMutateRpc,
+  WsBotUsageRpc,
   WsPortabilityExportRpc,
   WsPortabilityPreviewImportRpc,
   WsPortabilityApplyImportRpc,

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { BotThreadLanding } from "../components/roster/BotThreadLanding";
 import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
+import { useBotThreadRef } from "../components/roster/useBotThreadRef";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
 import { botEnvironment } from "../state/bots";
@@ -16,6 +17,7 @@ function BotThreadRouteView() {
   const bot = useRosterStore((state) =>
     state.bots.find((candidate) => candidate.id === botId && candidate.archivedAt === null),
   );
+  const threadRef = useBotThreadRef(botId);
 
   return (
     <>
@@ -24,6 +26,7 @@ function BotThreadRouteView() {
         <BotDetailsPanel
           key={bot.id}
           bot={bot}
+          threadRef={threadRef}
           onSaveBot={async ({
             name,
             label,

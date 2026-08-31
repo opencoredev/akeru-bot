@@ -4,6 +4,7 @@ import {
   type BotEngine,
   type EnvironmentId,
   type McpServerId,
+  type ScopedThreadRef,
 } from "@t3tools/contracts";
 import {
   Cancel01Icon,
@@ -42,6 +43,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotModelPicker } from "./BotModelPicker";
+import { BotMemorySheet } from "./BotMemorySheet";
+import { BotUsageSection } from "./BotUsageSection";
 import {
   BOT_SANDBOX_OPTIONS,
   botSandboxChoice,
@@ -89,9 +92,13 @@ export interface BotProfileUpdate {
 function BotProfileEditor({
   bot,
   onSave,
+  threadRef,
+  active,
 }: {
   readonly bot: Bot;
   readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
+  readonly threadRef: ScopedThreadRef | null;
+  readonly active: boolean;
 }) {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -105,6 +112,7 @@ function BotProfileEditor({
   const [saved, setSaved] = useState(false);
   const [engineChanged, setEngineChanged] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
@@ -287,6 +295,25 @@ function BotProfileEditor({
           />
         </div>
 
+        <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Memory</div>
+          <button
+            type="button"
+            aria-label="Manage bot memory"
+            aria-expanded={memoryOpen}
+            disabled={!threadRef}
+            onClick={() => setMemoryOpen(true)}
+            className="flex min-h-10 w-full items-center rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors enabled:hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          >
+            <span className="min-w-0 flex-1 text-sm">
+              {threadRef ? "Conversation and durable memory" : "No conversation yet"}
+            </span>
+            {threadRef ? <span className="text-xs text-muted-foreground">Manage</span> : null}
+          </button>
+        </div>
+
         <div className="space-y-2">
           <div className="text-sm font-medium">Tools</div>
           <button
@@ -345,6 +372,7 @@ function BotProfileEditor({
           markChanged();
         }}
       />
+      <BotMemorySheet open={memoryOpen} onOpenChange={setMemoryOpen} threadRef={threadRef} />
     </div>
   );
 }
@@ -352,9 +380,11 @@ function BotProfileEditor({
 export function BotDetailsPanel({
   bot,
   onSaveBot,
+  threadRef = null,
 }: {
   readonly bot: Bot;
   readonly onSaveBot?: (input: BotProfileUpdate) => Promise<boolean>;
+  readonly threadRef?: ScopedThreadRef | null;
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
@@ -387,13 +417,18 @@ export function BotDetailsPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings]);
 
-  const content = (closeButton?: ReactNode) => (
+  const content = (active: boolean, closeButton?: ReactNode) => (
     <>
       <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
         <h2 className="text-sm font-medium">Settings</h2>
         <div className="absolute right-3 flex items-center">{closeButton}</div>
       </header>
-      <BotProfileEditor bot={bot} {...(onSaveBot ? { onSave: onSaveBot } : {})} />
+      <BotProfileEditor
+        bot={bot}
+        threadRef={threadRef}
+        active={active}
+        {...(onSaveBot ? { onSave: onSaveBot } : {})}
+      />
     </>
   );
 
@@ -410,6 +445,7 @@ export function BotDetailsPanel({
         }
       >
         {content(
+          panelState.desktopOpen,
           <Tooltip>
             <TooltipTrigger
               render={
@@ -473,6 +509,7 @@ export function BotDetailsPanel({
         >
           <SheetTitle className="sr-only">Edit {bot.name}</SheetTitle>
           {content(
+            panelState.mobileOpen,
             <SheetClose
               aria-label="Close bot sidebar"
               render={<Button size="icon-sm" variant="ghost" />}

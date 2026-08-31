@@ -12,6 +12,7 @@ import type {
 } from "@mastra/core/agent-controller";
 import type { Workspace } from "@mastra/core/workspace";
 import {
+  AkeruUsageReservationId,
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -21,6 +22,7 @@ import {
   AKERU_TOOL_CATALOG,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   type McpServer,
+  type BotId,
   type ModelSelection,
   type ProviderApprovalDecision,
   type ProviderRuntimeEvent,
@@ -39,6 +41,7 @@ import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
+import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
@@ -84,6 +87,9 @@ interface ActiveTurn {
   assistantCompleted: boolean;
   waiting: boolean;
   finished: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
 }
 
 interface ActiveSession {
@@ -270,10 +276,17 @@ const make = (options?: AgentControllerLiveOptions) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig;
     const legacyProviderBridge = yield* LegacyProviderBridge;
+    const botUsageLedger = yield* BotUsageLedger;
+    const runtimeContext = yield* Effect.context<never>();
+    const runPromise = Effect.runPromiseWith(runtimeContext);
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const sessions = new Map<string, ActiveSession>();
+    const memoryUsageByThread = new Map<
+      string,
+      { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
+    >();
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -363,6 +376,58 @@ const make = (options?: AgentControllerLiveOptions) =>
         },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
         toolRuntime,
+        startMemoryCall: async ({ threadId, category }) => {
+          const context = memoryUsageByThread.get(threadId);
+          const active = sessions.get(threadId);
+          if (!context || !active) return undefined;
+          const callId = `${category}:${NodeCrypto.randomUUID()}`;
+          await runPromise(
+            botUsageLedger.reserve({
+              reservationId: AkeruUsageReservationId.make(callId),
+              sourceKey: callId,
+              botId: context.botId,
+              threadId: ThreadIdBrand(threadId),
+              turnId: context.turnId,
+              category,
+              maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
+              capLimit: context.capLimit,
+              provider: active.provider,
+              model: active.model,
+              createdAt: nowIso(),
+            }),
+          );
+          return callId;
+        },
+        finishMemoryCall: async ({ callId, usage, error }) => {
+          const outputTokens = usage?.outputTokens ?? 0;
+          const inputTokens =
+            usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
+          await runPromise(
+            botUsageLedger.settle(
+              usage
+                ? {
+                    reservationId: AkeruUsageReservationId.make(callId),
+                    state: "reported",
+                    inputTokens,
+                    outputTokens,
+                    reasoningTokens: null,
+                    settledAt: nowIso(),
+                  }
+                : error
+                  ? {
+                      reservationId: AkeruUsageReservationId.make(callId),
+                      state: "unavailable",
+                      reason: error.message || "Observational Memory usage was unavailable.",
+                      settledAt: nowIso(),
+                    }
+                  : {
+                      reservationId: AkeruUsageReservationId.make(callId),
+                      state: "released",
+                      settledAt: nowIso(),
+                    },
+            ),
+          );
+        },
       }),
     );
     yield* runMastra("init", () => bundle.controller.init());
@@ -602,15 +667,18 @@ const make = (options?: AgentControllerLiveOptions) =>
           return;
         case "usage_update":
           if (!turn) return;
+          turn.inputTokens += Math.max(0, event.usage.promptTokens ?? 0);
+          turn.outputTokens += Math.max(0, event.usage.completionTokens ?? 0);
+          turn.reasoningTokens += Math.max(0, event.usage.reasoningTokens ?? 0);
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             type: "thread.token-usage.updated",
             payload: {
               usage: {
-                usedTokens: Math.max(0, event.usage.totalTokens ?? 0),
-                inputTokens: Math.max(0, event.usage.promptTokens ?? 0),
-                outputTokens: Math.max(0, event.usage.completionTokens ?? 0),
-                reasoningOutputTokens: Math.max(0, event.usage.reasoningTokens ?? 0),
+                usedTokens: turn.inputTokens + turn.outputTokens,
+                inputTokens: turn.inputTokens,
+                outputTokens: turn.outputTokens,
+                reasoningOutputTokens: turn.reasoningTokens,
               },
             },
           });
@@ -875,7 +943,8 @@ const make = (options?: AgentControllerLiveOptions) =>
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
-          return yield* legacyProviderBridge.sendTurn(input);
+          const { botUsage: _, ...providerInput } = input;
+          return yield* legacyProviderBridge.sendTurn(providerInput);
         }
         if (active.activeTurn) {
           return yield* new AgentControllerRuntimeError({
@@ -918,6 +987,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           .join("\n\n");
         const files = attachmentFiles.map(({ file }) => file);
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
+        if (input.botUsage) {
+          memoryUsageByThread.set(key, { ...input.botUsage, turnId });
+        } else {
+          memoryUsageByThread.delete(key);
+        }
         active.activeTurn = {
           turnId,
           assistantItemId: RuntimeItemId.make(`mastra-answer-${turnId}`),
@@ -926,6 +1000,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           assistantCompleted: false,
           waiting: false,
           finished: false,
+          inputTokens: 0,
+          outputTokens: 0,
+          reasoningTokens: 0,
         };
         active.status = "running";
         publish({
@@ -1085,6 +1162,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         sessionResources.release(key, { destroy: destroyResources }),
       ).pipe(Effect.ignoreCause({ log: true }));
       sessions.delete(key);
+      memoryUsageByThread.delete(key);
     });
 
     const stopSession: AgentControllerShape["stopSession"] = (input) =>

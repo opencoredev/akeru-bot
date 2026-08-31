@@ -40,6 +40,10 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain('aria-label="Sandbox provider"');
     expect(markup).toContain(">Voice calls</span>");
     expect(markup).toContain('aria-label="Enable voice calls for Akeru"');
+    expect(markup).toContain('aria-label="Bot usage"');
+    expect(markup).toContain(">Memory</div>");
+    expect(markup).toContain('aria-label="Manage bot memory"');
+    expect(markup).toContain("No conversation yet");
     expect(markup).toContain(">Tools</div>");
     expect(markup).toContain("No workspace tools");
     expect(markup).toContain(">Manage</span>");
@@ -101,6 +105,7 @@ describe("BotDetailsPanel", () => {
     );
     expect(source).toContain("<BotDetailsPanel");
     expect(source).toContain("onSaveBot=");
+    expect(source).toContain("threadRef={threadRef}");
     expect(source).toContain("voiceEnabled,");
     expect(source).toContain("sandbox,");
     expect(source).toContain("disabledMcpServerIds,");

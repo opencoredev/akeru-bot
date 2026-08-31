@@ -20,6 +20,7 @@ import {
   ProductFeedbackToolDraft,
   classifyAkeruExternalCommand,
   classifyAkeruSensitivePath,
+  type AkeruConversationMemoryRecord,
   type AkeruConversationMemorySnapshot,
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
@@ -463,6 +464,42 @@ export async function createAkeruMastraHarness(
 
   return {
     controller,
+    clearObservationalMemory: async (threadId, resourceId) => {
+      const engine = await memory.omEngine;
+      if (engine) await engine.clear(threadId, resourceId);
+    },
+    readObservationalMemory: async (threadId, resourceId) => {
+      const engine = await memory.omEngine;
+      if (!engine) return { current: null, history: [] };
+      const normalize = (
+        record: Awaited<ReturnType<typeof engine.getRecord>>,
+      ): AkeruConversationMemoryRecord | null => {
+        if (!record) return null;
+        return {
+          id: record.id,
+          generationCount: record.generationCount,
+          originType: record.originType,
+          activeObservations: record.activeObservations,
+          bufferedObservations: [
+            ...(record.bufferedObservationChunks?.map((chunk) => chunk.observations) ?? []),
+            ...(record.bufferedObservations ? [record.bufferedObservations] : []),
+          ].join("\n\n"),
+          bufferedReflection: record.bufferedReflection ?? null,
+          totalTokensObserved: record.totalTokensObserved,
+          observationTokenCount: record.observationTokenCount,
+          createdAt: record.createdAt.toISOString(),
+          updatedAt: record.updatedAt.toISOString(),
+        };
+      };
+      const [current, history] = await Promise.all([
+        engine.getRecord(threadId, resourceId),
+        engine.getHistory(threadId, resourceId, 50),
+      ]);
+      return {
+        current: normalize(current),
+        history: history.map((record) => normalize(record)!),
+      };
+    },
     destroy: async () => {
       await memory.settled();
       await storage.close();
