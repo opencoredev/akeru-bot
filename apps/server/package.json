@@ -40,7 +40,8 @@
     "msgpackr-extract": "3.0.4",
     "node-pty": "^1.1.0",
     "pngjs": "7.0.0",
-    "yaml": "catalog:"
+    "yaml": "catalog:",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
