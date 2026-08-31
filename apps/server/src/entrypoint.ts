@@ -31,7 +31,10 @@ export const isEntrypoint = (input: {
   // module URL is the resolved real path while `process.argv[1]` keeps the link
   // path, so the comparison above misses.
   try {
-    return input.moduleUrl === NodeURL.pathToFileURL(NodeFS.realpathSync(input.entryPath)).href;
+    return (
+      NodeFS.realpathSync(NodeURL.fileURLToPath(input.moduleUrl)) ===
+      NodeFS.realpathSync(input.entryPath)
+    );
   } catch {
     return false;
   }

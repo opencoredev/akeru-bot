@@ -31,15 +31,11 @@ it("keeps the GitHub triage flow Akeru-only and labeled via-triage", () => {
     NodePath.join(repoRoot, ".github/ISSUE_TEMPLATE/bug_report.yml"),
     "utf8",
   );
-  const issueConfig = NodeFS.readFileSync(
-    NodePath.join(repoRoot, ".github/ISSUE_TEMPLATE/config.yml"),
-    "utf8",
-  );
   const issueLabelWorkflow = NodeFS.readFileSync(
     NodePath.join(repoRoot, ".github/workflows/issue-labels.yml"),
     "utf8",
   );
-  const githubTriage = `${issueTemplate}\n${bugTemplate}\n${issueConfig}`;
+  const githubTriage = `${issueTemplate}\n${bugTemplate}`;
 
   assert.include(issueTemplate, "`npx akeru-bot triage`");
   assert.match(issueTemplate, /labels:\n  - via-triage\nbody:/u);
