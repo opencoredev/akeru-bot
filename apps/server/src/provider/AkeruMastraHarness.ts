@@ -1,5 +1,9 @@
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodePath from "node:path";
+
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
+import { buildLibSQLStore } from "@mastra/code-sdk/utils/storage-factory";
 import type { ToolsInput } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
@@ -9,6 +13,8 @@ import { createCodingAgent } from "@mastra/core/coding-agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";
 import { createTool, type NeedsApprovalFn } from "@mastra/core/tools";
+import { Memory } from "@mastra/memory";
+import type { ObserveHooks } from "@mastra/memory/processors";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ProductFeedbackToolDraft,
@@ -75,6 +81,7 @@ export type AkeruMastraSession = Session<AkeruMastraState>;
 
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
+  readonly stateDir: string;
   readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
   readonly getThreadTools: (threadId: string) => ToolsInput;
   readonly syncThreadToolApproval?: (
@@ -83,6 +90,20 @@ export interface AkeruMastraHarnessOptions {
     protectedAction: boolean,
   ) => Promise<void>;
   readonly toolRuntime: AkeruToolRuntime;
+  readonly startMemoryCall?: (input: {
+    readonly threadId: string;
+    readonly category: "observer" | "reflector";
+  }) => Promise<string | undefined>;
+  readonly finishMemoryCall?: (input: {
+    readonly callId: string;
+    readonly category: "observer" | "reflector";
+    readonly usage?: {
+      readonly inputTokens?: number;
+      readonly outputTokens?: number;
+      readonly totalTokens?: number;
+    };
+    readonly error?: Error;
+  }) => Promise<void>;
 }
 
 export interface AkeruMastraHarness {
@@ -95,7 +116,40 @@ export interface AkeruMastraHarness {
     threadId: string,
     resourceId?: string,
   ) => Promise<AkeruConversationMemorySnapshot>;
-  readonly destroy: () => void;
+  readonly destroy: () => Promise<void>;
+}
+
+export function createAkeruObserveHooks(
+  options: Pick<AkeruMastraHarnessOptions, "startMemoryCall" | "finishMemoryCall">,
+): ObserveHooks {
+  const active = new Map<string, string>();
+  const finish = async (
+    category: "observer" | "reflector",
+    result: Parameters<NonNullable<ObserveHooks["onObservationEnd"]>>[0],
+  ) => {
+    if (!result.threadId) return;
+    const key = `${result.threadId}:${category}`;
+    const callId = active.get(key);
+    if (!callId) return;
+    active.delete(key);
+    await options.finishMemoryCall?.({
+      callId,
+      category,
+      ...(result.usage ? { usage: result.usage } : {}),
+      ...(result.error ? { error: result.error } : {}),
+    });
+  };
+  const start = async (threadId: string | undefined, category: "observer" | "reflector") => {
+    if (!threadId) return;
+    const callId = await options.startMemoryCall?.({ threadId, category });
+    if (callId) active.set(`${threadId}:${category}`, callId);
+  };
+  return {
+    onObservationStart: ({ threadId } = {}) => start(threadId, "observer"),
+    onObservationEnd: (result) => finish("observer", result),
+    onReflectionStart: ({ threadId } = {}) => start(threadId, "reflector"),
+    onReflectionEnd: (result) => finish("reflector", result),
+  };
 }
 
 function controllerContext(requestContext: RequestContext): Record<string, unknown> | undefined {
@@ -340,6 +394,31 @@ export function akeruToolCategory(toolName: string): AkeruToolCategory {
 export async function createAkeruMastraHarness(
   options: AkeruMastraHarnessOptions,
 ): Promise<AkeruMastraHarness> {
+  const storage = buildLibSQLStore({
+    id: "akeru-observational-memory",
+    url: `file:${NodePath.join(options.stateDir, "observational-memory.sqlite")}`,
+  });
+  const memoryModel = ({ requestContext }: { requestContext: RequestContext }) =>
+    resolveAkeruMastraModel(
+      controllerModelId(requestContext),
+      options.authStorage,
+      options.getKimiAccess,
+    );
+  const observationalMemory = {
+    model: memoryModel,
+    scope: "thread" as const,
+    hookExecution: "await" as const,
+    observation: { messageTokens: 30_000 },
+    reflection: { observationTokens: 40_000 },
+    hooks: createAkeruObserveHooks(options),
+  };
+  const memory = new Memory({
+    storage,
+    options: {
+      lastMessages: 10,
+      observationalMemory,
+    },
+  });
   const agent = createCodingAgent({
     id: "akeru-agent",
     name: "Akeru",
@@ -350,6 +429,7 @@ export async function createAkeruMastraHarness(
         options.authStorage,
         options.getKimiAccess,
       ),
+    memory,
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     workspace: undefined,
   });
@@ -357,6 +437,8 @@ export async function createAkeruMastraHarness(
   const controller = new MastraAgentController<AkeruMastraState>({
     id: "akeru-codex",
     agent,
+    storage,
+    memory,
     modes: [
       { id: "build", name: "Build", defaultModelId: DEFAULT_MODEL_ID },
       {
@@ -381,6 +463,9 @@ export async function createAkeruMastraHarness(
 
   return {
     controller,
-    destroy: () => undefined,
+    destroy: async () => {
+      await memory.settled();
+      await storage.close();
+    },
   };
 }

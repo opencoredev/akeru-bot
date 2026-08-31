@@ -309,6 +309,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const bundle = yield* runMastra("construct", () =>
       makeMastraHarness({
         authStorage,
+        stateDir: config.stateDir,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);
@@ -1097,7 +1098,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         yield* runMastra("destroy", () => bundle.controller.destroy()).pipe(
           Effect.ignoreCause({ log: true }),
         );
-        bundle.destroy();
+        yield* runMastra("memory.destroy", () => bundle.destroy()).pipe(
+          Effect.ignoreCause({ log: true }),
+        );
       }),
     );
 
