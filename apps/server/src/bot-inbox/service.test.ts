@@ -98,6 +98,21 @@ describe("bot inbox incidents", () => {
     expect(service.resolveById(item.id)).toBe(false);
   });
 
+  it("resolves only the incident with the matching id", () => {
+    const { filePath, service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+    ]);
+    const item = service.upsert(incident);
+    NodeFS.writeFileSync(filePath, JSON.stringify([item, { ...item, id: "replacement-incident" }]));
+
+    expect(service.resolveById(item.id)).toBe(true);
+    expect(service.list().map(({ id, status }) => ({ id, status }))).toEqual([
+      { id: item.id, status: "resolved" },
+      { id: "replacement-incident", status: "open" },
+    ]);
+  });
+
   it("preserves incidents written by another service instance", () => {
     const { filePath, service: approvalWriter } = makeService([
       "2026-08-30T20:00:00.000Z",

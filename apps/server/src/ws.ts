@@ -1989,10 +1989,9 @@ const makeWsRpcLayer = (
         [WS_METHODS.botInboxList]: (_input) =>
           observeRpcEffect(
             WS_METHODS.botInboxList,
-            Effect.sync(() => {
-              botInbox.reload();
-              return botInbox.list().filter((item) => item.status === "open");
-            }),
+            getAccessHealthSnapshot().pipe(
+              Effect.map(({ inbox }) => inbox.filter((item) => item.status === "open")),
+            ),
             { "rpc.aggregate": "bot" },
           ),
         [WS_METHODS.botInboxResolve]: ({ id }) =>

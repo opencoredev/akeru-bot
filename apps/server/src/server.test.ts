@@ -8,6 +8,7 @@ import {
   AuthAccessTokenType,
   AuthEnvironmentBootstrapTokenType,
   AuthTokenExchangeGrantType,
+  BotId,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
@@ -416,6 +417,7 @@ const buildAppUnderTest = (options?: {
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
+    projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
@@ -804,6 +806,7 @@ const buildAppUnderTest = (options?: {
             upsert: () => Effect.void,
             getById: () => Effect.succeed(Option.none()),
             listAll: () => Effect.succeed([]),
+            ...options?.layers?.projectionBots,
           } satisfies ProjectionBots.ProjectionBotRepositoryShape),
           Layer.succeed(ProjectionGroups.ProjectionGroupRepository, {
             upsert: () => Effect.void,
@@ -4529,6 +4532,89 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.deepEqual(response.issues, []);
       assert.deepEqual(response.keybindings, [resolved]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("syncs connector incidents through botInbox.list", () =>
+    Effect.gen(function* () {
+      const bot = {
+        botId: BotId.make("bot-akeru"),
+        name: "Akeru",
+        title: "Research bot",
+        label: null,
+        description: null,
+        disabledMcpServerIds: [],
+        avatar: { kind: "dither" as const, seed: "akeru" },
+        engine: { provider: "grok", model: "grok-4.6" },
+        sandbox: null,
+        runtimeMode: "approval-required" as const,
+        usageCap: null,
+        voiceEnabled: false,
+        groupId: null,
+        archivedAt: null,
+        createdAt: "2026-08-30T20:00:00.000Z",
+        updatedAt: "2026-08-30T20:00:00.000Z",
+      } satisfies ProjectionBots.ProjectionBot;
+      const config = yield* buildAppUnderTest({
+        layers: {
+          projectionBots: {
+            listAll: () => Effect.succeed([bot]),
+          },
+        },
+      });
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const authPath = path.join(config.secretsDir, "subscription-auth.json");
+      yield* fileSystem.makeDirectory(config.secretsDir, { recursive: true });
+      yield* fileSystem.writeFileString(
+        authPath,
+        // @effect-diagnostics-next-line preferSchemaOverJson:off
+        JSON.stringify({ xai: { type: "oauth", access: "a", refresh: "r", expires: 4e12 } }),
+      );
+      yield* fileSystem.writeFileString(
+        `${authPath}.health`,
+        // @effect-diagnostics-next-line preferSchemaOverJson:off
+        JSON.stringify({
+          xai: {
+            lastFailedRequest: {
+              at: "2026-08-30T20:00:00.000Z",
+              message: "The first request failed.",
+            },
+            failureKind: "request",
+          },
+        }),
+      );
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            const failed = yield* client[WS_METHODS.botInboxList]({});
+            assert.equal(failed.length, 1);
+            assert.equal(failed[0]?.kind, "connector-failure");
+            assert.equal(failed[0]?.status, "open");
+            assert.equal(failed[0]?.botId, bot.botId);
+            assert.equal(failed[0]?.lastFailure, "The first request failed.");
+
+            yield* fileSystem.writeFileString(
+              `${authPath}.health`,
+              // @effect-diagnostics-next-line preferSchemaOverJson:off
+              JSON.stringify({
+                xai: {
+                  lastSuccessfulRequestAt: "2026-08-30T20:01:00.000Z",
+                  lastFailedRequest: {
+                    at: "2026-08-30T20:00:00.000Z",
+                    message: "The first request failed.",
+                  },
+                  failureKind: "request",
+                },
+              }),
+            );
+
+            assert.deepEqual(yield* client[WS_METHODS.botInboxList]({}), []);
+          }),
+        ),
+      );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

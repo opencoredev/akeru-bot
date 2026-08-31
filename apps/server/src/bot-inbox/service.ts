@@ -144,8 +144,15 @@ export class BotInboxService {
 
   resolveById(id: string): boolean {
     this.reload();
-    const incident = this.items.find((item) => item.id === id && item.status === "open");
-    return incident ? this.resolve(incident.incidentKey) : false;
+    const resolvedAt = this.now();
+    let changed = false;
+    this.items = this.items.map((item) => {
+      if (item.id !== id || item.status === "resolved") return item;
+      changed = true;
+      return { ...item, status: "resolved", resolvedAt, lastSeenAt: resolvedAt };
+    });
+    if (changed) this.save();
+    return changed;
   }
 
   private save(): void {
