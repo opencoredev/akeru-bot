@@ -676,12 +676,12 @@ describe("AgentControllerLive", () => {
           toolName: "Shell",
           args: { command: "pwd" },
         } as AgentControllerEvent);
-        yield* controller.interruptTurn({ threadId: codexThreadId });
         yield* controller.respondToRequest({
           threadId: codexThreadId,
           requestId: ApprovalRequestId.make("shell-tool-stale"),
           decision: "accept",
         });
+        yield* controller.interruptTurn({ threadId: codexThreadId });
         yield* Effect.promise(() =>
           expect(runtime.execute({ ...execution, toolCallId: "shell-tool-stale" })).rejects.toThrow(
             "Tool 'Shell' requires approval.",

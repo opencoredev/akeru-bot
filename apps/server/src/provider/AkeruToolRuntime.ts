@@ -30,6 +30,7 @@ export interface AkeruToolExecution {
 export interface AkeruToolRuntime {
   readonly registerSession: (threadId: string, session: AkeruToolSession) => void;
   readonly unregisterSession: (threadId: string) => void;
+  readonly clearApprovals: (threadId: string) => void;
   readonly toolsForThread: (threadId: string) => ReadonlyArray<AkeruToolDefinition>;
   readonly requiresApproval: (
     threadId: string,
@@ -161,6 +162,7 @@ export function createAkeruToolRuntime(): AkeruToolRuntime {
       sessions.delete(threadId);
       clearGrants(threadId);
     },
+    clearApprovals: clearGrants,
     toolsForThread,
     requiresApproval: async (threadId, toolId, input) => {
       const session = sessions.get(threadId);

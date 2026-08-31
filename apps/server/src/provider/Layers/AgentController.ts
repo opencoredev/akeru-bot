@@ -391,6 +391,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         },
       });
       active.approvalRequests.clear();
+      toolRuntime.clearApprovals(String(threadId));
       active.activeTurn = null;
       publishSessionState(threadId, active, "ready");
     };
