@@ -1577,9 +1577,9 @@ const make = Effect.gen(function* () {
         : undefined;
       const eventMatchesPendingTurn =
         Option.isSome(pendingTurnStart) && sameId(expectedPendingTurnId, eventTurnId);
-      const canReconcileUsage =
-        !conflictsWithActiveTurn &&
-        (activeTurnId !== null || Option.isNone(pendingTurnStart) || eventMatchesPendingTurn);
+      const canReconcileUsage = Option.isSome(pendingTurnStart)
+        ? eventMatchesPendingTurn
+        : !conflictsWithActiveTurn;
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&

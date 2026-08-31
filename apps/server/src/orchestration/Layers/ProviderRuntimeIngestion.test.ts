@@ -533,6 +533,7 @@ describe("ProviderRuntimeIngestion", () => {
   it("does not charge a replacement reservation from stale turn events", async () => {
     const harness = await createHarness({ botOwned: true });
     const replacementTurnId = asTurnId("turn-replacement");
+    const staleTurnId = asTurnId("turn-stale");
     await harness.dispatch({
       type: "thread.turn.start",
       commandId: CommandId.make("cmd-turn-start-replacement"),
@@ -556,7 +557,7 @@ describe("ProviderRuntimeIngestion", () => {
         status: "starting",
         providerName: "codex",
         runtimeMode: "approval-required",
-        activeTurnId: null,
+        activeTurnId: staleTurnId,
         updatedAt: "2026-01-01T00:00:01.000Z",
         lastError: null,
       },
@@ -573,7 +574,6 @@ describe("ProviderRuntimeIngestion", () => {
     });
     await harness.reserveBotUsage(null);
 
-    const staleTurnId = asTurnId("turn-stale");
     harness.emit({
       type: "thread.token-usage.updated",
       eventId: asEventId("evt-stale-turn-usage"),
