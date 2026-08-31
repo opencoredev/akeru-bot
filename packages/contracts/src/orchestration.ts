@@ -297,7 +297,7 @@ export const BotEngine = Schema.Struct({
 });
 export type BotEngine = typeof BotEngine.Type;
 
-export const BotSandbox = Schema.Literals(["local", "vercel", "akeru-cloud", "upstash"]);
+export const BotSandbox = Schema.Literals(["local", "e2b", "daytona", "vercel", "upstash"]);
 export type BotSandbox = typeof BotSandbox.Type;
 
 export const BotSandboxBrowserSharing = Schema.Literals(["shared", "separate"]);
