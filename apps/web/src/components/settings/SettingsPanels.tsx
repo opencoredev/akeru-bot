@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   type BackgroundActivityProfile,
+  type BotSandboxBrowserSharing,
   type DesktopUpdateChannel,
   ProviderDriverKind,
   type ScopedThreadRef,
@@ -162,6 +163,11 @@ const TIMESTAMP_FORMAT_LABELS = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 } as const;
+
+const BOT_SANDBOX_BROWSER_SHARING_LABELS: Record<BotSandboxBrowserSharing, string> = {
+  shared: "Shared",
+  separate: "Separate",
+};
 
 const BACKGROUND_ACTIVITY_PROFILE_LABELS: Record<BackgroundActivityProfile, string> = {
   balanced: "Balanced",
@@ -525,6 +531,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks
         ? ["Provider update checks"]
         : []),
+      ...(settings.botSandboxBrowserSharing !== DEFAULT_UNIFIED_SETTINGS.botSandboxBrowserSharing
+        ? ["Sandbox and browser sharing"]
+        : []),
       ...(isBackgroundActivityDirty ? ["Background activity"] : []),
       ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
         ? ["New thread mode"]
@@ -581,6 +590,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.glassOpacity,
       settings.enableLegacyTokenStreaming,
       settings.enableProviderUpdateChecks,
+      settings.botSandboxBrowserSharing,
       settings.sidebarAutoSettleAfterDays,
       settings.sidebarAutoSettleOnMerge,
       settings.sidebarProjectGroupingMode,
@@ -672,6 +682,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       enableLegacyTokenStreaming: DEFAULT_UNIFIED_SETTINGS.enableLegacyTokenStreaming,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
+      botSandboxBrowserSharing: DEFAULT_UNIFIED_SETTINGS.botSandboxBrowserSharing,
       backgroundActivity: DEFAULT_UNIFIED_SETTINGS.backgroundActivity,
       backgroundActivityProfile: DEFAULT_UNIFIED_SETTINGS.backgroundActivityProfile,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
@@ -1852,6 +1863,82 @@ function LegacyFeaturesSection() {
   );
 }
 
+export function BotSandboxBrowserSharingSettings({
+  value,
+  onChange,
+}: {
+  readonly value: BotSandboxBrowserSharing;
+  readonly onChange: (value: BotSandboxBrowserSharing) => void;
+}) {
+  const [pendingValue, setPendingValue] = useState<BotSandboxBrowserSharing | null>(null);
+
+  return (
+    <>
+      <SettingsRow
+        {...searchableSetting("sandbox-browser-sharing")}
+        description="Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile."
+        resetAction={
+          value !== DEFAULT_UNIFIED_SETTINGS.botSandboxBrowserSharing ? (
+            <SettingResetButton
+              label="sandbox and browser sharing"
+              onClick={() => setPendingValue(DEFAULT_UNIFIED_SETTINGS.botSandboxBrowserSharing)}
+            />
+          ) : null
+        }
+        control={
+          <Select
+            value={value}
+            onValueChange={(nextValue) => {
+              if ((nextValue === "shared" || nextValue === "separate") && nextValue !== value) {
+                setPendingValue(nextValue);
+              }
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-40" aria-label="Sandbox and browser sharing">
+              <SelectValue>{BOT_SANDBOX_BROWSER_SHARING_LABELS[value]}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              <SelectItem hideIndicator value="shared">
+                Shared
+              </SelectItem>
+              <SelectItem hideIndicator value="separate">
+                Separate
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        }
+      />
+
+      <Dialog open={pendingValue !== null} onOpenChange={(open) => !open && setPendingValue(null)}>
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Change bot workspace mode?</DialogTitle>
+            <DialogDescription>
+              {pendingValue === "shared"
+                ? "Active tasks keep their current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move."
+                : "Active tasks keep their current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingValue(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const nextValue = pendingValue;
+                setPendingValue(null);
+                if (nextValue) onChange(nextValue);
+              }}
+            >
+              Change mode
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+    </>
+  );
+}
+
 export function GeneralSettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
@@ -1908,6 +1995,11 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection title="General">
+        <BotSandboxBrowserSharingSettings
+          value={settings.botSandboxBrowserSharing}
+          onChange={(value) => updateSettings({ botSandboxBrowserSharing: value })}
+        />
+
         <SettingsRow
           {...searchableSetting("project-grouping")}
           description="Combine matching repositories across environments."

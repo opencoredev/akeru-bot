@@ -75,6 +75,13 @@ describe("searchSettings", () => {
     expect(searchableSetting("archive")).toEqual({ id: "archive", title: "Archived threads" });
   });
 
+  it("routes sandbox and browser sharing to General settings", () => {
+    expect(searchSettings("sandbox and browser sharing")[0]).toMatchObject({
+      id: "sandbox-browser-sharing",
+      to: "/settings/general",
+    });
+  });
+
   it("routes appearance settings to their current section", () => {
     expect(searchSettings("theme")[0]).toMatchObject({
       id: "theme",

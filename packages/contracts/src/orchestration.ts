@@ -300,6 +300,10 @@ export type BotEngine = typeof BotEngine.Type;
 export const BotSandbox = Schema.Literals(["local", "vercel", "akeru-cloud", "upstash"]);
 export type BotSandbox = typeof BotSandbox.Type;
 
+export const BotSandboxBrowserSharing = Schema.Literals(["shared", "separate"]);
+export type BotSandboxBrowserSharing = typeof BotSandboxBrowserSharing.Type;
+export const DEFAULT_BOT_SANDBOX_BROWSER_SHARING: BotSandboxBrowserSharing = "separate";
+
 export const BotUsageCap = Schema.Struct({
   unit: Schema.Literal("tokens"),
   limit: Schema.Int.check(Schema.isGreaterThan(0)),

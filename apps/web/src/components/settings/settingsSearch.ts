@@ -114,6 +114,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "sandbox-browser-sharing",
+    title: "Sandbox and browser sharing",
+    to: "/settings/general",
+  },
+  {
     id: "auto-settle-inactive-threads",
     title: "Auto-settle inactive threads",
     to: "/settings/general",

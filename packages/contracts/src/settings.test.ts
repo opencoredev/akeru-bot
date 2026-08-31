@@ -209,6 +209,19 @@ describe("ClientSettings sidebar", () => {
   });
 });
 
+describe("ServerSettings bot sandbox and browser sharing", () => {
+  it("defaults to separate and accepts shared as an opt-in", () => {
+    expect(decodeServerSettings({}).botSandboxBrowserSharing).toBe("separate");
+    expect(
+      decodeServerSettingsPatch({ botSandboxBrowserSharing: "shared" }).botSandboxBrowserSharing,
+    ).toBe("shared");
+  });
+
+  it("rejects unsupported sharing modes", () => {
+    expect(() => decodeServerSettingsPatch({ botSandboxBrowserSharing: "per-thread" })).toThrow();
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults text generation to Luna at low reasoning effort", () => {
     expect(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection).toEqual({
