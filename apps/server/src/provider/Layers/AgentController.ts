@@ -4,11 +4,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import {
-  createMcpManager,
-  type McpManager,
-  type McpServerConfig,
-} from "@mastra/code-sdk/mcp/index";
+import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
 import type {
   AgentControllerEvent,
   MastraDBMessage,
@@ -22,6 +18,7 @@ import {
   RuntimeItemId,
   RuntimeRequestId,
   TurnId,
+  DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   type McpServer,
   type ModelSelection,
   type ProviderApprovalDecision,
@@ -50,7 +47,14 @@ import {
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
-import { createBotWorkspace, type CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
+import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
+import { AkeruSessionResources } from "../AkeruSessionResources.ts";
+import type { CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
+import {
+  botRuntimeResourceScope,
+  botWorkspaceIdentity,
+  botWorkspaceResourceKey,
+} from "../botWorkspacePool.ts";
 import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
 import { AgentController, type AgentControllerShape } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
@@ -89,6 +93,7 @@ interface ActiveSession {
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
   readonly toolNames: Map<string, string>;
+  readonly workspaceResourceKey: string;
   readonly unsubscribe: () => void;
 }
 
@@ -96,6 +101,7 @@ export interface AgentControllerLiveOptions {
   readonly makeMastraHarness?: (options: AkeruMastraHarnessOptions) => Promise<AkeruMastraHarness>;
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
+  readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -128,13 +134,44 @@ function mastraModeId(mode: "default" | "plan"): string {
   return mode === "plan" ? PLAN_MODE_ID : DEFAULT_MODE_ID;
 }
 
-export function toMcpServerConfigs(servers: readonly McpServer[]): Record<string, McpServerConfig> {
+const BROWSER_AWARE_MCP_SERVER_IDS = new Set(["builtin-executor", "builtin-tinyfish"]);
+
+export function toMcpServerConfigs(
+  servers: readonly McpServer[],
+  browser?: BotBrowserAttachment,
+): Record<string, McpServerConfig> {
+  const browserRequestHeaders = browser ? JSON.stringify(browser.requestHeaders) : undefined;
+  const browserEnvironment = browser
+    ? {
+        AKERU_BROWSER_MCP_URL: browser.browserUrl,
+        AKERU_BROWSER_MCP_SESSION_ID: browser.mcpSessionId,
+        AKERU_BROWSER_MCP_HEADERS: JSON.stringify(browser.localRequestHeaders),
+      }
+    : undefined;
   return Object.fromEntries(
     servers.map((server) => [
       String(server.id),
       server.transport === "url"
-        ? { url: server.url }
-        : { command: server.command, ...(server.args ? { args: [...server.args] } : {}) },
+        ? {
+            url: server.url,
+            ...(browser?.availableToHostedPlugins &&
+            BROWSER_AWARE_MCP_SERVER_IDS.has(String(server.id))
+              ? {
+                  headers: {
+                    "x-akeru-browser-mcp-url": browser.browserUrl,
+                    "x-akeru-browser-mcp-session-id": browser.mcpSessionId,
+                    "x-akeru-browser-mcp-headers": browserRequestHeaders!,
+                  },
+                }
+              : {}),
+          }
+        : {
+            command: server.command,
+            ...(server.args ? { args: [...server.args] } : {}),
+            ...(browserEnvironment && BROWSER_AWARE_MCP_SERVER_IDS.has(String(server.id))
+              ? { env: browserEnvironment }
+              : {}),
+          },
     ]),
   );
 }
@@ -245,36 +282,32 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
     const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
-    const mcpManagers = new Map<string, McpManager>();
-    const workspaces = new Map<string, Workspace>();
+    const sessionResources = new AkeruSessionResources({
+      stateDir: config.stateDir,
+      toMcpServerConfigs,
+      ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
+      ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
+      ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
+    });
+    const legacyResourceIdentity = new Map<
+      string,
+      {
+        readonly workspaceResourceKey: string;
+        readonly cwd: string | undefined;
+        readonly provider: ProviderDriverKind;
+        readonly providerInstanceId: ProviderInstanceId;
+      }
+    >();
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
     const bundle = yield* runMastra("construct", () =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
-        getThreadTools: (threadId) => mcpManagers.get(threadId)?.getTools() ?? {},
-        getThreadWorkspace: (threadId) => workspaces.get(threadId),
+        getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
+        getThreadWorkspace: (threadId) => sessionResources.getWorkspace(threadId),
       }),
     );
     yield* runMastra("init", () => bundle.controller.init());
-
-    const disconnectMcpManager = (key: string) => {
-      const manager = mcpManagers.get(key);
-      if (!manager) return Effect.void;
-      mcpManagers.delete(key);
-      return runMastra("mcp.disconnect", () => manager.disconnect()).pipe(
-        Effect.ignoreCause({ log: true }),
-      );
-    };
-
-    const disconnectWorkspace = (key: string) => {
-      const workspace = workspaces.get(key);
-      if (!workspace) return Effect.void;
-      workspaces.delete(key);
-      return runMastra("workspace.destroy", () => workspace.destroy()).pipe(
-        Effect.ignoreCause({ log: true }),
-      );
-    };
 
     const publish = (event: ProviderRuntimeEvent) => {
       PubSub.publishUnsafe(runtimeEvents, event);
@@ -603,39 +636,92 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
+      const resourceScope = botRuntimeResourceScope({
+        sharing: input.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+        ...(input.botId ? { botId: input.botId } : {}),
+        threadId: key,
+      });
+      const workspaceResourceKey = botWorkspaceResourceKey({
+        resourceScope,
+        ...(input.botSandbox !== undefined ? { sandbox: input.botSandbox } : {}),
+      });
+      const workspaceId = botWorkspaceIdentity(workspaceResourceKey);
       const existing = sessions.get(key);
-      if (existing) return toProviderSession(threadId, existing);
       const resolved = resolvedByThread.get(key);
+      if (
+        existing?.workspaceResourceKey === workspaceResourceKey &&
+        existing.cwd === input.cwd &&
+        resolved &&
+        existing.provider === resolved.provider &&
+        existing.providerInstanceId === resolved.providerInstanceId
+      ) {
+        existing.runtimeMode = input.runtimeMode;
+        return toProviderSession(threadId, existing);
+      }
+      const existingLegacy = legacyResourceIdentity.get(key);
+      if (
+        !existing &&
+        resolved &&
+        existingLegacy?.workspaceResourceKey === workspaceResourceKey &&
+        existingLegacy.cwd === input.cwd &&
+        existingLegacy.provider === resolved.provider &&
+        existingLegacy.providerInstanceId === resolved.providerInstanceId
+      ) {
+        const live = (yield* legacyProviderBridge.listSessions()).find(
+          (session) => session.threadId === threadId,
+        );
+        if (live) return live;
+        yield* runMastra("resources.release", () => sessionResources.release(key)).pipe(
+          Effect.ignoreCause({ log: true }),
+        );
+        legacyResourceIdentity.delete(key);
+      }
+      if (existing || existingLegacy) {
+        const previousWorkspaceResourceKey =
+          existing?.workspaceResourceKey ?? existingLegacy?.workspaceResourceKey;
+        yield* stopSessionWithResources(
+          { threadId },
+          previousWorkspaceResourceKey !== workspaceResourceKey,
+        );
+      }
       if (!resolved) {
         return yield* new AgentControllerRuntimeError({
           operation: "startSession",
           detail: `Thread '${threadId}' has no resolved engine.`,
         });
       }
-      if (!usesMastraCode(resolved.provider)) {
-        return yield* legacyProviderBridge.startSession(threadId, input);
-      }
       const mcpServers = input.mcpServers ?? [];
-      if (mcpServers.length > 0) {
-        const manager = (options?.makeMcpManager ?? createMcpManager)(
-          NodePath.join(config.stateDir, "bot-mcp-runtime"),
-          ".akeru-runtime",
-          toMcpServerConfigs(mcpServers),
-        );
-        yield* runMastra("mcp.init", () => manager.init());
-        mcpManagers.set(key, manager);
-      }
-      const workspace = yield* runMastra("workspace.create", () =>
-        createBotWorkspace({
+      const resources = yield* runMastra("resources.acquire", () =>
+        sessionResources.acquire({
           threadId: key,
-          ...(input.cwd ? { cwd: input.cwd } : {}),
-          ...(input.botSandbox !== undefined ? { sandbox: input.botSandbox } : {}),
-          ...(options?.makeRemoteWorkspace
-            ? { makeRemoteWorkspace: options.makeRemoteWorkspace }
-            : {}),
+          resourceScope,
+          workspaceResourceKey,
+          workspaceId,
+          ...(input.botSandbox !== undefined ? { botSandbox: input.botSandbox } : {}),
+          ...(input.cwd ? { userComputerCwd: input.cwd } : {}),
+          mcpServers,
         }),
       );
-      if (workspace) workspaces.set(key, workspace);
+      if (!usesMastraCode(resolved.provider)) {
+        return yield* legacyProviderBridge.startSession(threadId, input).pipe(
+          Effect.tap((session) =>
+            Effect.sync(() => {
+              legacyResourceIdentity.set(key, {
+                workspaceResourceKey,
+                cwd: input.cwd,
+                provider: resolved.provider,
+                providerInstanceId: resolved.providerInstanceId,
+              });
+              return session;
+            }),
+          ),
+          Effect.tapError(() =>
+            runMastra("resources.release", () =>
+              sessionResources.release(key, { destroy: true }),
+            ).pipe(Effect.ignoreCause({ log: true })),
+          ),
+        );
+      }
       const session = yield* runMastra("createSession", () =>
         bundle.controller.createSession({
           id: key,
@@ -643,11 +729,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           resourceId: key,
           threadId: key,
           ...(input.cwd ? { tags: { projectPath: input.cwd } } : {}),
-          ...(workspace ? { workspace } : {}),
+          workspace: resources.workspace,
         }),
       ).pipe(
         Effect.tapError(() =>
-          Effect.all([disconnectMcpManager(key), disconnectWorkspace(key)], { discard: true }),
+          runMastra("resources.release", () =>
+            sessionResources.release(key, { destroy: true }),
+          ).pipe(Effect.ignoreCause({ log: true })),
         ),
       );
       yield* runMastra("state.set", () =>
@@ -693,6 +781,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         status: "ready" as const,
         activeTurn: null,
         toolNames: new Map<string, string>(),
+        workspaceResourceKey,
       };
       const unsubscribe = session.subscribe((event) => {
         const active = sessions.get(key);
@@ -881,15 +970,21 @@ const make = (options?: AgentControllerLiveOptions) =>
       publishSessionState(input.threadId, active, "running");
     });
 
-    const stopSession: AgentControllerShape["stopSession"] = Effect.fn(
-      "AgentController.stopSession",
-    )(function* (input) {
+    const stopSessionWithResources = Effect.fn("AgentController.stopSession")(function* (
+      input: Parameters<AgentControllerShape["stopSession"]>[0],
+      destroyResources: boolean,
+    ) {
       const key = String(input.threadId);
       const active = sessions.get(key);
       if (!active) {
         const legacySessions = yield* legacyProviderBridge.listSessions();
         if (legacySessions.some((session) => session.threadId === input.threadId)) {
-          return yield* legacyProviderBridge.stopSession(input);
+          yield* legacyProviderBridge.stopSession(input);
+          yield* runMastra("resources.release", () =>
+            sessionResources.release(key, { destroy: destroyResources }),
+          ).pipe(Effect.ignoreCause({ log: true }));
+          legacyResourceIdentity.delete(key);
+          return;
         }
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
@@ -902,10 +997,14 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.unsubscribe();
       publishSessionState(input.threadId, active, "stopped");
       yield* runMastra("deleteSession", () => bundle.controller.deleteSession({ resourceId: key }));
-      yield* disconnectMcpManager(key);
-      yield* disconnectWorkspace(key);
+      yield* runMastra("resources.release", () =>
+        sessionResources.release(key, { destroy: destroyResources }),
+      ).pipe(Effect.ignoreCause({ log: true }));
       sessions.delete(key);
     });
+
+    const stopSession: AgentControllerShape["stopSession"] = (input) =>
+      stopSessionWithResources(input, false);
 
     const rollbackConversation: AgentControllerShape["rollbackConversation"] = (input) => {
       const resolved = resolvedByThread.get(String(input.threadId));
@@ -931,14 +1030,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("deleteSession", () =>
             bundle.controller.deleteSession({ resourceId: threadId }),
           ).pipe(Effect.ignoreCause({ log: true }));
-          yield* disconnectMcpManager(threadId);
-          yield* disconnectWorkspace(threadId);
         }
+        legacyResourceIdentity.clear();
         sessions.clear();
-        bundle.destroy();
+        yield* runMastra("resources.shutdown", () => sessionResources.shutdown()).pipe(
+          Effect.ignoreCause({ log: true }),
+        );
         yield* runMastra("destroy", () => bundle.controller.destroy()).pipe(
           Effect.ignoreCause({ log: true }),
         );
+        bundle.destroy();
       }),
     );
 

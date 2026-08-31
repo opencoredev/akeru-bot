@@ -60,6 +60,18 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.botSandbox).toBe("vercel");
   });
 
+  it("accepts bot-scoped sandbox and browser sharing", () => {
+    const parsed = decodeProviderSessionStartInput({
+      threadId: "thread-1",
+      provider: "codex",
+      botId: "bot-one",
+      botSandboxBrowserSharing: "separate",
+      runtimeMode: "full-access",
+    });
+    expect(parsed.botId).toBe("bot-one");
+    expect(parsed.botSandboxBrowserSharing).toBe("separate");
+  });
+
   it("rejects payloads without runtime mode", () => {
     expect(() =>
       decodeProviderSessionStartInput({

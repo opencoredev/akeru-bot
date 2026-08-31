@@ -214,6 +214,13 @@ function makeLayer(
   return makeAgentControllerLive({
     makeMastraHarness: factory,
     ...(makeMcpManager ? { makeMcpManager } : {}),
+    makeBotBrowser: () =>
+      ({
+        tools: {},
+        attachment: async () => undefined,
+        reconnect: async () => undefined,
+        close: async () => undefined,
+      }) as never,
   }).pipe(
     Layer.provide(
       Layer.merge(
@@ -802,11 +809,134 @@ describe("AgentControllerLive", () => {
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(makeRemoteWorkspace).toHaveBeenCalledWith({
-        threadId: String(codexThreadId),
+        threadId: `thread-${codexThreadId}`,
         sandbox: "upstash",
+        workspaceId: expect.stringMatching(/^akeru-[a-f0-9]{24}$/),
       });
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
       yield* controller.stopSession({ threadId: codexThreadId });
+    }).pipe(Effect.provide(layer), Effect.orDie);
+  });
+
+  it.effect("destroys obsolete and final pooled session resources", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const firstWorkspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    });
+    const secondWorkspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    });
+    const firstDestroy = vi.spyOn(firstWorkspace, "destroy");
+    const secondDestroy = vi.spyOn(secondWorkspace, "destroy");
+    const makeRemoteWorkspace = vi
+      .fn()
+      .mockResolvedValueOnce(firstWorkspace)
+      .mockResolvedValueOnce(secondWorkspace);
+    const firstBrowser = {
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    };
+    const secondBrowser = {
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    };
+    const makeBotBrowser = vi
+      .fn()
+      .mockReturnValueOnce(firstBrowser)
+      .mockReturnValueOnce(secondBrowser);
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeRemoteWorkspace,
+      makeBotBrowser: makeBotBrowser as never,
+    }).pipe(
+      Layer.provide(
+        Layer.merge(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "akeru-mastra-resource-finalizer-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      yield* Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+          botId: "bot-one" as never,
+          botSandboxBrowserSharing: "separate" as const,
+        };
+        yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
+        yield* controller.startSession(codexThreadId, { ...input, botSandbox: "vercel" });
+        expect(firstDestroy).toHaveBeenCalledOnce();
+        expect(firstBrowser.close).toHaveBeenCalledOnce();
+      }).pipe(Effect.provide(layer), Effect.orDie);
+
+      expect(secondDestroy).toHaveBeenCalledOnce();
+      expect(secondBrowser.close).toHaveBeenCalledOnce();
+    });
+  });
+
+  it.effect("keeps the same workspace when only session input changes", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const remote = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    });
+    const destroy = vi.spyOn(remote, "destroy");
+    const makeRemoteWorkspace = vi.fn(async () => remote);
+    const sharedBrowser = {
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    };
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeRemoteWorkspace,
+      makeBotBrowser: (() => sharedBrowser) as never,
+    }).pipe(
+      Layer.provide(
+        Layer.merge(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "akeru-mastra-same-workspace-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      const input = {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        modelSelection: codexSelection,
+        runtimeMode: "full-access" as const,
+        botSandbox: "upstash" as const,
+      };
+      yield* controller.startSession(codexThreadId, { ...input, cwd: process.cwd() });
+      yield* controller.startSession(codexThreadId, { ...input, cwd: NodeOS.tmpdir() });
+
+      expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
+      expect(destroy).not.toHaveBeenCalled();
+      expect(sharedBrowser.reconnect).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 

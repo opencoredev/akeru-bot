@@ -1,47 +1,73 @@
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { assert, describe, expect, it, vi } from "vite-plus/test";
 
-import { createBotWorkspace, isRemoteBotSandbox } from "./botWorkspace.ts";
+import {
+  createBotWorkspace,
+  createRemoteMastraWorkspace,
+  isRemoteBotSandbox,
+} from "./botWorkspace.ts";
 
 describe("createBotWorkspace", () => {
-  it("treats vercel, akeru-cloud, and upstash as remote sandboxes", () => {
+  it("classifies every managed provider", () => {
     expect(isRemoteBotSandbox("local")).toBe(false);
-    expect(isRemoteBotSandbox(null)).toBe(false);
-    expect(isRemoteBotSandbox("vercel")).toBe(true);
-    expect(isRemoteBotSandbox("akeru-cloud")).toBe(true);
-    expect(isRemoteBotSandbox("upstash")).toBe(true);
+    for (const sandbox of ["e2b", "daytona", "vercel", "akeru-cloud", "upstash"] as const) {
+      expect(isRemoteBotSandbox(sandbox)).toBe(true);
+    }
   });
 
-  it("builds a local Mastra workspace from the thread cwd", async () => {
+  it("keeps durable local bot files outside the user project", async () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-workspace-"));
+    const projectDir = NodePath.join(baseDir, "project");
+    const botRoot = NodePath.join(baseDir, "state", "akeru-bot-one");
+    NodeFS.mkdirSync(projectDir, { recursive: true });
     const workspace = await createBotWorkspace({
-      threadId: "thread-local",
-      cwd: process.cwd(),
+      threadId: "bot-one",
+      cwd: projectDir,
+      localRoot: botRoot,
+      workspaceId: "akeru-bot-one",
       sandbox: "local",
     });
     assert.isDefined(workspace);
-    expect(workspace?.sandbox).toBeInstanceOf(LocalSandbox);
-    expect(workspace?.filesystem).toBeInstanceOf(LocalFilesystem);
-    await workspace?.destroy();
+    expect(workspace.sandbox).toBeInstanceOf(LocalSandbox);
+    expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
+    await workspace.filesystem?.writeFile("identity.txt", "bot-owned");
+    expect(NodeFS.readFileSync(NodePath.join(botRoot, "identity.txt"), "utf8")).toBe("bot-owned");
+    expect(NodeFS.existsSync(NodePath.join(projectDir, "identity.txt"))).toBe(false);
+    await workspace.destroy();
+    NodeFS.rmSync(baseDir, { recursive: true, force: true });
   });
 
-  it("uses the selected remote sandbox provider", async () => {
+  it("passes stable identity to an injected remote provider", async () => {
     const remote = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const makeRemoteWorkspace = vi.fn(async () => remote);
-    const workspace = await createBotWorkspace({
+    await createBotWorkspace({
       threadId: "thread-vercel",
-      cwd: process.cwd(),
       sandbox: "vercel",
+      workspaceId: "akeru-vercel",
       makeRemoteWorkspace,
     });
-    expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
     expect(makeRemoteWorkspace).toHaveBeenCalledWith({
       threadId: "thread-vercel",
       sandbox: "vercel",
+      workspaceId: "akeru-vercel",
     });
-    expect(workspace).toBe(remote);
-    await workspace?.destroy();
+    await remote.destroy();
   });
+
+  it.each(["e2b", "daytona", "vercel", "upstash", "akeru-cloud"] as const)(
+    "fails closed while the %s adapter is unavailable",
+    async (sandbox) => {
+      await expect(
+        createRemoteMastraWorkspace({ threadId: "thread-remote", sandbox }),
+      ).rejects.toThrow(`Remote sandbox '${sandbox}' is unavailable`);
+    },
+  );
 });
