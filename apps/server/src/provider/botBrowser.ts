@@ -6,11 +6,10 @@ import * as NodeTimersPromises from "node:timers/promises";
 import type { ToolsInput } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import type { ProcessHandle, Workspace, WorkspaceSandbox } from "@mastra/core/workspace";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 import { z } from "zod";
 
-import { redactSensitiveText } from "../mcp/SensitiveDataRedaction.ts";
 import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
-
 const LIGHTPANDA_VERSION = "0.3.7";
 const MAX_SNAPSHOT_LENGTH = 50 * 1_024;
 const MCP_PROTOCOL_VERSION = "2024-11-05";
@@ -80,6 +79,10 @@ interface JsonRpcResponse {
   readonly id?: number;
   readonly result?: unknown;
   readonly error?: { readonly code?: number; readonly message?: string };
+}
+
+export function browserRpcErrorMessage(error: NonNullable<JsonRpcResponse["error"]>): string {
+  return redactSensitiveText(error.message ?? `Browser RPC ${error.code ?? "failed"}.`).value;
 }
 
 export interface BrowserHttpResponse {
@@ -455,7 +458,7 @@ class LightpandaRpc implements BotBrowserRpc {
     }
     const parsed = JSON.parse(response.body) as JsonRpcResponse;
     if (parsed.error) {
-      throw new Error(parsed.error.message ?? `Browser RPC ${parsed.error.code ?? "failed"}.`);
+      throw new Error(browserRpcErrorMessage(parsed.error));
     }
     return {
       result: parsed.result,
