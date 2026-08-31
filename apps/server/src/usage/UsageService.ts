@@ -19,6 +19,7 @@ import {
   type UsageSource,
   type UsageSummary,
   type UsageSummaryInput,
+  type UsageTokenTotals,
   UsageReadError,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -39,7 +40,7 @@ import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
-import { parseRateTable, type RateTable } from "./usagePricing.ts";
+import { parseRateTable, priceUsage, type PricedUsage, type RateTable } from "./usagePricing.ts";
 import {
   listTranscriptFiles,
   readDirectoryVolumeId,
@@ -88,36 +89,48 @@ const ScanCacheJson = Schema.fromJsonString(Schema.Unknown as unknown as Schema.
 const decodeScanCacheFile = Schema.decodeUnknownEffect(ScanCacheJson);
 const encodeScanCacheFile = Schema.encodeEffect(ScanCacheJson);
 
+export interface PriceStepUsageInput {
+  readonly model: string;
+  readonly totals: UsageTokenTotals;
+  readonly reportedCostUsd: number | null;
+}
+
 export class UsageService extends Context.Service<
   UsageService,
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
+    readonly priceStepUsage: (input: PriceStepUsageInput) => Effect.Effect<PricedUsage>;
   }
 >()("akeru-bot/usage/UsageService") {}
 
 /** Empty summary, for suites that only need the RPC surface to resolve. */
-export const layerTest = Layer.succeed(
-  UsageService,
-  UsageService.of({
-    readSummary: (input) =>
-      Effect.succeed({
-        contractVersion: USAGE_CONTRACT_VERSION,
-        readAt: "1970-01-01T00:00:00.000Z",
-        timeZone: input.timeZone,
-        sinceDay: input.sinceDay,
-        untilDay: input.untilDay,
-        buckets: [],
-        sources: [],
-        pricing: {
-          status: "unavailable",
-          source: LITELLM_RATES_URL,
-          fetchedAt: null,
-          knownModels: 0,
-        },
-        scanDurationMs: 0,
-      }),
-  }),
-);
+export const layerTestWithRates = (rateTable: RateTable) =>
+  Layer.succeed(
+    UsageService,
+    UsageService.of({
+      readSummary: (input) =>
+        Effect.succeed({
+          contractVersion: USAGE_CONTRACT_VERSION,
+          readAt: "1970-01-01T00:00:00.000Z",
+          timeZone: input.timeZone,
+          sinceDay: input.sinceDay,
+          untilDay: input.untilDay,
+          buckets: [],
+          sources: [],
+          pricing: {
+            status: "unavailable",
+            source: LITELLM_RATES_URL,
+            fetchedAt: null,
+            knownModels: rateTable.size,
+          },
+          scanDurationMs: 0,
+        }),
+      priceStepUsage: (input) =>
+        Effect.succeed(priceUsage(rateTable, input.model, input.totals, input.reportedCostUsd)),
+    }),
+  );
+
+export const layerTest = layerTestWithRates(new Map());
 
 export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -297,6 +310,13 @@ export const make = Effect.gen(function* () {
       return records;
     });
 
+  const priceStepUsage = Effect.fn("UsageService.priceStepUsage")(function* (
+    input: PriceStepUsageInput,
+  ) {
+    yield* ensureRates();
+    return priceUsage(rates, input.model, input.totals, input.reportedCostUsd);
+  });
+
   const readSummary = Effect.fn("UsageService.readSummary")(function* (input: UsageSummaryInput) {
     if (input.sinceDay > input.untilDay) {
       return yield* new UsageReadError({
@@ -454,7 +474,7 @@ export const make = Effect.gen(function* () {
     } satisfies UsageSummary;
   });
 
-  return { readSummary } as const;
+  return { readSummary, priceStepUsage } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);
