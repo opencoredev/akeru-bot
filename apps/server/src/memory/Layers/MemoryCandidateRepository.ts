@@ -9,7 +9,6 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { toPersistenceDecodeError, toPersistenceSqlError } from "../../persistence/Errors.ts";
@@ -23,6 +22,10 @@ import {
   MemoryCandidateRepository,
   type MemoryCandidateRepositoryShape,
 } from "../Services/MemoryCandidateRepository.ts";
+import {
+  MemoryRevisionWriteLock,
+  MemoryRevisionWriteLockLive,
+} from "../Services/MemoryRevisionWriteLock.ts";
 
 const CandidateRow = Schema.Struct({
   candidateId: Schema.String,
@@ -126,7 +129,7 @@ const expectedEntityId = (scope: AkeruMemoryTargetScope, access: AkeruMemoryThre
 
 const makeMemoryCandidateRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const writeLock = yield* Semaphore.make(1);
+  const writeLock = yield* MemoryRevisionWriteLock;
 
   const getPending = Effect.fn("MemoryCandidateRepository.getPending")(function* (
     access: AkeruMemoryThreadAccess,
@@ -237,22 +240,28 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
             reason: "The approved memory revision is not valid for this authenticated turn.",
           });
         }
-        if (nextRevision) {
-          const currentRows = yield* sql<{
-            readonly id: string;
-            readonly revision: number;
-            readonly scope: string;
-            readonly partitionId: string;
-            readonly visibility: string;
-            readonly deletionState: string;
-          }>`
+        const currentRows = yield* sql<{
+          readonly id: string;
+          readonly revision: number;
+          readonly scope: string;
+          readonly partitionId: string;
+          readonly visibility: string;
+          readonly deletionState: string;
+        }>`
           SELECT memory_id AS id, revision, scope, partition_id AS partitionId,
             visibility, deletion_state AS deletionState
           FROM akeru_memory_revisions
           WHERE tenant_id = ${input.access.tenantId} AND root_id = ${revision.rootId}
             AND superseded_by_id IS NULL LIMIT 1
         `.pipe(Effect.mapError(toPersistenceSqlError("MemoryCandidateRepository.approve:current")));
-          const current = currentRows[0];
+        const current = currentRows[0];
+        if (initialRevision && current) {
+          return yield* new MemoryCandidateConflictError({
+            candidateId: candidate.candidateId,
+            detail: "a current revision already exists for this memory root",
+          });
+        }
+        if (nextRevision) {
           const currentAuthorized =
             current &&
             partitions.some(
@@ -421,4 +430,4 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
 export const MemoryCandidateRepositoryLive = Layer.effect(
   MemoryCandidateRepository,
   makeMemoryCandidateRepository,
-);
+).pipe(Layer.provide(MemoryRevisionWriteLockLive));

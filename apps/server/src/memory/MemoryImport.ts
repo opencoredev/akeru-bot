@@ -46,7 +46,7 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
     input.target === "all"
       ? yield* new EntityMemoryImportError({
           detail:
-            "All-memory archives span separate authority domains. Import a thread, bot, or project archive instead.",
+            "All-memory archives span separate authority domains. Import a thread, bot, project, or workspace archive instead.",
         })
       : input.target;
   if (input.archive.files.some((file) => checksum(file.content) !== file.sha256)) {

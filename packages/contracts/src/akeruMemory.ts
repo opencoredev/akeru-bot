@@ -198,7 +198,13 @@ export const AkeruMemoryArchiveV1 = Schema.Struct({
 });
 export type AkeruMemoryArchiveV1 = typeof AkeruMemoryArchiveV1.Type;
 
-export const AkeruMemoryArchiveTarget = Schema.Literals(["thread", "bot", "project", "all"]);
+export const AkeruMemoryArchiveTarget = Schema.Literals([
+  "thread",
+  "bot",
+  "project",
+  "workspace",
+  "all",
+]);
 export type AkeruMemoryArchiveTarget = typeof AkeruMemoryArchiveTarget.Type;
 
 export const AkeruMemoryArchiveRevision = Schema.Struct({

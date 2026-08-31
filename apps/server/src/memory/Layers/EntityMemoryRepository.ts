@@ -11,7 +11,6 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 
@@ -32,6 +31,10 @@ import {
   EntityMemoryImportError,
 } from "../Services/EntityMemoryRepository.ts";
 import { encodeMemoryArchiveJson } from "../MemoryArchiveJson.ts";
+import {
+  MemoryRevisionWriteLock,
+  MemoryRevisionWriteLockLive,
+} from "../Services/MemoryRevisionWriteLock.ts";
 
 const EntityMemoryDbRow = Schema.Struct({
   id: AkeruMemoryId,
@@ -142,7 +145,7 @@ const toFtsQuery = (query: string): string | null => {
 
 const makeEntityMemoryRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const writeLock = yield* Semaphore.make(1);
+  const writeLock = yield* MemoryRevisionWriteLock;
 
   const insertRow = SqlSchema.void({
     Request: AkeruMemoryRevision,
@@ -258,6 +261,20 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         }
         yield* insertRow(revision).pipe(
           Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.insert:query")),
+          Effect.catchTag("PersistenceSqlError", (cause) =>
+            getCurrent({ access: input.access, rootId: revision.rootId }).pipe(
+              Effect.flatMap((current) =>
+                Effect.fail(
+                  new EntityMemoryConflictError({
+                    rootId: revision.rootId,
+                    expectedRevision: 0,
+                    actualRevision: current.revision,
+                  }),
+                ),
+              ),
+              Effect.catchTag("EntityMemoryNotFoundError", () => Effect.fail(cause)),
+            ),
+          ),
         );
         return revision;
       }),
@@ -566,7 +583,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       botUserPartition.visibility === "private";
     if (input.partitions.length !== 1 && !isBotAuthorityPair) {
       return yield* new AkeruMemoryAccessDenied({
-        reason: "Import one thread, bot, or project authority domain at a time.",
+        reason: "Import one thread, bot, project, or workspace authority domain at a time.",
       });
     }
     const authorBotId = input.access.respondingBotId ?? input.access.botId;
@@ -597,30 +614,35 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               entityKind: "project" as const,
               entityId: AkeruMemoryEntityId.make(input.access.projectId),
             }
-          : selected.scope === "bot-user" || selected.scope === "user"
+          : selected.scope === "workspace"
             ? {
-                entityKind: "user" as const,
-                entityId: AkeruMemoryEntityId.make(input.access.userId),
+                entityKind: "workspace" as const,
+                entityId: AkeruMemoryEntityId.make(selected.partitionId),
               }
-            : selected.scope === "bot"
+            : selected.scope === "bot-user" || selected.scope === "user"
               ? {
-                  entityKind: "bot" as const,
-                  entityId: AkeruMemoryEntityId.make(input.access.botId!),
+                  entityKind: "user" as const,
+                  entityId: AkeruMemoryEntityId.make(input.access.userId),
                 }
-              : selected.scope === "thread" && input.access.groupId !== null
+              : selected.scope === "bot"
                 ? {
-                    entityKind: "group" as const,
-                    entityId: AkeruMemoryEntityId.make(input.access.groupId),
+                    entityKind: "bot" as const,
+                    entityId: AkeruMemoryEntityId.make(input.access.botId!),
                   }
-                : selected.scope === "thread" && input.access.botId !== null
+                : selected.scope === "thread" && input.access.groupId !== null
                   ? {
-                      entityKind: "bot" as const,
-                      entityId: AkeruMemoryEntityId.make(input.access.botId),
+                      entityKind: "group" as const,
+                      entityId: AkeruMemoryEntityId.make(input.access.groupId),
                     }
-                  : {
-                      entityKind: "project" as const,
-                      entityId: AkeruMemoryEntityId.make(input.access.projectId),
-                    };
+                  : selected.scope === "thread" && input.access.botId !== null
+                    ? {
+                        entityKind: "bot" as const,
+                        entityId: AkeruMemoryEntityId.make(input.access.botId),
+                      }
+                    : {
+                        entityKind: "project" as const,
+                        entityId: AkeruMemoryEntityId.make(input.access.projectId),
+                      };
       normalized.push({
         ...revision,
         partition: {
@@ -961,4 +983,4 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
 export const EntityMemoryRepositoryLive = Layer.effect(
   EntityMemoryRepository,
   makeEntityMemoryRepository,
-);
+).pipe(Layer.provide(MemoryRevisionWriteLockLive));

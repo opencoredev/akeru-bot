@@ -12,6 +12,7 @@ import * as Effect from "effect/Effect";
 import {
   deriveAkeruWorkspaceId,
   resolveAuthorizedMemoryPartitions,
+  resolveMemoryArchivePartitions,
   resolveRecallMemoryPartitions,
 } from "./EntityMemoryAccess.ts";
 
@@ -93,4 +94,21 @@ describe("entity memory access", () => {
     assert.equal(first, second);
     assert.notInclude(first, "/workspaces/akeru");
   });
+
+  it.effect("selects the derived workspace archive partition", () =>
+    Effect.gen(function* () {
+      const partitions = yield* resolveMemoryArchivePartitions(
+        { ...base, botId: BotId.make("bot-1"), groupId: null },
+        "workspace",
+      );
+      assert.deepEqual(partitions, [
+        {
+          tenantId: base.tenantId,
+          scope: "workspace",
+          partitionId: deriveAkeruWorkspaceId(base.workspaceRoot),
+          visibility: "shared",
+        },
+      ]);
+    }),
+  );
 });

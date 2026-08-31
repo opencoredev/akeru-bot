@@ -95,7 +95,7 @@ export function resolveRecallMemoryPartitions(
 
 export function resolveMemoryArchivePartitions(
   input: AkeruMemoryThreadAccess,
-  target: "thread" | "bot" | "project" | "all",
+  target: "thread" | "bot" | "project" | "workspace" | "all",
 ): Effect.Effect<ReadonlyArray<AuthorizedMemoryPartition>, AkeruMemoryAccessDenied> {
   return resolveAuthorizedMemoryPartitions(input).pipe(
     Effect.flatMap((partitions) => {
@@ -106,9 +106,11 @@ export function resolveMemoryArchivePartitions(
             ? partitions.filter((candidate) => candidate.scope === "thread")
             : target === "project"
               ? partitions.filter((candidate) => candidate.scope === "project")
-              : partitions.filter(
-                  (candidate) => candidate.scope === "bot-user" || candidate.scope === "bot",
-                );
+              : target === "workspace"
+                ? partitions.filter((candidate) => candidate.scope === "workspace")
+                : partitions.filter(
+                    (candidate) => candidate.scope === "bot-user" || candidate.scope === "bot",
+                  );
       return selected.length > 0
         ? Effect.succeed(selected)
         : Effect.fail(

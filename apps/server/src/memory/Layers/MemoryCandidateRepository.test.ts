@@ -21,6 +21,7 @@ import {
   type AkeruMemoryRevision,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Cause from "effect/Cause";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -210,6 +211,41 @@ it.layer(layer)("MemoryCandidateRepository", (it) => {
         })
         .pipe(Effect.exit);
       assert.isTrue(replay._tag === "Failure");
+    }),
+  );
+
+  it.effect("coordinates candidate approval with direct revision writers", () =>
+    Effect.gen(function* () {
+      const candidates = yield* MemoryCandidateRepository;
+      const memory = yield* EntityMemoryRepository;
+      const candidateId = AkeruMemoryCandidateId.make("candidate-concurrent-head");
+      const approved = approvedRevision("candidate-concurrent-head");
+      const direct = { ...approved, id: AkeruMemoryId.make("direct-concurrent-head") };
+      yield* candidates.create({ access, candidate: candidate(candidateId) });
+
+      const exits = yield* Effect.all(
+        [
+          Effect.exit(
+            candidates.approve({
+              access,
+              candidateId,
+              revision: approved,
+              receiptId: "receipt-concurrent-head",
+              decidedAt: approved.updatedAt,
+            }),
+          ),
+          Effect.exit(memory.insert({ access, revision: direct })),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const failures = exits.filter((exit) => exit._tag === "Failure");
+      assert.equal(failures.length, 1);
+      const error = Cause.squash(failures[0]!.cause as Cause.Cause<unknown>);
+      assert.include(
+        ["EntityMemoryConflictError", "MemoryCandidateConflictError"],
+        (error as { readonly _tag?: string })._tag,
+      );
+      assert.equal((yield* memory.listHistory({ access, rootId: approved.rootId })).length, 1);
     }),
   );
 

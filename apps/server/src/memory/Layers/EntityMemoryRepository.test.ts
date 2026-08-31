@@ -33,7 +33,7 @@ import {
   type EntityMemoryRepositoryShape,
 } from "../Services/EntityMemoryRepository.ts";
 import { EntityMemoryRepositoryLive } from "./EntityMemoryRepository.ts";
-import { resolveMemoryArchivePartitions } from "../EntityMemoryAccess.ts";
+import { deriveAkeruWorkspaceId, resolveMemoryArchivePartitions } from "../EntityMemoryAccess.ts";
 import { exportAkeruMemory } from "../MemoryExport.ts";
 import { applyAkeruMemoryImport, previewAkeruMemoryImport } from "../MemoryImport.ts";
 
@@ -232,11 +232,19 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
       const rootId = AkeruMemoryRootId.make("delete-root");
-      yield* repository.insert({
+      const initial = makeRevision("delete-memory-1", "bot:user", {
+        rootId,
+        fact: "delete-index-old-marker",
+      });
+      yield* repository.insert({ access: botAccess, revision: initial });
+      yield* repository.revise({
         access: botAccess,
-        revision: makeRevision("delete-memory", "bot:user", {
+        expectedRevision: 1,
+        revision: makeRevision("delete-memory-2", "bot:user", {
           rootId,
-          fact: "delete-index-marker",
+          revision: 2,
+          supersedesId: initial.id,
+          fact: "delete-index-current-marker",
         }),
       });
       yield* repository.deleteRoot({ access: botAccess, rootId });
@@ -245,7 +253,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.isTrue(missing._tag === "Failure");
       const search = yield* repository.search({
         access: botAccess,
-        query: "delete index marker",
+        query: "delete index current marker",
         limit: 10,
       });
       assert.deepEqual(search, []);
@@ -645,7 +653,10 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       }).pipe(Effect.exit);
       assert.equal(exit._tag, "Failure");
       if (exit._tag === "Failure") {
-        assert.match(Cause.pretty(exit.cause), /one thread, bot, or project authority domain/);
+        assert.match(
+          Cause.pretty(exit.cause),
+          /one thread, bot, project, or workspace authority domain/,
+        );
       }
     }),
   );
@@ -844,6 +855,58 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         }),
         [],
       );
+    }),
+  );
+
+  it.effect("roundtrips workspace memory with its derived workspace identity", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const workspaceAccess = privateAccess("bot-workspace-roundtrip");
+      const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.workspaceRoot);
+      const rootId = AkeruMemoryRootId.make("workspace-archive-roundtrip-root");
+      const revision = makeRevision("workspace-archive-roundtrip-revision", workspaceId, {
+        rootId,
+        partition: {
+          tenantId: workspaceAccess.tenantId,
+          scope: "workspace",
+          partitionId: workspaceId,
+        },
+        entityKind: "workspace",
+        entityId: AkeruMemoryEntityId.make(workspaceId),
+        visibility: "shared",
+        sourceThreadId: null,
+        authorBotId: workspaceAccess.botId,
+        initiatingUserId: workspaceAccess.userId,
+        affectedBotIds: [workspaceAccess.botId!],
+      });
+      yield* repository.insert({ access: workspaceAccess, revision });
+      const archive = yield* exportAkeruMemory({
+        repository,
+        access: workspaceAccess,
+        target: "workspace",
+        complete: true,
+        createdAt: "2026-08-30T23:00:00.000Z",
+        conversations: [],
+      });
+      yield* repository.deleteRoot({ access: workspaceAccess, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: workspaceAccess,
+        target: "workspace",
+        archive,
+      });
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: workspaceAccess,
+        target: "workspace",
+        archive,
+        previewHash: preview.previewHash,
+      });
+
+      const restored = yield* repository.getCurrent({ access: workspaceAccess, rootId });
+      assert.equal(restored.entityKind, "workspace");
+      assert.equal(restored.entityId, AkeruMemoryEntityId.make(workspaceId));
+      assert.equal(restored.partition.partitionId, workspaceId);
     }),
   );
 });

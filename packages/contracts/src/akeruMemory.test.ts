@@ -8,6 +8,7 @@ import {
   AKERU_MEMORY_PACKET_MAX_FACTS,
   AkeruMemoryCandidate,
   AkeruMemoryCandidateDecision,
+  AkeruMemoryExportInput,
   AkeruMemoryDecisionReceipt,
   AkeruMemoryPacket,
   AkeruMemoryMutateInput,
@@ -89,6 +90,17 @@ describe("Akeru memory contracts", () => {
 
       assert.equal(candidate.status, "pending");
       assert.equal(decision.decision, "approve");
+    }),
+  );
+
+  it.effect("accepts workspace memory archives", () =>
+    Effect.gen(function* () {
+      const input = yield* Schema.decodeUnknownEffect(AkeruMemoryExportInput)({
+        threadId: "thread-1",
+        complete: true,
+        target: "workspace",
+      });
+      assert.equal(input.target, "workspace");
     }),
   );
 
