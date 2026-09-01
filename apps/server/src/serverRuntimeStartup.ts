@@ -31,7 +31,6 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import * as OrchestrationReactor from "./orchestration/Services/OrchestrationReactor.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerSettings from "./serverSettings.ts";
-import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as AgentController from "./provider/Services/AgentController.ts";
@@ -134,37 +133,6 @@ export const makeCommandGate = Effect.gen(function* () {
       }),
   } satisfies CommandGate;
 });
-
-export const recordStartupHeartbeat = Effect.gen(function* () {
-  const analytics = yield* AnalyticsService.AnalyticsService;
-  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
-
-  const { threadCount, projectCount } = yield* projectionSnapshotQuery.getCounts().pipe(
-    Effect.catch((cause) =>
-      Effect.logWarning("failed to gather startup projection counts for telemetry", {
-        cause,
-      }).pipe(
-        Effect.as({
-          threadCount: 0,
-          projectCount: 0,
-        }),
-      ),
-    ),
-  );
-
-  yield* analytics.record("server.boot.heartbeat", {
-    threadCount,
-    projectCount,
-  });
-});
-
-export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
-  Effect.annotateSpans({ "startup.phase": "heartbeat.record" }),
-  Effect.withSpan("server.startup.heartbeat.record"),
-  Effect.ignoreCause({ log: true }),
-  Effect.forkScoped,
-  Effect.asVoid,
-);
 
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
@@ -498,12 +466,6 @@ export const make = (options?: StartupOptions) =>
 
       yield* forkParked(
         Effect.gen(function* () {
-          yield* Effect.logDebug("startup phase: recording startup heartbeat");
-          yield* recordStartupHeartbeat.pipe(
-            Effect.annotateSpans({ "startup.phase": "heartbeat.record" }),
-            Effect.withSpan("server.startup.heartbeat.record"),
-            Effect.ignoreCause({ log: true }),
-          );
           if (serverConfig.startupPresentation === "headless") {
             const accessInfo = yield* issueHeadlessServeAccessInfo();
             yield* runStartupPhase(

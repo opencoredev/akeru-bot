@@ -666,6 +666,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  analyticsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   productFeedbackEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   productFeedbackEndpoint: ProductFeedbackEndpoint.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PRODUCT_FEEDBACK_ENDPOINT)),
@@ -908,6 +909,7 @@ export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
+  analyticsEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),

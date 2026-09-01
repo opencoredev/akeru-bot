@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 
 import { MessageId } from "./baseSchemas.ts";
 import {
+  AkeruDelegationRecord,
   BotAvatar,
   DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -16,6 +17,7 @@ import {
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
+  OrchestrationReadModel,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
@@ -45,6 +47,8 @@ const decodeThreadTurnStartRequestedPayload = Schema.decodeUnknownEffect(
   ThreadTurnStartRequestedPayload,
 );
 const decodeOrchestrationLatestTurn = Schema.decodeUnknownEffect(OrchestrationLatestTurn);
+const decodeOrchestrationReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
+const decodeAkeruDelegationRecord = Schema.decodeUnknownEffect(AkeruDelegationRecord);
 const decodeOrchestrationProposedPlan = Schema.decodeUnknownEffect(OrchestrationProposedPlan);
 const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSession);
 const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread);
@@ -593,6 +597,38 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
     assert.strictEqual(thread.settledAt, null);
     assert.strictEqual(shell.settledOverride, null);
     assert.strictEqual(shell.settledAt, null);
+  }),
+);
+
+it.effect("decodes delegation records and defaults historical read models", () =>
+  Effect.gen(function* () {
+    const delegation = yield* decodeAkeruDelegationRecord({
+      delegationId: "delegation-1",
+      sourceThreadId: "thread-source",
+      sourceTurnId: "turn-source",
+      sourceBotId: "bot-source",
+      targetBotId: "bot-target",
+      childThreadId: "thread-child",
+      childTurnId: null,
+      depth: 1,
+      billedBotId: "bot-target",
+      task: "Compare three flights.",
+      expectedResult: "A short comparison with sources.",
+      outcome: null,
+      createdAt: "2026-08-31T12:00:00.000Z",
+      completedAt: null,
+    });
+    assert.strictEqual(delegation.targetBotId, "bot-target");
+
+    const readModel = yield* decodeOrchestrationReadModel({
+      snapshotSequence: 0,
+      projects: [],
+      bots: [],
+      groups: [],
+      threads: [],
+      updatedAt: "2026-08-31T12:00:00.000Z",
+    });
+    assert.deepEqual(readModel.delegations, []);
   }),
 );
 

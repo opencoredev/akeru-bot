@@ -1,6 +1,7 @@
 import {
   BotId,
   CommandId,
+  DelegationId,
   EventId,
   GroupId,
   IsoDateTime,
@@ -38,7 +39,7 @@ const EventMetadataFromJsonString = Schema.fromJsonString(OrchestrationEventMeta
 const AppendEventRequestSchema = Schema.Struct({
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  streamId: Schema.Union([ProjectId, BotId, GroupId, McpServerId, ThreadId]),
+  streamId: Schema.Union([ProjectId, BotId, GroupId, McpServerId, ThreadId, DelegationId]),
   type: OrchestrationEventType,
   causationEventId: Schema.NullOr(EventId),
   correlationId: Schema.NullOr(CommandId),
@@ -54,7 +55,7 @@ const OrchestrationEventPersistedRowSchema = Schema.Struct({
   eventId: EventId,
   type: OrchestrationEventType,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, BotId, GroupId, McpServerId, ThreadId]),
+  aggregateId: Schema.Union([ProjectId, BotId, GroupId, McpServerId, ThreadId, DelegationId]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),

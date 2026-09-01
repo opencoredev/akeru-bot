@@ -3,17 +3,18 @@ import { RequestContext } from "@mastra/core/request-context";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
   AkeruToolInputSchemas,
-  ThreadId,
   type BotId,
   type AkeruToolDefinition,
   type AkeruToolId,
   type AkeruToolReceipt,
   type AkeruToolWorkspaceType,
   type RuntimeMode,
+  ThreadId,
   akeruToolRequiresApproval,
   decodeAkeruToolInput,
   filterAkeruTools,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
@@ -57,11 +58,17 @@ export interface AkeruToolSession {
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
   readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;
+  readonly delegation?: {
+    readonly send: (
+      input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
+    ) => Promise<AkeruToolReceipt>;
+  };
 }
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
   readonly onReceipt?: (receipt: AkeruToolReceipt) => void;
+  readonly now?: () => string;
 }
 
 export interface AkeruToolExecution {
@@ -87,7 +94,7 @@ export interface AkeruToolRuntime {
 }
 
 const BACKEND_NAMES: Record<
-  Exclude<AkeruToolId, "CopyToBox" | "CopyFromBox" | "request_box_help">,
+  Exclude<AkeruToolId, "CopyToBox" | "CopyFromBox" | "request_box_help" | "SendToAgent">,
   ReadonlyArray<string>
 > = {
   Shell: ["execute_command", "mastra_workspace_execute_command"],
@@ -199,6 +206,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     if (options?.onUserActionRequired && session.workspace && session.botId && session.botName) {
       tools.add("request_box_help");
     }
+    if (session.delegation) tools.add("SendToAgent");
     return tools;
   };
 
@@ -310,6 +318,29 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
           failureCode = "internal";
           result = await handler({ ...input, toolId: input.toolId, input: decoded });
+        } else if (input.toolId === "SendToAgent") {
+          if (!session.delegation) throw new Error("Delegation is not available for this session.");
+          const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);
+          failureCode = "internal";
+          try {
+            result = await session.delegation.send(delegationInput);
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              billedBotId: delegationInput.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
         } else if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
           const source =
             input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;

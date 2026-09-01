@@ -216,6 +216,7 @@ const makeDefaultOrchestrationReadModel = () => {
     updatedAt: now,
     bots: [],
     groups: [],
+    delegations: [],
     projects: [
       {
         id: defaultProjectId,
@@ -416,7 +417,6 @@ const buildAppUnderTest = (options?: {
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
-    analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
     botUsageLedger?: Partial<BotUsageLedgerShape>;
@@ -893,9 +893,7 @@ const buildAppUnderTest = (options?: {
       Layer.provide(UsageService.layerTest),
       Layer.provide(
         Layer.mock(AnalyticsService.AnalyticsService)({
-          record: () => Effect.void,
           flush: Effect.void,
-          ...options?.layers?.analyticsService,
         }),
       ),
       Layer.provide(
@@ -5439,101 +5437,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("records thread analytics only after a client command succeeds", () =>
-    Effect.gen(function* () {
-      const effects: string[] = [];
-      const analyticsProperties: Array<Readonly<Record<string, unknown>> | undefined> = [];
-      const failedCommandId = CommandId.make("cmd-thread-create-failed");
-
-      yield* buildAppUnderTest({
-        layers: {
-          analyticsService: {
-            record: (event, properties) =>
-              Effect.sync(() => {
-                effects.push(`analytics:${event}`);
-                analyticsProperties.push(properties);
-              }),
-          },
-          orchestrationEngine: {
-            dispatch: (command) =>
-              Effect.sync(() => effects.push(`dispatch:${command.commandId}`)).pipe(
-                Effect.flatMap(() =>
-                  command.commandId === failedCommandId
-                    ? Effect.fail(
-                        new OrchestrationListenerCallbackError({
-                          listener: "domain-event",
-                          detail: "thread creation failed",
-                        }),
-                      )
-                    : Effect.succeed({ sequence: 1 }),
-                ),
-              ),
-          },
-        },
-      });
-
-      const createThreadCommand = (commandId: CommandId, threadId: ThreadId) =>
-        ({
-          type: "thread.create",
-          commandId,
-          threadId,
-          projectId: defaultProjectId,
-          title: "Analytics test",
-          modelSelection: defaultModelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-          createdAt: "2026-01-01T00:00:00.000Z",
-        }) as const;
-
-      const wsUrl = yield* getWsServerUrl(
-        "/ws?clientSurface=mobile&clientAppVersion=1.2.3&clientOs=iOS&clientOsMajorVersion=18&clientDeviceModel=iPhone+15+Pro",
-      );
-      yield* Effect.scoped(
-        withWsRpcClient(wsUrl, (client) =>
-          Effect.gen(function* () {
-            const failed = yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand](
-              createThreadCommand(failedCommandId, ThreadId.make("thread-create-failed")),
-            ).pipe(Effect.result);
-
-            assert.equal(failed._tag, "Failure");
-            assert.deepEqual(effects, [
-              "analytics:client.connected",
-              "dispatch:cmd-thread-create-failed",
-            ]);
-
-            const succeeded = yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand](
-              createThreadCommand(
-                CommandId.make("cmd-thread-create-succeeded"),
-                ThreadId.make("thread-create-succeeded"),
-              ),
-            );
-
-            assert.equal(succeeded.sequence, 1);
-          }),
-        ),
-      );
-
-      assert.deepEqual(effects, [
-        "analytics:client.connected",
-        "dispatch:cmd-thread-create-failed",
-        "dispatch:cmd-thread-create-succeeded",
-        "analytics:client.thread.started",
-      ]);
-      assert.deepEqual(analyticsProperties, [
-        {
-          surface: "mobile",
-          appVersion: "1.2.3",
-          os: "iOS",
-          osMajorVersion: 18,
-          deviceModel: "iPhone 15 Pro",
-        },
-        { surface: "mobile", appVersion: "1.2.3" },
-      ]);
-    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );
-
   it.effect("routes websocket rpc projects.writeFile errors", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -6327,6 +6230,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         updatedAt: now,
         bots: [],
         groups: [],
+        delegations: [],
         projects: [
           {
             id: ProjectId.make("project-a"),
