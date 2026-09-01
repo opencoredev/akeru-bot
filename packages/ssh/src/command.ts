@@ -371,8 +371,8 @@ export function resolveRemoteT3CliPackageSpec(input: {
 }): string {
   const appVersion = input.appVersion.trim();
   if (!input.isDevelopment && PUBLISHABLE_T3_VERSION_PATTERN.test(appVersion)) {
-    return `t3@${appVersion}`;
+    return `akeru-bot@${appVersion}`;
   }
 
-  return "t3@latest";
+  return "akeru-bot@latest";
 }

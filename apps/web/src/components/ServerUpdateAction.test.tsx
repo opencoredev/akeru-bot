@@ -64,7 +64,7 @@ describe("ServerUpdateAction", () => {
     expect(testState.toast).toHaveBeenCalledWith({
       type: "success",
       title: "Test server updated",
-      description: "Reconnected on t3@0.0.31.",
+      description: "Reconnected on Akeru Bot 0.0.31.",
     });
   });
 

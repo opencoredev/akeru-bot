@@ -1,6 +1,6 @@
 # Mobile appearance
 
-Akeru Bot Mobile includes the T3 Code, Akeru Paper, T3 Chat, Grove, Ocean, Ember, and Iris themes.
+Akeru Bot Mobile includes the Akeru Bot, Akeru Paper, Akeru Chat, Grove, Ocean, Ember, and Iris themes.
 Each theme has light and dark colors that apply throughout the app, including code reviews, file
 previews, the terminal, native headers, and sheets.
 

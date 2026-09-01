@@ -1,8 +1,8 @@
 # Observability
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Akeru Bot? See [docs/user](../user/).
 
-T3 Code has one server-side observability model:
+Akeru Bot has one server-side observability model:
 
 - pretty logs go to stdout for humans
 - completed spans go to a local NDJSON trace file
@@ -29,10 +29,10 @@ If you want a log message to show up in the trace file, emit it inside an active
 
 Completed spans are written as NDJSON records to `serverTracePath`. The default depends on how the
 server starts: production and explicitly configured homes use
-`<home>/userdata/logs/server.trace.ndjson` (so `~/.t3/userdata/...` by default, or
+`<home>/userdata/logs/server.trace.ndjson` (so `~/.akeru/userdata/...` by default, or
 `/custom/path/userdata/...` with `--home-dir /custom/path`), a linked worktree dev run uses
-`<worktree>/.t3/userdata/logs/server.trace.ndjson`, and an implicit dev run outside a linked
-worktree uses `~/.t3/dev/logs/server.trace.ndjson`.
+`<worktree>/.akeru/userdata/logs/server.trace.ndjson`, and an implicit dev run outside a linked
+worktree uses `~/.akeru/dev/logs/server.trace.ndjson`.
 
 Important fields common to both record types:
 
@@ -155,7 +155,7 @@ macOS app bundle example:
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
 T3CODE_OTLP_SERVICE_NAME=t3-desktop \
-"/Applications/T3 Code.app/Contents/MacOS/T3 Code"
+"/Applications/Akeru Bot (Alpha).app/Contents/MacOS/Akeru Bot (Alpha)"
 ```
 
 Direct binary example:
@@ -183,19 +183,19 @@ Resolve the path for the launch mode once. Production and explicitly configured 
 state under the base directory's `userdata` folder:
 
 ```bash
-TRACE_FILE="${T3CODE_HOME:-$HOME/.t3}/userdata/logs/server.trace.ndjson"
+TRACE_FILE="${T3CODE_HOME:-$HOME/.akeru}/userdata/logs/server.trace.ndjson"
 ```
 
 A dev server started from a linked worktree defaults to that worktree's local home:
 
 ```bash
-TRACE_FILE="$WORKTREE/.t3/userdata/logs/server.trace.ndjson"
+TRACE_FILE="$WORKTREE/.akeru/userdata/logs/server.trace.ndjson"
 ```
 
 Only an implicit dev run outside a linked worktree uses the shared dev directory:
 
 ```bash
-TRACE_FILE="$HOME/.t3/dev/logs/server.trace.ndjson"
+TRACE_FILE="$HOME/.akeru/dev/logs/server.trace.ndjson"
 ```
 
 Tail the selected file:

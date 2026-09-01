@@ -108,7 +108,7 @@ export class ServesOtherEnvironmentError extends Schema.TaggedErrorClass<ServesO
   { servePort: Schema.Number },
 ) {
   override get message(): string {
-    return `Tailscale Serve on HTTPS port ${String(this.servePort)} already fronts a different T3 Code server. Pass --tailscale-serve-port to publish this one on another port.`;
+    return `Tailscale Serve on HTTPS port ${String(this.servePort)} already fronts a different Akeru Bot server. Pass --tailscale-serve-port to publish this one on another port.`;
   }
 }
 
@@ -126,7 +126,7 @@ export class ServePortOccupiedError extends Schema.TaggedErrorClass<ServePortOcc
   { servePort: Schema.Number },
 ) {
   override get message(): string {
-    return `HTTPS port ${String(this.servePort)} on the tailnet already serves something that is not a T3 Code server. Pass --tailscale-serve-port to publish this one on another port.`;
+    return `HTTPS port ${String(this.servePort)} on the tailnet already serves something that is not an Akeru Bot server. Pass --tailscale-serve-port to publish this one on another port.`;
   }
 }
 
@@ -254,7 +254,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
   if (explicitBaseDir !== undefined && explicitBaseDir.trim().length > 0) {
     bases.push(yield* resolveBaseDir(explicitBaseDir));
   } else {
-    // Same precedence as dev-runner: inside a linked worktree its own `.t3`
+    // Same precedence as dev-runner: inside a linked worktree its own `.akeru`
     // outranks the shared home, so `akeru pair` in a worktree pairs with the dev
     // server under test rather than the daily-driver install.
     const worktreeHome = yield* resolveWorktreeT3Home(process.cwd());
@@ -489,7 +489,7 @@ export const pairCommand = Command.make("pair", {
   tailscaleServePort: tailscaleServePortFlag,
 }).pipe(
   Command.withDescription(
-    "Mint a pairing token for a running T3 Code server and print it as a QR code.",
+    "Mint a pairing token for a running Akeru Bot server and print it as a QR code.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {

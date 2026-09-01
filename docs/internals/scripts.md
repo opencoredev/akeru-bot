@@ -1,10 +1,10 @@
 # Scripts
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Akeru Bot? See [docs/user](../user/).
 
 ## First checkout
 
-T3 Code uses [Vite+](https://viteplus.dev/guide/). Install the global `vp` command, install
+Akeru Bot uses [Vite+](https://viteplus.dev/guide/). Install the global `vp` command, install
 dependencies, then start the dev stack:
 
 ```bash
@@ -40,12 +40,12 @@ authenticated.
 
 ### Dev state directories
 
-- Dev commands run from a linked **git worktree** default to that worktree's gitignored `.t3`, even
-  when `T3CODE_HOME` is set, storing state in `<worktree>/.t3/userdata`. Pass `--home-dir <path>` to
+- Dev commands run from a linked **git worktree** default to that worktree's gitignored `.akeru`, even
+  when `T3CODE_HOME` is set, storing state in `<worktree>/.akeru/userdata`. Pass `--home-dir <path>` to
   choose another isolated directory explicitly. Submodules are not worktrees and keep the normal
   precedence.
-- From the **main checkout**, dev commands implicitly use `~/.t3/dev`, keeping development state
-  separate from `~/.t3/userdata`. An explicit `--home-dir <path>` stores state under
+- From the **main checkout**, dev commands implicitly use `~/.akeru/dev`, keeping development state
+  separate from `~/.akeru/userdata`. An explicit `--home-dir <path>` stores state under
   `<path>/userdata`; the base directory remains available for caches, worktrees, and other shared
   data.
 
@@ -77,13 +77,14 @@ authenticated.
 ### Desktop `.dmg` packaging notes
 
 - Default build is unsigned/not notarized for local sharing.
-- The DMG build uses `assets/prod/black-macos-1024.png` as the production app icon source.
+- The DMG build uses `assets/prod/akeru-macos-1024.png`, a safe-area export of the production
+  favicon artwork, as the production app icon source.
 - Production DMGs use neutral chrome. Blueprint artwork remains exclusive to Dev builds. Packaging
   rasterizes the selected SVG into standard and Retina PNGs inside the disposable staging
   directory.
 - The Finder window is 540×412 while its background is 540×380; the extra 32px accounts for the
   title bar included in Finder's window bounds.
-- Desktop production windows load the bundled UI from the `t3code://app/` root URL (not a
+- Desktop production windows load the bundled UI from the `akeru://app/` root URL (not a
   `127.0.0.1` document URL, and not an explicit `index.html` path).
 - Desktop packaging includes `apps/server/dist` (the `t3` backend) and starts it on loopback with an
   auth token for WebSocket/API traffic.

@@ -95,7 +95,8 @@ export function RemoteHandoffCard(props: { machine: string; latencyMs: number })
 const PROJECT_FAVICONS = {
   t3code: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <rect width="128" height="128" rx="10" fill="#000"/>
-  <path d="M33.4509 93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM86.7253 93.96C82.832 93.96 78.9653 93.4533 75.1253 92.44C71.2853 91.3733 68.032 89.88 65.3653 87.96L70.4053 78.04C72.5386 79.5867 75.0186 80.8133 77.8453 81.72C80.672 82.6267 83.5253 83.08 86.4053 83.08C89.6586 83.08 92.2186 82.44 94.0853 81.16C95.952 79.88 96.8853 78.12 96.8853 75.88C96.8853 73.7467 96.0586 72.0667 94.4053 70.84C92.752 69.6133 90.0853 69 86.4053 69H80.4853V60.44L96.0853 42.76L97.5253 47.4H68.1653V37H107.365V45.4L91.8453 63.08L85.2853 59.32H89.0453C95.9253 59.32 101.125 60.8667 104.645 63.96C108.165 67.0533 109.925 71.0267 109.925 75.88C109.925 79.0267 109.099 81.9867 107.445 84.76C105.792 87.48 103.259 89.6933 99.8453 91.4C96.432 93.1067 92.0586 93.96 86.7253 93.96Z" fill="#fff"/>
+  <path fill-rule="evenodd" d="M64 34L100 94H28L64 34ZM64 55L83 87H45L64 55Z" fill="#fff"/>
+  <path d="M47 72H81V81H47V72Z" fill="#fff"/>
 </svg>`,
   react: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="15" fill="#20232a"/>
@@ -115,9 +116,9 @@ const PROJECT_FAVICONS = {
 export const SHOWCASE_PROJECTS = [
   {
     id: "t3code",
-    title: "T3 Code",
-    directory: "t3code",
-    repositoryUrl: "https://github.com/pingdotgg/t3code.git",
+    title: "Akeru Bot",
+    directory: "akeru-bot",
+    repositoryUrl: "https://github.com/opencoredev/akeru-bot.git",
     favicon: PROJECT_FAVICONS.t3code,
   },
   {
@@ -162,9 +163,9 @@ export const SHOWCASE_THREADS = [
     branch: "feat/remote-command-center",
     minutesAgo: 3,
     request:
-      "Give T3 Code a remote-first command center. Make three machines feel one tap away, keep agent work in sync, and make every handoff feel instant.",
+      "Give Akeru Bot a remote-first command center. Make three machines feel one tap away, keep agent work in sync, and make every handoff feel instant.",
     response:
-      "T3 Code now treats every machine like it is right here in the room. ✦\n\n- Moonbase, Suspense Station, and Kernel Cabin stay live together\n- Terminal state follows you without losing a single line\n- Agent work remains perfectly in sync across devices\n- Handoffs land before your train of thought can wander\n\nI also ran the changed workspace: **612 tests passed**.",
+      "Akeru Bot now treats every machine like it is right here in the room. ✦\n\n- Moonbase, Suspense Station, and Kernel Cabin stay live together\n- Terminal state follows you without losing a single line\n- Agent work remains perfectly in sync across devices\n- Handoffs land before your train of thought can wander\n\nI also ran the changed workspace: **612 tests passed**.",
   },
   {
     id: "pocket-command-center",
@@ -305,7 +306,7 @@ async function seedT3CodeWorkspace(workspaceRoot: string): Promise<void> {
   );
   await initializeRepository({
     workspaceRoot,
-    repositoryUrl: "https://github.com/pingdotgg/t3code.git",
+    repositoryUrl: "https://github.com/opencoredev/akeru-bot.git",
     commitMessage: "Show connected environments",
   });
   await runGit(workspaceRoot, ["checkout", "-b", "feat/remote-command-center"]);
@@ -329,7 +330,7 @@ async function seedCompanionWorkspace(input: {
   await NodeFSP.writeFile(NodePath.join(input.workspaceRoot, "favicon.svg"), input.favicon);
   await NodeFSP.writeFile(
     NodePath.join(input.workspaceRoot, "README.md"),
-    `# ${input.title}\n\nSeeded by the T3 Code mobile screenshot harness.\n`,
+    `# ${input.title}\n\nSeeded by the Akeru Bot mobile screenshot harness.\n`,
   );
   await initializeRepository({
     workspaceRoot: input.workspaceRoot,

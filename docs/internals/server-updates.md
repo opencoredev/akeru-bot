@@ -1,6 +1,6 @@
 # Server Update Architecture
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Akeru Bot? See [docs/user](../user/).
 
 Remote server updates use one stable launcher selected by the platform service manager (systemd on
 Linux, launchd on macOS). Foreground CLI processes do not self-update, and a running server never

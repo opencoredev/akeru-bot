@@ -30,7 +30,7 @@ function versionCore(version: string): string {
 }
 
 /**
- * The skew a user can act on: the connected server runs an older T3 Code than
+ * The skew a user can act on: the connected server runs an older Akeru Bot than
  * this client, so the server is the side that needs updating.
  *
  * Versions compare their core `major.minor.patch` only.
@@ -79,7 +79,7 @@ export function resolveServerSelfUpdateCapability(
 
 /** The command to hand users whose server cannot update itself. */
 export function manualServerUpdateCommand(targetVersion: string): string {
-  return `npx t3@${targetVersion}`;
+  return `npx akeru-bot@${targetVersion}`;
 }
 
 /** One sentence telling the user how to resolve version skew for a server,

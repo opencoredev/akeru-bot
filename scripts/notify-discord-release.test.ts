@@ -31,7 +31,7 @@ it("builds a latest Discord announcement for stable subscribers", () => {
       {
         title: "T3 Code v1.2.3",
         url: "https://github.com/t3dotgg/t3-code/releases/tag/v1.2.3",
-        description: "A new T3 Code latest release is available.",
+        description: "A new Akeru Bot latest release is available.",
         color: 0x2ecc71,
         fields: [
           {

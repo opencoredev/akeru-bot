@@ -106,7 +106,7 @@ describe("ssh command", () => {
           appVersion: "0.0.17",
           updateChannel: "latest",
         }),
-        "t3@0.0.17",
+        "akeru-bot@0.0.17",
       );
       assert.equal(
         resolveRemoteT3CliPackageSpec({
@@ -114,7 +114,7 @@ describe("ssh command", () => {
           updateChannel: "latest",
           isDevelopment: true,
         }),
-        "t3@latest",
+        "akeru-bot@latest",
       );
     }),
   );

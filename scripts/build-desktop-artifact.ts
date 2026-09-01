@@ -1823,7 +1823,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "Akeru Bot",
-          schemes: ["t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
         },
       ],
       // electron-builder notarizes and staples the signed app before target
@@ -1867,21 +1867,21 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: "akeru-bot",
       icon: "icons",
       category: "Development",
       // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
       // in the .desktop entry (Exec already gets %U), so browsers can hand
-      // t3code:// OAuth callbacks to the app.
+      // akeru:// OAuth callbacks to the app.
       protocols: [
         {
           name: "Akeru Bot",
-          schemes: ["t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
         },
       ],
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: "akeru-bot",
         },
       },
     };

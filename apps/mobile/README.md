@@ -1,7 +1,7 @@
-# T3 Code Mobile
+# Akeru Bot Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> Akeru Bot Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,8 +10,8 @@
 
 This app has two variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client, installable side-by-side as `Akeru Bot Dev`
+- `production`: store/release build as `Akeru Bot`
 
 Run commands from `apps/mobile`.
 
@@ -39,7 +39,7 @@ entitlement, and native Sign in with Apple entitlement; builds without this opt-
 
 ```bash
 T3CODE_IOS_PERSONAL_TEAM=1 \
-T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code.dev \
+T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=dev.example.akeru.dev \
 vp run ios:dev
 ```
 
@@ -53,7 +53,7 @@ The Personal Team equivalent also needs a unique bundle identifier:
 
 ```bash
 T3CODE_IOS_PERSONAL_TEAM=1 \
-T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code \
+T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=dev.example.akeru \
 vp run ios:release
 ```
 

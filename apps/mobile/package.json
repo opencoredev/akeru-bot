@@ -5,11 +5,11 @@
   "main": "index.ts",
   "scripts": {
     "dev": "expo start --clear",
-    "dev:client": "APP_VARIANT=development expo start --dev-client --scheme t3code-dev --clear --lan",
+    "dev:client": "APP_VARIANT=development expo start --dev-client --scheme akeru-dev --clear --lan",
     "start": "expo start",
     "start:dev": "APP_VARIANT=development expo start",
     "start:prod": "APP_VARIANT=production expo start",
-    "showcase": "APP_VARIANT=production EXPO_PUBLIC_SHOWCASE=1 expo start --dev-client --scheme t3code --clear",
+    "showcase": "APP_VARIANT=production EXPO_PUBLIC_SHOWCASE=1 expo start --dev-client --scheme akeru --clear",
     "screenshots": "node ../../scripts/mobile-showcase.ts",
     "android": "EXPO_NO_GIT_STATUS=1 expo prebuild --clean --platform android && expo run:android",
     "android:dev": "APP_VARIANT=development EXPO_NO_GIT_STATUS=1 expo prebuild --clean --platform android && REACT_NATIVE_PACKAGER_HOSTNAME=localhost expo run:android",
