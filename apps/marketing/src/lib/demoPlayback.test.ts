@@ -12,4 +12,8 @@ describe("landing demo playback", () => {
   it("keeps the first demo when visibility is tied", () => {
     NodeAssert.equal(pickMostVisibleDemo([0.6, 0.6, 0.2]), 0);
   });
+
+  it("selects a demo as soon as any part enters the viewport", () => {
+    NodeAssert.equal(pickMostVisibleDemo([0, Number.MIN_VALUE, 0]), 1);
+  });
 });
