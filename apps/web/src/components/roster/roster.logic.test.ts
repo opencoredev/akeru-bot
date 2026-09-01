@@ -3,11 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   blinkDelayMs,
-  buildGroupedRosterSections,
-  buildRosterSections,
-  buildRosterStrip,
-  buildRosterTiles,
-  compareRosterBots,
   filterRosterBots,
   filterRosterGroups,
   DEFAULT_BLOB_COLOR,
@@ -28,7 +23,6 @@ import {
   rosterGroupDropId,
   BLOB_COLORS,
   BLOB_SHAPES,
-  type RosterLastMessage,
 } from "./roster.logic";
 import type { Bot, BotAvatar, Group } from "./types";
 
@@ -62,109 +56,6 @@ describe("resolveRosterBotId", () => {
         bot({ id: "archived", name: "Archived", archivedAt: "2026-08-02T00:00:00.000Z" }),
       ]),
     ).toBe("available");
-  });
-});
-
-describe("buildRosterSections", () => {
-  it("partitions only bots by their binary pin state", () => {
-    const sections = buildRosterSections([
-      bot({ id: "pinned-a", name: "Pinned A", pinned: true }),
-      bot({ id: "plain-a", name: "Plain A" }),
-      bot({ id: "pinned-b", name: "Pinned B", pinned: true }),
-      bot({ id: "plain-b", name: "Plain B" }),
-    ]);
-
-    expect(sections.map((section) => section.name)).toEqual(["Pinned", "Bots"]);
-    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["pinned-a", "pinned-b"]);
-    expect(sections[1]?.bots.map((entry) => entry.id)).toEqual(["plain-a", "plain-b"]);
-  });
-
-  it("hides archived bots without changing persisted order", () => {
-    const sections = buildRosterSections([
-      bot({ id: "first", name: "First" }),
-      bot({ id: "gone", name: "Gone", archivedAt: "2026-08-20T00:00:00.000Z" }),
-      bot({ id: "second", name: "Second" }),
-    ]);
-
-    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["first", "second"]);
-  });
-
-  it("unwraps the previous object call shape during a hot update", () => {
-    const sections = buildRosterSections({
-      bots: [bot({ id: "pinned", name: "Pinned", pinned: true })],
-    });
-
-    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["pinned"]);
-  });
-});
-
-describe("buildGroupedRosterSections", () => {
-  const group: Group = {
-    id: "group-product",
-    name: "Product",
-    bossBotId: "assigned",
-    members: [{ kind: "bot", botId: BotId.make("assigned"), role: "boss" }],
-    createdAt: "2026-08-01T00:00:00.000Z",
-    updatedAt: "2026-08-01T00:00:00.000Z",
-  };
-
-  it("uses group membership instead of the legacy bot group ID", () => {
-    const member = bot({ id: "assigned", name: "Assigned", groupId: null });
-
-    expect(groupContainsBot(group, member.id)).toBe(true);
-  });
-
-  it("shows assigned groups before Unassigned and leaves pinned bots in the strip", () => {
-    const sections = buildGroupedRosterSections(
-      [
-        bot({ id: "assigned", name: "Assigned", groupId: group.id }),
-        bot({ id: "free", name: "Free" }),
-        bot({ id: "pinned", name: "Pinned", groupId: group.id, pinned: true }),
-      ],
-      [group],
-    );
-
-    expect(sections.map((section) => section.name)).toEqual(["Product", "Unassigned"]);
-    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["assigned"]);
-    expect(sections[1]?.bots.map((entry) => entry.id)).toEqual(["free"]);
-  });
-});
-
-describe("buildRosterStrip", () => {
-  it("hides archived bots and puts pinned bots first without recency sorting", () => {
-    const strip = buildRosterStrip(
-      [
-        bot({ id: "quiet", name: "Quiet" }),
-        bot({ id: "gone", name: "Gone", archivedAt: "2026-08-20T00:00:00.000Z" }),
-        bot({ id: "pinned", name: "Pinned", pinned: true }),
-        bot({ id: "busy", name: "Busy" }),
-      ],
-      { busy: { text: "hi", at: "2026-08-27T10:00:00.000Z" } },
-    );
-    expect(strip.map((entry) => entry.id)).toEqual(["pinned", "quiet", "busy"]);
-  });
-});
-
-describe("buildRosterTiles", () => {
-  it("shows at most five recent bots without limiting the rail", () => {
-    const bots = Array.from({ length: 7 }, (_, index) =>
-      bot({ id: `bot-${index}`, name: `Bot ${index}`, pinned: true }),
-    );
-    const messages = Object.fromEntries(
-      bots.map((entry, index) => [
-        entry.id,
-        { text: `${index}`, at: `2026-08-${String(index + 1).padStart(2, "0")}T10:00:00.000Z` },
-      ]),
-    );
-
-    expect(buildRosterTiles(bots, messages).map((entry) => entry.id)).toEqual([
-      "bot-0",
-      "bot-1",
-      "bot-2",
-      "bot-3",
-      "bot-4",
-    ]);
-    expect(buildRosterStrip(bots, messages)).toHaveLength(7);
   });
 });
 
@@ -326,42 +217,6 @@ describe("resolveLatestRosterMessage", () => {
         ]),
       ),
     ).toEqual(fallback);
-  });
-});
-
-describe("compareRosterBots", () => {
-  const lastMessageByBotId: Record<string, RosterLastMessage> = {
-    older: { text: "old", at: "2026-08-25T10:00:00.000Z" },
-    newer: { text: "new", at: "2026-08-27T10:00:00.000Z" },
-  };
-
-  it("sorts the latest conversation first", () => {
-    const sorted = [bot({ id: "older", name: "Older" }), bot({ id: "newer", name: "Newer" })].sort(
-      (a, b) => compareRosterBots(a, b, lastMessageByBotId),
-    );
-    expect(sorted.map((entry) => entry.id)).toEqual(["newer", "older"]);
-  });
-
-  it("puts bots without messages after those with, alphabetized", () => {
-    const sorted = [
-      bot({ id: "quiet-b", name: "Zed" }),
-      bot({ id: "older", name: "Older" }),
-      bot({ id: "quiet-a", name: "Ada" }),
-    ].sort((a, b) => compareRosterBots(a, b, lastMessageByBotId));
-    expect(sorted.map((entry) => entry.id)).toEqual(["older", "quiet-a", "quiet-b"]);
-  });
-
-  it("treats an unparseable timestamp as no message", () => {
-    const sorted = [
-      bot({ id: "broken", name: "Broken" }),
-      bot({ id: "older", name: "Older" }),
-    ].sort((a, b) =>
-      compareRosterBots(a, b, {
-        ...lastMessageByBotId,
-        broken: { text: "?", at: "not-a-date" },
-      }),
-    );
-    expect(sorted.map((entry) => entry.id)).toEqual(["older", "broken"]);
   });
 });
 

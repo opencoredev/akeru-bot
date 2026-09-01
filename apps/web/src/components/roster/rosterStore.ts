@@ -65,7 +65,6 @@ interface RosterStore {
   chatPathByBotId: Record<string, string>;
   selectBot: (botId: string) => void;
   setBotAvatar: (botId: string, avatar: BotAvatar) => boolean;
-  moveBot: (activeBotId: string, overBotId: string | null, pinned: boolean) => void;
   commitBotLayout: (bots: Bot[]) => void;
   recordLastMessage: (botId: string, message: RosterLastMessage) => void;
   recordChatPath: (botId: string, path: string) => void;
@@ -77,28 +76,32 @@ interface RosterStore {
   }) => void;
 }
 
-export function moveRosterBot(
+export function reorderVisibleRosterBots(
   bots: readonly Bot[],
-  activeBotId: string,
-  overBotId: string | null,
-  pinned: boolean,
+  visibleBotIds: readonly string[],
+  sourceIndex: number,
+  destinationIndex: number,
 ): Bot[] | null {
-  const active = bots.find((bot) => bot.id === activeBotId);
-  const over = overBotId ? bots.find((bot) => bot.id === overBotId) : null;
-  if (!active || active.archivedAt !== null) return null;
-  if (over && (over.archivedAt !== null || over.pinned !== pinned)) return null;
-  if (active.id === over?.id && active.pinned === pinned) return null;
-
-  const moved = { ...active, pinned };
-  const next = bots.filter((bot) => bot.id !== activeBotId);
-  if (over) {
-    const overIndex = next.findIndex((bot) => bot.id === over.id);
-    next.splice(overIndex, 0, moved);
-  } else {
-    const partitionEnd = next.findLastIndex((bot) => bot.pinned === pinned);
-    next.splice(partitionEnd + 1, 0, moved);
+  if (
+    sourceIndex === destinationIndex ||
+    sourceIndex < 0 ||
+    destinationIndex < 0 ||
+    sourceIndex >= visibleBotIds.length ||
+    destinationIndex >= visibleBotIds.length ||
+    new Set(visibleBotIds).size !== visibleBotIds.length
+  ) {
+    return null;
   }
-  return next;
+  const byId = new Map(bots.map((bot) => [bot.id, bot] as const));
+  const visible = visibleBotIds.map((id) => byId.get(id));
+  if (visible.some((bot) => !bot || bot.archivedAt !== null)) return null;
+  const ordered = visible as Bot[];
+  const [moved] = ordered.splice(sourceIndex, 1);
+  if (!moved) return null;
+  ordered.splice(destinationIndex, 0, moved);
+  const visibleIds = new Set(visibleBotIds);
+  let index = 0;
+  return bots.map((bot) => (visibleIds.has(bot.id) ? ordered[index++]! : bot));
 }
 
 function saveState(state: Pick<RosterStore, "bots" | "selectedBotId" | "chatPathByBotId">) {
@@ -133,20 +136,6 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     }));
     saveState(get());
     return true;
-  },
-
-  moveBot: (activeBotId, overBotId, pinned) => {
-    const current = get().bots;
-    const bots = moveRosterBot(current, activeBotId, overBotId, pinned);
-    if (!bots) return;
-    const active = current.find((bot) => bot.id === activeBotId);
-    const nextBots = bots.map((bot) =>
-      bot.id === activeBotId && active?.pinned !== pinned
-        ? { ...bot, updatedAt: new Date().toISOString() }
-        : bot,
-    );
-    set({ bots: nextBots });
-    saveState(get());
   },
 
   commitBotLayout: (bots) => {

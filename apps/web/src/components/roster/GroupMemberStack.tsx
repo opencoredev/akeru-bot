@@ -16,13 +16,15 @@ export function GroupMemberStack({
   readonly sizeClassName?: string;
   readonly className?: string;
 }) {
-  const groupBots = [...groupBotMembers(group, bots)].sort((a, b) => {
-    if (a.id === group.bossBotId) return -1;
-    if (b.id === group.bossBotId) return 1;
-    return 0;
-  });
+  const groupBots = groupBotMembers(group, bots)
+    .filter((bot) => bot.archivedAt === null)
+    .sort((a, b) => {
+      if (a.id === group.bossBotId) return -1;
+      if (b.id === group.bossBotId) return 1;
+      return 0;
+    });
   return (
-    <div className={cn("flex -space-x-1.5", className)}>
+    <div className={cn("inline-flex -space-x-1.5", className)}>
       {groupBots.slice(0, 2).map((bot) => (
         <BotAvatarView
           key={bot.id}

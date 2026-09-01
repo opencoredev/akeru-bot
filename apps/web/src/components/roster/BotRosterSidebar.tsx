@@ -1,28 +1,9 @@
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  closestCenter,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import { restrictToFirstScrollableAncestor, snapCenterToCursor } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  rectSortingStrategy,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { BotIcon, PlusIcon, SearchIcon, UsersIcon } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
@@ -46,7 +27,6 @@ import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
 import {
-  buildRosterStrip,
   filterRosterBots,
   filterRosterGroups,
   formatRosterTimestamp,
@@ -62,7 +42,7 @@ import {
   type RosterLastMessage,
   type RosterPresence,
 } from "./roster.logic";
-import { moveRosterBot, useRosterStore } from "./rosterStore";
+import { reorderVisibleRosterBots, useRosterStore } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useServerRosterSync } from "./useServerRoster";
 
@@ -162,46 +142,6 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
   );
 });
 
-const BotStripTile = memo(function BotStripTile({
-  bot,
-  isActive,
-  onSelect,
-}: {
-  bot: Bot;
-  isActive: boolean;
-  onSelect: (bot: Bot) => void;
-}) {
-  const presence = useBotPresence(bot.id);
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: rosterBotDragId(bot.id),
-  });
-  return (
-    <li
-      ref={setNodeRef}
-      className={cn("list-none touch-pan-y", isDragging && "opacity-0")}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...listeners}
-    >
-      <button
-        type="button"
-        data-testid="roster-strip-tile"
-        data-bot-hover
-        aria-current={isActive || undefined}
-        onClick={() => onSelect(bot)}
-        className={cn(
-          "flex w-20 cursor-grab flex-col items-center gap-2 rounded-xl px-1 pb-2 pt-3 outline-none select-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
-          isActive ? "bg-sidebar-row-active" : "bg-transparent hover:bg-sidebar-row-hover",
-        )}
-      >
-        <RosterAvatar bot={bot} presence={presence} className="size-14" />
-        <span className="w-full truncate text-center text-xs text-sidebar-foreground">
-          {bot.name}
-        </span>
-      </button>
-    </li>
-  );
-});
-
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
@@ -235,60 +175,70 @@ const BotRosterRow = memo(function BotRosterRow({
   lastMessage,
   isActive,
   onSelect,
+  index,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
   onSelect: (bot: Bot) => void;
+  index: number;
 }) {
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage, presence === "working");
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: rosterBotDragId(bot.id),
-  });
   return (
-    <li
-      ref={setNodeRef}
-      className={cn("list-none touch-pan-y", isDragging && "opacity-0")}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...listeners}
+    <Draggable
+      draggableId={rosterBotDragId(bot.id)}
+      index={index}
+      disableInteractiveElementBlocking
     >
-      <div
-        data-testid="roster-bot-row"
-        data-bot-hover
-        className={cn(
-          "flex w-full items-center rounded-lg outline-none select-none",
-          isActive
-            ? "bg-sidebar-row-active text-sidebar-foreground"
-            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
-        )}
-      >
-        <button
-          type="button"
-          aria-current={isActive || undefined}
-          onClick={() => onSelect(bot)}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          role="listitem"
+          className={cn("list-none", snapshot.isDragging && "z-50")}
+          {...provided.draggableProps}
         >
-          <RosterAvatar bot={bot} presence={presence} className="size-10" />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="flex items-baseline gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
-              {latestMessage ? (
-                <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-                  {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+          <div
+            data-testid="roster-bot-row"
+            data-bot-hover
+            className={cn(
+              "flex w-full items-center rounded-lg outline-none select-none",
+              snapshot.isDragging
+                ? "bg-sidebar-row-active text-sidebar-foreground shadow-xl"
+                : isActive
+                  ? "bg-sidebar-row-active text-sidebar-foreground"
+                  : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+            )}
+          >
+            <button
+              type="button"
+              aria-current={isActive || undefined}
+              onClick={() => onSelect(bot)}
+              className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+              {...provided.dragHandleProps}
+            >
+              <RosterAvatar bot={bot} presence={presence} className="size-10" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="flex items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+                  {latestMessage ? (
+                    <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+                      {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </span>
-            {latestMessage ? (
-              <span className="truncate text-[13px] text-sidebar-muted-foreground">
-                {latestMessage.text}
+                {latestMessage ? (
+                  <span className="truncate text-[13px] text-sidebar-muted-foreground">
+                    {latestMessage.text}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-          </span>
-        </button>
-      </div>
-    </li>
+            </button>
+          </div>
+        </div>
+      )}
+    </Draggable>
   );
 });
 
@@ -342,68 +292,51 @@ function GroupRosterRow({
   isActive: boolean;
   onSelect: () => void;
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: rosterGroupDropId(group.id) });
-  const members = group.members.filter((member) => member.kind === "bot").length;
+  const members = group.members.filter(
+    (member) =>
+      member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
+  ).length;
   return (
-    <li ref={setNodeRef} data-testid="roster-group-row" className="list-none">
-      <button
-        type="button"
-        aria-current={isActive || undefined}
-        onClick={onSelect}
-        className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-          isOver
-            ? "bg-sidebar-row-active ring-2 ring-ring"
-            : isActive
-              ? "bg-sidebar-row-active"
-              : "hover:bg-sidebar-row-hover",
-        )}
-      >
-        <GroupMemberStack
-          group={group}
-          bots={bots}
-          ringClassName="ring-sidebar"
-          sizeClassName="size-10"
-          className="w-[3.5rem] shrink-0"
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">{group.name}</span>
-          <span className="block text-[13px] text-sidebar-muted-foreground">{members} bots</span>
-        </span>
-      </button>
-    </li>
-  );
-}
-
-function RosterDropZone({
-  id,
-  className,
-  children,
-}: {
-  id: "pinned-zone" | "unpinned-zone";
-  className?: string;
-  children: ReactNode;
-}) {
-  const { isOver, setNodeRef } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      data-drop-zone={id}
-      data-drag-over={isOver || undefined}
-      className={className}
-    >
-      {children}
-    </div>
-  );
-}
-
-function BotDragOverlay({ bot }: { bot: Bot }) {
-  const presence = useBotPresence(bot.id);
-  return (
-    <div className="flex w-20 cursor-grabbing flex-col items-center gap-2 rounded-xl bg-sidebar-row-hover px-1 pb-2 pt-3 text-sidebar-foreground shadow-xl select-none">
-      <RosterAvatar bot={bot} presence={presence} className="size-14" />
-      <span className="w-full truncate text-center text-xs">{bot.name}</span>
-    </div>
+    <Droppable droppableId={rosterGroupDropId(group.id)} type="roster-bot">
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          data-testid="roster-group-card"
+          role="listitem"
+          className="relative"
+          {...provided.droppableProps}
+        >
+          <button
+            type="button"
+            aria-current={isActive || undefined}
+            onClick={onSelect}
+            className={cn(
+              "flex h-24 w-20 flex-col items-center justify-center gap-2 rounded-xl px-1.5 text-center text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+              snapshot.isDraggingOver
+                ? "bg-sidebar-row-active ring-2 ring-ring"
+                : isActive
+                  ? "bg-sidebar-row-active ring-1 ring-border"
+                  : "bg-transparent hover:bg-sidebar-row-hover",
+            )}
+          >
+            <GroupMemberStack
+              group={group}
+              bots={bots}
+              ringClassName="ring-sidebar"
+              sizeClassName="size-9"
+              className="shrink-0"
+            />
+            <span className="min-w-0 max-w-full">
+              <span className="block truncate text-xs font-medium">{group.name}</span>
+              <span className="sr-only">{members} bots</span>
+            </span>
+          </button>
+          <div className="pointer-events-none absolute inset-0 opacity-0">
+            {provided.placeholder}
+          </div>
+        </div>
+      )}
+    </Droppable>
   );
 }
 
@@ -428,64 +361,20 @@ export default function BotRosterSidebar() {
     })),
   );
   const [query, setQuery] = useState("");
-  const [dragLayout, setDragLayout] = useState<Bot[] | null>(null);
-  const dragLayoutRef = useRef<Bot[] | null>(null);
-  const [activeBotId, setActiveBotId] = useState<string | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const strip = useMemo(
-    () => buildRosterStrip(bots, lastMessageByBotId),
-    [bots, lastMessageByBotId],
-  );
   const visibleBots = useMemo(
-    () => filterRosterBots(dragLayout ?? bots, query).filter((bot) => bot.archivedAt === null),
-    [bots, dragLayout, query],
+    () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
+    [bots, query],
   );
-  const pinnedBots = visibleBots.filter((bot) => bot.pinned);
-  const unpinnedBots = visibleBots.filter((bot) => !bot.pinned);
   const visibleGroups = useMemo(
     () => filterRosterGroups(groups, bots, query),
     [bots, groups, query],
   );
-  const activeBot =
-    activeBotId === null
-      ? null
-      : ((dragLayout ?? bots).find((bot) => bot.id === activeBotId) ?? null);
-
-  const resolveDrop = (layout: readonly Bot[], overId: string) => {
-    if (overId === "pinned-zone") return { overBotId: null, pinned: true } as const;
-    if (overId === "unpinned-zone") return { overBotId: null, pinned: false } as const;
-    const overBotId = parseRosterBotDragId(overId);
-    const overBot = overBotId ? layout.find((bot) => bot.id === overBotId) : null;
-    return overBot ? { overBotId: overBot.id, pinned: overBot.pinned } : null;
-  };
-  const handleDragStart = ({ active }: DragStartEvent) => {
-    dragLayoutRef.current = bots;
-    setActiveBotId(parseRosterBotDragId(String(active.id)));
-    setDragLayout(bots);
-  };
-  const handleDragOver = ({ active, over }: DragOverEvent) => {
-    if (!over) return;
-    setDragLayout((current) => {
-      const layout = current ?? bots;
-      if (parseRosterGroupDropId(String(over.id))) return layout;
-      const drop = resolveDrop(layout, String(over.id));
-      if (!drop) return layout;
-      const activeId = parseRosterBotDragId(String(active.id));
-      if (!activeId) return layout;
-      const next = moveRosterBot(layout, activeId, drop.overBotId, drop.pinned) ?? layout;
-      dragLayoutRef.current = next;
-      return next;
-    });
-  };
-  const finishDrag = () => {
-    dragLayoutRef.current = null;
-    setActiveBotId(null);
-    setDragLayout(null);
-  };
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    const botId = parseRosterBotDragId(String(active.id));
-    const groupId = over ? parseRosterGroupDropId(String(over.id)) : null;
+  const groupRouteActive = pathname.startsWith("/groups/");
+  const handleDragEnd = ({ draggableId, source, destination }: DropResult) => {
+    if (!destination) return;
+    const botId = parseRosterBotDragId(draggableId);
+    const groupId = parseRosterGroupDropId(destination.droppableId);
     const group = groupId ? groups.find((candidate) => candidate.id === groupId) : null;
     if (botId && group) {
       if (environmentId && !groupContainsBot(group, botId)) {
@@ -502,10 +391,15 @@ export default function BotRosterSidebar() {
           }
         });
       }
-    } else if (over && dragLayoutRef.current) {
-      useRosterStore.getState().commitBotLayout(dragLayoutRef.current);
+    } else if (botId && destination.droppableId === "roster-bots") {
+      const layout = reorderVisibleRosterBots(
+        bots,
+        visibleBots.map((bot) => bot.id),
+        source.index,
+        destination.index,
+      );
+      if (layout) useRosterStore.getState().commitBotLayout(layout);
     }
-    finishDrag();
   };
 
   // Remember the chat route the selected bot lands on, so re-selecting the
@@ -630,133 +524,141 @@ export default function BotRosterSidebar() {
           </div>
         ) : (
           <>
-            {/* Icon-collapsed rail: every visible bot, recency order. */}
+            {/* Icon-collapsed rail: groups first, then every visible bot. */}
             <SidebarGroup className="hidden items-center gap-1 px-0 pt-1 group-data-[collapsible=icon]:flex">
               <ul data-testid="roster-rail" className="flex flex-col items-center gap-1">
-                {strip.map((bot) => (
+                {visibleGroups.map((group) => (
+                  <li key={group.id} className="list-none">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-current={pathname === `/groups/${group.id}` || undefined}
+                            onClick={() =>
+                              void navigate({
+                                to: "/groups/$groupId",
+                                params: { groupId: group.id },
+                              })
+                            }
+                            className={cn(
+                              "flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              pathname === `/groups/${group.id}`
+                                ? "bg-sidebar-row-active"
+                                : "hover:bg-sidebar-row-hover",
+                            )}
+                          >
+                            <GroupMemberStack
+                              group={group}
+                              bots={bots}
+                              ringClassName="ring-sidebar"
+                              sizeClassName="size-5"
+                            />
+                          </button>
+                        }
+                      />
+                      <TooltipPopup side="right">{group.name}</TooltipPopup>
+                    </Tooltip>
+                  </li>
+                ))}
+                {visibleBots.map((bot) => (
                   <li key={bot.id} className="list-none">
                     <RailBotButton
                       bot={bot}
-                      isActive={selectedBotId === bot.id}
+                      isActive={!groupRouteActive && selectedBotId === bot.id}
                       onSelect={handleSelect}
                     />
                   </li>
                 ))}
               </ul>
             </SidebarGroup>
-            <DndContext
-              collisionDetection={closestCenter}
-              sensors={sensors}
-              modifiers={[restrictToFirstScrollableAncestor]}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragCancel={finishDrag}
-              onDragEnd={handleDragEnd}
-            >
-              {pinnedBots.length > 0 || activeBotId !== null ? (
-                <SidebarGroup className="px-4 pb-3 pt-2 group-data-[collapsible=icon]:hidden">
-                  <RosterDropZone
-                    id="pinned-zone"
-                    className="min-h-24 rounded-xl transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
-                  >
-                    <SortableContext
-                      items={pinnedBots.map((bot) => rosterBotDragId(bot.id))}
-                      strategy={rectSortingStrategy}
-                    >
-                      <ul
-                        data-testid="roster-strip"
-                        className={cn(
-                          "grid min-h-24 place-items-center gap-x-1 gap-y-2",
-                          pinnedBots.length === 1 ? "grid-cols-1" : "grid-cols-3",
-                        )}
-                      >
-                        {pinnedBots.map((bot) => (
-                          <BotStripTile
-                            key={bot.id}
-                            bot={bot}
-                            isActive={selectedBotId === bot.id}
-                            onSelect={handleSelect}
-                          />
-                        ))}
-                      </ul>
-                    </SortableContext>
-                  </RosterDropZone>
+            <DragDropContext onDragEnd={handleDragEnd}>
+              {visibleGroups.length > 0 ? (
+                <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-3 pt-2 group-data-[collapsible=icon]:hidden">
+                  <h2 className="mb-2 px-1 text-xs font-medium text-sidebar-muted-foreground">
+                    Groups
+                  </h2>
+                  <div role="list" aria-label="Groups" className="flex flex-wrap gap-2 pb-1">
+                    {visibleGroups.map((group) => (
+                      <GroupRosterRow
+                        key={group.id}
+                        group={group}
+                        bots={bots}
+                        isActive={pathname === `/groups/${group.id}`}
+                        onSelect={() =>
+                          void navigate({
+                            to: "/groups/$groupId",
+                            params: { groupId: group.id },
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
                 </SidebarGroup>
               ) : null}
+              <div className="px-[calc(var(--sidebar-content-inset)+0.25rem)] pt-1 text-xs font-medium text-sidebar-muted-foreground group-data-[collapsible=icon]:hidden">
+                Bots
+              </div>
               <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
-                <RosterDropZone
-                  id="unpinned-zone"
-                  className="min-h-12 rounded-lg transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
-                >
-                  <SortableContext
-                    items={unpinnedBots.map((bot) => rosterBotDragId(bot.id))}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="flex flex-col gap-2">
-                      {visibleGroups.length > 0 ? (
-                        <ul aria-label="Groups" className="flex flex-col gap-px">
-                          {visibleGroups.map((group) => (
-                            <GroupRosterRow
-                              key={group.id}
-                              group={group}
-                              bots={bots}
-                              isActive={pathname === `/groups/${group.id}`}
-                              onSelect={() =>
-                                void navigate({
-                                  to: "/groups/$groupId",
-                                  params: { groupId: group.id },
-                                })
-                              }
-                            />
-                          ))}
-                        </ul>
-                      ) : null}
-                      <ul aria-label="Bots" className="flex min-h-12 flex-col gap-px">
-                        {unpinnedBots.map((bot) => (
-                          <BotRosterRow
-                            key={bot.id}
-                            bot={bot}
-                            lastMessage={lastMessageByBotId[bot.id] ?? null}
-                            isActive={selectedBotId === bot.id}
-                            onSelect={handleSelect}
-                          />
-                        ))}
-                      </ul>
+                <Droppable droppableId="roster-bots" type="roster-bot">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      role="list"
+                      aria-label="Bots"
+                      data-drag-over={snapshot.isDraggingOver || undefined}
+                      className="flex min-h-12 flex-col gap-px rounded-lg transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
+                      {...provided.droppableProps}
+                    >
+                      {visibleBots.map((bot, index) => (
+                        <BotRosterRow
+                          key={bot.id}
+                          bot={bot}
+                          index={index}
+                          lastMessage={lastMessageByBotId[bot.id] ?? null}
+                          isActive={!groupRouteActive && selectedBotId === bot.id}
+                          onSelect={handleSelect}
+                        />
+                      ))}
+                      {provided.placeholder}
                     </div>
-                  </SortableContext>
-                  {unpinnedBots.length === 0 &&
-                  pinnedBots.length === 0 &&
-                  visibleGroups.length === 0 ? (
-                    <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-                      No bots match
-                    </div>
-                  ) : null}
-                </RosterDropZone>
+                  )}
+                </Droppable>
+                {visibleBots.length === 0 && visibleGroups.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
+                    No bots match
+                  </div>
+                ) : null}
               </SidebarGroup>
-              <DragOverlay modifiers={[snapCenterToCursor]}>
-                {activeBot ? <BotDragOverlay bot={activeBot} /> : null}
-              </DragOverlay>
-            </DndContext>
+            </DragDropContext>
           </>
         )}
       </SidebarContent>
-      {/* Rail new-bot sits above the footer, like the expanded header's plus. */}
+      {/* Rail create menu sits above the footer, like the expanded header's plus. */}
       <div className="hidden shrink-0 flex-col items-center pb-1 group-data-[collapsible=icon]:flex">
-        <Tooltip>
-          <TooltipTrigger
+        <Menu>
+          <MenuTrigger
             render={
               <button
                 type="button"
-                aria-label="New bot"
-                onClick={handleNewBot}
+                aria-label="Create"
                 className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none select-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PlusIcon className="size-4" />
               </button>
             }
           />
-          <TooltipPopup side="right">New bot</TooltipPopup>
-        </Tooltip>
+          <MenuPopup align="end" side="right">
+            <MenuItem onClick={handleNewBot}>
+              <BotIcon />
+              New bot
+            </MenuItem>
+            <MenuItem onClick={handleNewGroup}>
+              <UsersIcon />
+              New group
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </div>
       {newBotOpen ? (
         <NewBotDialog

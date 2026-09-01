@@ -154,77 +154,6 @@ export function resolveLatestRosterMessage(
   return latest.at >= fallback.at ? latest : fallback;
 }
 
-export interface RosterSection {
-  id: "pinned" | "unpinned";
-  name: "Pinned" | "Bots";
-  bots: Bot[];
-}
-
-function lastMessageSortValue(
-  bot: Bot,
-  lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): number | null {
-  const at = lastMessageByBotId[bot.id]?.at;
-  if (at === undefined) return null;
-  return parseTimestampDate(at)?.getTime() ?? null;
-}
-
-/** Latest conversation first; bots without messages trail, alphabetized. */
-export function compareRosterBots(
-  a: Bot,
-  b: Bot,
-  lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): number {
-  const aAt = lastMessageSortValue(a, lastMessageByBotId);
-  const bAt = lastMessageSortValue(b, lastMessageByBotId);
-  if (aAt !== null && bAt !== null && aAt !== bAt) return bAt - aAt;
-  if (aAt !== null && bAt === null) return -1;
-  if (aAt === null && bAt !== null) return 1;
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-}
-
-type RosterSectionsInput = readonly Bot[] | { bots: readonly Bot[] };
-
-function isPreviousRosterSectionsInput(
-  input: RosterSectionsInput,
-): input is { bots: readonly Bot[] } {
-  return !Array.isArray(input);
-}
-
-/**
- * Pinned and unpinned bots keep their persisted order within each section.
- * The object form covers a previous caller that can remain mounted during HMR.
- */
-export function buildRosterSections(input: RosterSectionsInput): RosterSection[] {
-  const bots = isPreviousRosterSectionsInput(input) ? input.bots : input;
-  const visibleBots = bots.filter((bot) => bot.archivedAt === null);
-  const pinned = visibleBots.filter((bot) => bot.pinned);
-  const unpinned = visibleBots.filter((bot) => !bot.pinned);
-  return [
-    ...(pinned.length > 0 ? [{ id: "pinned", name: "Pinned", bots: pinned } as const] : []),
-    ...(unpinned.length > 0 ? [{ id: "unpinned", name: "Bots", bots: unpinned } as const] : []),
-  ];
-}
-
-export const ROSTER_TILE_LIMIT = 5;
-
-/** Visible bots, pinned first, with persisted order preserved in each partition. */
-export function buildRosterStrip(
-  bots: readonly Bot[],
-  _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): Bot[] {
-  const visible = bots.filter((bot) => bot.archivedAt === null);
-  return [...visible.filter((bot) => bot.pinned), ...visible.filter((bot) => !bot.pinned)];
-}
-
-/** The expanded roster shows pinned bots in a fixed grid, never a carousel. */
-export function buildRosterTiles(
-  bots: readonly Bot[],
-  _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): Bot[] {
-  return bots.filter((bot) => bot.archivedAt === null && bot.pinned).slice(0, ROSTER_TILE_LIMIT);
-}
-
 export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return [...bots];
@@ -291,37 +220,6 @@ export function groupBotMembers(group: Group, bots: ReadonlyArray<Bot>): Readonl
 
 export function groupPersonMembers(group: Group): ReadonlyArray<GroupPersonMembership> {
   return group.members.filter(isGroupPersonMember);
-}
-
-export interface RosterGroupSection {
-  readonly id: string;
-  readonly name: string;
-  readonly group: Group | null;
-  readonly bots: ReadonlyArray<Bot>;
-}
-
-/** Assigned groups first, then every bot without a group under Unassigned. */
-export function buildGroupedRosterSections(
-  bots: ReadonlyArray<Bot>,
-  groups: ReadonlyArray<Group>,
-): ReadonlyArray<RosterGroupSection> {
-  const active = bots.filter((bot) => bot.archivedAt === null && bot.pinned === false);
-  const memberBotIds = new Set<string>(
-    groups.flatMap((group) => group.members.filter(isGroupBotMember).map((member) => member.botId)),
-  );
-  const assigned = groups.map((group) => ({
-    id: group.id,
-    name: group.name,
-    group,
-    bots: groupBotMembers(group, active),
-  }));
-  const unassigned = active.filter((bot) => !memberBotIds.has(bot.id));
-  return [
-    ...assigned,
-    ...(unassigned.length > 0
-      ? [{ id: "unassigned", name: "Unassigned", group: null, bots: unassigned }]
-      : []),
-  ];
 }
 
 const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: "short" });

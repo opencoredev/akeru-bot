@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { useRosterStore } from "./rosterStore";
+import { reorderVisibleRosterBots, useRosterStore } from "./rosterStore";
 import type { Bot } from "./types";
 
 function bot(id: string, archivedAt: string | null = null): Bot {
@@ -85,50 +85,28 @@ describe("bot selection", () => {
   });
 });
 
-describe("pin and order", () => {
-  it("pins and unpins only on a completed partition move", () => {
-    useRosterStore.setState({ bots: [bot("one"), bot("two"), bot("three")] });
+describe("bot order", () => {
+  it("moves a bot downward instead of leaving it in place", () => {
+    const bots = [bot("one"), bot("two"), bot("three")];
 
-    useRosterStore.getState().moveBot("two", null, true);
-    expect(useRosterStore.getState().bots.map(({ id, pinned }) => [id, pinned])).toEqual([
-      ["two", true],
-      ["one", false],
-      ["three", false],
-    ]);
+    const reordered = reorderVisibleRosterBots(bots, ["one", "two", "three"], 0, 2);
 
-    useRosterStore.getState().moveBot("two", null, false);
-    expect(useRosterStore.getState().bots.map(({ id, pinned }) => [id, pinned])).toEqual([
-      ["one", false],
-      ["three", false],
-      ["two", false],
-    ]);
+    expect(reordered?.map((entry) => entry.id)).toEqual(["two", "three", "one"]);
   });
 
-  it("reorders both partitions and supports valid cross-partition drops", () => {
-    useRosterStore.setState({
-      bots: [
-        { ...bot("pin-a"), pinned: true },
-        { ...bot("pin-b"), pinned: true },
-        bot("plain-a"),
-        bot("plain-b"),
-      ],
-    });
+  it("moves a bot upward", () => {
+    const bots = [bot("one"), bot("two"), bot("three")];
 
-    useRosterStore.getState().moveBot("pin-b", "pin-a", true);
-    useRosterStore.getState().moveBot("plain-b", "plain-a", false);
-    useRosterStore.getState().moveBot("plain-a", "pin-a", true);
-    expect(useRosterStore.getState().bots.map(({ id, pinned }) => [id, pinned])).toEqual([
-      ["pin-b", true],
-      ["plain-a", true],
-      ["pin-a", true],
-      ["plain-b", false],
-    ]);
+    const reordered = reorderVisibleRosterBots(bots, ["one", "two", "three"], 2, 0);
+
+    expect(reordered?.map((entry) => entry.id)).toEqual(["three", "one", "two"]);
   });
 
-  it("ignores an invalid cross-partition target", () => {
-    useRosterStore.setState({ bots: [{ ...bot("pinned"), pinned: true }, bot("plain")] });
+  it("keeps filtered bots in place", () => {
+    const bots = [bot("one"), bot("hidden"), bot("two"), bot("three")];
 
-    useRosterStore.getState().moveBot("pinned", "plain", true);
-    expect(useRosterStore.getState().bots.map((entry) => entry.id)).toEqual(["pinned", "plain"]);
+    const reordered = reorderVisibleRosterBots(bots, ["one", "two", "three"], 2, 0);
+
+    expect(reordered?.map((entry) => entry.id)).toEqual(["three", "hidden", "one", "two"]);
   });
 });
