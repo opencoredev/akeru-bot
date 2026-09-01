@@ -295,6 +295,10 @@ export class AkeruSessionResources {
     );
   }
 
+  getMcpManager(threadId: string): McpManager | undefined {
+    return this.mcpManagers.get(threadId);
+  }
+
   getWorkspace(threadId: string): Workspace | undefined {
     return (
       this.userComputerWorkspaceLeases.get(threadId)?.workspace.workspace ??
