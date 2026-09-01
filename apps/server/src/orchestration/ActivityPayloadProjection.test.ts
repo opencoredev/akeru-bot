@@ -21,6 +21,17 @@ function activity(payload: Record<string, unknown>): OrchestrationThreadActivity
  * assertions are the tripwire.
  */
 describe("projectActivityPayload", () => {
+  it("keeps a Mastra command while dropping its unused arguments", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: { args: { command: 'printf "hi\\n"', cwd: null, background: null } },
+      }),
+    );
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    expect(data).toEqual({ command: 'printf "hi\\n"' });
+  });
+
   it("preserves tool attribution (agentId/parentToolUseId) through data slimming", () => {
     const projected = projectActivityPayload(
       activity({

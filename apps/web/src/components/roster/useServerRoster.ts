@@ -26,9 +26,11 @@ export function useServerRosterSync(): void {
   useEffect(() => {
     if (environmentId === null || !loaded) return;
     useRosterStore.getState().replaceRoster({
+      environmentId,
       bots: bots.map((bot) => ({
         ...bot,
         avatar: { ...bot.avatar },
+        channelBindings: bot.channelBindings ?? [],
         pinned: false,
       })),
       groups: groups.map((group) => ({ ...group })),
@@ -39,7 +41,9 @@ export function useServerRosterSync(): void {
 export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promise<boolean> {
   const environmentId = usePrimaryEnvironmentId();
   const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
-  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
+  const updateBot = useAtomCommand(botEnvironment.update, {
+    reportFailure: false,
+  });
 
   return useCallback(
     async (botId: string, avatar: BotAvatar) => {

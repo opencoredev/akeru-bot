@@ -11,6 +11,7 @@ import {
   type DesktopPreviewColorScheme,
   type DesktopPreviewFavicon,
   type PreviewEvent,
+  type PreviewFrame,
   type PreviewListResult,
   type PreviewSessionSnapshot,
   type ScopedThreadRef,
@@ -42,6 +43,7 @@ export interface ThreadPreviewState {
   activeTabId: string | null;
   desktopOverlay: DesktopPreviewOverlay | null;
   desktopByTabId: Record<string, DesktopPreviewOverlay>;
+  framesByTabId: Record<string, PreviewFrame>;
   recentlySeenUrls: string[];
   /** Server process currently authoritative for revision ordering. */
   serverEpoch: string | null;
@@ -56,6 +58,7 @@ const EMPTY_THREAD_PREVIEW_STATE: ThreadPreviewState = Object.freeze({
   activeTabId: null,
   desktopOverlay: null,
   desktopByTabId: {},
+  framesByTabId: {},
   recentlySeenUrls: [] as string[],
   serverEpoch: null,
   serverRevision: 0,
@@ -146,6 +149,7 @@ const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPrevie
   if (!current.sessions[tabId]) return current;
   const { [tabId]: _closed, ...sessions } = current.sessions;
   const { [tabId]: _desktop, ...desktopByTabId } = current.desktopByTabId;
+  const { [tabId]: _frame, ...framesByTabId } = current.framesByTabId;
   const nextSnapshot = latestSnapshot(sessions);
   const activeTabId =
     current.activeTabId === tabId ? (nextSnapshot?.tabId ?? null) : current.activeTabId;
@@ -154,6 +158,7 @@ const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPrevie
     ...current,
     sessions,
     desktopByTabId,
+    framesByTabId,
     activeTabId: snapshot?.tabId ?? null,
     snapshot,
     desktopOverlay: snapshot ? (desktopByTabId[snapshot.tabId] ?? null) : null,
@@ -241,6 +246,13 @@ export function applyPreviewServerEvent(ref: ScopedThreadRef, event: PreviewEven
           suppressedTabIds.delete(event.tabId);
           return { ...closed, suppressedTabIds };
         }
+        case "frame": {
+          if (!current.sessions[event.tabId]) return current;
+          return {
+            ...current,
+            framesByTabId: { ...current.framesByTabId, [event.tabId]: event.frame },
+          };
+        }
       }
     })();
     return next.serverRevision === event.revision && next.serverEpoch === event.serverEpoch
@@ -267,6 +279,7 @@ export function applyPreviewServerSnapshot(
         activeTabId: null,
         desktopOverlay: null,
         desktopByTabId: {},
+        framesByTabId: {},
       };
     }
     if (current.suppressedTabIds.has(snapshot.tabId)) return current;
@@ -348,6 +361,11 @@ export function reconcilePreviewServerSessions(
           Object.entries(current.desktopByTabId).filter(([tabId]) => sessions[tabId] !== undefined),
         )
       : {};
+    const framesByTabId = sameServer
+      ? Object.fromEntries(
+          Object.entries(current.framesByTabId).filter(([tabId]) => sessions[tabId] !== undefined),
+        )
+      : {};
     const suppressedTabIds = new Set(
       [...currentSuppressedTabIds].filter((tabId) =>
         snapshots.some((snapshot) => snapshot.tabId === tabId),
@@ -360,6 +378,7 @@ export function reconcilePreviewServerSessions(
       activeTabId,
       snapshot,
       desktopByTabId,
+      framesByTabId,
       desktopOverlay: activeTabId ? (desktopByTabId[activeTabId] ?? null) : null,
       recentlySeenUrls,
       serverEpoch: result.serverEpoch,

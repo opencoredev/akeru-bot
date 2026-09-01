@@ -7,6 +7,7 @@ import {
 } from "../../pendingUserInput";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
+import { Button } from "../ui/button";
 import { cn } from "~/lib/utils";
 
 interface PendingUserInputPanelProps {
@@ -15,7 +16,8 @@ interface PendingUserInputPanelProps {
   answers: Record<string, PendingUserInputDraftAnswer>;
   questionIndex: number;
   onToggleOption: (questionId: string, optionLabel: string) => void;
-  onAdvance: () => void;
+  onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
+  onAdvance?: () => void;
 }
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -24,6 +26,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   answers,
   questionIndex,
   onToggleOption,
+  onSelectSingleOption,
   onAdvance,
 }: PendingUserInputPanelProps) {
   if (pendingUserInputs.length === 0) return null;
@@ -38,7 +41,8 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
       answers={answers}
       questionIndex={questionIndex}
       onToggleOption={onToggleOption}
-      onAdvance={onAdvance}
+      {...(onSelectSingleOption ? { onSelectSingleOption } : {})}
+      {...(onAdvance ? { onAdvance } : {})}
     />
   );
 });
@@ -49,6 +53,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   answers,
   questionIndex,
   onToggleOption,
+  onSelectSingleOption,
   onAdvance,
 }: {
   prompt: PendingUserInput;
@@ -56,12 +61,12 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   answers: Record<string, PendingUserInputDraftAnswer>;
   questionIndex: number;
   onToggleOption: (questionId: string, optionLabel: string) => void;
-  onAdvance: () => void;
+  onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
+  onAdvance?: () => void;
 }) {
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
   const activeQuestion = progress.activeQuestion;
   const autoAdvanceTimerRef = useRef<number | null>(null);
-  const onAdvanceRef = useRef(onAdvance);
   const [optimisticSingleSelect, setOptimisticSingleSelect] = useState<{
     questionId: string;
     optionLabel: string;
@@ -75,9 +80,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   const [collapsedQuestionId, setCollapsedQuestionId] = useState<string | null>(null);
   const isCollapsed = collapsedQuestionId !== null && collapsedQuestionId === activeQuestion?.id;
 
-  useEffect(() => {
-    onAdvanceRef.current = onAdvance;
-  }, [onAdvance]);
+  useEffect(
+    () => () => {
+      if (autoAdvanceTimerRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!activeQuestion || activeQuestion.multiSelect || !optimisticSingleSelect) {
@@ -100,15 +110,6 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     progress.selectedOptionLabels,
   ]);
 
-  // Clear auto-advance timer on unmount
-  useEffect(() => {
-    return () => {
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-      }
-    };
-  }, []);
-
   const handleOptionSelection = useCallback(
     (questionId: string, optionLabel: string) => {
       if (activeQuestion?.multiSelect) {
@@ -116,16 +117,22 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         return;
       }
       setOptimisticSingleSelect({ questionId, optionLabel });
-      onToggleOption(questionId, optionLabel);
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
+      if (onSelectSingleOption) {
+        onSelectSingleOption(questionId, optionLabel);
+        return;
       }
-      autoAdvanceTimerRef.current = window.setTimeout(() => {
-        autoAdvanceTimerRef.current = null;
-        onAdvanceRef.current();
-      }, 200);
+      onToggleOption(questionId, optionLabel);
+      if (onAdvance) {
+        if (autoAdvanceTimerRef.current !== null) {
+          window.clearTimeout(autoAdvanceTimerRef.current);
+        }
+        autoAdvanceTimerRef.current = window.setTimeout(() => {
+          autoAdvanceTimerRef.current = null;
+          onAdvance();
+        }, 200);
+      }
     },
-    [activeQuestion, onToggleOption],
+    [activeQuestion, onAdvance, onSelectSingleOption, onToggleOption],
   );
 
   // Keyboard shortcut: number keys 1-9 select corresponding options when focus is
@@ -276,6 +283,17 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               );
             })}
           </div>
+          {activeQuestion.multiSelect && onAdvance ? (
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="xs"
+                disabled={isResponding || progress.selectedOptionLabels.length === 0}
+                onClick={onAdvance}
+              >
+                {questionIndex < prompt.questions.length - 1 ? "Continue" : "Submit"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </CollapsiblePanel>
     </Collapsible>

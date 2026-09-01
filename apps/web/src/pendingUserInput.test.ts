@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  applyPendingUserInputSingleSelect,
   buildPendingUserInputAnswers,
   countAnsweredPendingUserInputQuestions,
   derivePendingUserInputProgress,
@@ -101,6 +102,39 @@ describe("togglePendingUserInputOptionSelection", () => {
       customAnswer: "",
       selectedOptionLabels: ["Web"],
     });
+  });
+});
+
+describe("applyPendingUserInputSingleSelect", () => {
+  it("builds the final answer from the clicked option without waiting for state", () => {
+    expect(
+      applyPendingUserInputSingleSelect(
+        [singleSelectQuestion],
+        {},
+        0,
+        "scope",
+        "Orchestration-first",
+      ),
+    ).toEqual({
+      draftAnswers: {
+        scope: { customAnswer: "", selectedOptionLabels: ["Orchestration-first"] },
+      },
+      questionIndex: 0,
+      answers: { scope: "Orchestration-first" },
+    });
+  });
+
+  it("advances a multi-question prompt without submitting it early", () => {
+    const second = { ...singleSelectQuestion, id: "second" };
+    expect(
+      applyPendingUserInputSingleSelect(
+        [singleSelectQuestion, second],
+        {},
+        0,
+        "scope",
+        "Orchestration-first",
+      ),
+    ).toMatchObject({ questionIndex: 1, answers: null });
   });
 });
 

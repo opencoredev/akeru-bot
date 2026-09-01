@@ -61,6 +61,7 @@ export interface AkeruToolSession {
   readonly billedBotId?: BotId;
   readonly runtimeMode: RuntimeMode;
   readonly workspaceType: AkeruToolWorkspaceType;
+  readonly timezone?: string;
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
   readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;

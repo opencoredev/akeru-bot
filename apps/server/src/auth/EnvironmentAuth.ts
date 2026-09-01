@@ -36,6 +36,10 @@ import { layerConfig as SqlitePersistenceLayer } from "../persistence/Layers/Sql
 export const DEFAULT_SESSION_SUBJECT = "cli-issued-session";
 export const INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT = "administrative-bootstrap";
 
+export function isEnvironmentHostSessionSubject(subject: string): boolean {
+  return subject === INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT;
+}
+
 export interface IssuedPairingLink {
   readonly id: string;
   readonly credential: string;

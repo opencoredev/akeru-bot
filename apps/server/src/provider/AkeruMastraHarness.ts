@@ -26,15 +26,19 @@ import {
 } from "@mastra/memory/processors";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
+  AkeruCreateRoutineInput,
   ProductFeedbackToolDraft,
   classifyAkeruExternalCommand,
   classifyAkeruSensitivePath,
   type AkeruConversationMemorySnapshot,
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
+  type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
 } from "@t3tools/contracts";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
+import { z } from "zod";
 
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
@@ -43,6 +47,7 @@ import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
+export const AKERU_RECENT_MESSAGE_LIMIT = 10;
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
@@ -82,6 +87,54 @@ const productFeedbackTool = createTool({
   execute: async () => ({ status: "draft-opened" as const }),
 });
 
+const routineTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+export const AKERU_LIST_ROUTINES_TOOL_NAME = "akeru_list_routines";
+export const AKERU_DELETE_ROUTINES_TOOL_NAME = "akeru_delete_routines";
+export const routineToolInputSchema = z.object({
+  name: z.string().trim().min(1),
+  instructions: z.string().trim().min(1),
+  schedule: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("daily"), time: routineTime }),
+    z.object({ kind: z.literal("weekdays"), time: routineTime }),
+    z.object({
+      kind: z.literal("weekly"),
+      weekdays: z
+        .array(
+          z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]),
+        )
+        .min(1),
+      time: routineTime,
+    }),
+  ]),
+  skillNames: z.array(z.string().trim().min(1)).nullish(),
+  connectorNames: z.array(z.string().trim().min(1)).nullish(),
+});
+const routineListOutputSchema = z.object({
+  routines: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      enabled: z.boolean(),
+      lifecycle: z.enum([
+        "draft",
+        "approved",
+        "enabled",
+        "running",
+        "paused",
+        "blocked",
+        "failed",
+        "completed",
+      ]),
+    }),
+  ),
+});
+export type AkeruRoutineListResult = z.infer<typeof routineListOutputSchema>;
+const routineDeleteResultSchema = z.object({
+  status: z.enum(["deleted", "cancelled", "not-found"]),
+  deletedRoutineIds: z.array(z.string()),
+});
+export type AkeruRoutineDeleteResult = z.infer<typeof routineDeleteResultSchema>;
+
 export interface AkeruMastraState {
   readonly projectPath?: string;
   readonly yolo?: boolean;
@@ -115,6 +168,15 @@ export interface AkeruMastraHarnessOptions {
     protectedAction: boolean,
   ) => Promise<void>;
   readonly toolRuntime: AkeruToolRuntime;
+  readonly createRoutine?: (
+    threadId: string,
+    input: AkeruCreateRoutineInputValue,
+  ) => Promise<unknown>;
+  readonly listRoutines?: (threadId: string) => Promise<AkeruRoutineListResult>;
+  readonly deleteRoutines?: (
+    threadId: string,
+    routineIds: ReadonlyArray<string>,
+  ) => Promise<AkeruRoutineDeleteResult>;
 }
 
 export interface AkeruMastraHarness {
@@ -140,7 +202,14 @@ export interface AkeruBackgroundObservationInput {
 
 type AkeruMastraToolOptions = Pick<
   AkeruMastraHarnessOptions,
-  "authStorage" | "getKimiAccess" | "getThreadTools" | "syncThreadToolApproval" | "toolRuntime"
+  | "authStorage"
+  | "getKimiAccess"
+  | "getThreadTools"
+  | "syncThreadToolApproval"
+  | "toolRuntime"
+  | "createRoutine"
+  | "listRoutines"
+  | "deleteRoutines"
 >;
 
 export function createAkeruObserveHooks(
@@ -213,6 +282,10 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
     if (args.stepNumber !== 0) return args.messageList;
     const context = this.engine.getThreadContext(args.requestContext, args.messageList);
     if (!context) return args.messageList;
+    const recent = await this.memory.recall({ threadId: context.threadId });
+    for (const message of recent.messages) {
+      if (message.role !== "system") args.messageList.add(message, "memory");
+    }
     const record = await this.engine.getOrCreateRecord(context.threadId, context.resourceId);
     const chunks = await this.engine.buildContextSystemMessages({ ...context, record });
     args.messageList.clearSystemMessages("observational-memory");
@@ -255,7 +328,7 @@ export async function createAkeruMastraMemory(
   const memory = new Memory({
     storage,
     options: {
-      lastMessages: 10,
+      lastMessages: AKERU_RECENT_MESSAGE_LIMIT,
       semanticRecall: false,
       workingMemory: { enabled: false },
       observationalMemory: false,
@@ -344,10 +417,108 @@ export async function resolveAkeruTools(
 ): Promise<ToolsInput> {
   const threadId = controllerResourceId(requestContext);
   if (!threadId) return {};
+  const routineTool = options.createRoutine
+    ? createTool({
+        id: AKERU_CREATE_ROUTINE_TOOL_NAME,
+        description:
+          "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
+        inputSchema: routineToolInputSchema,
+        requireApproval: false,
+        execute: async ({ skillNames, connectorNames, ...input }) =>
+          options.createRoutine!(
+            threadId,
+            await Schema.decodeUnknownPromise(AkeruCreateRoutineInput)(
+              {
+                ...input,
+                ...(skillNames ? { skillNames } : {}),
+                ...(connectorNames ? { connectorNames } : {}),
+              },
+              {
+                onExcessProperty: "error",
+              },
+            ),
+          ),
+      })
+    : undefined;
+  const listRoutinesTool = options.listRoutines
+    ? createTool({
+        id: AKERU_LIST_ROUTINES_TOOL_NAME,
+        description:
+          "List this bot's routines and show whether each schedule is enabled or disabled, plus its exact lifecycle. Use this before answering questions about routine state.",
+        inputSchema: z.object({}),
+        outputSchema: routineListOutputSchema,
+        strict: true,
+        requireApproval: false,
+        execute: async () => options.listRoutines!(threadId),
+      })
+    : undefined;
+  const deleteRoutinesTool =
+    options.listRoutines && options.deleteRoutines
+      ? createTool({
+          id: AKERU_DELETE_ROUTINES_TOOL_NAME,
+          description:
+            "Delete one or more routines owned by this bot. Pass routine IDs from akeru_list_routines. This tool asks the user for confirmation before deleting anything, so do not ask for separate confirmation.",
+          inputSchema: z.object({
+            routineIds: z.array(z.string().trim().min(1)).min(1),
+          }),
+          outputSchema: routineDeleteResultSchema,
+          suspendSchema: z.object({
+            question: z.string(),
+            options: z.array(
+              z.object({
+                label: z.string(),
+                description: z.string(),
+              }),
+            ),
+            selectionMode: z.literal("single_select"),
+          }),
+          resumeSchema: z.string(),
+          strict: true,
+          requireApproval: false,
+          execute: async ({ routineIds }, context) => {
+            const uniqueIds = [...new Set(routineIds)];
+            const available = await options.listRoutines!(threadId);
+            const requested = available.routines.filter((routine) =>
+              uniqueIds.includes(routine.id),
+            );
+            if (requested.length !== uniqueIds.length) {
+              return { status: "not-found" as const, deletedRoutineIds: [] };
+            }
+            const answer = context?.agent?.resumeData;
+            if (answer === undefined) {
+              const suspend = context?.agent?.suspend;
+              if (!suspend) return { status: "cancelled" as const, deletedRoutineIds: [] };
+              const names = requested.map((routine) => `"${routine.name}"`).join(", ");
+              await suspend({
+                question:
+                  requested.length === 1
+                    ? `Are you sure you want to delete ${names}?`
+                    : `Are you sure you want to delete these routines: ${names}?`,
+                options: [
+                  {
+                    label: "Delete routines",
+                    description: "Stop these schedules and hide them from the routines list.",
+                  },
+                  { label: "Cancel", description: "Keep every routine." },
+                ],
+                selectionMode: "single_select",
+              });
+              return;
+            }
+            if (answer !== "Delete routines") {
+              return { status: "cancelled" as const, deletedRoutineIds: [] };
+            }
+            return options.deleteRoutines!(threadId, uniqueIds);
+          },
+        })
+      : undefined;
   return {
     ...approvalAwareTools(threadId, options.getThreadTools(threadId), options),
     ...createAkeruMastraTools(threadId, options.toolRuntime),
     [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]: productFeedbackTool,
+    ...(routineTool ? { [AKERU_CREATE_ROUTINE_TOOL_NAME]: routineTool } : {}),
+    ...(listRoutinesTool ? { [AKERU_LIST_ROUTINES_TOOL_NAME]: listRoutinesTool } : {}),
+    ...(deleteRoutinesTool ? { [AKERU_DELETE_ROUTINES_TOOL_NAME]: deleteRoutinesTool } : {}),
   };
 }
 
@@ -552,6 +723,14 @@ export function akeruToolCategory(toolName: string): AkeruToolCategory {
   return "other";
 }
 
+export function routineToolNeedsGlobalApproval(toolName: string): boolean {
+  return (
+    toolName !== AKERU_CREATE_ROUTINE_TOOL_NAME &&
+    toolName !== AKERU_LIST_ROUTINES_TOOL_NAME &&
+    toolName !== AKERU_DELETE_ROUTINES_TOOL_NAME
+  );
+}
+
 export async function createAkeruMastraHarness(
   options: AkeruMastraHarnessOptions,
 ): Promise<AkeruMastraHarness> {
@@ -602,6 +781,21 @@ export async function createAkeruMastraHarness(
     toolCategoryResolver: akeruToolCategory,
     intervalHandlers: [],
   });
+  const controllerWithRunOptions = controller as unknown as {
+    buildSharedRunOptions: (session: unknown) => {
+      readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
+      readonly [key: string]: unknown;
+    };
+  };
+  const buildSharedRunOptions = controllerWithRunOptions.buildSharedRunOptions.bind(controller);
+  controllerWithRunOptions.buildSharedRunOptions = (session) => {
+    const runOptions = buildSharedRunOptions(session);
+    if (runOptions.requireToolApproval !== true) return runOptions;
+    return {
+      ...runOptions,
+      requireToolApproval: ({ toolName }) => routineToolNeedsGlobalApproval(toolName),
+    };
+  };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
     if (closing) return Promise.reject(new Error("Akeru observational memory is closing."));

@@ -14,6 +14,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import { TestClock } from "effect/testing";
+import { PNG } from "pngjs";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -60,6 +61,7 @@ describe("isPreviewRefreshShortcut", () => {
 
 const {
   browserWindowConstructor,
+  createFromBuffer,
   createFromPath,
   fromId,
   getFocusedWebContents,
@@ -70,6 +72,7 @@ const {
   writeImage,
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
+  createFromBuffer: vi.fn(),
   createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
   fromId: vi.fn((_id?: number) => null),
   getFocusedWebContents: vi.fn(() => null),
@@ -86,6 +89,7 @@ vi.mock("electron", () => ({
     writeImage,
   },
   nativeImage: {
+    createFromBuffer,
     createFromPath,
   },
   shell: {
@@ -142,6 +146,21 @@ const layer = PreviewManager.layer.pipe(
 );
 const encodePreviewManagerError = Schema.encodeSync(PreviewManager.PreviewManagerError);
 
+const makePng = (
+  width: number,
+  height: number,
+  color: readonly [red: number, green: number, blue: number, alpha: number],
+) => {
+  const png = new PNG({ width, height });
+  for (let offset = 0; offset < png.data.byteLength; offset += 4) {
+    png.data[offset] = color[0];
+    png.data[offset + 1] = color[1];
+    png.data[offset + 2] = color[2];
+    png.data[offset + 3] = color[3];
+  }
+  return PNG.sync.write(png);
+};
+
 const withManager = <A>(
   use: (
     manager: PreviewManager.PreviewManager["Service"],
@@ -157,9 +176,20 @@ interface TestCapturedPreviewImage {
   readonly getSize: () => { readonly width: number; readonly height: number };
 }
 
+type TestDebuggerMessageListener = (
+  event: Electron.Event,
+  method: string,
+  params: Record<string, unknown>,
+) => void;
+
 const makeTestPreviewWebContents = (
   capturePage: () => Promise<TestCapturedPreviewImage>,
   id = 42,
+  sendCommand: (
+    method: string,
+    commandParams?: Record<string, unknown>,
+  ) => Promise<unknown> = async () => undefined,
+  debuggerMessageListeners?: Set<TestDebuggerMessageListener>,
 ) =>
   ({
     id,
@@ -168,6 +198,7 @@ const makeTestPreviewWebContents = (
     getURL: () => "https://example.com",
     getTitle: () => "Example",
     isLoading: () => false,
+    isDevToolsOpened: () => false,
     getZoomFactor: () => 1,
     setZoomFactor: vi.fn(),
     setAudioMuted: vi.fn(),
@@ -181,9 +212,13 @@ const makeTestPreviewWebContents = (
     debugger: {
       isAttached: () => false,
       attach: vi.fn(),
-      sendCommand: vi.fn(async () => undefined),
-      on: vi.fn(),
-      off: vi.fn(),
+      sendCommand,
+      on: vi.fn((channel: string, listener: TestDebuggerMessageListener) => {
+        if (channel === "message") debuggerMessageListeners?.add(listener);
+      }),
+      off: vi.fn((channel: string, listener: TestDebuggerMessageListener) => {
+        if (channel === "message") debuggerMessageListeners?.delete(listener);
+      }),
     },
     capturePage,
   }) as never;
@@ -338,6 +373,7 @@ describe("PreviewManager", () => {
     showItemInFolder.mockClear();
     writeImage.mockClear();
     createFromPath.mockClear();
+    createFromBuffer.mockReset();
     webviewSend.mockClear();
   });
 
@@ -3193,6 +3229,216 @@ describe("PreviewManager", () => {
           button: "left",
           clickCount: 1,
         });
+      }),
+    ),
+  );
+
+  effectIt.effect("captures automation snapshots through the debugger page surface", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const png = makePng(800, 600, [255, 255, 255, 255]);
+        const image = {
+          getSize: () => ({ width: 800, height: 600 }),
+          isEmpty: () => false,
+          resize: vi.fn(),
+          toPNG: () => png,
+        };
+        createFromBuffer.mockReturnValue(image);
+        const capturePage = vi.fn(async () => ({
+          getSize: () => ({ width: 800, height: 600 }),
+          toJPEG: () => Buffer.from("black-webview-capture"),
+          toPNG: () => Buffer.from("black-webview-capture"),
+        }));
+        const sendCommand = vi.fn(async (method: string) => {
+          if (method === "Runtime.evaluate") {
+            return {
+              result: {
+                value: {
+                  url: "https://example.com",
+                  title: "Example Domain",
+                  loading: false,
+                  visibleText: "Example Domain",
+                  interactiveElements: [],
+                },
+              },
+            };
+          }
+          if (method === "Accessibility.getFullAXTree") return { nodes: [] };
+          if (method === "Page.captureScreenshot") {
+            return { data: png.toString("base64") };
+          }
+          return undefined;
+        });
+        fromId.mockReturnValue(makeTestPreviewWebContents(capturePage, 42, sendCommand));
+
+        yield* manager.createTab("tab_snapshot");
+        yield* manager.registerWebview("tab_snapshot", 42);
+        const snapshot = yield* manager.automationSnapshot("tab_snapshot");
+
+        expect(sendCommand).toHaveBeenCalledWith("Page.captureScreenshot", {
+          format: "png",
+          fromSurface: false,
+          captureBeyondViewport: false,
+        });
+        expect(createFromBuffer).toHaveBeenCalledWith(png);
+        expect(capturePage).not.toHaveBeenCalled();
+        expect(snapshot.screenshot).toEqual({
+          mimeType: "image/png",
+          data: png.toString("base64"),
+          width: 800,
+          height: 600,
+        });
+      }),
+    ),
+  );
+
+  effectIt.effect("captures a visible automation snapshot from the host window", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const guestPng = makePng(1280, 800, [0, 0, 0, 255]);
+        const hostPng = makePng(320, 180, [255, 255, 255, 255]);
+        const guestImage = {
+          getSize: () => ({ width: 1280, height: 800 }),
+          isEmpty: () => false,
+          resize: vi.fn(),
+          toPNG: () => guestPng,
+        };
+        const hostImage = {
+          getSize: () => ({ width: 320, height: 180 }),
+          isEmpty: () => false,
+          resize: vi.fn(),
+          toPNG: () => hostPng,
+        };
+        createFromBuffer.mockImplementation((buffer: Buffer) =>
+          buffer.equals(hostPng) ? hostImage : guestImage,
+        );
+        const hostCapturePage = vi.fn(async () => hostImage);
+        const hostWebContents = {
+          capturePage: hostCapturePage,
+          executeJavaScript: vi.fn(async () => ({ x: 20, y: 40, width: 320, height: 180 })),
+          isDestroyed: () => false,
+          on: vi.fn(),
+          off: vi.fn(),
+          send: vi.fn(),
+          setBackgroundThrottling: vi.fn(),
+        };
+        const mainWindow = {
+          isDestroyed: () => false,
+          once: vi.fn(),
+          webContents: hostWebContents,
+        };
+        const sendCommand = vi.fn(async (method: string) => {
+          if (method === "Runtime.evaluate") {
+            return {
+              result: {
+                value: {
+                  url: "https://example.com",
+                  title: "Example Domain",
+                  loading: false,
+                  visibleText: "Example Domain",
+                  interactiveElements: [],
+                },
+              },
+            };
+          }
+          if (method === "Accessibility.getFullAXTree") return { nodes: [] };
+          if (method === "Page.captureScreenshot") {
+            return { data: guestPng.toString("base64") };
+          }
+          return undefined;
+        });
+        fromId.mockReturnValue({
+          ...(makeTestPreviewWebContents(vi.fn(), 42, sendCommand) as unknown as object),
+          hostWebContents,
+        } as never);
+
+        yield* manager.setMainWindow(mainWindow as never);
+        yield* manager.createTab("tab_host_snapshot");
+        yield* manager.registerWebview("tab_host_snapshot", 42);
+        const snapshot = yield* manager.automationSnapshot("tab_host_snapshot");
+
+        expect(hostWebContents.executeJavaScript).toHaveBeenCalledWith(
+          expect.stringContaining("element.getWebContentsId?.() === 42"),
+        );
+        expect(hostCapturePage).toHaveBeenCalledWith(
+          { x: 20, y: 40, width: 320, height: 180 },
+          { stayAwake: true },
+        );
+        expect(snapshot.screenshot).toEqual({
+          mimeType: "image/png",
+          data: hostPng.toString("base64"),
+          width: 320,
+          height: 180,
+        });
+      }),
+    ),
+  );
+
+  effectIt.effect("skips black screencast frames and cleans up after the visible frame", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const blackPng = makePng(1280, 800, [0, 0, 0, 255]);
+        const visiblePng = makePng(1280, 800, [255, 255, 255, 255]);
+        const listeners = new Set<TestDebuggerMessageListener>();
+        const image = {
+          getSize: () => ({ width: 1280, height: 800 }),
+          isEmpty: () => false,
+          resize: vi.fn(),
+          toPNG: () => visiblePng,
+        };
+        createFromBuffer.mockReturnValue(image);
+        const sendCommand = vi.fn(async (method: string) => {
+          if (method === "Runtime.evaluate") {
+            return {
+              result: {
+                value: {
+                  url: "https://example.com",
+                  title: "Example Domain",
+                  loading: false,
+                  visibleText: "Example Domain",
+                  interactiveElements: [],
+                },
+              },
+            };
+          }
+          if (method === "Accessibility.getFullAXTree") return { nodes: [] };
+          if (method === "Page.captureScreenshot") {
+            return { data: blackPng.toString("base64") };
+          }
+          if (method === "Page.startScreencast") {
+            for (const listener of listeners) {
+              listener({} as Electron.Event, "Page.screencastFrame", {
+                data: blackPng.toString("base64"),
+                sessionId: 1,
+              });
+              listener({} as Electron.Event, "Page.screencastFrame", {
+                data: visiblePng.toString("base64"),
+                sessionId: 2,
+              });
+            }
+          }
+          return undefined;
+        });
+        const webContents = makeTestPreviewWebContents(
+          vi.fn(),
+          42,
+          sendCommand,
+          listeners,
+        ) as Electron.WebContents;
+        fromId.mockReturnValue(webContents as never);
+
+        yield* manager.createTab("tab_screencast_snapshot");
+        yield* manager.registerWebview("tab_screencast_snapshot", 42);
+        const snapshot = yield* manager.automationSnapshot("tab_screencast_snapshot");
+        yield* Effect.yieldNow;
+
+        expect(snapshot.screenshot.data).toBe(visiblePng.toString("base64"));
+        expect(sendCommand).toHaveBeenCalledWith("Page.bringToFront", undefined);
+        expect(sendCommand).toHaveBeenCalledWith("Page.stopScreencast", undefined);
+        expect(
+          sendCommand.mock.calls.filter(([method]) => method === "Page.screencastFrameAck"),
+        ).toHaveLength(2);
+        expect(listeners).toHaveLength(1);
       }),
     ),
   );

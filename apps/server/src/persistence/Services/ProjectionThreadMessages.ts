@@ -8,7 +8,9 @@
  */
 import {
   BotId,
+  AuthSessionId,
   ChatAttachment,
+  ChannelMessageOrigin,
   MessageId,
   OrchestrationMessageReaction,
   OrchestrationMessageRole,
@@ -28,6 +30,9 @@ export const ProjectionThreadMessage = Schema.Struct({
   threadId: ThreadId,
   turnId: Schema.NullOr(TurnId),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
+  authorPersonId: Schema.optional(Schema.NullOr(AuthSessionId)),
+  authorDisplayName: Schema.optional(Schema.NullOr(Schema.String)),
+  channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),

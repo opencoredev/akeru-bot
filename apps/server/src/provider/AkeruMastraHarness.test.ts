@@ -9,6 +9,7 @@ import { RequestContext } from "@mastra/core/request-context";
 import { Memory } from "@mastra/memory";
 import { ObservationalMemory } from "@mastra/memory/processors";
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   AKERU_TOOL_CATALOG,
   ProviderDriverKind,
@@ -18,6 +19,9 @@ import { assert, describe, expect, it, vi } from "vite-plus/test";
 
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import {
+  AKERU_RECENT_MESSAGE_LIMIT,
+  AKERU_DELETE_ROUTINES_TOOL_NAME,
+  AKERU_LIST_ROUTINES_TOOL_NAME,
   AkeruPassiveObservationalMemoryProcessor,
   akeruActionNeedsApproval,
   createAkeruObserveHooks,
@@ -28,6 +32,8 @@ import {
   resolveAkeruInstructions,
   resolveAkeruMastraModel,
   resolveAkeruTools,
+  routineToolInputSchema,
+  routineToolNeedsGlobalApproval,
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -143,6 +149,114 @@ describe("AkeruMastraHarness", () => {
     } finally {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it("restores a bounded recent message window after reopening", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-message-store-"));
+    const options = {
+      authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+      memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+    };
+    try {
+      const first = await createAkeruMastraMemory(options);
+      await first.memory.createThread({
+        threadId: "thread-history",
+        resourceId: "thread-history",
+      });
+      const messages = Array.from({ length: AKERU_RECENT_MESSAGE_LIMIT + 4 }, (_, index) => ({
+        id: `message-${index}`,
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        createdAt: DateTime.toDate(
+          DateTime.makeUnsafe(`2026-08-30T20:${String(index).padStart(2, "0")}:00.000Z`),
+        ),
+        content: { format: 2 as const, parts: [{ type: "text" as const, text: `Turn ${index}` }] },
+        threadId: "thread-history",
+        resourceId: "thread-history",
+      }));
+      await first.memory.persistMessages(messages);
+      await first.close();
+
+      const reopened = await createAkeruMastraMemory(options);
+      const engine = {
+        getThreadContext: vi.fn(() => ({
+          threadId: "thread-history",
+          resourceId: "thread-history",
+        })),
+        getOrCreateRecord: vi.fn(async () => ({ activeObservations: "Older observations." })),
+        buildContextSystemMessages: vi.fn(async () => ["Older context from observations."]),
+      } as unknown as ObservationalMemory;
+      const processor = new AkeruPassiveObservationalMemoryProcessor(engine, reopened.memory);
+      const messageList = new MessageList({
+        threadId: "thread-history",
+        resourceId: "thread-history",
+      });
+      messageList.add(
+        {
+          id: "current-message",
+          role: "user",
+          createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-08-31T20:00:00.000Z")),
+          content: { format: 2, parts: [{ type: "text", text: "What did we discuss?" }] },
+          threadId: "thread-history",
+          resourceId: "thread-history",
+        },
+        "input",
+      );
+
+      await processor.processInputStep({ stepNumber: 0, messageList } as never);
+
+      const recalled = messageList.get.remembered.db();
+      assert.equal(recalled.length, AKERU_RECENT_MESSAGE_LIMIT);
+      assert.deepEqual(
+        recalled.map((message) => message.id),
+        messages.slice(-AKERU_RECENT_MESSAGE_LIMIT).map((message) => message.id),
+      );
+      assert.deepEqual(
+        messageList.getSystemMessages("observational-memory").map((message) => message.content),
+        ["Older context from observations."],
+      );
+      assert.equal(messageList.get.input.db()[0]?.id, "current-message");
+      await reopened.close();
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("adds older observational context beside the recent message window", async () => {
+    const engine = {
+      getThreadContext: vi.fn(() => ({ threadId: "thread-context", resourceId: "thread-context" })),
+      getOrCreateRecord: vi.fn(async () => ({
+        activeObservations: "The user prefers short replies.",
+      })),
+      buildContextSystemMessages: vi.fn(async () => ["Older context: short replies."]),
+    } as unknown as ObservationalMemory;
+    const processor = new AkeruPassiveObservationalMemoryProcessor(engine, {
+      recall: vi.fn(async () => ({ messages: [] })),
+      persistMessages: vi.fn(async () => undefined),
+    } as unknown as Memory);
+    const messageList = new MessageList({
+      threadId: "thread-context",
+      resourceId: "thread-context",
+    });
+    messageList.add(
+      {
+        id: "recent-message",
+        role: "user",
+        createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-08-31T20:00:00.000Z")),
+        content: { format: 2, parts: [{ type: "text", text: "Use the context you remember." }] },
+        threadId: "thread-context",
+        resourceId: "thread-context",
+      },
+      "input",
+    );
+
+    await processor.processInputStep({ stepNumber: 0, messageList } as never);
+
+    assert.deepEqual(
+      messageList.getSystemMessages("observational-memory").map((message) => message.content),
+      ["Older context: short replies."],
+    );
+    assert.lengthOf(messageList.get.input.db(), 1);
+    assert.equal(messageList.get.input.db()[0]?.id, "recent-message");
   });
 
   it("persists only messages created by the current turn", async () => {
@@ -273,6 +387,8 @@ describe("AkeruMastraHarness", () => {
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
+    assert.include(AKERU_AGENT_INSTRUCTIONS, "Prefer preview_* tools over browser_* tools");
+    assert.include(AKERU_AGENT_INSTRUCTIONS, "akeru_list_routines");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
     assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
   });
@@ -295,9 +411,13 @@ describe("AkeruMastraHarness", () => {
       resourceId: "thread-1",
       session: { modelId: "openai/gpt-5.6-sol" },
     });
+    const approvalInputs: unknown[] = [];
     const runtime = {
       toolsForThread: () => AKERU_TOOL_CATALOG.filter((tool) => tool.id === "Shell"),
-      requiresApproval: async () => true,
+      requiresApproval: async (_threadId: string, _toolId: string, input: unknown) => {
+        approvalInputs.push(input);
+        return true;
+      },
       execute: async () => undefined,
     } as unknown as AkeruToolRuntime;
     const pluginTool = { id: "plugin", execute: async () => undefined, requireApproval: false };
@@ -324,6 +444,9 @@ describe("AkeruMastraHarness", () => {
     ]);
     assert.notProperty(tools, "Read");
     assert.notProperty(tools, "execute_command");
+    const shell = tools.Shell as unknown as {
+      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
+    };
     const restart = tools.RestartMcpServers as unknown as {
       readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
     };
@@ -335,6 +458,10 @@ describe("AkeruMastraHarness", () => {
     assert.isTrue(await search.needsApprovalFn({ command: "git push origin main" }));
     assert.isTrue(await search.needsApprovalFn({ path: ".env" }));
     assert.isFalse(await search.needsApprovalFn({ operation: "read" }));
+    assert.isTrue(
+      await shell.needsApprovalFn({ command: 'printf "hi\\n"', cwd: null, background: null }),
+    );
+    assert.deepEqual(approvalInputs, [{ command: 'printf "hi\\n"' }]);
     assert.deepEqual(approvalPolicies, [true, true, true, true, false]);
     assert.equal(criticalAkeruAction("RestartMcpServers"), "production");
   });
@@ -413,5 +540,205 @@ describe("AkeruMastraHarness", () => {
     }
     assert.instanceOf(blockedError, Error);
     assert.equal(blockedError.message, "Hook rejected");
+  });
+
+  it("creates an approved routine for the current chat after tool approval", async () => {
+    assert.isFalse(routineToolNeedsGlobalApproval(AKERU_CREATE_ROUTINE_TOOL_NAME));
+    assert.isFalse(routineToolNeedsGlobalApproval(AKERU_LIST_ROUTINES_TOOL_NAME));
+    assert.isTrue(routineToolNeedsGlobalApproval("execute_command"));
+    assert.isTrue(
+      routineToolInputSchema.safeParse({
+        name: "Morning brief",
+        instructions: "Prepare the morning brief.",
+        schedule: { kind: "weekdays", time: "09:00" },
+      }).success,
+    );
+    assert.isTrue(
+      routineToolInputSchema.safeParse({
+        name: "Morning brief",
+        instructions: "Prepare the morning brief.",
+        schedule: { kind: "weekdays", time: "09:00" },
+        connectorNames: null,
+      }).success,
+    );
+    assert.isFalse(
+      routineToolInputSchema.safeParse({
+        name: "Morning brief",
+        instructions: "Prepare the morning brief.",
+        schedule: { kind: "weekdays", time: {} },
+      }).success,
+    );
+    const calls: unknown[] = [];
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      createRoutine: async (threadId, input) => {
+        calls.push({ threadId, input });
+        return { status: "approved" };
+      },
+    });
+    const tool = tools[AKERU_CREATE_ROUTINE_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+
+    assert.isFalse(tool.requireApproval);
+    assert.deepEqual(calls, []);
+    assert.deepEqual(
+      await tool.execute?.(
+        {
+          name: "Morning brief",
+          instructions: "Prepare the morning brief.",
+          schedule: { kind: "weekdays", time: "09:00" },
+          skillNames: null,
+          connectorNames: null,
+        },
+        {},
+      ),
+      { status: "approved" },
+    );
+    assert.deepEqual(calls, [
+      {
+        threadId: "thread-1",
+        input: {
+          name: "Morning brief",
+          instructions: "Prepare the morning brief.",
+          schedule: { kind: "weekdays", time: "09:00" },
+        },
+      },
+    ]);
+  });
+
+  it("lets the model inspect this bot's routine states without approval", async () => {
+    const calls: string[] = [];
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const result = {
+      routines: [
+        { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" as const },
+        {
+          id: "routine-2",
+          name: "Weekly review",
+          enabled: false,
+          lifecycle: "approved" as const,
+        },
+        {
+          id: "routine-3",
+          name: "Inbox check",
+          enabled: false,
+          lifecycle: "paused" as const,
+        },
+      ],
+    };
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      listRoutines: async (threadId) => {
+        calls.push(threadId);
+        return result;
+      },
+    });
+    const tool = tools[AKERU_LIST_ROUTINES_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+
+    assert.deepEqual(calls, []);
+    assert.isFalse(tool.requireApproval);
+    assert.deepEqual(await tool.execute?.({}, {}), result);
+    assert.deepEqual(calls, ["thread-1"]);
+  });
+
+  it("asks once before deleting one or more routines", async () => {
+    const deleted: Array<{ threadId: string; routineIds: ReadonlyArray<string> }> = [];
+    const suspended: unknown[] = [];
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      listRoutines: async () => ({
+        routines: [
+          { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" },
+          { id: "routine-2", name: "Weekly review", enabled: false, lifecycle: "paused" },
+        ],
+      }),
+      deleteRoutines: async (threadId, routineIds) => {
+        deleted.push({ threadId, routineIds });
+        return { status: "deleted", deletedRoutineIds: [...routineIds] };
+      },
+    });
+    const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+    const input = { routineIds: ["routine-1", "routine-2"] };
+
+    assert.isFalse(tool.requireApproval);
+    assert.deepEqual(deleted, []);
+    await tool.execute?.(input, {
+      agent: { suspend: async (payload: unknown) => void suspended.push(payload) },
+    });
+    assert.deepEqual(deleted, []);
+    assert.deepEqual(suspended, [
+      {
+        question:
+          'Are you sure you want to delete these routines: "Morning brief", "Weekly review"?',
+        options: [
+          {
+            label: "Delete routines",
+            description: "Stop these schedules and hide them from the routines list.",
+          },
+          { label: "Cancel", description: "Keep every routine." },
+        ],
+        selectionMode: "single_select",
+      },
+    ]);
+
+    assert.deepEqual(await tool.execute?.(input, { agent: { resumeData: "Cancel" } }), {
+      status: "cancelled",
+      deletedRoutineIds: [],
+    });
+    assert.deepEqual(deleted, []);
+    assert.deepEqual(await tool.execute?.(input, { agent: { resumeData: "Delete routines" } }), {
+      status: "deleted",
+      deletedRoutineIds: ["routine-1", "routine-2"],
+    });
+    assert.deepEqual(deleted, [{ threadId: "thread-1", routineIds: ["routine-1", "routine-2"] }]);
+  });
+
+  it("does not ask or delete when any requested routine is unavailable", async () => {
+    let suspended = false;
+    let deleted = false;
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      listRoutines: async () => ({ routines: [] }),
+      deleteRoutines: async () => {
+        deleted = true;
+        return { status: "deleted", deletedRoutineIds: [] };
+      },
+    });
+    const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+
+    assert.deepEqual(
+      await tool.execute?.(
+        { routineIds: ["missing-routine"] },
+        { agent: { suspend: async () => void (suspended = true) } },
+      ),
+      { status: "not-found", deletedRoutineIds: [] },
+    );
+    assert.isFalse(suspended);
+    assert.isFalse(deleted);
   });
 });

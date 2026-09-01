@@ -1,16 +1,14 @@
+import { BotId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   blinkDelayMs,
-  buildGroupedRosterSections,
-  buildRosterSections,
-  buildRosterStrip,
-  buildRosterTiles,
-  compareRosterBots,
   filterRosterBots,
+  filterRosterGroups,
   DEFAULT_BLOB_COLOR,
   DEFAULT_BLOB_SHAPE,
   formatRosterTimestamp,
+  groupContainsBot,
   isRecordableChatPath,
   parseChatPath,
   randomBotAvatar,
@@ -19,9 +17,12 @@ import {
   resolveLatestRosterMessage,
   resolveRosterBotId,
   resolveRosterIndicator,
+  parseRosterBotDragId,
+  parseRosterGroupDropId,
+  rosterBotDragId,
+  rosterGroupDropId,
   BLOB_COLORS,
   BLOB_SHAPES,
-  type RosterLastMessage,
 } from "./roster.logic";
 import type { Bot, BotAvatar, Group } from "./types";
 
@@ -243,6 +244,40 @@ describe("filterRosterBots", () => {
   });
 });
 
+describe("filterRosterGroups", () => {
+  const bots = [bot({ id: "boss", name: "Akeru" }), bot({ id: "specialist", name: "Mori" })];
+  const groups: Group[] = [
+    {
+      id: "launch",
+      name: "Launch crew",
+      bossBotId: "boss",
+      members: [
+        { kind: "bot", botId: BotId.make("boss"), role: "boss" },
+        { kind: "bot", botId: BotId.make("specialist"), role: "specialist" },
+      ],
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    },
+  ];
+
+  it("matches a group by its name or a member bot name", () => {
+    expect(filterRosterGroups(groups, bots, "launch")).toHaveLength(1);
+    expect(filterRosterGroups(groups, bots, "MORI")).toHaveLength(1);
+    expect(filterRosterGroups(groups, bots, "nobody")).toEqual([]);
+  });
+});
+
+describe("roster drag ids", () => {
+  it("keeps bot and group targets distinct", () => {
+    expect(parseRosterBotDragId(rosterBotDragId("same"))).toBe("same");
+    expect(parseRosterGroupDropId(rosterGroupDropId("same"))).toBe("same");
+    expect(parseRosterBotDragId(rosterGroupDropId("same"))).toBeNull();
+    expect(parseRosterGroupDropId(rosterBotDragId("same"))).toBeNull();
+    expect(parseRosterBotDragId("bot:")).toBeNull();
+    expect(parseRosterGroupDropId("group:")).toBeNull();
+  });
+});
+
 describe("randomBotAvatar", () => {
   it("returns a valid blob and never picks white", () => {
     for (let i = 0; i < 20; i++) {
@@ -349,42 +384,6 @@ describe("resolveLatestRosterMessage", () => {
         ]),
       ),
     ).toEqual(fallback);
-  });
-});
-
-describe("compareRosterBots", () => {
-  const lastMessageByBotId: Record<string, RosterLastMessage> = {
-    older: { text: "old", at: "2026-08-25T10:00:00.000Z" },
-    newer: { text: "new", at: "2026-08-27T10:00:00.000Z" },
-  };
-
-  it("sorts the latest conversation first", () => {
-    const sorted = [bot({ id: "older", name: "Older" }), bot({ id: "newer", name: "Newer" })].sort(
-      (a, b) => compareRosterBots(a, b, lastMessageByBotId),
-    );
-    expect(sorted.map((entry) => entry.id)).toEqual(["newer", "older"]);
-  });
-
-  it("puts bots without messages after those with, alphabetized", () => {
-    const sorted = [
-      bot({ id: "quiet-b", name: "Zed" }),
-      bot({ id: "older", name: "Older" }),
-      bot({ id: "quiet-a", name: "Ada" }),
-    ].sort((a, b) => compareRosterBots(a, b, lastMessageByBotId));
-    expect(sorted.map((entry) => entry.id)).toEqual(["older", "quiet-a", "quiet-b"]);
-  });
-
-  it("treats an unparseable timestamp as no message", () => {
-    const sorted = [
-      bot({ id: "broken", name: "Broken" }),
-      bot({ id: "older", name: "Older" }),
-    ].sort((a, b) =>
-      compareRosterBots(a, b, {
-        ...lastMessageByBotId,
-        broken: { text: "?", at: "not-a-date" },
-      }),
-    );
-    expect(sorted.map((entry) => entry.id)).toEqual(["older", "broken"]);
   });
 });
 

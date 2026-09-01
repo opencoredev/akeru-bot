@@ -17,6 +17,7 @@ export const SETTINGS_SECTIONS = [
   "inbox",
   "appearance",
   "providers",
+  "browser",
   "sandbox",
   "voice",
   "privacy",
@@ -82,6 +83,7 @@ export function closeSettings(): void {
 /** Map a legacy `/settings/...` pathname onto a dialog section. */
 export function settingsSectionFromPathname(pathname: string): SettingsSection {
   const slug = pathname.replace(/^\/settings\/?/, "").split("/")[0] ?? "";
+  if (slug === "bots") return "channels";
   return (SETTINGS_SECTIONS as readonly string[]).includes(slug)
     ? (slug as SettingsSection)
     : "general";

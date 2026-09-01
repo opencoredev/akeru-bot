@@ -177,7 +177,7 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
-import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
+import { ServerSettings, ServerSettingsError, ServerSettingsRpcPatch } from "./settings.ts";
 import {
   BotInboxItem,
   BotInboxResolveInput,
@@ -217,6 +217,7 @@ import {
   PortabilityImportPreview,
   PortabilityPreviewImportInput,
 } from "./portability.ts";
+import { RoutineListRunsInput, RoutineListRunsResult, RoutineReadError } from "./routines.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -324,6 +325,7 @@ export const WS_METHODS = {
   portabilityExport: "portability.export",
   portabilityPreviewImport: "portability.previewImport",
   portabilityApplyImport: "portability.applyImport",
+  routinesListRuns: "routines.listRuns",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -410,7 +412,7 @@ export const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
 });
 
 export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSettings, {
-  payload: Schema.Struct({ patch: ServerSettingsPatch }),
+  payload: Schema.Struct({ patch: ServerSettingsRpcPatch }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
 });
@@ -609,6 +611,12 @@ export const WsPortabilityApplyImportRpc = Rpc.make(WS_METHODS.portabilityApplyI
   payload: PortabilityApplyImportInput,
   success: PortabilityApplyImportResult,
   error: Schema.Union([PortabilityArchiveError, EnvironmentAuthorizationError]),
+});
+
+export const WsRoutinesListRunsRpc = Rpc.make(WS_METHODS.routinesListRuns, {
+  payload: RoutineListRunsInput,
+  success: RoutineListRunsResult,
+  error: Schema.Union([RoutineReadError, EnvironmentAuthorizationError]),
 });
 
 export const WsSourceControlLookupRepositoryRpc = Rpc.make(
@@ -1059,6 +1067,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPortabilityExportRpc,
   WsPortabilityPreviewImportRpc,
   WsPortabilityApplyImportRpc,
+  WsRoutinesListRunsRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,

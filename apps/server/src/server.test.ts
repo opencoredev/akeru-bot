@@ -29,6 +29,8 @@ import {
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  RoutineId,
+  RoutineRunId,
   ResolvedKeybindingRule,
   ThreadId,
   TurnId,
@@ -144,6 +146,7 @@ import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -155,6 +158,8 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import { BotUsageLedger, type BotUsageLedgerShape } from "./usage/BotUsageLedger.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+import { RoutineRepository, type RoutineRepositoryShape } from "./routines/Repository.ts";
+import { RoutineRuntime, type RoutineRuntimeShape } from "./routines/Runtime.ts";
 import * as Data from "effect/Data";
 
 import { makeOrchestrationIntegrationHarness } from "../integration/OrchestrationEngineHarness.integration.ts";
@@ -248,6 +253,26 @@ const makeDefaultOrchestrationReadModel = () => {
     ],
   };
 };
+
+const makeChannelTestBot = () => ({
+  id: BotId.make("bot-channel-test"),
+  name: "Channel bot",
+  title: "Agent",
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "dither" as const, seed: "channel-bot" },
+  engine: null,
+  sandbox: "local" as const,
+  runtimeMode: "full-access" as const,
+  usageCap: null,
+  voiceEnabled: false,
+  channelBindings: [],
+  groupId: null,
+  archivedAt: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 const makeDefaultOrchestrationThreadShell = (
   overrides: Partial<OrchestrationThreadShell> = {},
@@ -410,6 +435,14 @@ const buildAppUnderTest = (options?: {
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
+    routineRepository?: Partial<RoutineRepositoryShape>;
+    routineRuntime?: Partial<RoutineRuntimeShape>;
+    analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]> & {
+      readonly record?: (
+        event: string,
+        properties?: Readonly<Record<string, unknown>>,
+      ) => Effect.Effect<void>;
+    };
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
     botUsageLedger?: Partial<BotUsageLedgerShape>;
@@ -417,6 +450,7 @@ const buildAppUnderTest = (options?: {
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
     serverRuntimeStartup?: Partial<ServerRuntimeStartup.ServerRuntimeStartup["Service"]>;
+    channelDeliveryStore?: ChannelDeliveryStore.ChannelDeliveryStoreShape | null;
     serverEnvironment?: Partial<ServerEnvironment.ServerEnvironment["Service"]>;
     repositoryIdentityResolver?: Partial<
       RepositoryIdentityResolver.RepositoryIdentityResolver["Service"]
@@ -782,13 +816,44 @@ const buildAppUnderTest = (options?: {
         ),
       ),
       Layer.provide(
-        Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
-          readEvents: () => Stream.empty,
-          dispatch: () => Effect.succeed({ sequence: 0 }),
-          streamDomainEvents: Stream.empty,
-          latestSequence: Effect.succeed(0),
-          ...options?.layers?.orchestrationEngine,
-        }),
+        Layer.mergeAll(
+          Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
+            readEvents: () => Stream.empty,
+            dispatch: () => Effect.succeed({ sequence: 0 }),
+            streamDomainEvents: Stream.empty,
+            latestSequence: Effect.succeed(0),
+            ...options?.layers?.orchestrationEngine,
+          }),
+          Layer.succeed(
+            RoutineRepository,
+            RoutineRepository.of({
+              listAll: Effect.succeed([]),
+              listEnabled: Effect.succeed([]),
+              getById: () => Effect.succeed(null),
+              listRuns: () => Effect.succeed([]),
+              listAllRuns: Effect.succeed([]),
+              getActiveRunByThreadRef: () => Effect.succeed(null),
+              listSkillAssignments: Effect.succeed([]),
+              claim: () => Effect.succeed(false),
+              markDispatched: () => Effect.void,
+              markBlocked: () => Effect.void,
+              listRecoverable: Effect.succeed([]),
+              ...options?.layers?.routineRepository,
+              markSettled: options?.layers?.routineRepository?.markSettled ?? (() => Effect.void),
+            } satisfies RoutineRepositoryShape),
+          ),
+          Layer.succeed(
+            RoutineRuntime,
+            RoutineRuntime.of({
+              runDue: Effect.void,
+              canRunNow: () => Effect.succeed(true),
+              runNow: () => Effect.succeed(null),
+              recover: Effect.void,
+              start: Effect.void,
+              ...options?.layers?.routineRuntime,
+            } satisfies RoutineRuntimeShape),
+          ),
+        ),
       ),
       Layer.provide(
         Layer.mergeAll(
@@ -884,6 +949,7 @@ const buildAppUnderTest = (options?: {
       Layer.provide(
         Layer.mock(AnalyticsService.AnalyticsService)({
           flush: Effect.void,
+          ...options?.layers?.analyticsService,
         }),
       ),
       Layer.provide(
@@ -975,6 +1041,15 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provideMerge(makeAuthTestLayer()),
       Layer.provideMerge(ServerSecretStore.layer),
+      Layer.provideMerge(
+        options?.layers?.channelDeliveryStore === null
+          ? Layer.empty
+          : Layer.succeed(
+              ChannelDeliveryStore.ChannelDeliveryStore,
+              options?.layers?.channelDeliveryStore ??
+                ChannelDeliveryStore.makeMemoryChannelDeliveryStore(),
+            ),
+      ),
       Layer.provide(workspaceAndProjectServicesLayer),
       Layer.provideMerge(FetchHttpClient.layer),
       Layer.provide(layerConfig),
@@ -3659,6 +3734,141 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("records thread analytics only after a client command succeeds", () =>
+    Effect.gen(function* () {
+      const effects: string[] = [];
+      const analyticsProperties: Array<Readonly<Record<string, unknown>> | undefined> = [];
+      const failedCommandId = CommandId.make("cmd-thread-create-failed");
+
+      yield* buildAppUnderTest({
+        layers: {
+          analyticsService: {
+            record: (event, properties) =>
+              Effect.sync(() => {
+                effects.push(`analytics:${event}`);
+                analyticsProperties.push(properties);
+              }),
+          },
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => effects.push(`dispatch:${command.commandId}`)).pipe(
+                Effect.flatMap(() =>
+                  command.commandId === failedCommandId
+                    ? Effect.fail(
+                        new OrchestrationListenerCallbackError({
+                          listener: "domain-event",
+                          detail: "thread creation failed",
+                        }),
+                      )
+                    : Effect.succeed({ sequence: 1 }),
+                ),
+              ),
+          },
+        },
+      });
+
+      const createThreadCommand = (commandId: CommandId, threadId: ThreadId) =>
+        ({
+          type: "thread.create",
+          commandId,
+          threadId,
+          projectId: defaultProjectId,
+          title: "Analytics test",
+          modelSelection: defaultModelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }) as const;
+
+      const wsUrl = yield* getWsServerUrl(
+        "/ws?clientSurface=mobile&clientAppVersion=1.2.3&clientOs=iOS&clientOsMajorVersion=18&clientDeviceModel=iPhone+15+Pro",
+      );
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            const failed = yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand](
+              createThreadCommand(failedCommandId, ThreadId.make("thread-create-failed")),
+            ).pipe(Effect.result);
+
+            assert.equal(failed._tag, "Failure");
+            assert.deepEqual(effects, [
+              "analytics:client.connected",
+              "dispatch:cmd-thread-create-failed",
+            ]);
+
+            const succeeded = yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand](
+              createThreadCommand(
+                CommandId.make("cmd-thread-create-succeeded"),
+                ThreadId.make("thread-create-succeeded"),
+              ),
+            );
+
+            assert.equal(succeeded.sequence, 1);
+          }),
+        ),
+      );
+
+      assert.deepEqual(effects, [
+        "analytics:client.connected",
+        "dispatch:cmd-thread-create-failed",
+        "dispatch:cmd-thread-create-succeeded",
+        "analytics:client.thread.started",
+      ]);
+      assert.deepEqual(analyticsProperties, [
+        {
+          surface: "mobile",
+          appVersion: "1.2.3",
+          os: "iOS",
+          osMajorVersion: 18,
+          deviceModel: "iPhone 15 Pro",
+        },
+        { surface: "mobile", appVersion: "1.2.3" },
+      ]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("reports a manual routine run that does not start", () =>
+    Effect.gen(function* () {
+      let dispatchCount = 0;
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            dispatch: () =>
+              Effect.sync(() => {
+                dispatchCount += 1;
+                return { sequence: 7 };
+              }),
+          },
+          routineRuntime: {
+            canRunNow: () => Effect.succeed(false),
+            runNow: () => Effect.die("busy routine must not run"),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "routine.run",
+            commandId: CommandId.make("cmd-routine-run-collision"),
+            routineId: RoutineId.make("routine-1"),
+            runId: RoutineRunId.make("run-1"),
+            trigger: "manual",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }).pipe(Effect.result),
+        ),
+      );
+
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assert.include(result.failure.message, "did not start");
+      }
+      assert.equal(dispatchCount, 0);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
   it.effect("routes websocket rpc projects.writeFile errors", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

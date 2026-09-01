@@ -147,7 +147,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
               muted
               loop
               playsinline
-              preload="none"
+              preload="auto"
             />
           </div>
         </div>
@@ -258,6 +258,13 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const visibility = new Map<HTMLVideoElement, number>();
+    const preloadVideos = () => {
+      videos.forEach((video) => {
+        if (video.src) return;
+        const source = video.dataset.src;
+        if (source) video.src = source;
+      });
+    };
 
     const updatePlayback = () => {
       if (document.hidden || reduceMotion) {
@@ -280,18 +287,16 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
         entries.forEach((entry) => {
           const video = entry.target as HTMLVideoElement;
           visibility.set(video, entry.intersectionRatio);
-          if (entry.isIntersecting && !video.src) {
-            const source = video.dataset.src;
-            if (source) video.src = source;
-          }
         });
         updatePlayback();
       },
-      { rootMargin: "320px 0px", threshold: [0, 0.25, 0.5, 0.75, 1] },
+      { threshold: [0, 0.25, 0.5, 0.75, 1] },
     );
 
     videos.forEach((video) => observer.observe(video));
     document.addEventListener("visibilitychange", updatePlayback);
+    if (document.readyState === "complete") preloadVideos();
+    else window.addEventListener("load", preloadVideos, { once: true });
   }
 
   init();

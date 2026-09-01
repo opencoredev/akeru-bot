@@ -1,4 +1,5 @@
 import {
+  AuthSessionId,
   BotId,
   CommandId,
   GroupId,
@@ -6,6 +7,7 @@ import {
   MessageId,
   ProjectId,
   ProviderInstanceId,
+  RoutineId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -54,6 +56,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const sql = yield* SqlClient.SqlClient;
       const botId = BotId.make("bot-1");
       const groupId = GroupId.make("group-1");
+      const routineId = RoutineId.make("routine-1");
       const createdAt = "2026-01-01T00:00:00.000Z";
 
       yield* engine.dispatch({
@@ -73,11 +76,33 @@ it.layer(TestLayer)("bot persistence", (it) => {
         createdAt,
       });
       yield* engine.dispatch({
-        type: "group.create",
-        commandId: CommandId.make("cmd-group-create"),
-        groupId,
-        name: "Product",
-        bossBotId: botId,
+        type: "routine.draft",
+        commandId: CommandId.make("cmd-routine-draft"),
+        routineId,
+        botId,
+        targetThreadId: ThreadId.make("thread-routine"),
+        projectId: ProjectId.make("project-1"),
+        job: "Morning research",
+        procedure: "Prepare the morning research brief.",
+        schedule: { kind: "daily", time: "09:00" },
+        timezone: "America/New_York",
+        skillAssignmentIds: [],
+        connectorDependencies: [],
+        sandbox: "local",
+        approvalPolicy: "approval-required",
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "routine.approve",
+        commandId: CommandId.make("cmd-routine-approve"),
+        routineId,
+        procedureVersion: 1,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "routine.enable",
+        commandId: CommandId.make("cmd-routine-enable"),
+        routineId,
         createdAt,
       });
       yield* engine.dispatch({
@@ -105,11 +130,22 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const archived = yield* snapshots.getShellSnapshot();
       assert.equal(archived.bots.length, 1);
       assert.notEqual(archived.bots[0]?.archivedAt, null);
+      assert.equal(archived.routines?.[0]?.lifecycle, "paused");
+      assert.equal(archived.routines?.[0]?.enabled, false);
+      assert.equal(archived.routines?.[0]?.nextRunAt, null);
 
       yield* engine.dispatch({
         type: "bot.restore",
         commandId: CommandId.make("cmd-bot-restore"),
         botId,
+      });
+      yield* engine.dispatch({
+        type: "group.create",
+        commandId: CommandId.make("cmd-group-create"),
+        groupId,
+        name: "Product",
+        bossBotId: botId,
+        createdAt,
       });
       yield* engine.dispatch({
         type: "group.rename",
@@ -119,6 +155,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
       });
 
       const restored = yield* snapshots.getShellSnapshot();
+      assert.equal(restored.routines?.[0]?.lifecycle, "paused");
+      assert.equal(restored.routines?.[0]?.enabled, false);
       assert.deepEqual(restored.bots, [
         {
           id: botId,
@@ -133,7 +171,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
           runtimeMode: "approval-required",
           usageCap: { unit: "tokens", limit: 50_000 },
           voiceEnabled: true,
-          groupId,
+          channelBindings: [],
+          groupId: null,
           archivedAt: null,
           createdAt,
           updatedAt: restored.bots[0]!.updatedAt,
@@ -144,7 +183,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           id: groupId,
           name: "Discovery",
           bossBotId: botId,
-          members: [{ botId, role: "boss" }],
+          members: [{ kind: "bot", botId, role: "boss" }],
           createdAt,
           updatedAt: restored.groups[0]!.updatedAt,
         },
@@ -296,6 +335,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const bossBotId = BotId.make("bot-routing-boss");
       const specialistBotId = BotId.make("bot-routing-specialist");
       const threadId = ThreadId.make("thread-group-routing");
+      const personId = AuthSessionId.make("person-routing");
       const createdAt = "2026-01-04T00:00:00.000Z";
       const modelSelection = {
         instanceId: ProviderInstanceId.make("codex"),
@@ -334,6 +374,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         name: "Routing group",
         bossBotId,
         specialistBotIds: [specialistBotId],
+        creator: { kind: "person", personId, displayName: "Routing person" },
         createdAt,
       });
       yield* engine.dispatch({
@@ -363,6 +404,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
         },
         runtimeMode: "full-access",
         interactionMode: "default",
+        senderPersonId: personId,
+        senderDisplayName: "Routing person",
         createdAt,
       });
 

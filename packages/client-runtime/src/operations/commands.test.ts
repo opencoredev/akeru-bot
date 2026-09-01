@@ -5,6 +5,7 @@ import {
   EnvironmentId,
   GroupId,
   McpServerId,
+  MessageId,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
   ThreadId,
@@ -31,8 +32,12 @@ import {
   cancelDelegation,
   createMcpServer,
   createProject,
+  disconnectChannel,
+  reconnectChannel,
+  sendChannelMessage,
   settleThread,
   setGroupBoss,
+  startThreadTurn,
   stopThreadSession,
   unassignGroupMember,
   unsettleThread,
@@ -188,6 +193,36 @@ describe("environment commands", () => {
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 
+  it.effect("dispatches channel lifecycle and send commands", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+      const botId = BotId.make("bot-1");
+
+      yield* connectChannel({ botId, provider: "telegram", token: "token" }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+      );
+      yield* reconnectChannel({ botId, provider: "telegram" }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+      );
+      yield* sendChannelMessage({
+        botId,
+        threadId: ThreadId.make("thread-1"),
+        messageId: MessageId.make("message-1"),
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+      yield* disconnectChannel({ botId, provider: "telegram" }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+      );
+
+      expect(dispatched.map((command) => command.type)).toEqual([
+        "channel.connect",
+        "channel.reconnect",
+        "channel.send",
+        "channel.disconnect",
+      ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
   it.effect("preserves caller metadata for idempotent queued commands", () =>
     Effect.gen(function* () {
       const dispatched: ClientOrchestrationCommand[] = [];
@@ -231,6 +266,33 @@ describe("environment commands", () => {
           createdAt: "2026-08-31T00:01:00.000Z",
         },
       ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("stamps turn starts with the client timezone", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* startThreadTurn({
+        commandId: CommandId.make("start-turn"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: MessageId.make("message-1"),
+          role: "user",
+          text: "Create a morning routine.",
+          attachments: [],
+        },
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        createdAt: "2026-06-06T00:01:00.000Z",
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toHaveLength(1);
+      expect(dispatched[0]).toMatchObject({
+        type: "thread.turn.start",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      });
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 

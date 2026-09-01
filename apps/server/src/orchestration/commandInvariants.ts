@@ -1,3 +1,4 @@
+import { isGroupBotMember } from "@t3tools/contracts";
 import type {
   AkeruDelegationRecord,
   BotId,
@@ -18,6 +19,7 @@ import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as Effect from "effect/Effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
+import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
 
 function invariantError(commandType: string, detail: string): OrchestrationCommandInvariantError {
   return new OrchestrationCommandInvariantError({
@@ -280,6 +282,56 @@ export function requireGroup(input: {
       );
 }
 
+function requireMutationActorAuthorized(input: {
+  readonly group: OrchestrationGroup;
+  readonly command: OrchestrationCommand;
+  readonly actor: OrchestrationDispatchActor | undefined;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  const actor = input.actor;
+  if (
+    actor === undefined ||
+    actor.canManageGroups ||
+    input.group.members.some(
+      (member) => member.kind === "person" && member.personId === actor.personId,
+    )
+  ) {
+    return Effect.void;
+  }
+  return Effect.fail(
+    invariantError(
+      input.command.type,
+      `Person '${actor.personId}' is not a member of group '${input.group.id}'.`,
+    ),
+  );
+}
+
+export function requireGroupThreadCreateAuthorized(input: {
+  readonly group: OrchestrationGroup;
+  readonly command: Extract<OrchestrationCommand, { readonly type: "thread.create" }>;
+  readonly actor: OrchestrationDispatchActor | undefined;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  return requireMutationActorAuthorized(input);
+}
+
+export function requireGroupOwnedThreadMutationAuthorized(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly thread: OrchestrationThread;
+  readonly command: OrchestrationCommand;
+  readonly actor: OrchestrationDispatchActor | undefined;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  if (input.thread.groupId == null) return Effect.void;
+  const group = findGroupById(input.readModel, input.thread.groupId);
+  if (!group) {
+    return Effect.fail(
+      invariantError(
+        input.command.type,
+        `Group '${input.thread.groupId}' does not exist for command '${input.command.type}'.`,
+      ),
+    );
+  }
+  return requireMutationActorAuthorized({ group, command: input.command, actor: input.actor });
+}
+
 export function requireGroupAbsent(input: {
   readonly readModel: OrchestrationReadModel;
   readonly command: OrchestrationCommand;
@@ -303,7 +355,9 @@ export function requireGroupMember(input: {
 }): Effect.Effect<OrchestrationBot, OrchestrationCommandInvariantError> {
   return Effect.gen(function* () {
     const group = yield* requireGroup(input);
-    const member = group.members.find((entry) => entry.botId === input.botId);
+    const member = group.members.find(
+      (entry) => isGroupBotMember(entry) && entry.botId === input.botId,
+    );
     if (!member) {
       return yield* Effect.fail(
         invariantError(

@@ -76,6 +76,61 @@ export function applyShellStreamEvent(
         : Arr.append(snapshot.delegations, event.delegation);
       return { ...snapshot, delegations, snapshotSequence: event.sequence };
     }
+    case "routine-upserted": {
+      const routines = snapshot.routines ?? [];
+      const nextRoutines = routines.some((routine) => routine.id === event.routine.id)
+        ? Arr.map(routines, (routine) =>
+            routine.id === event.routine.id ? event.routine : routine,
+          )
+        : Arr.append(routines, event.routine);
+      const runs = snapshot.routineRuns ?? [];
+      const eventRun = event.run;
+      const nextRuns = eventRun
+        ? runs.some((run) => run.id === eventRun.id)
+          ? Arr.map(runs, (run) => (run.id === eventRun.id ? eventRun : run))
+          : Arr.append(runs, eventRun)
+        : runs;
+      return {
+        ...snapshot,
+        routines: nextRoutines,
+        routineRuns: nextRuns,
+        snapshotSequence: event.sequence,
+      };
+    }
+    case "routine-removed":
+      return {
+        ...snapshot,
+        routines: Arr.filter(snapshot.routines ?? [], (routine) => routine.id !== event.routineId),
+        routineRuns: Arr.filter(
+          snapshot.routineRuns ?? [],
+          (run) => run.routineId !== event.routineId,
+        ),
+        snapshotSequence: event.sequence,
+      };
+    case "skill-assignment-upserted": {
+      const assignments = snapshot.skillAssignments ?? [];
+      const nextAssignments = assignments.some(
+        (assignment) => assignment.id === event.assignment.id,
+      )
+        ? Arr.map(assignments, (assignment) =>
+            assignment.id === event.assignment.id ? event.assignment : assignment,
+          )
+        : Arr.append(assignments, event.assignment);
+      return {
+        ...snapshot,
+        skillAssignments: nextAssignments,
+        snapshotSequence: event.sequence,
+      };
+    }
+    case "skill-assignment-removed":
+      return {
+        ...snapshot,
+        skillAssignments: Arr.filter(
+          snapshot.skillAssignments ?? [],
+          (assignment) => assignment.id !== event.assignmentId,
+        ),
+        snapshotSequence: event.sequence,
+      };
     case "thread-upserted": {
       const threads = snapshot.threads.some((t) => t.id === event.thread.id)
         ? Arr.map(snapshot.threads, (t) => (t.id === event.thread.id ? event.thread : t))

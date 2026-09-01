@@ -20,7 +20,7 @@ import {
   BotSandboxBrowserSharing,
   PersistedBotSandbox,
   BotUsageCap,
-  GroupMembership,
+  GroupBotMembership,
   ModelSelection,
   OrchestrationMessageRole,
   OrchestrationProposedPlanId,
@@ -100,7 +100,7 @@ export type PortabilityBotData = typeof PortabilityBotData.Type;
 export const PortabilityGroupData = Schema.Struct({
   name: TrimmedNonEmptyString,
   bossBotId: Schema.NullOr(BotId),
-  members: Schema.Array(GroupMembership),
+  members: Schema.Array(GroupBotMembership),
 });
 export type PortabilityGroupData = typeof PortabilityGroupData.Type;
 

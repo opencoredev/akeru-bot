@@ -26,6 +26,18 @@ Local bots ask before file changes and shell commands by default. Set **Settings
 execution** to **Full access** to skip routine local prompts. Protected actions still ask. Cloud
 sandboxes do not show the local-computer prompt.
 
+## Run a routine
+
+Open **Routines** in the bot panel. Add a job, procedure, schedule, timezone, required skills, and
+connectors. Run a dry run and approve the procedure before you enable its schedule.
+
+The panel shows the next and last run, latest result or failure, and five recent attempts. You can
+run, pause, resume, edit, or delete the routine. A procedure change needs approval again.
+
+If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
+adds one item to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived
+bot does not resume its routines.
+
 ## Tools
 
 Open **Tools** in the bot editor to enable or disable installed plugins and MCP servers. New tools

@@ -7,11 +7,13 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/core/agent-controller";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   ApprovalRequestId,
   BotId,
+  EnvironmentId,
   EventId,
   McpServerId,
   ProviderDriverKind,
@@ -273,6 +275,7 @@ function makeMastraHarness() {
     emit,
     finishSend: () => resolveSend?.(),
     rejectSend: (index: number, cause: unknown) => rejectSends[index]?.(cause),
+    failSend: (cause: unknown) => rejectSends.at(-1)?.(cause),
   };
 }
 
@@ -298,7 +301,11 @@ function makeLayer(
   usageLedger: BotUsageLedgerShape = makeUsageLedger().service,
   overrides?: Pick<
     AgentControllerLiveOptions,
-    "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
+    | "resolveComputerUseServer"
+    | "entityMemoryRepository"
+    | "memoryCandidateRepository"
+    | "issueMcpCredential"
+    | "revokeMcpCredential"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
 ) {
@@ -339,7 +346,11 @@ function provideController<A, E>(
   usageLedger?: BotUsageLedgerShape,
   overrides?: Pick<
     AgentControllerLiveOptions,
-    "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
+    | "resolveComputerUseServer"
+    | "entityMemoryRepository"
+    | "memoryCandidateRepository"
+    | "issueMcpCredential"
+    | "revokeMcpCredential"
   >,
 ) {
   return effect.pipe(
@@ -1318,6 +1329,57 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("recreates a Mastra session after sendMessage fails", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const startInput = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+        };
+        yield* controller.startSession(codexThreadId, startInput);
+
+        const failedTurn = yield* controller.streamEvents.pipe(
+          Stream.filter(
+            (event) => event.type === "turn.completed" && event.payload.state === "failed",
+          ),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "First turn." });
+        yield* Effect.yieldNow;
+        mastra.failSend(new Error("Mastra session is poisoned"));
+        yield* Fiber.join(failedTurn);
+        yield* Effect.yieldNow;
+
+        assert.deepEqual(yield* controller.listSessions(), []);
+        expect(mastra.session.abort).toHaveBeenCalledOnce();
+        expect(mastra.deleteSession).toHaveBeenCalledWith({
+          resourceId: String(codexThreadId),
+        });
+
+        yield* controller.startSession(codexThreadId, startInput);
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Second turn." });
+
+        expect(mastra.createSession).toHaveBeenCalledTimes(2);
+        expect(mastra.sendMessage).toHaveBeenNthCalledWith(1, { content: "First turn." });
+        expect(mastra.sendMessage).toHaveBeenNthCalledWith(2, { content: "Second turn." });
+        expect(bridge.startSession).not.toHaveBeenCalled();
+        expect(bridge.sendTurn).not.toHaveBeenCalled();
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("keeps product feedback approval-gated in full-access mode", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -1340,6 +1402,10 @@ describe("AgentControllerLive", () => {
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
           toolName: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
           policy: "ask",
+        });
+        expect(mastra.session.permissions.setForTool).not.toHaveBeenCalledWith({
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          policy: expect.anything(),
         });
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
           toolName: "RestartMcpServers",
@@ -1755,7 +1821,7 @@ describe("AgentControllerLive", () => {
         yield* controller.respondToUserInput({
           threadId: codexThreadId,
           requestId: ApprovalRequestId.make("tool-input-1"),
-          answers: { answer: "Continue" },
+          answers: { "tool-input-1": "Continue" },
         });
         mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
 
@@ -1763,8 +1829,92 @@ describe("AgentControllerLive", () => {
         assert.isUndefined(completed?.activeTurnId);
         expect(mastra.session.respondToToolSuspension).toHaveBeenCalledWith({
           toolCallId: "tool-input-1",
-          resumeData: { answer: "Continue" },
+          resumeData: "Continue",
         });
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("fails a cancelled Mastra suspension and accepts the next turn", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask for input." });
+        mastra.emit({
+          type: "tool_suspended",
+          toolCallId: "tool-input-cancelled",
+          toolName: "ask_user",
+          args: {},
+          suspendPayload: {},
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+
+        vi.mocked(mastra.session.respondToToolSuspension).mockImplementationOnce(async () => {
+          mastra.emit({
+            type: "tool_suspension_cancelled",
+            toolCallId: "tool-input-cancelled",
+            toolName: "ask_user",
+            reason: "sendStreamResume() could not find a suspended run",
+          } as AgentControllerEvent);
+          mastra.emit({
+            type: "error",
+            error: new Error("AGENT_SEND_STREAM_RESUME_NO_SUSPENDED_THREAD_RUN"),
+          } as AgentControllerEvent);
+          mastra.emit({ type: "agent_end", reason: "error" } as AgentControllerEvent);
+        });
+        const responseExit = yield* controller
+          .respondToUserInput({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("tool-input-cancelled"),
+            answers: { "tool-input-cancelled": "Continue" },
+          })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(responseExit));
+        yield* Effect.yieldNow;
+
+        const failedTurns = events.filter(
+          (event) => event.type === "turn.completed" && event.payload.state === "failed",
+        );
+        expect(failedTurns).toHaveLength(1);
+        expect(failedTurns[0]).toMatchObject({
+          payload: {
+            errorMessage: "This response could not resume. Send your reply again.",
+          },
+        });
+        expect(
+          events.filter(
+            (event) =>
+              event.type === "user-input.resolved" &&
+              String(event.requestId) === "tool-input-cancelled",
+          ),
+        ).toHaveLength(0);
+        expect(mastra.deleteSession).not.toHaveBeenCalled();
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Try again." });
+        expect(mastra.sendMessage).toHaveBeenNthCalledWith(2, { content: "Try again." });
+        expect(mastra.createSession).toHaveBeenCalledTimes(1);
+        mastra.finishSend();
+        yield* Fiber.interrupt(collector);
       }),
       bridge.service,
       mastra.factory,
@@ -1834,7 +1984,7 @@ describe("AgentControllerLive", () => {
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ "builtin-exa_search": {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {}, "t3-code_preview_status": {} })),
       getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
@@ -1868,11 +2018,19 @@ describe("AgentControllerLive", () => {
         expect(makeMcpManagerMock).toHaveBeenCalledOnce();
         expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
           "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
+          "t3-code": {
+            url: "http://127.0.0.1:15070/mcp",
+            headers: { Authorization: "Bearer preview-test" },
+          },
         });
         expect(mcpManager.init).toHaveBeenCalledOnce();
         assert.property(
           mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
           "builtin-exa_search",
+        );
+        assert.property(
+          mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
+          "preview_status",
         );
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
           toolName: "builtin-exa_search",
@@ -1951,6 +2109,21 @@ describe("AgentControllerLive", () => {
       mastra.factory,
       makeMcpManager,
       baseDir,
+      undefined,
+      {
+        issueMcpCredential: ({ threadId, providerInstanceId }) =>
+          Effect.succeed({
+            config: {
+              environmentId: EnvironmentId.make("environment-preview-test"),
+              threadId,
+              providerSessionId: "provider-session-preview-test",
+              providerInstanceId,
+              endpoint: "http://127.0.0.1:15070/mcp",
+              authorizationHeader: "Bearer preview-test",
+            },
+          }),
+        revokeMcpCredential: () => Effect.void,
+      },
     );
   });
 

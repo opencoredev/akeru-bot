@@ -13,6 +13,18 @@ import {
   OrchestrationMessage,
   OrchestrationSession,
   OrchestrationThread,
+  RoutineApprovedPayload,
+  RoutineBlockedPayload,
+  RoutineCompletedPayload,
+  RoutineDeletedPayload,
+  RoutineDraftedPayload,
+  RoutineEnabledPayload,
+  RoutineFailedPayload,
+  RoutinePausedPayload,
+  RoutineRunCanceledPayload,
+  RoutineRunningPayload,
+  RoutineSkillAssignedPayload,
+  RoutineSkillUnassignedPayload,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -28,6 +40,8 @@ import {
   GroupDeletedPayload,
   GroupMemberAssignedPayload,
   GroupMemberUnassignedPayload,
+  GroupPersonAssignedPayload,
+  GroupPersonUnassignedPayload,
   GroupRenamedPayload,
   McpServerCreatedPayload,
   McpServerDeletedPayload,
@@ -38,6 +52,7 @@ import {
   ThreadActivityAppendedPayload,
   ThreadArchivedPayload,
   ThreadCreatedPayload,
+  ThreadOwnershipUpdatedPayload,
   ThreadDeletedPayload,
   ThreadInteractionModeSetPayload,
   ThreadMessageReactionSetPayload,
@@ -232,6 +247,9 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     groups: [],
     delegations: [],
     mcpServers: [],
+    routines: [],
+    routineRuns: [],
+    skillAssignments: [],
     threads: [],
     updatedAt: nowIso,
   };
@@ -357,6 +375,7 @@ export function projectEvent(
             runtimeMode: payload.runtimeMode,
             usageCap: payload.usageCap,
             voiceEnabled: payload.voiceEnabled,
+            channelBindings: payload.channelBindings,
             groupId: payload.groupId,
             archivedAt: null,
             createdAt: payload.createdAt,
@@ -390,6 +409,9 @@ export function projectEvent(
             ...(payload.runtimeMode !== undefined ? { runtimeMode: payload.runtimeMode } : {}),
             ...(payload.usageCap !== undefined ? { usageCap: payload.usageCap } : {}),
             ...(payload.voiceEnabled !== undefined ? { voiceEnabled: payload.voiceEnabled } : {}),
+            ...(payload.channelBindings !== undefined
+              ? { channelBindings: payload.channelBindings }
+              : {}),
             ...(payload.groupId !== undefined ? { groupId: payload.groupId } : {}),
             updatedAt: payload.updatedAt,
           }),
@@ -456,9 +478,13 @@ export function projectEvent(
         Effect.map((payload) => {
           const group = nextBase.groups.find((entry) => entry.id === payload.groupId);
           if (!group) return nextBase;
-          const members = group.members.some((member) => member.botId === payload.member.botId)
+          const members = group.members.some(
+            (member) => isGroupBotMember(member) && member.botId === payload.member.botId,
+          )
             ? group.members.map((member) =>
-                member.botId === payload.member.botId ? payload.member : member,
+                isGroupBotMember(member) && member.botId === payload.member.botId
+                  ? payload.member
+                  : member,
               )
             : [...group.members, payload.member];
           return {
@@ -485,7 +511,51 @@ export function projectEvent(
             members:
               nextBase.groups
                 .find((group) => group.id === payload.groupId)
-                ?.members.filter((member) => member.botId !== payload.botId) ?? [],
+                ?.members.filter(
+                  (member) => !isGroupBotMember(member) || member.botId !== payload.botId,
+                ) ?? [],
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "group.person-assigned":
+      return decodeForEvent(GroupPersonAssignedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const group = nextBase.groups.find((entry) => entry.id === payload.groupId);
+          if (!group) return nextBase;
+          const members = [
+            ...group.members.filter(
+              (member) => member.kind !== "person" || member.personId !== payload.person.personId,
+            ),
+            payload.person,
+          ];
+          return {
+            ...nextBase,
+            groups: updateGroup(nextBase.groups, payload.groupId, {
+              members,
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
+      );
+
+    case "group.person-unassigned":
+      return decodeForEvent(
+        GroupPersonUnassignedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          groups: updateGroup(nextBase.groups, payload.groupId, {
+            members:
+              nextBase.groups
+                .find((group) => group.id === payload.groupId)
+                ?.members.filter(
+                  (member) => member.kind !== "person" || member.personId !== payload.personId,
+                ) ?? [],
             updatedAt: payload.updatedAt,
           }),
         })),
@@ -496,14 +566,21 @@ export function projectEvent(
         Effect.map((payload) => {
           const group = nextBase.groups.find((entry) => entry.id === payload.groupId);
           if (!group) return nextBase;
-          let members = group.members.filter((member) => member.botId !== payload.bossBotId);
+          let members = group.members.filter(
+            (member) => !isGroupBotMember(member) || member.botId !== payload.bossBotId,
+          );
           if (payload.previousBossBotId !== null) {
-            members = members.filter((member) => member.botId !== payload.previousBossBotId);
+            members = members.filter(
+              (member) => !isGroupBotMember(member) || member.botId !== payload.previousBossBotId,
+            );
             if (payload.previousBossRole === "specialist") {
-              members = [...members, { botId: payload.previousBossBotId, role: "specialist" }];
+              members = [
+                ...members,
+                { kind: "bot", botId: payload.previousBossBotId, role: "specialist" },
+              ];
             }
           }
-          members = [...members, { botId: payload.bossBotId, role: "boss" }];
+          members = [...members, { kind: "bot", botId: payload.bossBotId, role: "boss" }];
           return {
             ...nextBase,
             groups: updateGroup(nextBase.groups, payload.groupId, {
@@ -540,6 +617,100 @@ export function projectEvent(
           ...nextBase,
           mcpServers: (nextBase.mcpServers ?? []).filter(
             (entry) => entry.id !== payload.mcpServerId,
+          ),
+        })),
+      );
+
+    case "routine.drafted":
+    case "routine.approved":
+    case "routine.enabled":
+    case "routine.paused":
+    case "routine.deleted": {
+      const schema =
+        event.type === "routine.drafted"
+          ? RoutineDraftedPayload
+          : event.type === "routine.approved"
+            ? RoutineApprovedPayload
+            : event.type === "routine.enabled"
+              ? RoutineEnabledPayload
+              : event.type === "routine.paused"
+                ? RoutinePausedPayload
+                : RoutineDeletedPayload;
+      return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const routines = nextBase.routines ?? [];
+          return {
+            ...nextBase,
+            routines: routines.some((routine) => routine.id === payload.routine.id)
+              ? routines.map((routine) =>
+                  routine.id === payload.routine.id ? payload.routine : routine,
+                )
+              : [...routines, payload.routine],
+          };
+        }),
+      );
+    }
+
+    case "routine.running":
+    case "routine.blocked":
+    case "routine.failed":
+    case "routine.completed":
+    case "routine.run-canceled": {
+      const schema =
+        event.type === "routine.running"
+          ? RoutineRunningPayload
+          : event.type === "routine.blocked"
+            ? RoutineBlockedPayload
+            : event.type === "routine.failed"
+              ? RoutineFailedPayload
+              : event.type === "routine.completed"
+                ? RoutineCompletedPayload
+                : RoutineRunCanceledPayload;
+      return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const routines = nextBase.routines ?? [];
+          const runs = nextBase.routineRuns ?? [];
+          return {
+            ...nextBase,
+            routines: routines.some((routine) => routine.id === payload.routine.id)
+              ? routines.map((routine) =>
+                  routine.id === payload.routine.id ? payload.routine : routine,
+                )
+              : [...routines, payload.routine],
+            routineRuns: runs.some((run) => run.id === payload.run.id)
+              ? runs.map((run) => (run.id === payload.run.id ? payload.run : run))
+              : [...runs, payload.run],
+          };
+        }),
+      );
+    }
+
+    case "skill-assignment.assigned":
+      return decodeForEvent(RoutineSkillAssignedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const assignments = nextBase.skillAssignments ?? [];
+          return {
+            ...nextBase,
+            skillAssignments: assignments.some((entry) => entry.id === payload.assignment.id)
+              ? assignments.map((entry) =>
+                  entry.id === payload.assignment.id ? payload.assignment : entry,
+                )
+              : [...assignments, payload.assignment],
+          };
+        }),
+      );
+
+    case "skill-assignment.unassigned":
+      return decodeForEvent(
+        RoutineSkillUnassignedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          skillAssignments: (nextBase.skillAssignments ?? []).filter(
+            (entry) => entry.id !== payload.assignmentId,
           ),
         })),
       );
@@ -600,6 +771,23 @@ export function projectEvent(
             : [...nextBase.threads, thread],
         };
       });
+
+    case "thread.ownership-updated":
+      return decodeForEvent(
+        ThreadOwnershipUpdatedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            botId: payload.botId,
+            groupId: payload.groupId,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
 
     case "thread.deleted":
       return decodeForEvent(ThreadDeletedPayload, event.payload, event.type, "payload").pipe(
@@ -803,6 +991,15 @@ export function projectEvent(
             turnId: payload.turnId,
             ...(payload.respondingBotId !== undefined
               ? { respondingBotId: payload.respondingBotId }
+              : {}),
+            ...(payload.authorPersonId !== undefined
+              ? { authorPersonId: payload.authorPersonId }
+              : {}),
+            ...(payload.authorDisplayName !== undefined
+              ? { authorDisplayName: payload.authorDisplayName }
+              : {}),
+            ...(payload.channelOrigin !== undefined
+              ? { channelOrigin: payload.channelOrigin }
               : {}),
             streaming: payload.streaming,
             createdAt: payload.createdAt,

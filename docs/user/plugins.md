@@ -10,7 +10,7 @@ Select a plugin to inspect its publisher, authentication, execution location, tr
 platforms, permissions, approval classes, setup, documentation, source, and dependent bots.
 
 Health stays **Not checked** until a real request succeeds. An enabled plugin is not proof that its
-connection works.
+connection works. A routine can require an enabled connector.
 
 ## Plugin actions
 

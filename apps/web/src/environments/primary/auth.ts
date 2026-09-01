@@ -318,12 +318,13 @@ function isTransientBootstrapError(error: unknown): boolean {
 }
 
 async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
-  const bootstrapCredential = getDesktopBootstrapCredential();
+  const pairingCredential = takePairingTokenFromUrl();
   const currentSession = await fetchSessionState();
-  if (currentSession.authenticated) {
+  if (currentSession.authenticated && !pairingCredential) {
     return { status: "authenticated" };
   }
 
+  const bootstrapCredential = pairingCredential ?? getDesktopBootstrapCredential();
   if (!bootstrapCredential) {
     return {
       status: "requires-auth",
@@ -508,7 +509,7 @@ export async function revokeOtherServerClientSessions(): Promise<number> {
 }
 
 export async function resolveInitialServerAuthGateState(): Promise<ServerAuthGateState> {
-  if (resolvedAuthenticatedGateState?.status === "authenticated") {
+  if (resolvedAuthenticatedGateState?.status === "authenticated" && !peekPairingTokenFromUrl()) {
     return resolvedAuthenticatedGateState;
   }
 

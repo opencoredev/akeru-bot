@@ -43,6 +43,7 @@ import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
   OrchestrationEngineService,
+  type OrchestrationDispatchActor,
   type OrchestrationEngineShape,
 } from "../Services/OrchestrationEngine.ts";
 const isOrchestrationCommandPreviouslyRejectedError = Schema.is(
@@ -53,6 +54,7 @@ const isOrchestrationCommandInvariantError = Schema.is(OrchestrationCommandInvar
 
 interface CommandEnvelope {
   command: OrchestrationCommand;
+  actor: OrchestrationDispatchActor | undefined;
   origin: OrchestrationClientOrigin | undefined;
   result: Deferred.Deferred<{ sequence: number }, OrchestrationDispatchError>;
   startedAtMs: number;
@@ -83,6 +85,9 @@ function commandToAggregateRef(command: OrchestrationCommand): {
     case "group.delete":
     case "group.member.assign":
     case "group.member.unassign":
+    case "group.person.assign":
+    case "group.person.unassign":
+    case "group.leave":
     case "group.boss.set":
       return {
         aggregateKind: "group",
@@ -107,6 +112,29 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       return {
         aggregateKind: "delegation",
         aggregateId: command.delegationId,
+      };
+    case "routine.create-approved":
+    case "routine.draft":
+    case "routine.approve":
+    case "routine.enable":
+    case "routine.pause":
+    case "routine.run":
+    case "routine.run.scheduled":
+    case "routine.run.start":
+    case "routine.run.block":
+    case "routine.run.fail":
+    case "routine.run.complete":
+    case "routine.run.cancel":
+    case "routine.delete":
+      return {
+        aggregateKind: "routine",
+        aggregateId: command.routineId,
+      };
+    case "routine.skill.assign":
+    case "routine.skill.unassign":
+      return {
+        aggregateKind: "skill-assignment",
+        aggregateId: command.assignmentId,
       };
     default:
       return {
@@ -208,6 +236,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
           readModel: commandReadModel,
+          ...(envelope.actor !== undefined ? { actor: envelope.actor } : {}),
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),
           Effect.mapError((cause) =>
@@ -381,6 +410,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
       yield* Queue.offer(commandQueue, {
         command,
+        actor: options?.actor,
         origin: options?.origin,
         result,
         startedAtMs: yield* Clock.currentTimeMillis,

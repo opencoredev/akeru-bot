@@ -13,6 +13,7 @@ import {
   PortabilityArchive,
   ProjectId,
   ThreadId,
+  isGroupBotMember,
   type PortabilityArchiveRecord,
   type PortabilityImportItem,
   type PortabilityImportPreview,
@@ -415,7 +416,9 @@ export function portableRecords(
       data: {
         name: safeText(group.name),
         bossBotId: group.bossBotId,
-        members: [...group.members].sort((left, right) => left.botId.localeCompare(right.botId)),
+        members: group.members
+          .filter(isGroupBotMember)
+          .sort((left, right) => left.botId.localeCompare(right.botId)),
       },
     })),
     ...snapshot.projects
@@ -737,7 +740,6 @@ export function parsePortabilityArchive(contents: string) {
   const groupIds = new Set(
     archive.records.filter((record) => record.type === "group").map((record) => record.id),
   );
-  const groupByBotId = new Map<string, string>();
   for (const record of archive.records) {
     if (record.type === "bot") {
       const missing = record.data.disabledMcpServerIds.find((id) => !mcpIds.has(id));
@@ -764,15 +766,6 @@ export function parsePortabilityArchive(contents: string) {
       ];
       const missing = referenced.find((id) => id !== null && !botIds.has(id));
       if (missing) throw new Error(`Group '${record.id}' references missing bot '${missing}'.`);
-      for (const member of record.data.members) {
-        const existingGroupId = groupByBotId.get(member.botId);
-        if (existingGroupId && existingGroupId !== record.id) {
-          throw new Error(
-            `Bot '${member.botId}' belongs to both group '${existingGroupId}' and '${record.id}'.`,
-          );
-        }
-        groupByBotId.set(member.botId, record.id);
-      }
     }
     if (record.type === "thread") {
       if (!projectIds.has(record.data.projectId)) {
@@ -1091,7 +1084,6 @@ export function previewPortabilityImport(
   const deletedThreadIds = new Set<string>(
     snapshot.threads.filter((thread) => thread.deletedAt !== null).map((thread) => thread.id),
   );
-  const currentBotGroupIds = new Map(snapshot.bots.map((bot) => [bot.id, bot.groupId]));
   const enabledMcpServerIds = new Set(
     (snapshot.mcpServers ?? []).filter((server) => server.enabled).map((server) => server.id),
   );
@@ -1141,13 +1133,7 @@ export function previewPortabilityImport(
       const hasUnavailableMember = record.data.members.some((member) =>
         unavailableBotIds.has(member.botId),
       );
-      const hasAssignedMember = record.data.members.some((member) => {
-        const groupId = currentBotGroupIds.get(member.botId);
-        return groupId !== undefined && groupId !== null && groupId !== record.id;
-      });
-      return record.data.bossBotId === null || hasUnavailableMember || hasAssignedMember
-        ? [record.id]
-        : [];
+      return record.data.bossBotId === null || hasUnavailableMember ? [record.id] : [];
     }),
   );
   for (const record of archive.records) {
@@ -1312,6 +1298,9 @@ function itemForCommand(
       case "group.delete":
       case "group.member.assign":
       case "group.member.unassign":
+      case "group.person.assign":
+      case "group.person.unassign":
+      case "group.leave":
       case "group.boss.set":
         return `group:${command.groupId}`;
       case "mcp-server.create":
@@ -1325,6 +1314,23 @@ function itemForCommand(
         return `delegation:${command.delegation.delegationId}`;
       case "delegation.cancel":
         return `delegation:${command.delegationId}`;
+      case "routine.create-approved":
+      case "routine.draft":
+      case "routine.approve":
+      case "routine.enable":
+      case "routine.pause":
+      case "routine.run":
+      case "routine.run.scheduled":
+      case "routine.run.start":
+      case "routine.run.block":
+      case "routine.run.fail":
+      case "routine.run.complete":
+      case "routine.run.cancel":
+      case "routine.delete":
+        return `routine:${command.routineId}`;
+      case "routine.skill.assign":
+      case "routine.skill.unassign":
+        return `skill-assignment:${command.assignmentId}`;
       default:
         return `thread:${command.threadId}`;
     }
@@ -1596,7 +1602,9 @@ export function commandsForPortabilityImport(
       });
     }
     const desired = new Map(record.data.members.map((member) => [member.botId, member.role]));
-    const predicted = new Map(existing.members.map((member) => [member.botId, member.role]));
+    const predicted = new Map(
+      existing.members.filter(isGroupBotMember).map((member) => [member.botId, member.role]),
+    );
     if (record.data.bossBotId && existing.bossBotId !== record.data.bossBotId) {
       const unassignPreviousBoss = existing.bossBotId !== null && !desired.has(existing.bossBotId);
       commands.push({

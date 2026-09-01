@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AuthSessionId,
   CheckpointRef,
   CommandId,
   EventId,
@@ -367,6 +368,8 @@ describe("applyThreadDetailEvent", () => {
           role: "user",
           text: "Hello, world!",
           turnId: null,
+          authorPersonId: AuthSessionId.make("person-1"),
+          authorDisplayName: "Leo",
           streaming: false,
           createdAt: "2026-04-01T06:00:00.000Z",
           updatedAt: "2026-04-01T06:00:00.000Z",
@@ -377,6 +380,8 @@ describe("applyThreadDetailEvent", () => {
       if (result.kind === "updated") {
         expect(result.thread.messages).toHaveLength(1);
         expect(result.thread.messages[0]?.text).toBe("Hello, world!");
+        expect(result.thread.messages[0]?.authorPersonId).toBe("person-1");
+        expect(result.thread.messages[0]?.authorDisplayName).toBe("Leo");
       }
     });
 
