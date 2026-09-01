@@ -268,7 +268,7 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
   }),
 );
 
-it.effect("decodes bot.create to approval required when an old client omits runtimeMode", () =>
+it.effect("leaves an omitted bot.create runtime mode for the server", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeOrchestrationCommand({
       type: "bot.create",
@@ -285,7 +285,7 @@ it.effect("decodes bot.create to approval required when an old client omits runt
     });
 
     if (parsed.type !== "bot.create") assert.fail(`Expected bot.create, received ${parsed.type}.`);
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_LOCAL_EXECUTION_MODE);
+    assert.strictEqual(parsed.runtimeMode, undefined);
   }),
 );
 

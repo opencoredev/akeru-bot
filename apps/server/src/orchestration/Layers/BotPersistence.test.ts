@@ -512,4 +512,37 @@ it.layer(TestLayer)("bot persistence", (it) => {
       assert.equal(rebuiltHistoricalThread?.groupId, null);
     }),
   );
+
+  it.effect("defaults omitted bot runtime modes by sandbox", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const snapshots = yield* ProjectionSnapshotQuery;
+
+      for (const sandbox of [null, "akeru-cloud"] as const) {
+        yield* engine.dispatch({
+          type: "bot.create",
+          commandId: CommandId.make(`cmd-bot-default-${sandbox ?? "local"}`),
+          botId: BotId.make(`bot-default-${sandbox ?? "local"}`),
+          name: "Akeru",
+          title: "Akeru",
+          avatar: { kind: "dither", seed: "akeru" },
+          engine: null,
+          sandbox,
+          usageCap: null,
+          groupId: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+      }
+
+      const bots = (yield* snapshots.getShellSnapshot()).bots;
+      assert.equal(
+        bots.find((bot) => bot.id === BotId.make("bot-default-local"))?.runtimeMode,
+        "approval-required",
+      );
+      assert.equal(
+        bots.find((bot) => bot.id === BotId.make("bot-default-akeru-cloud"))?.runtimeMode,
+        "full-access",
+      );
+    }),
+  );
 });

@@ -1,5 +1,7 @@
 import {
   BotId,
+  DEFAULT_LOCAL_EXECUTION_MODE,
+  DEFAULT_RUNTIME_MODE,
   EventId,
   GroupId,
   ProviderInstanceId,
@@ -409,7 +411,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           avatar: command.avatar,
           engine: command.engine,
           sandbox: command.sandbox,
-          runtimeMode: command.runtimeMode,
+          runtimeMode:
+            command.runtimeMode ??
+            (command.sandbox === null ? DEFAULT_LOCAL_EXECUTION_MODE : DEFAULT_RUNTIME_MODE),
           usageCap: command.usageCap,
           voiceEnabled: command.voiceEnabled ?? false,
           groupId: command.groupId,
