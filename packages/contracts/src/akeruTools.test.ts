@@ -34,7 +34,12 @@ describe("Akeru tool contracts", () => {
         implementedTools: new Set(["Shell", "ExternalShell", "CopyToBox"]),
       }).map((tool) => tool.id),
     ).toEqual(["Shell"]);
-    expect(AKERU_TOOL_CATALOG.map((tool) => tool.id)).not.toContain("RestartMcpServers");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "AuthenticateMcpServer")?.approval).toBe(
+      "secrets",
+    );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "RestartMcpServers")?.approval).toBe(
+      "production",
+    );
   });
 
   it("decodes SendToAgent input and rejects server-owned fields", () => {

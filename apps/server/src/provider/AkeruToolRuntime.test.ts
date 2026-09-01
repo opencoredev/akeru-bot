@@ -11,7 +11,7 @@ import {
 } from "@mastra/core/workspace";
 import { PNG } from "pngjs";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { BotId, type AkeruToolReceipt } from "@t3tools/contracts";
+import { BotId, ThreadId, type AkeruToolReceipt } from "@t3tools/contracts";
 
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
@@ -157,6 +157,39 @@ describe("AkeruToolRuntime", () => {
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
   });
 
+  it("requires approval before catalog MCP handlers run and forwards progress", async () => {
+    const handler = vi.fn(async ({ emitProgress }) => {
+      await emitProgress("Restarting MCP server 'search'.");
+      return { servers: [{ name: "search", connected: true }] };
+    });
+    const onProgress = vi.fn();
+    const runtime = createAkeruToolRuntime({ onProgress });
+    runtime.registerSession("thread-mcp", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: { RestartMcpServers: handler },
+    });
+    const execution = {
+      threadId: "thread-mcp",
+      toolId: "RestartMcpServers" as const,
+      toolCallId: "tool-restart",
+      input: { serverIds: ["search"] },
+      approvalMode: "require-grant" as const,
+    };
+
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    runtime.grantApproval(execution);
+    await expect(runtime.execute(execution)).resolves.toEqual({
+      servers: [{ name: "search", connected: true }],
+    });
+    expect(onProgress).toHaveBeenCalledWith({
+      threadId: "thread-mcp",
+      toolId: "RestartMcpServers",
+      toolCallId: "tool-restart",
+      summary: "Restarting MCP server 'search'.",
+    });
+  });
+
   it("copies files only when both boundaries are registered", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("copy-bot");
@@ -230,7 +263,7 @@ describe("AkeruToolRuntime", () => {
 
     await expect(
       runtime.execute({
-        threadId: "thread-1",
+        threadId: ThreadId.make("thread-1"),
         toolId: "request_box_help",
         toolCallId: "tool-help",
         input: { reason: "captcha", message: "Complete the CAPTCHA." },
@@ -308,6 +341,41 @@ describe("AkeruToolRuntime", () => {
       fatalToThread: false,
       summary: "Message dispatch failed",
     });
+  });
+
+  it("publishes a failure receipt when user messaging returns one", async () => {
+    const receipts: AkeruToolReceipt[] = [];
+    const runtime = createAkeruToolRuntime({
+      now: () => "2026-09-01T00:00:00.000Z",
+      onReceipt: (receipt) => receipts.push(receipt),
+    });
+    const execution = {
+      threadId: "thread-1",
+      toolId: "SendToUser" as const,
+      toolCallId: "tool-message",
+      input: { message: "The export is ready." },
+      approvalMode: "require-grant" as const,
+    };
+    runtime.registerSession("thread-1", {
+      botId: BotId.make("parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      sendToUser: async () => ({
+        receiptId: "tool-message",
+        toolId: "SendToUser",
+        phase: "failure",
+        threadId: ThreadId.make("thread-1"),
+        botId: BotId.make("parent"),
+        summary: "Message dispatch failed",
+        failureCode: "internal",
+        fatalToThread: false,
+        createdAt: "2026-09-01T00:00:00.000Z",
+      }),
+    });
+    runtime.grantApproval(execution);
+
+    await expect(runtime.execute(execution)).resolves.toMatchObject({ phase: "failure" });
+    expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
   });
 
   it("translates await handles to workspace process ids", async () => {
