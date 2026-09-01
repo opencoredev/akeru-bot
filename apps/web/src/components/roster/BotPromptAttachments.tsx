@@ -84,7 +84,18 @@ export function BotPromptAttachments({
                 alt={attachment.file.name}
                 className="size-full object-cover"
                 draggable={false}
+                onError={(event) => {
+                  event.currentTarget.hidden = true;
+                  event.currentTarget.nextElementSibling?.removeAttribute("hidden");
+                  event.currentTarget.closest("button")?.setAttribute("disabled", "");
+                }}
               />
+              <span
+                hidden
+                className="flex size-full items-center justify-center break-all px-1 text-center text-[10px] leading-tight text-muted-foreground"
+              >
+                {attachment.file.name}
+              </span>
             </button>
           ) : (
             <span className="flex size-full items-center justify-center break-all px-1 text-center text-[10px] leading-tight text-muted-foreground">

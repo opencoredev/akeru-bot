@@ -150,6 +150,7 @@ describe("bot prompt composer", () => {
       tree,
       (element) => element.props["aria-label"] === "Remove preview.png",
     );
+    const image = visitElements(tree, (element) => element.props.alt === "preview.png");
 
     expect(markup).toContain('src="blob:preview"');
     expect(markup).toContain('alt="preview.png"');
@@ -164,5 +165,19 @@ describe("bot prompt composer", () => {
     expect(onRemove).toHaveBeenCalledOnce();
     expect(onRemove).toHaveBeenCalledWith("attachment-1");
     expect(onExpand).toHaveBeenCalledOnce();
+
+    const removeAttribute = vi.fn();
+    const setAttribute = vi.fn();
+    const currentTarget = {
+      hidden: false,
+      nextElementSibling: { removeAttribute },
+      closest: () => ({ setAttribute }),
+    };
+    (
+      image?.props.onError as ((event: { currentTarget: typeof currentTarget }) => void) | undefined
+    )?.({ currentTarget });
+    expect(currentTarget.hidden).toBe(true);
+    expect(removeAttribute).toHaveBeenCalledWith("hidden");
+    expect(setAttribute).toHaveBeenCalledWith("disabled", "");
   });
 });
