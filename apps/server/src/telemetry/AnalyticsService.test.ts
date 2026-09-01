@@ -392,7 +392,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
     }),
   );
 
-  it.effect("deletes analytics state when no PostHog key is configured", () =>
+  it.effect("uses the bundled PostHog key when no override is configured", () =>
     Effect.gen(function* () {
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "akeru-analytics-no-key-",
@@ -407,11 +407,9 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         const config = yield* ServerConfig.ServerConfig;
         const fs = yield* FileSystem.FileSystem;
         const analytics = yield* AnalyticsService.AnalyticsService;
-        yield* fs.writeFileString(config.analyticsStatePath, "queued analytics");
-
         yield* analytics.flush;
 
-        assert.isFalse(yield* fs.exists(config.analyticsStatePath));
+        assert.isTrue(yield* fs.exists(config.analyticsStatePath));
       }).pipe(Effect.provide(analyticsLayer));
     }),
   );

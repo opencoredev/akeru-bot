@@ -5,7 +5,8 @@
 Akeru Bot sends one PostHog event named `usage_3h` for each non-empty, closed
 three-hour UTC bucket. The default destination is
 `https://us.i.posthog.com/batch/`. `T3CODE_POSTHOG_HOST` changes the host and keeps
-the `/batch/` path.
+the `/batch/` path. Packaged builds use the Akeru production project by default.
+`T3CODE_POSTHOG_KEY` changes the public project key for distributor builds.
 
 Packaged production builds enable analytics by default. Development and CI disable
 it by default. `T3CODE_TELEMETRY_ENABLED` overrides that default for packaged,
