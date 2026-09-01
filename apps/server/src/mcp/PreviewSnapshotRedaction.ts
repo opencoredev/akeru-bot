@@ -3,7 +3,7 @@ import { PNG } from "pngjs";
 import { redactSensitiveText } from "./SensitiveDataRedaction.ts";
 
 const REDACTED = "[REDACTED]";
-const MAX_SCREENSHOT_BYTES = 20 * 1_024 * 1_024;
+export const MAX_SCREENSHOT_BYTES = 20 * 1_024 * 1_024;
 const MAX_SCREENSHOT_PIXELS = 16_000_000;
 const secretField =
   /^(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|cookie|set-cookie|session|sessionId|clientSecret|awsSecretAccessKey)$/i;

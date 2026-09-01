@@ -55,9 +55,13 @@ describe("ProviderSessionStartInput", () => {
       threadId: "thread-1",
       provider: "codex",
       botSandbox: "vercel",
+      botId: "bot-one",
+      botSandboxBrowserSharing: "shared",
       runtimeMode: "full-access",
     });
     expect(parsed.botSandbox).toBe("vercel");
+    expect(parsed.botId).toBe("bot-one");
+    expect(parsed.botSandboxBrowserSharing).toBe("shared");
   });
 
   it("accepts bot-scoped sandbox and browser sharing", () => {

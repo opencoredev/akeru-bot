@@ -132,7 +132,9 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       });
     }
   }
-  const partitions = yield* resolveMemoryArchivePartitions(input.access, importTarget);
+  const resolvedPartitions = yield* resolveMemoryArchivePartitions(input.access, importTarget);
+  const partitions =
+    importTarget === "workspace" ? resolvedPartitions.slice(0, 1) : resolvedPartitions;
   return {
     partitions,
     revisions: input.archive.revisions.map(({ revision }) => revision),
@@ -147,9 +149,6 @@ export function previewAkeruMemoryImport(input: {
 }): Effect.Effect<AkeruMemoryImportPreview, Error> {
   return Effect.gen(function* () {
     const prepared = yield* prepare(input);
-    if (!input.repository.previewImport) {
-      return yield* new EntityMemoryImportError({ detail: "Memory import is unavailable." });
-    }
     return yield* input.repository.previewImport({ access: input.access, ...prepared });
   });
 }
@@ -163,9 +162,6 @@ export function applyAkeruMemoryImport(input: {
 }): Effect.Effect<AkeruMemoryImportApplyResult, Error> {
   return Effect.gen(function* () {
     const prepared = yield* prepare(input);
-    if (!input.repository.applyImport) {
-      return yield* new EntityMemoryImportError({ detail: "Memory import is unavailable." });
-    }
     return yield* input.repository.applyImport({
       access: input.access,
       ...prepared,

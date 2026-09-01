@@ -9,6 +9,7 @@
 import {
   RuntimeMode,
   IsoDateTime,
+  McpServerId,
   OrchestrationSessionStatus,
   ProviderInstanceId,
   ThreadId,
@@ -27,6 +28,7 @@ export const ProjectionThreadSession = Schema.Struct({
   providerName: Schema.NullOr(Schema.String),
   providerInstanceId: Schema.NullOr(ProviderInstanceId),
   runtimeMode: RuntimeMode,
+  mcpServerIds: Schema.Array(McpServerId),
   activeTurnId: Schema.NullOr(TurnId),
   lastError: Schema.NullOr(Schema.String),
   updatedAt: IsoDateTime,

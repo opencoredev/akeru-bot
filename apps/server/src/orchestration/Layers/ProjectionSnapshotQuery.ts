@@ -127,7 +127,9 @@ const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
     sequence: Schema.NullOr(NonNegativeInt),
   }),
 );
-const ProjectionThreadSessionDbRowSchema = ProjectionThreadSession;
+const ProjectionThreadSessionDbRowSchema = ProjectionThreadSession.mapFields(
+  Struct.assign({ mcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)) }),
+);
 const ProjectionCheckpointDbRowSchema = ProjectionCheckpoint.mapFields(
   Struct.assign({
     files: Schema.fromJsonString(Schema.Array(OrchestrationCheckpointFile)),
@@ -342,6 +344,7 @@ function mapSessionRow(
     providerName: row.providerName,
     ...(row.providerInstanceId !== null ? { providerInstanceId: row.providerInstanceId } : {}),
     runtimeMode: row.runtimeMode,
+    mcpServerIds: row.mcpServerIds,
     activeTurnId: row.activeTurnId,
     lastError: row.lastError,
     updatedAt: row.updatedAt,
@@ -722,6 +725,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           provider_session_id AS "providerSessionId",
           provider_thread_id AS "providerThreadId",
           runtime_mode AS "runtimeMode",
+          mcp_server_ids_json AS "mcpServerIds",
           active_turn_id AS "activeTurnId",
           last_error AS "lastError",
           updated_at AS "updatedAt"
@@ -743,6 +747,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           sessions.provider_session_id AS "providerSessionId",
           sessions.provider_thread_id AS "providerThreadId",
           sessions.runtime_mode AS "runtimeMode",
+          sessions.mcp_server_ids_json AS "mcpServerIds",
           sessions.active_turn_id AS "activeTurnId",
           sessions.last_error AS "lastError",
           sessions.updated_at AS "updatedAt"
@@ -768,6 +773,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           sessions.provider_session_id AS "providerSessionId",
           sessions.provider_thread_id AS "providerThreadId",
           sessions.runtime_mode AS "runtimeMode",
+          sessions.mcp_server_ids_json AS "mcpServerIds",
           sessions.active_turn_id AS "activeTurnId",
           sessions.last_error AS "lastError",
           sessions.updated_at AS "updatedAt"
@@ -1194,6 +1200,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           provider_name AS "providerName",
           provider_instance_id AS "providerInstanceId",
           runtime_mode AS "runtimeMode",
+          mcp_server_ids_json AS "mcpServerIds",
           active_turn_id AS "activeTurnId",
           last_error AS "lastError",
           updated_at AS "updatedAt"
@@ -1816,18 +1823,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
               for (const row of sessionRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
-                sessionsByThread.set(row.threadId, {
-                  threadId: row.threadId,
-                  status: row.status,
-                  providerName: row.providerName,
-                  ...(row.providerInstanceId !== null
-                    ? { providerInstanceId: row.providerInstanceId }
-                    : {}),
-                  runtimeMode: row.runtimeMode,
-                  activeTurnId: row.activeTurnId,
-                  lastError: row.lastError,
-                  updatedAt: row.updatedAt,
-                });
+                sessionsByThread.set(row.threadId, mapSessionRow(row));
               }
 
               const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(

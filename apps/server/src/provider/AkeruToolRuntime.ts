@@ -1,11 +1,12 @@
+// @effect-diagnostics globalDate:off
 import { RequestContext } from "@mastra/core/request-context";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
   AkeruToolInputSchemas,
-  type AkeruToolReceipt,
   type BotId,
   type AkeruToolDefinition,
   type AkeruToolId,
+  type AkeruToolReceipt,
   type AkeruToolWorkspaceType,
   type RuntimeMode,
   ThreadId,
@@ -79,6 +80,7 @@ export interface AkeruToolSession {
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
+  readonly onReceipt?: (receipt: AkeruToolReceipt) => void;
   readonly onProgress?: (input: {
     readonly threadId: string;
     readonly toolId: AkeruToolId;
@@ -120,6 +122,7 @@ const BACKEND_NAMES: Record<
     | "CreateChannel"
     | "UpdateChannel"
     | "SendToUser"
+    | "InstallPlugin"
     | "GetMcpServerStatus"
     | "TestMcpServer"
     | "ReconnectMcpServer"
@@ -190,9 +193,28 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
   const sessions = new Map<string, AkeruToolSession>();
   const grants = new Map<string, { readonly toolId: AkeruRuntimeToolId; readonly input: string }>();
   const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
-  const clearGrants = (threadId: string) => {
+  const clearApprovals = (threadId: string) => {
     for (const grantKey of grants.keys()) {
       if (grantKey.startsWith(`${threadId}\u0000`)) grants.delete(grantKey);
+    }
+  };
+  const emitReceipt = (
+    input: AkeruToolExecution,
+    phase: AkeruToolReceipt["phase"],
+    details?: Pick<AkeruToolReceipt, "failureCode" | "summary">,
+  ) => {
+    try {
+      options?.onReceipt?.({
+        receiptId: input.toolCallId,
+        toolId: input.toolId,
+        phase,
+        threadId: ThreadId.make(input.threadId),
+        fatalToThread: false,
+        createdAt: new Date().toISOString(),
+        ...details,
+      });
+    } catch {
+      // Receipt observers must not change tool execution.
     }
   };
 
@@ -280,14 +302,14 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
 
   return {
     registerSession: (threadId, session) => {
-      clearGrants(threadId);
+      clearApprovals(threadId);
       sessions.set(threadId, session);
     },
     unregisterSession: (threadId) => {
       sessions.delete(threadId);
-      clearGrants(threadId);
+      clearApprovals(threadId);
     },
-    clearApprovals: clearGrants,
+    clearApprovals,
     toolsForThread,
     requiresApproval: async (threadId, toolId, input) => {
       const session = sessions.get(threadId);
@@ -303,189 +325,219 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       });
     },
     execute: async (input) => {
-      const session = sessions.get(input.threadId);
-      if (!session) throw new Error(`Tool session '${input.threadId}' is not registered.`);
-      const tool = toolsForThread(input.threadId).find(
-        (candidate) => candidate.id === input.toolId,
-      );
-      if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
-      const decoded = await validatedInput(input.toolId, input.input);
-      if (await requiresApproval(session, tool, decoded)) {
-        const grantKey = key(input.threadId, input.toolCallId);
-        const grant = grants.get(grantKey);
-        if (
-          !grant ||
-          input.approvalMode !== "require-grant" ||
-          grant?.toolId !== input.toolId ||
-          grant.input !== canonicalInput(decoded)
-        ) {
-          throw new Error(`Tool '${input.toolId}' requires approval.`);
-        }
-        grants.delete(grantKey);
-      }
-
-      if (isMemoryToolId(input.toolId)) {
-        const handler = session.memoryHandlers?.[input.toolId];
-        if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
-        return handler({ ...input, toolId: input.toolId, input: decoded });
-      }
-
-      const catalogHandler = session.catalogHandlers?.[input.toolId];
-      if (catalogHandler) {
-        return catalogHandler({
-          input: decoded,
-          emitProgress: (summary) =>
-            options?.onProgress?.({
-              threadId: input.threadId,
-              toolId: input.toolId as AkeruToolId,
-              toolCallId: input.toolCallId,
-              summary,
-            }),
-        });
-      }
-
-      if (input.toolId === "SendToAgent") {
-        if (!session.delegation) throw new Error("Delegation is not available for this session.");
-        const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);
-        try {
-          return await session.delegation.send(delegationInput);
-        } catch (cause) {
-          return {
-            receiptId: input.toolCallId,
-            toolId: input.toolId,
-            phase: "failure",
-            threadId: ThreadId.make(input.threadId),
-            botId: session.botId,
-            summary: cause instanceof Error ? cause.message : String(cause),
-            failureCode: "internal",
-            fatalToThread: false,
-            billedBotId: delegationInput.botId,
-            createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-          } satisfies AkeruToolReceipt;
-        }
-      }
-
-      if (input.toolId === "CreateChannel" || input.toolId === "UpdateChannel") {
-        if (!session.channels || !session.botId) {
-          throw new Error("Channel management is not available for this session.");
-        }
-        try {
-          const channelId =
-            input.toolId === "CreateChannel"
-              ? await session.channels.create(decodeAkeruToolInput("CreateChannel", decoded))
-              : await session.channels.update(decodeAkeruToolInput("UpdateChannel", decoded));
-          return {
-            receiptId: input.toolCallId,
-            toolId: input.toolId,
-            phase: "success",
-            threadId: ThreadId.make(input.threadId),
-            botId: session.botId,
-            summary: `Channel '${channelId}' saved.`,
-            fatalToThread: false,
-            billedBotId: session.botId,
-            createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-          } satisfies AkeruToolReceipt;
-        } catch (cause) {
-          return {
-            receiptId: input.toolCallId,
-            toolId: input.toolId,
-            phase: "failure",
-            threadId: ThreadId.make(input.threadId),
-            botId: session.botId,
-            summary: cause instanceof Error ? cause.message : String(cause),
-            failureCode: "internal",
-            fatalToThread: false,
-            billedBotId: session.botId,
-            createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-          } satisfies AkeruToolReceipt;
-        }
-      }
-
-      if (input.toolId === "SendToUser") {
-        if (!session.sendToUser)
-          throw new Error("User messaging is not available for this session.");
-        try {
-          return await session.sendToUser(decodeAkeruToolInput("SendToUser", decoded));
-        } catch (cause) {
-          return {
-            receiptId: input.toolCallId,
-            toolId: input.toolId,
-            phase: "failure",
-            threadId: ThreadId.make(input.threadId),
-            botId: session.botId,
-            summary: cause instanceof Error ? cause.message : String(cause),
-            failureCode: "internal",
-            fatalToThread: false,
-            createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-          } satisfies AkeruToolReceipt;
-        }
-      }
-
-      if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
-        const source =
-          input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;
-        const destination =
-          input.toolId === "CopyToBox" ? session.workspace : session.userComputerWorkspace;
-        if (!source?.filesystem || !destination?.filesystem) {
-          throw new Error("Both computer boundaries are required for file copy.");
-        }
-        const sourcePath = requiredString(decoded, "sourcePath");
-        const destinationPath = requiredString(decoded, "destinationPath");
-        await destination.filesystem.writeFile(
-          destinationPath,
-          await source.filesystem.readFile(sourcePath),
-          { recursive: true },
+      let failureCode: NonNullable<AkeruToolReceipt["failureCode"]> = "internal";
+      emitReceipt(input, "start");
+      try {
+        failureCode = "not_found";
+        const session = sessions.get(input.threadId);
+        if (!session) throw new Error(`Tool session '${input.threadId}' is not registered.`);
+        const tool = toolsForThread(input.threadId).find(
+          (candidate) => candidate.id === input.toolId,
         );
-        return { sourcePath, destinationPath };
-      }
-      if (input.toolId === "request_box_help") {
-        if (!options?.onUserActionRequired || !session.botId || !session.botName) {
-          throw new Error("Human handoff is not available for this session.");
+        if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
+
+        failureCode = "validation";
+        const decoded = await validatedInput(input.toolId, input.input);
+        failureCode = "denied";
+        if (await requiresApproval(session, tool, decoded)) {
+          const grantKey = key(input.threadId, input.toolCallId);
+          const grant = grants.get(grantKey);
+          if (
+            !grant ||
+            input.approvalMode !== "require-grant" ||
+            grant.toolId !== input.toolId ||
+            grant.input !== canonicalInput(decoded)
+          ) {
+            throw new Error(`Tool '${input.toolId}' requires approval.`);
+          }
+          grants.delete(grantKey);
         }
-        await options.onUserActionRequired({
-          botId: session.botId,
-          botName: session.botName,
-          toolId: input.toolId,
-          summary: requiredString(decoded, "message"),
-          nextAction: "Open the bot workspace and complete the requested step.",
-          target: requiredString(decoded, "reason"),
-        });
-        return { requested: true };
-      }
 
-      const workspace = workspaceForTool(input.toolId, session);
-      const backends = await toolsForWorkspace(workspace);
-      const backendNames = BACKEND_NAMES[input.toolId as keyof typeof BACKEND_NAMES] ?? [];
-      const backendName = backendNames.find((name) => executable(backends[name]));
-      const backend = backendName ? backends[backendName] : undefined;
-      if (!executable(backend)) throw new Error(`Tool '${input.toolId}' has no backend.`);
-      const backendInput =
-        input.toolId === "AwaitShell" || input.toolId === "AwaitExternalShell"
-          ? { pid: requiredString(decoded, "handleId"), wait: true }
-          : decoded;
-      const result = await backend.execute(backendInput, {
-        workspace,
-        requestContext: new RequestContext(),
-        observe: {
-          span: async <A>(_name: string, run: () => A | Promise<A>) => run(),
-          log: () => undefined,
-        },
-      });
-      if (input.toolId !== "Screenshot") return result;
-
-      const mediaType = field(result, "mediaType");
-      const data = field(result, "data");
-      if (mediaType !== "image/png" || typeof data !== "string") {
-        throw new Error("Screenshot result is invalid.");
+        failureCode = "not_found";
+        let result: unknown;
+        const catalogHandler = session.catalogHandlers?.[input.toolId as AkeruToolId];
+        if (isMemoryToolId(input.toolId)) {
+          const handler = session.memoryHandlers?.[input.toolId];
+          if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
+          failureCode = "internal";
+          result = await handler({ ...input, toolId: input.toolId, input: decoded });
+        } else if (catalogHandler) {
+          failureCode = "internal";
+          result = await catalogHandler({
+            input: decoded,
+            emitProgress: (summary: string) =>
+              options?.onProgress?.({
+                threadId: input.threadId,
+                toolId: input.toolId as AkeruToolId,
+                toolCallId: input.toolCallId,
+                summary,
+              }),
+          });
+        } else if (input.toolId === "SendToAgent") {
+          if (!session.delegation) throw new Error("Delegation is not available for this session.");
+          const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);
+          failureCode = "internal";
+          try {
+            result = await session.delegation.send(delegationInput);
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              billedBotId: delegationInput.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (input.toolId === "CreateChannel" || input.toolId === "UpdateChannel") {
+          if (!session.channels || !session.botId) {
+            throw new Error("Channel management is not available for this session.");
+          }
+          failureCode = "internal";
+          try {
+            const channelId =
+              input.toolId === "CreateChannel"
+                ? await session.channels.create(decodeAkeruToolInput("CreateChannel", decoded))
+                : await session.channels.update(decodeAkeruToolInput("UpdateChannel", decoded));
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "success",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary: `Channel '${channelId}' saved.`,
+              fatalToThread: false,
+              billedBotId: session.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              billedBotId: session.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (input.toolId === "SendToUser") {
+          if (!session.sendToUser) {
+            throw new Error("User messaging is not available for this session.");
+          }
+          failureCode = "internal";
+          try {
+            result = await session.sendToUser(decodeAkeruToolInput("SendToUser", decoded));
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
+          const source =
+            input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;
+          const destination =
+            input.toolId === "CopyToBox" ? session.workspace : session.userComputerWorkspace;
+          if (!source?.filesystem || !destination?.filesystem) {
+            throw new Error("Both computer boundaries are required for file copy.");
+          }
+          const sourcePath = requiredString(decoded, "sourcePath");
+          const destinationPath = requiredString(decoded, "destinationPath");
+          failureCode = "internal";
+          await destination.filesystem.writeFile(
+            destinationPath,
+            await source.filesystem.readFile(sourcePath),
+            { recursive: true },
+          );
+          result = { sourcePath, destinationPath };
+        } else if (input.toolId === "request_box_help") {
+          if (!options?.onUserActionRequired || !session.botId || !session.botName) {
+            throw new Error("Human handoff is not available for this session.");
+          }
+          failureCode = "internal";
+          await options.onUserActionRequired({
+            botId: session.botId,
+            botName: session.botName,
+            toolId: input.toolId,
+            summary: requiredString(decoded, "message"),
+            nextAction: "Open the bot workspace and complete the requested step.",
+            target: requiredString(decoded, "reason"),
+          });
+          result = { requested: true };
+        } else {
+          const workspace = workspaceForTool(input.toolId, session);
+          const backends = await toolsForWorkspace(workspace);
+          const backendNames = BACKEND_NAMES[input.toolId as keyof typeof BACKEND_NAMES] ?? [];
+          const backendName = backendNames.find((name) => executable(backends[name]));
+          const backend = backendName ? backends[backendName] : undefined;
+          if (!executable(backend)) throw new Error(`Tool '${input.toolId}' has no backend.`);
+          const backendInput =
+            input.toolId === "AwaitShell" || input.toolId === "AwaitExternalShell"
+              ? { pid: requiredString(decoded, "handleId"), wait: true }
+              : decoded;
+          failureCode = "internal";
+          result = await backend.execute(backendInput, {
+            workspace,
+            requestContext: new RequestContext(),
+            observe: {
+              span: async <A>(_name: string, run: () => A | Promise<A>) => run(),
+              log: () => undefined,
+            },
+          });
+        }
+        if (input.toolId === "Screenshot") {
+          const mediaType = field(result, "mediaType");
+          const data = field(result, "data");
+          if (mediaType !== "image/png" || typeof data !== "string") {
+            throw new Error("Screenshot result is invalid.");
+          }
+          const redacted = redactComputerScreenshot({
+            mediaType,
+            data: Buffer.from(data, "base64"),
+          });
+          result = {
+            ...(result as Record<string, unknown>),
+            data: Buffer.from(redacted.data).toString("base64"),
+          };
+        }
+        if (field(result, "phase") === "failure") {
+          const summary = field(result, "summary");
+          emitReceipt(input, "failure", {
+            failureCode,
+            summary: typeof summary === "string" ? summary : "Tool execution failed.",
+          });
+          return result;
+        }
+        emitReceipt(input, "success");
+        return result;
+      } catch (cause) {
+        emitReceipt(input, "failure", { failureCode, summary: "Tool execution failed." });
+        throw cause;
       }
-      const redacted = redactComputerScreenshot({
-        mediaType,
-        data: Buffer.from(data, "base64"),
-      });
-      return {
-        ...(result as Record<string, unknown>),
-        data: Buffer.from(redacted.data).toString("base64"),
-      };
     },
   };
 }

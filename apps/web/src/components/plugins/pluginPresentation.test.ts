@@ -92,7 +92,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "All" }).flatMap((section) =>
         section.plugins.map((plugin) => plugin.id),
       ),
-    ).toHaveLength(51);
+    ).toHaveLength(52);
     expect(
       buildPluginSections({
         plugins: catalog,

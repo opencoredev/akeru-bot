@@ -9,6 +9,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { McpServerUrl } from "./mcpServer.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
 export const AKERU_PATH_MAX_CHARS = 512;
@@ -59,6 +60,12 @@ export const AkeruToolInputSchemas = {
   }),
   SendToUser: Schema.Struct({
     message: TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_COMMAND_MAX_CHARS)),
+  }),
+  InstallPlugin: Schema.Struct({
+    pluginId: TrimmedNonEmptyString,
+    name: TrimmedNonEmptyString,
+    url: McpServerUrl,
+    authentication: Schema.Literals(["none", "oauth", "optional-oauth"]),
   }),
   GetMcpServerStatus: McpServerIdInput,
   TestMcpServer: McpServerIdInput,
@@ -202,6 +209,9 @@ export const AKERU_TOOL_CATALOG = [
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
     approval: "send",
+  }),
+  define("InstallPlugin", "bot-workspace", "Install or update a URL MCP plugin.", {
+    approval: "production",
   }),
   define("GetMcpServerStatus", "bot-workspace", "Inspect an MCP server connection."),
   define("TestMcpServer", "bot-workspace", "Run a real MCP server connection test."),

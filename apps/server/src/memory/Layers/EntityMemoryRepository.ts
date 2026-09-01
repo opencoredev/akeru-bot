@@ -6,7 +6,6 @@ import {
   AkeruMemoryRevision,
   AkeruMemoryRootId,
   AkeruMemoryTenantId,
-  ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -18,7 +17,6 @@ import { toPersistenceDecodeError, toPersistenceSqlError } from "../../persisten
 import {
   AkeruMemoryAccessDenied,
   resolveAuthorizedMemoryPartitions,
-  resolveRecallMemoryPartitions,
   type AuthorizedMemoryPartition,
 } from "../EntityMemoryAccess.ts";
 import {
@@ -63,13 +61,6 @@ const EntityMemoryDbRow = Schema.Struct({
   affectedBotIds: Schema.String,
 });
 type EntityMemoryDbRow = typeof EntityMemoryDbRow.Type;
-
-const EntityMemoryDerivedCopyRow = Schema.Struct({
-  tenantId: AkeruMemoryTenantId,
-  rootId: AkeruMemoryRootId,
-  revisionId: AkeruMemoryId,
-  threadId: ThreadId,
-});
 
 const selectColumns = `
   memory_id AS id,
@@ -198,6 +189,41 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     revision.partition.partitionId === partition.partitionId &&
     revision.visibility === partition.visibility;
 
+  const sameIds = (left: ReadonlyArray<string>, right: ReadonlyArray<string>) =>
+    [...left].sort().join("\0") === [...right].sort().join("\0");
+
+  const expectedEntity = (
+    access: Parameters<typeof resolveAuthorizedMemoryPartitions>[0],
+    revision: AkeruMemoryRevision,
+  ) => {
+    switch (revision.partition.scope) {
+      case "user":
+      case "bot-user":
+        return { kind: "user", id: AkeruMemoryEntityId.make(access.userId) } as const;
+      case "bot":
+        return access.botId === null
+          ? null
+          : ({ kind: "bot", id: AkeruMemoryEntityId.make(access.botId) } as const);
+      case "project":
+        return { kind: "project", id: AkeruMemoryEntityId.make(access.projectId) } as const;
+      case "group":
+        return access.groupId === null
+          ? null
+          : ({ kind: "group", id: AkeruMemoryEntityId.make(access.groupId) } as const);
+      case "workspace":
+        return {
+          kind: "workspace",
+          id: AkeruMemoryEntityId.make(revision.partition.partitionId),
+        } as const;
+      case "thread":
+        return access.groupId !== null
+          ? ({ kind: "group", id: AkeruMemoryEntityId.make(access.groupId) } as const)
+          : access.botId !== null
+            ? ({ kind: "bot", id: AkeruMemoryEntityId.make(access.botId) } as const)
+            : ({ kind: "project", id: AkeruMemoryEntityId.make(access.projectId) } as const);
+    }
+  };
+
   const authorizeRevision = Effect.fn("EntityMemoryRepository.authorizeRevision")(function* (
     access: Parameters<typeof resolveAuthorizedMemoryPartitions>[0],
     revision: AkeruMemoryRevision,
@@ -206,6 +232,28 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     if (!partitions.some((partition) => samePartition(revision, partition))) {
       return yield* new AkeruMemoryAccessDenied({
         reason: "The memory partition is not available to this thread.",
+      });
+    }
+    const authorBotId = access.respondingBotId ?? access.botId;
+    const entity = expectedEntity(access, revision);
+    const affectedBotIds =
+      access.groupId === null
+        ? authorBotId === null
+          ? []
+          : [authorBotId]
+        : access.groupMemberBotIds;
+    if (
+      revision.approvalState !== "approved" ||
+      revision.deletionState !== "active" ||
+      revision.initiatingUserId !== access.userId ||
+      revision.authorBotId !== authorBotId ||
+      entity === null ||
+      revision.entityKind !== entity.kind ||
+      revision.entityId !== entity.id ||
+      !sameIds(revision.affectedBotIds, affectedBotIds)
+    ) {
+      return yield* new AkeruMemoryAccessDenied({
+        reason: "The memory revision is not valid for this authenticated turn.",
       });
     }
     return partitions;
@@ -425,7 +473,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
   const search: EntityMemoryRepositoryShape["search"] = (input: SearchEntityMemoryInput) => {
     const limit = Math.max(0, Math.min(input.limit, 100));
     if (limit === 0 || toFtsQuery(input.query) === null) return Effect.succeed([]);
-    return resolveRecallMemoryPartitions(input.access).pipe(
+    return resolveAuthorizedMemoryPartitions(input.access).pipe(
       Effect.flatMap((partitions) =>
         Effect.forEach(
           partitions,
@@ -760,12 +808,12 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     },
   );
 
-  const previewImport: NonNullable<EntityMemoryRepositoryShape["previewImport"]> = (input) =>
+  const previewImport: EntityMemoryRepositoryShape["previewImport"] = (input) =>
     buildImportPreview(input).pipe(
       Effect.map(({ previewHash, items }) => ({ previewHash, items })),
     );
 
-  const applyImport: NonNullable<EntityMemoryRepositoryShape["applyImport"]> = (input) =>
+  const applyImport: EntityMemoryRepositoryShape["applyImport"] = (input) =>
     writeLock.withPermit(
       sql
         .withTransaction(
@@ -862,102 +910,6 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       }),
     );
 
-  const recordDerivedCopies: NonNullable<EntityMemoryRepositoryShape["recordDerivedCopies"]> = (
-    input,
-  ) =>
-    writeLock.withPermit(
-      sql
-        .withTransaction(
-          Effect.forEach(
-            [...new Map(input.revisions.map((revision) => [revision.rootId, revision])).values()],
-            (revision) => sql`
-            INSERT INTO akeru_memory_derived_copies (
-              tenant_id, root_id, revision_id, thread_id, created_at
-            ) VALUES (
-              ${input.tenantId}, ${revision.rootId}, ${revision.revisionId},
-              ${input.threadId}, ${input.createdAt}
-            )
-            ON CONFLICT (tenant_id, root_id, thread_id) DO UPDATE SET
-              revision_id = excluded.revision_id,
-              created_at = excluded.created_at
-          `,
-            { concurrency: 1, discard: true },
-          ),
-        )
-        .pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies"))),
-    );
-
-  const listDerivedCopies: NonNullable<EntityMemoryRepositoryShape["listDerivedCopies"]> = (
-    input,
-  ) =>
-    sql<{
-      readonly tenantId: string;
-      readonly rootId: string;
-      readonly revisionId: string;
-      readonly threadId: string;
-    }>`
-      SELECT tenant_id AS "tenantId", root_id AS "rootId", revision_id AS "revisionId",
-        thread_id AS "threadId"
-      FROM akeru_memory_derived_copies
-      WHERE tenant_id = ${input.tenantId} AND root_id = ${input.rootId}
-      ORDER BY thread_id
-    `.pipe(
-      Effect.flatMap(
-        Effect.forEach((row) => Schema.decodeUnknownEffect(EntityMemoryDerivedCopyRow)(row)),
-      ),
-      Effect.mapError((cause) =>
-        cause._tag === "SchemaError"
-          ? toPersistenceDecodeError("EntityMemoryRepository.listDerivedCopies")(cause)
-          : toPersistenceSqlError("EntityMemoryRepository.listDerivedCopies")(cause),
-      ),
-    );
-
-  const listPendingDerivedCopies: NonNullable<
-    EntityMemoryRepositoryShape["listPendingDerivedCopies"]
-  > = () =>
-    sql<{
-      readonly tenantId: string;
-      readonly rootId: string;
-      readonly revisionId: string;
-      readonly threadId: string;
-    }>`
-      SELECT copies.tenant_id AS "tenantId", copies.root_id AS "rootId",
-        copies.revision_id AS "revisionId", copies.thread_id AS "threadId"
-      FROM akeru_memory_derived_copies copies
-      LEFT JOIN akeru_memory_revisions current
-        ON current.tenant_id = copies.tenant_id
-        AND current.root_id = copies.root_id
-        AND current.superseded_by_id IS NULL
-      WHERE current.root_id IS NULL
-        OR current.deletion_state <> 'active'
-        OR current.memory_id <> copies.revision_id
-      ORDER BY copies.tenant_id, copies.root_id, copies.thread_id
-    `.pipe(
-      Effect.flatMap(
-        Effect.forEach((row) => Schema.decodeUnknownEffect(EntityMemoryDerivedCopyRow)(row)),
-      ),
-      Effect.mapError((cause) =>
-        cause._tag === "SchemaError"
-          ? toPersistenceDecodeError("EntityMemoryRepository.listPendingDerivedCopies")(cause)
-          : toPersistenceSqlError("EntityMemoryRepository.listPendingDerivedCopies")(cause),
-      ),
-    );
-
-  const removeDerivedCopy: NonNullable<EntityMemoryRepositoryShape["removeDerivedCopy"]> = (
-    input,
-  ) =>
-    writeLock.withPermit(
-      sql`
-        DELETE FROM akeru_memory_derived_copies
-        WHERE tenant_id = ${input.tenantId}
-          AND root_id = ${input.rootId}
-          AND thread_id = ${input.threadId}
-      `.pipe(
-        Effect.asVoid,
-        Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.removeDerivedCopy")),
-      ),
-    );
-
   return {
     insert,
     revise,
@@ -970,10 +922,6 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     previewImport,
     applyImport,
     deleteRoot,
-    recordDerivedCopies,
-    listDerivedCopies,
-    listPendingDerivedCopies,
-    removeDerivedCopy,
   } satisfies EntityMemoryRepositoryShape;
 });
 

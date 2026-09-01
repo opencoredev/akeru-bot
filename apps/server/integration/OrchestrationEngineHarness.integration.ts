@@ -313,6 +313,7 @@ export const makeOrchestrationIntegrationHarness = (
     const agentControllerLayer = AgentControllerLive.pipe(
       Layer.provide(memoryRepositoriesLayer),
       Layer.provide(legacyProviderLayer),
+      Layer.provide(BotUsageLedgerLive),
     );
     const providerRegistryLayer = makeProviderRegistryLayer();
 

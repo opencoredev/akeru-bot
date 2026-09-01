@@ -18,6 +18,7 @@ import {
   BotAvatar,
   BotEngine,
   BotSandbox,
+  BotSandboxBrowserSharing,
   BotUsageCap,
   GroupMembership,
   ModelSelection,
@@ -59,6 +60,8 @@ export const PortabilitySafeServerSettings = Schema.Struct({
   enableLegacyTokenStreaming: ServerSettings.fields.enableLegacyTokenStreaming,
   enableProviderUpdateChecks: ServerSettings.fields.enableProviderUpdateChecks,
   enableAgentBrowserAccess: ServerSettings.fields.enableAgentBrowserAccess,
+  // Do not decode a missing v1 field to a default. That would invalidate its signed record.
+  botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
   backgroundActivity: PortabilityBackgroundActivitySettings,
   automaticGitFetchIntervalMs: NonNegativeInt,
   providerHealthRefreshIntervalMs: NonNegativeInt,
