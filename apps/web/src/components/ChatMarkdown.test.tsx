@@ -201,6 +201,39 @@ describe("orderedListGutterStyle", () => {
 });
 
 describe("ChatMarkdown rich formatting", () => {
+  it("renders bot assistant artifacts", () => {
+    const html = renderToStaticMarkup(
+      <ChatMarkdown
+        cwd="/tmp/project"
+        text={[
+          "| File | State |",
+          "| --- | --- |",
+          "| src/output.ts | Ready |",
+          "",
+          "- [x] Render table",
+          "- [ ] Review diff",
+          "",
+          "```diff",
+          "-const state = 'plain';",
+          "+const state = 'rich';",
+          "```",
+          "",
+          '```ts title="src/generated.ts"',
+          "export const ready = true;",
+          "```",
+        ].join("\n")}
+      />,
+    );
+
+    expect(html).toContain("chat-markdown-table-container");
+    expect(html.match(/type="checkbox"/g)).toHaveLength(2);
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
+    expect(html.match(/readOnly=""/g)).toHaveLength(2);
+    expect(html).toContain('data-language="diff"');
+    expect(html).toContain('data-language="ts"');
+    expect(html).toContain("src/generated.ts");
+  });
+
   it("renders inline and display math", () => {
     const html = renderToStaticMarkup(
       <ChatMarkdown

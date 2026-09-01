@@ -150,7 +150,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                       name={bot.name}
                       className="mt-0.5 size-7 shrink-0"
                     />
-                    <div className="min-w-0 max-w-[85%]">
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">{bot.name}</div>
                       <ChatMarkdown
                         className="mt-1"

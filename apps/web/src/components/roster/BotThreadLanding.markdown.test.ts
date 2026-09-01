@@ -14,6 +14,9 @@ describe("BotThreadLanding message formatting", () => {
       expect(source).toContain("<ChatMarkdown");
       expect(source).toContain("cwd={runtime.defaultProject?.workspaceRoot}");
       expect(source).toContain("threadRef={runtime.linkedThreadRef ?? undefined}");
+      expect(source).toContain('className="min-w-0 flex-1"');
+      expect(source).toContain('className="whitespace-pre-wrap"');
+      expect(source).not.toContain("onTaskListChange");
     }
   });
 
