@@ -1,5 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import InstallPromptDialog from "../components/InstallPromptDialog.astro";
 import { docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
 
@@ -97,9 +98,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           <span>Read the docs</span>
         </a>
       </div>
-      <aside id="install-notice" class="install-notice" hidden>
-        <button id="copy-install-prompt" type="button">Copy verified install prompt</button>
-      </aside>
     </div>
     <div class="hero-shot">
       <img
@@ -165,7 +163,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       <div class="platform-cards">
         {
           platforms.map((platform) => (
-            <a class="platform-card" data-asset={platform.asset} href={RELEASES_URL}>
+            <a class="platform-card" data-os={platform.os} data-asset={platform.asset} href={RELEASES_URL}>
               <span class="platform-card-top">
                 <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={platform.mark} />
                 <svg class="platform-card-glyph" width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={DOWNLOAD_GLYPH} />
@@ -183,11 +181,12 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       </a>
     </div>
   </section>
+  <InstallPromptDialog />
 </Layout>
 
 <script>
   import { pickMostVisibleDemo } from "../lib/demoPlayback";
-  import { installPromptForPlatform } from "../lib/installPrompt";
+  import { installPromptPlatformForDownload } from "../lib/downloadInstallPrompt";
   import {
     detectDownloadTarget,
     fetchLatestRelease,
@@ -203,8 +202,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     const button = document.getElementById("download-btn") as HTMLAnchorElement | null;
     const label = document.getElementById("download-label");
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
-    const installNotice = document.getElementById("install-notice");
-    const copyPrompt = document.getElementById("copy-install-prompt") as HTMLButtonElement | null;
 
     // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
     // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
@@ -216,13 +213,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
         button.dataset.os = platform.os;
         button.dataset.asset = platform.assetSuffix;
       }
-      const prompt = installPromptForPlatform(platform.os);
-      installNotice?.toggleAttribute("hidden", !prompt);
-      copyPrompt?.addEventListener("click", async () => {
-        if (!prompt) return;
-        await navigator.clipboard.writeText(prompt);
-        copyPrompt.textContent = "Copied";
-      });
     } else if (button && label) {
       label.textContent = "All downloads";
       button.href = RELEASES_URL;
@@ -234,14 +224,17 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       const suffix = card.dataset.asset;
       if (!suffix || card === button) return;
       const asset = await resolveAssetDownload(card, suffix, release);
+      const promptPlatform = installPromptPlatformForDownload(card.dataset.os, asset !== null);
+      if (promptPlatform) card.dataset.installPrompt = promptPlatform;
       card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
     });
 
     if (button && platform) {
       const asset = await resolveAssetDownload(button, platform.assetSuffix, release);
+      const promptPlatform = installPromptPlatformForDownload(platform.os, asset !== null);
+      if (promptPlatform) button.dataset.installPrompt = promptPlatform;
       button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
       if (!asset && label) label.textContent = "All downloads";
-      if (!asset) installNotice?.setAttribute("hidden", "");
     }
     await Promise.all(cardDownloads);
 
