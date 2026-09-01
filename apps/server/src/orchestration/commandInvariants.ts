@@ -1,5 +1,7 @@
 import type {
+  AkeruDelegationRecord,
   BotId,
+  DelegationId,
   GroupId,
   OrchestrationBot,
   McpServer,
@@ -57,6 +59,13 @@ export function findMcpServerById(
   mcpServerId: McpServerId,
 ): McpServer | undefined {
   return readModel.mcpServers?.find((mcpServer) => mcpServer.id === mcpServerId);
+}
+
+export function findDelegationById(
+  readModel: OrchestrationReadModel,
+  delegationId: DelegationId,
+): AkeruDelegationRecord | undefined {
+  return readModel.delegations.find((delegation) => delegation.delegationId === delegationId);
 }
 
 export function listThreadsByProjectId(
@@ -149,6 +158,37 @@ export function requireBotAbsent(input: {
         invariantError(
           input.command.type,
           `Bot '${input.botId}' already exists and cannot be created twice.`,
+        ),
+      )
+    : Effect.void;
+}
+
+export function requireDelegation(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly delegationId: DelegationId;
+}): Effect.Effect<AkeruDelegationRecord, OrchestrationCommandInvariantError> {
+  const delegation = findDelegationById(input.readModel, input.delegationId);
+  return delegation
+    ? Effect.succeed(delegation)
+    : Effect.fail(
+        invariantError(
+          input.command.type,
+          `Delegation '${input.delegationId}' does not exist for command '${input.command.type}'.`,
+        ),
+      );
+}
+
+export function requireDelegationAbsent(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly delegationId: DelegationId;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  return findDelegationById(input.readModel, input.delegationId)
+    ? Effect.fail(
+        invariantError(
+          input.command.type,
+          `Delegation '${input.delegationId}' already exists and cannot be created twice.`,
         ),
       )
     : Effect.void;

@@ -3,11 +3,22 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import {
+  createWorkspaceTools,
+  LocalFilesystem,
+  LocalSandbox,
+  Workspace,
+} from "@mastra/core/workspace";
+import { PNG } from "pngjs";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { BotId } from "@t3tools/contracts";
 
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
+
+vi.mock("@mastra/core/workspace", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mastra/core/workspace")>();
+  return { ...actual, createWorkspaceTools: vi.fn(actual.createWorkspaceTools) };
+});
 
 const directories = new Set<string>();
 
@@ -40,6 +51,82 @@ describe("AkeruToolRuntime", () => {
       "Read",
       "AwaitShell",
     ]);
+  });
+
+  it("redacts screenshot frames before returning tool results", async () => {
+    const png = new PNG({ width: 1, height: 1 });
+    png.data.set([255, 255, 255, 255]);
+    const bot = workspace("screenshot");
+    Object.defineProperty(bot.sandbox, "computer", { value: {} });
+    vi.mocked(createWorkspaceTools).mockResolvedValueOnce({
+      mastra_workspace_computer_screenshot: {
+        execute: async () => ({
+          __workspaceMedia: true,
+          text: "Screenshot captured.",
+          mediaType: "image/png",
+          data: PNG.sync.write(png).toString("base64"),
+        }),
+      },
+    });
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-screenshot", {
+      runtimeMode: "full-access",
+      workspaceType: "cloud",
+      workspace: bot,
+    });
+
+    const result = (await runtime.execute({
+      threadId: "thread-screenshot",
+      toolId: "Screenshot",
+      toolCallId: "tool-screenshot",
+      input: {},
+      approvalMode: "require-grant",
+    })) as { readonly data: string; readonly text: string };
+    const frame = PNG.sync.read(Buffer.from(result.data, "base64"));
+
+    expect(result.text).toBe("Screenshot captured.");
+    expect([...frame.data]).toEqual([0, 0, 0, 255]);
+  });
+
+  it("exposes registered memory handlers and protects sensitive writes", async () => {
+    const remember = vi.fn(async () => ({ saved: true }));
+    const unavailable = vi.fn(async () => undefined);
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-memory", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      memoryHandlers: {
+        recall_memory: unavailable,
+        remember,
+        update_memory: unavailable,
+        forget_memory: unavailable,
+      },
+    });
+
+    expect(runtime.toolsForThread("thread-memory").map((tool) => tool.id)).toEqual([
+      "recall_memory",
+      "remember",
+      "update_memory",
+      "forget_memory",
+    ]);
+    const privateWrite = {
+      threadId: "thread-memory",
+      toolId: "remember" as const,
+      toolCallId: "private-write",
+      input: { fact: "The user prefers vim.", scope: "private" },
+      approvalMode: "require-grant" as const,
+    };
+    await expect(runtime.execute(privateWrite)).resolves.toEqual({ saved: true });
+
+    const sensitiveWrite = {
+      ...privateWrite,
+      toolCallId: "sensitive-write",
+      input: { fact: "  The user prefers vim.  ", scope: "private", sensitive: true },
+    };
+    await expect(runtime.execute(sensitiveWrite)).rejects.toThrow("requires approval");
+    runtime.grantApproval(sensitiveWrite);
+    await expect(runtime.execute(sensitiveWrite)).resolves.toEqual({ saved: true });
+    expect(remember).toHaveBeenCalledTimes(2);
   });
 
   it("requires an exact one-shot grant for local shell commands", async () => {
@@ -154,6 +241,40 @@ describe("AkeruToolRuntime", () => {
         target: "captcha",
       },
     ]);
+  });
+
+  it("isolates delegation failures from the parent thread", async () => {
+    const runtime = createAkeruToolRuntime();
+    const execution = {
+      threadId: "thread-1",
+      toolId: "SendToAgent" as const,
+      toolCallId: "tool-delegate",
+      input: {
+        botId: BotId.make("reviewer"),
+        task: "Review the patch",
+        expectedResult: "A verdict",
+      },
+      approvalMode: "require-grant" as const,
+    };
+    runtime.registerSession("thread-1", {
+      botId: BotId.make("parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      delegation: {
+        send: async () => {
+          throw new Error("Provider unavailable");
+        },
+      },
+    });
+    runtime.grantApproval(execution);
+
+    await expect(runtime.execute(execution)).resolves.toMatchObject({
+      phase: "failure",
+      failureCode: "internal",
+      fatalToThread: false,
+      billedBotId: "reviewer",
+      summary: "Provider unavailable",
+    });
   });
 
   it("translates await handles to workspace process ids", async () => {

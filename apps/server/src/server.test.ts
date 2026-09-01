@@ -160,6 +160,7 @@ import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClien
 import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { BotUsageLedger, type BotUsageLedgerShape } from "./usage/BotUsageLedger.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as Data from "effect/Data";
 
@@ -215,6 +216,7 @@ const makeDefaultOrchestrationReadModel = () => {
     updatedAt: now,
     bots: [],
     groups: [],
+    delegations: [],
     projects: [
       {
         id: defaultProjectId,
@@ -415,9 +417,9 @@ const buildAppUnderTest = (options?: {
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
-    analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
+    botUsageLedger?: Partial<BotUsageLedgerShape>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
@@ -808,6 +810,22 @@ const buildAppUnderTest = (options?: {
             listAll: () => Effect.succeed([]),
             ...options?.layers?.projectionBots,
           } satisfies ProjectionBots.ProjectionBotRepositoryShape),
+          Layer.mock(BotUsageLedger)({
+            summarize: (botId) =>
+              Effect.succeed({
+                botId,
+                consumedTokens: 0,
+                reservedTokens: 0,
+                measurements: {
+                  input: { tokens: 0, unavailableEntries: 0 },
+                  output: { tokens: 0, unavailableEntries: 0 },
+                  observer: { tokens: 0, unavailableEntries: 0 },
+                  reflector: { tokens: 0, unavailableEntries: 0 },
+                },
+                entries: [],
+              }),
+            ...options?.layers?.botUsageLedger,
+          }),
           Layer.succeed(ProjectionGroups.ProjectionGroupRepository, {
             upsert: () => Effect.void,
             getById: () => Effect.succeed(Option.none()),
@@ -875,9 +893,7 @@ const buildAppUnderTest = (options?: {
       Layer.provide(UsageService.layerTest),
       Layer.provide(
         Layer.mock(AnalyticsService.AnalyticsService)({
-          record: () => Effect.void,
           flush: Effect.void,
-          ...options?.layers?.analyticsService,
         }),
       ),
       Layer.provide(
@@ -4535,6 +4551,87 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("publishes typed per-bot usage with the server-owned cap", () =>
+    Effect.gen(function* () {
+      const botId = BotId.make("bot-usage-rpc");
+      const missingBotId = BotId.make("bot-usage-missing");
+      const summarize = vi.fn<BotUsageLedgerShape["summarize"]>(() =>
+        Effect.succeed({
+          botId,
+          consumedTokens: 1_500,
+          reservedTokens: 32_000,
+          measurements: {
+            input: { tokens: 1_000, unavailableEntries: 1 },
+            output: { tokens: 500, unavailableEntries: 1 },
+            observer: { tokens: 120, unavailableEntries: 0 },
+            reflector: { tokens: 80, unavailableEntries: 1 },
+          },
+          entries: [],
+        }),
+      );
+      const bot = {
+        botId,
+        name: "Usage bot",
+        title: "Usage bot",
+        label: null,
+        description: null,
+        disabledMcpServerIds: [],
+        avatar: { kind: "dither" as const, seed: "usage-bot" },
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        sandbox: "local",
+        runtimeMode: "approval-required" as const,
+        usageCap: { unit: "tokens" as const, limit: 64_000 },
+        voiceEnabled: false,
+        groupId: null,
+        archivedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      } satisfies ProjectionBots.ProjectionBot;
+
+      yield* buildAppUnderTest({
+        layers: {
+          projectionBots: {
+            getById: ({ botId: requestedBotId }) =>
+              Effect.succeed(requestedBotId === botId ? Option.some(bot) : Option.none()),
+          },
+          botUsageLedger: { summarize },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            const usage = yield* client[WS_METHODS.botUsage]({ botId });
+            const missing = yield* client[WS_METHODS.botUsage]({ botId: missingBotId }).pipe(
+              Effect.flip,
+            );
+            return { usage, missing };
+          }),
+        ),
+      );
+
+      assert.deepEqual(result.usage.usageCap, { unit: "tokens", limit: 64_000 });
+      assert.equal(result.usage.consumedTokens, 1_500);
+      assert.equal(result.usage.reservedTokens, 32_000);
+      assert.deepEqual(result.usage.measurements, {
+        input: { tokens: 1_000, unavailableEntries: 1 },
+        output: { tokens: 500, unavailableEntries: 1 },
+        observer: { tokens: 120, unavailableEntries: 0 },
+        reflector: { tokens: 80, unavailableEntries: 1 },
+      });
+      assert.deepEqual(result.usage.estimatedCost, { status: "unavailable", usd: null });
+      assert.deepEqual(result.usage.subscriptionPool, {
+        status: "unavailable",
+        used: null,
+        limit: null,
+        unit: null,
+      });
+      assert.equal(result.missing._tag, "AkeruBotUsageReadError");
+      assert.deepEqual(summarize.mock.calls, [[botId]]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("syncs connector incidents through botInbox.list", () =>
     Effect.gen(function* () {
       const bot = {
@@ -5340,101 +5437,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("records thread analytics only after a client command succeeds", () =>
-    Effect.gen(function* () {
-      const effects: string[] = [];
-      const analyticsProperties: Array<Readonly<Record<string, unknown>> | undefined> = [];
-      const failedCommandId = CommandId.make("cmd-thread-create-failed");
-
-      yield* buildAppUnderTest({
-        layers: {
-          analyticsService: {
-            record: (event, properties) =>
-              Effect.sync(() => {
-                effects.push(`analytics:${event}`);
-                analyticsProperties.push(properties);
-              }),
-          },
-          orchestrationEngine: {
-            dispatch: (command) =>
-              Effect.sync(() => effects.push(`dispatch:${command.commandId}`)).pipe(
-                Effect.flatMap(() =>
-                  command.commandId === failedCommandId
-                    ? Effect.fail(
-                        new OrchestrationListenerCallbackError({
-                          listener: "domain-event",
-                          detail: "thread creation failed",
-                        }),
-                      )
-                    : Effect.succeed({ sequence: 1 }),
-                ),
-              ),
-          },
-        },
-      });
-
-      const createThreadCommand = (commandId: CommandId, threadId: ThreadId) =>
-        ({
-          type: "thread.create",
-          commandId,
-          threadId,
-          projectId: defaultProjectId,
-          title: "Analytics test",
-          modelSelection: defaultModelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-          createdAt: "2026-01-01T00:00:00.000Z",
-        }) as const;
-
-      const wsUrl = yield* getWsServerUrl(
-        "/ws?clientSurface=mobile&clientAppVersion=1.2.3&clientOs=iOS&clientOsMajorVersion=18&clientDeviceModel=iPhone+15+Pro",
-      );
-      yield* Effect.scoped(
-        withWsRpcClient(wsUrl, (client) =>
-          Effect.gen(function* () {
-            const failed = yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand](
-              createThreadCommand(failedCommandId, ThreadId.make("thread-create-failed")),
-            ).pipe(Effect.result);
-
-            assert.equal(failed._tag, "Failure");
-            assert.deepEqual(effects, [
-              "analytics:client.connected",
-              "dispatch:cmd-thread-create-failed",
-            ]);
-
-            const succeeded = yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand](
-              createThreadCommand(
-                CommandId.make("cmd-thread-create-succeeded"),
-                ThreadId.make("thread-create-succeeded"),
-              ),
-            );
-
-            assert.equal(succeeded.sequence, 1);
-          }),
-        ),
-      );
-
-      assert.deepEqual(effects, [
-        "analytics:client.connected",
-        "dispatch:cmd-thread-create-failed",
-        "dispatch:cmd-thread-create-succeeded",
-        "analytics:client.thread.started",
-      ]);
-      assert.deepEqual(analyticsProperties, [
-        {
-          surface: "mobile",
-          appVersion: "1.2.3",
-          os: "iOS",
-          osMajorVersion: 18,
-          deviceModel: "iPhone 15 Pro",
-        },
-        { surface: "mobile", appVersion: "1.2.3" },
-      ]);
-    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );
-
   it.effect("routes websocket rpc projects.writeFile errors", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -6228,6 +6230,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         updatedAt: now,
         bots: [],
         groups: [],
+        delegations: [],
         projects: [
           {
             id: ProjectId.make("project-a"),

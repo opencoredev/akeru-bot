@@ -54,6 +54,7 @@ export interface AkeruSessionResourcesOptions {
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
   readonly hostPlatform?: NodeJS.Platform;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
+  readonly onMcpServerConnectionFailure?: (serverId: McpServer["id"]) => void;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
     browser?: BotBrowserAttachment,
@@ -212,7 +213,24 @@ export class AkeruSessionResources {
           configs,
         );
         this.mcpManagers.set(key, manager);
-        await manager.init();
+        try {
+          await manager.init();
+        } catch (cause) {
+          for (const server of input.mcpServers) {
+            this.options.onMcpServerConnectionFailure?.(server.id);
+          }
+          if (usesComputer) {
+            // eslint-disable-next-line preserve-caught-error -- MCP errors may contain private desktop paths.
+            throw new Error("Computer Use MCP failed to start.");
+          }
+          throw cause;
+        }
+        const serversById = new Map(input.mcpServers.map((server) => [String(server.id), server]));
+        for (const status of manager.getServerStatuses()) {
+          if (status.connected) continue;
+          const server = serversById.get(status.name);
+          if (server) this.options.onMcpServerConnectionFailure?.(server.id);
+        }
         if (usesComputer) {
           const status = manager
             .getServerStatuses()
@@ -265,10 +283,6 @@ export class AkeruSessionResources {
         ];
       }),
     );
-  }
-
-  getMcpManager(threadId: string): McpManager | undefined {
-    return this.mcpManagers.get(threadId);
   }
 
   getWorkspace(threadId: string): Workspace | undefined {
@@ -351,7 +365,7 @@ export class AkeruSessionResources {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true;
-    await Promise.allSettled([...this.acquisitions.values()]);
+    await Promise.allSettled(this.acquisitions.values());
     const threadIds = new Set([
       ...this.acquisitions.keys(),
       ...this.workspaceLeases.keys(),

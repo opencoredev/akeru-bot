@@ -1,4 +1,6 @@
 import {
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
   AkeruUsageReservationId,
   type ChatAttachment,
   CommandId,
@@ -338,6 +340,15 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const failDelegation = (threadId: ThreadId, error: string) =>
+    agentController.failDelegation?.({ threadId, error }) ?? Effect.void;
+  if (agentController.configureDelegation) {
+    yield* agentController.configureDelegation({
+      readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
+      dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
+    });
+  }
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -536,6 +547,7 @@ const make = Effect.gen(function* () {
       engine,
       fallback,
       mode: thread.interactionMode,
+      botConversation: thread.botId != null || thread.groupId != null,
     });
     return { ...selection, configured: engine !== null };
   });
@@ -697,6 +709,12 @@ const make = Effect.gen(function* () {
         : yield* projectionBotRepository
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
+    const respondingGroup =
+      thread.groupId == null
+        ? undefined
+        : (yield* projectionSnapshotQuery.getCommandReadModel()).groups.find(
+            (group) => group.id === thread.groupId,
+          );
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: project ? [project] : [],
@@ -724,6 +742,21 @@ const make = Effect.gen(function* () {
         mcpServers,
         ...(respondingBotId ? { botId: respondingBotId } : {}),
         ...(respondingBot ? { botName: respondingBot.name } : {}),
+        ...(project
+          ? {
+              memoryAccess: {
+                tenantId: AkeruMemoryTenantId.make("local"),
+                userId: AkeruMemoryUserId.make("owner"),
+                threadId,
+                projectId: thread.projectId,
+                workspaceRoot: project.workspaceRoot,
+                botId: thread.groupId == null ? respondingBotId : null,
+                groupId: thread.groupId ?? null,
+                respondingBotId,
+                groupMemberBotIds: respondingGroup?.members.map((member) => member.botId) ?? [],
+              },
+            }
+          : {}),
         botSandbox: respondingBot?.sandbox ?? null,
         botSandboxBrowserSharing,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
@@ -1225,7 +1258,14 @@ const make = Effect.gen(function* () {
         turnId: null,
         createdAt: event.payload.createdAt,
         requestId: event.payload.messageId,
-      });
+      }).pipe(
+        Effect.ensuring(
+          failDelegation(
+            event.payload.threadId,
+            `User message '${event.payload.messageId}' was not found for turn start request.`,
+          ),
+        ),
+      );
       return;
     }
 
@@ -1284,6 +1324,7 @@ const make = Effect.gen(function* () {
           }),
         ),
         Effect.asVoid,
+        Effect.ensuring(failDelegation(event.payload.threadId, detail)),
       );
     };
 

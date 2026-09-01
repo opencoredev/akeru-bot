@@ -87,7 +87,7 @@ describe("plugin presentation", () => {
         ...catalog.filter((plugin) => ["Work", "Web"].includes(plugin.primaryCategory)),
         { ...pendingPlugin, primaryCategory: "Marketing", category: "Marketing" },
       ]),
-    ).toEqual(["All", "Featured", "Installed", "Work", "Web", "Marketing"]);
+    ).toEqual(["All", "Featured", "Installed", "Work", "Web", "Marketing", "Support"]);
     expect(
       buildPluginSections({ plugins: catalog, query: "", filter: "All" }).flatMap((section) =>
         section.plugins.map((plugin) => plugin.id),
@@ -111,6 +111,17 @@ describe("plugin presentation", () => {
         (plugin) => plugin.id,
       ),
     ).toEqual(["context", "apify", "exa", "firecrawl", "parallel-search", "tavily"]);
+    expect(
+      buildPluginSections({ plugins: catalog, query: "", filter: "Sales" })[0]?.plugins,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ id: "hubspot" })]));
+    expect(
+      buildPluginSections({ plugins: catalog, query: "", filter: "Support" })[0]?.plugins,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "customer-io" }),
+        expect.objectContaining({ id: "linear" }),
+      ]),
+    );
   });
 
   it("groups the unfiltered directory into populated category sections", () => {

@@ -1,4 +1,5 @@
 import {
+  AkeruDelegationRecord,
   BotAvatar,
   BotEngine,
   BotId,
@@ -98,6 +99,9 @@ const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
 const ProjectionGroupDbRowSchema = ProjectionGroup.mapFields(
   Struct.assign({ members: Schema.fromJsonString(Schema.Array(GroupMembership)) }),
 );
+const ProjectionDelegationDbRowSchema = Schema.Struct({
+  delegation: Schema.fromJsonString(AkeruDelegationRecord),
+});
 const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
@@ -226,6 +230,7 @@ const REQUIRED_SNAPSHOT_PROJECTORS = [
   ORCHESTRATION_PROJECTOR_NAMES.projects,
   ORCHESTRATION_PROJECTOR_NAMES.bots,
   ORCHESTRATION_PROJECTOR_NAMES.groups,
+  ORCHESTRATION_PROJECTOR_NAMES.delegations,
   ORCHESTRATION_PROJECTOR_NAMES.mcpServers,
   ORCHESTRATION_PROJECTOR_NAMES.threads,
   ORCHESTRATION_PROJECTOR_NAMES.threadMessages,
@@ -503,6 +508,16 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_groups
       ORDER BY created_at ASC, group_id ASC
+    `,
+  });
+
+  const listDelegationRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: () => sql`
+      SELECT record_json AS delegation
+      FROM projection_delegations
+      ORDER BY json_extract(record_json, '$.createdAt') ASC, delegation_id ASC
     `,
   });
 
@@ -1601,6 +1616,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listDelegationRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getSnapshot:listDelegations:query",
+                "ProjectionSnapshotQuery.getSnapshot:listDelegations:decodeRows",
+              ),
+            ),
+          ),
           projectionMcpServerRepository.listAll(),
           listThreadRows(undefined).pipe(
             Effect.mapError(
@@ -1674,6 +1697,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             projectRows,
             botRows,
             groupRows,
+            delegationRows,
             mcpServers,
             threadRows,
             messageRows,
@@ -1702,6 +1726,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               }
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
+              for (const row of delegationRows) {
+                updatedAt = maxIso(
+                  updatedAt,
+                  row.delegation.completedAt ?? row.delegation.createdAt,
+                );
               }
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
@@ -1865,6 +1895,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 projects,
                 bots: botRows.map(mapBotRow),
                 groups: groupRows.map(mapGroupRow),
+                delegations: delegationRows.map((row) => row.delegation),
                 mcpServers,
                 threads,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
@@ -1910,6 +1941,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               toPersistenceSqlOrDecodeError(
                 "ProjectionSnapshotQuery.getCommandReadModel:listGroups:query",
                 "ProjectionSnapshotQuery.getCommandReadModel:listGroups:decodeRows",
+              ),
+            ),
+          ),
+          listDelegationRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listDelegations:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listDelegations:decodeRows",
               ),
             ),
           ),
@@ -1962,6 +2001,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             projectRows,
             botRows,
             groupRows,
+            delegationRows,
             mcpServers,
             threadRows,
             proposedPlanRows,
@@ -1998,6 +2038,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               }
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
+              for (const row of delegationRows) {
+                updatedAt = maxIso(
+                  updatedAt,
+                  row.delegation.completedAt ?? row.delegation.createdAt,
+                );
               }
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
@@ -2119,6 +2165,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 projects,
                 bots: botRows.map(mapBotRow),
                 groups: groupRows.map(mapGroupRow),
+                delegations: delegationRows.map((row) => row.delegation),
                 mcpServers,
                 threads,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",

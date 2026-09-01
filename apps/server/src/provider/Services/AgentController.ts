@@ -1,4 +1,6 @@
 import type {
+  AkeruConversationMemorySnapshot,
+  AkeruMemoryThreadAccess,
   BotEngine,
   ModelSelection,
   ProviderInteractionMode,
@@ -13,6 +15,8 @@ import type {
   ProviderTurnStartResult,
   ProviderUploadFeedbackInput,
   ProviderUploadFeedbackResult,
+  OrchestrationCommand,
+  OrchestrationReadModel,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -34,12 +38,30 @@ export interface AgentControllerEngineSelection extends AgentControllerAvailable
 }
 
 export interface AgentControllerShape {
+  readonly configureDelegation?: (input: {
+    readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+    readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  }) => Effect.Effect<void>;
+  readonly failDelegation?: (input: {
+    readonly threadId: ThreadId;
+    readonly error: string;
+  }) => Effect.Effect<void>;
+
+  readonly readConversationMemory?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<AkeruConversationMemorySnapshot, AgentControllerError>;
+
+  readonly clearConversationMemory?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<void, AgentControllerError>;
+
   /** Resolve a thread's selected mode and model to an available Akeru provider instance. */
   readonly resolveEngine: (input: {
     readonly threadId: ThreadId;
     readonly engine: BotEngine | null;
     readonly fallback: ModelSelection;
     readonly mode: ProviderInteractionMode;
+    readonly botConversation: boolean;
   }) => Effect.Effect<AgentControllerEngineSelection, AgentControllerError>;
 
   /** Read routing metadata without changing the thread's active runtime session. */
@@ -49,7 +71,7 @@ export interface AgentControllerShape {
 
   readonly startSession: (
     threadId: ThreadId,
-    input: ProviderSessionStartInput,
+    input: ProviderSessionStartInput & { readonly memoryAccess?: AkeruMemoryThreadAccess },
   ) => Effect.Effect<ProviderSession, AgentControllerError>;
 
   readonly sendTurn: (

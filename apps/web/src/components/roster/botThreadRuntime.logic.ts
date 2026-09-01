@@ -11,6 +11,8 @@ import type {
   OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 
+import { parseChatPath } from "./roster.logic";
+
 const botTurnSubmissions = new Map<
   string,
   {
@@ -195,6 +197,20 @@ export function findLatestBotThreadTarget(
         right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id),
     )[0];
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
+}
+
+export function resolveBotThreadTarget(
+  botId: string,
+  environmentId: string,
+  threads: Parameters<typeof findLatestBotThreadTarget>[2],
+  rememberedPath: string | undefined,
+) {
+  const latest = findLatestBotThreadTarget(botId, environmentId, threads);
+  if (latest) return latest;
+  const remembered = rememberedPath ? parseChatPath(rememberedPath) : null;
+  return remembered?.kind === "thread" && remembered.environmentId === environmentId
+    ? remembered
+    : null;
 }
 
 export function findLatestGroupThreadTarget(

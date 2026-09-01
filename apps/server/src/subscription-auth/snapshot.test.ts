@@ -1,4 +1,4 @@
-import { BotId, ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
+import { BotId, McpServerId, ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildProviderAccessCapabilities } from "./snapshot.ts";
@@ -144,5 +144,46 @@ describe("provider access capabilities", () => {
         capability && "repairAction" in capability ? capability.repairAction : undefined,
       ).toBeTruthy();
     }
+  });
+
+  it("reports exact MCP health, built-in identity, and dependent bots", () => {
+    const serverId = McpServerId.make("builtin-executor");
+    const rows = buildProviderAccessCapabilities(
+      [],
+      [],
+      undefined,
+      [
+        {
+          id: serverId,
+          name: "Executor",
+          transport: "url",
+          url: "https://executor.sh/mcp",
+          enabled: true,
+          createdAt: "2026-08-31T18:00:00.000Z",
+          updatedAt: "2026-08-31T18:00:00.000Z",
+        },
+      ],
+      [
+        {
+          id: BotId.make("bot-1"),
+          name: "Research",
+          engine: null,
+          disabledMcpServerIds: [],
+        },
+      ],
+      () => ({
+        health: "healthy",
+        lastSuccessfulRequestAt: "2026-08-31T20:00:00.000Z",
+      }),
+    );
+
+    expect(rows.find((row) => row.serverId === serverId)).toMatchObject({
+      id: "mcp-builtin-executor",
+      pluginId: "executor",
+      accessMethod: "mcp",
+      health: "healthy",
+      dependentBots: [{ id: "bot-1", name: "Research" }],
+    });
+    expect(rows.find((row) => row.serverId === serverId)?.repairAction).toBeUndefined();
   });
 });

@@ -8,7 +8,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
-import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
@@ -25,7 +24,6 @@ import {
 } from "../src/provider/Services/ProviderService.ts";
 import * as ServerConfig from "../src/config.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
-import { AnalyticsService } from "../src/telemetry/Services/AnalyticsService.ts";
 import { SqlitePersistenceMemory } from "../src/persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../src/persistence/ProviderSessionRuntime.ts";
 
@@ -56,29 +54,7 @@ interface IntegrationFixture {
   readonly layer: Layer.Layer<ProviderService, unknown, never>;
 }
 
-interface RecordedAnalyticsEvent {
-  readonly event: string;
-  readonly properties: Readonly<Record<string, unknown>> | undefined;
-}
-
-/**
- * Analytics layer that keeps captured events in memory so tests can assert on
- * telemetry payloads. `AnalyticsService.layerTest` discards them.
- */
-const makeRecordingAnalytics = Effect.gen(function* () {
-  const recorded = yield* Ref.make<ReadonlyArray<RecordedAnalyticsEvent>>([]);
-  const layer = Layer.succeed(
-    AnalyticsService,
-    AnalyticsService.of({
-      record: (event, properties) =>
-        Ref.update(recorded, (current) => [...current, { event, properties }]),
-      flush: Effect.void,
-    }),
-  );
-  return { layer, get: Ref.get(recorded) } as const;
-});
-
-const makeIntegrationFixture = (options?: { readonly analytics?: Layer.Layer<AnalyticsService> }) =>
+const makeIntegrationFixture = () =>
   Effect.gen(function* () {
     const cwd = yield* makeWorkspaceDirectory;
     const harness = yield* makeTestProviderAdapterHarness();
@@ -96,7 +72,6 @@ const makeIntegrationFixture = (options?: { readonly analytics?: Layer.Layer<Ana
       Layer.succeed(ProviderAdapterRegistry, registry),
       ServerConfig.layerTest(cwd, cwd).pipe(Layer.provide(NodeServices.layer)),
       ServerSettingsService.layerTest(DEFAULT_SERVER_SETTINGS),
-      options?.analytics ?? AnalyticsService.layerTest,
       Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
     ).pipe(Layer.provide(SqlitePersistenceMemory));
 
@@ -325,62 +300,6 @@ it.live("rolls back provider conversation state only", () =>
 
       const readme = yield* readFileString(join(fixture.cwd, "README.md"));
       assert.equal(readme, "v3\n");
-    }).pipe(Effect.provide(fixture.layer));
-  }).pipe(Effect.provide(NodeServices.layer)),
-);
-
-it.live("reports runtime mode per turn and on mode transitions", () =>
-  Effect.gen(function* () {
-    const analytics = yield* makeRecordingAnalytics;
-    const fixture = yield* makeIntegrationFixture({ analytics: analytics.layer });
-    const threadId = ThreadId.make("thread-integration-runtime-mode");
-
-    yield* Effect.gen(function* () {
-      const provider = yield* ProviderService;
-      const startSession = (runtimeMode: "approval-required" | "full-access") =>
-        provider.startSession(threadId, {
-          threadId,
-          provider: ProviderDriverKind.make("codex"),
-          providerInstanceId: codexInstanceId,
-          cwd: fixture.cwd,
-          runtimeMode,
-        });
-
-      yield* startSession("approval-required");
-      yield* runTurn({
-        provider,
-        harness: fixture.harness,
-        threadId,
-        userText: "supervised turn",
-        response: { events: codexTurnTextFixture },
-      });
-
-      // Toggling the mode restarts the session, which is the only place the
-      // transition is observable.
-      yield* startSession("full-access");
-      yield* runTurn({
-        provider,
-        harness: fixture.harness,
-        threadId,
-        userText: "full access turn",
-        response: { events: codexTurnTextFixture },
-      });
-
-      const recorded = yield* analytics.get;
-
-      assert.deepEqual(
-        recorded
-          .filter((entry) => entry.event === "provider.turn.sent")
-          .map((entry) => entry.properties?.runtimeMode),
-        ["approval-required", "full-access"],
-      );
-
-      assert.deepEqual(
-        recorded
-          .filter((entry) => entry.event === "provider.runtime_mode.changed")
-          .map((entry) => [entry.properties?.from, entry.properties?.to]),
-        [["approval-required", "full-access"]],
-      );
     }).pipe(Effect.provide(fixture.layer));
   }).pipe(Effect.provide(NodeServices.layer)),
 );

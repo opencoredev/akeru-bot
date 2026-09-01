@@ -2,18 +2,52 @@ import { RequestContext } from "@mastra/core/request-context";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
   AkeruToolInputSchemas,
+  type AkeruToolReceipt,
   type BotId,
   type AkeruToolDefinition,
   type AkeruToolId,
   type AkeruToolWorkspaceType,
   type RuntimeMode,
+  ThreadId,
   akeruToolRequiresApproval,
   decodeAkeruToolInput,
   filterAkeruTools,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
+import { redactComputerScreenshot } from "../mcp/PreviewSnapshotRedaction.ts";
+import {
+  AkeruMemoryToolInputSchemas,
+  type AkeruMemoryToolHandler,
+  type AkeruMemoryToolId,
+} from "../memory/MemoryToolHandlers.ts";
+
+export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
+
+export interface AkeruRuntimeToolDefinition {
+  readonly id: AkeruRuntimeToolId;
+  readonly description: string;
+}
+
+const MEMORY_TOOL_DEFINITIONS = [
+  { id: "recall_memory", description: "Search approved memory for the current turn." },
+  { id: "remember", description: "Propose a durable fact for the current user and bot context." },
+  { id: "update_memory", description: "Propose a revision to an authorized durable fact." },
+  { id: "forget_memory", description: "Forget an authorized durable fact immediately." },
+] as const satisfies ReadonlyArray<AkeruRuntimeToolDefinition>;
+
+const MEMORY_TOOL_INPUT_DECODERS = {
+  recall_memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.recall_memory),
+  remember: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.remember),
+  update_memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.update_memory),
+  forget_memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.forget_memory),
+} as const;
+
+export function isMemoryToolId(toolId: string): toolId is AkeruMemoryToolId {
+  return Object.hasOwn(AkeruMemoryToolInputSchemas, toolId);
+}
 
 export interface AkeruToolSession {
   readonly botId?: BotId;
@@ -22,15 +56,22 @@ export interface AkeruToolSession {
   readonly workspaceType: AkeruToolWorkspaceType;
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
+  readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;
+  readonly delegation?: {
+    readonly send: (
+      input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
+    ) => Promise<AkeruToolReceipt>;
+  };
 }
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
+  readonly now?: () => string;
 }
 
 export interface AkeruToolExecution {
   readonly threadId: string;
-  readonly toolId: AkeruToolId;
+  readonly toolId: AkeruRuntimeToolId;
   readonly toolCallId: string;
   readonly input: unknown;
   readonly approvalMode: "require-grant";
@@ -40,10 +81,10 @@ export interface AkeruToolRuntime {
   readonly registerSession: (threadId: string, session: AkeruToolSession) => void;
   readonly unregisterSession: (threadId: string) => void;
   readonly clearApprovals: (threadId: string) => void;
-  readonly toolsForThread: (threadId: string) => ReadonlyArray<AkeruToolDefinition>;
+  readonly toolsForThread: (threadId: string) => ReadonlyArray<AkeruRuntimeToolDefinition>;
   readonly requiresApproval: (
     threadId: string,
-    toolId: AkeruToolId,
+    toolId: AkeruRuntimeToolId,
     input: unknown,
   ) => Promise<boolean>;
   readonly grantApproval: (input: Omit<AkeruToolExecution, "approvalMode">) => void;
@@ -51,7 +92,7 @@ export interface AkeruToolRuntime {
 }
 
 const BACKEND_NAMES: Record<
-  Exclude<AkeruToolId, "CopyToBox" | "CopyFromBox" | "request_box_help">,
+  Exclude<AkeruToolId, "CopyToBox" | "CopyFromBox" | "request_box_help" | "SendToAgent">,
   ReadonlyArray<string>
 > = {
   Shell: ["execute_command", "mastra_workspace_execute_command"],
@@ -114,7 +155,7 @@ function executable(value: unknown): value is {
 
 export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): AkeruToolRuntime {
   const sessions = new Map<string, AkeruToolSession>();
-  const grants = new Map<string, { readonly toolId: AkeruToolId; readonly input: string }>();
+  const grants = new Map<string, { readonly toolId: AkeruRuntimeToolId; readonly input: string }>();
   const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
   const clearGrants = (threadId: string) => {
     for (const grantKey of grants.keys()) {
@@ -144,6 +185,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     if (options?.onUserActionRequired && session.workspace && session.botId && session.botName) {
       tools.add("request_box_help");
     }
+    if (session.delegation) tools.add("SendToAgent");
     return tools;
   };
 
@@ -151,19 +193,49 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     const session = sessions.get(threadId);
     if (!session) throw new Error(`Tool session '${threadId}' is not registered.`);
     const implemented = implementedTools(session);
-    return filterAkeruTools({
+    const workspaceTools = filterAkeruTools({
       capabilities: new Set(["bot-workspace", "user-computer"]),
       workspaceType: session.workspaceType,
       hasUserComputer: Boolean(session.userComputerWorkspace),
       localFullAccess: session.runtimeMode === "full-access",
       implementedTools: implemented,
     });
+    return session.memoryHandlers
+      ? [...workspaceTools, ...MEMORY_TOOL_DEFINITIONS]
+      : workspaceTools;
   };
 
-  const validatedInput = (toolId: AkeruToolId, input: unknown) =>
-    Schema.decodeUnknownPromise(AkeruToolInputSchemas[toolId])(input, {
+  const validatedInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
+    Schema.decodeUnknownPromise(
+      isMemoryToolId(toolId) ? AkeruMemoryToolInputSchemas[toolId] : AkeruToolInputSchemas[toolId],
+    )(input, {
       onExcessProperty: "error",
     });
+
+  const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
+    isMemoryToolId(toolId)
+      ? MEMORY_TOOL_INPUT_DECODERS[toolId](input, { onExcessProperty: "error" })
+      : decodeAkeruToolInput(toolId, input);
+
+  const requiresApproval = async (
+    session: AkeruToolSession,
+    tool: AkeruRuntimeToolDefinition,
+    input: unknown,
+  ) => {
+    if (tool.id === "recall_memory") return field(input, "includeSensitive") === true;
+    if (tool.id === "remember") {
+      return field(input, "scope") !== "private" || field(input, "sensitive") === true;
+    }
+    if (tool.id === "update_memory" || tool.id === "forget_memory") return true;
+    return akeruToolRequiresApproval(
+      tool as AkeruToolDefinition,
+      {
+        localFullAccess: session.runtimeMode === "full-access",
+        workspaceType: session.workspaceType,
+      },
+      input,
+    );
+  };
 
   return {
     registerSession: (threadId, session) => {
@@ -181,19 +253,12 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       if (!session) throw new Error(`Tool session '${threadId}' is not registered.`);
       const tool = toolsForThread(threadId).find((candidate) => candidate.id === toolId);
       if (!tool) throw new Error(`Tool '${toolId}' is not available for this turn.`);
-      return akeruToolRequiresApproval(
-        tool,
-        {
-          localFullAccess: session.runtimeMode === "full-access",
-          workspaceType: session.workspaceType,
-        },
-        await validatedInput(toolId, input),
-      );
+      return requiresApproval(session, tool, await validatedInput(toolId, input));
     },
     grantApproval: (input) => {
       grants.set(key(input.threadId, input.toolCallId), {
         toolId: input.toolId,
-        input: canonicalInput(decodeAkeruToolInput(input.toolId, input.input)),
+        input: canonicalInput(decodedGrantInput(input.toolId, input.input)),
       });
     },
     execute: async (input) => {
@@ -204,16 +269,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       );
       if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
       const decoded = await validatedInput(input.toolId, input.input);
-      if (
-        akeruToolRequiresApproval(
-          tool,
-          {
-            localFullAccess: session.runtimeMode === "full-access",
-            workspaceType: session.workspaceType,
-          },
-          decoded,
-        )
-      ) {
+      if (await requiresApproval(session, tool, decoded)) {
         const grantKey = key(input.threadId, input.toolCallId);
         const grant = grants.get(grantKey);
         if (
@@ -225,6 +281,33 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           throw new Error(`Tool '${input.toolId}' requires approval.`);
         }
         grants.delete(grantKey);
+      }
+
+      if (isMemoryToolId(input.toolId)) {
+        const handler = session.memoryHandlers?.[input.toolId];
+        if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
+        return handler({ ...input, toolId: input.toolId, input: decoded });
+      }
+
+      if (input.toolId === "SendToAgent") {
+        if (!session.delegation) throw new Error("Delegation is not available for this session.");
+        const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);
+        try {
+          return await session.delegation.send(delegationInput);
+        } catch (cause) {
+          return {
+            receiptId: input.toolCallId,
+            toolId: input.toolId,
+            phase: "failure",
+            threadId: ThreadId.make(input.threadId),
+            botId: session.botId,
+            summary: cause instanceof Error ? cause.message : String(cause),
+            failureCode: "internal",
+            fatalToThread: false,
+            billedBotId: delegationInput.botId,
+            createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+          } satisfies AkeruToolReceipt;
+        }
       }
 
       if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
@@ -268,7 +351,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         input.toolId === "AwaitShell" || input.toolId === "AwaitExternalShell"
           ? { pid: requiredString(decoded, "handleId"), wait: true }
           : decoded;
-      return backend.execute(backendInput, {
+      const result = await backend.execute(backendInput, {
         workspace,
         requestContext: new RequestContext(),
         observe: {
@@ -276,6 +359,21 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           log: () => undefined,
         },
       });
+      if (input.toolId !== "Screenshot") return result;
+
+      const mediaType = field(result, "mediaType");
+      const data = field(result, "data");
+      if (mediaType !== "image/png" || typeof data !== "string") {
+        throw new Error("Screenshot result is invalid.");
+      }
+      const redacted = redactComputerScreenshot({
+        mediaType,
+        data: Buffer.from(data, "base64"),
+      });
+      return {
+        ...(result as Record<string, unknown>),
+        data: Buffer.from(redacted.data).toString("base64"),
+      };
     },
   };
 }

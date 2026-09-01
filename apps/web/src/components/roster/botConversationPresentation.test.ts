@@ -31,17 +31,21 @@ describe("bot conversation presentation", () => {
     expect(visibleBotChatMessages(messages).map((entry) => entry.id)).toEqual(["user", "answer"]);
   });
 
-  it("shows only the last settled assistant record from one turn", () => {
+  it("shows each settled assistant note from one turn", () => {
     const messages = [
       message("user", "user", false),
       message("intermediate", "assistant", false, "turn-1"),
       message("final", "assistant", false, "turn-1"),
     ];
 
-    expect(visibleBotChatMessages(messages).map((entry) => entry.id)).toEqual(["user", "final"]);
+    expect(visibleBotChatMessages(messages).map((entry) => entry.id)).toEqual([
+      "user",
+      "intermediate",
+      "final",
+    ]);
   });
 
-  it("hides assistant records from the active turn behind the working status", () => {
+  it("shows completed status beats while the turn remains active", () => {
     const messages = [
       message("first-user", "user", false),
       message("first-answer", "assistant", false, "turn-1"),
@@ -49,10 +53,11 @@ describe("bot conversation presentation", () => {
       message("active-intermediate", "assistant", false, "turn-2"),
     ];
 
-    expect(visibleBotChatMessages(messages, true).map((entry) => entry.id)).toEqual([
+    expect(visibleBotChatMessages(messages).map((entry) => entry.id)).toEqual([
       "first-user",
       "first-answer",
       "active-user",
+      "active-intermediate",
     ]);
   });
 });

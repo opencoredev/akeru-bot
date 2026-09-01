@@ -128,22 +128,6 @@ export class BotWorkspacePool {
     };
   }
 
-  async stopAll(): Promise<void> {
-    const entries = [...this.entries.values()];
-    const results = await Promise.allSettled(
-      entries.map(async (entry) => {
-        const workspace = await entry.workspace;
-        entry.sleeping ??= (async () => {
-          await entry.waking;
-          await workspace.stop();
-        })();
-        await entry.sleeping;
-      }),
-    );
-    const failure = results.find((result) => result.status === "rejected");
-    if (failure?.status === "rejected") throw failure.reason;
-  }
-
   async destroyAll(): Promise<void> {
     const entries = [...this.entries.entries()];
     const results = await Promise.allSettled(

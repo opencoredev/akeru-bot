@@ -104,7 +104,7 @@ describe("Plugins dialog content", () => {
       />,
     );
     expect(markup).toContain("Disable Firecrawl");
-    expect(markup).toContain("Add Executor");
+    expect(markup).toContain("Connect Executor");
     expect(markup).toContain("Connect Pending Vendor");
     expect(markup).toContain(pendingPlugin.description.replaceAll("'", "&#x27;"));
     expect(markup).toContain("Approval pending");
@@ -156,15 +156,54 @@ describe("Plugins dialog content", () => {
     );
     expect(markup).toContain("By Useful Software Co.");
     expect(markup).toContain("Authentication");
-    expect(markup).toContain("Local");
-    expect(markup).toContain("Local command");
+    expect(markup).toContain("OAuth");
+    expect(markup).toContain("Hosted");
+    expect(markup).toContain("Remote URL");
     expect(markup).toContain("Not checked");
-    expect(markup).toContain("macos, windows, linux");
+    expect(markup).toContain("web, desktop, mobile");
     expect(markup).toContain("Submit a payment.");
     expect(markup).toContain("account-wide");
     expect(markup).toContain("Documentation");
     expect(markup).toContain("Source");
     expect(markup).not.toContain("Connected");
+  });
+
+  it("shows persisted connector health without exposing credential data", () => {
+    const markup = renderToStaticMarkup(
+      <PluginDetailsContent
+        plugin={executor}
+        server={undefined}
+        accessStatus={{
+          id: "mcp-builtin-executor",
+          label: "Executor",
+          accessMethod: "mcp",
+          health: "recovered",
+          apiAccess: "not-applicable",
+          nextAction: "Disable or remove Executor when it is no longer needed.",
+          repairAction: "Reconnect",
+          serverId: "builtin-executor",
+          pluginId: "executor",
+          lastSuccessfulRequestAt: "2026-08-31T20:00:00.000Z",
+          lastFailedRequest: {
+            at: "2026-08-31T19:00:00.000Z",
+            message: "The MCP tool request failed.",
+          },
+          dependentBots: [],
+          dependentRoutines: [],
+        }}
+        activeDependentBotNames={[]}
+        pending={false}
+        onToggle={noop}
+        onRemove={noop}
+        onViewDocumentation={noop}
+        onViewSource={noop}
+        onOpenSkill={noop}
+      />,
+    );
+    expect(markup).toContain("Recovered");
+    expect(markup).toContain("Reconnect");
+    expect(markup).not.toContain("token");
+    expect(markup).not.toContain("secret-access");
   });
 
   it("blocks approval-pending connection and names the blocker in details", () => {
@@ -185,6 +224,28 @@ describe("Plugins dialog content", () => {
     expect(markup).toContain("disabled");
     expect(markup).toContain("Approval pending");
     expect(markup).toContain("The vendor must approve Akeru as an OAuth client.");
+  });
+
+  it("keeps disable available after an installed plugin becomes pending", () => {
+    const pendingServer = { ...firecrawlServer, id: pluginMcpServerId(pendingPlugin) };
+    const markup = renderToStaticMarkup(
+      <PluginDetailsContent
+        plugin={pendingPlugin}
+        server={pendingServer}
+        activeDependentBotNames={[]}
+        pending={false}
+        onToggle={noop}
+        onRemove={noop}
+        onViewDocumentation={noop}
+        onViewSource={noop}
+        onOpenSkill={noop}
+      />,
+    );
+    expect(markup).toContain('aria-label="Disable Pending Vendor"');
+    expect(planPluginToggle(firecrawl, [firecrawlServer], false)).toEqual({
+      action: "disable",
+      mcpServerId: pluginMcpServerId(firecrawl),
+    });
   });
 
   it("shows key setup without storing a credential in the registry", () => {

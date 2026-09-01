@@ -1,9 +1,9 @@
 import { useAuth, useUser } from "@clerk/expo";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { SymbolView } from "../../components/AppSymbol";
 import * as Effect from "effect/Effect";
@@ -44,10 +44,15 @@ import {
   runAppUpdateCheck,
 } from "../updates/app-updates";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
-import { resolveAgentAwarenessPlatformPresentation } from "./SettingsRouteScreen.logic";
+import {
+  resolveAgentAwarenessPlatformPresentation,
+  resolveSettingsEnvironmentId,
+} from "./SettingsRouteScreen.logic";
 
 type NotificationStatus = "checking" | "enabled" | "disabled" | "unsupported";
 type LiveActivityStatus = "checking" | "enabled" | "disabled" | "signed-out" | "linking";
@@ -65,8 +70,19 @@ function useDeviceRegistered(): boolean {
   return status === "registered";
 }
 
-export function SettingsRouteScreen() {
+type SettingsRouteParams = {
+  readonly environmentId?: EnvironmentId | ReadonlyArray<string> | null;
+};
+
+export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRouteParams | undefined>) {
   const navigation = useNavigation();
+  const rawEnvironmentId = route.params?.environmentId;
+  const environmentId =
+    typeof rawEnvironmentId === "string"
+      ? EnvironmentId.make(rawEnvironmentId)
+      : rawEnvironmentId?.[0] === undefined
+        ? null
+        : EnvironmentId.make(rawEnvironmentId[0]);
 
   return (
     <>
@@ -96,16 +112,28 @@ export function SettingsRouteScreen() {
           }}
         />
       )}
-      {hasCloudPublicConfig() ? <ConfiguredSettingsRouteScreen /> : <LocalSettingsRouteScreen />}
+      {hasCloudPublicConfig() ? (
+        <ConfiguredSettingsRouteScreen environmentId={environmentId} />
+      ) : (
+        <LocalSettingsRouteScreen environmentId={environmentId} />
+      )}
     </>
   );
 }
 
-function LocalSettingsRouteScreen() {
+function LocalSettingsRouteScreen({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
   const insets = useSafeAreaInsets();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const connections = Object.values(savedConnectionsById);
   const environmentCount = connections.length;
+  const settingsEnvironmentId = resolveSettingsEnvironmentId(
+    environmentId,
+    connections.map((connection) => connection.environmentId),
+  );
 
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
@@ -129,7 +157,7 @@ function LocalSettingsRouteScreen() {
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
-        <GeneralSettingsSection />
+        <GeneralSettingsSection environmentId={settingsEnvironmentId} />
 
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
@@ -145,7 +173,11 @@ function LocalSettingsRouteScreen() {
   );
 }
 
-function ConfiguredSettingsRouteScreen() {
+function ConfiguredSettingsRouteScreen({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const agentAwarenessPushAvailable = supportsAgentAwarenessPush();
@@ -164,6 +196,10 @@ function ConfiguredSettingsRouteScreen() {
 
   const connections = useMemo(() => Object.values(savedConnectionsById), [savedConnectionsById]);
   const environmentCount = connections.length;
+  const settingsEnvironmentId = resolveSettingsEnvironmentId(
+    environmentId,
+    connections.map((connection) => connection.environmentId),
+  );
   const accountLabel = useMemo(() => {
     if (!isLoaded) return "Checking";
     if (!isSignedIn) return "Sign in";
@@ -517,7 +553,7 @@ function ConfiguredSettingsRouteScreen() {
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
-        <GeneralSettingsSection />
+        <GeneralSettingsSection environmentId={settingsEnvironmentId} />
 
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
@@ -559,7 +595,34 @@ function ErrorsSettingsSection({
   );
 }
 
-function GeneralSettingsSection() {
+function AnalyticsSettingsSwitch({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings);
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <SettingsSwitchRow
+      disabled={settings === null || saving}
+      icon="chart.bar"
+      label="Analytics"
+      value={settings?.analyticsEnabled ?? true}
+      onValueChange={async (analyticsEnabled) => {
+        setSaving(true);
+        try {
+          await updateSettings({ environmentId, input: { patch: { analyticsEnabled } } });
+        } finally {
+          setSaving(false);
+        }
+      }}
+    />
+  );
+}
+
+function GeneralSettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const autoSettleOnMerge =
@@ -576,6 +639,17 @@ function GeneralSettingsSection() {
         onValueChange={(value) => savePreferences({ autoSettleOnMerge: value })}
       />
       <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
+      {environmentId === null ? (
+        <SettingsSwitchRow
+          disabled
+          icon="chart.bar"
+          label="Analytics"
+          value
+          onValueChange={() => {}}
+        />
+      ) : (
+        <AnalyticsSettingsSwitch environmentId={environmentId} />
+      )}
     </SettingsSection>
   );
 }

@@ -65,6 +65,7 @@ export const ORCHESTRATION_PROJECTOR_NAMES = {
   projects: "projection.projects",
   bots: "projection.bots",
   groups: "projection.groups",
+  delegations: "projection.delegations",
   mcpServers: "projection.mcp-servers",
   threads: "projection.threads",
   threadMessages: "projection.thread-messages",
@@ -762,6 +763,27 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         }
       },
     );
+    const applyDelegationsProjection: ProjectorDefinition["apply"] = Effect.fn(
+      "applyDelegationsProjection",
+    )((event, _attachmentSideEffects) => {
+      if (event.type !== "delegation.created" && event.type !== "delegation.completed") {
+        return Effect.void;
+      }
+      return sql`
+        INSERT INTO projection_delegations (delegation_id, record_json)
+        VALUES (
+          ${event.payload.delegation.delegationId},
+          ${JSON.stringify(event.payload.delegation)}
+        )
+        ON CONFLICT (delegation_id) DO UPDATE SET
+          record_json = excluded.record_json
+      `.pipe(
+        Effect.mapError(
+          toPersistenceSqlError("ProjectionPipeline.applyDelegationsProjection:query"),
+        ),
+        Effect.asVoid,
+      );
+    });
     const applyMcpServersProjection: ProjectorDefinition["apply"] = Effect.fn(
       "applyMcpServersProjection",
     )(function* (event, _attachmentSideEffects) {
@@ -1895,6 +1917,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.groups,
         apply: applyGroupsProjection,
+      },
+      {
+        name: ORCHESTRATION_PROJECTOR_NAMES.delegations,
+        apply: applyDelegationsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.mcpServers,

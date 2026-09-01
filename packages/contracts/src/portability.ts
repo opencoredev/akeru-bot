@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
@@ -245,6 +246,17 @@ export const PortabilityImportItem = Schema.Struct({
 });
 export type PortabilityImportItem = typeof PortabilityImportItem.Type;
 
+export const PortabilityProjectFolderMap = Schema.Record(ProjectId, TrimmedNonEmptyString);
+export type PortabilityProjectFolderMap = typeof PortabilityProjectFolderMap.Type;
+
+export const PortabilityProjectFolder = Schema.Struct({
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  workspaceName: TrimmedNonEmptyString,
+  destination: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type PortabilityProjectFolder = typeof PortabilityProjectFolder.Type;
+
 export const PortabilityUnsupportedItem = Schema.Struct({
   kind: Schema.Literals([
     "project",
@@ -268,6 +280,9 @@ export const PortabilityImportPreview = Schema.Struct({
   conflicts: Schema.Array(PortabilityImportItem),
   missingProviders: Schema.Array(TrimmedNonEmptyString),
   skippedSecrets: Schema.Array(TrimmedNonEmptyString),
+  projectFolders: Schema.Array(PortabilityProjectFolder).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   unsupported: Schema.Array(PortabilityUnsupportedItem),
 });
 export type PortabilityImportPreview = typeof PortabilityImportPreview.Type;
@@ -280,11 +295,13 @@ export type PortabilityExportResult = typeof PortabilityExportResult.Type;
 
 export const PortabilityPreviewImportInput = Schema.Struct({
   contents: PortabilityArchiveText,
+  projectFolders: Schema.optional(PortabilityProjectFolderMap),
 });
 export type PortabilityPreviewImportInput = typeof PortabilityPreviewImportInput.Type;
 
 export const PortabilityApplyImportInput = Schema.Struct({
   contents: PortabilityArchiveText,
+  projectFolders: Schema.optional(PortabilityProjectFolderMap),
   expectedSnapshotSequence: NonNegativeInt,
   expectedStateChecksum: ArchiveChecksum,
 });

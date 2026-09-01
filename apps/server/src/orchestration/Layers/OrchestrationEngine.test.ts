@@ -120,6 +120,7 @@ describe("OrchestrationEngine", () => {
       updatedAt: "2026-03-03T00:00:04.000Z",
       bots: [],
       groups: [],
+      delegations: [],
       projects: [
         {
           id: asProjectId("project-bootstrap"),

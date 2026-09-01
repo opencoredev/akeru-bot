@@ -46,6 +46,10 @@ describe("searchSettings", () => {
   it("matches normalized title substrings", () => {
     expect(searchSettings("  WORD   WRAP  ", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
+    expect(searchSettings("local execution")[0]).toMatchObject({
+      id: "local-execution",
+      to: "/settings/general",
+    });
     expect(searchSettings("xyzzy")).toEqual([]);
   });
 
@@ -78,6 +82,13 @@ describe("searchSettings", () => {
   it("routes sandbox and browser sharing to General settings", () => {
     expect(searchSettings("sandbox and browser sharing")[0]).toMatchObject({
       id: "sandbox-browser-sharing",
+      to: "/settings/general",
+    });
+  });
+
+  it("routes analytics to General settings", () => {
+    expect(searchSettings("analytics")[0]).toMatchObject({
+      id: "analytics",
       to: "/settings/general",
     });
   });

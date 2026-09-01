@@ -38,6 +38,7 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain("Connect a provider");
     expect(markup).toContain(">Sandbox</div>");
     expect(markup).toContain('aria-label="Sandbox provider"');
+    expect(markup).toContain('aria-label="Bot usage"');
     expect(markup).toContain(">Voice calls</span>");
     expect(markup).toContain('aria-label="Enable voice calls for Akeru"');
     expect(markup).toContain(">Tools</div>");

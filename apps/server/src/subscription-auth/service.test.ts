@@ -213,6 +213,38 @@ describe("subscription auth storage", () => {
     expect(new SubscriptionAuthService(authPath).providerInstanceHealth("grok")).toBe("recovered");
   });
 
+  it("persists MCP failure and recovery without storing tool output or tokens", () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+
+    service.recordMcpRequestFailure(
+      "builtin-executor",
+      "The MCP tool request failed.",
+      "2026-08-31T19:00:00.000Z",
+    );
+    expect(service.mcpRequestHealth("builtin-executor")).toMatchObject({
+      health: "failed-first-request",
+      lastFailedRequest: { message: "The MCP tool request failed." },
+    });
+    service.recordMcpRequestSuccess("builtin-executor", "2026-08-31T20:00:00.000Z");
+    const restarted = new SubscriptionAuthService(authPath);
+    expect(restarted.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
+    expect(JSON.stringify(restarted.mcpRequestHealth("builtin-executor"))).not.toContain("token");
+  });
+
+  it("uses the last MCP health result when requests finish in the same millisecond", () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const at = "2026-08-31T20:00:00.000Z";
+
+    service.recordMcpRequestFailure("builtin-executor", "The request failed.", at);
+    service.recordMcpRequestSuccess("builtin-executor", at);
+    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
+
+    service.recordMcpRequestFailure("builtin-executor", "The retry failed.", at);
+    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("failed");
+  });
+
   it("preserves health updates written by another service instance", () => {
     const { authPath } = fixture();
     const providerRuntime = new SubscriptionAuthService(authPath);

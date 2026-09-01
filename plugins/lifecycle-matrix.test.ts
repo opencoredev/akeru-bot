@@ -12,7 +12,7 @@ const EXPECTED_IDS =
   "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github help-scout hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
-const INSTALLABLE_IDS = ["context", "exa", "executor", "firecrawl", "parallel-search"];
+const INSTALLABLE_IDS = ["context", "exa", "firecrawl", "parallel-search"];
 
 describe("milestone 13 plugin lifecycle matrix", () => {
   it("keeps verified plugins installable and every unverified plugin blocked", () => {
@@ -35,13 +35,13 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     ]);
 
     const pending = directory.filter((plugin) => !INSTALLABLE_IDS.includes(plugin.id));
-    expect(pending).toHaveLength(47);
+    expect(pending).toHaveLength(48);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(31);
+    ).toHaveLength(32);
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
       expect(plugin.connection).toMatchObject({
@@ -54,6 +54,12 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     expect(byId.get("typefully")).toMatchObject({
       authentication: "oauth",
       requiredCredentials: [],
+      documentationUrl: "https://typefully.com/ai-agents",
+      connection: { type: "verification-pending" },
+    });
+    expect(byId.get("executor")).toMatchObject({
+      transport: { type: "url", url: "https://executor.sh/mcp" },
+      authentication: "oauth",
       connection: { type: "verification-pending" },
     });
     expect(byId.get("github")).toMatchObject({

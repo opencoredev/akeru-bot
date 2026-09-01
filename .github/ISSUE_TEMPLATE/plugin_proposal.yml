@@ -28,6 +28,15 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: maintainer
+    attributes:
+      label: Plugin maintainer
+      description: Name the person or organization that maintains the plugin and give their public URL.
+      placeholder: Acme Inc., https://acme.example
+    validations:
+      required: true
+
   - type: textarea
     id: akeru_job
     attributes:
@@ -76,6 +85,7 @@ body:
       description: Choose the state that works today. Explain an approval blocker below.
       options:
         - available
+        - verification-pending
         - approval-pending
         - deprecated
     validations:

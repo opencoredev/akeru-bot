@@ -17,6 +17,7 @@ const readModel: OrchestrationReadModel = {
   snapshotSequence: 0,
   bots: [],
   groups: [],
+  delegations: [],
   projects: [],
   threads: [
     {

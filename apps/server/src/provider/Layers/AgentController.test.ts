@@ -8,12 +8,16 @@ import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/cor
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
   ApprovalRequestId,
   BotId,
   EventId,
   McpServerId,
   ProviderDriverKind,
   ProviderInstanceId,
+  ProjectId,
+  RuntimeItemId,
   ThreadId,
   TurnId,
   type ProviderRuntimeEvent,
@@ -21,19 +25,24 @@ import {
 } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import type { EntityMemoryRepositoryShape } from "../../memory/Services/EntityMemoryRepository.ts";
+import type { MemoryCandidateRepositoryShape } from "../../memory/Services/MemoryCandidateRepository.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
   createAkeruMastraAuthStorage,
   makeAgentControllerLive,
+  mcpServerIdForToolName,
   recordProviderAccessHealth,
   toMcpServerConfigs,
   type AgentControllerLiveOptions,
@@ -226,9 +235,9 @@ function makeMastraHarness() {
   };
 }
 
-function assistantMessage(text: string): MastraDBMessage {
+function assistantMessage(text: string, id = "assistant-message"): MastraDBMessage {
   return {
-    id: "assistant-message",
+    id,
     role: "assistant",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     content: {
@@ -245,7 +254,10 @@ function makeLayer(
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
-  overrides?: Pick<AgentControllerLiveOptions, "resolveComputerUseServer">,
+  overrides?: Pick<
+    AgentControllerLiveOptions,
+    "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
+  >,
 ) {
   return makeAgentControllerLive({
     makeMastraHarness: factory,
@@ -277,7 +289,10 @@ function provideController<A, E>(
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
-  overrides?: Pick<AgentControllerLiveOptions, "resolveComputerUseServer">,
+  overrides?: Pick<
+    AgentControllerLiveOptions,
+    "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
+  >,
 ) {
   return effect.pipe(
     Effect.provide(makeLayer(bridge, factory, makeMcpManager, baseDir, overrides)),
@@ -291,10 +306,21 @@ function resolveCodex(controller: AgentController["Service"]) {
     engine: { provider: "codex", model: "gpt-5.6-sol" },
     fallback: codexSelection,
     mode: "default",
+    botConversation: true,
   });
 }
 
 describe("toMcpServerConfigs", () => {
+  it("attributes namespaced MCP tools to the exact server id", () => {
+    expect(
+      mcpServerIdForToolName(
+        [McpServerId.make("builtin-exa"), McpServerId.make("builtin-exa-search")],
+        "builtin-exa-search_find",
+      ),
+    ).toBe("builtin-exa-search");
+    expect(mcpServerIdForToolName([McpServerId.make("builtin-exa")], "read_file")).toBeUndefined();
+  });
+
   it("converts only the bot's filtered MCP registrations for Mastra", () => {
     expect(
       toMcpServerConfigs([
@@ -487,7 +513,7 @@ describe("AgentControllerLive", () => {
     ),
   );
 
-  it.effect("passes Akeru subscription auth to the custom memory-free harness", () => {
+  it.effect("passes Akeru subscription auth and memory storage to the custom harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -496,10 +522,134 @@ describe("AgentControllerLive", () => {
         const options = mastra.harnessOptions[0];
         assert.isDefined(options);
         assert.isDefined(options.authStorage);
-        assert.notProperty(options, "memory");
+        assert.match(options.memoryDbPath, /mastra-observational-memory\.sqlite$/);
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("rejects conversation memory calls when the harness has no memory", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const readError = yield* controller.readConversationMemory!(codexThreadId).pipe(
+          Effect.flip,
+        );
+        const clearError = yield* controller.clearConversationMemory!(codexThreadId).pipe(
+          Effect.flip,
+        );
+
+        assert.deepInclude(readError, {
+          _tag: "AgentControllerRuntimeError",
+          operation: "memory.read",
+        });
+        assert.deepInclude(clearError, {
+          _tag: "AgentControllerRuntimeError",
+          operation: "memory.clear",
+        });
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("registers repository-backed memory tools for Mastra sessions", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: codexThreadId,
+      projectId: ProjectId.make("project-memory-tools"),
+      workspaceRoot: "/workspace/memory-tools",
+      botId: BotId.make("bot-memory-tools"),
+      groupId: null,
+      respondingBotId: BotId.make("bot-memory-tools"),
+      groupMemberBotIds: [],
+    } as const;
+    const insert = vi.fn((input) => Effect.succeed(input.revision));
+    const create = vi.fn((input) => Effect.succeed(input.candidate));
+    const entityMemoryRepository = { insert } as unknown as EntityMemoryRepositoryShape;
+    const memoryCandidateRepository = { create } as unknown as MemoryCandidateRepositoryShape;
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: access,
+        });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
+          expect.arrayContaining(["recall_memory", "remember", "update_memory", "forget_memory"]),
+        );
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "remember",
+            toolCallId: "private-memory",
+            input: { fact: "The user prefers vim.", scope: "private" },
+            approvalMode: "require-grant",
+          }),
+        );
+        const sharedMemory = {
+          threadId: String(codexThreadId),
+          toolId: "remember" as const,
+          toolCallId: "shared-memory",
+          input: { fact: "The project uses Bun.", scope: "project" },
+          approvalMode: "require-grant" as const,
+        };
+        runtime.grantApproval(sharedMemory);
+        yield* Effect.promise(() => runtime.execute(sharedMemory));
+
+        expect(insert).toHaveBeenCalledOnce();
+        expect(create).toHaveBeenCalledOnce();
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              events.push(event);
+            }),
+          ),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Remember this." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "memory-approval",
+          toolName: "remember",
+          args: { fact: "The project uses Bun.", scope: "project" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        expect(events.find((event) => event.type === "request.opened")).toMatchObject({
+          payload: {
+            options: [
+              { decision: "accept", label: "Allow" },
+              { decision: "decline", label: "Decline" },
+            ],
+          },
+        });
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        mastra.finishSend();
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      { entityMemoryRepository, memoryCandidateRepository },
     );
   });
 
@@ -599,6 +749,68 @@ describe("AgentControllerLive", () => {
         expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Reply once." });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("keeps replies and status beats as separate completed messages", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("I'll check first.", "opening"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "view-1",
+          toolName: "view",
+          args: { path: "package.json" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "view-1",
+          result: "{}",
+          isError: false,
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("I found the configuration.", "status"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
+          [
+            RuntimeItemId.make("mastra-answer-opening"),
+            RuntimeItemId.make("view-1"),
+            RuntimeItemId.make("mastra-answer-status"),
+          ],
+        );
       }),
       bridge.service,
       mastra.factory,
@@ -908,10 +1120,12 @@ describe("AgentControllerLive", () => {
   it.effect("attaches the globally installed MCP servers selected for the bot", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-mcp-"));
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ exa_search: {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {} })),
+      getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> =
@@ -948,10 +1162,10 @@ describe("AgentControllerLive", () => {
         expect(mcpManager.init).toHaveBeenCalledOnce();
         assert.property(
           mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
-          "exa_search",
+          "builtin-exa_search",
         );
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           policy: "ask",
         });
 
@@ -959,7 +1173,7 @@ describe("AgentControllerLive", () => {
         mastra.emit({
           type: "tool_approval_required",
           toolCallId: "exa-tool-1",
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           args: { operation: "read" },
         } as AgentControllerEvent);
         yield* controller.respondToRequest({
@@ -969,24 +1183,64 @@ describe("AgentControllerLive", () => {
         });
         const syncApproval = mastra.harnessOptions[0]?.syncThreadToolApproval;
         assert.isDefined(syncApproval);
-        yield* Effect.promise(() => syncApproval(String(codexThreadId), "exa_search", true));
+        yield* Effect.promise(() =>
+          syncApproval(String(codexThreadId), "builtin-exa_search", true),
+        );
         expect(mastra.session.permissions.setForTool).toHaveBeenLastCalledWith({
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           policy: "ask",
         });
-        yield* Effect.promise(() => syncApproval(String(codexThreadId), "exa_search", false));
+        yield* Effect.promise(() =>
+          syncApproval(String(codexThreadId), "builtin-exa_search", false),
+        );
         expect(mastra.session.permissions.setForTool).toHaveBeenLastCalledWith({
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           policy: "allow",
         });
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "exa-tool-1",
+          result: "failed",
+          isError: true,
+          denied: false,
+        } as AgentControllerEvent);
+        expect(
+          SubscriptionAuthService.forSecretsDir(
+            NodePath.join(baseDir, "userdata", "secrets"),
+          ).mcpRequestHealth(exaServer.id)?.health,
+        ).toBe("failed-first-request");
+
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "exa-tool-2",
+          toolName: "builtin-exa_search",
+          args: { operation: "read" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "exa-tool-2",
+          result: "ok",
+          isError: false,
+          denied: false,
+        } as AgentControllerEvent);
+        expect(
+          SubscriptionAuthService.forSecretsDir(
+            NodePath.join(baseDir, "userdata", "secrets"),
+          ).mcpRequestHealth(exaServer.id)?.health,
+        ).toBe("recovered");
         mastra.finishSend();
 
         yield* controller.stopSession({ threadId: codexThreadId });
         expect(mcpManager.disconnect).toHaveBeenCalledOnce();
-      }),
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(baseDir, { recursive: true, force: true })),
+        ),
+      ),
       bridge.service,
       mastra.factory,
       makeMcpManager,
+      baseDir,
     );
   });
 
@@ -1134,6 +1388,7 @@ describe("AgentControllerLive", () => {
           engine: { provider: "codex", model: "gpt-5.6-sol" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: true,
         });
         yield* controller.startSession(nextThreadId, {
           threadId: nextThreadId,
@@ -1199,7 +1454,6 @@ describe("AgentControllerLive", () => {
         threadId: codexThreadId,
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
-        cwd: process.cwd(),
         modelSelection: codexSelection,
         runtimeMode: "full-access",
         botSandbox: "upstash",
@@ -1288,6 +1542,43 @@ describe("AgentControllerLive", () => {
     });
   });
 
+  it.effect("waits for observational memory shutdown before closing the controller scope", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const destroyStarted = Promise.withResolvers<void>();
+    const destroyReleased = Promise.withResolvers<void>();
+    const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (
+      options,
+    ) => {
+      const harness = await mastra.factory(options);
+      return {
+        ...harness,
+        destroy: async () => {
+          destroyStarted.resolve();
+          await destroyReleased.promise;
+        },
+      };
+    };
+
+    return Effect.gen(function* () {
+      const scope = yield* Scope.make("sequential");
+      yield* Layer.buildWithScope(makeLayer(bridge.service, factory), scope);
+      let scopeClosed = false;
+      const closeScope = yield* Scope.close(scope, Exit.void).pipe(
+        Effect.tap(() => Effect.sync(() => (scopeClosed = true))),
+        Effect.forkScoped,
+      );
+
+      yield* Effect.promise(() => destroyStarted.promise);
+      yield* Effect.yieldNow;
+      expect(scopeClosed).toBe(false);
+
+      destroyReleased.resolve();
+      yield* Fiber.join(closeScope);
+      expect(scopeClosed).toBe(true);
+    });
+  });
+
   it.effect("keeps the same workspace when only session input changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -1349,6 +1640,7 @@ describe("AgentControllerLive", () => {
           engine: { provider: "claudeAgent", model: "claude-fable-5" },
           fallback: codexSelection,
           mode: "plan",
+          botConversation: true,
         });
         yield* controller.startSession(claudeThreadId, {
           threadId: claudeThreadId,
@@ -1384,6 +1676,7 @@ describe("AgentControllerLive", () => {
           engine: { provider: "kimi", model: "k3-256k" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: true,
         });
         const session = yield* controller.startSession(kimiThreadId, {
           threadId: kimiThreadId,
@@ -1423,12 +1716,14 @@ describe("AgentControllerLive", () => {
           engine: { provider: "claudeAgent", model: "claude-fable-5" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: false,
         });
         yield* controller.resolveEngine({
           threadId: codexThreadId,
           engine: { provider: "codex", model: "gpt-5.6-sol" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: false,
         });
         yield* controller.stopSession({ threadId: codexThreadId });
 

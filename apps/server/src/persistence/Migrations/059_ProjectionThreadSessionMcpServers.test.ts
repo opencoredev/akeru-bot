@@ -7,13 +7,13 @@ import { runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "../NodeSqliteClient.ts";
 
 it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))(
-  "058_ProjectionThreadSessionMcpServers",
+  "059_ProjectionThreadSessionMcpServers",
   (it) => {
     it.effect("adds an empty MCP server list to projected sessions", () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         yield* runMigrations({ toMigrationInclusive: 57 });
-        yield* runMigrations({ toMigrationInclusive: 58 });
+        yield* runMigrations({ toMigrationInclusive: 59 });
 
         const columns = yield* sql<{
           readonly name: string;

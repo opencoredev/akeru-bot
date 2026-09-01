@@ -14,7 +14,7 @@ When the reason for a decision will matter after implementation, record it in th
 
 Track active maintainer work in its GitHub issue or project item. The tracking item should state the outcome, constraints, and acceptance criteria, then link the pull requests that implement it. Split large efforts into one durable specification and small work items that can each close independently.
 
-Close completed items. Update or delete invalidated work before starting the next implementation session. External proposals follow [CONTRIBUTING.md](../../CONTRIBUTING.md) and belong in Ideas discussions rather than issues.
+Close completed items. Update or delete invalidated work before starting the next implementation session. External proposals follow [CONTRIBUTING.md](../../CONTRIBUTING.md) and belong in Ideas discussions rather than issues. Plugin and provider proposals use their issue forms because maintainers need fixed admission and lifecycle evidence.
 
 ## Temporary work stays temporary
 

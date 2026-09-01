@@ -42,8 +42,23 @@ export const AkeruToolInputSchemas = {
   ExternalRead: PathInput,
   AwaitShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
   AwaitExternalShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
+  SendToAgent: Schema.Struct({
+    botId: BotId,
+    task: TrimmedNonEmptyString,
+    expectedResult: TrimmedNonEmptyString,
+  }),
 } as const;
 export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
+
+const AkeruToolInputDecoders = Object.fromEntries(
+  Object.entries(AkeruToolInputSchemas).map(([toolId, schema]) => [
+    toolId,
+    Schema.decodeUnknownSync(schema),
+  ]),
+) as Record<
+  AkeruToolId,
+  (input: unknown, options: { readonly onExcessProperty: "error" }) => unknown
+>;
 
 export const AkeruProtectedApprovalClass = Schema.Literals([
   "send",
@@ -160,6 +175,9 @@ export const AKERU_TOOL_CATALOG = [
     workspace: "user-computer",
     requiresUserComputer: true,
   }),
+  define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
+    approval: "send",
+  }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {
@@ -259,7 +277,7 @@ export function decodeAkeruToolInput<Name extends AkeruToolId>(
   toolId: Name,
   input: unknown,
 ): (typeof AkeruToolInputSchemas)[Name]["Type"] {
-  return Schema.decodeUnknownSync(AkeruToolInputSchemas[toolId])(input, {
+  return AkeruToolInputDecoders[toolId](input, {
     onExcessProperty: "error",
   }) as (typeof AkeruToolInputSchemas)[Name]["Type"];
 }

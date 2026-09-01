@@ -10,6 +10,14 @@ import { OrchestrationProjectionPipelineLive } from "./Layers/ProjectionPipeline
 import { OrchestrationProjectionSnapshotQueryLive } from "./Layers/ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "./ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "./ThreadPlanProgress.ts";
+import { EntityMemoryRepositoryLive } from "../memory/Layers/EntityMemoryRepository.ts";
+import { MemoryCandidateRepositoryLive } from "../memory/Layers/MemoryCandidateRepository.ts";
+import { MemoryRevisionWriteLockLive } from "../memory/Services/MemoryRevisionWriteLock.ts";
+
+const MemoryRepositoriesLive = Layer.mergeAll(
+  EntityMemoryRepositoryLive,
+  MemoryCandidateRepositoryLive,
+).pipe(Layer.provide(MemoryRevisionWriteLockLive));
 
 export const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationEventStoreLive,
@@ -27,6 +35,7 @@ export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   ProjectionBotRepositoryLive,
   ProjectionGroupRepositoryLive,
   BotUsageLedgerLive,
+  MemoryRepositoriesLive,
   // Shared background-liveness and plan-progress registries: written by
   // runtime ingestion, read by the snapshot query. provideMerge feeds the
   // same instance to the snapshot query here and re-exports it for runtime

@@ -37,6 +37,18 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.map((tool) => tool.id)).not.toContain("RestartMcpServers");
   });
 
+  it("decodes SendToAgent input and rejects server-owned fields", () => {
+    const input = {
+      botId: "bot-research",
+      task: "Compare three flights.",
+      expectedResult: "A short comparison with sources.",
+    };
+
+    expect(decodeAkeruToolInput("SendToAgent", input)).toEqual(input);
+    expect(() => decodeAkeruToolInput("SendToAgent", { ...input, depth: 2 })).toThrow();
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
+  });
+
   it("never lets full access bypass protected commands or paths", () => {
     const shell = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalShell")!;
     const read = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalRead")!;

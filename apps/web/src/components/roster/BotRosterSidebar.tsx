@@ -42,6 +42,7 @@ import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
+import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import {
   buildGroupedRosterSections,
   buildRosterStrip,
@@ -185,7 +186,6 @@ const BotStripTile = memo(function BotStripTile({
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
-  working: boolean,
 ): RosterLastMessage | null {
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
   const environmentId = usePrimaryEnvironmentId();
@@ -200,10 +200,7 @@ function useLatestBotMessage(
       : null;
   }, [botId, environmentId, rememberedPath, threadShells]);
   const messages = useThreadMessages(threadRef);
-  const visibleMessages = useMemo(
-    () => visibleBotChatMessages(messages, working),
-    [messages, working],
-  );
+  const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
   return useMemo(
     () => resolveLatestRosterMessage(fallback, visibleMessages),
     [fallback, visibleMessages],
@@ -223,7 +220,7 @@ const BotRosterRow = memo(function BotRosterRow({
 }) {
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
-  const latestMessage = useLatestBotMessage(bot.id, lastMessage, presence === "working");
+  const latestMessage = useLatestBotMessage(bot.id, lastMessage);
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
   return (
     <li
@@ -455,7 +452,7 @@ export default function BotRosterSidebar() {
         avatar,
         engine: null,
         sandbox: null,
-        runtimeMode: "full-access",
+        runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
         usageCap: null,
         groupId: null,
       },
