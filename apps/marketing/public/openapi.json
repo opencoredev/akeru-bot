@@ -1,0 +1,64 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Akeru Bot public metadata API",
+    "version": "1.0.0",
+    "description": "Read-only public metadata for Akeru Bot project files. Akeru Bot itself runs on the user's machine and does not expose a hosted automation API."
+  },
+  "servers": [{ "url": "https://www.akeru-bot.com" }],
+  "security": [],
+  "paths": {
+    "/schema/t3.json": {
+      "get": {
+        "operationId": "getProjectFileSchema",
+        "summary": "Get the Akeru Bot project-file schema",
+        "description": "Returns the JSON Schema used to validate t3.json project configuration files.",
+        "responses": {
+          "200": {
+            "description": "The current project-file JSON Schema.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["$schema"],
+                  "properties": {
+                    "$schema": { "type": "string", "format": "uri" },
+                    "$id": { "type": "string", "format": "uri" },
+                    "title": { "type": "string" },
+                    "type": { "type": ["string", "array"] },
+                    "properties": { "type": "object", "additionalProperties": true }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested API resource does not exist.",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "required": ["type", "title", "status", "detail", "code", "resolution"],
+        "properties": {
+          "type": { "type": "string", "format": "uri-reference" },
+          "title": { "type": "string" },
+          "status": { "type": "integer" },
+          "detail": { "type": "string" },
+          "code": { "type": "string" },
+          "resolution": { "type": "string" }
+        }
+      }
+    }
+  }
+}

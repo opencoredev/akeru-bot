@@ -173,7 +173,8 @@ export interface AgentControllerLiveOptions {
   readonly delegationRuntime?: Pick<
     AkeruDelegationRuntime,
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
-  >;
+  > &
+    Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -526,6 +527,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           access: input.access,
         };
       };
+      const createAgent = delegationRuntime?.create;
+      const checkAgent = delegationRuntime?.check;
+      const stopAgent = delegationRuntime?.stop;
       return {
         depth: input.parentDelegation?.depth ?? 0,
         activeDelegations:
@@ -537,7 +541,10 @@ const make = (options?: AgentControllerLiveOptions) =>
               candidate.state !== "canceled",
           ).length ?? 0,
         access: input.access,
+        ...(createAgent ? { create: (request) => createAgent(parent(), request) } : {}),
+        ...(checkAgent ? { check: (request) => checkAgent(parent(), request) } : {}),
         send: (request) => delegationRuntime!.send(parent(), request),
+        ...(stopAgent ? { stop: (request) => stopAgent(parent(), request) } : {}),
       };
     };
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;

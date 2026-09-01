@@ -37,4 +37,18 @@ describe("agent readiness files", () => {
       ]),
     );
   });
+
+  it("documents the public metadata endpoint", () => {
+    const openapi = JSON.parse(publicFile("openapi.json"));
+    const apiError = JSON.parse(publicFile("api-error.json"));
+
+    expect(openapi).toMatchObject({
+      openapi: "3.1.0",
+      info: { title: "Akeru Bot public metadata API" },
+    });
+    expect(openapi.paths["/schema/t3.json"].get).toMatchObject({
+      operationId: "getProjectFileSchema",
+    });
+    expect(apiError).toMatchObject({ status: 404, code: "api_resource_not_found" });
+  });
 });

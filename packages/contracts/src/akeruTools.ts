@@ -7,12 +7,13 @@ import {
   GroupId,
   IsoDateTime,
   NonNegativeInt,
+  PositiveInt,
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
-import { McpServerId, McpServerUrl } from "./mcpServer.ts";
+import { McpServerId } from "./mcpServer.ts";
 import { BotSandbox, RuntimeMode } from "./orchestration.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
@@ -62,11 +63,18 @@ export const AkeruToolId = Schema.Literals([
   "ExternalRead",
   "AwaitShell",
   "AwaitExternalShell",
+  "CreateAgent",
+  "CheckAgent",
+  "MessageAgent",
+  "StopAgent",
   "SendToAgent",
   "CreateChannel",
   "UpdateChannel",
   "SendToUser",
+  "SearchPlugins",
+  "GetPlugin",
   "InstallPlugin",
+  "UninstallPlugin",
   "GetMcpServerStatus",
   "TestMcpServer",
   "ReconnectMcpServer",
@@ -87,6 +95,21 @@ export const AkeruToolApprovalClass = Schema.Literals([
 ]);
 export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
 
+const AgentMessageInput = Schema.Struct({
+  botId: BotId,
+  task: TrimmedNonEmptyString,
+  expectedResult: TrimmedNonEmptyString,
+  deadline: Schema.optional(IsoDateTime),
+  allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
+  memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
+  mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
+  sandbox: Schema.optional(
+    Schema.NullOr(Schema.suspend((): Schema.Codec<BotSandbox> => BotSandbox)),
+  ),
+  runtimeMode: Schema.optional(Schema.suspend((): Schema.Codec<RuntimeMode> => RuntimeMode)),
+  approvalCeiling: Schema.optional(AkeruToolApprovalClass),
+});
+
 export const AkeruToolInputSchemas = {
   Shell: CommandInput,
   Read: PathInput,
@@ -101,20 +124,15 @@ export const AkeruToolInputSchemas = {
   ExternalRead: PathInput,
   AwaitShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
   AwaitExternalShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
-  SendToAgent: Schema.Struct({
-    botId: BotId,
-    task: TrimmedNonEmptyString,
-    expectedResult: TrimmedNonEmptyString,
-    deadline: Schema.optional(IsoDateTime),
-    allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
-    memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
-    mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
-    sandbox: Schema.optional(
-      Schema.NullOr(Schema.suspend((): Schema.Codec<BotSandbox> => BotSandbox)),
-    ),
-    runtimeMode: Schema.optional(Schema.suspend((): Schema.Codec<RuntimeMode> => RuntimeMode)),
-    approvalCeiling: Schema.optional(AkeruToolApprovalClass),
+  CreateAgent: Schema.Struct({
+    name: TrimmedNonEmptyString,
+    title: Schema.optional(TrimmedNonEmptyString),
+    description: Schema.optional(TrimmedNonEmptyString),
   }),
+  CheckAgent: Schema.Struct({ botId: BotId }),
+  MessageAgent: AgentMessageInput,
+  StopAgent: Schema.Struct({ botId: BotId }),
+  SendToAgent: AgentMessageInput,
   CreateChannel: Schema.Struct({
     name: TrimmedNonEmptyString,
     specialistBotIds: Schema.optional(Schema.Array(BotId)),
@@ -126,12 +144,13 @@ export const AkeruToolInputSchemas = {
   SendToUser: Schema.Struct({
     message: TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_COMMAND_MAX_CHARS)),
   }),
-  InstallPlugin: Schema.Struct({
-    pluginId: TrimmedNonEmptyString,
-    name: TrimmedNonEmptyString,
-    url: McpServerUrl,
-    authentication: Schema.Literals(["none", "oauth", "optional-oauth"]),
+  SearchPlugins: Schema.Struct({
+    query: Schema.optional(TrimmedNonEmptyString),
+    limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(50))),
   }),
+  GetPlugin: Schema.Struct({ pluginId: TrimmedNonEmptyString }),
+  InstallPlugin: Schema.Struct({ pluginId: TrimmedNonEmptyString }),
+  UninstallPlugin: Schema.Struct({ pluginId: TrimmedNonEmptyString }),
   GetMcpServerStatus: McpServerIdInput,
   TestMcpServer: McpServerIdInput,
   ReconnectMcpServer: McpServerIdInput,
@@ -257,6 +276,14 @@ export const AKERU_TOOL_CATALOG = [
     workspace: "user-computer",
     requiresUserComputer: true,
   }),
+  define("CreateAgent", "bot-workspace", "Create a durable named bot."),
+  define("CheckAgent", "bot-workspace", "Inspect a durable named bot and its delegated work."),
+  define("MessageAgent", "bot-workspace", "Send bounded work to a durable named bot.", {
+    approval: "send",
+  }),
+  define("StopAgent", "bot-workspace", "Cancel a durable bot's delegated work.", {
+    approval: "delete",
+  }),
   define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
     approval: "send",
   }),
@@ -265,8 +292,17 @@ export const AKERU_TOOL_CATALOG = [
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
     approval: "send",
   }),
-  define("InstallPlugin", "bot-workspace", "Install or update a URL MCP plugin.", {
+  define("SearchPlugins", "bot-workspace", "Search the curated plugin directory."),
+  define(
+    "GetPlugin",
+    "bot-workspace",
+    "Inspect a plugin, its connection, permissions, health, and dependents.",
+  ),
+  define("InstallPlugin", "bot-workspace", "Install a curated plugin after inspecting it.", {
     approval: "production",
+  }),
+  define("UninstallPlugin", "bot-workspace", "Remove a curated plugin after inspecting it.", {
+    approval: "delete",
   }),
   define("GetMcpServerStatus", "bot-workspace", "Inspect an MCP server connection."),
   define("TestMcpServer", "bot-workspace", "Run a real MCP server connection test.", {
@@ -301,7 +337,7 @@ export function filterAkeruTools(
     if (!context.capabilities.has(tool.capability)) return false;
     if (!context.implementedTools.has(tool.id)) return false;
     if (
-      tool.id === "SendToAgent" &&
+      (tool.id === "SendToAgent" || tool.id === "MessageAgent") &&
       ((context.delegationDepth ?? 0) >= AKERU_DELEGATION_MAX_DEPTH ||
         (context.activeDelegations ?? 0) >= AKERU_DELEGATION_MAX_CONCURRENCY)
     )
