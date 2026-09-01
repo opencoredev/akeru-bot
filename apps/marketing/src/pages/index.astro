@@ -95,6 +95,10 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           <span>Read the docs</span>
         </a>
       </div>
+      <aside id="install-notice" class="install-notice" hidden>
+        <span>Want your coding agent to install the verified Linux AppImage?</span>
+        <button id="copy-install-prompt" type="button">Copy install prompt</button>
+      </aside>
     </div>
     <div class="hero-shot">
       <img
@@ -192,6 +196,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     resolveDownloadUrl,
     selectReleaseAsset,
   } from "../lib/releases";
+  import { installPromptForPlatform } from "../lib/installPrompt";
 
   const UNSIGNED_PROMPT =
     "This build is unsigned. Your system may ask you to confirm the install. Continue?";
@@ -201,6 +206,8 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     const resolveButton = button ? blockDownloadUntilResolved(button) : null;
     const label = document.getElementById("download-label");
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
+    const installNotice = document.getElementById("install-notice");
+    const copyInstallPrompt = document.getElementById("copy-install-prompt") as HTMLButtonElement | null;
 
     // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
     // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
@@ -212,6 +219,15 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     } else if (button && label) {
       label.textContent = "All downloads";
       resolveButton?.(RELEASES_URL);
+    }
+
+    const installPrompt = installPromptForPlatform(platform?.os ?? "");
+    if (installPrompt && installNotice && copyInstallPrompt) {
+      installNotice.hidden = false;
+      copyInstallPrompt.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(installPrompt);
+        copyInstallPrompt.textContent = "Copied";
+      });
     }
 
     try {
@@ -298,6 +314,28 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     gap: 12px;
     flex-wrap: wrap;
     padding-top: 4px;
+  }
+
+  .install-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+  }
+
+  .install-notice[hidden] {
+    display: none;
+  }
+
+  .install-notice button {
+    color: var(--color-foreground);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .hero-shot {
