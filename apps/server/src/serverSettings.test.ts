@@ -1140,6 +1140,25 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("rejects plaintext sandbox secrets after a valid redacted marker", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"sandbox":{"providers":{"e2b":{"environment":[{"name":"E2B_API_KEY","value":"","sensitive":true,"valueRedacted":true},{"name":"E2B_API_KEY","value":"plaintext-key","sensitive":true}]}}}}',
+      );
+
+      const error = yield* Effect.flip(serverSettings.getSettings);
+      assert.deepInclude(error, {
+        operation: "validate-sandbox",
+        providerInstanceId: "sandbox:e2b",
+        environmentVariable: "E2B_API_KEY",
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("rejects incomplete sandbox connections", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;

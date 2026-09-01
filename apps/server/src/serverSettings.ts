@@ -616,15 +616,14 @@ const make = Effect.gen(function* () {
         const variables = settings.sandbox.providers[provider].environment;
         for (const credential of SANDBOX_PROVIDER_CREDENTIALS[provider]) {
           if (!credential.sensitive) continue;
-          const variable = variables.find((candidate) => candidate.name === credential.name);
-          if (!variable) continue;
-          if (
-            variable.sensitive === true &&
-            variable.valueRedacted === true &&
-            variable.value.length === 0
-          ) {
-            continue;
-          }
+          const hasInvalidMarker = variables.some(
+            (variable) =>
+              variable.name === credential.name &&
+              (variable.sensitive !== true ||
+                variable.valueRedacted !== true ||
+                variable.value.length > 0),
+          );
+          if (!hasInvalidMarker) continue;
           return yield* sandboxValidationError(
             provider,
             credential.name,
