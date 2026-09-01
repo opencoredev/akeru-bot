@@ -694,6 +694,37 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("excludes the plugin catalog from the Windows loose-file budget", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const baseline = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+        });
+        const pluginDir = path.join(fixture.packagedAppDir, "resources/plugins/entries/example");
+        yield* fs.makeDirectory(pluginDir, { recursive: true });
+        yield* Effect.forEach(
+          Array.from({ length: 100 }, (_, index) => index),
+          (index) => fs.writeFileString(path.join(pluginDir, `${String(index)}.json`), "{}"),
+          { concurrency: "unbounded" },
+        );
+
+        const withCatalog = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          fileLimit: baseline.fileCount,
+        });
+
+        assert.equal(withCatalog.fileCount, baseline.fileCount);
+      }),
+    ),
+  );
+
   it.effect("probes fff through the packaged Windows primary instead of helper executables", () => {
     const commands: Array<{
       readonly command: string;

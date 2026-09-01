@@ -2146,10 +2146,14 @@ function collectUnpackedAsarFiles(
   return output;
 }
 
-const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (root: string) {
+const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (input: {
+  readonly root: string;
+  readonly excludedDirectories?: ReadonlyArray<string>;
+}) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const pendingDirectories = [root];
+  const excludedDirectories = new Set(input.excludedDirectories ?? []);
+  const pendingDirectories = [input.root];
   let count = 0;
 
   while (pendingDirectories.length > 0) {
@@ -2160,7 +2164,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
       const entryPath = path.join(directory, entry);
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
-        pendingDirectories.push(entryPath);
+        if (!excludedDirectories.has(entryPath)) pendingDirectories.push(entryPath);
       } else if (stat.type === "File") {
         count += 1;
       }
@@ -2359,7 +2363,10 @@ export const validateWindowsPackagedPayload = Effect.fn(
     });
   }
 
-  const fileCount = yield* countPayloadFiles(packagedAppDir);
+  const fileCount = yield* countPayloadFiles({
+    root: packagedAppDir,
+    excludedDirectories: [path.join(resourcesDir, "plugins")],
+  });
   if (fileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
