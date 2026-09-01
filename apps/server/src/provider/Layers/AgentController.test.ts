@@ -25,8 +25,10 @@ import {
 } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
@@ -500,7 +502,7 @@ describe("AgentControllerLive", () => {
     ),
   );
 
-  it.effect("passes Akeru subscription auth to the custom memory-free harness", () => {
+  it.effect("passes Akeru subscription auth and memory storage to the custom harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -509,7 +511,7 @@ describe("AgentControllerLive", () => {
         const options = mastra.harnessOptions[0];
         assert.isDefined(options);
         assert.isDefined(options.authStorage);
-        assert.notProperty(options, "memory");
+        assert.match(options.memoryDbPath, /mastra-observational-memory\.sqlite$/);
       }),
       bridge.service,
       mastra.factory,
@@ -1393,7 +1395,98 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
-  it.effect("keeps the same remote workspace when only cwd changes", () => {
+  it.effect("destroys obsolete and final pooled workspaces", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const firstWorkspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    });
+    const secondWorkspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    });
+    const firstDestroy = vi.spyOn(firstWorkspace, "destroy");
+    const secondDestroy = vi.spyOn(secondWorkspace, "destroy");
+    const makeRemoteWorkspace = vi
+      .fn()
+      .mockResolvedValueOnce(firstWorkspace)
+      .mockResolvedValueOnce(secondWorkspace);
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeRemoteWorkspace,
+    }).pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "akeru-mastra-resource-finalizer-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      yield* Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+          botId: "bot-one" as never,
+          botSandboxBrowserSharing: "separate" as const,
+        };
+        yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
+        yield* controller.startSession(codexThreadId, { ...input, botSandbox: "vercel" });
+        expect(firstDestroy).toHaveBeenCalledOnce();
+      }).pipe(Effect.provide(layer), Effect.orDie);
+
+      expect(secondDestroy).toHaveBeenCalledOnce();
+    });
+  });
+
+  it.effect("waits for observational memory shutdown before closing the controller scope", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const destroyStarted = Promise.withResolvers<void>();
+    const destroyReleased = Promise.withResolvers<void>();
+    const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (
+      options,
+    ) => {
+      const harness = await mastra.factory(options);
+      return {
+        ...harness,
+        destroy: async () => {
+          destroyStarted.resolve();
+          await destroyReleased.promise;
+        },
+      };
+    };
+
+    return Effect.gen(function* () {
+      const scope = yield* Scope.make("sequential");
+      yield* Layer.buildWithScope(makeLayer(bridge.service, factory), scope);
+      let scopeClosed = false;
+      const closeScope = yield* Scope.close(scope, Exit.void).pipe(
+        Effect.tap(() => Effect.sync(() => (scopeClosed = true))),
+        Effect.forkScoped,
+      );
+
+      yield* Effect.promise(() => destroyStarted.promise);
+      yield* Effect.yieldNow;
+      expect(scopeClosed).toBe(false);
+
+      destroyReleased.resolve();
+      yield* Fiber.join(closeScope);
+      expect(scopeClosed).toBe(true);
+    });
+  });
+
+  it.effect("keeps the same workspace when only session input changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({

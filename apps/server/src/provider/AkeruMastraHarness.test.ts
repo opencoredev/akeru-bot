@@ -4,19 +4,25 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
+import { MessageList } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
+import { Memory } from "@mastra/memory";
+import { ObservationalMemory } from "@mastra/memory/processors";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   AKERU_TOOL_CATALOG,
   ProviderDriverKind,
 } from "@t3tools/contracts";
-import { assert, describe, it } from "vite-plus/test";
+import * as DateTime from "effect/DateTime";
+import { assert, describe, expect, it, vi } from "vite-plus/test";
 
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import {
-  criticalAkeruAction,
-  createAkeruMastraHarness,
+  AkeruPassiveObservationalMemoryProcessor,
   createAkeruObserveHooks,
+  createAkeruMastraHarness,
+  createAkeruMastraMemory,
+  criticalAkeruAction,
   mastraModelId,
   resolveAkeruInstructions,
   resolveAkeruMastraModel,
@@ -26,22 +32,188 @@ import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
 describe("AkeruMastraHarness", () => {
-  it("initializes native observational memory", async () => {
-    const stateDir = await NodeFS.promises.mkdtemp(
-      NodePath.join(NodeOS.tmpdir(), "akeru-observational-memory-"),
+  it("emits observer and reflector metering callbacks", async () => {
+    const started: unknown[] = [];
+    const finished: unknown[] = [];
+    const hooks = createAkeruObserveHooks({
+      startMemoryCall: async (input) => {
+        started.push(input);
+        return `${input.category}-call`;
+      },
+      finishMemoryCall: async (input) => {
+        finished.push(input);
+      },
+    });
+
+    await hooks.onObservationStart?.({ threadId: "thread-1" });
+    await hooks.onObservationEnd?.({
+      threadId: "thread-1",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await hooks.onReflectionStart?.({ threadId: "thread-1" });
+    await hooks.onReflectionEnd?.({
+      threadId: "thread-1",
+      usage: { inputTokens: 20, outputTokens: 8 },
+    });
+
+    assert.deepEqual(started, [
+      { threadId: "thread-1", category: "observer" },
+      { threadId: "thread-1", category: "reflector" },
+    ]);
+    assert.deepEqual(finished, [
+      {
+        callId: "observer-call",
+        category: "observer",
+        usage: { inputTokens: 10, outputTokens: 5 },
+      },
+      {
+        callId: "reflector-call",
+        category: "reflector",
+        usage: { inputTokens: 20, outputTokens: 8 },
+      },
+    ]);
+
+    const blocked = createAkeruObserveHooks({
+      startMemoryCall: async () => {
+        throw new Error("Metering rejected");
+      },
+    });
+    await expect(blocked.onObservationStart?.({ threadId: "thread-1" })).rejects.toThrow(
+      "Metering rejected",
     );
+  });
+
+  it("stores observational memory by thread and restores it after reopening", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-store-"));
+    const options = {
+      authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+      memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+    };
+    try {
+      const first = await createAkeruMastraMemory(options);
+      assert.equal(first.engine.scope, "thread");
+      assert.isFalse(first.engine.retrieval);
+      await first.memory.createThread({ threadId: "thread-a", resourceId: "resource-a" });
+      await first.memory.createThread({ threadId: "thread-b", resourceId: "resource-b" });
+      await first.close();
+
+      const reopened = await createAkeruMastraMemory(options);
+      assert.deepInclude(
+        await reopened.memory.getThreadById({ threadId: "thread-a", resourceId: "resource-a" }),
+        { id: "thread-a", resourceId: "resource-a" },
+      );
+      assert.isNull(
+        await reopened.memory.getThreadById({ threadId: "thread-a", resourceId: "resource-b" }),
+      );
+      await reopened.close();
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("persists only messages created by the current turn", async () => {
+    const persistMessages = vi.fn(async () => undefined);
+    const engine = {
+      getThreadContext: vi.fn(() => ({ threadId: "thread-passive", resourceId: "thread-passive" })),
+      getOrCreateRecord: vi.fn(async () => ({ activeObservations: "" })),
+      buildContextSystemMessages: vi.fn(async () => []),
+    } as unknown as ObservationalMemory;
+    const processor = new AkeruPassiveObservationalMemoryProcessor(engine, {
+      persistMessages,
+    } as unknown as Memory);
+    const messageList = new MessageList({
+      threadId: "thread-passive",
+      resourceId: "thread-passive",
+    });
+    messageList.add(
+      {
+        id: "user-history",
+        role: "user",
+        createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-08-30T20:00:00.000Z")),
+        content: { format: 2, parts: [{ type: "text", text: "Earlier turn." }] },
+        threadId: "thread-passive",
+        resourceId: "thread-passive",
+      },
+      "memory",
+    );
+    for (const message of [
+      {
+        id: "user-current",
+        role: "user" as const,
+        text: "Only this turn.",
+        source: "input" as const,
+      },
+      {
+        id: "assistant-current",
+        role: "assistant" as const,
+        text: "Current reply.",
+        source: "response" as const,
+      },
+    ]) {
+      messageList.add(
+        {
+          id: message.id,
+          role: message.role,
+          createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-08-31T20:00:00.000Z")),
+          content: { format: 2, parts: [{ type: "text", text: message.text }] },
+          threadId: "thread-passive",
+          resourceId: "thread-passive",
+        },
+        message.source,
+      );
+    }
+
+    await processor.processOutputResult({ messageList } as never);
+
+    expect(persistMessages).toHaveBeenCalledOnce();
+    expect(persistMessages).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "user-current" }),
+      expect.objectContaining({ id: "assistant-current" }),
+    ]);
+  });
+
+  it("serializes observations per thread and drains them before close", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-queue-"));
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let markStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let calls = 0;
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(async () => {
+        calls += 1;
+        if (calls === 1) {
+          markStarted();
+          await firstBlocked;
+        }
+        return undefined as never;
+      });
     const harness = await createAkeruMastraHarness({
-      authStorage: new AuthStorage(NodePath.join(stateDir, "auth.json")),
-      stateDir,
+      authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+      memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
       getThreadTools: () => ({}),
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
     });
     try {
-      await harness.controller.init();
+      const input = { threadId: "thread-queue", modelId: "openai/gpt-5.6-sol" };
+      const first = harness.observeAfterTurn!(input);
+      await firstStarted;
+      const second = harness.observeAfterTurn!(input);
+      expect(observe).toHaveBeenCalledOnce();
+      const close = harness.destroy();
+      releaseFirst();
+      await Promise.all([first, second, close]);
+      expect(observe).toHaveBeenCalledTimes(2);
     } finally {
-      await harness.controller.destroy();
+      releaseFirst();
+      observe.mockRestore();
       await harness.destroy();
-      await NodeFS.promises.rm(stateDir, { recursive: true, force: true });
+      NodeFS.rmSync(directory, { recursive: true, force: true });
     }
   });
 
@@ -99,7 +271,6 @@ describe("AkeruMastraHarness", () => {
 
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
-      stateDir: "/tmp",
       getThreadTools: () => ({
         exa_search: pluginTool,
         RestartMcpServers: pluginTool,
@@ -149,7 +320,6 @@ describe("AkeruMastraHarness", () => {
     requestContext.setRaw("controller", { resourceId: "thread-1" });
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
-      stateDir: "/tmp",
       getThreadTools: () => ({}),
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
     });

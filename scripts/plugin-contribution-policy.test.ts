@@ -36,7 +36,11 @@ function labelsForPath(config: PathLabelConfig, path: string): string[] {
 
 describe("plugin contribution policy", () => {
   it.each([
-    ["plugin_proposal.yml", "type:plugin", ["product", "mcp_ownership", "logo", "permissions"]],
+    [
+      "plugin_proposal.yml",
+      "type:plugin",
+      ["product", "maintainer", "mcp_ownership", "logo", "permissions"],
+    ],
     ["provider_proposal.yml", "type:provider", ["provider", "runtime", "logo", "approvals"]],
   ])("collects admission evidence in %s", (file, typeLabel, specificFields) => {
     const form = yaml(`.github/ISSUE_TEMPLATE/${file}`) as {
@@ -163,7 +167,7 @@ describe("plugin contribution policy", () => {
     );
   });
 
-  it("runs the existing catalog validator in CI", () => {
+  it("runs catalog validation and contribution policy tests in CI", () => {
     const ci = yaml(".depot/workflows/ci.yml") as {
       jobs: Record<string, { steps?: Array<{ run?: string }> }>;
     };
@@ -172,6 +176,9 @@ describe("plugin contribution policy", () => {
     );
 
     expect(commands).toContain("node scripts/validate-plugin-catalog.ts");
+    expect(commands).toContain(
+      "vp test run scripts/validate-plugin-catalog.test.ts scripts/plugin-contribution-policy.test.ts plugins/catalog.test.ts plugins/schema.test.ts plugins/lifecycle-matrix.test.ts",
+    );
   });
 
   it("keeps issue routing and the accepted-proposal PR exception coherent", () => {
@@ -186,6 +193,13 @@ describe("plugin contribution policy", () => {
     );
     expect(contributionGuide).not.toContain("opencoredev/akeru-bot/discussions");
     expect(contributionGuide).toContain("plugin and provider proposal forms");
+    expect(contributionGuide).toContain("issues/new?template=plugin_proposal.yml");
+    expect(contributionGuide).toContain("issues/new?template=provider_proposal.yml");
+    expect(text("plugins/README.md")).toContain("issues/new?template=plugin_proposal.yml");
+    expect(text(".github/ISSUE_TEMPLATE/plugin_proposal.yml")).toContain("verification-pending");
+    expect(text("docs/internals/work-artifacts.md")).toContain(
+      "Plugin and provider proposals use their issue forms",
+    );
     expect(pullRequestTemplate).toContain("accepted plugin or provider proposal");
   });
 });
