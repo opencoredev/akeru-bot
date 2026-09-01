@@ -5,10 +5,16 @@ import {
   PlugSocketIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
-import type { EnvironmentId, McpServer } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  McpServer,
+  OrchestrationBot,
+  OrchestrationThreadShell,
+  ThreadId,
+} from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import {
   loadCatalog,
   resolveCatalogInstallations,
@@ -21,7 +27,10 @@ import { openPlugins } from "../../pluginsDialogStore";
 import { openUsage } from "../../usageDialogStore";
 import { openProductFeedback } from "../../productFeedbackStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { environmentMcpServersAtom } from "../../state/mcpServers";
+import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcpServers";
+import { environmentSnapshotAtom } from "../../state/shell";
+import { threadEnvironment } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { AkeruMark } from "../AkeruMark";
 import { T3ConnectSidebarAvatar, T3ConnectSidebarSignIn } from "../clerk/T3ConnectSidebarSignIn";
 import { PluginLogoImage } from "../plugins/PluginsCatalog";
@@ -35,6 +44,7 @@ import {
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { AppIcon } from "../ui/app-icon";
 import {
   SidebarFooter,
@@ -120,6 +130,38 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 }
 
 const PLUGIN_CATALOG = loadCatalog();
+const COMPUTER_USE_SERVER_ID = "builtin-computer-use";
+
+export interface ActiveComputerUseControl {
+  readonly threadId: ThreadId;
+  readonly botName: string;
+}
+
+export function findActiveComputerUseControl(input: {
+  readonly threads: readonly OrchestrationThreadShell[];
+  readonly bots: readonly OrchestrationBot[];
+  readonly mcpServers: readonly McpServer[];
+}): ActiveComputerUseControl | null {
+  const server = input.mcpServers.find(
+    (candidate) => candidate.id === COMPUTER_USE_SERVER_ID && candidate.enabled,
+  );
+  if (!server) return null;
+  for (const thread of input.threads) {
+    if (
+      !thread.session ||
+      thread.session.providerName?.toLowerCase() !== "codex" ||
+      !thread.session.mcpServerIds?.includes(server.id) ||
+      (thread.session.status !== "ready" && thread.session.status !== "running")
+    ) {
+      continue;
+    }
+    const botId = thread.respondingBotId ?? thread.botId;
+    const bot = input.bots.find((candidate) => candidate.id === botId);
+    if (!bot || bot.disabledMcpServerIds.includes(server.id)) continue;
+    return { threadId: thread.id, botName: bot.name };
+  }
+  return null;
+}
 
 export function formatEnabledPluginStatus(enabledCount: number): string {
   if (enabledCount === 0) return "No plugins enabled";
@@ -224,6 +266,81 @@ function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
   return <SidebarPluginSummaryForEnvironment environmentId={environmentId} onClick={onClick} />;
 }
 
+function ComputerUseControlForEnvironment({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId;
+}) {
+  const snapshot = useAtomValue(environmentSnapshotAtom(environmentId));
+  const stopSession = useAtomCommand(threadEnvironment.stopSession);
+  const disableServer = useAtomCommand(mcpServerEnvironment.disable);
+  const [pending, setPending] = useState(false);
+  const control = snapshot
+    ? findActiveComputerUseControl({
+        threads: snapshot.threads,
+        bots: snapshot.bots,
+        mcpServers: snapshot.mcpServers ?? [],
+      })
+    : null;
+  if (!control) return null;
+
+  const stop = async () => {
+    setPending(true);
+    try {
+      await stopSession({ environmentId, input: { threadId: control.threadId } });
+    } finally {
+      setPending(false);
+    }
+  };
+  const revoke = async () => {
+    setPending(true);
+    try {
+      const stopped = await stopSession({
+        environmentId,
+        input: { threadId: control.threadId },
+      });
+      if (stopped._tag === "Success") {
+        await disableServer({
+          environmentId,
+          input: { mcpServerId: COMPUTER_USE_SERVER_ID as McpServer["id"] },
+        });
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5" role="status">
+      <div className="flex items-center gap-2 text-xs font-medium">
+        <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
+        <span className="min-w-0 truncate">{control.botName} controls this Mac</span>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Button className="h-7 flex-1 text-xs" disabled={pending} size="sm" onClick={stop}>
+          Stop
+        </Button>
+        <Button
+          aria-label="Revoke Computer Use for all bots"
+          className="h-7 flex-1 text-xs"
+          disabled={pending}
+          size="sm"
+          title="Disable Computer Use for all bots"
+          variant="destructive-outline"
+          onClick={revoke}
+        >
+          Revoke
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ComputerUseControl() {
+  const environmentId = usePrimaryEnvironmentId();
+  return environmentId ? <ComputerUseControlForEnvironment environmentId={environmentId} /> : null;
+}
+
 function SidebarUtilityItem({
   icon,
   label,
@@ -279,6 +396,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter className="max-h-[min(45dvh,22rem)] shrink-0 overflow-y-auto overscroll-contain p-[var(--sidebar-content-inset)]">
       <div className="flex flex-col gap-2 empty:hidden group-data-[collapsible=icon]:hidden">
+        <ComputerUseControl />
         <SidebarProviderUpdatePill />
         <SidebarUpdateArchitectureWarning />
       </div>

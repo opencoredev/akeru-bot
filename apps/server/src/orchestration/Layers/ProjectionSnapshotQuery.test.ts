@@ -391,6 +391,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             status: "running",
             providerName: "codex",
             runtimeMode: "approval-required",
+            mcpServerIds: [],
             activeTurnId: asTurnId("turn-1"),
             lastError: null,
             updatedAt: "2026-02-24T00:00:07.000Z",
@@ -477,6 +478,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             status: "running",
             providerName: "codex",
             runtimeMode: "approval-required",
+            mcpServerIds: [],
             activeTurnId: asTurnId("turn-1"),
             lastError: null,
             updatedAt: "2026-02-24T00:00:07.000Z",
@@ -739,6 +741,55 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         yield* sql`DELETE FROM projection_projects`;
         yield* sql`DELETE FROM projection_threads`;
         yield* sql`DELETE FROM projection_turns`;
+        yield* sql`DELETE FROM orchestration_events`;
+
+        yield* sql`
+        INSERT INTO orchestration_events (
+          event_id,
+          aggregate_kind,
+          stream_id,
+          stream_version,
+          event_type,
+          occurred_at,
+          actor_kind,
+          payload_json,
+          metadata_json
+        )
+        VALUES
+          (
+            'event-project-deleted-created',
+            'project',
+            'project-deleted',
+            1,
+            'project.created',
+            '2026-02-28T00:00:00.000Z',
+            'user',
+            '{"projectId":"project-deleted","workspaceRoot":"/tmp/workspace"}',
+            '{}'
+          ),
+          (
+            'event-project-deleted-moved',
+            'project',
+            'project-deleted',
+            2,
+            'project.meta-updated',
+            '2026-02-28T00:00:01.000Z',
+            'user',
+            '{"projectId":"project-deleted","workspaceRoot":"/tmp/moved"}',
+            '{}'
+          ),
+          (
+            'event-project-active-created',
+            'project',
+            'project-active',
+            1,
+            'project.created',
+            '2026-03-01T00:00:00.000Z',
+            'user',
+            '{"projectId":"project-active","workspaceRoot":"/tmp/workspace"}',
+            '{}'
+          )
+      `;
 
         yield* sql`
         INSERT INTO projection_projects (
@@ -765,12 +816,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'project-deleted',
             'Deleted Project',
-            '/tmp/deleted',
+            '/tmp/moved',
             NULL,
             '[]',
-            '2026-03-01T00:00:02.000Z',
-            '2026-03-01T00:00:03.000Z',
-            '2026-03-01T00:00:04.000Z'
+            '2026-02-28T00:00:00.000Z',
+            '2026-02-28T00:00:01.000Z',
+            '2026-02-28T00:00:02.000Z'
           )
       `;
 
@@ -850,8 +901,18 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           assert.equal(project.value.id, asProjectId("project-active"));
         }
 
+        const originalProjectId =
+          yield* snapshotQuery.getOriginalProjectIdByWorkspaceRoot("/tmp/workspace");
+        assert.equal(originalProjectId._tag, "Some");
+        if (originalProjectId._tag === "Some") {
+          assert.equal(originalProjectId.value, asProjectId("project-deleted"));
+        }
+
         const missingProject = yield* snapshotQuery.getActiveProjectByWorkspaceRoot("/tmp/missing");
         assert.equal(missingProject._tag, "None");
+        const missingOriginalProjectId =
+          yield* snapshotQuery.getOriginalProjectIdByWorkspaceRoot("/tmp/missing");
+        assert.equal(missingOriginalProjectId._tag, "None");
 
         const firstThreadId = yield* snapshotQuery.getFirstActiveThreadIdByProjectId(
           asProjectId("project-active"),

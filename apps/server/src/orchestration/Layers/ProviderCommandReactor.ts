@@ -685,6 +685,7 @@ const make = Effect.gen(function* () {
           providerName: activeSession?.provider ?? preferredProvider,
           providerInstanceId: activeSession?.providerInstanceId ?? desiredInstanceId,
           runtimeMode: desiredRuntimeMode,
+          mcpServerIds: activeSession?.mcpServerIds ?? [],
           activeTurnId: null,
           lastError: null,
           updatedAt: createdAt,
@@ -708,6 +709,9 @@ const make = Effect.gen(function* () {
     }
     const providerChanged = currentInfo.driverKind !== desiredInfo.driverKind;
     const project = yield* resolveProject(thread.projectId);
+    const legacyWorkspaceOwnerProjectId = project
+      ? yield* projectionSnapshotQuery.getOriginalProjectIdByWorkspaceRoot(project.workspaceRoot)
+      : Option.none<ProjectId>();
     const mcpServers = yield* resolveControllerMcpServers(thread);
     const serverSettings = yield* serverSettingsService.getSettings;
     const botSandboxBrowserSharing = serverSettings.botSandboxBrowserSharing;
@@ -786,6 +790,9 @@ const make = Effect.gen(function* () {
                 threadId,
                 projectId: thread.projectId,
                 workspaceRoot: project.workspaceRoot,
+                ...(Option.isSome(legacyWorkspaceOwnerProjectId)
+                  ? { legacyWorkspaceOwnerProjectId: legacyWorkspaceOwnerProjectId.value }
+                  : {}),
                 botId: thread.groupId == null ? respondingBotId : null,
                 groupId: thread.groupId ?? null,
                 respondingBotId,
@@ -820,6 +827,7 @@ const make = Effect.gen(function* () {
             providerName: session.provider,
             providerInstanceId: session.providerInstanceId,
             runtimeMode: desiredRuntimeMode,
+            mcpServerIds: session.mcpServerIds ?? [],
             // Provider turn ids are not orchestration turn ids.
             activeTurnId: null,
             lastError: session.lastError ?? null,
@@ -1694,6 +1702,7 @@ const make = Effect.gen(function* () {
           ? { providerInstanceId: thread.session.providerInstanceId }
           : {}),
         runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        mcpServerIds: [],
         activeTurnId: null,
         lastError: thread.session?.lastError ?? null,
         updatedAt: now,

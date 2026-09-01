@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "computer-use",
+  "name": "Codex Computer Use",
+  "description": "Let one Codex bot inspect and control local macOS applications with approval for every action.",
+  "primaryCategory": "Build",
+  "tags": ["codex", "computer-use", "macos", "desktop", "local"],
+  "capabilities": [
+    "capture the screen",
+    "inspect local applications",
+    "click and scroll",
+    "type text and keyboard shortcuts",
+    "open local applications"
+  ],
+  "publisher": { "name": "OpenAI", "url": "https://openai.com" },
+  "maintainer": { "name": "OpenAI", "url": "https://openai.com" },
+  "documentationUrl": "https://developers.openai.com/codex/computer-use",
+  "sourceUrl": "https://developers.openai.com/codex/plugins",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://openai.com/brand/",
+      "license": "OpenAI brand asset"
+    }
+  },
+  "platforms": ["macos"],
+  "transport": {
+    "type": "stdio",
+    "command": "akeru-codex-computer-use",
+    "args": ["mcp"]
+  },
+  "connection": {
+    "type": "verification-pending",
+    "blocker": "A live Akeru Codex tool call still needs verification with a signed-in disposable environment."
+  },
+  "authentication": "none",
+  "requiredCredentials": [],
+  "setup": [
+    "Install the official plugin with codex plugin add computer-use@openai-bundled --json.",
+    "Use a Codex bot on macOS. Screen Recording and Accessibility are requested only when control starts."
+  ],
+  "permissions": [
+    {
+      "id": "inspect-local-desktop",
+      "description": "Capture the screen and inspect local applications in memory.",
+      "approval": "read"
+    },
+    {
+      "id": "control-local-desktop",
+      "description": "Click, scroll, type, use keyboard shortcuts, and open local applications.",
+      "approval": "production"
+    }
+  ],
+  "approvals": ["production"],
+  "catalogStatus": "verification-pending"
+}

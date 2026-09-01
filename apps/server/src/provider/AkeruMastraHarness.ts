@@ -40,6 +40,7 @@ import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentIn
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
@@ -363,7 +364,8 @@ function approvalAwareTools(
       };
       const existing = configured.needsApprovalFn ?? configured.requireApproval;
       const needsApproval: NeedsApprovalFn = async (input, context) => {
-        const protectedAction = akeruActionNeedsApproval(name, input);
+        const protectedAction =
+          isCodexComputerUseTool(name) || akeruActionNeedsApproval(name, input);
         await options.syncThreadToolApproval?.(threadId, name, protectedAction);
         return (
           protectedAction ||
