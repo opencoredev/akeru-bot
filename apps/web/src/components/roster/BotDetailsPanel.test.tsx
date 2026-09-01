@@ -35,6 +35,8 @@ const bot: Bot = {
 describe("BotDetailsPanel", () => {
   it("shows the per-bot profile editor with simple panel chrome", () => {
     const markup = renderToStaticMarkup(<BotDetailsPanel bot={bot} />);
+    expect(markup).toContain("Akeru&#x27;s browser");
+    expect(markup).toContain("Open the desktop app to view the browser.");
     expect(markup).toContain(">Settings</h2>");
     expect(markup).toContain('aria-label="Change bot avatar"');
     expect(markup).toContain('aria-label="Bot name"');

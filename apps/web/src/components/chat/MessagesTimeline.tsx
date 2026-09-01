@@ -71,6 +71,7 @@ import { ChangedFilesCard } from "./ChangedFilesTree";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
 import { keepTimelineEndVisibleAfterOverlayGrowth } from "./timelineScrollAnchoring";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { MessageImageAttachments } from "./MessageImageAttachments";
 import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRows,
@@ -1141,7 +1142,9 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const bot = useSelectedBot();
-  const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const messageText =
+    row.message.text ||
+    (row.message.streaming || row.message.attachments?.length ? "" : "(empty response)");
 
   return (
     <>
@@ -1158,6 +1161,13 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
             lineBreaks={shouldPreserveAssistantLineBreaks(messageText)}
             skills={ctx.skills}
           />
+          {row.message.attachments?.length && ctx.threadRef ? (
+            <MessageImageAttachments
+              environmentId={ctx.threadRef.environmentId}
+              attachments={row.message.attachments}
+              className="mt-2"
+            />
+          ) : null}
           <MessageReactions reactions={row.message.reactions ?? []} />
           <AssistantChangedFilesSection
             turnSummary={row.assistantTurnDiffSummary}

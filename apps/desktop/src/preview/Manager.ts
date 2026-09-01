@@ -31,7 +31,17 @@ import type {
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { normalizePreviewUrl } from "@t3tools/shared/preview";
-import { BrowserWindow, type Session, clipboard, nativeImage, shell, webContents } from "electron";
+import {
+  BrowserWindow,
+  type NativeImage,
+  type Rectangle,
+  type Session,
+  clipboard,
+  desktopCapturer,
+  nativeImage,
+  shell,
+  webContents,
+} from "electron";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -49,6 +59,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
+import { PNG } from "pngjs";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { PREVIEW_PICTURE_IN_PICTURE_FRAME_CHANNEL } from "../ipc/channels.ts";
@@ -108,6 +119,40 @@ const MAX_EVALUATION_BYTES = 64_000;
 const MAX_VISIBLE_TEXT_LENGTH = 20_000;
 const MAX_INTERACTIVE_ELEMENTS = 200;
 const MAX_SCREENSHOT_WIDTH = 1280;
+
+const containsVisiblePngPixel = (data: Buffer): boolean => {
+  try {
+    const png = PNG.sync.read(data);
+    for (let offset = 0; offset + 3 < png.data.byteLength; offset += 4) {
+      const alpha = png.data[offset + 3]!;
+      if (
+        alpha !== 0 &&
+        (png.data[offset]! !== 0 || png.data[offset + 1]! !== 0 || png.data[offset + 2]! !== 0)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+const scaleCaptureRect = (
+  rect: Rectangle,
+  windowBounds: Rectangle,
+  contentBounds: Rectangle,
+  thumbnailSize: { readonly width: number; readonly height: number },
+): Rectangle => {
+  const scaleX = thumbnailSize.width / windowBounds.width;
+  const scaleY = thumbnailSize.height / windowBounds.height;
+  return {
+    x: Math.max(0, Math.round((contentBounds.x - windowBounds.x + rect.x) * scaleX)),
+    y: Math.max(0, Math.round((contentBounds.y - windowBounds.y + rect.y) * scaleY)),
+    width: Math.max(1, Math.round(rect.width * scaleX)),
+    height: Math.max(1, Math.round(rect.height * scaleY)),
+  };
+};
 const RECORDING_FRAME_INTERVAL_MS = Math.ceil(1_000 / 12);
 const RECORDING_JPEG_QUALITY = 80;
 const PICTURE_IN_PICTURE_INITIAL_WIDTH = 480;
@@ -3106,7 +3151,12 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   });
 
   const captureAutomationSnapshot = Effect.fn("PreviewManager.captureAutomationSnapshot")(
-    function* (tabId: string, wc: Electron.WebContents, send: SendCommand) {
+    function* (
+      tabId: string,
+      wc: Electron.WebContents,
+      send: SendCommand,
+      sendCleanup: SendCommand,
+    ) {
       yield* Effect.all([send("Runtime.enable"), send("Accessibility.enable")], {
         concurrency: 2,
         discard: true,
@@ -3173,25 +3223,341 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         })()`,
         true,
       );
-      const [accessibility, sourceImage, diagnostics, timelines] = yield* Effect.all([
+      const [accessibility, initialScreenshotResult, diagnostics, timelines] = yield* Effect.all([
         send("Accessibility.getFullAXTree"),
-        attemptPromise(
-          {
-            operation: "automationSnapshot.capturePage",
-            tabId,
-            webContentsId: wc.id,
-          },
-          () => wc.capturePage(),
-        ),
+        send("Page.captureScreenshot", {
+          format: "png",
+          fromSurface: false,
+          captureBeyondViewport: false,
+        }),
         Ref.get(diagnosticsRef),
         Ref.get(actionTimelineRef),
       ]);
-      const sourceSize = sourceImage.getSize();
-      const image =
-        sourceSize.width > MAX_SCREENSHOT_WIDTH
-          ? sourceImage.resize({ width: MAX_SCREENSHOT_WIDTH })
-          : sourceImage;
-      const size = image.getSize();
+      const hostScreenshot = yield* Effect.gen(function* () {
+        const mainWindow = yield* Ref.get(mainWindowRef);
+        if (Option.isNone(mainWindow) || mainWindow.value.isDestroyed()) return null;
+        const host = mainWindow.value.webContents;
+        if (host.isDestroyed()) return null;
+        const tabIdJson = yield* encodeJson(
+          { operation: "automationSnapshot.encodeTabId", tabId, webContentsId: wc.id },
+          tabId,
+        );
+        const rawRect = yield* attemptPromise(
+          {
+            operation: "automationSnapshot.measureHostPreview",
+            tabId,
+            webContentsId: wc.id,
+          },
+          () =>
+            host.executeJavaScript(`new Promise((resolve) => {
+              const deadline = performance.now() + 3000;
+              const measure = () => {
+                const preview = Array.from(document.querySelectorAll("webview")).find(
+                  (element) =>
+                    element.getWebContentsId?.() === ${wc.id} ||
+                    element.dataset.previewServerTab === ${tabIdJson}
+                );
+                if (preview) {
+                  const style = getComputedStyle(preview);
+                  const rect = preview.getBoundingClientRect();
+                  if (
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    rect.right > 0 &&
+                    rect.bottom > 0 &&
+                    rect.left < innerWidth &&
+                    rect.top < innerHeight
+                  ) {
+                    resolve({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+                    return;
+                  }
+                }
+                if (performance.now() >= deadline) {
+                  resolve(null);
+                  return;
+                }
+                requestAnimationFrame(measure);
+              };
+              measure();
+            })`),
+        ).pipe(
+          Effect.timeout("4 seconds"),
+          Effect.orElseSucceed(() => null),
+        );
+        const rect = normalizeCaptureRect(rawRect);
+        if (!rect) return null;
+        const captured = yield* attemptPromise(
+          {
+            operation: "automationSnapshot.captureHostPreview",
+            tabId,
+            webContentsId: wc.id,
+          },
+          () => host.capturePage(rect, { stayAwake: true }),
+        ).pipe(Effect.orElseSucceed(() => null));
+        if (captured && containsVisiblePngPixel(captured.toPNG())) return captured;
+        const mediaSourceId = yield* attempt(
+          {
+            operation: "automationSnapshot.createTabCaptureSource",
+            tabId,
+            webContentsId: wc.id,
+          },
+          () => wc.getMediaSourceId(host),
+        ).pipe(Effect.orElseSucceed(() => null));
+        if (mediaSourceId) {
+          const mediaSourceIdJson = yield* encodeJson(
+            {
+              operation: "automationSnapshot.encodeTabCaptureSource",
+              tabId,
+              webContentsId: wc.id,
+            },
+            mediaSourceId,
+          );
+          const tabCapture = yield* attemptPromise(
+            {
+              operation: "automationSnapshot.captureTabStream",
+              tabId,
+              webContentsId: wc.id,
+            },
+            () =>
+              host.executeJavaScript(`(async () => {
+                let stream;
+                let expired = false;
+                const stop = (value) => value?.getTracks().forEach((track) => track.stop());
+                try {
+                  const capture = navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: { mandatory: {
+                      chromeMediaSource: "tab",
+                      chromeMediaSourceId: ${mediaSourceIdJson}
+                    }}
+                  }).then((value) => {
+                    if (!expired) return value;
+                    stop(value);
+                    throw new Error("Tab capture timed out");
+                  });
+                  stream = await Promise.race([
+                    capture,
+                    new Promise((_, reject) => setTimeout(() => {
+                      expired = true;
+                      reject(new Error("Tab capture timed out"));
+                    }, 3000))
+                  ]);
+                  const video = document.createElement("video");
+                  video.muted = true;
+                  video.playsInline = true;
+                  video.srcObject = stream;
+                  await video.play();
+                  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+                    await new Promise((resolve, reject) => {
+                      const timer = setTimeout(() => reject(new Error("Tab frame timed out")), 3000);
+                      video.addEventListener("loadeddata", () => {
+                        clearTimeout(timer);
+                        resolve();
+                      }, { once: true });
+                    });
+                  }
+                  const canvas = document.createElement("canvas");
+                  canvas.width = video.videoWidth;
+                  canvas.height = video.videoHeight;
+                  const context = canvas.getContext("2d", { alpha: false });
+                  if (!context || canvas.width <= 0 || canvas.height <= 0) {
+                    throw new Error("Tab capture returned no frame");
+                  }
+                  context.drawImage(video, 0, 0);
+                  return canvas.toDataURL("image/png").slice("data:image/png;base64,".length);
+                } finally {
+                  stop(stream);
+                }
+              })()`),
+          ).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.orElseSucceed(() => null),
+          );
+          if (typeof tabCapture === "string" && tabCapture.length > 0) {
+            const tabData = Buffer.from(tabCapture, "base64");
+            const tabImage = nativeImage.createFromBuffer(tabData);
+            if (!tabImage.isEmpty() && containsVisiblePngPixel(tabData)) return tabImage;
+          }
+        }
+        const windowBounds = mainWindow.value.getBounds();
+        const contentBounds = mainWindow.value.getContentBounds();
+        const sources = yield* attemptPromise(
+          {
+            operation: "automationSnapshot.captureDesktopWindow",
+            tabId,
+            webContentsId: wc.id,
+          },
+          () =>
+            desktopCapturer.getSources({
+              types: ["window"],
+              thumbnailSize: { width: windowBounds.width, height: windowBounds.height },
+            }),
+        ).pipe(
+          Effect.timeout("3 seconds"),
+          Effect.orElseSucceed(() => []),
+        );
+        const source = sources.find(
+          (candidate) => candidate.id === mainWindow.value.getMediaSourceId(),
+        );
+        if (!source || source.thumbnail.isEmpty()) return null;
+        const thumbnailSize = source.thumbnail.getSize();
+        const desktopRect = scaleCaptureRect(rect, windowBounds, contentBounds, thumbnailSize);
+        if (
+          desktopRect.x + desktopRect.width > thumbnailSize.width ||
+          desktopRect.y + desktopRect.height > thumbnailSize.height
+        ) {
+          return null;
+        }
+        const desktopImage = source.thumbnail.crop(desktopRect);
+        return !desktopImage.isEmpty() && containsVisiblePngPixel(desktopImage.toPNG())
+          ? desktopImage
+          : null;
+      });
+      const refreshedScreenshotResult = yield* send("Page.captureScreenshot", {
+        format: "png",
+        fromSurface: false,
+        captureBeyondViewport: false,
+      });
+      const refreshedScreenshotData =
+        typeof refreshedScreenshotResult === "object" &&
+        refreshedScreenshotResult !== null &&
+        "data" in refreshedScreenshotResult &&
+        typeof refreshedScreenshotResult.data === "string"
+          ? Buffer.from(refreshedScreenshotResult.data, "base64")
+          : null;
+      const hostScreenshotData = hostScreenshot?.toPNG() ?? null;
+      const initialScreenshotData =
+        typeof initialScreenshotResult === "object" &&
+        initialScreenshotResult !== null &&
+        "data" in initialScreenshotResult &&
+        typeof initialScreenshotResult.data === "string"
+          ? Buffer.from(initialScreenshotResult.data, "base64")
+          : null;
+      const fallbackScreenshotResult =
+        refreshedScreenshotData && containsVisiblePngPixel(refreshedScreenshotData)
+          ? refreshedScreenshotResult
+          : hostScreenshotData && containsVisiblePngPixel(hostScreenshotData)
+            ? { data: hostScreenshotData.toString("base64") }
+            : initialScreenshotData && containsVisiblePngPixel(initialScreenshotData)
+              ? initialScreenshotResult
+              : null;
+      const screencastScreenshotResult = fallbackScreenshotResult
+        ? null
+        : yield* Effect.gen(function* () {
+            const screencastFrame = yield* Deferred.make<{ readonly data: string }>();
+            const onScreencastMessage = (
+              _event: Electron.Event,
+              method: string,
+              params: Record<string, unknown>,
+            ) => {
+              if (method !== "Page.screencastFrame" || typeof params["data"] !== "string") return;
+              const data = Buffer.from(params["data"], "base64");
+              if (!containsVisiblePngPixel(data)) return;
+              runFork(
+                Deferred.succeed(screencastFrame, { data: params["data"] }).pipe(Effect.asVoid),
+              );
+            };
+            return yield* Effect.acquireUseRelease(
+              attempt(
+                {
+                  operation: "automationSnapshot.listenForScreencastFrame",
+                  tabId,
+                  webContentsId: wc.id,
+                },
+                () => wc.debugger.on("message", onScreencastMessage),
+              ),
+              () =>
+                Effect.gen(function* () {
+                  yield* send("Page.bringToFront");
+                  yield* send("Page.startScreencast", {
+                    format: "png",
+                    maxWidth: MAX_SCREENSHOT_WIDTH,
+                    everyNthFrame: 1,
+                  });
+                  return yield* Deferred.await(screencastFrame).pipe(Effect.timeout("3 seconds"));
+                }).pipe(Effect.orElseSucceed(() => null)),
+              () =>
+                attempt(
+                  {
+                    operation: "automationSnapshot.removeScreencastListener",
+                    tabId,
+                    webContentsId: wc.id,
+                  },
+                  () => wc.debugger.off("message", onScreencastMessage),
+                ).pipe(
+                  Effect.ignore,
+                  Effect.andThen(sendCleanup("Page.stopScreencast").pipe(Effect.ignore)),
+                ),
+            );
+          });
+      const screenshotResult =
+        screencastScreenshotResult ?? fallbackScreenshotResult ?? initialScreenshotResult;
+      const screenshot = yield* Effect.try({
+        try: () => {
+          if (
+            typeof screenshotResult !== "object" ||
+            screenshotResult === null ||
+            !("data" in screenshotResult) ||
+            typeof screenshotResult.data !== "string" ||
+            screenshotResult.data.length === 0
+          ) {
+            throw new TypeError("Page.captureScreenshot returned no PNG data");
+          }
+          const sourceData = Buffer.from(screenshotResult.data, "base64");
+          const image = nativeImage.createFromBuffer(sourceData);
+          if (image.isEmpty()) {
+            throw new TypeError("Page.captureScreenshot returned an invalid PNG");
+          }
+          if (!containsVisiblePngPixel(sourceData)) {
+            throw new TypeError("Page.captureScreenshot returned an all-black PNG");
+          }
+          const sourceSize = image.getSize();
+          if (
+            !Number.isFinite(sourceSize.width) ||
+            !Number.isFinite(sourceSize.height) ||
+            sourceSize.width <= 0 ||
+            sourceSize.height <= 0
+          ) {
+            throw new TypeError("Page.captureScreenshot returned invalid image dimensions");
+          }
+          const output =
+            sourceSize.width > MAX_SCREENSHOT_WIDTH
+              ? image.resize({ width: MAX_SCREENSHOT_WIDTH })
+              : image;
+          if (output.isEmpty()) {
+            throw new TypeError("Page.captureScreenshot could not be resized");
+          }
+          const size = output.getSize();
+          if (
+            !Number.isFinite(size.width) ||
+            !Number.isFinite(size.height) ||
+            size.width <= 0 ||
+            size.height <= 0
+          ) {
+            throw new TypeError("Page.captureScreenshot produced invalid output dimensions");
+          }
+          const data = sourceSize.width > MAX_SCREENSHOT_WIDTH ? output.toPNG() : sourceData;
+          if (data.byteLength === 0) {
+            throw new TypeError("Page.captureScreenshot produced an empty PNG");
+          }
+          return {
+            mimeType: "image/png" as const,
+            data: data.toString("base64"),
+            width: size.width,
+            height: size.height,
+          };
+        },
+        catch: (cause) =>
+          new PreviewOperationError({
+            operation: "automationSnapshot.decodeScreenshot",
+            tabId,
+            webContentsId: wc.id,
+            cause,
+          }),
+      });
       const browserDiagnostics = diagnostics.get(wc.id);
       return {
         ...page,
@@ -3199,12 +3565,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         consoleEntries: [...(browserDiagnostics?.consoleEntries ?? [])],
         networkEntries: [...(browserDiagnostics?.networkEntries ?? [])],
         actionTimeline: [...(timelines.get(tabId) ?? [])],
-        screenshot: {
-          mimeType: "image/png" as const,
-          data: image.toPNG().toString("base64"),
-          width: size.width,
-          height: size.height,
-        },
+        screenshot,
       };
     },
   );
@@ -3213,8 +3574,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     tabId: string,
   ) {
     const wc = yield* requireWebContents(tabId);
-    return yield* withControlSession(tabId, wc, "snapshot", (send) =>
-      captureAutomationSnapshot(tabId, wc, send),
+    return yield* withControlSession(tabId, wc, "snapshot", (send, sendCleanup) =>
+      captureAutomationSnapshot(tabId, wc, send, sendCleanup),
     );
   });
 

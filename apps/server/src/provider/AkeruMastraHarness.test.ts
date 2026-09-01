@@ -273,6 +273,7 @@ describe("AkeruMastraHarness", () => {
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
+    assert.include(AKERU_AGENT_INSTRUCTIONS, "Prefer preview_* tools over browser_* tools");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
     assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
   });

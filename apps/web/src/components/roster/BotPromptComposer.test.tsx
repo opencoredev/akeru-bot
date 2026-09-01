@@ -12,10 +12,13 @@ import {
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
 import {
+  appendBotMention,
   BotPromptComposer,
   canSubmitBotPrompt,
   findMentionedBotId,
+  isBotPromptSubmissionCurrent,
   isBotPromptExpanded,
+  restoreBotStashPrompt,
   shouldFocusBotPromptForKey,
 } from "./BotPromptComposer";
 
@@ -32,6 +35,16 @@ describe("bot prompt composer", () => {
     expect(canSubmitBotPrompt(true, "Send this", 0)).toBe(false);
     expect(canSubmitBotPrompt(false, "Send this", 0)).toBe(true);
     expect(canSubmitBotPrompt(false, "", 1)).toBe(true);
+  });
+
+  it("restores a failed submission only while the composer remains unchanged", () => {
+    expect(isBotPromptSubmissionCurrent(3, 3)).toBe(true);
+    expect(isBotPromptSubmissionCurrent(3, 4)).toBe(false);
+  });
+
+  it("preserves new draft text when inserting a mention", () => {
+    expect(appendBotMention("new draft", "Mori")).toBe("new draft @Mori ");
+    expect(appendBotMention("", "Mori")).toBe("@Mori ");
   });
 
   it("expands for long or multiline prompts", () => {
@@ -68,6 +81,15 @@ describe("bot prompt composer", () => {
     expect(shouldFocusBotPromptForKey({ ...baseInput, isComposing: true })).toBe(false);
   });
 
+  it("restores stashed text after the current draft", () => {
+    expect(restoreBotStashPrompt("Current draft  ", "Stashed follow-up")).toBe(
+      "Current draft\n\nStashed follow-up",
+    );
+    expect(restoreBotStashPrompt("", "Stashed follow-up")).toBe("Stashed follow-up");
+    expect(restoreBotStashPrompt("   ", "Stashed follow-up")).toBe("Stashed follow-up");
+    expect(restoreBotStashPrompt("Current draft", "")).toBe("Current draft");
+  });
+
   it("uses the available chat width", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer
@@ -78,7 +100,7 @@ describe("bot prompt composer", () => {
       />,
     );
 
-    expect(markup).toContain('<form class="w-full ');
+    expect(markup).toContain('class="w-full px-4');
     expect(markup).not.toContain("max-w-4xl");
   });
 

@@ -1343,6 +1343,61 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("projects a persisted tool screenshot as an assistant image attachment", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-preview-screenshot"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-preview"),
+      itemId: asItemId("tool-preview-snapshot"),
+      payload: {
+        itemType: "mcp_tool_call",
+        status: "completed",
+        title: "preview_snapshot",
+        data: {
+          result: { url: "https://example.com" },
+          chatAttachment: {
+            type: "image",
+            id: "thread-1-00000000-0000-4000-8000-000000000001",
+            name: "browser-screenshot.png",
+            mimeType: "image/png",
+            sizeBytes: 42,
+          },
+        },
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "provider-attachment-evt-preview-screenshot" && !message.streaming,
+      ),
+    );
+    expect(
+      thread.messages.find(
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "provider-attachment-evt-preview-screenshot",
+      ),
+    ).toMatchObject({
+      role: "assistant",
+      text: "",
+      attachments: [
+        {
+          type: "image",
+          id: "thread-1-00000000-0000-4000-8000-000000000001",
+          name: "browser-screenshot.png",
+          mimeType: "image/png",
+          sizeBytes: 42,
+        },
+      ],
+    });
+  });
+
   it("persists separate assistant notes while one turn remains active", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

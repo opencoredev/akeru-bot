@@ -15,6 +15,7 @@ const destinations: Readonly<
   },
   appearance: { section: "appearance", label: "Appearance" },
   providers: { section: "providers", label: "Providers" },
+  browser: { section: "browser", label: "Browser" },
   "bot-inbox": { section: "inbox", label: "Errors" },
   voice: { section: "voice", label: "Voice" },
   connections: { section: "connections", label: "Connections" },

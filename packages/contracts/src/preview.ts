@@ -1,10 +1,9 @@
 /**
  * Preview - Schemas for the in-app browser preview surface.
  *
- * The preview is desktop-only (Chromium <webview>); the server tracks per-thread
- * tab metadata so it survives client reconnects and multi-window. The desktop
- * renderer mediates: it owns the actual <webview> and reports navigation back to
- * the server via these RPCs, the server fans events to all subscribers.
+ * The server tracks per-thread tab metadata and can publish bounded browser
+ * frames. Desktop clients render a Chromium <webview>; web clients render the
+ * latest server-owned frame.
  *
  * @module Preview
  */
@@ -237,6 +236,14 @@ export const PreviewListResult = Schema.Struct({
 });
 export type PreviewListResult = typeof PreviewListResult.Type;
 
+export const PreviewFrame = Schema.Struct({
+  mimeType: Schema.Literal("image/png"),
+  data: Schema.String,
+  width: Schema.Int.check(Schema.isGreaterThan(0)),
+  height: Schema.Int.check(Schema.isGreaterThan(0)),
+});
+export type PreviewFrame = typeof PreviewFrame.Type;
+
 const PreviewEventBaseSchema = Schema.Struct({
   threadId: TrimmedNonEmptyString,
   tabId: PreviewTabId,
@@ -279,12 +286,19 @@ const PreviewClosedEvent = Schema.Struct({
   type: Schema.Literal("closed"),
 });
 
+const PreviewFrameEvent = Schema.Struct({
+  ...PreviewEventBaseSchema.fields,
+  type: Schema.Literal("frame"),
+  frame: PreviewFrame,
+});
+
 export const PreviewEvent = Schema.Union([
   PreviewOpenedEvent,
   PreviewNavigatedEvent,
   PreviewResizedEvent,
   PreviewFailedEvent,
   PreviewClosedEvent,
+  PreviewFrameEvent,
 ]);
 export type PreviewEvent = typeof PreviewEvent.Type;
 

@@ -47,6 +47,7 @@ import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import * as PreviewAutomationServerHost from "./mcp/PreviewAutomationServerHost.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
@@ -258,6 +259,7 @@ const LegacyProviderLayerLive = LegacyProviderBridgeLive.pipe(
 );
 
 const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
+const McpSessionRegistryLayerLive = McpSessionRegistry.layer;
 
 export const RuntimeMemoryRepositoriesLive = Layer.mergeAll(
   EntityMemoryRepositoryLive,
@@ -370,6 +372,7 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
 
 const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // Core Services
+  Layer.provideMerge(McpSessionRegistryLayerLive),
   Layer.provideMerge(ServerSettingsLayerLive),
   Layer.provideMerge(CheckpointingLayerLive),
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
@@ -430,7 +433,7 @@ const commandReadinessLayer = HttpRouter.middleware(
   { global: true },
 );
 
-export const makeRoutesLayer = Layer.mergeAll(
+const makeRoutesLayerWithSharedMcpRegistry = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
       Layer.provide(authHttpApiLayer),
@@ -445,13 +448,19 @@ export const makeRoutesLayer = Layer.mergeAll(
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,
   ),
-  McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
+  McpHttpServer.layer,
 ).pipe(
-  Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer),
   Layer.provide(commandReadinessLayer),
   Layer.provide(browserApiCorsLayer),
   Layer.provide(httpCompressionLayer),
+);
+
+// Route-only tests do not build the provider runtime, so give those callers a
+// private registry. The real server uses the runtime-owned registry below.
+export const makeRoutesLayer = makeRoutesLayerWithSharedMcpRegistry.pipe(
+  Layer.provide(McpSessionRegistryLayerLive),
+  Layer.provide(PreviewAutomationBroker.layer),
 );
 
 export const makeServerLayer = Layer.unwrap(
@@ -572,11 +581,15 @@ export const makeServerLayer = Layer.unwrap(
       ).pipe(Effect.asVoid),
     }).pipe(Layer.provideMerge(RuntimeDependenciesLive), Layer.provide(launcherLayer));
 
-    const routesLayer = HttpRouter.serve(makeRoutesLayer.pipe(Layer.provide(launcherLayer)), {
-      disableLogger: !config.logWebSocketEvents,
-    }).pipe(Layer.tap(() => Deferred.succeed(routesReady, undefined).pipe(Effect.orDie)));
+    const routesLayer = HttpRouter.serve(
+      makeRoutesLayerWithSharedMcpRegistry.pipe(Layer.provide(launcherLayer)),
+      {
+        disableLogger: !config.logWebSocketEvents,
+      },
+    ).pipe(Layer.tap(() => Deferred.succeed(routesReady, undefined).pipe(Effect.orDie)));
     const serverApplicationLayer = Layer.mergeAll(
       routesLayer,
+      PreviewAutomationServerHost.layer,
       httpListeningLayer,
       runtimeStateLayer,
       tailscaleServeLayer,
@@ -584,6 +597,7 @@ export const makeServerLayer = Layer.unwrap(
 
     return serverApplicationLayer.pipe(
       Layer.provideMerge(runtimeServicesLive),
+      Layer.provide(PreviewAutomationBroker.layer),
       Layer.provide(activationLayer),
       Layer.provideMerge(HttpServerLive),
       Layer.provide(ApplicationObservabilityLive),

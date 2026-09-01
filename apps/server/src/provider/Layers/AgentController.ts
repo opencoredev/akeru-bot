@@ -65,7 +65,11 @@ import {
 } from "../../memory/Services/MemoryCandidateRepository.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import * as ServerSettings from "../../serverSettings.ts";
 import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
+import { persistAkeruPreviewSnapshot } from "../AkeruPreviewSnapshotAttachment.ts";
 import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
@@ -114,7 +118,11 @@ import {
   botWorkspaceResourceKey,
 } from "../botWorkspacePool.ts";
 import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
-import { AgentController, type AgentControllerShape } from "../Services/AgentController.ts";
+import {
+  AgentController,
+  type AgentControllerSendTurnInput,
+  type AgentControllerShape,
+} from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 
 const DEFAULT_MODE_ID = "build";
@@ -152,6 +160,13 @@ interface ActiveTurn {
   assistantText: string;
 }
 
+interface PendingTurn {
+  readonly threadId: ThreadId;
+  readonly turnId: TurnId;
+  readonly message: Parameters<MastraSession["sendMessage"]>[0];
+  readonly botUsage: AgentControllerSendTurnInput["botUsage"];
+}
+
 interface ActiveSession {
   readonly session: MastraSession;
   readonly provider: ProviderDriverKind;
@@ -163,6 +178,7 @@ interface ActiveSession {
   model: string;
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
+  readonly pendingTurns: PendingTurn[];
   readonly toolNames: Map<string, string>;
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
   readonly connectorSessionApprovals: Set<string>;
@@ -185,6 +201,8 @@ export interface AgentControllerLiveOptions {
   ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
+  readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
+  readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
   readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
   readonly memoryCandidateRepository?: MemoryCandidateRepositoryShape;
   readonly delegationRuntime?: Pick<
@@ -416,6 +434,8 @@ const make = (options?: AgentControllerLiveOptions) =>
     const hostPlatform = yield* HostProcessPlatform;
     const legacyProviderBridge = yield* LegacyProviderBridge;
     const botUsageLedger = yield* BotUsageLedger;
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+    const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
     const runtimeContext = yield* Effect.context<never>();
     const runPromise = Effect.runPromiseWith(runtimeContext);
     const mutationLock = yield* Semaphore.make(1);
@@ -428,6 +448,41 @@ const make = (options?: AgentControllerLiveOptions) =>
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
     >();
+    const issueMcpCredential =
+      options?.issueMcpCredential ??
+      (Option.isSome(mcpSessionRegistry)
+        ? (request: McpSessionRegistry.McpCredentialRequest) =>
+            mcpSessionRegistry.value.revokeThread(request.threadId).pipe(
+              Effect.andThen(mcpSessionRegistry.value.issue(request)),
+              Effect.map((credential) => ({ config: credential.config })),
+            )
+        : McpSessionRegistry.issueActiveMcpCredential);
+    const revokeMcpCredential =
+      options?.revokeMcpCredential ??
+      (Option.isSome(mcpSessionRegistry)
+        ? mcpSessionRegistry.value.revokeThread
+        : McpSessionRegistry.revokeActiveMcpThread);
+    const clearPreviewMcpSession = (threadId: ThreadId) =>
+      revokeMcpCredential(threadId).pipe(
+        Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
+      );
+    const preparePreviewMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
+      Effect.gen(function* () {
+        const enabled = Option.isSome(serverSettings)
+          ? yield* serverSettings.value.getSettings.pipe(
+              Effect.map((settings) => settings.enableAgentBrowserAccess),
+              Effect.orElseSucceed(() => false),
+            )
+          : true;
+        if (!enabled) {
+          yield* clearPreviewMcpSession(threadId);
+          return;
+        }
+        const credential = yield* issueMcpCredential({ threadId, providerInstanceId });
+        if (credential) {
+          yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
+        }
+      });
     let channelRuntime: AkeruChannelRuntime | undefined;
     let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
     let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
@@ -468,6 +523,15 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
       hostPlatform,
+      getPreviewMcpServerConfig: (threadId) => {
+        const session = McpProviderSession.readMcpProviderSession(ThreadId.make(threadId));
+        return session
+          ? {
+              url: session.endpoint,
+              headers: { Authorization: session.authorizationHeader },
+            }
+          : undefined;
+      },
       toMcpServerConfigs,
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
@@ -840,6 +904,54 @@ const make = (options?: AgentControllerLiveOptions) =>
       toolRuntime.clearApprovals(String(threadId));
     };
 
+    const startPendingTurn = (
+      active: ActiveSession,
+      { threadId, turnId, message, botUsage }: PendingTurn,
+    ) => {
+      const key = String(threadId);
+      if (botUsage) {
+        memoryUsageByThread.set(key, { ...botUsage, turnId });
+      } else {
+        memoryUsageByThread.delete(key);
+      }
+      active.activeTurn = {
+        turnId,
+        assistantMessages: new Map(),
+        waiting: false,
+        finished: false,
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        memoryQueued: false,
+        assistantText: "",
+      };
+      active.status = "running";
+      publish({
+        ...baseEvent(threadId, active, turnId),
+        type: "turn.started",
+        payload: { model: active.model },
+      });
+      publishSessionState(threadId, active, "running");
+      void active.session
+        .sendMessage(message)
+        .then(() => {
+          const turn = active.activeTurn;
+          if (turn?.turnId === turnId && !turn.waiting) {
+            finishTurn(threadId, active, "completed");
+          }
+        })
+        .catch((cause: unknown) => {
+          if (active.activeTurn?.turnId !== turnId) return;
+          const detail = sessionFailureDetail(active, cause);
+          publish({
+            ...baseEvent(threadId, active, turnId),
+            type: "runtime.error",
+            payload: { message: detail, class: "provider_error" },
+          });
+          finishTurn(threadId, active, "failed", detail);
+        });
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -880,7 +992,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
       }
       active.activeTurn = null;
-      publishSessionState(threadId, active, "ready");
+      const nextTurn = active.pendingTurns.shift();
+      if (nextTurn) {
+        startPendingTurn(active, nextTurn);
+      } else {
+        publishSessionState(threadId, active, "ready");
+      }
     };
 
     const publishAssistantText = (
@@ -988,6 +1105,14 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_end": {
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
+          const previewSnapshot =
+            toolName === "preview_snapshot" && !event.isError && !event.denied
+              ? persistAkeruPreviewSnapshot({
+                  attachmentsDir: config.attachmentsDir,
+                  threadId: String(threadId),
+                  result: event.result,
+                })
+              : null;
           active.approvalRequests.delete(event.toolCallId);
           active.toolNames.delete(event.toolCallId);
           const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
@@ -1018,7 +1143,12 @@ const make = (options?: AgentControllerLiveOptions) =>
               title: isCodexComputerUseTool(toolName) ? "Computer Use" : toolName,
               data: isCodexComputerUseTool(toolName)
                 ? { action: "computer-use" }
-                : { result: event.result },
+                : {
+                    result: previewSnapshot?.activityResult ?? event.result,
+                    ...(previewSnapshot?.attachment
+                      ? { chatAttachment: previewSnapshot.attachment }
+                      : {}),
+                  },
             },
           });
           return;
@@ -1389,6 +1519,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: `Provider '${resolved.provider}' cannot enforce delegated access.`,
         });
       }
+      if (usesMastraCode(resolved.provider) && !(delegatedAccess && access.sandbox === null)) {
+        yield* preparePreviewMcpSession(threadId, resolved.providerInstanceId);
+      }
       const resources =
         delegatedAccess && access.sandbox === null
           ? ({ workspaceType: "none" } as const)
@@ -1409,7 +1542,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   : {}),
                 mcpServers,
               }),
-            );
+            ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {
         return yield* legacyProviderBridge.startSession(threadId, input).pipe(
           Effect.tap((session) =>
@@ -1619,6 +1752,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           model: resolved.modelSelection.model,
           status: "ready" as const,
           activeTurn: null,
+          pendingTurns: [],
           toolNames: new Map<string, string>(),
           approvalRequests: new Map(),
           connectorSessionApprovals: new Set<string>(),
@@ -1664,12 +1798,6 @@ const make = (options?: AgentControllerLiveOptions) =>
               : providerInput,
           );
         }
-        if (active.activeTurn) {
-          return yield* new AgentControllerRuntimeError({
-            operation: "sendTurn",
-            detail: `Mastra session for thread '${input.threadId}' already has an active turn.`,
-          });
-        }
         const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
           const path = resolveAttachmentPath({
             attachmentsDir: config.attachmentsDir,
@@ -1705,45 +1833,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           .join("\n\n");
         const files = attachmentFiles.map(({ file }) => file);
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
-        if (input.botUsage) {
-          memoryUsageByThread.set(key, { ...input.botUsage, turnId });
-        } else {
-          memoryUsageByThread.delete(key);
-        }
-        active.activeTurn = {
+        active.pendingTurns.push({
+          threadId: input.threadId,
           turnId,
-          assistantMessages: new Map(),
-          waiting: false,
-          finished: false,
-          inputTokens: 0,
-          outputTokens: 0,
-          reasoningTokens: 0,
-          memoryQueued: false,
-          assistantText: "",
-        };
-        active.status = "running";
-        publish({
-          ...baseEvent(input.threadId, active, turnId),
-          type: "turn.started",
-          payload: { model: active.model },
+          message: { content, ...(files.length > 0 ? { files } : {}) },
+          botUsage: input.botUsage,
         });
-        publishSessionState(input.threadId, active, "running");
-        void active.session
-          .sendMessage({ content, ...(files.length > 0 ? { files } : {}) })
-          .then(() => {
-            if (!active.activeTurn?.waiting) {
-              finishTurn(input.threadId, active, "completed");
-            }
-          })
-          .catch((cause: unknown) => {
-            const detail = sessionFailureDetail(active, cause);
-            publish({
-              ...baseEvent(input.threadId, active, turnId),
-              type: "runtime.error",
-              payload: { message: detail, class: "provider_error" },
-            });
-            finishTurn(input.threadId, active, "failed", detail);
-          });
+        if (!active.activeTurn) {
+          const nextTurn = active.pendingTurns.shift();
+          if (nextTurn) startPendingTurn(active, nextTurn);
+        }
         return { threadId: input.threadId, turnId };
       },
     );
@@ -1761,6 +1860,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.interruptTurn(input);
       }
+      active.pendingTurns.length = 0;
       active.session.abort();
       finishTurn(input.threadId, active, "interrupted");
     });
@@ -1891,11 +1991,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("resources.release", () =>
             sessionResources.release(key, { destroy: destroyResources }),
           ).pipe(Effect.ignoreCause({ log: true }));
+          yield* clearPreviewMcpSession(input.threadId);
           toolRuntime.unregisterSession(key);
           return;
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      active.pendingTurns.length = 0;
       active.session.abort();
       if (active.activeTurn) {
         finishTurn(input.threadId, active, "interrupted");
@@ -1912,6 +2014,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             yield* runMastra("resources.release", () =>
               sessionResources.release(key, { destroy: destroyResources }),
             ).pipe(Effect.ignoreCause({ log: true }));
+            yield* clearPreviewMcpSession(input.threadId);
             toolRuntime.unregisterSession(key);
             sessions.delete(key);
             memoryUsageByThread.delete(key);
@@ -1942,6 +2045,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
+          active.pendingTurns.length = 0;
           active.session.abort();
           if (active.activeTurn) {
             finishTurn(ThreadId.make(threadId), active, "interrupted");
@@ -1950,6 +2054,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("deleteSession", () =>
             bundle.controller.deleteSession({ resourceId: threadId }),
           ).pipe(Effect.ignoreCause({ log: true }));
+          yield* clearPreviewMcpSession(ThreadId.make(threadId));
           toolRuntime.unregisterSession(threadId);
         }
         legacyResourceIdentity.clear();

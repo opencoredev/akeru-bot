@@ -65,6 +65,7 @@ const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const BROWSERBASE_API_KEY_SECRET = "browser-provider-browserbase-api-key";
 
 /**
  * Fold the legacy in-config `enabled` flag into the envelope-level
@@ -178,6 +179,7 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
         : instance,
     ]),
   );
+  const browserProvider = settings.browserProvider;
   return {
     ...settings,
     providerInstances,
@@ -189,6 +191,13 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
         vercel: redactSandboxProviderConnection(settings.sandbox.providers.vercel),
         upstash: redactSandboxProviderConnection(settings.sandbox.providers.upstash),
       },
+    },
+    browserProvider: {
+      ...browserProvider,
+      browserbaseApiKey: "",
+      ...(browserProvider.browserbaseApiKey.length > 0 || browserProvider.browserbaseApiKeyRedacted
+        ? { browserbaseApiKeyRedacted: true }
+        : {}),
     },
   };
 }
@@ -597,6 +606,31 @@ const make = Effect.gen(function* () {
       };
     });
 
+  const materializeBrowserProviderSecret = (
+    settings: ServerSettings,
+  ): Effect.Effect<ServerSettings, ServerSettingsError> => {
+    if (!settings.browserProvider.browserbaseApiKeyRedacted) return Effect.succeed(settings);
+    return secretStore.get(BROWSERBASE_API_KEY_SECRET).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ServerSettingsError({
+            settingsPath,
+            operation: "read-secret",
+            providerInstanceId: "browser:browserbase",
+            environmentVariable: "BROWSERBASE_API_KEY",
+            cause,
+          }),
+      ),
+      Effect.map((secret) => ({
+        ...settings,
+        browserProvider: {
+          ...settings.browserProvider,
+          browserbaseApiKey: Option.isSome(secret) ? textDecoder.decode(secret.value) : "",
+        },
+      })),
+    );
+  };
+
   const sandboxValidationError = (
     provider: CloudSandboxProvider,
     environmentVariable: string,
@@ -669,6 +703,7 @@ const make = Effect.gen(function* () {
   const materializeAllSecrets = (settings: ServerSettings) =>
     materializeProviderEnvironmentSecrets(settings).pipe(
       Effect.flatMap(materializeSandboxEnvironmentSecrets),
+      Effect.flatMap(materializeBrowserProviderSecret),
     );
 
   type SecretSnapshot = {
@@ -702,6 +737,10 @@ const make = Effect.gen(function* () {
           }
         }
       }
+      references.set(BROWSERBASE_API_KEY_SECRET, {
+        providerInstanceId: "browser:browserbase",
+        environmentVariable: "BROWSERBASE_API_KEY",
+      });
 
       const snapshots: SecretSnapshot[] = [];
       for (const [name, reference] of references) {
@@ -963,6 +1002,43 @@ const make = Effect.gen(function* () {
       };
     });
 
+  const persistBrowserProviderSecret = (
+    next: ServerSettings,
+  ): Effect.Effect<ServerSettings, ServerSettingsError> => {
+    const browserProvider = next.browserProvider;
+    if (browserProvider.browserbaseApiKeyRedacted) return Effect.succeed(next);
+    const persist = browserProvider.browserbaseApiKey
+      ? secretStore.set(
+          BROWSERBASE_API_KEY_SECRET,
+          textEncoder.encode(browserProvider.browserbaseApiKey),
+        )
+      : secretStore.remove(BROWSERBASE_API_KEY_SECRET);
+    return persist.pipe(
+      Effect.mapError(
+        (cause) =>
+          new ServerSettingsError({
+            settingsPath,
+            operation: browserProvider.browserbaseApiKey ? "write-secret" : "remove-secret",
+            providerInstanceId: "browser:browserbase",
+            environmentVariable: "BROWSERBASE_API_KEY",
+            cause,
+          }),
+      ),
+      Effect.map(() => {
+        const { browserbaseApiKeyRedacted: _redacted, ...browserProviderWithoutRedaction } =
+          browserProvider;
+        return {
+          ...next,
+          browserProvider: {
+            ...browserProviderWithoutRedaction,
+            browserbaseApiKey: "",
+            ...(browserProvider.browserbaseApiKey ? { browserbaseApiKeyRedacted: true } : {}),
+          },
+        };
+      }),
+    );
+  };
+
   const writeSettingsAtomically = Effect.fnUntraced(
     function* (settings: ServerSettings) {
       const sparseSettingsJson = yield* encodeServerSettingsJson(
@@ -1079,7 +1155,8 @@ const make = Effect.gen(function* () {
               ...providerSecretsPersisted,
               sandbox: sandboxMaterialized.sandbox,
             });
-            const normalized = yield* normalizeServerSettings(nextPersisted);
+            const browserSecretPersisted = yield* persistBrowserProviderSecret(nextPersisted);
+            const normalized = yield* normalizeServerSettings(browserSecretPersisted);
             yield* writeSettingsAtomically(normalized);
             return normalized;
           }).pipe(
