@@ -518,7 +518,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const engine = yield* OrchestrationEngineService;
       const snapshots = yield* ProjectionSnapshotQuery;
 
-      for (const sandbox of [null, "local", "akeru-cloud"] as const) {
+      for (const sandbox of [null, "local", "vercel"] as const) {
         yield* engine.dispatch({
           type: "bot.create",
           commandId: CommandId.make(`cmd-bot-default-${sandbox ?? "null"}`),
@@ -544,7 +544,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         "approval-required",
       );
       assert.equal(
-        bots.find((bot) => bot.id === BotId.make("bot-default-akeru-cloud"))?.runtimeMode,
+        bots.find((bot) => bot.id === BotId.make("bot-default-vercel"))?.runtimeMode,
         "full-access",
       );
     }),

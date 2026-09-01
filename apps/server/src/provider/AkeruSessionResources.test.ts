@@ -353,6 +353,7 @@ describe("AkeruSessionResources", () => {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({ exa_search: {} })),
+      getServerStatuses: vi.fn(() => []),
     };
     const makeBotBrowser = vi.fn(() => browser());
     const toMcpServerConfigs = vi.fn(() => ({}));
