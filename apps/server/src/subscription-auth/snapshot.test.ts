@@ -135,15 +135,12 @@ describe("provider access capabilities", () => {
     expect(capabilities.find((item) => item.id === "grok-acp")?.health).toBe("healthy");
   });
 
-  it("keeps API keys and Cursor ACP detected until a real request passes", () => {
-    const providers = [
-      providerFixture("custom-openai", "codex", "apiKey"),
-      providerFixture("cursor", "cursor", undefined),
-    ];
+  it("keeps API keys detected until a real request passes without exposing Cursor ACP", () => {
+    const providers = [providerFixture("custom-openai", "codex", "apiKey")];
     const detected = buildProviderAccessCapabilities([], providers);
 
     expect(detected.find((item) => item.id === "api-key-custom-openai")?.health).toBe("detected");
-    expect(detected.find((item) => item.id === "cursor-acp")?.health).toBe("detected");
+    expect(detected.find((item) => item.id === "cursor-acp")).toBeUndefined();
 
     const requested = buildProviderAccessCapabilities([], providers, (instanceId) =>
       instanceId === "custom-openai" ? "failed-first-request" : "recovered",
@@ -151,7 +148,6 @@ describe("provider access capabilities", () => {
     expect(requested.find((item) => item.id === "api-key-custom-openai")?.health).toBe(
       "failed-first-request",
     );
-    expect(requested.find((item) => item.id === "cursor-acp")?.health).toBe("recovered");
   });
 
   it("labels unsupported browser gaps as temporary and gives a repair action", () => {
