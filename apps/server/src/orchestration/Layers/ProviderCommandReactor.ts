@@ -341,6 +341,8 @@ const make = Effect.gen(function* () {
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const failDelegation = (threadId: ThreadId, error: string) =>
+    agentController.failDelegation?.({ threadId, error }) ?? Effect.void;
   if (agentController.configureDelegation) {
     yield* agentController.configureDelegation({
       readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
@@ -1254,7 +1256,14 @@ const make = Effect.gen(function* () {
         turnId: null,
         createdAt: event.payload.createdAt,
         requestId: event.payload.messageId,
-      });
+      }).pipe(
+        Effect.ensuring(
+          failDelegation(
+            event.payload.threadId,
+            `User message '${event.payload.messageId}' was not found for turn start request.`,
+          ),
+        ),
+      );
       return;
     }
 
@@ -1313,6 +1322,7 @@ const make = Effect.gen(function* () {
           }),
         ),
         Effect.asVoid,
+        Effect.ensuring(failDelegation(event.payload.threadId, detail)),
       );
     };
 

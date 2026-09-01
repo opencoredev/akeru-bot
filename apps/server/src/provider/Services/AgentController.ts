@@ -42,6 +42,10 @@ export interface AgentControllerShape {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
     readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
   }) => Effect.Effect<void>;
+  readonly failDelegation?: (input: {
+    readonly threadId: ThreadId;
+    readonly error: string;
+  }) => Effect.Effect<void>;
 
   readonly readConversationMemory?: (
     threadId: ThreadId,

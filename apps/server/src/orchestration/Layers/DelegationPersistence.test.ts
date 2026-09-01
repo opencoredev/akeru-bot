@@ -66,7 +66,7 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
     Layer.provideMerge(OrchestrationProjectionPipelineLive),
-    Layer.provide(OrchestrationEventStoreLive),
+    Layer.provideMerge(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
     Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),

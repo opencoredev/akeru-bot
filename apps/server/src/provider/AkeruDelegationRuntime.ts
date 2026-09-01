@@ -36,6 +36,7 @@ export interface AkeruDelegationRuntimeOptions {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
   readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
   readonly awaitChild: (threadId: ThreadId) => Promise<AkeruDelegationChildOutcome>;
+  readonly failChild?: (threadId: ThreadId, error: string) => void;
   readonly now?: () => string;
   readonly id?: () => string;
 }
@@ -105,22 +106,27 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       commandId: commandId("create"),
       delegation: active,
     });
-    await options.dispatch({
-      type: "thread.turn.start",
-      commandId: commandId("turn"),
-      threadId: childThreadId,
-      message: {
-        messageId: MessageId.make(`delegation-message-${id()}`),
-        role: "user",
-        text: `${request.task}\n\nExpected result: ${request.expectedResult}`,
-        attachments: [],
-      },
-      runtimeMode: targetBot.runtimeMode,
-      interactionMode: "default",
-      createdAt: now(),
-    });
+    const childOutcome = options.awaitChild(childThreadId);
+    try {
+      await options.dispatch({
+        type: "thread.turn.start",
+        commandId: commandId("turn"),
+        threadId: childThreadId,
+        message: {
+          messageId: MessageId.make(`delegation-message-${id()}`),
+          role: "user",
+          text: `${request.task}\n\nExpected result: ${request.expectedResult}`,
+          attachments: [],
+        },
+        runtimeMode: targetBot.runtimeMode,
+        interactionMode: "default",
+        createdAt: now(),
+      });
+    } catch (cause) {
+      options.failChild?.(childThreadId, cause instanceof Error ? cause.message : String(cause));
+    }
 
-    const child = await options.awaitChild(childThreadId);
+    const child = await childOutcome;
     const completedAt = now();
     const result = child.result?.trim();
     const completed: AkeruDelegationRecord = {

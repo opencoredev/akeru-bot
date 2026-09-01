@@ -151,4 +151,35 @@ describe("AkeruDelegationRuntime", () => {
       summary: "Provider unavailable",
     });
   });
+
+  it("records a failed delegation when child dispatch fails", async () => {
+    const commands: Array<{ type: string; [key: string]: unknown }> = [];
+    let resolveChild: (outcome: { turnId: null; error: string }) => void = () => undefined;
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => snapshot,
+      dispatch: async (command) => {
+        commands.push(command);
+        if (command.type === "thread.turn.start") throw new Error("Provider unavailable");
+      },
+      awaitChild: () => new Promise((resolve) => (resolveChild = resolve)),
+      failChild: (_threadId, error) => resolveChild({ turnId: null, error }),
+    });
+
+    await expect(
+      runtime.send(
+        { threadId: sourceThreadId, turnId: sourceTurnId, botId: sourceBotId, depth: 0 },
+        request,
+      ),
+    ).resolves.toMatchObject({
+      phase: "failure",
+      fatalToThread: false,
+      summary: "Provider unavailable",
+    });
+    expect(commands.map((command) => command.type)).toEqual([
+      "thread.create",
+      "delegation.create",
+      "thread.turn.start",
+      "delegation.complete",
+    ]);
+  });
 });

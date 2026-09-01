@@ -317,6 +317,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       string,
       { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
     >();
+    const resolveChildWaiter = (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => {
+      childWaiters.get(String(threadId))?.resolve(outcome);
+      childWaiters.delete(String(threadId));
+    };
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -485,14 +489,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(errorMessage ? { errorMessage } : {}),
         },
       });
-      childWaiters.get(String(threadId))?.resolve({
+      resolveChildWaiter(threadId, {
         turnId: turn.turnId,
         ...(state === "completed" && turn.assistantText.trim()
           ? { result: turn.assistantText.trim() }
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
-      childWaiters.delete(String(threadId));
       active.approvalRequests.clear();
       toolRuntime.clearApprovals(String(threadId));
       active.activeTurn = null;
@@ -1309,6 +1312,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         Effect.sync(() => {
           delegationRuntime = createAkeruDelegationRuntime({
             ...input,
+            failChild: (threadId, error) => resolveChildWaiter(threadId, { turnId: null, error }),
             awaitChild: (threadId) =>
               new Promise((resolve, reject) => {
                 const key = String(threadId);
@@ -1320,6 +1324,8 @@ const make = (options?: AgentControllerLiveOptions) =>
               }),
           });
         }),
+      failDelegation: ({ threadId, error }) =>
+        Effect.sync(() => resolveChildWaiter(threadId, { turnId: null, error })),
       readConversationMemory: (threadId) =>
         bundle.readObservationalMemory
           ? runMastra("memory.read", () =>
