@@ -21,14 +21,25 @@ vi.mock("@mastra/core/workspace", async (importOriginal) => {
 });
 
 const directories = new Set<string>();
+const workspaceRoots = new WeakMap<Workspace, string>();
 
 function workspace(name: string) {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), `akeru-tool-${name}-`));
-  directories.add(root);
-  return new Workspace({
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), `akeru-tool-${name}-`));
+  const root = NodePath.join(directory, "workspace");
+  NodeFS.mkdirSync(root);
+  directories.add(directory);
+  const value = new Workspace({
     filesystem: new LocalFilesystem({ basePath: root }),
     sandbox: new LocalSandbox({ workingDirectory: root }),
   });
+  workspaceRoots.set(value, root);
+  return value;
+}
+
+function workspaceRoot(value: Workspace) {
+  const root = workspaceRoots.get(value);
+  if (!root) throw new Error("Workspace root is unavailable.");
+  return root;
 }
 
 describe("AkeruToolRuntime", () => {
@@ -88,6 +99,49 @@ describe("AkeruToolRuntime", () => {
     expect([...frame.data]).toEqual([0, 0, 0, 255]);
   });
 
+  it("limits delegated tools and requires a one-shot send grant", async () => {
+    const send = vi.fn(async () => ({ delivered: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-delegated", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      workspace: workspace("delegated"),
+      delegation: {
+        depth: 0,
+        activeDelegations: 0,
+        access: {
+          allowedToolIds: ["SendToAgent"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "full-access",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send",
+        },
+        send,
+      },
+    });
+    expect(runtime.toolsForThread("thread-delegated").map((tool) => tool.id)).toEqual([
+      "SendToAgent",
+    ]);
+    const execution = {
+      threadId: "thread-delegated",
+      toolId: "SendToAgent" as const,
+      toolCallId: "tool-send",
+      input: {
+        botId: BotId.make("child-bot"),
+        task: "Research the issue.",
+        expectedResult: "Return the cause.",
+      },
+      approvalMode: "require-grant" as const,
+    };
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    runtime.grantApproval(execution);
+    await expect(runtime.execute(execution)).resolves.toEqual({ delivered: true });
+    expect(send).toHaveBeenCalledOnce();
+  });
+
   it("exposes registered memory handlers and protects sensitive writes", async () => {
     const remember = vi.fn(async () => ({ saved: true }));
     const unavailable = vi.fn(async () => undefined);
@@ -127,6 +181,60 @@ describe("AkeruToolRuntime", () => {
     runtime.grantApproval(sensitiveWrite);
     await expect(runtime.execute(sensitiveWrite)).resolves.toEqual({ saved: true });
     expect(remember).toHaveBeenCalledTimes(2);
+  });
+
+  it("exposes a narrow profile tool only for a bot-owned session", async () => {
+    const updateProfile = vi.fn(async () => ({
+      receiptId: "profile-1",
+      toolId: "UpdateBotProfile",
+      phase: "success" as const,
+      threadId: ThreadId.make("thread-profile"),
+      botId: BotId.make("bot-one"),
+      fatalToThread: false as const,
+      createdAt: "2026-09-01T02:00:00.000Z",
+    }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-no-bot", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      botState: { updateProfile },
+    });
+    runtime.registerSession("thread-profile", {
+      botId: BotId.make("bot-one"),
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      botState: { updateProfile },
+    });
+
+    expect(runtime.toolsForThread("thread-no-bot").map((tool) => tool.id)).not.toContain(
+      "UpdateBotProfile",
+    );
+    expect(runtime.toolsForThread("thread-profile").map((tool) => tool.id)).toEqual([
+      "UpdateBotProfile",
+    ]);
+    await expect(
+      runtime.execute({
+        threadId: "thread-profile",
+        toolId: "UpdateBotProfile",
+        toolCallId: "profile-1",
+        input: { title: "Principal researcher" },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toMatchObject({ phase: "success" });
+    expect(updateProfile).toHaveBeenCalledWith("thread-profile", "bot-one", "profile-1", {
+      title: "Principal researcher",
+    });
+
+    await expect(
+      runtime.execute({
+        threadId: "thread-profile",
+        toolId: "UpdateBotProfile",
+        toolCallId: "profile-2",
+        input: { title: "Principal researcher", botId: "bot-other" },
+        approvalMode: "require-grant",
+      }),
+    ).rejects.toThrow();
+    expect(updateProfile).toHaveBeenCalledTimes(1);
   });
 
   it("requires an exact one-shot grant for local shell commands", async () => {
@@ -190,6 +298,74 @@ describe("AkeruToolRuntime", () => {
     });
   });
 
+  it("rejects shell working directories outside both workspace boundaries", async () => {
+    const runtime = createAkeruToolRuntime();
+    const bot = workspace("cwd-bot");
+    const user = workspace("cwd-user");
+    NodeFS.mkdirSync(NodePath.join(workspaceRoot(user), "nested"));
+    runtime.registerSession("thread-1", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      workspace: bot,
+      userComputerWorkspace: user,
+    });
+
+    await expect(
+      runtime.execute({
+        threadId: "thread-1",
+        toolId: "ExternalShell",
+        toolCallId: "tool-safe-external",
+        input: { command: "pwd", cwd: "nested" },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toBeDefined();
+
+    for (const toolId of ["Shell", "ExternalShell"] as const) {
+      for (const cwd of ["/", ".."]) {
+        const execution = {
+          threadId: "thread-1",
+          toolId,
+          toolCallId: `tool-${toolId}-${cwd}`,
+          input: { command: "pwd", cwd },
+          approvalMode: "require-grant" as const,
+        };
+        if (toolId === "Shell") runtime.grantApproval(execution);
+        await expect(runtime.execute(execution)).rejects.toThrow("must stay inside its workspace");
+      }
+    }
+  });
+
+  it("allows a safe read without approval and rejects path traversal", async () => {
+    const runtime = createAkeruToolRuntime();
+    const bot = workspace("read");
+    NodeFS.writeFileSync(NodePath.join(workspaceRoot(bot), "report.txt"), "report");
+    NodeFS.writeFileSync(NodePath.join(workspaceRoot(bot), "..", "outside.txt"), "secret");
+    runtime.registerSession("thread-1", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      workspace: bot,
+    });
+
+    await expect(
+      runtime.execute({
+        threadId: "thread-1",
+        toolId: "Read",
+        toolCallId: "tool-read",
+        input: { path: "report.txt" },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      runtime.execute({
+        threadId: "thread-1",
+        toolId: "Read",
+        toolCallId: "tool-read-outside",
+        input: { path: "../outside.txt" },
+        approvalMode: "require-grant",
+      }),
+    ).rejects.toThrow();
+  });
+
   it("copies files only when both boundaries are registered", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("copy-bot");
@@ -213,6 +389,14 @@ describe("AkeruToolRuntime", () => {
     expect(await bot.filesystem?.readFile("inbox/report.txt", { encoding: "utf-8" })).toBe(
       "report",
     );
+    NodeFS.writeFileSync(NodePath.join(workspaceRoot(user), "..", "outside.txt"), "secret");
+    await expect(
+      runtime.execute({
+        ...execution,
+        toolCallId: "tool-copy-outside",
+        input: { sourcePath: "../outside.txt", destinationPath: "inbox/outside.txt" },
+      }),
+    ).rejects.toThrow();
   });
 
   it("invalidates approvals when the thread workspace changes", async () => {
@@ -299,6 +483,18 @@ describe("AkeruToolRuntime", () => {
       runtimeMode: "full-access",
       workspaceType: "local",
       delegation: {
+        depth: 0,
+        activeDelegations: 0,
+        access: {
+          allowedToolIds: ["SendToAgent"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "full-access",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send",
+        },
         send: async () => {
           throw new Error("Provider unavailable");
         },

@@ -1745,10 +1745,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
               for (const row of delegationRows) {
-                updatedAt = maxIso(
-                  updatedAt,
-                  row.delegation.completedAt ?? row.delegation.createdAt,
-                );
+                updatedAt = maxIso(updatedAt, row.delegation.updatedAt);
               }
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
@@ -2046,10 +2043,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
               for (const row of delegationRows) {
-                updatedAt = maxIso(
-                  updatedAt,
-                  row.delegation.completedAt ?? row.delegation.createdAt,
-                );
+                updatedAt = maxIso(updatedAt, row.delegation.updatedAt);
               }
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
@@ -2214,6 +2208,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listDelegationRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getShellSnapshot:listDelegations:query",
+                "ProjectionSnapshotQuery.getShellSnapshot:listDelegations:decodeRows",
+              ),
+            ),
+          ),
           projectionMcpServerRepository.listAll(),
           listActiveThreadRows(undefined).pipe(
             Effect.mapError(
@@ -2255,6 +2257,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             projectRows,
             botRows,
             groupRows,
+            delegationRows,
             mcpServers,
             threadRows,
             sessionRows,
@@ -2271,6 +2274,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               }
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
+              for (const row of delegationRows) {
+                updatedAt = maxIso(updatedAt, row.delegation.updatedAt);
               }
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
@@ -2314,6 +2320,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 ),
                 bots: botRows.map(mapBotRow),
                 groups: groupRows.map(mapGroupRow),
+                delegations: delegationRows.map((row) => row.delegation),
                 mcpServers,
                 threads: Arr.filterMap(threadRows, (row) =>
                   row.deletedAt === null

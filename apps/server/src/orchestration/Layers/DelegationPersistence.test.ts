@@ -3,7 +3,8 @@ import {
   BotId,
   CommandId,
   DelegationId,
-  EventId,
+  ProjectId,
+  ProviderInstanceId,
   ThreadId,
   TurnId,
   type AkeruDelegationRecord,
@@ -17,10 +18,10 @@ import { ServerConfig } from "../../config.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { makeSqlitePersistenceLive } from "../../persistence/Layers/Sqlite.ts";
-import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
+import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
@@ -31,33 +32,43 @@ import {
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 
 const NOW = "2026-08-31T12:00:00.000Z";
-const COMPLETED_AT = "2026-08-31T12:01:00.000Z";
-const SOURCE_BOT_ID = BotId.make("bot-source");
-const TARGET_BOT_ID = BotId.make("bot-target");
-const SOURCE_THREAD_ID = ThreadId.make("thread-source");
-const CHILD_THREAD_ID = ThreadId.make("thread-child");
+const PARENT_BOT_ID = BotId.make("bot-parent");
+const CHILD_BOT_ID = BotId.make("bot-child");
+const PARENT_THREAD_ID = ThreadId.make("thread-parent");
 
 const delegation: AkeruDelegationRecord = {
   delegationId: DelegationId.make("delegation-restart"),
-  sourceThreadId: SOURCE_THREAD_ID,
-  sourceTurnId: TurnId.make("turn-source"),
-  sourceBotId: SOURCE_BOT_ID,
-  targetBotId: TARGET_BOT_ID,
-  childThreadId: CHILD_THREAD_ID,
-  childTurnId: TurnId.make("turn-child"),
+  parentDelegationId: null,
+  parentBotId: PARENT_BOT_ID,
+  childBotId: CHILD_BOT_ID,
+  parentThreadId: PARENT_THREAD_ID,
+  childThreadId: null,
+  parentTurnId: TurnId.make("turn-parent"),
+  childTurnId: null,
+  ancestorBotIds: [PARENT_BOT_ID],
   depth: 1,
-  billedBotId: TARGET_BOT_ID,
   task: "Compare three flights.",
   expectedResult: "A short comparison with sources.",
-  outcome: null,
+  deadline: null,
+  access: {
+    allowedToolIds: ["Read"],
+    memoryScopes: ["project"],
+    sandbox: "daytona",
+    runtimeMode: "approval-required",
+    hasUserComputer: false,
+    enabledMcpServerIds: [],
+    disabledMcpServerIds: [],
+    approvalCeiling: "send",
+  },
+  state: "queued",
+  billedBotId: CHILD_BOT_ID,
+  result: null,
+  failure: null,
+  keep: false,
   createdAt: NOW,
+  updatedAt: NOW,
+  startedAt: null,
   completedAt: null,
-};
-
-const completedDelegation: AkeruDelegationRecord = {
-  ...delegation,
-  outcome: { status: "succeeded", result: "Flight B is the best fit." },
-  completedAt: COMPLETED_AT,
 };
 
 const makeLayer = (dbPath: string) =>
@@ -66,41 +77,66 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
     Layer.provideMerge(OrchestrationProjectionPipelineLive),
-    Layer.provideMerge(OrchestrationEventStoreLive),
+    Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
     Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
   );
 
-it.effect("replays the completed delegation after a restart", () =>
+it.effect("rebuilds the full delegation record after a restart", () =>
   Effect.gen(function* () {
     const { dbPath } = yield* ServerConfig;
 
     yield* Effect.gen(function* () {
-      const eventStore = yield* OrchestrationEventStore;
-      yield* eventStore.append({
-        type: "delegation.created",
-        eventId: EventId.make("event-delegation-created"),
-        aggregateKind: "delegation",
-        aggregateId: delegation.delegationId,
-        occurredAt: NOW,
-        commandId: CommandId.make("command-delegation-create"),
-        causationEventId: null,
-        correlationId: CommandId.make("command-delegation-create"),
-        metadata: {},
-        payload: { delegation },
+      const engine = yield* OrchestrationEngineService;
+      const projectId = ProjectId.make("project-1");
+      for (const [id, name] of [
+        [PARENT_BOT_ID, "Parent"],
+        [CHILD_BOT_ID, "Child"],
+      ] as const) {
+        yield* engine.dispatch({
+          type: "bot.create",
+          commandId: CommandId.make(`command-${name.toLowerCase()}-bot`),
+          botId: id,
+          name,
+          title: "Agent",
+          avatar: { kind: "dither", seed: id },
+          engine: null,
+          sandbox: "local",
+          runtimeMode: "approval-required",
+          usageCap: null,
+          groupId: null,
+          createdAt: NOW,
+        });
+      }
+      yield* engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("command-project"),
+        projectId,
+        title: "Delegation project",
+        workspaceRoot: "/tmp/delegation-project",
+        defaultModelSelection: null,
+        createdAt: NOW,
       });
-      yield* eventStore.append({
-        type: "delegation.completed",
-        eventId: EventId.make("event-delegation-completed"),
-        aggregateKind: "delegation",
-        aggregateId: delegation.delegationId,
-        occurredAt: COMPLETED_AT,
-        commandId: CommandId.make("command-delegation-complete"),
-        causationEventId: null,
-        correlationId: CommandId.make("command-delegation-complete"),
-        metadata: {},
-        payload: { delegation: completedDelegation },
+      yield* engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("command-parent-thread"),
+        threadId: PARENT_THREAD_ID,
+        projectId,
+        botId: PARENT_BOT_ID,
+        groupId: null,
+        title: "Parent thread",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6" },
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt: NOW,
+      });
+      yield* engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("command-delegation"),
+        delegation,
       });
     }).pipe(Effect.provide(makeLayer(dbPath)));
 
@@ -118,13 +154,13 @@ it.effect("replays the completed delegation after a restart", () =>
 
       const snapshot = yield* snapshots.getSnapshot();
       const commandReadModel = yield* snapshots.getCommandReadModel();
-      assert.deepEqual(snapshot.delegations, [completedDelegation]);
-      assert.deepEqual(commandReadModel.delegations, [completedDelegation]);
+      assert.deepEqual(snapshot.delegations, [delegation]);
+      assert.deepEqual(commandReadModel.delegations, [delegation]);
     }).pipe(Effect.provide(makeLayer(dbPath)));
   }).pipe(
     Effect.provide(
       Layer.provideMerge(
-        ServerConfig.layerTest(process.cwd(), { prefix: "akeru-delegation-persistence-test-" }),
+        ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegation-persistence-test-" }),
         NodeServices.layer,
       ),
     ),

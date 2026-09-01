@@ -93,7 +93,7 @@ export function createAkeruCatalogToolHandlers(
   return {
     ...(installPlugin
       ? {
-          InstallPlugin: async ({ input, emitProgress }) => {
+          InstallPlugin: async ({ input, emitProgress }: AkeruCatalogToolHandlerInput) => {
             const name = requiredString(input, "name");
             await emitProgress(`Installing plugin '${name}'.`);
             return installPlugin(input as (typeof AkeruToolInputSchemas.InstallPlugin)["Type"]);

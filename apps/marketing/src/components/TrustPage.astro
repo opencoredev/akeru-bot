@@ -1,0 +1,62 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+interface Props {
+  readonly title: string;
+  readonly description: string;
+  readonly heading: string;
+}
+
+const { title, description, heading } = Astro.props;
+---
+
+<Layout title={title} description={description}>
+  <article class="trust-page">
+    <h1>{heading}</h1>
+    <div class="trust-copy">
+      <slot />
+    </div>
+  </article>
+</Layout>
+
+<style>
+  .trust-page {
+    width: min(760px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: clamp(80px, 12vw, 144px) 0 112px;
+  }
+
+  h1 {
+    font-size: clamp(3.4rem, 9vw, 6.8rem);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+  }
+
+  .trust-copy {
+    display: grid;
+    gap: 24px;
+    margin-top: 48px;
+    color: var(--color-muted-foreground);
+    font-size: 1.05rem;
+    line-height: 1.75;
+  }
+
+  .trust-copy :global(h2) {
+    margin-top: 24px;
+    color: var(--color-foreground);
+    font-size: 1.5rem;
+    font-weight: 500;
+  }
+
+  .trust-copy :global(a) {
+    color: var(--color-foreground);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .trust-copy :global(address) {
+    color: var(--color-foreground);
+    font-style: normal;
+  }
+</style>

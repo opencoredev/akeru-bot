@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type BotEngine } from "@t3tools/contracts";
+import { BotId, type BotEngine, type EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -17,6 +17,7 @@ import {
 import { botEnvironment } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { openSettings } from "../../settingsDialogStore";
@@ -29,6 +30,7 @@ import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
+import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
@@ -39,13 +41,16 @@ import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 
+const NO_ENVIRONMENT = "" as EnvironmentId;
+
 export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
-  const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
+  const bots = useRosterStore((state) => state.bots);
+  const bot = bots.find((candidate) => candidate.id === botId);
   const [pendingEngine, setPendingEngine] = useState<BotEngine | null>(null);
   const [modelUpdatePending, setModelUpdatePending] = useState(false);
   const configuredEngine = pendingEngine ?? bot?.engine ?? null;
@@ -90,6 +95,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
 
   useEffect(() => {
     if (
@@ -114,6 +120,11 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const messages = visibleBotChatMessages(runtime.messages);
   const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
+  const delegations = runtime.linkedThreadRef
+    ? (snapshot?.delegations.filter(
+        (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
+      ) ?? [])
+    : [];
 
   return (
     <SidebarInset
@@ -194,6 +205,18 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
               />
             ) : null}
+            {delegations.map((delegation) => (
+              <DelegationCard
+                key={delegation.delegationId}
+                delegation={delegation}
+                childBot={
+                  bots.find(
+                    (candidate) =>
+                      candidate.id === delegation.childBotId && candidate.archivedAt === null,
+                  ) ?? null
+                }
+              />
+            ))}
             {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
           </BotConversationScrollArea>
           <BotInboxAlertStack

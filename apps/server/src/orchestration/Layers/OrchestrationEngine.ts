@@ -98,10 +98,15 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateId: command.mcpServerId,
       };
     case "delegation.create":
-    case "delegation.complete":
+    case "delegation.state.set":
       return {
         aggregateKind: "delegation",
         aggregateId: command.delegation.delegationId,
+      };
+    case "delegation.cancel":
+      return {
+        aggregateKind: "delegation",
+        aggregateId: command.delegationId,
       };
     default:
       return {

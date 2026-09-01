@@ -1,13 +1,30 @@
 import { ORCHESTRATION_WS_METHODS } from "@t3tools/contracts";
+import * as Crypto from "effect/Crypto";
 import { Atom } from "effect/unstable/reactivity";
 
-import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
+import { cancelDelegation, type CancelDelegationInput } from "../operations/commands.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
+import {
+  createAtomCommandScheduler,
+  createEnvironmentCommand,
+  createEnvironmentRpcQueryAtomFamily,
+} from "./runtime.ts";
 
 export function createOrchestrationEnvironmentAtoms<R, E>(
-  runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
+  runtime: Atom.AtomRuntime<EnvironmentRegistry | Crypto.Crypto | R, E>,
 ) {
+  const scheduler = createAtomCommandScheduler();
   return {
+    cancelDelegation: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:delegation:cancel",
+      execute: (input: CancelDelegationInput) => cancelDelegation(input),
+      scheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, "delegation", input.delegationId]),
+      },
+    }),
     turnDiff: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:turn-diff",
       tag: ORCHESTRATION_WS_METHODS.getTurnDiff,

@@ -26,6 +26,7 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
+import { AkeruDelegationRecord, DelegationId } from "./akeruDelegation.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -554,47 +555,12 @@ export const OrchestrationThread = Schema.Struct({
 });
 export type OrchestrationThread = typeof OrchestrationThread.Type;
 
-export const AKERU_DELEGATION_MAX_DEPTH = 2;
-
-export const DelegationId = TrimmedNonEmptyString.pipe(Schema.brand("DelegationId"));
-export type DelegationId = typeof DelegationId.Type;
-
-export const AkeruDelegationOutcome = Schema.Union([
-  Schema.Struct({
-    status: Schema.Literal("succeeded"),
-    result: TrimmedNonEmptyString,
-  }),
-  Schema.Struct({
-    status: Schema.Literal("failed"),
-    error: TrimmedNonEmptyString,
-  }),
-]);
-export type AkeruDelegationOutcome = typeof AkeruDelegationOutcome.Type;
-
-export const AkeruDelegationRecord = Schema.Struct({
-  delegationId: DelegationId,
-  sourceThreadId: ThreadId,
-  sourceTurnId: TurnId,
-  sourceBotId: BotId,
-  targetBotId: BotId,
-  childThreadId: ThreadId,
-  childTurnId: Schema.NullOr(TurnId),
-  depth: PositiveInt.check(Schema.isLessThanOrEqualTo(AKERU_DELEGATION_MAX_DEPTH)),
-  billedBotId: BotId,
-  task: TrimmedNonEmptyString,
-  expectedResult: TrimmedNonEmptyString,
-  outcome: Schema.NullOr(AkeruDelegationOutcome),
-  createdAt: IsoDateTime,
-  completedAt: Schema.NullOr(IsoDateTime),
-});
-export type AkeruDelegationRecord = typeof AkeruDelegationRecord.Type;
-
 export const OrchestrationReadModel = Schema.Struct({
   snapshotSequence: NonNegativeInt,
   projects: Schema.Array(OrchestrationProject),
   bots: Schema.Array(OrchestrationBot).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   groups: Schema.Array(OrchestrationGroup).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  delegations: Schema.Array(AkeruDelegationRecord).pipe(
+  delegations: Schema.Array(Schema.suspend(() => AkeruDelegationRecord)).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
@@ -681,6 +647,9 @@ export const OrchestrationShellSnapshot = Schema.Struct({
   projects: Schema.Array(OrchestrationProjectShell),
   bots: Schema.Array(OrchestrationBot).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   groups: Schema.Array(OrchestrationGroup).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  delegations: Schema.Array(Schema.suspend(() => AkeruDelegationRecord)).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
   threads: Schema.Array(OrchestrationThreadShell),
   updatedAt: IsoDateTime,
@@ -722,6 +691,11 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("mcp-server-removed"),
     sequence: NonNegativeInt,
     mcpServerId: McpServerId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("delegation-upserted"),
+    sequence: NonNegativeInt,
+    delegation: Schema.suspend(() => AkeruDelegationRecord),
   }),
   Schema.Struct({
     kind: Schema.Literal("thread-upserted"),
@@ -1307,6 +1281,14 @@ const ThreadSessionStopCommand = Schema.Struct({
   onlyIfSettled: Schema.optional(Schema.Boolean),
 });
 
+export const DelegationCancelCommand = Schema.Struct({
+  type: Schema.Literal("delegation.cancel"),
+  commandId: CommandId,
+  delegationId: Schema.suspend(() => DelegationId),
+  keep: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  createdAt: IsoDateTime,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
@@ -1347,6 +1329,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  DelegationCancelCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -1391,6 +1374,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  DelegationCancelCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -1487,13 +1471,13 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
 export const DelegationCreateCommand = Schema.Struct({
   type: Schema.Literal("delegation.create"),
   commandId: CommandId,
-  delegation: AkeruDelegationRecord,
+  delegation: Schema.suspend(() => AkeruDelegationRecord),
 });
 
-export const DelegationCompleteCommand = Schema.Struct({
-  type: Schema.Literal("delegation.complete"),
+export const DelegationStateSetCommand = Schema.Struct({
+  type: Schema.Literal("delegation.state.set"),
   commandId: CommandId,
-  delegation: AkeruDelegationRecord,
+  delegation: Schema.suspend(() => AkeruDelegationRecord),
 });
 
 const InternalOrchestrationCommand = Schema.Union([
@@ -1507,7 +1491,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadRevertCompleteCommand,
   ThreadTitleRegenerationCompleteCommand,
   DelegationCreateCommand,
-  DelegationCompleteCommand,
+  DelegationStateSetCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 
@@ -1563,7 +1547,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.turn-diff-completed",
   "thread.activity-appended",
   "delegation.created",
-  "delegation.completed",
+  "delegation.updated",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -1923,9 +1907,9 @@ export const ThreadActivityAppendedPayload = Schema.Struct({
 });
 
 export const DelegationCreatedPayload = Schema.Struct({
-  delegation: AkeruDelegationRecord,
+  delegation: Schema.suspend(() => AkeruDelegationRecord),
 });
-export const DelegationCompletedPayload = DelegationCreatedPayload;
+export const DelegationUpdatedPayload = DelegationCreatedPayload;
 
 /**
  * Which client connection dispatched the command that produced an event.
@@ -1954,7 +1938,14 @@ const EventBaseFields = {
   sequence: NonNegativeInt,
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, BotId, GroupId, McpServerId, ThreadId, DelegationId]),
+  aggregateId: Schema.Union([
+    ProjectId,
+    BotId,
+    GroupId,
+    McpServerId,
+    ThreadId,
+    Schema.suspend(() => DelegationId),
+  ]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -2190,8 +2181,8 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
-    type: Schema.Literal("delegation.completed"),
-    payload: DelegationCompletedPayload,
+    type: Schema.Literal("delegation.updated"),
+    payload: DelegationUpdatedPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

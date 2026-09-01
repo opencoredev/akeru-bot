@@ -249,7 +249,26 @@ export function createMemoryToolHandlers(
     readonly rootId: AkeruMemoryRootId;
     readonly affectedBotIds: ReadonlyArray<string>;
   }) => void | Promise<void>,
+  allowedScopes?: ReadonlyArray<AkeruMemoryTargetScope>,
 ): Record<AkeruMemoryToolId, AkeruMemoryToolHandler> {
+  const allowed = allowedScopes ? new Set(allowedScopes) : undefined;
+  const requireAllowed = (scope: AkeruMemoryTargetScope) => {
+    if (allowed && !allowed.has(scope)) {
+      throw new Error(`Memory scope '${scope}' is outside this delegation's grant.`);
+    }
+  };
+  const revisionScope = (revision: AkeruMemoryRevision) => {
+    const scope = revision.partition.scope;
+    if (scope === "bot-user" || scope === "user") return "private" as const;
+    return scope === "bot" || scope === "project" || scope === "group" || scope === "workspace"
+      ? scope
+      : undefined;
+  };
+  const requireAllowedRevision = (revision: AkeruMemoryRevision) => {
+    const scope = revisionScope(revision);
+    if (!scope) throw new Error("This memory scope is outside the delegation grant.");
+    requireAllowed(scope);
+  };
   const createCandidate = async (
     fact: string,
     scope: AkeruMemoryTargetScope,
@@ -294,6 +313,7 @@ export function createMemoryToolHandlers(
       );
       const includeSensitive = field(input, "includeSensitive") === true;
       return rows
+        .filter((revision) => !allowed || allowed.has(revisionScope(revision)!))
         .filter((revision) => includeSensitive || !revision.sensitive)
         .map((revision) => ({
           memoryId: revision.rootId,
@@ -307,6 +327,7 @@ export function createMemoryToolHandlers(
     },
     remember: async ({ input }) => {
       const scope = targetScope(input);
+      requireAllowed(scope);
       const sensitive = field(input, "sensitive") === true;
       const fact = stringField(input, "fact");
       const now = nowIso();
@@ -323,6 +344,8 @@ export function createMemoryToolHandlers(
       const expected = expectedRevision(input);
       const current = await Effect.runPromise(repository.getCurrent({ access, rootId }));
       const scope = targetScope(input);
+      requireAllowedRevision(current);
+      requireAllowed(scope);
       const sensitive =
         typeof field(input, "sensitive") === "boolean"
           ? field(input, "sensitive") === true
@@ -353,6 +376,7 @@ export function createMemoryToolHandlers(
     },
     forget_memory: async ({ input }) => {
       const rootId = AkeruMemoryRootId.make(stringField(input, "memoryId"));
+      requireAllowedRevision(await Effect.runPromise(repository.getCurrent({ access, rootId })));
       const tombstone = await Effect.runPromise(
         repository.tombstone({
           access,
