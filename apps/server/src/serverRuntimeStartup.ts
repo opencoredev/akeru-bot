@@ -459,6 +459,9 @@ export const make = (options?: StartupOptions) =>
         Effect.gen(function* () {
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+          yield* forkParked(
+            ChannelRuntime.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
+          ).pipe(Scope.provide(reactorScope));
         }),
       );
 

@@ -1508,11 +1508,6 @@ const makeWsRpcLayer = (
                 Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
               );
               yield* recordClientCommandAnalytics(normalizedCommand);
-              if (normalizedCommand.type === "bot.archive") {
-                yield* Effect.promise(() =>
-                  ChannelRuntime.stopChannelsForBot(normalizedCommand.botId),
-                );
-              }
               if (parkingCommand) {
                 const parkingKind = parkingCommand.type === "thread.archive" ? "archive" : "settle";
                 if (shouldStopSessionAfterCommand) {

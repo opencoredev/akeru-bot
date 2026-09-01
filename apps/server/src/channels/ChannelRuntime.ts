@@ -12,6 +12,7 @@ import {
   type ChannelBinding,
   type ChannelProvider,
   type ClientOrchestrationCommand,
+  type OrchestrationEvent,
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
@@ -19,6 +20,7 @@ import { Chat } from "chat";
 import * as Effect from "effect/Effect";
 import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import type * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
@@ -337,9 +339,18 @@ async function stopRuntime(botId: BotId, provider: ChannelProvider): Promise<voi
 
 export async function stopChannelsForBot(botId: BotId): Promise<void> {
   await Promise.allSettled(
-    (["telegram", "imessage"] as const).map((provider) => stopRuntime(botId, provider)),
+    (["telegram", "imessage"] as const).map((provider) =>
+      withChannelOperation(botId, provider, () => stopRuntime(botId, provider)),
+    ),
   );
 }
+
+export const stopArchivedBotChannels = (events: Stream.Stream<OrchestrationEvent>) =>
+  Stream.runForEach(events, (event) =>
+    event.type === "bot.archived"
+      ? Effect.promise(() => stopChannelsForBot(event.payload.botId))
+      : Effect.void,
+  );
 
 export async function shutdownAllChannels(): Promise<void> {
   const entries = [...runtimes.values()];

@@ -1,6 +1,7 @@
 import {
   BotId,
   CommandId,
+  EventId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
@@ -63,6 +64,7 @@ import {
   restoreConnectedChannels,
   sendChannelMessage,
   shutdownAllChannels,
+  stopArchivedBotChannels,
   stopChannelsForBot,
   type ChannelRuntimeDependencies,
 } from "./ChannelRuntime.ts";
@@ -544,6 +546,46 @@ describe("channel runtime", () => {
     );
     await expect(restoreConnectedChannels(harness.dependencies)).resolves.toEqual([]);
     expect(starts).toBe(0);
+  });
+
+  it("stops every live transport on bot archive events without stopping restored bots", async () => {
+    let stops = 0;
+    const harness = makeHarness({ shutdown: async () => void (stops += 1) });
+    await connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+    const eventBase = {
+      sequence: 13,
+      eventId: EventId.make("event-bot-lifecycle"),
+      aggregateKind: "bot" as const,
+      aggregateId: BOT_ID,
+      occurredAt: NOW,
+      commandId: CommandId.make("command-bot-lifecycle"),
+      causationEventId: null,
+      correlationId: CommandId.make("command-bot-lifecycle"),
+      metadata: {},
+    };
+
+    await Effect.runPromise(
+      stopArchivedBotChannels(
+        Stream.make({
+          ...eventBase,
+          type: "bot.restored",
+          payload: { botId: BOT_ID, updatedAt: NOW },
+        }),
+      ),
+    );
+    expect(stops).toBe(0);
+
+    await Effect.runPromise(
+      stopArchivedBotChannels(
+        Stream.make({
+          ...eventBase,
+          type: "bot.archived",
+          payload: { botId: BOT_ID, archivedAt: NOW, updatedAt: NOW },
+        }),
+      ),
+    );
+    expect(stops).toBe(2);
   });
 
   it("connects, disconnects, reconnects, restores, and stops a bot runtime", async () => {
