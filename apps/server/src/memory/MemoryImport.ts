@@ -132,7 +132,9 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       });
     }
   }
-  const partitions = yield* resolveMemoryArchivePartitions(input.access, importTarget);
+  const resolvedPartitions = yield* resolveMemoryArchivePartitions(input.access, importTarget);
+  const partitions =
+    importTarget === "workspace" ? resolvedPartitions.slice(0, 1) : resolvedPartitions;
   return {
     partitions,
     revisions: input.archive.revisions.map(({ revision }) => revision),

@@ -1,6 +1,9 @@
+import * as NodeCrypto from "node:crypto";
+
 import { assert, describe, it } from "@effect/vitest";
 import {
   AkeruMemoryTenantId,
+  AkeruMemoryPartitionId,
   AkeruMemoryUserId,
   BotId,
   GroupId,
@@ -43,7 +46,7 @@ describe("entity memory access", () => {
       assert.isFalse(second.some((value) => value.partitionId === "bot-1:owner"));
       assert.deepEqual(
         first.map((value) => value.scope),
-        ["user", "bot-user", "bot", "project", "workspace", "thread"],
+        ["user", "bot-user", "bot", "project", "workspace", "workspace", "thread"],
       );
       assert.isTrue(
         first.some((value) => value.scope === "project" && value.visibility === "shared"),
@@ -66,7 +69,7 @@ describe("entity memory access", () => {
 
       assert.deepEqual(
         partitions.map((value) => value.scope),
-        ["group", "project", "workspace", "thread"],
+        ["group", "project", "workspace", "workspace", "thread"],
       );
       assert.isTrue(partitions.every((value) => value.visibility === "shared"));
     }),
@@ -96,8 +99,11 @@ describe("entity memory access", () => {
     assert.notEqual(beforeMove, deriveAkeruWorkspaceId(ProjectId.make("project-2")));
   });
 
-  it.effect("selects the derived workspace archive partition", () =>
+  it.effect("keeps legacy workspace memory reachable in reads and archives", () =>
     Effect.gen(function* () {
+      const legacyWorkspaceId = AkeruMemoryPartitionId.make(
+        `workspace:${NodeCrypto.createHash("sha256").update(base.workspaceRoot).digest("hex")}`,
+      );
       const partitions = yield* resolveMemoryArchivePartitions(
         { ...base, botId: BotId.make("bot-1"), groupId: null },
         "workspace",
@@ -107,6 +113,12 @@ describe("entity memory access", () => {
           tenantId: base.tenantId,
           scope: "workspace",
           partitionId: deriveAkeruWorkspaceId(base.projectId),
+          visibility: "shared",
+        },
+        {
+          tenantId: base.tenantId,
+          scope: "workspace",
+          partitionId: legacyWorkspaceId,
           visibility: "shared",
         },
       ]);

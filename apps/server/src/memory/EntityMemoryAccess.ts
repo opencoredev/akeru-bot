@@ -1,3 +1,5 @@
+import * as NodeCrypto from "node:crypto";
+
 import {
   AkeruMemoryPartitionId,
   type AkeruMemoryPartition,
@@ -37,6 +39,16 @@ export function deriveAkeruWorkspaceId(projectId: ProjectId): AkeruMemoryPartiti
   return AkeruMemoryPartitionId.make(`workspace:${projectId}`);
 }
 
+const workspacePartitions = (input: AkeruMemoryThreadAccess) => [
+  partition(input, "workspace", deriveAkeruWorkspaceId(input.projectId), "shared"),
+  partition(
+    input,
+    "workspace",
+    `workspace:${NodeCrypto.createHash("sha256").update(input.workspaceRoot).digest("hex")}`,
+    "shared",
+  ),
+];
+
 export function resolveAuthorizedMemoryPartitions(
   input: AkeruMemoryThreadAccess,
 ): Effect.Effect<ReadonlyArray<AuthorizedMemoryPartition>, AkeruMemoryAccessDenied> {
@@ -55,7 +67,7 @@ export function resolveAuthorizedMemoryPartitions(
     return Effect.succeed([
       partition(input, "group", input.groupId, "shared"),
       partition(input, "project", input.projectId, "shared"),
-      partition(input, "workspace", deriveAkeruWorkspaceId(input.projectId), "shared"),
+      ...workspacePartitions(input),
       partition(input, "thread", input.threadId, "shared"),
     ]);
   }
@@ -66,14 +78,14 @@ export function resolveAuthorizedMemoryPartitions(
       partition(input, "bot-user", `${input.botId}:${input.userId}`, "private"),
       partition(input, "bot", input.botId, "private"),
       partition(input, "project", input.projectId, "shared"),
-      partition(input, "workspace", deriveAkeruWorkspaceId(input.projectId), "shared"),
+      ...workspacePartitions(input),
       partition(input, "thread", input.threadId, "private"),
     ]);
   }
 
   return Effect.succeed([
     partition(input, "project", input.projectId, "shared"),
-    partition(input, "workspace", deriveAkeruWorkspaceId(input.projectId), "shared"),
+    ...workspacePartitions(input),
     partition(input, "thread", input.threadId, "shared"),
   ]);
 }
