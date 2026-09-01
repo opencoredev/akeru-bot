@@ -75,6 +75,7 @@ import {
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
 import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
+import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
@@ -394,6 +395,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     >();
     let channelRuntime: AkeruChannelRuntime | undefined;
     let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
+    let botStateRuntime: AkeruBotStateRuntime | undefined;
     const childWaiters = new Map<
       string,
       {
@@ -1239,6 +1241,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.billedBotId;
         delete toolSession.delegation;
         delete toolSession.memoryHandlers;
+        delete toolSession.botState;
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
             ? memoryHandlers(input.memoryAccess, access.memoryScopes)
@@ -1261,6 +1264,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 }),
               }
             : {}),
+          ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
         };
         toolRuntime.registerSession(key, existing.toolSession);
         return toProviderSession(threadId, existing);
@@ -1350,6 +1354,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(workspace ? { workspace } : {}),
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
+        ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
         catalogHandlers: createAkeruCatalogToolHandlers(
           sessionResources.getMcpManager(key),
           pluginRuntime,
@@ -1813,6 +1818,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }),
       configureDelegation: (input) =>
         Effect.sync(() => {
+          botStateRuntime = createAkeruBotStateRuntime(input);
           channelRuntime = createAkeruChannelRuntime(input);
           delegationRuntime ??= makeDelegationRuntime(input);
         }),

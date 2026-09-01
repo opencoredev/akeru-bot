@@ -90,6 +90,33 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToUser")?.approval).toBe("send");
   });
 
+  it("decodes only narrow bot profile fields", () => {
+    expect(
+      decodeAkeruToolInput("UpdateBotProfile", {
+        name: "Researcher",
+        label: null,
+        description: "Checks primary sources.",
+      }),
+    ).toEqual({
+      name: "Researcher",
+      label: null,
+      description: "Checks primary sources.",
+    });
+    expect(() => decodeAkeruToolInput("UpdateBotProfile", {})).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("UpdateBotProfile", {
+        name: "Researcher",
+        botId: "another-bot",
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("UpdateBotProfile", {
+        name: "Researcher",
+        groupId: "another-group",
+      }),
+    ).toThrow();
+  });
+
   it("never lets full access bypass protected commands or paths", () => {
     const shell = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalShell")!;
     const read = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalRead")!;

@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 
 import {
   BotId,
@@ -33,6 +34,22 @@ const CommandInput = Schema.Struct({
 const PathInput = Schema.Struct({ path: PathText });
 const CopyInput = Schema.Struct({ sourcePath: PathText, destinationPath: PathText });
 const McpServerIdInput = Schema.Struct({ serverId: TrimmedNonEmptyString });
+const UpdateBotProfileInput = Schema.Struct({
+  name: Schema.optional(TrimmedNonEmptyString),
+  title: Schema.optional(TrimmedNonEmptyString),
+  label: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+}).check(
+  Schema.makeFilter(
+    (input) =>
+      input.name !== undefined ||
+      input.title !== undefined ||
+      input.label !== undefined ||
+      input.description !== undefined ||
+      new SchemaIssue.InvalidValue({ message: "At least one profile field is required." }),
+    { identifier: "UpdateBotProfileInput" },
+  ),
+);
 
 export const AkeruToolId = Schema.Literals([
   "Shell",
@@ -50,6 +67,7 @@ export const AkeruToolId = Schema.Literals([
   "UpdateChannel",
   "SendToUser",
   "InstallPlugin",
+  "UpdateBotProfile",
   "AuthenticateMcpServer",
   "RestartMcpServers",
 ]);
@@ -111,6 +129,7 @@ export const AkeruToolInputSchemas = {
     url: McpServerUrl,
     authentication: Schema.Literals(["none", "oauth", "optional-oauth"]),
   }),
+  UpdateBotProfile: UpdateBotProfileInput,
   AuthenticateMcpServer: McpServerIdInput,
   RestartMcpServers: Schema.Struct({
     serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
@@ -243,6 +262,7 @@ export const AKERU_TOOL_CATALOG = [
   define("InstallPlugin", "bot-workspace", "Install or update a URL MCP plugin.", {
     approval: "production",
   }),
+  define("UpdateBotProfile", "bot-workspace", "Update this bot's public profile."),
   define("AuthenticateMcpServer", "bot-workspace", "Authenticate an MCP server.", {
     approval: "secrets",
   }),
