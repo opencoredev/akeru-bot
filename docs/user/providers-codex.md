@@ -1,153 +1,53 @@
 # Codex
 
-This guide is for people who want to use more than one Codex account in Akeru Bot. For Claude, see
-[Claude](./providers-claude.md). For first-time setup, see [Install Akeru Bot](./install.md).
+Akeru runs Codex models through its built-in Mastra-based runtime. Connect a ChatGPT subscription in
+Akeru. You do not need the Codex CLI for Akeru bot turns.
 
-Common reasons:
+## Connect ChatGPT
 
-- use a work account for work projects
-- use a personal account for personal projects
-- switch to another account when one account hits limits
-- keep one shared Codex history instead of maintaining two separate Codex setups
+1. Open **Settings > Providers**.
+2. Find **ChatGPT** and select **Connect**.
+3. Open the sign-in page and enter the displayed device code.
+4. Approve access with the ChatGPT account that this environment should use.
+5. Return to Akeru and wait for the account status to update.
 
-## I Only Use One Codex Account
+Akeru supports ChatGPT Plus, Pro, Business, Enterprise, and Edu. Select **Check OAuth** to test the
+stored login. Use **Reconnect** after an expired or revoked login.
 
-Use the default provider.
+## How Codex runs
 
-In Settings, your Codex provider can stay like this:
+Akeru creates and controls the Codex session. The runtime supplies:
 
-```text
-Display name: Codex
-CODEX_HOME path: ~/.codex
-Shadow home path: empty
-```
+- the bot's local or remote workspace
+- installed plugins and MCP tools
+- Akeru memory and bot tools
+- the selected permission mode
+- the selected ChatGPT subscription model
 
-Log in with Codex normally:
+Akeru normalizes tool calls, approvals, usage, messages, and errors before it sends them to the
+client. This keeps the same thread controls available on web, desktop, and mobile.
 
-```bash
-codex login
-```
+The environment server stores the subscription credential under its private secrets directory. It
+passes short-lived access to the runtime when needed. The credential does not enter the project,
+thread history, checkpoints, or client storage.
 
-## Send feedback to OpenAI
+## Protected actions
 
-In an existing Codex thread, send `/feedback` or `/feedback` followed by a description of the
-issue. Akeru Bot uploads the thread and Codex logs to OpenAI and shows a thread ID that you can copy
-and share with OpenAI employees.
+The runtime can allow routine reads and edits based on the thread's permission mode. It still asks
+before an action that sends data, pays, deletes, changes production, publishes, exposes secrets,
+signs, refunds, or changes an account. An approval applies only to the pending action.
 
-## Approve access to other apps
+See [Permission modes](./permission-modes.md) for the complete mode behavior.
 
-When a Codex tool needs access to an app such as Safari, Akeru Bot shows the app name and asks for
-approval. You can approve, decline, or cancel the request from the desktop app, web app, or mobile
-app. Some tools also offer approval for the current session or permanent approval.
+## Fix sign-in problems
 
-## I Want Work And Personal Codex Accounts
+If Codex cannot start:
 
-Use one real Codex home and one shadow home.
+1. Open **Settings > Providers**.
+2. Check the ChatGPT status.
+3. Select **Check OAuth**.
+4. Select **Reconnect** if the check fails.
+5. Confirm that the account has a supported ChatGPT plan.
 
-Recommended setup:
-
-```text
-~/.codex      shared Codex home
-~/.codex_p    second account auth
-```
-
-The idea is:
-
-- both accounts can see the same Akeru Bot/Codex sessions
-- each account keeps its own login
-- existing threads can continue with either account
-
-### Set Up The First Account
-
-Log in normally:
-
-```bash
-codex login
-```
-
-This is the account used by `~/.codex`.
-
-In Akeru Bot Settings, name it something obvious:
-
-```text
-Display name: Codex Work
-CODEX_HOME path: ~/.codex
-Shadow home path: empty
-```
-
-### Set Up The Second Account
-
-Log in with a separate Codex home:
-
-```bash
-mkdir -p ~/.codex_p
-CODEX_HOME=~/.codex_p codex login
-```
-
-In Akeru Bot Settings, add another Codex provider:
-
-```text
-Display name: Codex Personal
-CODEX_HOME path: ~/.codex
-Shadow home path: ~/.codex_p
-```
-
-The important part is that both providers use the same `CODEX_HOME path`, but only the second one
-has a `Shadow home path`.
-
-## Which Account Am I Using?
-
-Open Settings and look at the provider row.
-
-Akeru Bot shows the authenticated email for providers that report one. Emails are blurred by default;
-click the blurred email to reveal it.
-
-Use display names and accent colors to make accounts easy to tell apart in the model picker.
-
-## I Need A Different API Key Or Endpoint
-
-Use the provider's Environment variables section in Settings.
-
-This is useful when a Codex-compatible setup needs account-specific variables. Add the variables to
-the provider instance that should receive them, and mark API keys or tokens as sensitive. Sensitive
-values are stored as server secrets and are not sent back to the app after saving.
-
-## Can I Switch Accounts In An Existing Thread?
-
-Yes, when both Codex providers share the same `CODEX_HOME path`.
-
-For example:
-
-```text
-Codex Work      CODEX_HOME path: ~/.codex
-Codex Personal  CODEX_HOME path: ~/.codex, Shadow home path: ~/.codex_p
-```
-
-Those two providers are considered compatible for continuation, so the locked model picker can show
-both.
-
-If you add a third Codex provider with a completely different `CODEX_HOME path`, Akeru Bot treats it
-as a different workspace. It will not be offered for existing threads created under `~/.codex`.
-
-## If Both Accounts Look The Same
-
-If two Codex providers show the same account or the same unexpected model list:
-
-1. Check the email in Settings.
-2. Refresh provider status.
-3. Confirm the second provider has `Shadow home path` set.
-4. Confirm the shadow directory has its own `auth.json`.
-5. If you copied `~/.codex` into the shadow directory, remove everything except `auth.json`.
-
-Example cleanup:
-
-```bash
-find ~/.codex_p -mindepth 1 ! -name auth.json -exec rm -rf {} +
-```
-
-## When To Use A Separate CODEX_HOME
-
-Use a totally separate `CODEX_HOME path` only when you want a separate Codex workspace.
-
-That means separate sessions and less account switching inside old threads. Most dual-account users
-should use the shared-home plus shadow-home setup instead.
+Repeat these steps on the environment that owns the project. Signing in on another Akeru server does
+not connect this one.

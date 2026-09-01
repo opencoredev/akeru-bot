@@ -1,26 +1,32 @@
 # Privacy and outbound data
 
-Akeru Bot stores threads, settings, secrets, and logs on your device under `~/.akeru`. It does not
-require a hosted Akeru account.
+Akeru stores environment data under `~/.akeru` by default. This includes projects, threads, bot
+profiles, settings, secrets, logs, local memory, and cached provider data. A worktree development
+server uses that worktree's `.akeru` directory instead.
 
-Some features send data to services outside your device:
+## Data that can leave the environment
 
-- Provider runs send prompts, selected files, tool results, screenshots, computer frames, and
-  conversation context to the provider CLI or service you choose. The provider controls its own
-  processing and retention.
-- Product feedback goes to `feedback.akeru.bot`. The service may keep submissions for up to 90
-  days.
-- Voice calls send microphone audio and session data to the ChatGPT Realtime service while a call
-  is active.
-- Provider update checks contact the release sources for your configured providers. Signed desktop
-  builds contact the configured release host for Akeru Bot updates.
-- Anonymous analytics use PostHog only when you turn analytics on and the distributor configures a
-  PostHog key. Events include the app version, platform, architecture, client type, feature use,
-  and a random installation identifier. They do not use a provider account identifier.
+- Agent requests send the prompt, selected files, tool results, and conversation context to the
+  provider that you select. That provider controls its processing and retention.
+- Product feedback sends the text and an optional safe interface descriptor to
+  `feedback.akeru.bot`. The service can retain accepted feedback for up to 90 days.
+- Voice calls send microphone audio and call state to the ChatGPT Realtime service while a call is
+  active.
+- Provider update checks contact the release source for configured providers. Signed desktop builds
+  contact the configured Akeru release host.
+- Anonymous analytics send fixed aggregate counters and app, platform, architecture, and client
+  dimensions when analytics is on.
 
-Open Settings, then Privacy, to control analytics, product feedback, voice calls, and provider
-update checks. Analytics starts off. Mobile shows the same controls in the Privacy section for the
-connected environment.
+## Subscription credentials
 
-The published Terms of Use and Privacy Policy pages are drafts. Akeru Bot must not ship a signed
-release until qualified legal counsel approves them.
+The environment server stores subscription credentials in its private secrets directory. OAuth
+tokens do not pass through the WebSocket contract and do not enter projects, checkpoints, sandboxes,
+or client storage. A run receives only the short-lived access that it needs.
+
+## Privacy controls
+
+Open **Settings > Privacy** to control anonymous analytics, product feedback, voice calls, and
+provider update checks. Mobile exposes the same controls for the connected environment.
+
+Turning a control off stops new transfers for that feature. Provider requests still leave the
+environment when you run a connected online model.

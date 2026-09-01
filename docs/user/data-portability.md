@@ -1,17 +1,28 @@
-# Data portability
+# Move Akeru data
 
-Open **Settings > General**, then find **Data portability**.
+Open **Settings > General** and find **Data portability**.
 
-Choose **Export** to download an `akeru.archive` file. The archive includes safe server settings, MCP recipes, bots, groups, mapped project references, thread metadata, conversation text, plans, and approval history.
+## Export
 
-The archive removes credentials, local paths, project scripts, attachments, image files, Git state, provider sessions, receipts, tool arguments, raw approval payloads, and deleted threads and projects. It replaces image avatars with generated avatars. MCP recipes do not include secrets.
+Select **Export** to download an `akeru.archive` file. The archive can contain safe server settings,
+MCP recipes, bots, groups, mapped project references, thread metadata, conversation text, proposed
+plans, and approval history.
 
-Imported approval rows are history only. An import does not reopen a request or approve an action. Imported MCP servers stay disabled until you reconnect their credentials.
+The export excludes secrets, provider credentials, jobs, durable memory, routines, skill
+assignments, usage history, files, Git repositories, terminals, attachments, and checkpoints.
 
-Choose **Import** and select an archive to see a restore preview. The preview lists additions, changes, conflicts, missing providers, and data that stays on the source device. Review this list before you restore the archive.
+## Import
 
-Akeru Bot updates a project when its existing workspace reference matches the archive. For each missing workspace, choose an existing local folder in the preview. Akeru Bot links the restored project to that folder without copying its files, then restores its threads. Import skips unmapped projects and their threads without blocking independent records.
+1. Select **Import** and choose an archive.
+2. Review the bots, groups, projects, threads, settings, and skipped items in **Restore preview**.
+3. Map project paths to directories on the destination environment.
+4. Select **Restore**.
 
-Import skips records that need a missing provider. It also skips conflicts when the target has a newer record. If the environment changes after the preview, Akeru Bot stops the import and requires a new preview.
+The archive limit is 20 MiB. Akeru validates the complete archive before it writes any restored data.
+Unsupported or unsafe entries appear in the preview and remain skipped.
 
-The restore result lists failed records. A partly restored record means at least one write succeeded before another write failed. Review the archive again after any failed or partly restored result.
+Desktop can use its native project-folder picker. Browser and mobile clients cannot browse the
+server's filesystem through that picker, so map paths from a desktop client when needed.
+
+Keep the archive private. It can contain conversation text, project paths, bot instructions, and
+approval history even though it excludes credentials.

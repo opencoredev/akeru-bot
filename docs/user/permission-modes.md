@@ -1,50 +1,39 @@
-# Permission Modes
+# Permission modes
 
-A permission mode controls how much the agent does on its own and when it stops to ask you.
+A permission mode controls which actions an agent can take before it must ask you.
 
-The mode is set per thread, from the mode control in the message composer. Changing it in one
-thread does not change any other thread. A thread created from inside another thread keeps that
-thread's mode. Otherwise, new threads use **Settings > General > Local execution** and ask before
-local file changes and shell commands by default.
+Set the mode per thread from the message composer. A child thread keeps its parent thread's mode.
+Other new threads use **Settings > General > Local execution** and ask before local file changes and
+shell commands by default.
 
-## The Modes
+## The modes
 
-**Supervised**: ask before commands and file changes. The agent pauses and shows you what it
-wants to run or edit, and waits for approval. Work outside the workspace is restricted.
+**Supervised** asks before commands and file changes. Work outside the workspace stays restricted.
 
-**Auto-accept edits**: auto-approve edits, ask before other actions. File changes go through
-without prompting; commands and anything else still stop for approval.
+**Auto-accept edits** allows file edits and asks before commands and other actions.
 
-**Auto**: routine actions proceed without you; risky ones still ask. How this is enforced depends
-on the provider: Codex delegates routine approvals to an AI reviewer, Claude uses its own auto
-permission mode, and providers without an equivalent (such as OpenCode) fall back to asking, like
-Supervised.
+**Auto** allows routine actions and asks before risky ones. Each provider maps this mode to its own
+permission system. A provider without an equivalent can fall back to supervised behavior.
 
-**Full access**: allow commands and edits without local prompts. The agent runs unattended until
-it finishes or asks a question of its own. Actions that send, pay, delete, change production, or
-use secrets still ask.
+**Full access** allows routine commands and edits without local prompts. The agent still asks its own
+questions and still stops at protected actions.
 
-Approvals appear inline in the conversation. Approve or reject one and the agent continues from
-there. The Codex runtime still asks before every MCP tool call and actions that send, pay, delete,
-deploy, publish, expose secrets, sign, refund, or change an account. This applies in every mode.
-Each approval applies only to the pending action.
+## Protected actions
 
-## Choosing a Mode
+Akeru's Codex and Kimi runtime always asks before an action that sends data, pays, deletes, changes
+production, publishes, exposes secrets, signs, refunds, or changes an account. Unknown mutating
+actions also ask. Each approval applies only to the pending action.
 
-Use **Full access** for work in a worktree or a sandbox you can throw away.
+Installed MCP tools ask unless the server marks the tool read-only. Provider adapters can add their
+own approval rules.
 
-Use **Supervised** on a repository where an unwanted command is expensive, or the first time you
-run an unfamiliar task.
+## Choose a mode
 
-**Auto-accept edits** suits refactors where the edits are the point and you only care about the
-shell commands.
+Use **Supervised** for an unfamiliar task or a repository where an unwanted command is expensive.
 
-## Provider Behavior
+Use **Auto-accept edits** when you want the refactor but still want to inspect shell commands.
 
-Each provider maps these modes onto its own approval and sandbox settings. Codex, for example,
-translates the mode into its approval policy and sandbox level, so **Supervised** runs the CLI
-with prompting enabled and a restricted workspace while **Full access** disables both. The
-protected-action gate still applies after this provider mapping. The exact per-provider translation
-is internal and may change.
+Use **Full access** for a worktree or sandbox that you can restore. Check the workspace and Git diff
+after the agent finishes.
 
-Mobile offers the same four modes with the same labels and descriptions.
+Web, desktop, and mobile use the same four labels.

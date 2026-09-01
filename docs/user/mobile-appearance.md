@@ -1,15 +1,17 @@
 # Mobile appearance
 
-Akeru Bot Mobile includes the Akeru Bot, Akeru Paper, Akeru Chat, Grove, Ocean, Ember, and Iris themes.
-Each theme has light and dark colors that apply throughout the app, including code reviews, file
-previews, the terminal, native headers, and sheets.
+Akeru Mobile includes these themes:
 
-To change themes:
+- Akeru Classic
+- Akeru Paper
+- Akeru Chat
+- Grove
+- Ocean
+- Ember
+- Iris
 
-1. Open **Settings**.
-2. Select **Appearance**.
-3. Choose a theme.
-4. Select **System**, **Light**, or **Dark**.
+Open **Settings > Appearance**. Choose separate themes for light and dark appearance, or apply one
+theme to both. Then select **System**, **Light**, or **Dark** for the device mode.
 
-**System** follows the device appearance automatically. Theme, text, code, and terminal appearance
-preferences are stored on the device.
+**System** follows the device appearance. Theme, text, code, and terminal preferences stay on that
+device.

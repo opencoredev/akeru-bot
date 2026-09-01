@@ -1,30 +1,41 @@
 # Anonymous usage analytics
 
-Akeru Bot sends anonymous usage totals from packaged production builds. Development
-and CI runs do not send analytics unless a maintainer enables them.
+Packaged production builds send anonymous aggregate usage by default. Development and CI builds do
+not send it unless a maintainer enables it.
 
-Each report covers one three-hour UTC period. It contains counts for bots, messages,
-bot replies, failed turns, groups, approval decisions, provider turns, sandbox turns,
-completed tool categories, and provider-native web searches. It also records which
-public catalog plugins are enabled. Custom plugin names and MCP server details never
-leave the installation.
+## What a report contains
 
-The first report with activity marks the analytics installation as new. This supports
-an anonymous new-active-install trend. It does not identify a person or count a
-download that never runs.
-Reserved counters for external messages, voice, browser tasks, routines, and
-connectors stay at zero until those features have a durable local count source.
+Each report covers one three-hour UTC period. It contains fixed counters for:
 
-Akeru Bot uses a random UUID only for analytics. It does not read provider sign-in
-files or use an account ID. Reports do not contain personal information, user
-content, connector data, IP addresses, prompts, replies, model output, personal IDs,
-URLs, paths, recipients, memory, payloads, tokens, credentials, screenshots, stack
-traces, error text, files, or custom properties.
+- created, deleted, and active bots
+- user messages, bot replies, group messages, and failed turns
+- approval decisions and provider turns
+- local and remote sandbox turns
+- completed tool categories and provider-native web searches
+- supported external messages, voice calls, browser work, routines, and connectors
+- public catalog plugins that are enabled
 
-Turn off **Analytics** in **Settings → General** to stop collection. Akeru Bot then
-deletes the analytics UUID, the current period, all reports waiting to send, and the
-legacy analytics ID file. The setting stays off.
+Counters with no durable local source stay at zero. Custom plugin names and Custom MCP server details
+never leave the environment.
+
+The first report with activity marks the installation as new. This measures active installations. It
+does not count a download that never runs.
+
+## What a report excludes
+
+Reports do not contain prompts, replies, model output, files, paths, URLs, recipients, memory,
+screenshots, stack traces, error text, tokens, credentials, or provider account identifiers.
+
+Akeru uses a random analytics UUID. It disables PostHog person profiles and geolocation for these
+events. It also supplies a fixed empty IP value instead of the client address.
+
+## Turn analytics off
+
+Open **Settings > Privacy** and turn off **Anonymous analytics**. Mobile uses the same path.
+
+Turning analytics off deletes the analytics UUID, the current period, queued reports, and the legacy
+analytics ID file. The setting stays off.
 
 Resource diagnostics are separate. [Local resource telemetry](../internals/resource-telemetry.md)
-measures processes and host resources for the diagnostics interface. It does not
-send those measurements as anonymous usage analytics.
+measures the environment for the diagnostics interface and does not send those measurements as
+anonymous analytics.

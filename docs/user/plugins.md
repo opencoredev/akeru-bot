@@ -1,22 +1,47 @@
 # Plugins
 
-Open **Plugins** from the sidebar or command palette. Use **All**, **Featured**, **Installed**, or one of the eight categories. Search checks the plugin name, title, description, category, tags, capabilities, and publisher name.
+Open **Plugins** from the sidebar or command palette. Filter by **All**, **Featured**, **Installed**,
+or category. Search checks the plugin name, title, description, category, tags, capabilities, and
+publisher.
 
-Select a plugin to review its publisher, authentication, hosted or local execution, transport, platform support, permissions, approval classes, setup, documentation, source, and active dependent bots. Routines are unavailable until routines ship. Health shows **Not checked** until Akeru completes a real request. An enabled plugin does not imply a healthy connection.
+## Review a plugin
 
-The available action matches the current state:
+Select a plugin to inspect its publisher, authentication, execution location, transport, supported
+platforms, permissions, approval classes, setup, documentation, source, and dependent bots.
+
+Health stays **Not checked** until a real request succeeds. An enabled plugin is not proof that its
+connection works.
+
+## Plugin actions
 
 - **Add** installs a public or local plugin.
-- **Connect** starts an OAuth connection.
-- **Add key** installs a plugin whose key stays in the host environment.
-- **Disable** stops an enabled plugin without deleting its registration.
-- **Reconnect** refreshes and enables a disabled plugin.
-- **Remove** deletes the plugin registration.
+- **Connect** starts OAuth.
+- **Add key** stores a required key in the host environment.
+- **Disable** stops the plugin without deleting it.
+- **Reconnect** repairs and enables a disabled plugin.
+- **Remove** deletes the registration.
 
-Approval-pending plugins remain visible, but Akeru disables **Connect** and shows the vendor blocker. Plugins removed from the directory remain under **Installed** until you remove them.
+A plugin waiting for publisher approval stays visible, but **Connect** remains disabled. A plugin
+removed from the public directory stays under **Installed** until you remove it.
 
-Codex Computer Use runs only on the local Mac. It does not use a hosted desktop or remote-control service. When a Codex bot starts control, macOS requests Screen Recording and Accessibility access if the helper does not have them. Akeru allows one controlling bot at a time and shows its name in the sidebar. **Stop** ends that session. **Revoke** ends it and disables Computer Use for every bot. Akeru keeps screenshots, typed text, window titles, and application content out of stored runtime events.
+## Enable tools for a bot
 
-Akeru enables each installed plugin for every bot by default. Use a bot's **Plugins** setting to disable it for that bot. A provider change starts a fresh provider session with the same enabled plugins.
+Akeru enables a new plugin for every bot by default. Open the bot's **Tools** setting to disable it
+for that bot. Changing the bot's provider starts a fresh provider session with the same enabled tools.
 
-Ask the agent to add a Custom MCP server when a connector is not in the directory. Existing Custom MCP servers remain under **Installed**, where you can edit, disable, or delete them. Akeru stores no plugin credentials in the directory or MCP registry. Keep credentials in the host environment or the service sign-in flow.
+## Custom MCP servers
+
+Use **Add server** under **Custom MCP servers** when a connector is not in the directory. Installed
+servers can be edited, disabled, or removed from the same section.
+
+Akeru does not store plugin credentials in the public directory or MCP registry. Keep credentials in
+the environment server or the service's sign-in flow.
+
+## Codex Computer Use
+
+Codex Computer Use runs only on the local Mac. It does not use a hosted desktop. macOS requests
+Screen Recording and Accessibility access when the helper needs them.
+
+Only one bot can control the Mac at a time. **Stop** ends the current session. **Revoke** ends it and
+disables Computer Use for every bot. Akeru excludes screenshots, typed text, window titles, and app
+content from stored runtime events.

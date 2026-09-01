@@ -1,64 +1,72 @@
 # Install Akeru Bot
 
-Akeru Bot is a web and desktop GUI for running coding agents on your machine.
+Akeru Bot runs on your machine. The desktop app includes the server. The command-line package runs
+the same server for web and remote clients.
 
-## Requirements
+## Desktop app
 
-Node.js `^22.16 || ^23.11 || >=24.10` on the machine that runs the Akeru Bot server.
+Download the current installer from
+[GitHub Releases](https://github.com/opencoredev/akeru-bot/releases).
 
-At least one provider CLI, installed and authenticated. See [Providers](#providers) below.
+- macOS: Apple silicon DMG
+- Windows: Windows 10 or 11 x64 installer
+- Linux: x86_64 AppImage
 
-## Run Without Installing
+Open the app, add a project, then open **Settings > Providers** to connect an account. The desktop
+app manages the local server.
+
+## Command-line server
+
+The command-line server requires Node.js `^22.16 || ^23.11 || >=24.10`.
+
+Run the latest release without installing it globally:
 
 ```bash
 npx akeru-bot@latest
 ```
 
-This starts the Akeru Bot server on your machine and opens the local web app. Use
-`npx akeru-bot@latest --help` for the full CLI reference.
+The command starts the server and opens the local web app. Run this for the complete command list:
 
-## Desktop App
+```bash
+npx akeru-bot@latest --help
+```
 
-Download the latest installer for your platform from
-[GitHub Releases](https://github.com/opencoredev/akeru-bot/releases).
+Use the [background service](./background-service.md) when the server must stay available after you
+close the terminal.
 
-## Providers
+## Connect a subscription
 
-Akeru Bot drives provider CLIs; it does not ship them. Install the CLI for each provider you want
-to use, then authenticate it.
+Open **Settings > Providers** on any connected client. The **Subscriptions** section supports:
 
-| Provider   | CLI                                                   | Default binary | Log in with           |
-| ---------- | ----------------------------------------------------- | -------------- | --------------------- |
-| Codex      | [Codex CLI](https://developers.openai.com/codex/cli)  | `codex`        | `codex login`         |
-| Claude     | [Claude Code](https://claude.com/product/claude-code) | `claude`       | `claude auth login`   |
-| Grok Build | [Grok Build CLI](https://x.ai/cli)                    | `grok`         | `grok login`          |
-| OpenCode   | [OpenCode](https://opencode.ai)                       | `opencode`     | `opencode auth login` |
+| Account | Supported access |
+| --- | --- |
+| ChatGPT | Plus, Pro, Business, Enterprise, or Edu |
+| Claude | Pro or Max |
+| Grok | Shared xAI login |
+| Kimi For Coding | Kimi For Coding plan |
 
-Codex and Claude are on by default. Grok Build and OpenCode are off by default; turn
-them on in **Settings** → the provider's card when you want to use them.
+Select **Connect** and finish the provider's sign-in flow. ChatGPT, Grok, and Kimi use a device code.
+Claude asks you to paste the returned authorization code into Akeru.
 
-Run the login command on the machine running the Akeru Bot server, not on the device you browse
-from.
+The environment server owns the connection, so you sign in once per environment. It stores access
+and refresh tokens outside the workspace. Web, desktop, and mobile clients only receive connection
+status and sign-in progress.
 
-### Binary Discovery
+After sign-in, select **Check OAuth** to test the stored login. Use **Reconnect** after a revoked or
+expired login. Akeru cannot verify whether an xAI login includes SuperGrok or X Premium+.
 
-Each provider CLI must be on the server's `PATH`, or have an explicit binary path set in
-**Settings** → the provider instance → **Binary path**. Use the explicit path when a version
-manager or a non-standard install location keeps the CLI off the `PATH` of the shell that
-started Akeru Bot.
+## What Akeru runs
 
-### When Auth Is Needed
+Codex and Kimi use Akeru's custom Mastra-based runtime. Akeru supplies the workspace, memory,
+plugins, approval rules, and subscription access for each thread.
 
-Provider auth is required before you start a session with that provider, not before you start
-Akeru Bot. You can install Akeru Bot, open it, and add providers afterwards. A provider that is not
-authenticated shows its status in **Settings** and fails at session start with the login command
-to run.
+Claude, Grok, and OpenCode use their provider adapters. These adapters keep provider-specific
+session and permission behavior behind the same Akeru thread interface.
 
-For multi-account setups, see [Codex](./providers-codex.md) and [Claude](./providers-claude.md).
+## Next steps
 
-## Next Steps
-
-- [Permission modes](./permission-modes.md): how much Akeru Bot asks before acting
-- [Remote access](./remote-access.md): connect from a phone, tablet, or another desktop
-- [Keeping Akeru Bot in sync](./updating.md): client and server version skew
-- [Running in the background](./background-service.md): Linux background service
+- [Configure bots](./bots.md)
+- [Choose a permission mode](./permission-modes.md)
+- [Connect another device](./remote-access.md)
+- [Use Codex](./providers-codex.md)
+- [Use Claude](./providers-claude.md)

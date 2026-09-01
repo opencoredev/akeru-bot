@@ -1,7 +1,6 @@
 # Remote access
 
-Use remote access to connect a phone, tablet, browser, or desktop app to an Akeru Bot server that you
-control.
+Connect a phone, tablet, browser, or desktop app directly to an Akeru server that you control.
 
 ## Pair with a running server
 
@@ -11,8 +10,8 @@ Run this on the server machine:
 npx akeru-bot pair
 ```
 
-The command finds the running server, creates a one-time pairing credential, and prints a URL and QR
-code. The other device must be able to reach the address in that URL.
+The command finds the server and prints a one-time pairing URL and QR code. The other device must be
+able to reach the address in that URL.
 
 For Tailscale HTTPS, run:
 
@@ -20,93 +19,83 @@ For Tailscale HTTPS, run:
 npx akeru-bot pair --tailscale
 ```
 
-This configures Tailscale Serve when needed and prints a pairing URL for the machine's HTTPS
-MagicDNS address.
+Akeru configures Tailscale Serve when needed and prints a link for the machine's HTTPS MagicDNS
+address.
 
-Treat a pairing URL like a password. The credential expires and ordinary pairing links work once.
+Treat a pairing link like a password. The default command creates a link that expires and works once.
 
-## Desktop network access
+## Create a link from the desktop app
 
-1. Open **Settings** and select **Connections**.
-2. Enable **Network access** under **This environment**.
-3. Select a reachable LAN, Tailscale, or custom HTTPS endpoint.
-4. Select **Create Link**.
+1. Open **Settings > Connections**.
+2. Under **This environment**, choose a reachable LAN, Tailscale, or custom HTTPS endpoint.
+3. Set the endpoint as the default when needed.
+4. Select **Create link**.
 5. Open the link on the other device.
 
-A loopback address works only on the same machine. A LAN address requires both devices to reach the
-same network. A browser loaded over HTTPS can connect only to an HTTPS and WSS server.
+A loopback address works only on the server machine. A LAN address requires both devices to reach
+the same network. A browser loaded over HTTPS can connect only to an HTTPS and WSS endpoint.
 
-The client connects directly to the address in the link. Akeru Bot does not proxy the connection
-through a hosted service.
+The client connects to the selected endpoint. Akeru does not proxy the session through a hosted
+service.
 
-## Headless server
+## Run a headless server
 
-Run a server without the desktop app:
+Bind the server to the machine's Tailscale address:
 
 ```bash
 npx akeru-bot serve --host "$(tailscale ip -4)"
 ```
 
-The command prints the server address, pairing credential, URL, and QR code.
-
-To let Akeru Bot configure Tailscale Serve, run:
+Or let Akeru configure Tailscale Serve:
 
 ```bash
 npx akeru-bot serve --tailscale-serve
 ```
 
-Use `--tailscale-serve-port` to choose another HTTPS port. Use `akeru serve --help` for the full
-flag list.
+Use `--tailscale-serve-port` to select another HTTPS port. Run this for all server flags:
 
-## Desktop-managed SSH
+```bash
+npx akeru-bot serve --help
+```
 
-The desktop app can start or reuse a server on an SSH host.
+## Connect through SSH
 
-1. Open **Settings** and select **Connections**.
+The desktop app can start or reuse an Akeru server on an SSH host.
+
+1. Open **Settings > Connections**.
 2. Select **Add environment**.
-3. Select the SSH flow.
+3. Select the SSH connection.
 4. Enter a target such as `user@example.com`.
 5. Confirm the launch.
 
 The desktop app starts the remote server and opens a local port forward. The remote machine owns its
-projects, threads, files, terminals, git state, and provider sessions.
+projects, threads, files, terminals, Git state, subscriptions, and provider sessions.
 
-The SSH launcher requires a compatible Node.js version on the remote host:
-
-```text
-^22.16 || ^23.11 || >=24.10
-```
-
-Check the non-interactive shell if launch fails:
+The remote host needs Node.js `^22.16 || ^23.11 || >=24.10`. Check the non-interactive shell when
+startup fails:
 
 ```bash
 ssh user@example.com 'sh -lc "command -v node && node --version"'
 ```
 
-Configure the remote version manager so that command prints a compatible Node.js version.
+Configure the remote version manager until that command prints a supported Node.js version.
 
-## Saved environments
+## Manage saved access
 
-After pairing, the client stores a bearer credential for that environment. It reconnects without
-reusing the original pairing URL.
+After pairing, the client stores a bearer credential for the environment. It reconnects without the
+original pairing link.
 
-Use `akeru auth` to inspect sessions, create another pairing link, or revoke access:
+Inspect sessions, create links, and revoke access from the command line:
 
 ```bash
 npx akeru-bot auth --help
 ```
 
-Remove a saved environment from **Connections** on web or desktop, or **Environments** on mobile.
-This removes the local saved connection. Revoke the server session when the device should no longer
-have access.
+Web and desktop show saved connections under **Connections**. Mobile shows them under
+**Environments**. Removing a saved connection deletes it from that client. Revoke the server session
+when the device must lose access.
 
-## Security notes
+Prefer a private network such as Tailscale. Do not expose an HTTP server directly to the public
+internet. Use HTTPS and WSS across untrusted networks.
 
-- Prefer a private network such as Tailscale.
-- Do not expose an HTTP server directly to the public internet.
-- Use HTTPS and WSS across untrusted networks.
-- Revoke links or sessions that you no longer trust.
-- Finish active work before updating a remote server because the server restarts.
-
-See [background service](./background-service.md) for a Linux server that must remain available
-after logout.
+See [Running Akeru Bot in the background](./background-service.md) for an unattended server.

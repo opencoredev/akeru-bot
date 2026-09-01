@@ -1,81 +1,68 @@
-# Keeping Akeru Bot in Sync
+# Keep the app and server in sync
 
-The Akeru Bot web or desktop app and the server it connects to work best when they use the same
-version. If they do not match, Akeru Bot shows a warning with the right update option for that server.
+Akeru works best when a client and its connected environment server use the same version. A version
+mismatch appears above the composer and under **Settings > Connections**.
 
-## Where to Find the Update
+Dismissing the composer notice hides that reminder for the two current versions. It does not update
+the server. Connections still shows the mismatch.
 
-You may see the warning in either of these places:
+## Before an update
 
-- above the message box in the current conversation
-- **Settings** → **Connections**, beside the affected connection
+Let active agent work and terminal commands finish. A server update interrupts the connection and
+can stop work that is still running. It does not remove threads, settings, or project files.
 
-Dismissing the conversation warning only hides that reminder for those two versions. It does not
-update the server, and the version difference remains visible in Connections.
+## Update the environment
 
-## Before You Update
+The available action depends on how the environment started.
 
-Let active agent work and terminal commands finish first. Updating restarts the server, so the
-connection will disappear briefly and work that is still running may be interrupted.
+- A supported background service can offer an update action in Akeru. Keep the client open while it
+  downloads, verifies, restarts, and reconnects.
+- A desktop-managed environment tells you to update the desktop app on the machine that owns the
+  server.
+- A command-line environment offers **Copy update command**. Run the copied command on the server
+  machine with its normal startup flags.
 
-The update does not remove saved threads, settings, or project files.
+The manual command pins the server to the client version:
 
-## Choose the Action You See
+```bash
+npx akeru-bot@<client-version>
+```
 
-| Action                     | What to do                                                                                                                                                                    |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Available for the Akeru Bot Linux background service. Select the button and leave Akeru Bot open while it prepares, tests, restarts, and reconnects.                          |
-| **Update the desktop app** | Open the Akeru Bot desktop app on the machine that runs the server and install the app update there. Reopen it if needed.                                                     |
-| **Copy update command**    | Copy the command, open a terminal on the server machine, stop the current Akeru Bot server, and relaunch it with the copied command and any startup options you normally use. |
+For the background service, pin the same version like this:
 
-The available action depends on how that server was started. Akeru Bot does not update connected
-servers silently in the background.
-
-An older background-service launcher may ask you to run the exact
-`npx akeru-bot@<version> service update` command on the server machine. That one local update installs the
-rollback support needed for later remote updates, including versions that change the database.
-
-After selecting **Update**, the notice becomes a live status line: **Downloading…** while the new
-version is fetched and verified, then **Restarting…** while the server restarts into it. The same
-status appears in the conversation and in Connections, so navigating between them does not lose the
-update. A failure remains visible with its error and an option to retry.
-
-**Copy update command** gives you `npx akeru-bot@<client-version>`, which relaunches the server directly
-at the matching version. Add whatever startup options you normally use.
-
-If the server instead runs as the Akeru Bot background service, update the service on the host and
-pin the same version:
-
-```sh
+```bash
 npx akeru-bot@<client-version> service update
 ```
 
-`service update` installs the version of the CLI that invoked it, so `npx akeru-bot@latest service update`
-only resolves the skew when your client happens to be on the latest release. The exact version from
-the warning always works.
+`service update` installs the version of the package that invoked it. `@latest` only resolves a
+mismatch when the client already uses the latest release.
 
-See [Running Akeru Bot in the Background](./background-service.md) for install, status, and removal
-commands.
+An older launcher can ask for one exact local service update before Akeru can perform future remote
+updates safely.
 
-## After the Update
+## Follow progress
 
-Keep the web or desktop app open while the server restarts. The update completes only after the
-service launcher reports that exact update committed and the replacement server is ready to accept
-commands. A rollback is reported immediately instead of waiting for a generic reconnect timeout.
+The notice shows **Downloading…** while Akeru fetches and verifies the candidate. It shows
+**Restarting…** while the replacement server starts. The same state appears in the composer and
+Connections.
 
-If a step fails:
+A failed update stays visible with its error and retry action. A rollback appears as soon as the
+launcher returns to the previous version.
+
+If an update fails:
 
 1. Retry the offered action once.
-2. Make sure you updated the machine named in the warning, not only the device you are using.
-3. For a command-line server, relaunch it with `npx akeru-bot@<client-version>`, replacing
-   `<client-version>` with the client version shown in the warning.
+2. Confirm that you updated the machine named in the notice.
+3. Relaunch a command-line server with `npx akeru-bot@<client-version>`.
 
-## The Mobile App
+See [Run Akeru in the background](./background-service.md) for service commands.
 
-The mobile app keeps itself current on its own. When it finds a new version, it downloads it in the
-background and installs it automatically the next time you leave the app. Unsent drafts and queued
-messages are saved before the restart. Only if the app stays open long enough that the update never
-gets that chance does it ask whether to install right away; choosing **Later** is safe and keeps the
-automatic install armed.
+## Mobile updates
 
-For remote connection setup and access troubleshooting, see [Remote Access](./remote-access.md).
+The mobile app downloads its own update in the background and installs it after you leave the app.
+It saves unsent drafts and queued messages before restart.
+
+If the app stays open for too long to install the update, it asks whether to install now. **Later**
+keeps the pending automatic install.
+
+See [Remote access](./remote-access.md) for connection setup.
