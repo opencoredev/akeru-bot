@@ -33,6 +33,18 @@ describe("BotThreadLanding message formatting", () => {
     expect(groupSource).not.toContain("justify-end gap-4");
   });
 
+  it("renders the shared approval card in bot and group threads", () => {
+    const sources = ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"].map((file) =>
+      NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8"),
+    );
+
+    for (const source of sources) {
+      expect(source).toContain("<BotApprovalPrompt");
+      expect(source).toContain("useRosterPendingApproval(runtime.linkedThreadRef)");
+      expect(source).toContain("pendingApproval !== null ||");
+    }
+  });
+
   it("mounts the voice action in the live bot chat header", () => {
     const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
 
