@@ -10,6 +10,11 @@ export const releasePackageNames = [
 ] as const;
 
 export const release = tegami({
+  ignore: ["@t3tools/mobile"],
+  npm: {
+    bumpDep: () => false,
+    updateLockFile: false,
+  },
   groups: {
     akeru: {
       syncBump: true,

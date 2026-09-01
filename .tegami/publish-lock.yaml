@@ -1,0 +1,59 @@
+core:changelogs:
+  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Ship the first stable Akeru Bot release\n\nPackage the merged Akeru Bot features for CLI and desktop distribution.\n"
+    filename: 2026-09-01-stable-release.md
+    v: 0.0.0
+core:packages:
+  - id: npm:@t3tools/monorepo
+    updated: false
+  - id: npm:@t3tools/oxlint-plugin-t3code
+    updated: false
+  - changelogIds:
+      - 2026-09-01-stable-release.md
+    id: npm:@t3tools/desktop
+    updated: true
+  - id: npm:@t3tools/scripts
+    updated: false
+  - changelogIds:
+      - 2026-09-01-stable-release.md
+    id: npm:@t3tools/web
+    updated: true
+  - changelogIds:
+      - 2026-09-01-stable-release.md
+    id: npm:akeru-bot
+    updated: true
+  - id: npm:@t3tools/marketing
+    updated: false
+  - id: npm:akeru-feedback
+    updated: false
+  - id: npm:@t3tools/client-runtime
+    updated: false
+  - changelogIds:
+      - 2026-09-01-stable-release.md
+    id: npm:@t3tools/contracts
+    updated: true
+  - id: npm:effect-codex-app-server
+    updated: false
+  - id: npm:@t3tools/shared
+    updated: false
+  - id: npm:effect-acp
+    updated: false
+  - id: npm:@t3tools/ssh
+    updated: false
+  - id: npm:@t3tools/tailscale
+    updated: false
+npm:packages:
+  - id: npm:@t3tools/monorepo
+  - id: npm:@t3tools/oxlint-plugin-t3code
+  - id: npm:@t3tools/desktop
+  - id: npm:@t3tools/scripts
+  - id: npm:@t3tools/web
+  - id: npm:akeru-bot
+  - id: npm:@t3tools/marketing
+  - id: npm:akeru-feedback
+  - id: npm:@t3tools/client-runtime
+  - id: npm:@t3tools/contracts
+  - id: npm:effect-codex-app-server
+  - id: npm:@t3tools/shared
+  - id: npm:effect-acp
+  - id: npm:@t3tools/ssh
+  - id: npm:@t3tools/tailscale
