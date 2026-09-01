@@ -24,7 +24,7 @@ function assertOmits(haystack: string, needle: string, message: string): void {
   if (haystack.toLowerCase().includes(needle.toLowerCase())) throw new Error(message);
 }
 
-const releaseWorkflow = read(".depot/workflows/release.yml");
+const releaseWorkflow = read(".github/workflows/release.yml");
 const versionPackagesWorkflow = read(".depot/workflows/version-packages.yml");
 const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
 const ciWorkflow = read(".depot/workflows/ci.yml");
@@ -40,7 +40,7 @@ for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
   }
 }
 
-for (const relativePath of [".github/workflows/ci.yml", ".github/workflows/release.yml"] as const) {
+for (const relativePath of [".github/workflows/ci.yml"] as const) {
   if (NodeFS.existsSync(NodePath.join(repoRoot, relativePath))) {
     throw new Error(`GitHub Actions still owns ${relativePath}; move it to .depot/workflows.`);
   }
@@ -109,9 +109,9 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: depot-macos-15", "Depot macOS runner"],
-  ["runner: depot-windows-2025-8", "Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-8", "Depot Linux runner"],
+  ["runner: macos-15", "GitHub-hosted macOS runner"],
+  ["runner: windows-2025", "GitHub-hosted Windows runner"],
+  ["runner: ubuntu-24.04", "GitHub-hosted Linux runner"],
   ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
@@ -156,9 +156,9 @@ for (const [needle, label] of [
 
 assertContains(ciWorkflow, "runs-on: depot-ubuntu-24.04-8", "CI does not use Depot runners.");
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
-assertOmits(releaseWorkflow, "runner: macos-15", "GitHub-hosted macOS runner");
-assertOmits(releaseWorkflow, "runner: windows-2025", "GitHub-hosted Windows runner");
-assertOmits(releaseWorkflow, "runner: ubuntu-24.04", "GitHub-hosted Linux runner");
+assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
+assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");
+assertOmits(releaseWorkflow, "runner: depot-ubuntu-24.04-8", "Depot Linux runner");
 assertOmits(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',
@@ -171,6 +171,7 @@ assertContains(
 );
 
 for (const relativePath of [
+  ".depot/workflows/release.yml",
   ".github/workflows/deploy-relay.yml",
   ".github/workflows/desktop-macos-preview.yml",
   ".github/workflows/mobile-eas-preview.yml",

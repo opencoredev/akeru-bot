@@ -30,7 +30,9 @@ release announcements.
 ## Depot setup
 
 CI and release smoke run on Depot CI. Code Access is already installed for `opencoredev/akeru-bot`.
-GitHub Actions no longer owns those jobs. All Depot jobs use a Depot runner label:
+GitHub Actions owns the publishing workflow because Depot does not provide the macOS runner and
+rejects the Windows runner needed for stable desktop artifacts. All Depot smoke jobs use a Depot
+runner label:
 
 - Linux uses the 8-vCPU `depot-ubuntu-24.04-8` runner.
 - Windows uses the 8-vCPU `depot-windows-2025-8` runner.
