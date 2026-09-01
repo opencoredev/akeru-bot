@@ -10,10 +10,12 @@ import {
   createBotWorkspace,
   createRemoteBotWorkspace,
   daytona,
+  e2b,
   type AkeruRemoteSession,
   isRemoteBotSandbox,
   upstash,
   upstashWorkspaceState,
+  vercel,
   vercelWorkspaceState,
 } from "./botWorkspace.ts";
 
@@ -22,6 +24,7 @@ function remoteSession(providerId: string): AkeruRemoteSession {
     providerId,
     inspect: async () => "running",
     run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+    browserEndpoint: async () => ({ url: "https://browser.example", requestHeaders: {} }),
     wake: async () => undefined,
     sleep: async () => undefined,
     destroy: async () => undefined,
@@ -153,6 +156,10 @@ describe("createBotWorkspace", () => {
       pause,
       start,
       delete: vi.fn(async () => undefined),
+      getPreviewLink: vi.fn(async () => ({
+        url: "https://9223-daytona.example",
+        token: "daytona-token",
+      })),
       process: { executeCommand: vi.fn() },
     } as unknown as import("@daytona/sdk").Sandbox;
     const client = {
@@ -167,6 +174,46 @@ describe("createBotWorkspace", () => {
     expect(pause).toHaveBeenCalledOnce();
     expect(start).toHaveBeenCalledOnce();
     expect(await session.inspect()).toBe("running");
+    await expect(session.browserEndpoint(9223)).resolves.toEqual({
+      url: "https://9223-daytona.example/?DAYTONA_SANDBOX_AUTH_KEY=daytona-token",
+      requestHeaders: {},
+    });
+  });
+
+  it("keeps E2B browser ingress private", async () => {
+    const session = e2b({
+      sandboxId: "e2b-id",
+      trafficAccessToken: "e2b-token",
+      getHost: (port: number) => `${port}-e2b.example`,
+      commands: { run: vi.fn() },
+      pause: vi.fn(),
+      kill: vi.fn(),
+    } as unknown as import("e2b").Sandbox);
+
+    await expect(session.browserEndpoint(9223)).resolves.toEqual({
+      url: "https://9223-e2b.example",
+      requestHeaders: { "e2b-traffic-access-token": "e2b-token" },
+    });
+  });
+
+  it("adds the Vercel browser port without removing existing routes", async () => {
+    const update = vi.fn(async () => undefined);
+    const session = vercel({
+      name: "vercel-id",
+      status: "running",
+      routes: [{ port: 3000 }],
+      update,
+      domain: (port: number) => `https://${port}-vercel.example`,
+      runCommand: vi.fn(),
+      stop: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as import("@vercel/sandbox").Sandbox);
+
+    await expect(session.browserEndpoint(9223)).resolves.toEqual({
+      url: "https://9223-vercel.example",
+      requestHeaders: {},
+    });
+    expect(update).toHaveBeenCalledWith({ ports: [3000, 9223] });
   });
 
   it("resumes a paused Upstash workspace after reattach", async () => {
@@ -180,6 +227,11 @@ describe("createBotWorkspace", () => {
       resume,
       pause: vi.fn(async () => undefined),
       delete: vi.fn(async () => undefined),
+      getPublicURL: vi.fn(async () => ({
+        url: "https://9223-upstash.example",
+        port: 9223,
+        token: "upstash-token",
+      })),
       exec: { command: vi.fn() },
     } as unknown as import("@upstash/box").Box;
     const session = upstash(box);
@@ -188,6 +240,42 @@ describe("createBotWorkspace", () => {
 
     expect(resume).toHaveBeenCalledOnce();
     expect(await session.inspect()).toBe("running");
+    await expect(session.browserEndpoint(9223)).resolves.toEqual({
+      url: "https://9223-upstash.example",
+      requestHeaders: { authorization: "Bearer upstash-token" },
+    });
+  });
+
+  it("fails closed when a remote provider omits browser credentials", async () => {
+    const e2bSession = e2b({
+      sandboxId: "e2b-id",
+      getHost: vi.fn(),
+      commands: { run: vi.fn() },
+      pause: vi.fn(),
+      kill: vi.fn(),
+    } as unknown as import("e2b").Sandbox);
+    const upstashSession = upstash({
+      id: "upstash-id",
+      getPublicURL: vi.fn(async () => ({ url: "https://upstash.example", port: 9223 })),
+    } as unknown as import("@upstash/box").Box);
+    const daytonaSession = daytona(
+      {} as import("@daytona/sdk").Daytona,
+      {
+        id: "daytona-id",
+        getPreviewLink: vi.fn(async () => ({
+          url: "https://daytona.example",
+          token: "",
+        })),
+      } as unknown as import("@daytona/sdk").Sandbox,
+    );
+
+    await expect(e2bSession.browserEndpoint(9223)).rejects.toThrow("no traffic access token");
+    await expect(daytonaSession.browserEndpoint(9223)).rejects.toThrow(
+      "no authenticated preview URL",
+    );
+    await expect(upstashSession.browserEndpoint(9223)).rejects.toThrow(
+      "no authenticated public URL",
+    );
   });
 
   it("does not classify unavailable provider states as running", () => {

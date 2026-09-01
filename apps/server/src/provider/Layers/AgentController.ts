@@ -964,6 +964,15 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && delegationRuntime
           ? {
+              sendToUser: async (request) => {
+                const active = sessions.get(key);
+                const turnId = active?.activeTurn?.turnId;
+                if (!turnId) throw new Error("User messaging requires an active turn.");
+                return delegationRuntime!.sendToUser(
+                  { threadId, turnId, botId: input.botId!, depth: 0 },
+                  request,
+                );
+              },
               delegation: {
                 send: async (request) => {
                   const active = sessions.get(key);

@@ -19,11 +19,17 @@ export const REMOTE_BOT_SANDBOXES = ["e2b", "daytona", "vercel", "upstash"] as c
 export type RemoteBotSandbox = (typeof REMOTE_BOT_SANDBOXES)[number];
 export type AkeruWorkspaceState = "running" | "sleeping" | "missing";
 
+export interface AkeruBrowserEndpoint {
+  readonly url: string;
+  readonly requestHeaders: Readonly<Record<string, string>>;
+}
+
 export interface AkeruBotWorkspace {
   readonly id: string;
   readonly provider: BotSandbox;
   readonly providerId?: string;
   readonly workspace: Workspace;
+  readonly browserEndpoint?: (port: number) => Promise<AkeruBrowserEndpoint>;
   readonly inspect: () => Promise<AkeruWorkspaceState>;
   readonly wake: () => Promise<void>;
   readonly sleep: () => Promise<void>;
@@ -38,6 +44,7 @@ export interface AkeruRemoteSession {
     args: readonly string[],
     options?: { cwd?: string; env?: Record<string, string>; timeout?: number },
   ) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
+  readonly browserEndpoint: (port: number) => Promise<AkeruBrowserEndpoint>;
   readonly wake: () => Promise<void>;
   readonly sleep: () => Promise<void>;
   readonly destroy: () => Promise<void>;
@@ -142,6 +149,7 @@ export async function createRemoteBotWorkspace(
     provider: input.sandbox,
     providerId: session.providerId,
     workspace,
+    browserEndpoint: session.browserEndpoint,
     inspect: session.inspect,
     wake: () => workspace.init(),
     sleep: () => workspace.stop(),
@@ -254,7 +262,12 @@ const commandLine = (command: string, args: readonly string[]) =>
 async function create(provider: RemoteBotSandbox, id: string): Promise<AkeruRemoteSession> {
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
-    return e2b(await Sandbox.create({ lifecycle: { onTimeout: "pause" } }));
+    return e2b(
+      await Sandbox.create({
+        lifecycle: { onTimeout: "pause" },
+        network: { allowPublicTraffic: false },
+      }),
+    );
   }
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
@@ -287,7 +300,7 @@ async function open(provider: RemoteBotSandbox, id: string): Promise<AkeruRemote
   return upstash(await Box.get(id));
 }
 
-function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
+export function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
   let sandbox = initial;
   const providerId = sandbox.sandboxId;
   return {
@@ -304,6 +317,14 @@ function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
         ...(options?.timeout ? { timeoutMs: options.timeout } : {}),
       });
       return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+    },
+    browserEndpoint: async (port) => {
+      const token = sandbox.trafficAccessToken?.trim();
+      if (!token) throw new Error(`E2B workspace '${providerId}' has no traffic access token.`);
+      return {
+        url: `https://${sandbox.getHost(port)}`,
+        requestHeaders: { "e2b-traffic-access-token": token },
+      };
     },
     wake: async () => {
       const { Sandbox } = await import("e2b");
@@ -338,6 +359,16 @@ export function daytona(
       );
       return { exitCode: result.exitCode, stdout: result.result, stderr: "" };
     },
+    browserEndpoint: async (port) => {
+      const preview = await sandbox.getPreviewLink(port);
+      const token = preview.token?.trim();
+      if (!preview.url || !token) {
+        throw new Error(`Daytona workspace '${sandbox.id}' has no authenticated preview URL.`);
+      }
+      const url = new URL(preview.url);
+      url.searchParams.set("DAYTONA_SANDBOX_AUTH_KEY", token);
+      return { url: url.toString(), requestHeaders: {} };
+    },
     wake: async () => {
       if ((await sandbox.refreshData(), String(sandbox.state)) !== "started") {
         await sandbox.start();
@@ -359,7 +390,7 @@ export function vercelWorkspaceState(
   return "sleeping";
 }
 
-function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession {
+export function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession {
   let sandbox = initial;
   return {
     providerId: sandbox.name,
@@ -381,6 +412,12 @@ function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession 
         stdout: await result.stdout(),
         stderr: await result.stderr(),
       };
+    },
+    browserEndpoint: async (port) => {
+      if (!sandbox.routes.some((route) => route.port === port)) {
+        await sandbox.update({ ports: [...sandbox.routes.map((route) => route.port), port] });
+      }
+      return { url: sandbox.domain(port), requestHeaders: {} };
     },
     wake: async () => {
       const { Sandbox } = await import("@vercel/sandbox");
@@ -418,6 +455,17 @@ export function upstash(box: import("@upstash/box").Box): AkeruRemoteSession {
         `${options?.cwd ? `cd ${quote(options.cwd)} && ` : ""}${line}`,
       );
       return { exitCode: result.exitCode ?? 1, stdout: result.result, stderr: "" };
+    },
+    browserEndpoint: async (port) => {
+      const preview = await box.getPublicURL(port, { bearerToken: true });
+      const token = preview.token?.trim();
+      if (!preview.url || !token) {
+        throw new Error(`Upstash workspace '${box.id}' has no authenticated public URL.`);
+      }
+      return {
+        url: preview.url,
+        requestHeaders: { authorization: `Bearer ${token}` },
+      };
     },
     wake: async () => {
       const current = await inspect();
