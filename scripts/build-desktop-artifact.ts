@@ -1309,7 +1309,11 @@ export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservin
 );
 
 const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSelfContained")(
-  function* (input: { readonly asarPath: string; readonly verbose: boolean }) {
+  function* (input: {
+    readonly asarPath: string;
+    readonly pluginCatalogPath: string;
+    readonly verbose: boolean;
+  }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
@@ -1330,6 +1334,10 @@ const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSel
     // is hoisted and should be physical. A future package-manager layout change
     // must not let the probe resolve through the build tree.
     yield* copyDirectoryPreservingSymlinks(extractedApp, probeApp);
+    yield* copyDirectoryPreservingSymlinks(
+      input.pluginCatalogPath,
+      path.join(probeRoot, "plugins"),
+    );
 
     // Guard the guard: if anything above the probe provides a node_modules, a
     // missing dependency would resolve there and the check would pass while the
@@ -2386,6 +2394,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
 
   yield* verifyPackagedBundleIsSelfContained({
     asarPath,
+    pluginCatalogPath: path.join(resourcesDir, "plugins"),
     verbose: input.verbose ?? false,
   });
 
