@@ -1,26 +1,43 @@
-import type { McpManager } from "@mastra/code-sdk/mcp/index";
+import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
+import { BotId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createAkeruCatalogToolHandlers } from "./AkeruCatalogToolHandlers.ts";
 
+const connectedStatus: McpServerStatus = {
+  name: "search",
+  connected: true,
+  toolCount: 1,
+  toolNames: ["search_web"],
+  transport: "http",
+};
+
+function options(manager: McpManager, overrides = {}) {
+  return {
+    mcpManager: manager,
+    getRequestHealth: () => undefined,
+    recordSuccess: vi.fn(),
+    recordFailure: vi.fn(),
+    getDependencies: async () => ({
+      dependentBots: [{ id: BotId.make("bot-akeru"), name: "Akeru" }],
+      dependentRoutines: [],
+    }),
+    now: () => "2026-09-01T02:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("Akeru catalog MCP tool handlers", () => {
   it("authenticates through the session manager and reports the authorization URL", async () => {
-    const status = {
-      name: "search",
-      connected: true,
-      toolCount: 1,
-      toolNames: ["search_web"],
-      transport: "http" as const,
-    };
+    const status = connectedStatus;
     const authenticateServer = vi.fn<McpManager["authenticateServer"]>(
       async (_serverId, options) => {
         options?.onAuthorizationUrl?.("https://example.com/authorize");
         return status;
       },
     );
-    const handlers = createAkeruCatalogToolHandlers({
-      authenticateServer,
-    } as unknown as McpManager);
+    const manager = { authenticateServer } as unknown as McpManager;
+    const handlers = createAkeruCatalogToolHandlers(options(manager));
     const emitProgress = vi.fn();
 
     await expect(
@@ -44,13 +61,7 @@ describe("Akeru catalog MCP tool handlers", () => {
   });
 
   it("restarts all or selected servers and fails on a disconnected server", async () => {
-    const status = {
-      name: "search",
-      connected: true,
-      toolCount: 1,
-      toolNames: ["search_web"],
-      transport: "http" as const,
-    };
+    const status = connectedStatus;
     const reload = vi.fn(async () => undefined);
     const reconnectServer = vi.fn<McpManager["reconnectServer"]>(async () => status);
     const manager = {
@@ -58,7 +69,7 @@ describe("Akeru catalog MCP tool handlers", () => {
       reconnectServer,
       getServerStatuses: () => [status],
     } as unknown as McpManager;
-    const handler = createAkeruCatalogToolHandlers(manager).RestartMcpServers!;
+    const handler = createAkeruCatalogToolHandlers(options(manager)).RestartMcpServers!;
     const emitProgress = vi.fn();
 
     await expect(handler({ input: {}, emitProgress })).resolves.toEqual({ servers: [status] });
@@ -81,5 +92,98 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("omits every catalog handler when no production manager exists", () => {
     expect(createAkeruCatalogToolHandlers()).toEqual({});
+  });
+
+  it("reports stored request evidence and never invents a green health result", async () => {
+    const manager = {
+      getServerStatuses: () => [connectedStatus],
+    } as unknown as McpManager;
+    const handler = createAkeruCatalogToolHandlers(
+      options(manager, {
+        getRequestHealth: () => ({
+          health: "failed" as const,
+          lastSuccessfulRequestAt: "2026-09-01T01:00:00.000Z",
+          lastFailedRequest: {
+            at: "2026-09-01T01:30:00.000Z",
+            message: "OAuth expired.",
+          },
+          nextRetryAt: "2026-09-01T02:30:00.000Z",
+        }),
+      }),
+    ).GetMcpServerStatus!;
+
+    await expect(
+      handler({ input: { serverId: "search" }, emitProgress: vi.fn() }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        connectionState: "connected",
+        healthTest: "failed",
+        authenticationExpiresAt: null,
+        lastSuccessfulRequestAt: "2026-09-01T01:00:00.000Z",
+        lastFailure: { at: "2026-09-01T01:30:00.000Z", message: "OAuth expired." },
+        nextRetryAt: "2026-09-01T02:30:00.000Z",
+        dependentBots: [{ id: "bot-akeru", name: "Akeru" }],
+        dependentRoutines: [],
+      }),
+    );
+  });
+
+  it.each(["TestMcpServer", "ReconnectMcpServer"] as const)(
+    "%s records a real reconnect result and reconciles the incident",
+    async (toolId) => {
+      const reconnectServer = vi.fn(async () => connectedStatus);
+      const manager = {
+        getServerStatuses: () => [connectedStatus],
+        reconnectServer,
+      } as unknown as McpManager;
+      const recordSuccess = vi.fn();
+      const onRecovery = vi.fn();
+      const handler = createAkeruCatalogToolHandlers(
+        options(manager, { recordSuccess, onRecovery }),
+      )[toolId]!;
+
+      await expect(
+        handler({ input: { serverId: "search" }, emitProgress: vi.fn() }),
+      ).resolves.toEqual(expect.objectContaining({ healthTest: "not-run", connected: true }));
+      expect(reconnectServer).toHaveBeenCalledWith("search");
+      expect(recordSuccess).toHaveBeenCalledWith("search", "2026-09-01T02:00:00.000Z");
+      expect(onRecovery).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("records and escalates a failed health test without returning green", async () => {
+    const failedStatus = { ...connectedStatus, connected: false, error: "OAuth expired." };
+    const manager = {
+      getServerStatuses: () => [connectedStatus],
+      reconnectServer: async () => failedStatus,
+    } as unknown as McpManager;
+    const recordFailure = vi.fn();
+    const onFailure = vi.fn();
+    const handler = createAkeruCatalogToolHandlers(
+      options(manager, { recordFailure, onFailure }),
+    ).TestMcpServer!;
+
+    await expect(handler({ input: { serverId: "search" }, emitProgress: vi.fn() })).rejects.toThrow(
+      "OAuth expired",
+    );
+    expect(recordFailure).toHaveBeenCalledWith(
+      "search",
+      "OAuth expired.",
+      "2026-09-01T02:00:00.000Z",
+    );
+    expect(onFailure).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an unknown server before a test can look healthy", async () => {
+    const manager = {
+      getServerStatuses: () => [],
+      reconnectServer: vi.fn(),
+    } as unknown as McpManager;
+    const handler = createAkeruCatalogToolHandlers(options(manager)).TestMcpServer!;
+
+    await expect(
+      handler({ input: { serverId: "missing" }, emitProgress: vi.fn() }),
+    ).rejects.toThrow("not configured");
+    expect(manager.reconnectServer).not.toHaveBeenCalled();
   });
 });

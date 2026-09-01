@@ -1,5 +1,8 @@
-import type { McpManager } from "@mastra/code-sdk/mcp/index";
-import type { AkeruToolId } from "@t3tools/contracts";
+import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
+import type { AkeruToolId, BotId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+
+import type { RequestHealthStatus } from "../subscription-auth/service.ts";
 
 export interface AkeruCatalogToolHandlerInput {
   readonly input: unknown;
@@ -7,6 +10,30 @@ export interface AkeruCatalogToolHandlerInput {
 }
 
 export type AkeruCatalogToolHandler = (input: AkeruCatalogToolHandlerInput) => Promise<unknown>;
+
+export interface AkeruMcpDependencies {
+  readonly dependentBots: ReadonlyArray<{ readonly id: BotId; readonly name: string }>;
+  readonly dependentRoutines: ReadonlyArray<string>;
+}
+
+export interface AkeruMcpHealthHandlerOptions {
+  readonly mcpManager: McpManager;
+  readonly getRequestHealth: (serverId: string) => RequestHealthStatus | undefined;
+  readonly recordSuccess: (serverId: string, at: string) => void;
+  readonly recordFailure: (serverId: string, message: string, at: string) => void;
+  readonly getDependencies: (serverId: string) => Promise<AkeruMcpDependencies>;
+  readonly onFailure?: (
+    serverId: string,
+    message: string,
+    dependencies: AkeruMcpDependencies,
+  ) => void | Promise<void>;
+  readonly onRecovery?: (
+    serverId: string,
+    dependencies: AkeruMcpDependencies,
+  ) => void | Promise<void>;
+  readonly authenticationExpiresAt?: (serverId: string) => string | undefined;
+  readonly now?: () => string;
+}
 
 function field(value: unknown, key: string): unknown {
   if (typeof value !== "object" || value === null) return undefined;
@@ -21,11 +48,96 @@ function requiredString(value: unknown, key: string): string {
   return candidate;
 }
 
-export function createAkeruCatalogToolHandlers(
-  mcpManager?: McpManager,
-): Partial<Record<AkeruToolId, AkeruCatalogToolHandler>> {
-  if (!mcpManager) return {};
+function serverStatus(mcpManager: McpManager, serverId: string): McpServerStatus {
+  const status = mcpManager.getServerStatuses().find((candidate) => candidate.name === serverId);
+  if (!status) throw new Error(`MCP server '${serverId}' is not configured for this bot.`);
+  return status;
+}
+
+function connectionState(status: McpServerStatus) {
+  if (status.disabled) return "disabled" as const;
+  if (status.authenticating) return "authenticating" as const;
+  if (status.connecting) return "connecting" as const;
+  if (status.connected) return "connected" as const;
+  if (status.needsAuth) return "authentication-required" as const;
+  return "failed" as const;
+}
+
+function healthResult(status: McpServerStatus, requestHealth: RequestHealthStatus | undefined) {
+  if (requestHealth?.health === "healthy" || requestHealth?.health === "recovered") {
+    return "passed" as const;
+  }
+  if (
+    requestHealth?.health === "failed" ||
+    requestHealth?.health === "failed-first-request" ||
+    status.error
+  ) {
+    return "failed" as const;
+  }
+  return "not-run" as const;
+}
+
+async function buildStatus(
+  options: AkeruMcpHealthHandlerOptions,
+  serverId: string,
+  status = serverStatus(options.mcpManager, serverId),
+) {
+  const requestHealth = options.getRequestHealth(serverId);
+  const dependencies = await options.getDependencies(serverId);
   return {
+    serverId,
+    connectionState: connectionState(status),
+    healthTest: healthResult(status, requestHealth),
+    connected: status.connected,
+    transport: status.transport,
+    toolCount: status.toolCount,
+    toolNames: status.toolNames,
+    needsAuthentication: status.needsAuth ?? false,
+    authenticationExpiresAt: options.authenticationExpiresAt?.(serverId) ?? null,
+    lastSuccessfulRequestAt: requestHealth?.lastSuccessfulRequestAt ?? null,
+    lastFailure:
+      requestHealth?.lastFailedRequest ??
+      (status.error ? { at: null, message: status.error } : null),
+    nextRetryAt: requestHealth?.nextRetryAt ?? null,
+    dependentBots: dependencies.dependentBots,
+    dependentRoutines: dependencies.dependentRoutines,
+  };
+}
+
+async function checkConnection(
+  options: AkeruMcpHealthHandlerOptions,
+  serverId: string,
+  emitProgress: AkeruCatalogToolHandlerInput["emitProgress"],
+  action: "Testing" | "Reconnecting",
+) {
+  serverStatus(options.mcpManager, serverId);
+  await emitProgress(`${action} MCP server '${serverId}'.`);
+  const status = await options.mcpManager.reconnectServer(serverId);
+  const at = options.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe());
+  const dependencies = await options.getDependencies(serverId);
+  if (!status.connected) {
+    const message = status.error ?? `MCP server '${serverId}' did not connect.`;
+    options.recordFailure(serverId, message, at);
+    await options.onFailure?.(serverId, message, dependencies);
+    throw new Error(message);
+  }
+  options.recordSuccess(serverId, at);
+  await options.onRecovery?.(serverId, dependencies);
+  return buildStatus(options, serverId, status);
+}
+
+export function createAkeruCatalogToolHandlers(
+  options?: AkeruMcpHealthHandlerOptions,
+): Partial<Record<AkeruToolId, AkeruCatalogToolHandler>> {
+  if (!options) return {};
+  const { mcpManager } = options;
+  return {
+    GetMcpServerStatus: async ({ input }) =>
+      buildStatus(options, requiredString(input, "serverId")),
+    TestMcpServer: async ({ input, emitProgress }) =>
+      checkConnection(options, requiredString(input, "serverId"), emitProgress, "Testing"),
+    ReconnectMcpServer: async ({ input, emitProgress }) =>
+      checkConnection(options, requiredString(input, "serverId"), emitProgress, "Reconnecting"),
     AuthenticateMcpServer: async ({ input, emitProgress }) => {
       const serverId = requiredString(input, "serverId");
       let authorizationUrl: string | undefined;

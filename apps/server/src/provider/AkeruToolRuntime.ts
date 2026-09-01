@@ -120,6 +120,9 @@ const BACKEND_NAMES: Record<
     | "CreateChannel"
     | "UpdateChannel"
     | "SendToUser"
+    | "GetMcpServerStatus"
+    | "TestMcpServer"
+    | "ReconnectMcpServer"
     | "AuthenticateMcpServer"
     | "RestartMcpServers"
   >,

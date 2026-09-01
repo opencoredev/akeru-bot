@@ -931,6 +931,11 @@ const make = (options?: AgentControllerLiveOptions) =>
         input.botSandbox && input.botSandbox !== "local" ? "cloud" : "local";
       const userComputerWorkspace =
         workspaceType === "local" && input.cwd ? resources.workspace : undefined;
+      const mcpManager = sessionResources.getMcpManager(key);
+      const mcpDependencies =
+        input.botId && input.botName
+          ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
+          : { dependentBots: [], dependentRoutines: [] };
       const toolSession: AkeruToolSession = {
         ...(input.botId ? { botId: input.botId } : {}),
         ...(input.botName ? { botName: input.botName } : {}),
@@ -939,7 +944,37 @@ const make = (options?: AgentControllerLiveOptions) =>
         workspace: resources.botWorkspace,
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
-        catalogHandlers: createAkeruCatalogToolHandlers(sessionResources.getMcpManager(key)),
+        catalogHandlers: createAkeruCatalogToolHandlers(
+          mcpManager
+            ? {
+                mcpManager,
+                getRequestHealth: (serverId) => subscriptionAuth.mcpRequestHealth(serverId),
+                recordSuccess: (serverId, at) =>
+                  subscriptionAuth.recordMcpRequestSuccess(serverId, at),
+                recordFailure: (serverId, message, at) =>
+                  subscriptionAuth.recordMcpRequestFailure(serverId, message, at),
+                getDependencies: async () => mcpDependencies,
+                onFailure: (serverId, message, dependencies) => {
+                  for (const bot of dependencies.dependentBots) {
+                    botInbox.ensureOpen({
+                      incidentKey: `access:mcp-${serverId}:${bot.id}`,
+                      kind: "connector-failure",
+                      botId: bot.id,
+                      botName: bot.name,
+                      taskOrRoutine: `${serverId} access`,
+                      lastFailure: message,
+                      nextAction: `Reconnect ${serverId}, then retry its failed request.`,
+                    });
+                  }
+                },
+                onRecovery: (serverId, dependencies) => {
+                  for (const bot of dependencies.dependentBots) {
+                    botInbox.resolve(`access:mcp-${serverId}:${bot.id}`);
+                  }
+                },
+              }
+            : undefined,
+        ),
         ...(input.botId && delegationRuntime
           ? {
               sendToUser: async (request) => {

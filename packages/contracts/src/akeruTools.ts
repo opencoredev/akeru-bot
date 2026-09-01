@@ -60,6 +60,9 @@ export const AkeruToolInputSchemas = {
   SendToUser: Schema.Struct({
     message: TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_COMMAND_MAX_CHARS)),
   }),
+  GetMcpServerStatus: McpServerIdInput,
+  TestMcpServer: McpServerIdInput,
+  ReconnectMcpServer: McpServerIdInput,
   AuthenticateMcpServer: McpServerIdInput,
   RestartMcpServers: Schema.Struct({
     serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
@@ -199,6 +202,11 @@ export const AKERU_TOOL_CATALOG = [
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
     approval: "send",
+  }),
+  define("GetMcpServerStatus", "bot-workspace", "Inspect an MCP server connection."),
+  define("TestMcpServer", "bot-workspace", "Run a real MCP server connection test."),
+  define("ReconnectMcpServer", "bot-workspace", "Reconnect one MCP server.", {
+    approval: "production",
   }),
   define("AuthenticateMcpServer", "bot-workspace", "Authenticate an MCP server.", {
     approval: "secrets",
