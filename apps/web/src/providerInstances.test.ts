@@ -105,6 +105,27 @@ describe("isProviderInstancePickerSelectable", () => {
     expect(missing && isProviderInstancePickerSelectable(missing)).toBe(false);
     expect(unauthenticated && isProviderInstancePickerSelectable(unauthenticated)).toBe(false);
   });
+
+  it("rejects disabled provider snapshots with explicit or omitted availability", () => {
+    const [available, availabilityOmitted] = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok_available",
+        status: "disabled",
+        availability: "available",
+      }),
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok_availability_omitted",
+        status: "disabled",
+      }),
+    ]);
+
+    expect(available && isProviderInstancePickerSelectable(available)).toBe(false);
+    expect(availabilityOmitted && isProviderInstancePickerSelectable(availabilityOmitted)).toBe(
+      false,
+    );
+  });
 });
 
 describe("isProviderInstancePickerVisible", () => {

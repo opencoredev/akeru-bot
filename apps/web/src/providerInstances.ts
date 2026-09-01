@@ -88,6 +88,7 @@ export function isProviderInstancePickerSelectable(entry: ProviderInstanceEntry)
     entry.enabled &&
     entry.isAvailable &&
     entry.installed &&
+    entry.status !== "disabled" &&
     entry.snapshot.auth.status !== "unauthenticated"
   );
 }
