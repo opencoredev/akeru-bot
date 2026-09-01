@@ -947,4 +947,51 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.equal(restored.partition.partitionId, workspaceId);
     }),
   );
+
+  it.effect("edits and pins memory with the legacy workspace identity", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const workspaceAccess = privateAccess("bot-legacy-workspace");
+      const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.projectId);
+      const partitions = yield* resolveMemoryArchivePartitions(workspaceAccess, "workspace");
+      const legacyWorkspaceId = partitions.find(
+        (partition) => partition.partitionId !== workspaceId,
+      )?.partitionId;
+      assert.isDefined(legacyWorkspaceId);
+
+      const rootId = AkeruMemoryRootId.make("legacy-workspace-root");
+      const initial = makeRevision("legacy-workspace-1", legacyWorkspaceId, {
+        rootId,
+        partition: {
+          tenantId: workspaceAccess.tenantId,
+          scope: "workspace",
+          partitionId: legacyWorkspaceId,
+        },
+        entityKind: "workspace",
+        entityId: AkeruMemoryEntityId.make(legacyWorkspaceId),
+        visibility: "shared",
+        sourceThreadId: null,
+        authorBotId: workspaceAccess.botId,
+        initiatingUserId: workspaceAccess.userId,
+        affectedBotIds: [workspaceAccess.botId!],
+      });
+      yield* repository.insert({ access: workspaceAccess, revision: initial });
+      yield* repository.revise({
+        access: workspaceAccess,
+        expectedRevision: 1,
+        revision: {
+          ...initial,
+          id: AkeruMemoryId.make("legacy-workspace-2"),
+          revision: 2,
+          fact: "Updated legacy workspace memory.",
+          pinned: true,
+          supersedesId: initial.id,
+        },
+      });
+
+      const current = yield* repository.getCurrent({ access: workspaceAccess, rootId });
+      assert.equal(current.fact, "Updated legacy workspace memory.");
+      assert.isTrue(current.pinned);
+    }),
+  );
 });
