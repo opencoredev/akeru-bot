@@ -8,6 +8,11 @@ import { McpServerId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
+import {
+  type AkeruBotWorkspace,
+  type AkeruRemoteSession,
+  createRemoteBotWorkspace,
+} from "./botWorkspace.ts";
 
 const directories = new Set<string>();
 
@@ -22,6 +27,18 @@ function workspace() {
     filesystem: new LocalFilesystem({ basePath: process.cwd() }),
     sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
   });
+}
+
+function localBotWorkspace(value: Workspace): AkeruBotWorkspace {
+  return {
+    id: value.id,
+    provider: "local",
+    workspace: value,
+    inspect: async () => "running",
+    wake: () => value.init(),
+    sleep: () => value.stop(),
+    destroy: () => value.destroy(),
+  };
 }
 
 function browser(overrides?: { reconnect?: () => Promise<void>; close?: () => Promise<void> }) {
@@ -61,7 +78,7 @@ describe("AkeruSessionResources", () => {
 
   it("shares one workspace and browser across thread sessions", async () => {
     const remote = workspace();
-    const makeRemoteWorkspace = vi.fn(async () => remote);
+    const makeRemoteWorkspace = vi.fn(async () => localBotWorkspace(remote));
     const sharedBrowser = browser();
     const makeBotBrowser = vi.fn(() => sharedBrowser);
     const resources = new AkeruSessionResources({
@@ -169,7 +186,7 @@ describe("AkeruSessionResources", () => {
       .mockReturnValueOnce(replacementBrowser);
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
-      makeRemoteWorkspace: async () => workspace(),
+      makeRemoteWorkspace: async () => localBotWorkspace(workspace()),
       makeBotBrowser,
       toMcpServerConfigs: () => ({}),
     });
@@ -193,8 +210,8 @@ describe("AkeruSessionResources", () => {
     const replacement = workspace();
     const makeRemoteWorkspace = vi
       .fn()
-      .mockResolvedValueOnce(failed)
-      .mockResolvedValueOnce(replacement);
+      .mockResolvedValueOnce(localBotWorkspace(failed))
+      .mockResolvedValueOnce(localBotWorkspace(replacement));
     const staleBrowser = browser();
     const replacementBrowser = browser();
     const makeBotBrowser = vi
@@ -230,7 +247,7 @@ describe("AkeruSessionResources", () => {
       .mockReturnValueOnce(replacementBrowser);
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
-      makeRemoteWorkspace: async () => workspace(),
+      makeRemoteWorkspace: async () => localBotWorkspace(workspace()),
       makeBotBrowser,
       toMcpServerConfigs: () => ({}),
     });
@@ -257,7 +274,7 @@ describe("AkeruSessionResources", () => {
     const sharedBrowser = browser();
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
-      makeRemoteWorkspace: async () => remote,
+      makeRemoteWorkspace: async () => localBotWorkspace(remote),
       makeBotBrowser: () => sharedBrowser,
       toMcpServerConfigs: () => ({}),
     });
@@ -273,14 +290,14 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it("destroys pooled workspaces and browsers during shutdown", async () => {
+  it("stops pooled workspaces and browsers during shutdown", async () => {
     const remote = workspace();
     const stop = vi.spyOn(remote, "stop");
     const destroy = vi.spyOn(remote, "destroy");
     const sharedBrowser = browser();
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
-      makeRemoteWorkspace: async () => remote,
+      makeRemoteWorkspace: async () => localBotWorkspace(remote),
       makeBotBrowser: () => sharedBrowser,
       toMcpServerConfigs: () => ({}),
     });
@@ -289,11 +306,54 @@ describe("AkeruSessionResources", () => {
     expect(stop).toHaveBeenCalledOnce();
 
     await resources.shutdown();
-    expect(destroy).toHaveBeenCalledOnce();
+    expect(destroy).not.toHaveBeenCalled();
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
     await expect(resources.acquire({ ...remoteInput, threadId: "late" })).rejects.toThrow(
       "shutting down",
     );
+  });
+
+  it("reattaches a durable remote workspace after shutdown", async () => {
+    const directory = stateDir();
+    const sleep = vi.fn(async () => undefined);
+    const destroy = vi.fn(async () => undefined);
+    const openSession = vi.fn(
+      async (providerId?: string): Promise<AkeruRemoteSession> => ({
+        providerId: providerId ?? "provider-1",
+        inspect: async () => "running",
+        run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+        wake: async () => undefined,
+        sleep,
+        destroy,
+      }),
+    );
+    const options = {
+      stateDir: directory,
+      makeRemoteWorkspace: (input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
+        createRemoteBotWorkspace({ ...input, openSession }),
+      toMcpServerConfigs: () => ({}),
+    };
+
+    const first = new AkeruSessionResources(options);
+    await first.acquire({ ...remoteInput, threadId: "before-restart" });
+    await first.shutdown();
+
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(destroy).not.toHaveBeenCalled();
+    const identityFile = NodePath.join(
+      directory,
+      "bot-workspaces",
+      remoteInput.workspaceId,
+      "provider.json",
+    );
+    expect(NodeFS.existsSync(identityFile)).toBe(true);
+
+    const second = new AkeruSessionResources(options);
+    await second.acquire({ ...remoteInput, threadId: "after-restart" });
+    expect(openSession).toHaveBeenNthCalledWith(2, "provider-1");
+    await second.release("after-restart", { destroy: true });
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(NodeFS.existsSync(identityFile)).toBe(false);
   });
 
   it("keeps the bot workspace separate from the user computer workspace", async () => {
@@ -314,13 +374,63 @@ describe("AkeruSessionResources", () => {
       userComputerCwd: project,
       mcpServers: [],
     });
-    await acquired.workspace.filesystem?.writeFile("bot.txt", "bot");
-    await acquired.userComputerWorkspace?.filesystem?.writeFile("user.txt", "user");
+    await acquired.botWorkspace.filesystem?.writeFile("bot.txt", "bot");
+    await acquired.workspace.filesystem?.writeFile("user.txt", "user");
+    expect(resources.getWorkspace("local-thread")).toBe(acquired.workspace);
     expect(
       NodeFS.existsSync(NodePath.join(directory, "bot-workspaces", "akeru-bot-one", "bot.txt")),
     ).toBe(true);
     expect(NodeFS.existsSync(NodePath.join(project, "user.txt"))).toBe(true);
     expect(NodeFS.existsSync(NodePath.join(project, "bot.txt"))).toBe(false);
+    await resources.shutdown();
+  });
+
+  it("does not create or attach a browser for remote workspaces", async () => {
+    const remote: AkeruBotWorkspace = {
+      id: "akeru-shared",
+      provider: "vercel",
+      providerId: "vercel-native-id",
+      workspace: workspace(),
+      inspect: async () => "running",
+      wake: vi.fn(async () => undefined),
+      sleep: vi.fn(async () => undefined),
+      destroy: vi.fn(async () => undefined),
+    };
+    const manager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({ exa_search: {} })),
+      getServerStatuses: vi.fn(() => []),
+    };
+    const makeBotBrowser = vi.fn(() => browser());
+    const toMcpServerConfigs = vi.fn(() => ({}));
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => remote,
+      makeBotBrowser,
+      makeMcpManager: vi.fn(() => manager as never),
+      toMcpServerConfigs,
+    });
+
+    await resources.acquire({
+      ...remoteInput,
+      threadId: "remote-mcp",
+      mcpServers: [
+        {
+          id: McpServerId.make("builtin-exa"),
+          name: "Exa",
+          transport: "url",
+          url: "https://mcp.exa.ai/mcp",
+          enabled: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(makeBotBrowser).not.toHaveBeenCalled();
+    expect(toMcpServerConfigs).toHaveBeenCalledWith(expect.any(Array), undefined);
+    expect(resources.getConnectorTools("remote-mcp")).toEqual({ exa_search: {} });
     await resources.shutdown();
   });
 });

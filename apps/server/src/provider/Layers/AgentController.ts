@@ -74,7 +74,7 @@ import {
 } from "../AkeruToolRuntime.ts";
 import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
 import { AkeruSessionResources } from "../AkeruSessionResources.ts";
-import type { CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
+import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
   botWorkspaceIdentity,
@@ -137,7 +137,9 @@ interface ActiveSession {
 export interface AgentControllerLiveOptions {
   readonly makeMastraHarness?: (options: AkeruMastraHarnessOptions) => Promise<AkeruMastraHarness>;
   readonly makeMcpManager?: typeof createMcpManager;
-  readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
+  readonly makeRemoteWorkspace?: (
+    input: CreateRemoteBotWorkspaceInput,
+  ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
   readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
   readonly memoryCandidateRepository?: MemoryCandidateRepositoryShape;
@@ -923,15 +925,17 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
       }
       const registeredMemoryHandlers = memoryHandlers(input.memoryAccess);
+      const workspaceType: "cloud" | "local" =
+        input.botSandbox && input.botSandbox !== "local" ? "cloud" : "local";
+      const userComputerWorkspace =
+        workspaceType === "local" && input.cwd ? resources.workspace : undefined;
       const toolSession: AkeruToolSession = {
         ...(input.botId ? { botId: input.botId } : {}),
         ...(input.botName ? { botName: input.botName } : {}),
         runtimeMode: input.runtimeMode,
-        workspaceType: resources.workspaceType,
-        workspace: resources.workspace,
-        ...(resources.userComputerWorkspace
-          ? { userComputerWorkspace: resources.userComputerWorkspace }
-          : {}),
+        workspaceType,
+        workspace: resources.botWorkspace,
+        ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && delegationRuntime
           ? {

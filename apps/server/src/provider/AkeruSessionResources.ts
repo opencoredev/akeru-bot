@@ -17,6 +17,7 @@ import {
   type CreateBotBrowserInput,
 } from "./botBrowser.ts";
 import {
+  type AkeruBotWorkspace,
   createBotWorkspace,
   isRemoteBotSandbox,
   type CreateRemoteBotWorkspaceInput,
@@ -35,14 +36,15 @@ export interface AkeruSessionResourceInput {
 
 export interface AkeruSessionResourceView {
   readonly workspace: Workspace;
-  readonly userComputerWorkspace?: Workspace;
-  readonly workspaceType: "local" | "cloud";
+  readonly botWorkspace: Workspace;
 }
 
 export interface AkeruSessionResourcesOptions {
   readonly stateDir: string;
   readonly makeMcpManager?: typeof createMcpManager;
-  readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
+  readonly makeRemoteWorkspace?: (
+    input: CreateRemoteBotWorkspaceInput,
+  ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
   readonly onMcpServerConnectionFailure?: (serverId: McpServer["id"]) => void;
   readonly toMcpServerConfigs: (
@@ -100,6 +102,12 @@ export class AkeruSessionResources {
           const workspace = await createBotWorkspace({
             threadId: input.resourceScope,
             workspaceId: input.workspaceId,
+            identityFile: NodePath.join(
+              this.options.stateDir,
+              "bot-workspaces",
+              input.workspaceId,
+              "provider.json",
+            ),
             ...(isRemoteBotSandbox(input.botSandbox)
               ? { sandbox: input.botSandbox }
               : {
@@ -120,7 +128,8 @@ export class AkeruSessionResources {
       );
       this.workspaceLeases.set(key, workspaceLease);
 
-      const userComputerCwd = input.userComputerCwd;
+      const remote = isRemoteBotSandbox(input.botSandbox);
+      const userComputerCwd = remote ? undefined : input.userComputerCwd;
       const userComputerWorkspaceLease = userComputerCwd
         ? await this.workspacePool.acquire(`user-computer:${key}:${userComputerCwd}`, async () => {
             const workspace = await createBotWorkspace({
@@ -137,39 +146,42 @@ export class AkeruSessionResources {
         this.userComputerWorkspaceLeases.set(key, userComputerWorkspaceLease);
       }
 
-      const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
-      const browser =
-        existingBrowser ??
-        (this.options.makeBotBrowser ?? createBotBrowser)({
-          threadId: input.resourceScope,
-          workspace: workspaceLease.workspace,
-          cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
-        });
+      let browser: BotBrowser | undefined;
+      if (workspaceLease.workspace.provider === "local") {
+        const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
+        browser =
+          existingBrowser ??
+          (this.options.makeBotBrowser ?? createBotBrowser)({
+            threadId: input.resourceScope,
+            workspace: workspaceLease.workspace.workspace,
+            cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
+          });
 
-      this.resourceBrowsers.set(input.workspaceResourceKey, browser);
-      this.threadBrowsers.set(key, browser);
-      this.browserResourceKeys.set(key, input.workspaceResourceKey);
-      this.browserReferences.set(
-        input.workspaceResourceKey,
-        (this.browserReferences.get(input.workspaceResourceKey) ?? 0) + 1,
-      );
+        this.resourceBrowsers.set(input.workspaceResourceKey, browser);
+        this.threadBrowsers.set(key, browser);
+        this.browserResourceKeys.set(key, input.workspaceResourceKey);
+        this.browserReferences.set(
+          input.workspaceResourceKey,
+          (this.browserReferences.get(input.workspaceResourceKey) ?? 0) + 1,
+        );
 
-      let reconnect = this.browserReconnects.get(input.workspaceResourceKey);
-      if (existingBrowser && workspaceLease.wokeFromSleep && !reconnect) {
-        reconnect = browser.reconnect().finally(() => {
-          this.browserReconnects.delete(input.workspaceResourceKey);
-        });
-        this.browserReconnects.set(input.workspaceResourceKey, reconnect);
-      }
-      try {
-        await reconnect;
-      } catch (cause) {
-        await this.invalidateBrowser(input.workspaceResourceKey, browser);
-        throw cause;
+        let reconnect = this.browserReconnects.get(input.workspaceResourceKey);
+        if (existingBrowser && workspaceLease.wokeFromSleep && !reconnect) {
+          reconnect = browser.reconnect().finally(() => {
+            this.browserReconnects.delete(input.workspaceResourceKey);
+          });
+          this.browserReconnects.set(input.workspaceResourceKey, reconnect);
+        }
+        try {
+          await reconnect;
+        } catch (cause) {
+          await this.invalidateBrowser(input.workspaceResourceKey, browser);
+          throw cause;
+        }
       }
 
       if (input.mcpServers.length > 0) {
-        const attachment = await browser.attachment();
+        const attachment = await browser?.attachment();
         const manager = (this.options.makeMcpManager ?? createMcpManager)(
           NodePath.join(this.options.stateDir, "bot-mcp-runtime"),
           ".akeru-runtime",
@@ -193,11 +205,9 @@ export class AkeruSessionResources {
       }
 
       return {
-        workspace: workspaceLease.workspace,
-        ...(userComputerWorkspaceLease
-          ? { userComputerWorkspace: userComputerWorkspaceLease.workspace }
-          : {}),
-        workspaceType: isRemoteBotSandbox(input.botSandbox) ? "cloud" : "local",
+        workspace:
+          userComputerWorkspaceLease?.workspace.workspace ?? workspaceLease.workspace.workspace,
+        botWorkspace: workspaceLease.workspace.workspace,
       };
     } catch (cause) {
       await this.releaseOnce(key, { destroy: true }).catch(() => undefined);
@@ -212,12 +222,11 @@ export class AkeruSessionResources {
     };
   }
 
-  getMcpManager(threadId: string): McpManager | undefined {
-    return this.mcpManagers.get(threadId);
-  }
-
   getWorkspace(threadId: string): Workspace | undefined {
-    return this.workspaceLeases.get(threadId)?.workspace;
+    return (
+      this.userComputerWorkspaceLeases.get(threadId)?.workspace.workspace ??
+      this.workspaceLeases.get(threadId)?.workspace.workspace
+    );
   }
 
   async release(threadId: string, options?: { readonly destroy?: boolean }): Promise<void> {
@@ -294,14 +303,11 @@ export class AkeruSessionResources {
       ...this.mcpManagers.keys(),
       ...this.threadBrowsers.keys(),
     ]);
-    await Promise.allSettled(
-      [...threadIds].map((threadId) => this.release(threadId, { destroy: true })),
-    );
+    await Promise.allSettled([...threadIds].map((threadId) => this.release(threadId)));
     await Promise.allSettled([...this.resourceBrowsers.values()].map((browser) => browser.close()));
     this.resourceBrowsers.clear();
     this.browserReferences.clear();
     this.browserDestroyRequests.clear();
     this.browserReconnects.clear();
-    await this.workspacePool.destroyAll();
   }
 }
