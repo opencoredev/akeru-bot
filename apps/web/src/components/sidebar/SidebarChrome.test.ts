@@ -139,7 +139,7 @@ describe("sidebar footer", () => {
     expect(source).not.toContain('openSettings("inbox")');
   });
 
-  it("creates manual and first-run bots with approval required", () => {
+  it("creates manual bots with approval required without adding a first-run bot", () => {
     const rosterSource = NodeFS.readFileSync(
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
       "utf8",
@@ -150,9 +150,9 @@ describe("sidebar footer", () => {
     );
 
     expect(rosterSource).toContain("runtimeMode: DEFAULT_BOT_RUNTIME_MODE");
-    expect(syncSource).toContain("runtimeMode: DEFAULT_BOT_RUNTIME_MODE");
     expect(rosterSource).not.toContain('runtimeMode: "full-access"');
-    expect(syncSource).not.toContain('runtimeMode: "full-access"');
+    expect(syncSource).not.toContain('BotId.make("bot-akeru")');
+    expect(syncSource).not.toContain("botEnvironment.create");
   });
 
   it("updates existing bot and group threads before starting the next turn", () => {

@@ -90,7 +90,7 @@ export class ServerUpdateResumeTimeoutError extends Schema.TaggedErrorClass<Serv
   },
 ) {
   override get message(): string {
-    return `The server did not resume on t3@${this.targetVersion}.`;
+    return `The server did not resume on Akeru Bot ${this.targetVersion}.`;
   }
 }
 
@@ -101,7 +101,7 @@ export class ServerUpdateProgressIncompleteError extends Schema.TaggedErrorClass
   },
 ) {
   override get message(): string {
-    return `The t3@${this.targetVersion} update ended before the server accepted the restart.`;
+    return `The Akeru Bot ${this.targetVersion} update ended before the server accepted the restart.`;
   }
 }
 
@@ -114,7 +114,7 @@ export class ServerUpdateTerminalError extends Schema.TaggedErrorClass<ServerUpd
   },
 ) {
   override get message(): string {
-    return this.reason ?? `The t3@${this.targetVersion} update ${this.status}.`;
+    return this.reason ?? `The Akeru Bot ${this.targetVersion} update ${this.status}.`;
   }
 }
 

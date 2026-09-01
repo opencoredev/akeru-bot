@@ -133,7 +133,7 @@ export const buildDiscordReleaseAnnouncement = (
     {
       title: options.releaseName,
       url: options.releaseUrl.href,
-      description: "A new T3 Code latest release is available.",
+      description: "A new Akeru Bot latest release is available.",
       color: targetColors[options.target],
       fields: [
         {
@@ -273,7 +273,7 @@ export const notifyDiscordReleaseCommand = Command.make(
       yield* postDiscordWebhook(webhookUrl, payload, announcement);
       yield* Effect.logInfo("discord release announcement completed");
     }),
-).pipe(Command.withDescription("Post a T3 Code release announcement to Discord."));
+).pipe(Command.withDescription("Post an Akeru Bot release announcement to Discord."));
 
 if (import.meta.main) {
   Command.run(notifyDiscordReleaseCommand, { version: "0.0.0" }).pipe(

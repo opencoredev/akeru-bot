@@ -228,8 +228,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
       isDevelopment ? "dev.leodoes.akeru.dev" : "dev.leodoes.akeru",
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName: isDevelopment ? "akeru-bot-dev.desktop" : "akeru-bot.desktop",
+    linuxWmClass: isDevelopment ? "akeru-bot-dev" : "akeru-bot",
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     userDataDirName,
