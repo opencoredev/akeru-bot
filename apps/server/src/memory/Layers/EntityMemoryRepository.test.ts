@@ -948,17 +948,16 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
-  it.effect("edits and pins memory with the legacy workspace identity", () =>
+  it.effect("edits and pins memory in the legacy workspace partition", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
       const workspaceAccess = privateAccess("bot-legacy-workspace");
       const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.projectId);
-      const partitions = yield* resolveMemoryArchivePartitions(workspaceAccess, "workspace");
-      const legacyWorkspaceId = partitions.find(
-        (partition) => partition.partitionId !== workspaceId,
-      )?.partitionId;
-      assert.isDefined(legacyWorkspaceId);
-
+      const legacyWorkspaceId = (yield* resolveMemoryArchivePartitions(
+        workspaceAccess,
+        "workspace",
+      )).find((partition) => partition.partitionId !== workspaceId)?.partitionId;
+      if (!legacyWorkspaceId) return assert.fail("Expected a legacy workspace partition.");
       const rootId = AkeruMemoryRootId.make("legacy-workspace-root");
       const initial = makeRevision("legacy-workspace-1", legacyWorkspaceId, {
         rootId,
@@ -975,22 +974,27 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         initiatingUserId: workspaceAccess.userId,
         affectedBotIds: [workspaceAccess.botId!],
       });
+      const edited = {
+        ...initial,
+        id: AkeruMemoryId.make("legacy-workspace-2"),
+        revision: 2,
+        supersedesId: initial.id,
+        fact: "The legacy workspace fact was edited.",
+      };
+      const pinned = {
+        ...edited,
+        id: AkeruMemoryId.make("legacy-workspace-3"),
+        revision: 3,
+        supersedesId: edited.id,
+        pinned: true,
+      };
+
       yield* repository.insert({ access: workspaceAccess, revision: initial });
-      yield* repository.revise({
-        access: workspaceAccess,
-        expectedRevision: 1,
-        revision: {
-          ...initial,
-          id: AkeruMemoryId.make("legacy-workspace-2"),
-          revision: 2,
-          fact: "Updated legacy workspace memory.",
-          pinned: true,
-          supersedesId: initial.id,
-        },
-      });
+      yield* repository.revise({ access: workspaceAccess, revision: edited, expectedRevision: 1 });
+      yield* repository.revise({ access: workspaceAccess, revision: pinned, expectedRevision: 2 });
 
       const current = yield* repository.getCurrent({ access: workspaceAccess, rootId });
-      assert.equal(current.fact, "Updated legacy workspace memory.");
+      assert.equal(current.fact, edited.fact);
       assert.isTrue(current.pinned);
     }),
   );
