@@ -5,6 +5,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -29,6 +30,7 @@ import {
   type FileManagerRevealKind,
   type OrchestrationClientOrigin,
   type OrchestrationCommand,
+  type OrchestrationReadModel,
   type GitActionProgressEvent,
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
@@ -41,6 +43,8 @@ import {
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
   PortabilityArchiveError,
+  type PortabilityArchive,
+  type PortabilityProjectFolderMap,
   ORCHESTRATION_WS_METHODS,
   type ProjectId,
   type ProjectEntriesFailure,
@@ -79,7 +83,7 @@ import {
   subscriptionDependentBots,
 } from "./subscription-auth/snapshot.ts";
 import { BotInboxService } from "./bot-inbox/service.ts";
-import { syncConnectorIncidents } from "./bot-inbox/connectorIncidents.ts";
+import { syncAccessIncidents, syncConnectorIncidents } from "./bot-inbox/connectorIncidents.ts";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
@@ -138,7 +142,6 @@ import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
-import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { BotUsageLedger } from "./usage/BotUsageLedger.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as Portability from "./portability.ts";
@@ -182,6 +185,36 @@ const availablePortabilityProviderIds = (providers: ReadonlyArray<ServerProvider
       )
       .map((provider) => provider.instanceId),
   );
+
+const validatePortabilityProjectFolders = Effect.fn("validatePortabilityProjectFolders")(function* (
+  archive: PortabilityArchive,
+  snapshot: OrchestrationReadModel,
+  projectFolders: PortabilityProjectFolderMap,
+  operation: "preview" | "apply",
+) {
+  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+  const path = yield* Path.Path;
+  for (const [projectId, destination] of Object.entries(projectFolders)) {
+    if (!path.isAbsolute(destination) || path.dirname(destination) === destination) {
+      return yield* portabilityError(
+        operation,
+        new Error(`Project '${projectId}' destination must be an absolute non-root path.`),
+      );
+    }
+  }
+  const normalized = Portability.normalizePortabilityProjectFolders(
+    archive,
+    snapshot,
+    projectFolders,
+  );
+  return Object.fromEntries(
+    yield* Effect.forEach(Object.entries(normalized), ([projectId, workspaceRoot]) =>
+      workspacePaths
+        .normalizeWorkspaceRoot(workspaceRoot)
+        .pipe(Effect.map((normalizedRoot) => [projectId, normalizedRoot] as const)),
+    ),
+  ) as PortabilityProjectFolderMap;
+});
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -414,7 +447,6 @@ function toAuthAccessStreamEvent(
 
 const isClientSurface = Schema.is(ClientSurface);
 const MAX_CLIENT_APP_VERSION_LENGTH = 64;
-const MAX_CLIENT_DEVICE_MODEL_LENGTH = 80;
 
 // Optional client identity announced on the /ws upgrade URL next to wsTicket.
 // Lenient by design: absent or malformed values degrade to {} so a connection
@@ -432,33 +464,6 @@ function readClientConnectionOrigin(
     ...(isClientSurface(surface) ? { surface } : {}),
     ...(appVersion !== "" && appVersion.length <= MAX_CLIENT_APP_VERSION_LENGTH
       ? { appVersion }
-      : {}),
-  };
-}
-
-const clientOriginAnalyticsProps = (origin: OrchestrationClientOrigin) => ({
-  ...(origin.surface !== undefined ? { surface: origin.surface } : {}),
-  ...(origin.appVersion !== undefined ? { appVersion: origin.appVersion } : {}),
-});
-
-function readMobileDeviceAnalyticsProps(request: HttpServerRequest.HttpServerRequest) {
-  const url = HttpServerRequest.toURL(request);
-  if (Option.isNone(url) || url.value.searchParams.get("clientSurface") !== "mobile") {
-    return {};
-  }
-
-  const os = url.value.searchParams.get("clientOs");
-  const rawOsMajorVersion = url.value.searchParams.get("clientOsMajorVersion") ?? "";
-  const osMajorVersion = Number(rawOsMajorVersion);
-  const deviceModel = url.value.searchParams.get("clientDeviceModel")?.trim() ?? "";
-
-  return {
-    ...(os === "iOS" || os === "Android" ? { os } : {}),
-    ...(rawOsMajorVersion !== "" && Number.isInteger(osMajorVersion) && osMajorVersion > 0
-      ? { osMajorVersion }
-      : {}),
-    ...(deviceModel !== "" && deviceModel.length <= MAX_CLIENT_DEVICE_MODEL_LENGTH
-      ? { deviceModel }
       : {}),
   };
 }
@@ -481,7 +486,6 @@ const makeWsRpcLayer = (
       const entityMemoryRepository = yield* Effect.serviceOption(EntityMemoryRepository);
       const memoryCandidates = yield* Effect.serviceOption(MemoryCandidateRepository);
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
-      const analytics = yield* AnalyticsService.AnalyticsService;
       // Every command dispatched on this connection carries the connecting
       // client's origin, including server-generated bootstrap sub-commands:
       // the client's request caused them.
@@ -494,22 +498,6 @@ const makeWsRpcLayer = (
           command,
           hasClientOrigin ? { origin: clientOrigin } : undefined,
         );
-      const originProps = clientOriginAnalyticsProps(clientOrigin);
-      const recordClientCommandAnalytics = (command: OrchestrationCommand) => {
-        switch (command.type) {
-          case "thread.create":
-            return analytics.record("client.thread.started", originProps);
-          case "thread.turn.start":
-            return command.bootstrap?.createThread
-              ? Effect.andThen(
-                  analytics.record("client.thread.started", originProps),
-                  analytics.record("client.turn.requested", originProps),
-                )
-              : analytics.record("client.turn.requested", originProps);
-          default:
-            return Effect.void;
-        }
-      };
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
@@ -669,10 +657,13 @@ const makeWsRpcLayer = (
       const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
         subscriptionAuth.reload();
         botInbox.reload();
-        const [providers, bots] = yield* Effect.all([
+        const [providers, bots, snapshot] = yield* Effect.all([
           providerRegistry.getProviders,
           projectionBots
             .listAll()
+            .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message }))),
+          projectionSnapshotQuery
+            .getShellSnapshot()
             .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message }))),
         ]);
         const dependentBots = subscriptionDependentBots(
@@ -680,14 +671,26 @@ const makeWsRpcLayer = (
           providers,
         );
         const subscriptionStatuses = subscriptionAuth.statuses(dependentBots);
+        const access = buildProviderAccessCapabilities(
+          subscriptionStatuses,
+          providers,
+          (instanceId) => subscriptionAuth.providerInstanceRequestHealth(instanceId),
+          snapshot.mcpServers ?? [],
+          bots.map((bot) => ({
+            id: bot.botId,
+            name: bot.name,
+            engine: bot.engine,
+            disabledMcpServerIds: bot.disabledMcpServerIds,
+          })),
+          (serverId) => subscriptionAuth.mcpRequestHealth(serverId),
+        );
 
         syncConnectorIncidents(botInbox, subscriptionStatuses);
+        syncAccessIncidents(botInbox, access);
 
         return {
           providers: subscriptionStatuses,
-          access: buildProviderAccessCapabilities(subscriptionStatuses, providers, (instanceId) =>
-            subscriptionAuth.providerInstanceHealth(instanceId),
-          ),
+          access,
           inbox: botInbox.list(),
         };
       });
@@ -1485,7 +1488,6 @@ const makeWsRpcLayer = (
               const result = yield* dispatchNormalizedCommand(normalizedCommand).pipe(
                 Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
               );
-              yield* recordClientCommandAnalytics(normalizedCommand);
               if (parkingCommand) {
                 const parkingKind = parkingCommand.type === "thread.archive" ? "archive" : "settle";
                 if (shouldStopSessionAfterCommand) {
@@ -1979,7 +1981,7 @@ const makeWsRpcLayer = (
             }).pipe(Effect.mapError((cause) => portabilityError("export", cause))),
             { "rpc.aggregate": "portability" },
           ),
-        [WS_METHODS.portabilityPreviewImport]: ({ contents }) =>
+        [WS_METHODS.portabilityPreviewImport]: ({ contents, projectFolders = {} }) =>
           observeRpcEffect(
             WS_METHODS.portabilityPreviewImport,
             Effect.gen(function* () {
@@ -1992,17 +1994,25 @@ const makeWsRpcLayer = (
                 serverSettings.getSettings,
                 providerRegistry.getProviders,
               ]);
+              const validatedProjectFolders = yield* validatePortabilityProjectFolders(
+                archive,
+                snapshot,
+                projectFolders,
+                "preview",
+              );
               return Portability.previewPortabilityImport(
                 archive,
                 snapshot,
                 settings,
                 availablePortabilityProviderIds(providers),
+                validatedProjectFolders,
               );
             }).pipe(Effect.mapError((cause) => portabilityError("preview", cause))),
             { "rpc.aggregate": "portability" },
           ),
         [WS_METHODS.portabilityApplyImport]: ({
           contents,
+          projectFolders = {},
           expectedSnapshotSequence,
           expectedStateChecksum,
         }) =>
@@ -2019,11 +2029,23 @@ const makeWsRpcLayer = (
                 providerRegistry.getProviders,
               ]);
               const availableProviderIds = availablePortabilityProviderIds(providers);
+              const validatedProjectFolders = yield* validatePortabilityProjectFolders(
+                archive,
+                snapshot,
+                projectFolders,
+                "apply",
+              );
               if (
-                !Portability.isPortabilityPreviewCurrent(snapshot, settings, availableProviderIds, {
-                  snapshotSequence: expectedSnapshotSequence,
-                  stateChecksum: expectedStateChecksum,
-                })
+                !Portability.isPortabilityPreviewCurrent(
+                  snapshot,
+                  settings,
+                  availableProviderIds,
+                  {
+                    snapshotSequence: expectedSnapshotSequence,
+                    stateChecksum: expectedStateChecksum,
+                  },
+                  validatedProjectFolders,
+                )
               ) {
                 return yield* portabilityError(
                   "apply",
@@ -2035,6 +2057,7 @@ const makeWsRpcLayer = (
                 snapshot,
                 settings,
                 availableProviderIds,
+                validatedProjectFolders,
               );
               yield* decideCommandSequence({ commands: plan.commands, readModel: snapshot }).pipe(
                 Effect.provideService(Crypto.Crypto, crypto),
@@ -2994,7 +3017,6 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         const request = yield* HttpServerRequest.HttpServerRequest;
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
         const sessions = yield* SessionStore.SessionStore;
-        const analytics = yield* AnalyticsService.AnalyticsService;
         const session = yield* serverAuth.authenticateWebSocketUpgrade(request).pipe(
           Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
             failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),
@@ -3005,10 +3027,6 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         );
         const clientOrigin = readClientConnectionOrigin(request);
         yield* sessions.recordClientConnection(session.sessionId, clientOrigin);
-        yield* analytics.record("client.connected", {
-          ...clientOriginAnalyticsProps(clientOrigin),
-          ...readMobileDeviceAnalyticsProps(request),
-        });
         const rpcWebSocketHttpEffect = yield* RpcServer.toHttpEffectWebsocket(WsRpcGroup, {
           disableTracing: true,
         }).pipe(

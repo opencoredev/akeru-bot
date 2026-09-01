@@ -1,6 +1,13 @@
-import type { BotEngine, BotId, ServerProvider } from "@t3tools/contracts";
+import type {
+  BotEngine,
+  BotId,
+  McpServer,
+  McpServerId,
+  ProviderAccessStatus,
+  ServerProvider,
+} from "@t3tools/contracts";
 
-import type { ProviderStatus, SubscriptionProviderId } from "./service.ts";
+import type { ProviderStatus, RequestHealthStatus, SubscriptionProviderId } from "./service.ts";
 
 const SUBSCRIPTION_ACCESS = [
   { id: "chatgpt", label: "ChatGPT", provider: "openai-codex" },
@@ -40,6 +47,37 @@ export function subscriptionDependentBots(
 
 type ActualRequestHealth = "healthy" | "failed" | "failed-first-request" | "recovered" | undefined;
 
+type BotAccess = {
+  readonly id: BotId;
+  readonly name: string;
+  readonly engine: BotEngine | null;
+  readonly disabledMcpServerIds?: ReadonlyArray<McpServerId>;
+};
+
+function requestHealthState(
+  health: ActualRequestHealth | RequestHealthStatus,
+): ActualRequestHealth {
+  return typeof health === "string" || health === undefined ? health : health.health;
+}
+
+function requestHealthFields(health: ActualRequestHealth | RequestHealthStatus) {
+  return typeof health === "object"
+    ? {
+        ...(health.lastSuccessfulRequestAt
+          ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
+          : {}),
+        ...(health.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
+        ...(health.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
+      }
+    : {};
+}
+
+function dependentBotsForProvider(bots: ReadonlyArray<BotAccess>, instanceId: string) {
+  return bots
+    .filter((bot) => bot.engine?.provider === instanceId)
+    .map(({ id, name }) => ({ id, name }));
+}
+
 function providerAccessHealth(
   provider: ServerProvider | undefined,
   actualRequestHealth: ActualRequestHealth,
@@ -54,8 +92,12 @@ function providerAccessHealth(
 export function buildProviderAccessCapabilities(
   subscriptions: ReadonlyArray<ProviderStatus>,
   providers: ReadonlyArray<ServerProvider>,
-  providerRequestHealth: (instanceId: string) => ActualRequestHealth = () => undefined,
-) {
+  providerRequestHealth: (instanceId: string) => ActualRequestHealth | RequestHealthStatus = () =>
+    undefined,
+  mcpServers: ReadonlyArray<McpServer> = [],
+  bots: ReadonlyArray<BotAccess> = [],
+  mcpRequestHealth: (serverId: string) => RequestHealthStatus | undefined = () => undefined,
+): ReadonlyArray<ProviderAccessStatus> {
   const subscriptionById = new Map(subscriptions.map((status) => [status.provider, status]));
   const subscriptionRows = SUBSCRIPTION_ACCESS.map((entry) => {
     const status = subscriptionById.get(entry.provider);
@@ -71,17 +113,20 @@ export function buildProviderAccessCapabilities(
           : status?.connected
             ? "Check OAuth, then send a provider request to verify access."
             : `Connect ${entry.label} in Settings.`,
+      ...(status?.lastSuccessfulRequestAt
+        ? { lastSuccessfulRequestAt: status.lastSuccessfulRequestAt }
+        : {}),
+      ...(status?.lastFailedRequest ? { lastFailedRequest: status.lastFailedRequest } : {}),
+      ...(status?.nextRetryAt ? { nextRetryAt: status.nextRetryAt } : {}),
+      reconnectAction: status?.reconnectAction ?? `Connect ${entry.label}`,
       dependentBots: status?.dependentBots ?? [],
-      dependentRoutines: status?.dependentRoutines ?? [],
     };
   });
 
   const apiKeyProviders = providers.filter((provider) => provider.auth.type === "apiKey");
   const apiKeyRows = apiKeyProviders.map((provider) => {
-    const health = providerAccessHealth(
-      provider,
-      provider ? providerRequestHealth(provider.instanceId) : undefined,
-    );
+    const requestHealth = providerRequestHealth(provider.instanceId);
+    const health = providerAccessHealth(provider, requestHealthState(requestHealth));
     return {
       id: `api-key-${provider.instanceId}`,
       label: `${provider.displayName ?? provider.driver} API key`,
@@ -92,6 +137,9 @@ export function buildProviderAccessCapabilities(
         health === "failed" || health === "failed-first-request"
           ? "Check the API key and billing, then retry a provider request."
           : "Send a provider request to verify the key and billing.",
+      ...requestHealthFields(requestHealth),
+      reconnectAction: "Update key",
+      dependentBots: dependentBotsForProvider(bots, provider.instanceId),
     };
   });
 
@@ -100,10 +148,8 @@ export function buildProviderAccessCapabilities(
     { id: "grok-acp", label: "Grok ACP CLI", driver: "grok" },
   ].map((entry) => {
     const provider = providers.find((candidate) => candidate.driver === entry.driver);
-    const health = providerAccessHealth(
-      provider,
-      provider ? providerRequestHealth(provider.instanceId) : undefined,
-    );
+    const requestHealth = provider ? providerRequestHealth(provider.instanceId) : undefined;
+    const health = providerAccessHealth(provider, requestHealthState(requestHealth));
     return {
       id: entry.id,
       label: entry.label,
@@ -116,6 +162,45 @@ export function buildProviderAccessCapabilities(
           : provider
             ? `Send a request through ${entry.label} to verify access.`
             : `Install and sign in to the ${entry.label}.`,
+      ...requestHealthFields(requestHealth),
+      reconnectAction: "Reconnect CLI",
+      dependentBots: provider ? dependentBotsForProvider(bots, provider.instanceId) : [],
+    };
+  });
+
+  const mcpRows = mcpServers.map((server) => {
+    const requestHealth = mcpRequestHealth(server.id);
+    const health: ProviderAccessStatus["health"] = server.enabled
+      ? (requestHealth?.health ?? "detected")
+      : "disabled";
+    return {
+      id: `mcp-${server.id}`,
+      label: server.name,
+      accessMethod: "mcp" as const,
+      health,
+      apiAccess: "not-applicable" as const,
+      nextAction:
+        health === "disabled"
+          ? `Enable ${server.name} to use it again.`
+          : health === "failed" || health === "failed-first-request"
+            ? `Reconnect ${server.name}, then retry its failed request.`
+            : health === "healthy" || health === "recovered"
+              ? `Disable or remove ${server.name} when it is no longer needed.`
+              : `Send a request through ${server.name} to verify the connection.`,
+      ...(health === "disabled"
+        ? { repairAction: "Enable" }
+        : health === "failed" || health === "failed-first-request"
+          ? { repairAction: "Reconnect" }
+          : {}),
+      reconnectAction: "Reconnect",
+      serverId: String(server.id),
+      ...(String(server.id).startsWith("builtin-")
+        ? { pluginId: String(server.id).slice("builtin-".length) }
+        : {}),
+      ...requestHealthFields(requestHealth),
+      dependentBots: bots
+        .filter((bot) => !bot.disabledMcpServerIds?.includes(server.id))
+        .map(({ id, name }) => ({ id, name })),
     };
   });
 
@@ -158,6 +243,7 @@ export function buildProviderAccessCapabilities(
           },
         ]),
     ...acpRows,
+    ...mcpRows,
     {
       id: "email-browser",
       label: "Email browser session",

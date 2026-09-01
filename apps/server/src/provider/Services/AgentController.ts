@@ -1,5 +1,6 @@
 import type {
   AkeruConversationMemorySnapshot,
+  AkeruMemoryThreadAccess,
   BotEngine,
   ModelSelection,
   ProviderInteractionMode,
@@ -49,6 +50,7 @@ export interface AgentControllerShape {
     readonly engine: BotEngine | null;
     readonly fallback: ModelSelection;
     readonly mode: ProviderInteractionMode;
+    readonly botConversation: boolean;
   }) => Effect.Effect<AgentControllerEngineSelection, AgentControllerError>;
 
   /** Read routing metadata without changing the thread's active runtime session. */
@@ -58,7 +60,7 @@ export interface AgentControllerShape {
 
   readonly startSession: (
     threadId: ThreadId,
-    input: ProviderSessionStartInput,
+    input: ProviderSessionStartInput & { readonly memoryAccess?: AkeruMemoryThreadAccess },
   ) => Effect.Effect<ProviderSession, AgentControllerError>;
 
   readonly sendTurn: (

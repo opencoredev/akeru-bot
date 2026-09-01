@@ -4,12 +4,7 @@ import {
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import {
-  DEFAULT_RUNTIME_MODE,
-  type RuntimeMode,
-  type ScopedProjectRef,
-  type ThreadId,
-} from "@t3tools/contracts";
+import { type RuntimeMode, type ScopedProjectRef, type ThreadId } from "@t3tools/contracts";
 import { useParams, useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 import {
@@ -280,7 +275,7 @@ export function useNewThreadHandler() {
           if (workspaceContext) {
             setDraftThreadContext(emptyStoredDraftThread.draftId, {
               ...workspaceContext,
-              ...(carryRuntimeMode ? { runtimeMode: carryRuntimeMode } : {}),
+              runtimeMode: carryRuntimeMode ?? primaryServerSettings.localExecutionMode,
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
             if (carryModelSelection) {
@@ -303,7 +298,7 @@ export function useNewThreadHandler() {
             {
               threadId: emptyStoredDraftThread.threadId,
               ...workspaceContext,
-              ...(carryRuntimeMode ? { runtimeMode: carryRuntimeMode } : {}),
+              runtimeMode: carryRuntimeMode ?? primaryServerSettings.localExecutionMode,
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             },
           );
@@ -415,7 +410,7 @@ export function useNewThreadHandler() {
               envMode: initialEnvMode,
               newWorktreesStartFromOrigin: primaryServerSettings.newWorktreesStartFromOrigin,
             }),
-          runtimeMode: carryRuntimeMode ?? DEFAULT_RUNTIME_MODE,
+          runtimeMode: carryRuntimeMode ?? primaryServerSettings.localExecutionMode,
           ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
         });
         applyStickyState(draftId);

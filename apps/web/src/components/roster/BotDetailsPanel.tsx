@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import {
   Cancel01Icon,
+  Brain02Icon,
   Edit02Icon,
   PanelRightCloseIcon,
   PanelRightIcon,
@@ -42,6 +43,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotModelPicker } from "./BotModelPicker";
+import { BotUsageSection } from "./BotUsageSection";
+import { BotMemorySheet } from "./BotMemorySheet";
 import {
   BOT_SANDBOX_OPTIONS,
   botSandboxChoice,
@@ -50,6 +53,7 @@ import {
 } from "./botSandbox";
 import { BotToolsSheet, buildBotToolItems } from "./BotToolsSheet";
 import type { Bot } from "./types";
+import type { ScopedThreadRef } from "@t3tools/contracts";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -89,9 +93,11 @@ export interface BotProfileUpdate {
 function BotProfileEditor({
   bot,
   onSave,
+  threadRef,
 }: {
   readonly bot: Bot;
   readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
+  readonly threadRef: ScopedThreadRef | null;
 }) {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -105,6 +111,7 @@ function BotProfileEditor({
   const [saved, setSaved] = useState(false);
   const [engineChanged, setEngineChanged] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
@@ -251,6 +258,23 @@ function BotProfileEditor({
           </div>
         </div>
 
+        <BotUsageSection environmentId={environmentId} botId={bot.id} />
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Memory</div>
+          <button
+            type="button"
+            aria-label="Manage bot memory"
+            disabled={!threadRef}
+            onClick={() => setMemoryOpen(true)}
+            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors enabled:hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Brain02Icon} />
+            <span className="min-w-0 flex-1 text-sm">Facts and history</span>
+            <span className="text-xs text-muted-foreground">Manage</span>
+          </button>
+        </div>
+
         <div className="space-y-2">
           <div className="text-sm font-medium">Sandbox</div>
           <Select
@@ -345,6 +369,7 @@ function BotProfileEditor({
           markChanged();
         }}
       />
+      <BotMemorySheet open={memoryOpen} onOpenChange={setMemoryOpen} threadRef={threadRef} />
     </div>
   );
 }
@@ -352,9 +377,11 @@ function BotProfileEditor({
 export function BotDetailsPanel({
   bot,
   onSaveBot,
+  threadRef = null,
 }: {
   readonly bot: Bot;
   readonly onSaveBot?: (input: BotProfileUpdate) => Promise<boolean>;
+  readonly threadRef?: ScopedThreadRef | null;
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
@@ -393,7 +420,11 @@ export function BotDetailsPanel({
         <h2 className="text-sm font-medium">Settings</h2>
         <div className="absolute right-3 flex items-center">{closeButton}</div>
       </header>
-      <BotProfileEditor bot={bot} {...(onSaveBot ? { onSave: onSaveBot } : {})} />
+      <BotProfileEditor
+        bot={bot}
+        threadRef={threadRef}
+        {...(onSaveBot ? { onSave: onSaveBot } : {})}
+      />
     </>
   );
 

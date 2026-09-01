@@ -2,27 +2,30 @@
   "schemaVersion": 1,
   "id": "executor",
   "name": "Executor",
-  "description": "Use the integrations configured in your local Executor account.",
+  "description": "Use the integrations configured in your Executor account.",
   "primaryCategory": "Work",
-  "tags": ["integrations", "automation", "local"],
-  "capabilities": ["use configured integrations", "run local integration tools"],
+  "tags": ["integrations", "automation", "hosted"],
+  "capabilities": ["use configured integrations", "run integration tools"],
   "publisher": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "maintainer": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "documentationUrl": "https://executor.sh/docs",
-  "sourceUrl": "https://github.com/UsefulSoftwareCo/executor",
-  "license": "MIT",
+  "sourceUrl": "https://executor.sh/docs",
+  "license": "Proprietary",
   "logo": {
     "provenance": {
       "sourceUrl": "https://executor.sh/favicon-192.png",
       "license": "Executor brand asset"
     }
   },
-  "platforms": ["macos", "windows", "linux"],
-  "transport": { "type": "stdio", "command": "bunx", "args": ["-y", "executor", "mcp"] },
-  "connection": { "type": "local" },
-  "authentication": "none",
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "url", "url": "https://executor.sh/mcp" },
+  "connection": {
+    "type": "verification-pending",
+    "blocker": "Hosted OAuth is documented, but the full add, use, disable, reconnect, and remove lifecycle still needs current verification."
+  },
+  "authentication": "oauth",
   "requiredCredentials": [],
-  "setup": ["Sign in to Executor locally, then start its MCP command."],
+  "setup": ["Wait for the hosted Executor connection lifecycle to pass."],
   "permissions": [
     {
       "id": "read-integrations",
@@ -70,5 +73,5 @@
     "refunds",
     "account-wide"
   ],
-  "catalogStatus": "available"
+  "catalogStatus": "verification-pending"
 }

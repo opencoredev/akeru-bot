@@ -1,7 +1,7 @@
 import { AKERU_TOOL_CATALOG } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import { createAkeruToolRuntime, type AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 
 describe("createAkeruMastraTools", () => {
@@ -30,5 +30,32 @@ describe("createAkeruMastraTools", () => {
     await expect(shell.execute({ command: "pwd" }, {} as never)).rejects.toThrow(
       "has no call identity",
     );
+  });
+
+  it("builds registered memory handlers as Mastra tools", async () => {
+    const rememberHandler = vi.fn(async () => ({ saved: true }));
+    const unavailable = vi.fn(async () => undefined);
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-memory", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      memoryHandlers: {
+        recall_memory: unavailable,
+        remember: rememberHandler,
+        update_memory: unavailable,
+        forget_memory: unavailable,
+      },
+    });
+    const remember = createAkeruMastraTools("thread-memory", runtime).remember as {
+      readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+    if (!remember?.execute) throw new Error("Remember tool is unavailable.");
+
+    await expect(
+      remember.execute({ fact: "The user prefers vim.", scope: "private" }, {
+        agent: { toolCallId: "memory-1" },
+      } as never),
+    ).resolves.toEqual({ saved: true });
+    expect(rememberHandler).toHaveBeenCalledOnce();
   });
 });

@@ -63,6 +63,15 @@ jobs:
       - name: Validate plugin catalog
         run: node scripts/validate-plugin-catalog.ts
 
+      - name: Test plugin catalog and contribution policy
+        run: >-
+          vp test run
+          scripts/validate-plugin-catalog.test.ts
+          scripts/plugin-contribution-policy.test.ts
+          plugins/catalog.test.ts
+          plugins/schema.test.ts
+          plugins/lifecycle-matrix.test.ts
+
       - name: Lint
         run: vp run lint
 

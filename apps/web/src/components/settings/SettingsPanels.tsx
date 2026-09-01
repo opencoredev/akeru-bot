@@ -535,6 +535,9 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Sandbox and browser sharing"]
         : []),
       ...(isBackgroundActivityDirty ? ["Background activity"] : []),
+      ...(settings.localExecutionMode !== DEFAULT_UNIFIED_SETTINGS.localExecutionMode
+        ? ["Local execution"]
+        : []),
       ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
         ? ["New thread mode"]
         : []),
@@ -575,6 +578,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.addProjectBaseDirectory,
+      settings.localExecutionMode,
       settings.defaultThreadEnvMode,
       settings.newWorktreesStartFromOrigin,
       settings.diffIgnoreWhitespace,
@@ -687,6 +691,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       backgroundActivityProfile: DEFAULT_UNIFIED_SETTINGS.backgroundActivityProfile,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
       providerHealthRefreshInterval: DEFAULT_UNIFIED_SETTINGS.providerHealthRefreshInterval,
+      localExecutionMode: DEFAULT_UNIFIED_SETTINGS.localExecutionMode,
       defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
       newWorktreesStartFromOrigin: DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
@@ -2354,8 +2359,48 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          {...searchableSetting("local-execution")}
+          description="Ask before local file changes and shell commands. Full access skips these prompts. Sensitive actions still ask."
+          resetAction={
+            settings.localExecutionMode !== DEFAULT_UNIFIED_SETTINGS.localExecutionMode ? (
+              <SettingResetButton
+                label="local execution"
+                onClick={() =>
+                  updateSettings({
+                    localExecutionMode: DEFAULT_UNIFIED_SETTINGS.localExecutionMode,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.localExecutionMode}
+              onValueChange={(value) => {
+                if (value === "approval-required" || value === "full-access") {
+                  updateSettings({ localExecutionMode: value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Local execution">
+                <SelectValue>
+                  {settings.localExecutionMode === "full-access" ? "Full access" : "Ask first"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="approval-required">
+                  Ask first
+                </SelectItem>
+                <SelectItem hideIndicator value="full-access">
+                  Full access
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
           {...searchableSetting("new-threads")}
-          id="local-execution"
           description="Pick the default workspace mode for newly created draft threads."
           resetAction={
             settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode ||
@@ -2620,6 +2665,17 @@ export function GeneralSettingsPanel() {
             description="Current version of the application."
           />
         )}
+        <SettingsRow
+          {...searchableSetting("analytics")}
+          description="Share anonymous usage data to help improve Akeru Bot."
+          control={
+            <Switch
+              aria-label="Analytics"
+              checked={settings.analyticsEnabled}
+              onCheckedChange={(analyticsEnabled) => updateSettings({ analyticsEnabled })}
+            />
+          }
+        />
         <SettingsRow
           title="Product feedback"
           control={

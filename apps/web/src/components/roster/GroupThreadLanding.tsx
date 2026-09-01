@@ -44,7 +44,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const boss = members.find((bot) => bot.id === group.bossBotId) ?? members[0];
   if (!boss) return null;
   const working = runtime.sending || presence === "working";
-  const messages = visibleBotChatMessages(runtime.messages, working);
+  const messages = visibleBotChatMessages(runtime.messages);
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
   const inboxItems = selectOpenBotInboxItems(
     inboxQuery.data?.inbox ?? [],

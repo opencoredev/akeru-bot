@@ -67,6 +67,19 @@ describe("ServerSettings product feedback", () => {
   });
 });
 
+describe("ServerSettings analytics", () => {
+  it("defaults analytics on and accepts an opt-out patch", () => {
+    expect(decodeServerSettings({}).analyticsEnabled).toBe(true);
+    expect(decodeServerSettingsPatch({ analyticsEnabled: false })).toEqual({
+      analyticsEnabled: false,
+    });
+  });
+
+  it("rejects a non-boolean analytics patch", () => {
+    expect(() => decodeServerSettingsPatch({ analyticsEnabled: "false" })).toThrow();
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");
@@ -93,6 +106,20 @@ describe("ClaudeSettings auto-compaction", () => {
     expect(
       decodeServerSettingsPatch({ providers: { claudeAgent: { autoCompactWindow: "300000" } } }),
     ).toBeDefined();
+  });
+});
+
+describe("ServerSettings local execution", () => {
+  it("asks before local execution by default and accepts an explicit full-access opt-in", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+    expect(
+      decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
+    ).toBe("full-access");
+  });
+
+  it("rejects other runtime modes", () => {
+    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
+    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto-accept-edits" })).toThrow();
   });
 });
 

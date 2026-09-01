@@ -11,8 +11,8 @@ import type {
 } from "@t3tools/contracts";
 import {
   CommandId,
+  DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
-  DEFAULT_RUNTIME_MODE,
   MessageId,
   T3_PROJECT_FILE_NAME,
   ThreadId,
@@ -400,7 +400,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     draftStartFromOrigin ??
     selectedEnvironmentServerConfig?.settings.newWorktreesStartFromOrigin ??
     true;
-  const runtimeMode = selectedProjectDraft.runtimeMode ?? DEFAULT_RUNTIME_MODE;
+  const runtimeMode =
+    selectedProjectDraft.runtimeMode ??
+    selectedEnvironmentServerConfig?.settings.localExecutionMode ??
+    DEFAULT_LOCAL_EXECUTION_MODE;
   const interactionMode = planModeEnabled
     ? (selectedProjectDraft.interactionMode ?? DEFAULT_PROVIDER_INTERACTION_MODE)
     : DEFAULT_PROVIDER_INTERACTION_MODE;
@@ -865,7 +868,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         text,
         attachments: draft.attachments,
         modelSelection: draftModelSelection,
-        runtimeMode: draft.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        runtimeMode:
+          draft.runtimeMode ??
+          selectedEnvironmentServerConfig?.settings.localExecutionMode ??
+          DEFAULT_LOCAL_EXECUTION_MODE,
         interactionMode: resolvePendingTaskInteractionMode({
           preferenceLoaded: planModePreferenceLoaded,
           planModeEnabled,

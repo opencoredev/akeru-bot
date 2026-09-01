@@ -15,6 +15,7 @@ import {
   type PortabilityArchiveRecord,
   type PortabilityImportItem,
   type PortabilityImportPreview,
+  type PortabilityProjectFolderMap,
   type PortabilityProjectData,
   type PortabilitySafeServerSettings,
   type OrchestrationCommand,
@@ -22,6 +23,11 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
+import {
+  isWindowsAbsolutePath,
+  normalizeProjectPathForComparison,
+  normalizeProjectPathForDispatch,
+} from "@t3tools/shared/path";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 
@@ -800,6 +806,7 @@ function item(record: PortabilityArchiveRecord): PortabilityImportItem {
 
 type ProjectRestoreMatch =
   | { readonly kind: "matched"; readonly targetId: ProjectId }
+  | { readonly kind: "created"; readonly targetId: ProjectId; readonly workspaceRoot: string }
   | { readonly kind: "conflict" }
   | { readonly kind: "unsupported"; readonly reason: string };
 
@@ -827,7 +834,7 @@ function repositoriesMatch(
   return sourceDisplayName !== undefined && sourceDisplayName === targetDisplayName;
 }
 
-function resolveProjectRestoreMatches(
+function resolveExistingProjectRestoreMatches(
   archive: PortabilityArchive,
   snapshot: OrchestrationReadModel,
 ): Map<string, ProjectRestoreMatch> {
@@ -838,6 +845,11 @@ function resolveProjectRestoreMatches(
   const matches = new Map<string, ProjectRestoreMatch>();
 
   for (const source of sourceProjects) {
+    const sameIdTarget = targets.find((target) => target.project.id === source.id);
+    if (sameIdTarget) {
+      matches.set(source.id, { kind: "matched", targetId: sameIdTarget.project.id });
+      continue;
+    }
     const repositoryCandidates = source.data.repository
       ? targets.filter((target) =>
           repositoriesMatch(source.data.repository, target.data.repository),
@@ -910,6 +922,83 @@ function resolveProjectRestoreMatches(
   return matches;
 }
 
+export function normalizePortabilityProjectFolders(
+  archive: PortabilityArchive,
+  snapshot: OrchestrationReadModel,
+  projectFolders: PortabilityProjectFolderMap = {},
+): PortabilityProjectFolderMap {
+  const sourceProjects = new Map(
+    archive.records.flatMap((record) =>
+      record.type === "project" ? [[record.id, record] as const] : [],
+    ),
+  );
+  const existingMatches = resolveExistingProjectRestoreMatches(archive, snapshot);
+  const activeWorkspaceRoots = new Set(
+    snapshot.projects
+      .filter((project) => project.deletedAt === null)
+      .map((project) => normalizeProjectPathForComparison(project.workspaceRoot)),
+  );
+  const targetWorkspaceRoots = new Map<string, string>();
+  const normalized: Record<string, string> = {};
+
+  for (const [projectId, destination] of Object.entries(projectFolders)) {
+    if (!sourceProjects.has(projectId)) {
+      throw new Error(`Project folder map references unknown project '${projectId}'.`);
+    }
+    if (existingMatches.get(projectId)?.kind !== "unsupported") {
+      throw new Error(`Project '${projectId}' already has a target project.`);
+    }
+    if (!destination.startsWith("/") && !isWindowsAbsolutePath(destination)) {
+      throw new Error(`Project '${projectId}' destination must be an absolute path.`);
+    }
+    const workspaceRoot = normalizeProjectPathForDispatch(destination);
+    if (workspaceRoot === "/" || /^[A-Za-z]:[\\/]$/.test(workspaceRoot)) {
+      throw new Error(`Project '${projectId}' destination cannot be a filesystem root.`);
+    }
+    const comparisonRoot = normalizeProjectPathForComparison(workspaceRoot);
+    if (activeWorkspaceRoots.has(comparisonRoot)) {
+      throw new Error(`Project '${projectId}' destination already belongs to an active project.`);
+    }
+    const otherProjectId = targetWorkspaceRoots.get(comparisonRoot);
+    if (otherProjectId) {
+      throw new Error(
+        `Projects '${otherProjectId}' and '${projectId}' cannot use the same destination.`,
+      );
+    }
+    targetWorkspaceRoots.set(comparisonRoot, projectId);
+    normalized[projectId] = workspaceRoot;
+  }
+
+  return normalized as PortabilityProjectFolderMap;
+}
+
+function resolveProjectRestoreMatches(
+  archive: PortabilityArchive,
+  snapshot: OrchestrationReadModel,
+  projectFolders: PortabilityProjectFolderMap = {},
+): Map<string, ProjectRestoreMatch> {
+  const matches = resolveExistingProjectRestoreMatches(archive, snapshot);
+  const normalizedProjectFolders = normalizePortabilityProjectFolders(
+    archive,
+    snapshot,
+    projectFolders,
+  );
+  for (const [sourceId, workspaceRoot] of Object.entries(normalizedProjectFolders)) {
+    let targetId = ProjectId.make(sourceId);
+    let collision = 0;
+    while (snapshot.projects.some((project) => project.id === targetId)) {
+      targetId = ProjectId.make(portableId("project", { sourceId, workspaceRoot, collision }));
+      collision += 1;
+    }
+    matches.set(sourceId, {
+      kind: "created",
+      targetId,
+      workspaceRoot,
+    });
+  }
+  return matches;
+}
+
 function mutableProjectData(data: PortabilityProjectData) {
   return {
     title: data.title,
@@ -935,10 +1024,21 @@ export function isPortabilityPreviewCurrent(
   settings: ServerSettings,
   availableProviderIds: ReadonlySet<string>,
   preview: Pick<PortabilityImportPreview, "snapshotSequence" | "stateChecksum">,
+  projectFolders: PortabilityProjectFolderMap = {},
 ): boolean {
   return (
     snapshot.snapshotSequence === preview.snapshotSequence &&
-    portabilityStateChecksum(snapshot, settings, availableProviderIds) === preview.stateChecksum
+    portabilityChecksum({
+      state: portabilityStateChecksum(snapshot, settings, availableProviderIds),
+      projectFolders: Object.fromEntries(
+        Object.entries(projectFolders)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([projectId, destination]) => [
+            projectId,
+            normalizeProjectPathForDispatch(destination),
+          ]),
+      ),
+    }) === preview.stateChecksum
   );
 }
 
@@ -947,11 +1047,18 @@ export function previewPortabilityImport(
   snapshot: OrchestrationReadModel,
   settings: ServerSettings,
   availableProviderIds: ReadonlySet<string>,
+  projectFolders: PortabilityProjectFolderMap = {},
 ): PortabilityImportPreview {
   const current = new Map(
     portableRecords(snapshot, settings).map((record) => [`${record.type}:${record.id}`, record]),
   );
-  const projectMatches = resolveProjectRestoreMatches(archive, snapshot);
+  const normalizedProjectFolders = normalizePortabilityProjectFolders(
+    archive,
+    snapshot,
+    projectFolders,
+  );
+  const existingProjectMatches = resolveExistingProjectRestoreMatches(archive, snapshot);
+  const projectMatches = resolveProjectRestoreMatches(archive, snapshot, normalizedProjectFolders);
   const additions: PortabilityImportItem[] = [];
   const changes: PortabilityImportItem[] = [];
   const conflicts: PortabilityImportItem[] = [];
@@ -984,6 +1091,15 @@ export function previewPortabilityImport(
     ),
   ].sort();
   const missingProviderIds = new Set(missingProviders);
+  const uncreatableProjectIds = new Set(
+    archive.records.flatMap((record) =>
+      record.type === "project" &&
+      record.data.defaultModelSelection !== null &&
+      missingProviderIds.has(record.data.defaultModelSelection.instanceId)
+        ? [record.id]
+        : [],
+    ),
+  );
   const unavailableBotIds = new Set(
     archive.records.flatMap((record) =>
       record.type === "bot" &&
@@ -1008,15 +1124,6 @@ export function previewPortabilityImport(
         : [];
     }),
   );
-  const unsupportedCounts = new Map<
-    string,
-    { kind: "project" | "thread"; count: number; reason: string }
-  >();
-  const addUnsupported = (kind: "project" | "thread", reason: string) => {
-    const key = `${kind}:${reason}`;
-    const existing = unsupportedCounts.get(key);
-    unsupportedCounts.set(key, { kind, count: (existing?.count ?? 0) + 1, reason });
-  };
   for (const record of archive.records) {
     const projectMatch =
       record.type === "project"
@@ -1025,7 +1132,6 @@ export function previewPortabilityImport(
           ? projectMatches.get(record.data.projectId)
           : undefined;
     if (projectMatch?.kind === "unsupported") {
-      addUnsupported(record.type as "project" | "thread", projectMatch.reason);
       continue;
     }
     if (projectMatch?.kind === "conflict") {
@@ -1044,6 +1150,7 @@ export function previewPortabilityImport(
       (record.type === "group" && unavailableGroupIds.has(record.id)) ||
       (record.type === "thread" &&
         (deletedThreadIds.has(record.id) ||
+          (projectMatch?.kind === "created" && uncreatableProjectIds.has(record.data.projectId)) ||
           missingProviderIds.has(record.data.modelSelection.instanceId) ||
           (record.data.botId !== undefined &&
             record.data.botId !== null &&
@@ -1056,12 +1163,14 @@ export function previewPortabilityImport(
       continue;
     }
     const existingKey =
-      record.type === "project" && projectMatch?.kind === "matched"
+      record.type === "project" &&
+      (projectMatch?.kind === "matched" || projectMatch?.kind === "created")
         ? `project:${projectMatch.targetId}`
         : `${record.type}:${record.id}`;
     const existing = current.get(existingKey);
     const importedData =
-      record.type === "thread" && projectMatch?.kind === "matched"
+      record.type === "thread" &&
+      (projectMatch?.kind === "matched" || projectMatch?.kind === "created")
         ? { ...record.data, projectId: projectMatch.targetId }
         : record.data;
     if (!existing) additions.push(item(record));
@@ -1081,7 +1190,9 @@ export function previewPortabilityImport(
       record.type === "thread" &&
       existing.type === "thread" &&
       (existing.data.projectId !==
-        (projectMatch?.kind === "matched" ? projectMatch.targetId : record.data.projectId) ||
+        (projectMatch?.kind === "matched" || projectMatch?.kind === "created"
+          ? projectMatch.targetId
+          : record.data.projectId) ||
         existing.data.botId !== record.data.botId ||
         existing.data.groupId !== record.data.groupId ||
         ((existing.data.messages.length > 0 ||
@@ -1105,45 +1216,32 @@ export function previewPortabilityImport(
   }
   return {
     snapshotSequence: snapshot.snapshotSequence,
-    stateChecksum: portabilityStateChecksum(snapshot, settings, availableProviderIds),
+    stateChecksum: portabilityChecksum({
+      state: portabilityStateChecksum(snapshot, settings, availableProviderIds),
+      projectFolders: normalizedProjectFolders,
+    }),
     additions,
     changes,
     conflicts,
     missingProviders,
     skippedSecrets: [
-      "Provider credentials and opaque provider configuration",
-      "MCP credentials and environment variables",
-      "Local paths, image avatar files, Git state, and event identifiers",
+      "Provider sign-ins and private provider settings",
+      "MCP server credentials and environment variables",
+      "Device-specific paths, image files, Git state, and internal event identifiers",
     ],
-    unsupported: [
-      ...unsupportedCounts.values(),
-      {
-        kind: "jobs" as const,
-        count: 0,
-        reason: "The Akeru read model has no jobs collection or repository.",
-      },
-      {
-        kind: "memory" as const,
-        count: 0,
-        reason: "The Akeru read model has no durable memory collection or repository.",
-      },
-      {
-        kind: "routines" as const,
-        count: 0,
-        reason: "The Akeru read model has no routines collection or repository.",
-      },
-      {
-        kind: "skill-assignments" as const,
-        count: 0,
-        reason: "Provider skill discovery exists, but Akeru has no persisted skill assignments.",
-      },
-      {
-        kind: "usage-history" as const,
-        count: 0,
-        reason:
-          "Usage is read from provider-owned transcripts. Akeru has no usage import repository.",
-      },
-    ],
+    projectFolders: archive.records.flatMap((record) =>
+      record.type === "project" && existingProjectMatches.get(record.id)?.kind === "unsupported"
+        ? [
+            {
+              projectId: ProjectId.make(record.id),
+              title: record.data.title,
+              workspaceName: record.data.workspaceName,
+              destination: normalizedProjectFolders[ProjectId.make(record.id)] ?? null,
+            },
+          ]
+        : [],
+    ),
+    unsupported: [],
   };
 }
 
@@ -1245,6 +1343,7 @@ export function commandsForPortabilityImport(
   snapshot: OrchestrationReadModel,
   settings: ServerSettings,
   availableProviderIds: ReadonlySet<string>,
+  projectFolders: PortabilityProjectFolderMap = {},
 ): {
   commands: OrchestrationCommand[];
   commandItems: PortabilityImportItem[];
@@ -1253,11 +1352,19 @@ export function commandsForPortabilityImport(
   applied: number;
   skipped: number;
 } {
-  const preview = previewPortabilityImport(archive, snapshot, settings, availableProviderIds);
-  const projectMatches = resolveProjectRestoreMatches(archive, snapshot);
+  const preview = previewPortabilityImport(
+    archive,
+    snapshot,
+    settings,
+    availableProviderIds,
+    projectFolders,
+  );
+  const projectMatches = resolveProjectRestoreMatches(archive, snapshot, projectFolders);
   const projectSourceIdByTarget = new Map(
     [...projectMatches.entries()].flatMap(([sourceId, match]) =>
-      match.kind === "matched" ? [[match.targetId, sourceId] as const] : [],
+      match.kind === "matched" || match.kind === "created"
+        ? [[match.targetId, sourceId] as const]
+        : [],
     ),
   );
   const conflictKeys = new Set(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`));
@@ -1282,8 +1389,19 @@ export function commandsForPortabilityImport(
   const deferredBotArchiveCommands: OrchestrationCommand[] = [];
   let settingsPatch: ServerSettingsPatch | undefined;
   let applied = 0;
+  const unmappedProjectRecordCount = archive.records.filter((record) => {
+    const match =
+      record.type === "project"
+        ? projectMatches.get(record.id)
+        : record.type === "thread"
+          ? projectMatches.get(record.data.projectId)
+          : undefined;
+    return match?.kind === "unsupported";
+  }).length;
   let skipped =
-    preview.conflicts.length + preview.unsupported.reduce((total, entry) => total + entry.count, 0);
+    preview.conflicts.length +
+    preview.unsupported.reduce((total, entry) => total + entry.count, 0) +
+    unmappedProjectRecordCount;
 
   for (const record of archive.records) {
     if (conflictKeys.has(`${record.type}:${record.id}`)) continue;
@@ -1318,6 +1436,27 @@ export function commandsForPortabilityImport(
   for (const record of archive.records) {
     if (record.type !== "project" || conflictKeys.has(`project:${record.id}`)) continue;
     const match = projectMatches.get(record.id);
+    if (match?.kind === "created") {
+      commands.push({
+        type: "project.create",
+        commandId: nextCommandId(),
+        projectId: match.targetId,
+        title: record.data.title,
+        workspaceRoot: match.workspaceRoot,
+        defaultModelSelection: record.data.defaultModelSelection,
+        createdAt: record.updatedAt,
+      });
+      if (record.data.defaultThreadEnvMode) {
+        commands.push({
+          type: "project.meta.update",
+          commandId: nextCommandId(),
+          projectId: match.targetId,
+          defaultThreadEnvMode: record.data.defaultThreadEnvMode,
+        });
+      }
+      applied += 1;
+      continue;
+    }
     if (match?.kind !== "matched") continue;
     const existing = projectsById.get(match.targetId);
     if (!existing) continue;
@@ -1471,7 +1610,7 @@ export function commandsForPortabilityImport(
     if (
       record.type !== "thread" ||
       conflictKeys.has(`thread:${record.id}`) ||
-      projectMatch?.kind !== "matched"
+      (projectMatch?.kind !== "matched" && projectMatch?.kind !== "created")
     ) {
       continue;
     }

@@ -3,7 +3,6 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
-  DEFAULT_RUNTIME_MODE,
   EnvironmentId,
   ThreadId,
   type ModelSelection,
@@ -29,15 +28,15 @@ import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
+import { resolveBotRuntimeMode } from "./botSandbox";
 import {
   acceptBotTurnSubmission,
   buildBotTurnStartInput,
-  findLatestBotThreadTarget,
   joinOrStartThreadCreate,
   releaseBotTurnSubmissionAfterObservation,
+  resolveBotThreadTarget,
   reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
-import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -82,7 +81,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const providers = useAtomValue(primaryServerProvidersAtom);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
   const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
-  const target = rememberedPath ? parseChatPath(rememberedPath) : null;
   const primaryThreadShells = useMemo(
     () =>
       primaryEnvironmentId
@@ -90,20 +88,14 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         : [],
     [primaryEnvironmentId, threadShells],
   );
-  const serverTarget = primaryEnvironmentId
-    ? findLatestBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells)
+  const target = primaryEnvironmentId
+    ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
     : null;
   const rememberedThreadRef = useMemo<ScopedThreadRef | null>(() => {
-    const candidate =
-      serverTarget ??
-      (target?.kind === "thread" && target.environmentId === primaryEnvironmentId ? target : null);
-    return candidate
-      ? scopeThreadRef(
-          EnvironmentId.make(candidate.environmentId),
-          ThreadId.make(candidate.threadId),
-        )
+    return target
+      ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
       : null;
-  }, [primaryEnvironmentId, serverTarget, target]);
+  }, [target]);
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
   const retainedThreadRef = useRef<{ botId: string; threadRef: ScopedThreadRef | null }>({
@@ -139,6 +131,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     () => resolveAppModelSelectionState(settings, providers),
     [providers, settings],
   );
+  const setRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
+    reportFailure: false,
+  });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const appendVoiceTranscript = useAtomCommand(threadEnvironment.appendVoiceTranscript, {
     reportFailure: false,
@@ -178,7 +173,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
                 effectiveModelSelection ??
                 activeProject.defaultModelSelection ??
                 appDefaultModelSelection,
-              runtimeMode: bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+              runtimeMode: resolveBotRuntimeMode(bot?.sandbox ?? null, settings.localExecutionMode),
               interactionMode: DEFAULT_INTERACTION_MODE,
               branch: null,
               worktreePath: null,
@@ -203,6 +198,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       botReady,
       createThread,
       effectiveModelSelection,
+      settings.localExecutionMode,
     ],
   );
 
@@ -243,7 +239,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       const createdAt = new Date().toISOString();
       const modelSelection: ModelSelection =
         effectiveModelSelection ?? activeProject.defaultModelSelection ?? appDefaultModelSelection;
-      const runtimeMode = bot?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
+      const runtimeMode = resolveBotRuntimeMode(bot?.sandbox ?? null, settings.localExecutionMode);
       const title = threadTitle(prompt, files);
       const messageId = newMessageId();
       let accepted = false;
@@ -263,6 +259,16 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         if (!currentThreadRef) {
           setError("Could not send the message.");
           return false;
+        }
+        if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {
+          const modeResult = await setRuntimeMode({
+            environmentId: currentThreadRef.environmentId,
+            input: { threadId: currentThreadRef.threadId, runtimeMode },
+          });
+          if (modeResult._tag === "Failure") {
+            setError(errorMessage(modeResult));
+            return false;
+          }
         }
         const startResult = await startTurn({
           environmentId: currentThreadRef.environmentId,
@@ -324,6 +330,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       botReady,
       ensureTranscriptThread,
       rememberedThread?.latestTurn,
+      rememberedThread?.runtimeMode,
+      settings.localExecutionMode,
+      setRuntimeMode,
       startTurn,
     ],
   );

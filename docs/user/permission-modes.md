@@ -4,8 +4,8 @@ A permission mode controls how much the agent does on its own and when it stops 
 
 The mode is set per thread, from the mode control in the message composer. Changing it in one
 thread does not change any other thread. A thread created from inside another thread keeps that
-thread's mode; otherwise new threads start in **Full access** unless you pick something else
-before sending.
+thread's mode. Otherwise, new threads use **Settings > General > Local execution** and ask before
+local file changes and shell commands by default.
 
 ## The Modes
 
@@ -20,8 +20,9 @@ on the provider: Codex delegates routine approvals to an AI reviewer, Claude use
 permission mode, and providers without an equivalent (such as OpenCode) fall back to asking, like
 Supervised.
 
-**Full access**: allow commands and edits without prompts. The default. The agent runs
-unattended until it finishes or asks a question of its own.
+**Full access**: allow commands and edits without local prompts. The agent runs unattended until
+it finishes or asks a question of its own. Actions that send, pay, delete, change production, or
+use secrets still ask.
 
 Approvals appear inline in the conversation. Approve or reject one and the agent continues from
 there. The Codex runtime still asks before every MCP tool call and actions that send, pay, delete,
