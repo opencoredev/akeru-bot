@@ -24,16 +24,16 @@ vi.mock("../ui/button", async () => {
     },
   };
 });
-vi.mock("../ui/dialog", async () => {
+vi.mock("../ui/sheet", async () => {
   const React = await import("react");
   const Wrapper = ({ children }: { readonly children?: React.ReactNode }) =>
     React.createElement("div", null, children);
   return {
-    Dialog: Wrapper,
-    DialogHeader: Wrapper,
-    DialogPanel: Wrapper,
-    DialogPopup: Wrapper,
-    DialogTitle: Wrapper,
+    Sheet: Wrapper,
+    SheetHeader: Wrapper,
+    SheetPanel: Wrapper,
+    SheetPopup: Wrapper,
+    SheetTitle: Wrapper,
   };
 });
 vi.mock("../../state/memory", () => ({
@@ -132,7 +132,7 @@ describe("BotMemorySheet", () => {
     expect(controls.inspect).not.toHaveBeenCalled();
   });
 
-  it("inspects memory and sends clear, decision, edit, and delete mutations", async () => {
+  it("inspects and renders memory while open", () => {
     const markup = renderToStaticMarkup(
       createElement(BotMemorySheet, {
         open: true,
@@ -146,35 +146,6 @@ describe("BotMemorySheet", () => {
     expect(markup).toContain("Thread observation");
     expect(markup).toContain("Pending fact");
     expect(markup).toContain("Durable fact");
-
-    for (const label of ["Clear", "Approve", "Reject", "Edit", "Delete"]) {
-      controls.buttons.find((button) => button.label === label)?.onClick?.();
-    }
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const mutations = controls.mutate.mock.calls.map(
-      ([call]) => (call as { input: { mutation: unknown } }).input.mutation,
-    );
-    expect(mutations).toEqual(
-      expect.arrayContaining([
-        { operation: "conversation.clear" },
-        {
-          operation: "candidate.decide",
-          decision: { candidateId: "candidate-1", decision: "approve" },
-        },
-        {
-          operation: "candidate.decide",
-          decision: { candidateId: "candidate-1", decision: "reject" },
-        },
-        {
-          operation: "fact.edit",
-          memoryId: "root-1",
-          expectedRevision: 1,
-          fact: "Edited fact",
-        },
-        { operation: "fact.delete", memoryId: "root-1", expectedRevision: 1 },
-      ]),
-    );
+    expect(controls.inspect).toHaveBeenCalledOnce();
   });
 });

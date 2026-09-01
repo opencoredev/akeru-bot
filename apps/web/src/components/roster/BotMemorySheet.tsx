@@ -279,7 +279,7 @@ export function BotMemorySheet({
   readonly threadRef: ScopedThreadRef | null;
 }) {
   const query = useEnvironmentQuery(
-    threadRef
+    open && threadRef
       ? memoryEnvironment.inspect({
           environmentId: threadRef.environmentId,
           input: { threadId: threadRef.threadId },
@@ -381,11 +381,16 @@ export function BotMemorySheet({
 
               <section className="space-y-3">
                 <h3 className="text-sm font-medium">Conversation</h3>
-                <p className="text-sm text-muted-foreground">
-                  {query.data.conversation.current
-                    ? `${query.data.conversation.current.generationCount} generations`
-                    : "No conversation memory."}
-                </p>
+                {query.data.conversation.current ? (
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p>{query.data.conversation.current.generationCount} generations</p>
+                    <p className="whitespace-pre-wrap">
+                      {query.data.conversation.current.activeObservations}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No conversation memory.</p>
+                )}
                 <Button
                   size="sm"
                   variant={clearPending ? "destructive" : "outline"}
