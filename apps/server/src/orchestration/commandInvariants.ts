@@ -108,7 +108,7 @@ export function requireProjectAbsent(input: {
   );
 }
 
-export function requireActiveProjectWorkspaceRootAbsent(input: {
+export function requireProjectWorkspaceRootAbsent(input: {
   readonly readModel: OrchestrationReadModel;
   readonly command: OrchestrationCommand;
   readonly workspaceRoot: string;
@@ -117,7 +117,6 @@ export function requireActiveProjectWorkspaceRootAbsent(input: {
   const normalizedWorkspaceRoot = normalizeProjectPathForComparison(input.workspaceRoot);
   const existingProject = input.readModel.projects.find(
     (project) =>
-      project.deletedAt === null &&
       normalizeProjectPathForComparison(project.workspaceRoot) === normalizedWorkspaceRoot &&
       project.id !== input.exceptProjectId,
   );
@@ -127,7 +126,7 @@ export function requireActiveProjectWorkspaceRootAbsent(input: {
   return Effect.fail(
     invariantError(
       input.command.type,
-      `Active project '${existingProject.id}' already exists for workspace root '${normalizedWorkspaceRoot}'.`,
+      `Project '${existingProject.id}' already owns workspace root '${normalizedWorkspaceRoot}'.`,
     ),
   );
 }
