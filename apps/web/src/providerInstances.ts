@@ -75,6 +75,23 @@ export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boo
   return entry.enabled && entry.isAvailable && entry.status === "ready";
 }
 
+/**
+ * Whether an instance can expose its known models in the picker.
+ *
+ * A warning or error probe does not erase the server's model inventory. The
+ * user can still pick one of those models and retry the provider, matching the
+ * mobile client. Missing installs and explicit authentication failures remain
+ * unavailable.
+ */
+export function isProviderInstancePickerSelectable(entry: ProviderInstanceEntry): boolean {
+  return (
+    entry.enabled &&
+    entry.isAvailable &&
+    entry.installed &&
+    entry.snapshot.auth.status !== "unauthenticated"
+  );
+}
+
 /** Picker rails contain configured, enabled instances only. */
 export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
   return entry.enabled;
