@@ -4,7 +4,7 @@ import desktopPackage from "../apps/desktop/package.json" with { type: "json" };
 import serverPackage from "../apps/server/package.json" with { type: "json" };
 import webPackage from "../apps/web/package.json" with { type: "json" };
 import contractsPackage from "../packages/contracts/package.json" with { type: "json" };
-import { releasePackageNames } from "./tegami.mts";
+import { releasePackageNames } from "./tegami.ts";
 
 describe("Tegami release packages", () => {
   it("keeps every release package on one stable version", () => {

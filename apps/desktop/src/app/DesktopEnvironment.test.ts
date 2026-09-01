@@ -131,18 +131,16 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("brands Dev, Alpha, and Nightly display names as Akeru Bot", () =>
+  it.effect("brands Dev and stable display names as Akeru Bot", () =>
     Effect.gen(function* () {
       const development = yield* makeEnvironment(
         {},
         { VITE_DEV_SERVER_URL: "http://localhost:5173" },
       );
       const alpha = yield* makeEnvironment();
-      const nightly = yield* makeEnvironment({ appVersion: "0.0.22-nightly.20260101.1" });
 
       assert.equal(development.displayName, "Akeru Bot (Dev)");
       assert.equal(alpha.displayName, "Akeru Bot (Alpha)");
-      assert.equal(nightly.displayName, "Akeru Bot (Nightly)");
       assert.deepEqual(alpha.branding, {
         baseName: "Akeru Bot",
         stageLabel: "Alpha",

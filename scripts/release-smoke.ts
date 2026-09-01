@@ -110,7 +110,7 @@ for (const [needle, label] of [
   assertContains(releaseWorkflow, needle, `Stable release workflow is missing ${label}.`);
 }
 
-assertContains(releaseWorkflow, 'tag=v%s\\n', "Stable release workflow does not use a vX.Y.Z tag.");
+assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
 assertContains(
   releaseWorkflow,
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",

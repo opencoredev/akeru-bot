@@ -78,10 +78,7 @@ describe("brand-assets", () => {
     expect([
       BRAND_ASSET_PATHS.developmentIconComposerProject,
       BRAND_ASSET_PATHS.productionIconComposerProject,
-    ]).toEqual([
-      "assets/dev/app-icon.icon",
-      "assets/prod/app-icon.icon",
-    ]);
+    ]).toEqual(["assets/dev/app-icon.icon", "assets/prod/app-icon.icon"]);
     expect(BRAND_ASSET_PATHS.developmentDesktopIconPng).toMatch(/^assets\/dev\/blueprint-/);
     expect(BRAND_ASSET_PATHS.productionMacIconPng).toMatch(/^assets\/prod\/black-/);
   });

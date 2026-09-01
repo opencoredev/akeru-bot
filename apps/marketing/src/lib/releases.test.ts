@@ -1,4 +1,4 @@
-import { strict as assert } from "node:assert";
+import * as NodeAssert from "node:assert/strict";
 import { describe, it } from "vite-plus/test";
 
 import {
@@ -40,9 +40,9 @@ describe("release downloads", () => {
 
     for (const [userAgent, suffix, os] of cases) {
       const target = detectDownloadTarget(userAgent);
-      assert.equal(target?.os, os);
-      assert.equal(target?.assetSuffix, suffix);
-      assert.equal(
+      NodeAssert.equal(target?.os, os);
+      NodeAssert.equal(target?.assetSuffix, suffix);
+      NodeAssert.equal(
         selectReleaseAsset(release, suffix)?.browser_download_url,
         release.assets.find((asset) => asset.name.endsWith(suffix))?.browser_download_url,
       );
@@ -50,8 +50,8 @@ describe("release downloads", () => {
   });
 
   it("does not advertise macOS Intel or unknown systems", () => {
-    assert.equal(detectDownloadTarget("Macintosh; Intel Mac OS X")?.assetSuffix, "arm64.dmg");
-    assert.equal(detectDownloadTarget("Mozilla/5.0 (Android 16)"), null);
+    NodeAssert.equal(detectDownloadTarget("Macintosh; Intel Mac OS X")?.assetSuffix, "arm64.dmg");
+    NodeAssert.equal(detectDownloadTarget("Mozilla/5.0 (Android 16)"), null);
   });
 
   it("blocks a fast click until the primary download resolves", () => {
@@ -71,14 +71,14 @@ describe("release downloads", () => {
     const resolve = blockDownloadUntilResolved(link);
     const pendingClick = new Event("click", { cancelable: true });
     link.dispatchEvent(pendingClick);
-    assert.equal(pendingClick.defaultPrevented, true);
-    assert.equal(link.attributes.get("aria-disabled"), "true");
+    NodeAssert.equal(pendingClick.defaultPrevented, true);
+    NodeAssert.equal(link.attributes.get("aria-disabled"), "true");
 
     resolve("https://downloads.example/mac");
     const readyClick = new Event("click", { cancelable: true });
     link.dispatchEvent(readyClick);
-    assert.equal(readyClick.defaultPrevented, false);
-    assert.equal(link.href, "https://downloads.example/mac");
+    NodeAssert.equal(readyClick.defaultPrevented, false);
+    NodeAssert.equal(link.href, "https://downloads.example/mac");
   });
 
   it("uses one resolver for direct assets and fallback links", async () => {
@@ -102,25 +102,25 @@ describe("release downloads", () => {
     const resolving = resolveAssetDownload(link, "x64.exe", pendingRelease);
     const pendingClick = new Event("click", { cancelable: true });
     link.dispatchEvent(pendingClick);
-    assert.equal(pendingClick.defaultPrevented, true);
-    assert.equal(link.attributes.get("aria-disabled"), "true");
+    NodeAssert.equal(pendingClick.defaultPrevented, true);
+    NodeAssert.equal(link.attributes.get("aria-disabled"), "true");
 
     finishRelease(release);
-    assert.equal(await resolving, release.assets[1]);
-    assert.equal(link.href, "https://downloads.example/windows");
+    NodeAssert.equal(await resolving, release.assets[1]);
+    NodeAssert.equal(link.href, "https://downloads.example/windows");
 
     const fallback = new Link();
-    assert.equal(
+    NodeAssert.equal(
       await resolveAssetDownload(fallback, "x64.exe", Promise.reject(new Error("offline"))),
       null,
     );
-    assert.equal(fallback.href, RELEASES_URL);
-    assert.equal(fallback.attributes.has("aria-disabled"), false);
+    NodeAssert.equal(fallback.href, RELEASES_URL);
+    NodeAssert.equal(fallback.attributes.has("aria-disabled"), false);
   });
 
   it("accepts only the exact asset for the stable tag", () => {
-    assert.equal(selectReleaseAsset(release, "arm64.dmg"), release.assets[0]);
-    assert.equal(
+    NodeAssert.equal(selectReleaseAsset(release, "arm64.dmg"), release.assets[0]);
+    NodeAssert.equal(
       selectReleaseAsset(
         {
           ...release,
@@ -130,12 +130,12 @@ describe("release downloads", () => {
       ),
       null,
     );
-    assert.equal(selectReleaseAsset({ ...release, tag_name: "preview" }, "arm64.dmg"), null);
+    NodeAssert.equal(selectReleaseAsset({ ...release, tag_name: "preview" }, "arm64.dmg"), null);
   });
 
   it("prompts only for unsigned Windows and Linux artifacts", () => {
-    assert.equal(requiresUnsignedInstall("arm64.dmg"), false);
-    assert.equal(requiresUnsignedInstall("x64.exe"), true);
-    assert.equal(requiresUnsignedInstall("x64.AppImage"), true);
+    NodeAssert.equal(requiresUnsignedInstall("arm64.dmg"), false);
+    NodeAssert.equal(requiresUnsignedInstall("x64.exe"), true);
+    NodeAssert.equal(requiresUnsignedInstall("x64.AppImage"), true);
   });
 });

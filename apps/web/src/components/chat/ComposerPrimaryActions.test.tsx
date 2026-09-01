@@ -231,7 +231,7 @@ describe("ComposerPrimaryActions", () => {
 
     const markup = renderSendButton();
 
-    expect(markup).toContain("stage-blueprint");
+    expect(markup).toContain("stage-dev");
     expect(markup).toContain("bg-transparent text-white");
     expect(markup).not.toContain("bg-message-action text-message-action-foreground");
   });

@@ -229,11 +229,11 @@ describe("updateMachine", () => {
   it("clears release notes when checking again", () => {
     const state = reduceDesktopUpdateStateOnCheckStart(
       {
-        ...createInitialDesktopUpdateState("1.0.0", runtimeInfo, "nightly"),
+        ...createInitialDesktopUpdateState("1.0.0", runtimeInfo, "latest"),
         enabled: true,
         status: "available",
-        availableVersion: "1.1.0-nightly.1",
-        releaseNotes: [{ version: "1.1.0-nightly.1", items: ["feat: old note"] }],
+        availableVersion: "1.1.0",
+        releaseNotes: [{ version: "1.1.0", items: ["feat: old note"] }],
       },
       "2026-03-04T00:00:00.000Z",
     );

@@ -1,22 +1,25 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+// @effect-diagnostics nodeBuiltinImport:off - Tests use isolated temporary release directories.
+import * as NodeAssert from "node:assert/strict";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import { describe, it } from "vite-plus/test";
 
 import { expectedReleaseAssetNames, verifyReleaseAssets } from "./verify-release-assets.ts";
 
 describe("verify-release-assets", () => {
   it("rejects missing assets and writes verified SHA256SUMS for the exact release set", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "akeru-release-assets-"));
+    const directory = await NodeFSP.mkdtemp(
+      NodePath.join(NodeOS.tmpdir(), "akeru-release-assets-"),
+    );
     const names = expectedReleaseAssetNames("1.2.3");
-    for (const name of names) await writeFile(join(directory, name), name);
+    for (const name of names) await NodeFSP.writeFile(NodePath.join(directory, name), name);
 
     const sums = await verifyReleaseAssets(directory, "1.2.3");
-    assert.equal(sums, await readFile(join(directory, "SHA256SUMS"), "utf8"));
-    assert.equal(sums.trimEnd().split("\n").length, names.length);
+    NodeAssert.equal(sums, await NodeFSP.readFile(NodePath.join(directory, "SHA256SUMS"), "utf8"));
+    NodeAssert.equal(sums.trimEnd().split("\n").length, names.length);
 
-    await writeFile(join(directory, "unexpected.txt"), "unexpected");
-    await assert.rejects(verifyReleaseAssets(directory, "1.2.3"), /Release assets differ/);
+    await NodeFSP.writeFile(NodePath.join(directory, "unexpected.txt"), "unexpected");
+    await NodeAssert.rejects(verifyReleaseAssets(directory, "1.2.3"), /Release assets differ/);
   });
 });

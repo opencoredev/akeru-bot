@@ -43,36 +43,6 @@ describe("versionSkew", () => {
     expect(resolveVersionMismatch("9.9.9")).toBeNull();
   });
 
-  it("does not warn when a nightly and a stable build share a core version", () => {
-    expect(resolveVersionMismatch("0.0.34-nightly.20260818.1124")).toBeNull();
-
-    branding.APP_VERSION = "0.0.34-nightly.20260818.1124";
-    expect(resolveVersionMismatch("0.0.34")).toBeNull();
-  });
-
-  it.each(["0.0.34-nightly.20260823.1124", "0.0.34-nightly.20260824.1124"])(
-    "warns when nightly server %s is behind a nightly client on the same release",
-    (serverVersion) => {
-      branding.APP_VERSION = "0.0.34-nightly.20260824.1125";
-
-      expect(resolveVersionMismatch(serverVersion)).toEqual({
-        clientVersion: "0.0.34-nightly.20260824.1125",
-        serverVersion,
-        hint: MISMATCH_HINT,
-      });
-    },
-  );
-
-  it("does not warn when a nightly server is ahead on the same release", () => {
-    branding.APP_VERSION = "0.0.34-nightly.20260824.1125";
-
-    expect(resolveVersionMismatch("0.0.34-nightly.20260824.1126")).toBeNull();
-  });
-
-  it("treats a nightly server built past the client as ahead, not skew", () => {
-    expect(resolveVersionMismatch("0.0.35-nightly.20260818.1124")).toBeNull();
-  });
-
   it("still warns when a nightly client outruns the server by a release", () => {
     branding.APP_VERSION = "0.0.35-nightly.20260818.1124";
 

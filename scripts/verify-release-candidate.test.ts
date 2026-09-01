@@ -1,8 +1,9 @@
-import assert from "node:assert/strict";
+// @effect-diagnostics nodeBuiltinImport:off - Tests use isolated temporary release directories.
+import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "vite-plus/test";
 
 import { verifyReleaseCandidate, writeReleaseChecksums } from "./verify-release-candidate.ts";
 
@@ -30,7 +31,7 @@ describe("verifyReleaseCandidate", () => {
   it("accepts the exact stable asset set and generated checksums", () => {
     const directory = fixture();
     try {
-      assert.doesNotThrow(() => verifyReleaseCandidate(directory, version));
+      NodeAssert.doesNotThrow(() => verifyReleaseCandidate(directory, version));
     } finally {
       NodeFS.rmSync(directory, { recursive: true });
     }
@@ -40,7 +41,7 @@ describe("verifyReleaseCandidate", () => {
     const directory = fixture();
     try {
       NodeFS.appendFileSync(NodePath.join(directory, assets[0]), "tampered");
-      assert.throws(() => verifyReleaseCandidate(directory, version), /SHA256 mismatch/);
+      NodeAssert.throws(() => verifyReleaseCandidate(directory, version), /SHA256 mismatch/);
     } finally {
       NodeFS.rmSync(directory, { recursive: true });
     }
@@ -49,12 +50,15 @@ describe("verifyReleaseCandidate", () => {
   it("rejects nightly versions and assets", () => {
     const directory = fixture();
     try {
-      assert.throws(
+      NodeAssert.throws(
         () => verifyReleaseCandidate(directory, "1.2.3-nightly.1"),
         /Stable release version must be plain semver/,
       );
       NodeFS.writeFileSync(NodePath.join(directory, "latest-nightly.yml"), "nightly");
-      assert.throws(() => verifyReleaseCandidate(directory, version), /Release assets do not match/);
+      NodeAssert.throws(
+        () => verifyReleaseCandidate(directory, version),
+        /Release assets do not match/,
+      );
     } finally {
       NodeFS.rmSync(directory, { recursive: true });
     }

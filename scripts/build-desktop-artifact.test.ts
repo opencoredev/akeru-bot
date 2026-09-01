@@ -981,9 +981,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           prefix: "t3code-dmg-background-missing-",
         });
 
-        const error = yield* stageDesktopDmgBackground(stageResourcesDir, "latest", false).pipe(
-          Effect.flip,
-        );
+        const error = yield* stageDesktopDmgBackground(stageResourcesDir, false).pipe(Effect.flip);
 
         assert.instanceOf(error, DesktopDmgBackgroundSourceMissingError);
         assert.equal(error.channel, "latest");

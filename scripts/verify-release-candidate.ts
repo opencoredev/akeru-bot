@@ -1,19 +1,21 @@
+// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - Release verification runs before an Effect runtime exists.
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-const stableAssets = (version: string) => [
-  `Akeru-Bot-${version}-arm64.dmg`,
-  `Akeru-Bot-${version}-arm64-mac.zip`,
-  `Akeru-Bot-${version}-x64.exe`,
-  `Akeru-Bot-${version}-x64.exe.blockmap`,
-  `Akeru-Bot-${version}-x86_64.AppImage`,
-  `Akeru-Bot-${version}-x86_64.AppImage.blockmap`,
-  "latest-mac.yml",
-  "latest.yml",
-  "latest-linux.yml",
-] as const;
+const stableAssets = (version: string) =>
+  [
+    `Akeru-Bot-${version}-arm64.dmg`,
+    `Akeru-Bot-${version}-arm64-mac.zip`,
+    `Akeru-Bot-${version}-x64.exe`,
+    `Akeru-Bot-${version}-x64.exe.blockmap`,
+    `Akeru-Bot-${version}-x86_64.AppImage`,
+    `Akeru-Bot-${version}-x86_64.AppImage.blockmap`,
+    "latest-mac.yml",
+    "latest.yml",
+    "latest-linux.yml",
+  ] as const;
 
 const sha256 = (path: string) =>
   NodeCrypto.createHash("sha256").update(NodeFS.readFileSync(path)).digest("hex");
@@ -26,7 +28,9 @@ export function verifyReleaseCandidate(directory: string, version: string): void
   const expected = [...stableAssets(version), "SHA256SUMS"].sort();
   const actual = NodeFS.readdirSync(directory).sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`Release assets do not match.\nExpected: ${expected.join(", ")}\nActual: ${actual.join(", ")}`);
+    throw new Error(
+      `Release assets do not match.\nExpected: ${expected.join(", ")}\nActual: ${actual.join(", ")}`,
+    );
   }
 
   const checksums = new Map(
