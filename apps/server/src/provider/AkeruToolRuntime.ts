@@ -25,6 +25,7 @@ import {
   type AkeruMemoryToolId,
 } from "../memory/MemoryToolHandlers.ts";
 import type { AkeruCatalogToolHandler } from "./AkeruCatalogToolHandlers.ts";
+import type { AkeruBotStateRuntime } from "./AkeruBotStateRuntime.ts";
 
 export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
 
@@ -75,6 +76,7 @@ export interface AkeruToolSession {
   readonly sendToUser?: (
     input: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
   ) => Promise<AkeruToolReceipt>;
+  readonly botState?: Pick<AkeruBotStateRuntime, "updateProfile">;
   readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
 }
 
@@ -122,6 +124,7 @@ const BACKEND_NAMES: Record<
     | "CreateChannel"
     | "UpdateChannel"
     | "SendToUser"
+    | "UpdateBotProfile"
     | "InstallPlugin"
     | "AuthenticateMcpServer"
     | "RestartMcpServers"
@@ -243,6 +246,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       tools.add("UpdateChannel");
     }
     if (session.sendToUser) tools.add("SendToUser");
+    if (session.botId && session.botState) tools.add("UpdateBotProfile");
     for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
       tools.add(toolId);
     }
@@ -449,6 +453,35 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               summary,
               failureCode,
               fatalToThread: false,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (input.toolId === "UpdateBotProfile") {
+          if (!session.botId || !session.botState) {
+            throw new Error("Bot profile management is not available for this session.");
+          }
+          failureCode = "internal";
+          try {
+            result = await session.botState.updateProfile(
+              ThreadId.make(input.threadId),
+              session.botId,
+              input.toolCallId,
+              decodeAkeruToolInput("UpdateBotProfile", decoded),
+            );
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              billedBotId: session.botId,
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });
