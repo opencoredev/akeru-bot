@@ -16,7 +16,6 @@ import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import { toPersistenceDecodeError, toPersistenceSqlError } from "../../persistence/Errors.ts";
 import {
   AkeruMemoryAccessDenied,
-  deriveAkeruWorkspaceId,
   resolveAuthorizedMemoryPartitions,
   type AuthorizedMemoryPartition,
 } from "../EntityMemoryAccess.ts";
@@ -214,7 +213,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       case "workspace":
         return {
           kind: "workspace",
-          id: AkeruMemoryEntityId.make(deriveAkeruWorkspaceId(access.projectId)),
+          id: AkeruMemoryEntityId.make(revision.partition.partitionId),
         } as const;
       case "thread":
         return access.groupId !== null
