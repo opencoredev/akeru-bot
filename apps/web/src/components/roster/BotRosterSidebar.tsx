@@ -43,7 +43,6 @@ import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
-import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import {
   buildGroupedRosterSections,
   buildRosterStrip,

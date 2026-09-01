@@ -10,6 +10,7 @@ import { createStaticNavigation } from "@react-navigation/native";
 
 import { RegistryContext } from "@effect/atom-react";
 import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
+import { MobilePolicyNotice } from "./features/settings/MobilePolicyNotice";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
 import { IncomingShareProvider } from "./features/sharing/IncomingShareProvider";
 import {
@@ -94,6 +95,7 @@ function AppContent() {
                 <Navigation linking={appLinking} theme={navigationTheme} />
               </IncomingShareProvider>
               <ConfirmDialogHost />
+              <MobilePolicyNotice />
             </BlurTargetView>
             {/* Anchored-menu overlays render here — in-window, so the
                 keyboard stays up while a dropdown is open. */}

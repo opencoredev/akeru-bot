@@ -549,4 +549,39 @@ it.layer(TestLayer)("bot persistence", (it) => {
       );
     }),
   );
+
+  it.effect("maps historical Akeru Cloud bots to local during projection rebuilds", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const projectionPipeline = yield* OrchestrationProjectionPipeline;
+      const snapshots = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      const botId = BotId.make("bot-legacy-akeru-cloud");
+
+      yield* engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-bot-legacy-akeru-cloud"),
+        botId,
+        name: "Legacy",
+        title: "Legacy",
+        avatar: { kind: "dither", seed: "legacy" },
+        engine: null,
+        sandbox: "local",
+        usageCap: null,
+        groupId: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      yield* sql`
+        UPDATE orchestration_events
+        SET payload_json = json_set(payload_json, '$.sandbox', 'akeru-cloud')
+        WHERE event_type = 'bot.created' AND stream_id = ${botId}
+      `;
+      yield* sql`DELETE FROM projection_bots`;
+      yield* sql`DELETE FROM projection_state WHERE projector = 'projection.bots'`;
+      yield* projectionPipeline.bootstrap;
+
+      const bot = (yield* snapshots.getShellSnapshot()).bots.find((item) => item.id === botId);
+      assert.equal(bot?.sandbox, null);
+    }),
+  );
 });

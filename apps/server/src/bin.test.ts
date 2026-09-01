@@ -185,7 +185,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
     Effect.gen(function* () {
       const { output } = yield* captureStdout(runCli(["service", "--help"]));
 
-      assert.include(output, "Manage the T3 Code background service.");
+      assert.include(output, "Manage the Akeru Bot background service.");
       assert.include(output, "install");
       assert.include(output, "uninstall");
       assert.include(output, "update");

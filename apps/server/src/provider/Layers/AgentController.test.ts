@@ -753,8 +753,8 @@ describe("AgentControllerLive", () => {
         expect(events.find((event) => event.type === "request.opened")).toMatchObject({
           payload: {
             options: [
-              { decision: "accept", label: "Allow" },
               { decision: "decline", label: "Decline" },
+              { decision: "accept", label: "Approve" },
             ],
           },
         });
@@ -1475,6 +1475,7 @@ describe("AgentControllerLive", () => {
       getTools: vi.fn(() => ({
         indexed_read: { mcp: { annotations: { readOnlyHint: true } } },
       })),
+      getServerStatuses: vi.fn(() => []),
     };
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> = vi.fn(
       () => mcpManager as never,

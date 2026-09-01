@@ -16,6 +16,8 @@ const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
+  readonly reviewedPrivacyPolicyVersion?: string;
+  readonly reviewedTermsVersion?: string;
   readonly liveActivitiesEnabled?: boolean;
   readonly themeId?: MobileThemeId;
   readonly lightThemeId?: MobileThemeId;
@@ -86,6 +88,8 @@ export class MobilePreferencesStore extends Context.Service<
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    reviewedPrivacyPolicyVersion?: string;
+    reviewedTermsVersion?: string;
     liveActivitiesEnabled?: boolean;
     themeId?: MobileThemeId;
     lightThemeId?: MobileThemeId;
@@ -106,6 +110,12 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListV2SnoozedShelfExpanded?: boolean;
   } = {};
 
+  if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
+    preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
+  }
+  if (typeof parsed.reviewedTermsVersion === "string") {
+    preferences.reviewedTermsVersion = parsed.reviewedTermsVersion;
+  }
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }

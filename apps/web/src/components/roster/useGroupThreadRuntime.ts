@@ -31,7 +31,6 @@ import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { resolveBotRuntimeMode } from "./botSandbox";
 import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
-import { resolveBotRuntimeMode } from "./botSandbox";
 import { useRosterStore } from "./rosterStore";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -134,9 +133,6 @@ export function useGroupThreadRuntime(groupId: string) {
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
-  const setRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
-    reportFailure: false,
-  });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
