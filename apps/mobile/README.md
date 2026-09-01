@@ -8,10 +8,9 @@
 > [!NOTE]
 > Uses native modules so using Expo Go is not supported. You need to use the Expo Dev Client.
 
-This app has three variants:
+This app has two variants:
 
 - `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
 - `production`: store/release build as `T3 Code`
 
 Run commands from `apps/mobile`.
@@ -58,12 +57,6 @@ T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code \
 vp run ios:release
 ```
 
-Build and run the local iOS preview app:
-
-```bash
-vp run ios:preview
-```
-
 Force the review diff highlighter engine:
 
 ```bash
@@ -76,7 +69,7 @@ Inspect the resolved Expo config for a variant:
 
 ```bash
 vp run config:dev
-vp run config:preview
+vp run config:prod
 ```
 
 Run static checks for mobile native code:
@@ -89,17 +82,9 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
-CI uses Expo fingerprinting with the `preview:dev` profile to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and default local builds continue to use the `appVersion` runtime policy.
-
-For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
+For the production EAS environment, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
 `T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
 as EAS environment variables. Expo config maps the canonical values into the mobile build.
-
-Create a PR preview dev-client build manually:
-
-```bash
-vp run eas:ios:preview:dev
-```
 
 Create a cloud dev-client build:
 
@@ -107,16 +92,8 @@ Create a cloud dev-client build:
 vp run eas:ios:dev
 ```
 
-Create a persistent preview build:
-
-```bash
-vp run eas:ios:preview
-```
-
 Android equivalents:
 
 ```bash
 vp run eas:android:dev
-vp run eas:android:preview:dev
-vp run eas:android:preview
 ```

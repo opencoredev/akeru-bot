@@ -15,31 +15,6 @@
       "developmentClient": true,
       "distribution": "internal"
     },
-    "preview": {
-      "corepack": true,
-      "env": {
-        "APP_VARIANT": "preview",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
-      },
-      "channel": "preview",
-      "environment": "preview",
-      "distribution": "internal"
-    },
-    "preview:dev": {
-      "corepack": true,
-      "env": {
-        "APP_VARIANT": "preview",
-        "MOBILE_VERSION_POLICY": "fingerprint",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
-      },
-      "channel": "preview",
-      "environment": "preview",
-      "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
-    },
     "production": {
       "corepack": true,
       "env": {

@@ -47,9 +47,8 @@ identifiers, not secrets.
 Web, desktop, mobile, and bundled server builds statically inject the values they consume during
 their build step. A built artifact does not need an environment file at runtime. CI release builds
 should set `T3CODE_CLERK_PUBLISHABLE_KEY`, `T3CODE_CLERK_JWT_TEMPLATE`,
-`T3CODE_CLERK_CLI_OAUTH_CLIENT_ID`, and `T3CODE_RELAY_URL` before building. EAS preview and
-production builds only need the Clerk publishable key, JWT template name, and relay URL in their EAS
-environment.
+`T3CODE_CLERK_CLI_OAUTH_CLIENT_ID`, and `T3CODE_RELAY_URL` before building. EAS production builds
+only need the Clerk publishable key, JWT template name, and relay URL in their EAS environment.
 
 When any client-facing public value is absent, cloud UI is omitted. The `akeru connect` command group is
 always registered: when the CLI public values are absent, `makeCli` in `apps/server/src/bin.ts`
