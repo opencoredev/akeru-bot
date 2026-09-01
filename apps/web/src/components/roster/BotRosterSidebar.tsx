@@ -20,14 +20,17 @@ import { useShallow } from "zustand/react/shallow";
 import { isElectron } from "../../env";
 import { useClientSettings } from "../../hooks/useSettings";
 import { resolveShortcutCommand } from "../../keybindings";
+import { isPreviewFocused } from "../../lib/previewFocus";
 import { isTerminalFocused } from "../../lib/terminalFocus";
 import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
+import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
 import { useThreadMessages, useThreadShells } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { Button } from "../ui/button";
 import {
@@ -69,6 +72,7 @@ import {
 } from "./roster.logic";
 import { useRosterStore, type RosterItemRef, type RosterSection } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
+import { useBotThreadRef } from "./useBotThreadRef";
 import { useServerRosterSync } from "./useServerRoster";
 
 /** Avatar with a yellow needs-you light and a green working light. */
@@ -547,6 +551,20 @@ export default function BotRosterSidebar() {
     })),
   );
   const [query, setQuery] = useState("");
+  const activeBotThreadRef = useBotThreadRef(
+    pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
+  );
+  const terminalOpen = useTerminalUiStateStore((state) =>
+    activeBotThreadRef
+      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, activeBotThreadRef)
+          .terminalOpen
+      : false,
+  );
+  const previewOpen = useRightPanelStore((state) =>
+    activeBotThreadRef
+      ? selectActiveRightPanel(state.byThreadKey, activeBotThreadRef) === "preview"
+      : false,
+  );
 
   const visibleBots = useMemo(
     () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
@@ -677,6 +695,9 @@ export default function BotRosterSidebar() {
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
           terminalFocus: isTerminalFocused(),
+          terminalOpen,
+          previewFocus: isPreviewFocused(),
+          previewOpen,
           modelPickerOpen: isModelPickerOpen(),
         },
       });
@@ -692,7 +713,7 @@ export default function BotRosterSidebar() {
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [keybindings, navigate, shortcutBots]);
+  }, [keybindings, navigate, previewOpen, shortcutBots, terminalOpen]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
