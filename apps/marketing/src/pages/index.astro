@@ -1,6 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { GITHUB_REPOSITORY_URL, docsUrl } from "../lib/site";
+import { docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
 
 // Stroke icons are Hugeicons outlines drawn on a 24x24 grid.
@@ -64,7 +64,7 @@ const LINUX_MARK = `<path fill-rule="evenodd" clip-rule="evenodd" d="M9.8 18.2C8
 const platforms = [
   { os: "mac", name: "macOS", detail: "Apple silicon · DMG", mark: APPLE_MARK, asset: "arm64.dmg" },
   { os: "win", name: "Windows", detail: "x64 · Installer", mark: WINDOWS_MARK, asset: "x64.exe" },
-  { os: "linux", name: "Linux", detail: "x64 · AppImage", mark: LINUX_MARK, asset: "x86_64.AppImage" },
+  { os: "linux", name: "Linux", detail: "x64 · AppImage", mark: LINUX_MARK, asset: "x64.AppImage", unsigned: true },
 ];
 
 const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
@@ -81,7 +81,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
         subscription, on your machine or a cloud sandbox.
       </p>
       <div class="hero-actions">
-        <a id="download-btn" class="btn-primary" data-os="mac" href={RELEASES_URL}>
+        <a id="download-btn" class="btn-primary" data-os="mac" aria-disabled="true">
           <svg class="os-mark" data-os="mac" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={APPLE_MARK} />
           <svg class="os-mark" data-os="win" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={WINDOWS_MARK} />
           <svg class="os-mark" data-os="linux" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={LINUX_MARK} />
@@ -175,62 +175,81 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           ))
         }
       </div>
-      <a class="btn-outline" href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">
-        View on GitHub
+      <a class="btn-outline" href={RELEASES_URL} target="_blank" rel="noopener noreferrer">
+        All downloads
       </a>
     </div>
   </section>
 </Layout>
 
 <script>
-  import { fetchLatestRelease, RELEASES_URL, type ReleaseAsset } from "../lib/releases";
+  import {
+    blockDownloadUntilResolved,
+    detectDownloadTarget,
+    fetchLatestRelease,
+    RELEASES_URL,
+    requiresUnsignedInstall,
+    resolveDownloadUrl,
+    selectReleaseAsset,
+  } from "../lib/releases";
 
-  type Platform = { os: "mac" | "win" | "linux"; label: string; asset: string };
-
-  function detectPlatform(): Platform | null {
-    const ua = navigator.userAgent;
-    if (/Win/i.test(ua)) return { os: "win", label: "Download for Windows", asset: "x64.exe" };
-    if (/Mac/i.test(ua)) return { os: "mac", label: "Download for macOS", asset: "arm64.dmg" };
-    if (/Linux/i.test(ua)) return { os: "linux", label: "Download for Linux", asset: "x86_64.AppImage" };
-    return null;
-  }
-
-  function assetUrl(assets: ReleaseAsset[], suffix: string): string | null {
-    return assets.find((a) => a.name.endsWith(`-${suffix}`))?.browser_download_url ?? null;
-  }
+  const UNSIGNED_PROMPT =
+    "This build is unsigned. Your system may ask you to confirm the install. Continue?";
 
   async function init() {
     const button = document.getElementById("download-btn") as HTMLAnchorElement | null;
+    const resolveButton = button ? blockDownloadUntilResolved(button) : null;
     const label = document.getElementById("download-label");
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
 
     // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
     // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
     // Intel build. Do NOT add arch detection here.
-    const platform = detectPlatform();
+    const platform = detectDownloadTarget(navigator.userAgent);
     if (platform) {
       if (label) label.textContent = platform.label;
       if (button) button.dataset.os = platform.os;
+    } else if (button && label) {
+      label.textContent = "All downloads";
+      resolveButton?.(RELEASES_URL);
     }
 
     try {
-      const release = await fetchLatestRelease();
+      const releasePromise = fetchLatestRelease();
+      if (button && platform) {
+        resolveButton?.(await resolveDownloadUrl(platform, releasePromise));
+      }
+      const release = await releasePromise;
       const assets = release.assets ?? [];
 
       if (button && platform) {
-        button.href = assetUrl(assets, platform.asset) ?? RELEASES_URL;
+        const asset = selectReleaseAsset(assets, platform.assetSuffix);
+        button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
+        if (!asset && label) label.textContent = "All downloads";
       }
 
       cards.forEach((card) => {
         const suffix = card.dataset.asset;
-        card.href = (suffix && assetUrl(assets, suffix)) || RELEASES_URL;
+        const asset = suffix ? selectReleaseAsset(assets, suffix) : null;
+        card.href = asset?.browser_download_url ?? RELEASES_URL;
+        card.dataset.unsigned = asset && suffix && requiresUnsignedInstall(suffix) ? "true" : "";
       });
     } catch {
-      if (button) button.href = RELEASES_URL;
+      if (button) {
+        resolveButton?.(RELEASES_URL);
+      }
+      if (label) label.textContent = "All downloads";
       cards.forEach((card) => {
         card.href = RELEASES_URL;
+        card.dataset.unsigned = "";
       });
     }
+
+    document.querySelectorAll<HTMLAnchorElement>("a[data-unsigned='true']").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        if (!window.confirm(UNSIGNED_PROMPT)) event.preventDefault();
+      });
+    });
   }
 
   init();
