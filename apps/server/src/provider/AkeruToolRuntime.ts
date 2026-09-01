@@ -71,6 +71,9 @@ export interface AkeruToolSession {
       input: (typeof AkeruToolInputSchemas.UpdateChannel)["Type"],
     ) => Promise<string>;
   };
+  readonly sendToUser?: (
+    input: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
+  ) => Promise<AkeruToolReceipt>;
 }
 
 export interface AkeruToolRuntimeOptions {
@@ -110,6 +113,7 @@ const BACKEND_NAMES: Record<
     | "SendToAgent"
     | "CreateChannel"
     | "UpdateChannel"
+    | "SendToUser"
   >,
   ReadonlyArray<string>
 > = {
@@ -227,6 +231,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       tools.add("CreateChannel");
       tools.add("UpdateChannel");
     }
+    if (session.sendToUser) tools.add("SendToUser");
     return tools;
   };
 
@@ -394,6 +399,29 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               failureCode,
               fatalToThread: false,
               billedBotId: session.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (input.toolId === "SendToUser") {
+          if (!session.sendToUser) {
+            throw new Error("User messaging is not available for this session.");
+          }
+          failureCode = "internal";
+          try {
+            result = await session.sendToUser(decodeAkeruToolInput("SendToUser", decoded));
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });

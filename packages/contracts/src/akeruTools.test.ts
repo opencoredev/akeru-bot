@@ -49,6 +49,14 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
   });
 
+  it("decodes SendToUser input and keeps it approval-gated", () => {
+    expect(decodeAkeruToolInput("SendToUser", { message: "The export is ready." })).toEqual({
+      message: "The export is ready.",
+    });
+    expect(() => decodeAkeruToolInput("SendToUser", { message: "" })).toThrow();
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToUser")?.approval).toBe("send");
+  });
+
   it("never lets full access bypass protected commands or paths", () => {
     const shell = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalShell")!;
     const read = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalRead")!;

@@ -46,6 +46,58 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   const id = options.id ?? (() => NodeCrypto.randomUUID());
   const commandId = (label: string) => CommandId.make(`delegation:${label}:${id()}`);
 
+  const sendToUser = async (
+    parent: AkeruDelegationParent,
+    request: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
+  ): Promise<AkeruToolReceipt> => {
+    const snapshot = await options.readSnapshot();
+    const sourceThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
+    const sourceBot = snapshot.bots.find((bot) => bot.id === parent.botId);
+    if (
+      !sourceThread ||
+      sourceThread.deletedAt !== null ||
+      sourceThread.archivedAt !== null ||
+      !sourceBot ||
+      sourceBot.archivedAt !== null ||
+      (sourceThread.respondingBotId ?? sourceThread.botId) !== parent.botId ||
+      sourceThread.latestTurn?.turnId !== parent.turnId ||
+      sourceThread.latestTurn.state !== "running"
+    ) {
+      throw new Error("The source bot is not authorized for this active thread.");
+    }
+
+    const messageId = MessageId.make(`bot-message-${id()}`);
+    const createdAt = now();
+    await options.dispatch({
+      type: "thread.message.assistant.delta",
+      commandId: commandId("message"),
+      threadId: parent.threadId,
+      messageId,
+      delta: request.message,
+      turnId: parent.turnId,
+      createdAt,
+    });
+    await options.dispatch({
+      type: "thread.message.assistant.complete",
+      commandId: commandId("message-complete"),
+      threadId: parent.threadId,
+      messageId,
+      turnId: parent.turnId,
+      createdAt,
+    });
+
+    return {
+      receiptId: `message:${messageId}`,
+      toolId: "SendToUser",
+      phase: "success",
+      threadId: parent.threadId,
+      botId: parent.botId,
+      summary: "Message sent to the user.",
+      fatalToThread: false,
+      createdAt,
+    };
+  };
+
   const send = async (
     parent: AkeruDelegationParent,
     request: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
@@ -161,7 +213,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     };
   };
 
-  return { send, readSnapshot: options.readSnapshot };
+  return { send, sendToUser, readSnapshot: options.readSnapshot };
 }
 
 export type AkeruDelegationRuntime = ReturnType<typeof createAkeruDelegationRuntime>;
