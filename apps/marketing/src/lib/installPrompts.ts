@@ -1,0 +1,15 @@
+export const VERIFIED_INSTALL_SUCCESS = "You can open the app now with no issues.";
+
+export const windowsInstallPrompt = `Install the latest stable Windows release of Akeru Bot from opencoredev/akeru-bot. Use PowerShell and stop on every failed check. Detect the native Windows architecture first. Continue only for AMD64 as x64. Refuse ARM64, x86, and every other architecture because the official release supports Windows x64 only. Fetch the latest stable release only from https://api.github.com/repos/opencoredev/akeru-bot/releases/latest and require a stable vX.Y.Z tag. Download its exact Akeru-Bot-<version>-x64.exe asset and SHA256SUMS. Require both download URLs to start with https://github.com/opencoredev/akeru-bot/releases/download/. Find one SHA256SUMS entry whose filename exactly matches the installer. Stop if the entry is missing, duplicated, malformed, or if Get-FileHash -Algorithm SHA256 does not match it. Only after the hash matches, run Unblock-File on that installer. Do not disable or change SmartScreen, antivirus software, or any system-wide security setting. Run the installer and ask me only for a native Windows administrator confirmation if Windows requires one. Launch Akeru Bot, then verify its running process has an Akeru Bot window or that its executable is the installed Akeru Bot executable. Do not claim success after only starting the installer or process. Say exactly "${VERIFIED_INSTALL_SUCCESS}" only after checksum verification, completed installation, launch, and process or window verification all succeed.`;
+
+export function installPromptForPlatform(platform: string): string | null {
+  return platform === "win" ? windowsInstallPrompt : null;
+}
+
+export function verifiedInstallSuccess(input: {
+  checksum: boolean;
+  install: boolean;
+  launch: boolean;
+}): string | null {
+  return input.checksum && input.install && input.launch ? VERIFIED_INSTALL_SUCCESS : null;
+}
