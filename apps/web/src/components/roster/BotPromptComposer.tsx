@@ -15,6 +15,10 @@ export function isBotPromptExpanded(prompt: string): boolean {
   return prompt.includes("\n") || prompt.length > 80;
 }
 
+export function canSubmitBotPrompt(disabled: boolean, prompt: string, fileCount: number): boolean {
+  return !disabled && (prompt.trim().length > 0 || fileCount > 0);
+}
+
 export function shouldFocusBotPromptForKey(input: {
   readonly altKey: boolean;
   readonly ctrlKey: boolean;
@@ -130,6 +134,7 @@ export function BotPromptComposer({
       onSubmit={(event) => {
         event.preventDefault();
         const prompt = draft.trim();
+        if (!canSubmitBotPrompt(disabled, prompt, files.length)) return;
         void onSubmit(prompt, files, findMentionedBotId(prompt, mentionBots)).then((sent) => {
           if (sent) {
             persistDraft("");
@@ -244,7 +249,7 @@ export function BotPromptComposer({
           <button
             type="submit"
             aria-label="Send message"
-            disabled={disabled || (draft.trim().length === 0 && files.length === 0)}
+            disabled={!canSubmitBotPrompt(disabled, draft, files.length)}
             className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-25"
           >
             <ArrowUpIcon className="size-5" />
