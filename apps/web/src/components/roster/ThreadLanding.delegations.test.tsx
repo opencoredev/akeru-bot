@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import { visitElements } from "../../test/reactElementTree";
 import type { Bot, Group } from "./types";
+import type { PendingUserInput } from "../../session-logic";
 
 const mocks = vi.hoisted(() => ({
   providersAtom: Symbol("providers"),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   snapshot: null as OrchestrationShellSnapshot | null,
   bots: [] as Bot[],
   groups: [] as Group[],
+  groupPendingUserInputs: [] as PendingUserInput[],
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -115,6 +117,7 @@ vi.mock("./useBotThreadRuntime", () => ({
 vi.mock("./useGroupThreadRuntime", () => ({
   useGroupThreadRuntime: () => ({
     sending: false,
+    respondingRequestIds: [],
     messages: [],
     error: null,
     defaultProject: null,
@@ -125,6 +128,11 @@ vi.mock("./useGroupThreadRuntime", () => ({
       environmentId: EnvironmentId.make("environment-1"),
       threadId: ThreadId.make("thread-parent"),
     },
+    pendingUserInputs: mocks.groupPendingUserInputs,
+    pendingUserInputAnswers: {},
+    pendingUserInputQuestionIndex: 0,
+    selectPendingUserInputOption: vi.fn(),
+    advancePendingUserInput: vi.fn(),
     send: vi.fn(),
   }),
 }));
@@ -132,6 +140,7 @@ vi.mock("./useGroupThreadRuntime", () => ({
 import { BotThreadLanding } from "./BotThreadLanding";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
+import { BotUserInputPrompt } from "./BotUserInputPrompt";
 
 const decodeDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord);
 const parentBot: Bot = {
@@ -208,6 +217,7 @@ describe("thread landing delegations", () => {
     hooks.reset();
     mocks.bots = [parentBot, childBot];
     mocks.groups = [group];
+    mocks.groupPendingUserInputs = [];
     mocks.snapshot = {
       snapshotSequence: 1,
       bots: [],
@@ -231,5 +241,31 @@ describe("thread landing delegations", () => {
 
     expect(card?.props.delegation.delegationId).toBe("matching");
     expect(card?.props.childBot).toBe(childBot);
+  });
+
+  it("renders pending provider questions in group threads", () => {
+    mocks.groupPendingUserInputs = [
+      {
+        requestId: "group-question" as PendingUserInput["requestId"],
+        createdAt: "2026-09-01T00:00:00.000Z",
+        questions: [
+          {
+            id: "scope",
+            header: "Scope",
+            question: "Which workspace should I use?",
+            options: [{ label: "Current", description: "Use the current workspace." }],
+            multiSelect: false,
+          },
+        ],
+      },
+    ];
+
+    hooks.beginRender();
+    const prompt = visitElements(
+      GroupThreadLanding({ groupId: group.id }),
+      (element) => element.type === BotUserInputPrompt,
+    ) as ReactElement<Parameters<typeof BotUserInputPrompt>[0]> | null;
+
+    expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
   });
 });

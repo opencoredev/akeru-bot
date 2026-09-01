@@ -1900,22 +1900,33 @@ describe("AgentControllerLive", () => {
           toolName: "execute_command",
           args: { command: "rm -rf ./temporary-output" },
         } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "shred-risky",
+          toolName: "execute_command",
+          args: { command: "shred important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "dd-risky",
+          toolName: "execute_command",
+          args: { command: "dd if=/dev/zero of=important-file" },
+        } as AgentControllerEvent);
         yield* Effect.yieldNow;
 
         expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
           toolCallId: "read-safe",
           decision: "approve",
         });
-        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
-          toolCallId: "delete-risky",
-          decision: "approve",
-        });
-        expect(events).toContainEqual(
-          expect.objectContaining({
-            type: "request.opened",
-            requestId: "delete-risky",
-          }),
-        );
+        for (const requestId of ["delete-risky", "shred-risky", "dd-risky"]) {
+          expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
+            toolCallId: requestId,
+            decision: "approve",
+          });
+          expect(events).toContainEqual(
+            expect.objectContaining({ type: "request.opened", requestId }),
+          );
+        }
         yield* Fiber.interrupt(collector);
       }),
       bridge.service,

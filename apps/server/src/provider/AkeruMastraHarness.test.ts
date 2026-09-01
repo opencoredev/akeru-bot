@@ -52,6 +52,10 @@ describe("Akeru action classifier", () => {
     ["git clean -fd", "delete"],
     ["find . -name '*.tmp' -exec rm -rf {} \\;", "delete"],
     ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
+    ["shred important-file", "delete"],
+    ["sudo shred -u important-file", "delete"],
+    ["dd if=/dev/zero of=important-file", "delete"],
+    ["sudo dd if=image.img of=/dev/disk4 bs=4m", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);
     expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);
