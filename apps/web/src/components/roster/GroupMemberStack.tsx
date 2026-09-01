@@ -6,13 +6,11 @@ import type { Bot, Group } from "./types";
 export function GroupMemberStack({
   group,
   bots,
-  ringClassName,
   sizeClassName = "size-6",
   className,
 }: {
   readonly group: Group;
   readonly bots: ReadonlyArray<Bot>;
-  readonly ringClassName: string;
   readonly sizeClassName?: string;
   readonly className?: string;
 }) {
@@ -24,13 +22,16 @@ export function GroupMemberStack({
       return 0;
     });
   return (
-    <div className={cn("inline-flex -space-x-1.5", className)}>
-      {groupBots.slice(0, 2).map((bot) => (
+    <div className={cn("relative inline-flex shrink-0", sizeClassName, className)}>
+      {groupBots.slice(0, 2).map((bot, index) => (
         <BotAvatarView
           key={bot.id}
           avatar={bot.avatar}
           name={bot.name}
-          className={cn("ring-2", sizeClassName, ringClassName)}
+          className={cn(
+            "absolute size-[68%]",
+            index === 0 ? "left-0 top-0" : "bottom-0 right-0 z-10",
+          )}
         />
       ))}
     </div>

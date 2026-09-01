@@ -9,6 +9,7 @@ import {
   ApprovalRequestId,
   AuthSessionId,
   BotId,
+  ChannelConnectionId,
   CheckpointRef,
   ClientSurface,
   CommandId,
@@ -318,6 +319,7 @@ export const ChannelBindingStatus = Schema.Literals([
 export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
 export const ChannelBinding = Schema.Struct({
   botId: BotId,
+  connectionId: Schema.optional(ChannelConnectionId),
   provider: ChannelProvider,
   status: ChannelBindingStatus,
   externalIdentity: Schema.NullOr(TrimmedNonEmptyString),
@@ -987,6 +989,63 @@ const ChannelConnectCommand = Schema.Union([
   }),
 ]);
 
+const ChannelConnectionSaveCommand = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("telegram"),
+    token: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("hosted"),
+    projectId: TrimmedNonEmptyString,
+    projectSecret: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("self-hosted"),
+    serverUrl: TrimmedNonEmptyString,
+    apiKey: TrimmedNonEmptyString,
+    phone: Schema.optional(TrimmedNonEmptyString),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("whatsapp"),
+    accessToken: TrimmedNonEmptyString,
+    appSecret: TrimmedNonEmptyString,
+    phoneNumberId: TrimmedNonEmptyString,
+    verifyToken: TrimmedNonEmptyString,
+  }),
+]);
+
+const ChannelConnectionDeleteCommand = Schema.Struct({
+  type: Schema.Literal("channel.connection.delete"),
+  commandId: CommandId,
+  connectionId: ChannelConnectionId,
+});
+
+const ChannelAttachCommand = Schema.Struct({
+  type: Schema.Literal("channel.attach"),
+  commandId: CommandId,
+  botId: BotId,
+  connectionId: ChannelConnectionId,
+  provider: ChannelProvider,
+});
+
 const ChannelDisconnectCommand = Schema.Struct({
   type: Schema.Literal("channel.disconnect"),
   commandId: CommandId,
@@ -1476,6 +1535,9 @@ export const ClientOrchestrationCommand = Schema.Union([
   BotArchiveCommand,
   BotRestoreCommand,
   ChannelConnectCommand,
+  ChannelConnectionSaveCommand,
+  ChannelConnectionDeleteCommand,
+  ChannelAttachCommand,
   ChannelDisconnectCommand,
   ChannelReconnectCommand,
   ChannelSendCommand,

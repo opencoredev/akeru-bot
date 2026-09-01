@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
-import { Trash2Icon, UserPlusIcon } from "lucide-react";
+import { BotIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useReducer, useState, type ReactNode } from "react";
 
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
@@ -21,7 +21,10 @@ import { GroupMemberStack } from "./GroupMemberStack";
 import { groupBotMembers, groupContainsBot } from "./roster.logic";
 import type { Bot, Group } from "./types";
 
-type PanelState = { readonly desktopOpen: boolean; readonly mobileOpen: boolean };
+type PanelState = {
+  readonly desktopOpen: boolean;
+  readonly mobileOpen: boolean;
+};
 type PanelAction =
   | { readonly type: "toggle-desktop" }
   | { readonly type: "toggle-mobile" }
@@ -44,13 +47,21 @@ function GroupEditor({
   readonly bots: readonly Bot[];
   readonly onDeleted: () => void;
 }) {
-  const renameGroup = useAtomCommand(botEnvironment.groups.rename, { reportFailure: false });
-  const deleteGroup = useAtomCommand(botEnvironment.groups.delete, { reportFailure: false });
-  const assignMember = useAtomCommand(botEnvironment.groups.assignMember, { reportFailure: false });
+  const renameGroup = useAtomCommand(botEnvironment.groups.rename, {
+    reportFailure: false,
+  });
+  const deleteGroup = useAtomCommand(botEnvironment.groups.delete, {
+    reportFailure: false,
+  });
+  const assignMember = useAtomCommand(botEnvironment.groups.assignMember, {
+    reportFailure: false,
+  });
   const unassignMember = useAtomCommand(botEnvironment.groups.unassignMember, {
     reportFailure: false,
   });
-  const setBoss = useAtomCommand(botEnvironment.groups.setBoss, { reportFailure: false });
+  const setBoss = useAtomCommand(botEnvironment.groups.setBoss, {
+    reportFailure: false,
+  });
   const [name, setName] = useState(group.name);
   const [newMemberId, setNewMemberId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,12 +88,7 @@ function GroupEditor({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
       <div className="flex flex-col items-center gap-3 pb-7 pt-6">
-        <GroupMemberStack
-          group={group}
-          bots={bots}
-          ringClassName="ring-background"
-          sizeClassName="size-16"
-        />
+        <GroupMemberStack group={group} bots={bots} sizeClassName="size-16" />
         <span className="text-sm text-muted-foreground">{members.length} bots</span>
       </div>
       <div className="space-y-5">
@@ -103,7 +109,10 @@ function GroupEditor({
                   () =>
                     renameGroup({
                       environmentId,
-                      input: { groupId: GroupId.make(group.id), name: name.trim() },
+                      input: {
+                        groupId: GroupId.make(group.id),
+                        name: name.trim(),
+                      },
                     }),
                   "Could not rename group",
                 )
@@ -174,7 +183,10 @@ function GroupEditor({
                         () =>
                           unassignMember({
                             environmentId,
-                            input: { groupId: GroupId.make(group.id), botId: BotId.make(bot.id) },
+                            input: {
+                              groupId: GroupId.make(group.id),
+                              botId: BotId.make(bot.id),
+                            },
                           }),
                         `Could not remove ${bot.name}`,
                       )
@@ -219,7 +231,7 @@ function GroupEditor({
                 ).then((success) => success && setNewMemberId(""))
               }
             >
-              <UserPlusIcon />
+              <BotIcon />
             </Button>
           </div>
         </section>
@@ -233,7 +245,11 @@ function GroupEditor({
               variant="destructive"
               onClick={() =>
                 void run(
-                  () => deleteGroup({ environmentId, input: { groupId: GroupId.make(group.id) } }),
+                  () =>
+                    deleteGroup({
+                      environmentId,
+                      input: { groupId: GroupId.make(group.id) },
+                    }),
                   "Could not delete group",
                 ).then((success) => success && onDeleted())
               }

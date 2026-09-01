@@ -1419,6 +1419,7 @@ const makeWsRpcLayer = (
                         {
                           engine: orchestrationEngine,
                           secretStore,
+                          settings: serverSettings,
                           deliveryStore: channelDeliveryStore.value,
                           readModel: () =>
                             Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),

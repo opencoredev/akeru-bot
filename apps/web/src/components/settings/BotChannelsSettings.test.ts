@@ -1,4 +1,4 @@
-import { AuthAccessWriteScope, BotId } from "@t3tools/contracts";
+import { AuthAccessWriteScope, BotId, ChannelConnectionId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -7,6 +7,12 @@ import {
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
 import { bindingFor, selfHostedIMessageConnectInput, whatsAppConnectInput } from "./BotChannelRows";
+import {
+  assignedBotForConnection,
+  channelTestInstructions,
+  parsePhotonHostedCredentials,
+  providerLabel,
+} from "./BotChannelsSettings";
 
 describe("bot channel settings", () => {
   const botId = BotId.make("bot-1");
@@ -101,5 +107,63 @@ describe("bot channel settings", () => {
   it("keeps pending access neutral until the session loads", () => {
     expect(resolveChannelSettingsAccess({ isPending: true, session: null })).toBe("pending");
     expect(resolveChannelSettingsAccess({ isPending: false, session: null })).toBe("denied");
+  });
+
+  it("finds saved connections assigned to archived bots", () => {
+    const connectionId = ChannelConnectionId.make("photon-work");
+    const bots = [
+      {
+        id: botId,
+        name: "Scout",
+        archivedAt: "2026-08-28T20:00:00.000Z",
+        channelBindings: [
+          {
+            botId,
+            connectionId,
+            provider: "imessage" as const,
+            status: "connected" as const,
+            externalIdentity: "+15551234567",
+            connectedAt: "2026-08-27T20:00:00.000Z",
+            sentMessageIds: [],
+          },
+        ],
+      },
+    ];
+
+    expect(assignedBotForConnection(connectionId, bots)?.name).toBe("Scout");
+    expect(assignedBotForConnection(ChannelConnectionId.make("unassigned"), bots)).toBeUndefined();
+  });
+
+  it("uses installed adapter names", () => {
+    expect(providerLabel("imessage")).toBe("Photon");
+    expect(providerLabel("whatsapp")).toBe("Meta Cloud API");
+    expect(providerLabel("telegram")).toBe("Telegram Bot API");
+  });
+
+  it("explains the real end-to-end channel test", () => {
+    expect(channelTestInstructions("imessage", "Akeru")).toContain("replies automatically");
+    expect(channelTestInstructions("imessage", "Akeru")).toContain("exact @Akeru mention");
+    expect(channelTestInstructions("whatsapp")).toContain("WhatsApp message");
+    expect(channelTestInstructions("telegram")).toContain("Telegram message");
+  });
+
+  it("parses copied Photon environment variables", () => {
+    expect(
+      parsePhotonHostedCredentials(
+        "SPECTRUM_PROJECT_ID=project-1\r\nSPECTRUM_PROJECT_SECRET=secret=with=equals",
+      ),
+    ).toEqual({ projectId: "project-1", projectSecret: "secret=with=equals" });
+  });
+
+  it("rejects incomplete or ambiguous Photon environment variables", () => {
+    expect(parsePhotonHostedCredentials("SPECTRUM_PROJECT_ID=project-1")).toBeNull();
+    expect(
+      parsePhotonHostedCredentials(
+        "SPECTRUM_PROJECT_ID=first\nSPECTRUM_PROJECT_ID=second\nSPECTRUM_PROJECT_SECRET=secret",
+      ),
+    ).toBeNull();
+    expect(
+      parsePhotonHostedCredentials("OTHER_PROJECT_ID=project-1\nSPECTRUM_PROJECT_SECRET=secret"),
+    ).toBeNull();
   });
 });

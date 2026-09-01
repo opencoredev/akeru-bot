@@ -477,6 +477,7 @@ export const make = (options?: StartupOptions) =>
                 ChannelRuntime.restoreConnectedChannels({
                   engine: orchestrationEngine,
                   secretStore,
+                  settings: serverSettings,
                   deliveryStore: channelDeliveryStore,
                   readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
                   readThread: (threadId) =>

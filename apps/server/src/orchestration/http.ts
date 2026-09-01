@@ -16,6 +16,7 @@ import * as ChannelDeliveryStore from "../channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
   applyAuthenticatedCommandActor,
@@ -42,6 +43,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
     const channelDeliveryStore = yield* Effect.serviceOption(
       ChannelDeliveryStore.ChannelDeliveryStore,
@@ -125,7 +127,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             if (!principal.scopes.has(AuthAccessWriteScope)) {
               yield* requireEnvironmentScope(AuthAccessWriteScope);
             }
-            const services = Option.all({ secretStore, channelDeliveryStore, startup });
+            const services = Option.all({
+              secretStore,
+              serverSettings,
+              channelDeliveryStore,
+              startup,
+            });
             if (Option.isNone(services)) {
               return yield* failEnvironmentInternal(
                 "orchestration_dispatch_failed",
@@ -139,6 +146,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                     {
                       engine: orchestrationEngine,
                       secretStore: services.value.secretStore,
+                      settings: services.value.serverSettings,
                       deliveryStore: services.value.channelDeliveryStore,
                       readModel: () =>
                         Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),

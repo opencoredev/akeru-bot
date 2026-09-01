@@ -278,6 +278,21 @@ describe("resolveInitialServerAuthGateState", () => {
     expect(testWindow.location.searchParams.get("token")).toBeNull();
   });
 
+  it("exchanges an explicit pairing token when a browser session already exists", async () => {
+    const testWindow = installTestBrowser("http://localhost/#token=admin-bootstrap-token");
+    const testApi = await installAuthApi({
+      session: () => authenticatedSession(LOOPBACK_AUTH),
+      browserSession: () => Effect.succeed(browserSession(["orchestration:read", "access:write"])),
+    });
+    const { resolveInitialServerAuthGateState } = await import("./environments/primary");
+
+    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
+      status: "authenticated",
+    });
+    expect(testApi.calls.browserSession).toEqual([{ credential: "admin-bootstrap-token" }]);
+    expect(testWindow.location.hash).toBe("");
+  });
+
   it("accepts query-string pairing tokens as a backward-compatible fallback", async () => {
     const testWindow = installTestBrowser("http://localhost/?token=pairing-token");
     const { takePairingTokenFromUrl } = await import("./environments/primary");

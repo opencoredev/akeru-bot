@@ -5,7 +5,7 @@ export type SettingsPath =
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
-  | "/settings/bots"
+  | "/settings/channels"
   | "/settings/voice"
   | "/settings/integrations"
   | "/settings/source-control"
@@ -32,7 +32,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
   "/settings/providers": "Providers",
-  "/settings/bots": "Bots",
+  "/settings/channels": "Channels",
   "/settings/voice": "Voice",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
@@ -240,8 +240,8 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "bot-channels",
-    title: "Bot channels",
-    to: "/settings/bots",
+    title: "Channels",
+    to: "/settings/channels",
     keywords: ["Telegram", "iMessage", "Photon", "WhatsApp"],
   },
   {

@@ -36,6 +36,9 @@ export type UpdateBotInput = CommandInput<"bot.update">;
 export type ArchiveBotInput = CommandInput<"bot.archive">;
 export type RestoreBotInput = CommandInput<"bot.restore">;
 export type ConnectChannelInput = CommandInput<"channel.connect">;
+export type SaveChannelConnectionInput = CommandInput<"channel.connection.save">;
+export type DeleteChannelConnectionInput = CommandInput<"channel.connection.delete">;
+export type AttachChannelInput = CommandInput<"channel.attach">;
 export type DisconnectChannelInput = CommandInput<"channel.disconnect">;
 export type ReconnectChannelInput = CommandInput<"channel.reconnect">;
 export type SendChannelMessageInput = CommandInput<"channel.send">;
@@ -341,6 +344,30 @@ export const connectChannel: (input: ConnectChannelInput) => CommandEffect = Eff
     type: "channel.connect",
     commandId: yield* commandId(input),
   });
+});
+
+export const saveChannelConnection: (input: SaveChannelConnectionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.saveChannelConnection")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "channel.connection.save",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const deleteChannelConnection: (input: DeleteChannelConnectionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.deleteChannelConnection")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "channel.connection.delete",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const attachChannel: (input: AttachChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.attachChannel",
+)(function* (input) {
+  return yield* dispatch({ ...input, type: "channel.attach", commandId: yield* commandId(input) });
 });
 
 export const disconnectChannel: (input: DisconnectChannelInput) => CommandEffect = Effect.fn(

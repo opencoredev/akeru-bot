@@ -66,6 +66,17 @@ describe("sidebar footer", () => {
     expect(source).not.toContain("touch-none");
   });
 
+  it("keeps group membership out of roster drag and centers pinned items", () => {
+    const source = NodeFS.readFileSync(
+      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).not.toContain("botEnvironment.groups.assignMember");
+    expect(source).toContain('className="flex justify-center gap-2 overflow-x-auto px-2 py-1"');
+    expect(source).toContain("onContextMenu={(event) => {");
+  });
+
   it("keeps short plugin dialogs and the footer independently scrollable", () => {
     const sidebarSource = NodeFS.readFileSync(
       new URL("./SidebarChrome.tsx", import.meta.url),

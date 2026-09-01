@@ -2,12 +2,15 @@ import { createHmac } from "node:crypto";
 
 import {
   BotId,
+  ChannelConnectionId,
   CommandId,
+  DEFAULT_SERVER_SETTINGS,
   EventId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  TurnId,
   type ChannelBinding,
   type OrchestrationBot,
   type OrchestrationCommand,
@@ -57,14 +60,18 @@ import { createEmptyReadModel } from "../orchestration/projector.ts";
 import type { OrchestrationEngineShape } from "../orchestration/Services/OrchestrationEngine.ts";
 import { makeMemoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 import {
+  attachChannelConnection,
   channelBindingsForRuntime,
   channelThreadId,
   connectChannel,
+  deleteChannelConnection,
   disconnectChannel,
   dispatchInboundChannelMessage,
   handleWhatsAppWebhook,
   reconnectChannel,
+  saveChannelConnection,
   restoreConnectedChannels,
+  sendCompletedChannelReply,
   sendChannelMessage,
   shutdownAllChannels,
   stopArchivedBotChannels,
@@ -222,10 +229,12 @@ function makeHarness(input: {
   readonly shutdown?: () => Promise<void>;
   readonly deliveryStore?: ChannelRuntimeDependencies["deliveryStore"];
   readonly secretStore?: ChannelRuntimeDependencies["secretStore"];
+  readonly settings?: ChannelRuntimeDependencies["settings"];
   readonly startTransport?: ChannelRuntimeDependencies["startTransport"] | null;
   readonly failBotUpdate?: (updateIndex: number) => Error | undefined;
 }) {
   let model = makeModel(input.bots ?? [makeBot(BOT_ID)]);
+  let settings = DEFAULT_SERVER_SETTINGS;
   const threads = [...(input.threads ?? [])];
   const commands: OrchestrationCommand[] = [];
   const { store: memorySecretStore, values: secrets } = makeMemorySecretStore();
@@ -265,6 +274,14 @@ function makeHarness(input: {
   const dependencies: ChannelRuntimeDependencies = {
     engine,
     secretStore,
+    settings: input.settings ?? {
+      getSettings: Effect.sync(() => settings),
+      updateSettings: (patch) =>
+        Effect.sync(() => {
+          settings = { ...settings, ...patch } as typeof settings;
+          return settings;
+        }),
+    },
     deliveryStore: input.deliveryStore ?? makeMemoryChannelDeliveryStore(),
     readModel: async () => ({ ...model, threads }),
     readThread: async (threadId) => threads.find((thread) => thread.id === threadId) ?? null,
@@ -284,7 +301,7 @@ function makeHarness(input: {
             })),
         }),
   };
-  return { commands, dependencies, secrets, readModel: () => model };
+  return { commands, dependencies, secrets, readModel: () => model, readSettings: () => settings };
 }
 
 const telegramConnect = (botId: BotId, token = "telegram-token") => ({
@@ -631,6 +648,11 @@ describe("channel runtime", () => {
     await photon.chat.processMessage(
       photon.adapter,
       groupId,
+      makeChatSdkMessage(groupId, "group-2b", "@Build Bot-dev ignore", "+15552220000"),
+    );
+    await photon.chat.processMessage(
+      photon.adapter,
+      groupId,
       makeChatSdkMessage(groupId, "group-3", "@BUILD BOT continue", "+15552220000"),
     );
 
@@ -639,7 +661,7 @@ describe("channel runtime", () => {
     expect(photon.subscriptionAttempts).toEqual([groupId]);
     expect(turns.map((turn) => turn.message.text)).toEqual([
       "@build bot status",
-      "+15552220000: background chatter\n+15552220000: @BUILD BOT continue",
+      "+15552220000: background chatter\n+15552220000: @Build Bot-dev ignore\n+15552220000: @BUILD BOT continue",
     ]);
   });
 
@@ -828,6 +850,155 @@ describe("channel runtime", () => {
     expect(harness.secrets.size).toBe(0);
   });
 
+  it("saves, attaches, reconnects, detaches, and deletes a reusable connection", async () => {
+    const connectionId = ChannelConnectionId.make("telegram-main");
+    const harness = makeHarness({});
+
+    await saveChannelConnection(harness.dependencies, {
+      type: "channel.connection.save",
+      commandId: CommandId.make("save-connection"),
+      connectionId,
+      name: "Main Telegram",
+      provider: "telegram",
+      token: "telegram-token",
+    });
+    await attachChannelConnection(harness.dependencies, BOT_ID, connectionId, "telegram");
+    expect(harness.readSettings().channelConnections).toEqual([
+      {
+        id: connectionId,
+        name: "Main Telegram",
+        provider: "telegram",
+        adapter: "telegram",
+      },
+    ]);
+    expect(harness.readModel().bots[0]?.channelBindings?.[0]).toMatchObject({
+      connectionId,
+      provider: "telegram",
+      status: "connected",
+    });
+
+    await expect(
+      saveChannelConnection(harness.dependencies, {
+        type: "channel.connection.save",
+        commandId: CommandId.make("edit-attached-connection"),
+        connectionId,
+        name: "Changed Telegram",
+        provider: "telegram",
+        token: "changed-token",
+      }),
+    ).rejects.toThrow("Disconnect this channel before editing it");
+
+    await expect(deleteChannelConnection(harness.dependencies, connectionId)).rejects.toThrow(
+      "Disconnect this channel",
+    );
+    await stopChannelsForBot(BOT_ID);
+    await reconnectChannel(harness.dependencies, BOT_ID, "telegram");
+    await disconnectChannel(harness.dependencies, BOT_ID, "telegram");
+    await expect(reconnectChannel(harness.dependencies, BOT_ID, "telegram")).rejects.toThrow(
+      "No active telegram channel",
+    );
+    expect(harness.secrets.size).toBe(1);
+    await deleteChannelConnection(harness.dependencies, connectionId);
+    expect(harness.secrets.size).toBe(0);
+    expect(harness.readSettings().channelConnections).toEqual([]);
+  });
+
+  it("serializes multiple reusable connection profiles", async () => {
+    const telegramId = ChannelConnectionId.make("telegram-work");
+    const photonId = ChannelConnectionId.make("photon-personal");
+    const harness = makeHarness({});
+
+    await Promise.all([
+      saveChannelConnection(harness.dependencies, {
+        type: "channel.connection.save",
+        commandId: CommandId.make("save-telegram"),
+        connectionId: telegramId,
+        name: "Work Telegram",
+        provider: "telegram",
+        token: "telegram-token",
+      }),
+      saveChannelConnection(harness.dependencies, {
+        type: "channel.connection.save",
+        commandId: CommandId.make("save-photon"),
+        connectionId: photonId,
+        name: "Personal iPhone",
+        provider: "imessage",
+        mode: "self-hosted",
+        serverUrl: "photon.example:443",
+        apiKey: "photon-key",
+        phone: "+15551234567",
+      }),
+    ]);
+
+    expect(harness.readSettings().channelConnections).toEqual([
+      {
+        id: telegramId,
+        name: "Work Telegram",
+        provider: "telegram",
+        adapter: "telegram",
+      },
+      {
+        id: photonId,
+        name: "Personal iPhone",
+        provider: "imessage",
+        adapter: "photon",
+        externalIdentity: "+15551234567",
+      },
+    ]);
+  });
+
+  it("stores a safe dashboard link for hosted Photon", async () => {
+    const connectionId = ChannelConnectionId.make("photon-hosted");
+    const harness = makeHarness({});
+
+    await saveChannelConnection(harness.dependencies, {
+      type: "channel.connection.save",
+      commandId: CommandId.make("save-photon-hosted"),
+      connectionId,
+      name: "Launch iPhone",
+      provider: "imessage",
+      mode: "hosted",
+      projectId: "project/launch",
+      projectSecret: "never-in-settings",
+    });
+
+    expect(harness.readSettings().channelConnections).toEqual([
+      {
+        id: connectionId,
+        name: "Launch iPhone",
+        provider: "imessage",
+        adapter: "photon",
+        externalIdentity: "project/launch",
+        managementUrl: "https://app.photon.codes/dashboard/project%2Flaunch",
+      },
+    ]);
+    expect(JSON.stringify(harness.readSettings().channelConnections)).not.toContain(
+      "never-in-settings",
+    );
+  });
+
+  it("rolls back a saved secret when profile persistence fails", async () => {
+    const connectionId = ChannelConnectionId.make("failed-profile");
+    const harness = makeHarness({
+      settings: {
+        getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+        updateSettings: () => Effect.die(new Error("settings write failed")),
+      },
+    });
+
+    await expect(
+      saveChannelConnection(harness.dependencies, {
+        type: "channel.connection.save",
+        commandId: CommandId.make("save-failed-profile"),
+        connectionId,
+        name: "Failed profile",
+        provider: "telegram",
+        token: "telegram-token",
+      }),
+    ).rejects.toThrow("settings write failed");
+    expect(harness.secrets.size).toBe(0);
+  });
+
   it("restores saved WhatsApp credentials", async () => {
     let starts = 0;
     const harness = makeHarness({
@@ -877,6 +1048,97 @@ describe("channel runtime", () => {
     await sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
 
     expect(posts).toEqual([{ externalThreadId, text: "Approved answer" }]);
+  });
+
+  it("automatically sends one completed reply for an inbound channel turn", async () => {
+    const turnId = TurnId.make("turn-auto-reply");
+    const requestMessageId = MessageId.make("inbound-auto-reply");
+    const messageId = MessageId.make("assistant-auto-reply");
+    const threadId = ThreadId.make("thread-auto-reply");
+    let posts = 0;
+    const thread: OrchestrationThread = {
+      ...makeThread(threadId, BOT_ID, [
+        makeMessage(requestMessageId, "user", "Hello", {
+          provider: "imessage",
+          externalThreadId: "iMessage;-;sender",
+        }),
+        { ...makeMessage(messageId, "assistant", "Hello back"), turnId },
+      ]),
+      latestTurn: {
+        turnId,
+        state: "completed",
+        requestedAt: NOW,
+        startedAt: NOW,
+        completedAt: NOW,
+        assistantMessageId: messageId,
+        requestMessageId,
+        respondingBotId: BOT_ID,
+      },
+    };
+    const harness = makeHarness({
+      threads: [thread],
+      post: async () => void (posts += 1),
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
+    await expect(
+      sendCompletedChannelReply(harness.dependencies, threadId, turnId),
+    ).resolves.toBeGreaterThan(0);
+    await expect(
+      sendCompletedChannelReply(harness.dependencies, threadId, turnId),
+    ).resolves.toBeGreaterThan(0);
+
+    expect(posts).toBe(1);
+    expect(harness.readModel().bots[0]?.channelBindings[0]?.sentMessageIds).toContain(messageId);
+
+    await expect(
+      sendCompletedChannelReply(
+        harness.dependencies,
+        threadId,
+        TurnId.make("stale-auto-reply-turn"),
+      ),
+    ).resolves.toBeNull();
+    expect(posts).toBe(1);
+  });
+
+  it("does not send a local turn to an earlier channel conversation", async () => {
+    const turnId = TurnId.make("turn-local-after-channel");
+    const inboundMessageId = MessageId.make("inbound-before-local-turn");
+    const localMessageId = MessageId.make("local-request");
+    const assistantMessageId = MessageId.make("local-assistant");
+    const threadId = ThreadId.make("thread-local-after-channel");
+    let posts = 0;
+    const thread: OrchestrationThread = {
+      ...makeThread(threadId, BOT_ID, [
+        makeMessage(inboundMessageId, "user", "Channel question", {
+          provider: "imessage",
+          externalThreadId: "iMessage;-;sender",
+        }),
+        makeMessage(localMessageId, "user", "Local question"),
+        { ...makeMessage(assistantMessageId, "assistant", "Local answer"), turnId },
+      ]),
+      latestTurn: {
+        turnId,
+        state: "completed",
+        requestedAt: NOW,
+        startedAt: NOW,
+        completedAt: NOW,
+        assistantMessageId,
+        requestMessageId: localMessageId,
+        respondingBotId: BOT_ID,
+      },
+    };
+    const harness = makeHarness({
+      threads: [thread],
+      post: async () => void (posts += 1),
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
+    await expect(
+      sendCompletedChannelReply(harness.dependencies, threadId, turnId),
+    ).resolves.toBeNull();
+
+    expect(posts).toBe(0);
   });
 
   it("uses collision-free secret names for distinct bot IDs", async () => {
@@ -941,6 +1203,35 @@ describe("channel runtime", () => {
     await expect(connectChannel(harness.dependencies, telegramConnect(secondId))).rejects.toThrow(
       "already connected",
     );
+  });
+
+  it("rejects one WhatsApp number bound to two active bots", async () => {
+    const secondId = BotId.make("bot-2");
+    const harness = makeHarness({ bots: [makeBot(BOT_ID), makeBot(secondId)] });
+
+    await connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+    await expect(connectChannel(harness.dependencies, whatsappConnect(secondId))).rejects.toThrow(
+      "already connected",
+    );
+  });
+
+  it("serializes concurrent WhatsApp identity claims", async () => {
+    const secondId = BotId.make("bot-2");
+    const harness = makeHarness({ bots: [makeBot(BOT_ID), makeBot(secondId)] });
+
+    const results = await Promise.allSettled([
+      connectChannel(harness.dependencies, whatsappConnect(BOT_ID)),
+      connectChannel(harness.dependencies, whatsappConnect(secondId)),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(
+      harness
+        .readModel()
+        .bots.flatMap((bot) => bot.channelBindings ?? [])
+        .filter((binding) => binding.provider === "whatsapp" && binding.status === "connected"),
+    ).toHaveLength(1);
   });
 
   it("releases a failed post so explicit approval can retry", async () => {

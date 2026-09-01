@@ -6,11 +6,14 @@ import { TelegramProvider } from "@mastra/telegram";
 import { createiMessageAdapter } from "@photon-ai/chat-adapter-imessage";
 import {
   BotId,
+  ChannelConnectionId,
   CommandId,
   MessageId,
   ProviderInstanceId,
   ThreadId,
+  TurnId,
   type ChannelBinding,
+  type ChannelConnectionProfile,
   type ChannelProvider,
   type ClientOrchestrationCommand,
   type OrchestrationEvent,
@@ -26,6 +29,7 @@ import * as Stream from "effect/Stream";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import type { ServerSecretStore } from "../auth/ServerSecretStore.ts";
+import type { ServerSettingsService } from "../serverSettings.ts";
 import type * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import type { ChannelDeliveryStoreShape } from "./ChannelDeliveryStore.ts";
 
@@ -57,10 +61,15 @@ type ChannelConnectInput = Extract<
   ClientOrchestrationCommand,
   { readonly type: "channel.connect" }
 >;
+type ChannelConnectionSaveInput = Extract<
+  ClientOrchestrationCommand,
+  { readonly type: "channel.connection.save" }
+>;
 
 export interface ChannelRuntimeDependencies {
   readonly engine: OrchestrationEngine.OrchestrationEngineShape;
   readonly secretStore: ServerSecretStore["Service"];
+  readonly settings: Pick<ServerSettingsService["Service"], "getSettings" | "updateSettings">;
   readonly deliveryStore: ChannelDeliveryStoreShape;
   readonly readModel: () => Promise<OrchestrationReadModel>;
   readonly readThread: (threadId: ThreadId) => Promise<OrchestrationThread | null>;
@@ -104,10 +113,11 @@ type StoredChannelSecret = typeof StoredChannelSecret.Type;
 const decodeStoredChannelSecret = Schema.decodeUnknownEffect(StoredChannelSecret);
 
 const runtimeKey = (botId: string, provider: ChannelProvider) => `${botId}:${provider}`;
-const operationKey = (botId: BotId, provider: ChannelProvider) =>
-  provider === "telegram" ? provider : runtimeKey(botId, provider);
+const operationKey = (provider: ChannelProvider) => provider;
 const secretName = (botId: BotId, provider: ChannelProvider) =>
   `channel-${provider}-${createHash("sha256").update(botId).digest("hex")}`;
+const connectionSecretName = (connectionId: ChannelConnectionId) =>
+  `channel-connection-${createHash("sha256").update(connectionId).digest("hex")}`;
 
 export const channelThreadId = (
   botId: BotId,
@@ -149,7 +159,7 @@ const isIMessageDirectThread = (externalThreadId: string) => externalThreadId.in
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const iMessageGroupTrigger = (botName: string) =>
-  new RegExp(`(?:^|[^\\p{L}\\p{N}_])@${escapeRegExp(botName)}(?=$|[^\\p{L}\\p{N}_])`, "iu");
+  new RegExp(`(?:^|[^\\p{L}\\p{N}_])@${escapeRegExp(botName)}(?=$|[^\\p{L}\\p{N}_-])`, "iu");
 
 function subscribedIMessageGroupIds(
   model: OrchestrationReadModel,
@@ -198,18 +208,116 @@ async function loadSecret(
   return Effect.runPromise(decodeStoredChannelSecret(raw));
 }
 
-async function assertTelegramTokenAvailable(
+async function loadConnectionSecret(
+  dependencies: ChannelRuntimeDependencies,
+  connectionId: ChannelConnectionId,
+): Promise<StoredChannelSecret | null> {
+  const stored = await Effect.runPromise(
+    dependencies.secretStore.get(connectionSecretName(connectionId)),
+  );
+  if (stored._tag === "None") return null;
+  const raw: unknown = JSON.parse(decoder.decode(stored.value));
+  return Effect.runPromise(decodeStoredChannelSecret(raw));
+}
+
+const storedSecretFromInput = (
+  input: ChannelConnectInput | ChannelConnectionSaveInput,
+): StoredChannelSecret =>
+  input.provider === "telegram"
+    ? { provider: "telegram", token: input.token }
+    : input.provider === "whatsapp"
+      ? {
+          provider: "whatsapp",
+          accessToken: input.accessToken,
+          appSecret: input.appSecret,
+          phoneNumberId: input.phoneNumberId,
+          verifyToken: input.verifyToken,
+        }
+      : input.mode === "hosted"
+        ? {
+            provider: "imessage",
+            mode: "hosted",
+            projectId: input.projectId,
+            projectSecret: input.projectSecret,
+          }
+        : {
+            provider: "imessage",
+            mode: "self-hosted",
+            serverUrl: input.serverUrl,
+            apiKey: input.apiKey,
+            ...(input.phone ? { phone: input.phone } : {}),
+          };
+
+const connectInputFromSecret = (
+  botId: BotId,
+  commandId: CommandId,
+  secret: StoredChannelSecret,
+): ChannelConnectInput =>
+  secret.provider === "telegram"
+    ? { type: "channel.connect", commandId, botId, provider: "telegram", token: secret.token }
+    : secret.provider === "whatsapp"
+      ? {
+          type: "channel.connect",
+          commandId,
+          botId,
+          provider: "whatsapp",
+          accessToken: secret.accessToken,
+          appSecret: secret.appSecret,
+          phoneNumberId: secret.phoneNumberId,
+          verifyToken: secret.verifyToken,
+        }
+      : secret.mode === "hosted" && secret.projectId && secret.projectSecret
+        ? {
+            type: "channel.connect",
+            commandId,
+            botId,
+            provider: "imessage",
+            mode: "hosted",
+            projectId: secret.projectId,
+            projectSecret: secret.projectSecret,
+          }
+        : secret.mode === "self-hosted" && secret.serverUrl && secret.apiKey
+          ? {
+              type: "channel.connect",
+              commandId,
+              botId,
+              provider: "imessage",
+              mode: "self-hosted",
+              serverUrl: secret.serverUrl,
+              apiKey: secret.apiKey,
+              ...(secret.phone ? { phone: secret.phone } : {}),
+            }
+          : (() => {
+              throw new Error("Saved channel credentials are incomplete.");
+            })();
+
+const channelSecretIdentity = (secret: StoredChannelSecret): string =>
+  secret.provider === "telegram"
+    ? `telegram:${secret.token}`
+    : secret.provider === "whatsapp"
+      ? `whatsapp:${secret.phoneNumberId}`
+      : secret.mode === "hosted"
+        ? `imessage:hosted:${secret.projectId ?? ""}`
+        : `imessage:self-hosted:${secret.serverUrl ?? ""}:${secret.phone ?? ""}`;
+
+async function assertChannelIdentityAvailable(
   dependencies: ChannelRuntimeDependencies,
   botId: BotId,
-  token: string,
+  candidateSecret: StoredChannelSecret,
 ): Promise<void> {
   const model = await dependencies.readModel();
   for (const bot of model.bots) {
     if (bot.id === botId || bot.archivedAt !== null) continue;
-    if (!(bot.channelBindings ?? []).some((binding) => binding.provider === "telegram")) continue;
-    const secret = await loadSecret(dependencies, bot.id, "telegram").catch(() => null);
-    if (secret?.provider === "telegram" && secret.token === token) {
-      throw new Error("This Telegram bot is already connected to another bot.");
+    for (const binding of bot.channelBindings ?? []) {
+      if (binding.provider !== candidateSecret.provider || binding.status === "disconnected") {
+        continue;
+      }
+      const secret = binding.connectionId
+        ? await loadConnectionSecret(dependencies, binding.connectionId).catch(() => null)
+        : await loadSecret(dependencies, bot.id, binding.provider).catch(() => null);
+      if (secret && channelSecretIdentity(secret) === channelSecretIdentity(candidateSecret)) {
+        throw new Error("This channel connection is already connected to another bot.");
+      }
     }
   }
 }
@@ -352,7 +460,42 @@ async function withChannelOperation<A>(
   provider: ChannelProvider,
   operation: () => Promise<A>,
 ): Promise<A> {
-  const key = operationKey(botId, provider);
+  const key = operationKey(provider);
+  const previous = operationQueues.get(key) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const queued = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  operationQueues.set(key, queued);
+  try {
+    return await result;
+  } finally {
+    if (operationQueues.get(key) === queued) operationQueues.delete(key);
+  }
+}
+
+async function withConnectionOperation<A>(
+  connectionId: ChannelConnectionId,
+  operation: () => Promise<A>,
+): Promise<A> {
+  const key = `connection:${connectionId}`;
+  const previous = operationQueues.get(key) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const queued = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  operationQueues.set(key, queued);
+  try {
+    return await result;
+  } finally {
+    if (operationQueues.get(key) === queued) operationQueues.delete(key);
+  }
+}
+
+async function withConnectionSettingsOperation<A>(operation: () => Promise<A>): Promise<A> {
+  const key = "connection-settings";
   const previous = operationQueues.get(key) ?? Promise.resolve();
   const result = previous.catch(() => undefined).then(operation);
   const queued = result.then(
@@ -574,6 +717,7 @@ async function startWhatsApp(
 async function startChannel(
   dependencies: ChannelRuntimeDependencies,
   input: ChannelConnectInput,
+  connectionId?: ChannelConnectionId,
 ): Promise<StartedChannel> {
   const model = await dependencies.readModel();
   const bot = model.bots.find((candidate) => candidate.id === input.botId);
@@ -631,6 +775,7 @@ async function startChannel(
     runtime: started.runtime,
     binding: {
       botId: bot.id,
+      ...(connectionId ? { connectionId } : {}),
       provider: input.provider,
       status: "connected",
       externalIdentity: started.externalIdentity,
@@ -682,37 +827,154 @@ export async function connectChannel(
   input: ChannelConnectInput,
 ): Promise<number> {
   return withChannelOperation(input.botId, input.provider, async () => {
-    if (input.provider === "telegram") {
-      await assertTelegramTokenAvailable(dependencies, input.botId, input.token);
-    }
+    await assertChannelIdentityAvailable(dependencies, input.botId, storedSecretFromInput(input));
     const started = await startChannel(dependencies, input);
-    const secret: StoredChannelSecret =
-      input.provider === "telegram"
-        ? { provider: "telegram", token: input.token }
-        : input.provider === "whatsapp"
-          ? {
-              provider: "whatsapp",
-              accessToken: input.accessToken,
-              appSecret: input.appSecret,
-              phoneNumberId: input.phoneNumberId,
-              verifyToken: input.verifyToken,
-            }
-          : input.mode === "hosted"
-            ? {
-                provider: "imessage",
-                mode: "hosted",
-                projectId: input.projectId,
-                projectSecret: input.projectSecret,
-              }
-            : {
-                provider: "imessage",
-                mode: "self-hosted",
-                serverUrl: input.serverUrl,
-                apiKey: input.apiKey,
-                ...(input.phone ? { phone: input.phone } : {}),
-              };
-    return commitStartedChannel(dependencies, started, secret);
+    return commitStartedChannel(dependencies, started, storedSecretFromInput(input));
   });
+}
+
+export async function saveChannelConnection(
+  dependencies: ChannelRuntimeDependencies,
+  input: ChannelConnectionSaveInput,
+): Promise<number> {
+  return withConnectionSettingsOperation(() =>
+    withConnectionOperation(input.connectionId, async () => {
+      const model = await dependencies.readModel();
+      const attached = model.bots.some((bot) =>
+        (bot.channelBindings ?? []).some(
+          (binding) =>
+            binding.connectionId === input.connectionId && binding.status !== "disconnected",
+        ),
+      );
+      if (attached) throw new Error("Disconnect this channel before editing it.");
+      const secretKey = connectionSecretName(input.connectionId);
+      const previousSecret = await Effect.runPromise(dependencies.secretStore.get(secretKey));
+      const settings = await Effect.runPromise(dependencies.settings.getSettings);
+      const profile: ChannelConnectionProfile = {
+        id: input.connectionId,
+        name: input.name,
+        provider: input.provider,
+        adapter: input.provider === "imessage" ? "photon" : input.provider,
+        ...(input.provider === "whatsapp"
+          ? { externalIdentity: input.phoneNumberId }
+          : input.provider === "imessage"
+            ? {
+                externalIdentity:
+                  input.mode === "hosted" ? input.projectId : (input.phone ?? input.serverUrl),
+                ...(input.mode === "hosted"
+                  ? {
+                      managementUrl: `https://app.photon.codes/dashboard/${encodeURIComponent(input.projectId)}`,
+                    }
+                  : {}),
+              }
+            : {}),
+      };
+      await Effect.runPromise(
+        dependencies.secretStore.set(
+          secretKey,
+          encoder.encode(JSON.stringify(storedSecretFromInput(input))),
+        ),
+      );
+      try {
+        await Effect.runPromise(
+          dependencies.settings.updateSettings({
+            channelConnections: [
+              ...settings.channelConnections.filter(
+                (connection) => connection.id !== input.connectionId,
+              ),
+              profile,
+            ],
+          }),
+        );
+      } catch (cause) {
+        if (previousSecret._tag === "Some") {
+          await Effect.runPromise(
+            dependencies.secretStore.set(secretKey, previousSecret.value),
+          ).catch(() => undefined);
+        } else {
+          await Effect.runPromise(dependencies.secretStore.remove(secretKey)).catch(
+            () => undefined,
+          );
+        }
+        throw cause;
+      }
+      return 0;
+    }),
+  );
+}
+
+export async function deleteChannelConnection(
+  dependencies: ChannelRuntimeDependencies,
+  connectionId: ChannelConnectionId,
+): Promise<number> {
+  return withConnectionSettingsOperation(() =>
+    withConnectionOperation(connectionId, async () => {
+      const model = await dependencies.readModel();
+      if (
+        model.bots.some((bot) =>
+          (bot.channelBindings ?? []).some(
+            (binding) => binding.connectionId === connectionId && binding.status !== "disconnected",
+          ),
+        )
+      ) {
+        throw new Error("Disconnect this channel before deleting it.");
+      }
+      const secretKey = connectionSecretName(connectionId);
+      const previousSecret = await Effect.runPromise(dependencies.secretStore.get(secretKey));
+      const settings = await Effect.runPromise(dependencies.settings.getSettings);
+      await Effect.runPromise(dependencies.secretStore.remove(secretKey));
+      try {
+        await Effect.runPromise(
+          dependencies.settings.updateSettings({
+            channelConnections: settings.channelConnections.filter(
+              (connection) => connection.id !== connectionId,
+            ),
+          }),
+        );
+      } catch (cause) {
+        if (previousSecret._tag === "Some") {
+          await Effect.runPromise(
+            dependencies.secretStore.set(secretKey, previousSecret.value),
+          ).catch(() => undefined);
+        }
+        throw cause;
+      }
+      return 0;
+    }),
+  );
+}
+
+export async function attachChannelConnection(
+  dependencies: ChannelRuntimeDependencies,
+  botId: BotId,
+  connectionId: ChannelConnectionId,
+  provider: ChannelProvider,
+): Promise<number> {
+  return withConnectionOperation(connectionId, () =>
+    withChannelOperation(botId, provider, async () => {
+      const model = await dependencies.readModel();
+      const inUse = model.bots.some(
+        (bot) =>
+          bot.id !== botId &&
+          bot.archivedAt === null &&
+          (bot.channelBindings ?? []).some(
+            (binding) => binding.connectionId === connectionId && binding.status !== "disconnected",
+          ),
+      );
+      if (inUse) throw new Error("This channel connection is attached to another bot.");
+      const secret = await loadConnectionSecret(dependencies, connectionId);
+      if (!secret || secret.provider !== provider)
+        throw new Error("Saved channel connection is unavailable.");
+      await assertChannelIdentityAvailable(dependencies, botId, secret);
+      const commandId = CommandId.make(await randomId(dependencies, "channel-attach"));
+      const started = await startChannel(
+        dependencies,
+        connectInputFromSecret(botId, commandId, secret),
+        connectionId,
+      );
+      return commitStartedChannel(dependencies, started);
+    }),
+  );
 }
 
 export async function disconnectChannel(
@@ -721,9 +983,15 @@ export async function disconnectChannel(
   provider: ChannelProvider,
 ): Promise<number> {
   return withChannelOperation(botId, provider, async () => {
+    const model = await dependencies.readModel();
+    const currentBinding = model.bots
+      .find((bot) => bot.id === botId)
+      ?.channelBindings?.find((binding) => binding.provider === provider);
     const name = secretName(botId, provider);
     const previousSecret = await Effect.runPromise(dependencies.secretStore.get(name));
-    await Effect.runPromise(dependencies.secretStore.remove(name));
+    if (!currentBinding?.connectionId) {
+      await Effect.runPromise(dependencies.secretStore.remove(name));
+    }
     let sequence: number;
     try {
       sequence = await replaceBinding(dependencies, {
@@ -753,55 +1021,22 @@ export async function reconnectChannel(
   provider: LiveProvider,
 ): Promise<number> {
   return withChannelOperation(botId, provider, async () => {
-    const secret = await loadSecret(dependencies, botId, provider);
+    const model = await dependencies.readModel();
+    const binding = model.bots
+      .find((bot) => bot.id === botId)
+      ?.channelBindings?.find((candidate) => candidate.provider === provider);
+    if (!binding || binding.status === "disconnected") {
+      throw new Error(`No active ${provider} channel to reconnect.`);
+    }
+    const secret = binding?.connectionId
+      ? await loadConnectionSecret(dependencies, binding.connectionId)
+      : await loadSecret(dependencies, botId, provider);
     if (!secret || secret.provider !== provider)
       throw new Error(`No saved ${provider} credentials.`);
+    await assertChannelIdentityAvailable(dependencies, botId, secret);
     const commandId = CommandId.make(await randomId(dependencies, "channel-reconnect"));
-    const input: ChannelConnectInput =
-      secret.provider === "telegram"
-        ? { type: "channel.connect", commandId, botId, provider: "telegram", token: secret.token }
-        : secret.provider === "whatsapp"
-          ? {
-              type: "channel.connect",
-              commandId,
-              botId,
-              provider: "whatsapp",
-              accessToken: secret.accessToken,
-              appSecret: secret.appSecret,
-              phoneNumberId: secret.phoneNumberId,
-              verifyToken: secret.verifyToken,
-            }
-          : secret.mode === "hosted"
-            ? (() => {
-                if (!secret.projectId || !secret.projectSecret) {
-                  throw new Error("Saved Photon hosted credentials are incomplete.");
-                }
-                return {
-                  type: "channel.connect",
-                  commandId,
-                  botId,
-                  provider: "imessage",
-                  mode: "hosted",
-                  projectId: secret.projectId,
-                  projectSecret: secret.projectSecret,
-                } as const;
-              })()
-            : (() => {
-                if (!secret.serverUrl || !secret.apiKey) {
-                  throw new Error("Saved Photon self-hosted credentials are incomplete.");
-                }
-                return {
-                  type: "channel.connect",
-                  commandId,
-                  botId,
-                  provider: "imessage",
-                  mode: "self-hosted",
-                  serverUrl: secret.serverUrl,
-                  apiKey: secret.apiKey,
-                  ...(secret.phone ? { phone: secret.phone } : {}),
-                } as const;
-              })();
-    const started = await startChannel(dependencies, input);
+    const input = connectInputFromSecret(botId, commandId, secret);
+    const started = await startChannel(dependencies, input, binding?.connectionId);
     return commitStartedChannel(dependencies, started);
   });
 }
@@ -917,4 +1152,57 @@ export async function sendChannelMessage(
         });
     return sequence;
   });
+}
+
+export async function resolveCompletedChannelReply(
+  dependencies: ChannelRuntimeDependencies,
+  threadId: ThreadId,
+  turnId: TurnId,
+): Promise<{
+  readonly botId: BotId;
+  readonly threadId: ThreadId;
+  readonly messageId: MessageId;
+} | null> {
+  const thread = await dependencies.readThread(threadId);
+  const latestTurn = thread?.latestTurn;
+  if (
+    !thread?.botId ||
+    latestTurn?.state !== "completed" ||
+    latestTurn.turnId !== turnId ||
+    !latestTurn.requestMessageId ||
+    !latestTurn.assistantMessageId
+  ) {
+    return null;
+  }
+
+  const inboundIndex = thread.messages.findIndex(
+    (message) =>
+      message.id === latestTurn.requestMessageId &&
+      message.role === "user" &&
+      message.channelOrigin !== undefined,
+  );
+  const assistantIndex = thread.messages.findIndex(
+    (message) =>
+      message.id === latestTurn.assistantMessageId &&
+      message.role === "assistant" &&
+      message.turnId === turnId &&
+      !message.streaming &&
+      Boolean(message.text.trim()),
+  );
+  if (inboundIndex < 0 || assistantIndex <= inboundIndex) return null;
+
+  return {
+    botId: thread.botId,
+    threadId,
+    messageId: latestTurn.assistantMessageId,
+  };
+}
+
+export async function sendCompletedChannelReply(
+  dependencies: ChannelRuntimeDependencies,
+  threadId: ThreadId,
+  turnId: TurnId,
+): Promise<number | null> {
+  const target = await resolveCompletedChannelReply(dependencies, threadId, turnId);
+  return target ? sendChannelMessage(dependencies, target) : null;
 }

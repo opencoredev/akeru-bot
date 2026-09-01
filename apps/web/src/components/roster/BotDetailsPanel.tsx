@@ -8,6 +8,7 @@ import {
 import {
   Cancel01Icon,
   Edit02Icon,
+  Link02Icon,
   PanelRightCloseIcon,
   PanelRightIcon,
   WrenchIcon,
@@ -41,6 +42,7 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
+import { BotChannelsSheet } from "./BotChannelsSheet";
 import { BotModelPicker } from "./BotModelPicker";
 import {
   BOT_SANDBOX_OPTIONS,
@@ -105,6 +107,7 @@ function BotProfileEditor({
   const [saved, setSaved] = useState(false);
   const [engineChanged, setEngineChanged] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [channelsOpen, setChannelsOpen] = useState(false);
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
@@ -154,6 +157,9 @@ function BotProfileEditor({
   const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);
   const enabledToolCount = tools.filter(
     (tool) => tool.workspaceEnabled && !disabledMcpServerIds.includes(tool.id),
+  ).length;
+  const connectedChannelCount = (bot.channelBindings ?? []).filter(
+    (binding) => binding.status !== "disconnected",
   ).length;
   const toolOverridesDirty =
     [...disabledMcpServerIds].sort().join("\u0000") !==
@@ -305,6 +311,23 @@ function BotProfileEditor({
             <span className="text-xs text-muted-foreground">Manage</span>
           </button>
         </div>
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Channels</div>
+          <button
+            type="button"
+            aria-label="Manage bot channels"
+            aria-expanded={channelsOpen}
+            onClick={() => setChannelsOpen(true)}
+            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Link02Icon} />
+            <span className="min-w-0 flex-1 text-sm">
+              {connectedChannelCount === 0 ? "No channels" : `${connectedChannelCount} connected`}
+            </span>
+            <span className="text-xs text-muted-foreground">Manage</span>
+          </button>
+        </div>
       </div>
 
       <div className="mt-7 flex items-center justify-end gap-3">
@@ -345,6 +368,7 @@ function BotProfileEditor({
           markChanged();
         }}
       />
+      <BotChannelsSheet bot={bot} open={channelsOpen} onOpenChange={setChannelsOpen} />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import {
+  type BotId,
   type ChannelBinding,
   type ChannelProvider,
   type EnvironmentId,
-  type OrchestrationBot,
 } from "@t3tools/contracts";
 import { useState } from "react";
 
@@ -14,10 +14,12 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { toastManager } from "../ui/toast";
 import { SettingsRow } from "./settingsLayout";
 
-export function bindingFor(
-  bot: Pick<OrchestrationBot, "id" | "channelBindings">,
-  provider: ChannelProvider,
-): ChannelBinding {
+export interface ChannelBot {
+  readonly id: BotId;
+  readonly channelBindings?: readonly ChannelBinding[];
+}
+
+export function bindingFor(bot: ChannelBot, provider: ChannelProvider): ChannelBinding {
   return (
     bot.channelBindings?.find((binding) => binding.provider === provider) ?? {
       botId: bot.id,
@@ -31,7 +33,7 @@ export function bindingFor(
 }
 
 export function selfHostedIMessageConnectInput(
-  botId: OrchestrationBot["id"],
+  botId: BotId,
   serverUrl: string,
   apiKey: string,
   phone: string,
@@ -48,7 +50,7 @@ export function selfHostedIMessageConnectInput(
 }
 
 export function whatsAppConnectInput(
-  botId: OrchestrationBot["id"],
+  botId: BotId,
   accessToken: string,
   appSecret: string,
   phoneNumberId: string,
@@ -83,13 +85,17 @@ function description(binding: ChannelBinding): string {
 
 function useChannelActions(
   environmentId: EnvironmentId,
-  bot: OrchestrationBot,
+  bot: ChannelBot,
   provider: ChannelProvider,
   label: string,
 ) {
   const binding = bindingFor(bot, provider);
-  const disconnect = useAtomCommand(botEnvironment.channels.disconnect, { reportFailure: false });
-  const reconnect = useAtomCommand(botEnvironment.channels.reconnect, { reportFailure: false });
+  const disconnect = useAtomCommand(botEnvironment.channels.disconnect, {
+    reportFailure: false,
+  });
+  const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
+    reportFailure: false,
+  });
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<{ readonly _tag: string }>, failure: string) => {
     setBusy(true);
@@ -138,9 +144,11 @@ export function TelegramChannelRow({
   bot,
 }: {
   readonly environmentId: EnvironmentId;
-  readonly bot: OrchestrationBot;
+  readonly bot: ChannelBot;
 }) {
-  const connect = useAtomCommand(botEnvironment.channels.connect, { reportFailure: false });
+  const connect = useAtomCommand(botEnvironment.channels.connect, {
+    reportFailure: false,
+  });
   const [token, setToken] = useState("");
   const actions = useChannelActions(environmentId, bot, "telegram", "Telegram");
   return (
@@ -167,7 +175,11 @@ export function TelegramChannelRow({
                     () =>
                       connect({
                         environmentId,
-                        input: { botId: bot.id, provider: "telegram", token: token.trim() },
+                        input: {
+                          botId: bot.id,
+                          provider: "telegram",
+                          token: token.trim(),
+                        },
                       }),
                     "Could not connect Telegram",
                   )
@@ -188,9 +200,11 @@ export function IMessageChannelRow({
   bot,
 }: {
   readonly environmentId: EnvironmentId;
-  readonly bot: OrchestrationBot;
+  readonly bot: ChannelBot;
 }) {
-  const connect = useAtomCommand(botEnvironment.channels.connect, { reportFailure: false });
+  const connect = useAtomCommand(botEnvironment.channels.connect, {
+    reportFailure: false,
+  });
   const [mode, setMode] = useState<"hosted" | "self-hosted">("hosted");
   const [projectId, setProjectId] = useState("");
   const [projectSecret, setProjectSecret] = useState("");
@@ -303,9 +317,11 @@ export function WhatsAppChannelRow({
   bot,
 }: {
   readonly environmentId: EnvironmentId;
-  readonly bot: OrchestrationBot;
+  readonly bot: ChannelBot;
 }) {
-  const connect = useAtomCommand(botEnvironment.channels.connect, { reportFailure: false });
+  const connect = useAtomCommand(botEnvironment.channels.connect, {
+    reportFailure: false,
+  });
   const [accessToken, setAccessToken] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");

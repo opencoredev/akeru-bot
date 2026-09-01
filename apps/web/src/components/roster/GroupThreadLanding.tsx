@@ -67,7 +67,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader className="border-b border-border">
           <div className="flex min-w-0 items-center gap-2">
-            <GroupMemberStack group={group} bots={bots} ringClassName="ring-background" />
+            <GroupMemberStack group={group} bots={bots} />
             <span className="truncate text-sm font-medium">{group.name}</span>
           </div>
         </WorkspacePageHeader>

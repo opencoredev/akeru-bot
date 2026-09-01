@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { MessageId } from "./baseSchemas.ts";
+import { ChannelConnectionId, MessageId } from "./baseSchemas.ts";
 import {
   BotAvatar,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -113,6 +113,17 @@ it.effect("decodes live channel commands", () =>
       phoneNumberId: " phone-number-id ",
       verifyToken: " verify-token ",
     });
+    const saveConnection = yield* decodeClientOrchestrationCommand({
+      type: "channel.connection.save",
+      commandId: "save-photon",
+      connectionId: " photon-work ",
+      name: " Work iPhone ",
+      provider: "imessage",
+      mode: "self-hosted",
+      serverUrl: " photon.example:443 ",
+      apiKey: " photon-key ",
+      phone: " +15551234567 ",
+    });
 
     assert.deepInclude(telegram, { provider: "telegram", token: "token" });
     assert.deepInclude(imessage, {
@@ -126,6 +137,14 @@ it.effect("decodes live channel commands", () =>
       appSecret: "app-secret",
       phoneNumberId: "phone-number-id",
       verifyToken: "verify-token",
+    });
+    assert.deepInclude(saveConnection, {
+      connectionId: ChannelConnectionId.make("photon-work"),
+      name: "Work iPhone",
+      provider: "imessage",
+      serverUrl: "photon.example:443",
+      apiKey: "photon-key",
+      phone: "+15551234567",
     });
   }),
 );

@@ -22,7 +22,9 @@ export function useServerRosterSync(): void {
   const loaded = useAtomValue(environmentRosterLoadedAtom(atomKey));
   const bots = useAtomValue(environmentBotsAtom(atomKey));
   const groups = useAtomValue(environmentGroupsAtom(atomKey));
-  const createBot = useAtomCommand(botEnvironment.create, { reportFailure: false });
+  const createBot = useAtomCommand(botEnvironment.create, {
+    reportFailure: false,
+  });
 
   useEffect(() => {
     if (environmentId === null || !loaded) return;
@@ -46,6 +48,7 @@ export function useServerRosterSync(): void {
       return;
     }
     useRosterStore.getState().replaceRoster({
+      environmentId,
       bots: bots.map((bot) => ({
         ...bot,
         avatar: { ...bot.avatar },
@@ -60,7 +63,9 @@ export function useServerRosterSync(): void {
 export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promise<boolean> {
   const environmentId = usePrimaryEnvironmentId();
   const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
-  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
+  const updateBot = useAtomCommand(botEnvironment.update, {
+    reportFailure: false,
+  });
 
   return useCallback(
     async (botId: string, avatar: BotAvatar) => {

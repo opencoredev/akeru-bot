@@ -11,12 +11,14 @@ import {
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
+  ServerSettingsRpcPatch,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
 const decodeClientSettingsPatch = Schema.decodeUnknownSync(ClientSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
+const decodeServerSettingsRpcPatch = Schema.decodeUnknownSync(ServerSettingsRpcPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
@@ -64,6 +66,53 @@ describe("ServerSettings product feedback", () => {
       decodeServerSettingsPatch({ productFeedbackEndpoint: "http://feedback.example.test" }),
     ).toThrow();
     expect(() => decodeServerSettingsPatch({ productFeedbackEndpoint: "/api/feedback" })).toThrow();
+  });
+});
+
+describe("ServerSettings channel connections", () => {
+  it("defaults to no saved connections", () => {
+    expect(decodeServerSettings({}).channelConnections).toEqual([]);
+  });
+
+  it("decodes reusable connection identity metadata", () => {
+    expect(
+      decodeServerSettingsPatch({
+        channelConnections: [
+          {
+            id: " photon-work ",
+            name: " Work iPhone ",
+            provider: "imessage",
+            adapter: "photon",
+            externalIdentity: " +15551234567 ",
+            managementUrl: " https://app.photon.codes/dashboard/photon-work ",
+          },
+        ],
+      }).channelConnections,
+    ).toEqual([
+      {
+        id: "photon-work",
+        name: "Work iPhone",
+        provider: "imessage",
+        adapter: "photon",
+        externalIdentity: "+15551234567",
+        managementUrl: "https://app.photon.codes/dashboard/photon-work",
+      },
+    ]);
+  });
+
+  it("keeps channel profiles out of the generic settings RPC", () => {
+    expect(
+      decodeServerSettingsRpcPatch({
+        channelConnections: [
+          {
+            id: "photon-work",
+            name: "Work iPhone",
+            provider: "imessage",
+            adapter: "photon",
+          },
+        ],
+      }),
+    ).not.toHaveProperty("channelConnections");
   });
 });
 

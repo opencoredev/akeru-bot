@@ -2,14 +2,15 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
+import * as Struct from "effect/Struct";
+import { ChannelConnectionId, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { ThreadEnvMode } from "./environment.ts";
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
   DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
   ProviderOptionSelections,
 } from "./model.ts";
-import { ModelSelection } from "./orchestration.ts";
+import { ChannelProvider, ModelSelection } from "./orchestration.ts";
 import {
   DEFAULT_PREVIEW_APPEARANCE,
   DEFAULT_PREVIEW_ZOOM_FACTOR,
@@ -640,6 +641,16 @@ export const BackgroundActivitySettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
+export const ChannelConnectionProfile = Schema.Struct({
+  id: ChannelConnectionId,
+  provider: ChannelProvider,
+  adapter: Schema.Literals(["telegram", "photon", "whatsapp"]),
+  name: TrimmedNonEmptyString,
+  externalIdentity: Schema.optional(TrimmedNonEmptyString),
+  managementUrl: Schema.optional(TrimmedNonEmptyString),
+});
+export type ChannelConnectionProfile = typeof ChannelConnectionProfile.Type;
+
 export const ServerSettings = Schema.Struct({
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
   // `enableAssistantStreaming`): decoding drops the old key, so everyone,
@@ -729,6 +740,9 @@ export const ServerSettings = Schema.Struct({
   // See providerInstance.ts for the forward/backward compatibility invariant.
   providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  channelConnections: Schema.Array(ChannelConnectionProfile).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
@@ -874,7 +888,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
-export const ServerSettingsPatch = Schema.Struct({
+const ServerSettingsPatchFields = {
   // Server settings
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
@@ -931,8 +945,15 @@ export const ServerSettingsPatch = Schema.Struct({
   // patches risk leaving driver-specific config in a half-merged state.
   // The web UI sends a fully-formed map every time it edits this field.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
-});
+  channelConnections: Schema.optionalKey(Schema.Array(ChannelConnectionProfile)),
+} as const;
+export const ServerSettingsPatch = Schema.Struct(ServerSettingsPatchFields);
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
+
+export const ServerSettingsRpcPatch = Schema.Struct(
+  Struct.omit(ServerSettingsPatchFields, ["channelConnections"]),
+);
+export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
