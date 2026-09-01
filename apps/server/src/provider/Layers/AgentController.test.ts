@@ -8,12 +8,15 @@ import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/cor
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
   ApprovalRequestId,
   BotId,
   EventId,
   McpServerId,
   ProviderDriverKind,
   ProviderInstanceId,
+  ProjectId,
   ThreadId,
   TurnId,
   type ProviderRuntimeEvent,
@@ -28,8 +31,14 @@ import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
-import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryRepository.ts";
-import { MemoryCandidateRepository } from "../../memory/Services/MemoryCandidateRepository.ts";
+import {
+  EntityMemoryRepository,
+  type EntityMemoryRepositoryShape,
+} from "../../memory/Services/EntityMemoryRepository.ts";
+import {
+  MemoryCandidateRepository,
+  type MemoryCandidateRepositoryShape,
+} from "../../memory/Services/MemoryCandidateRepository.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
@@ -249,11 +258,13 @@ function makeLayer(
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
   usageLedger: BotUsageLedgerShape = makeUsageLedger().service,
+  memory?: Pick<AgentControllerLiveOptions, "entityMemoryRepository" | "memoryCandidateRepository">,
 ) {
   return makeAgentControllerLive({
     makeMastraHarness: factory,
     makeBotBrowser,
     ...(makeMcpManager ? { makeMcpManager } : {}),
+    ...memory,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -277,9 +288,10 @@ function provideController<A, E>(
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
   usageLedger?: BotUsageLedgerShape,
+  memory?: Pick<AgentControllerLiveOptions, "entityMemoryRepository" | "memoryCandidateRepository">,
 ) {
   return effect.pipe(
-    Effect.provide(makeLayer(bridge, factory, makeMcpManager, baseDir, usageLedger)),
+    Effect.provide(makeLayer(bridge, factory, makeMcpManager, baseDir, usageLedger, memory)),
     Effect.orDie,
   );
 }
@@ -526,6 +538,104 @@ describe("AgentControllerLive", () => {
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("registers repository-backed memory tools for Mastra sessions", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: codexThreadId,
+      projectId: ProjectId.make("project-memory-tools"),
+      workspaceRoot: "/workspace/memory-tools",
+      botId: BotId.make("bot-memory-tools"),
+      groupId: null,
+      respondingBotId: BotId.make("bot-memory-tools"),
+      groupMemberBotIds: [],
+    } as const;
+    const insert = vi.fn((input) => Effect.succeed(input.revision));
+    const create = vi.fn((input) => Effect.succeed(input.candidate));
+    const entityMemoryRepository = { insert } as unknown as EntityMemoryRepositoryShape;
+    const memoryCandidateRepository = { create } as unknown as MemoryCandidateRepositoryShape;
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: access,
+        });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
+          expect.arrayContaining(["recall_memory", "remember", "update_memory", "forget_memory"]),
+        );
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "remember",
+            toolCallId: "private-memory",
+            input: { fact: "The user prefers vim.", scope: "private" },
+            approvalMode: "require-grant",
+          }),
+        );
+        const sharedMemory = {
+          threadId: String(codexThreadId),
+          toolId: "remember" as const,
+          toolCallId: "shared-memory",
+          input: { fact: "The project uses Bun.", scope: "project" },
+          approvalMode: "require-grant" as const,
+        };
+        runtime.grantApproval(sharedMemory);
+        yield* Effect.promise(() => runtime.execute(sharedMemory));
+
+        expect(insert).toHaveBeenCalledOnce();
+        expect(create).toHaveBeenCalledOnce();
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              events.push(event);
+            }),
+          ),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Remember this." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "memory-approval",
+          toolName: "remember",
+          args: { fact: "The project uses Bun.", scope: "project" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        expect(events.find((event) => event.type === "request.opened")).toMatchObject({
+          payload: {
+            options: [
+              { decision: "accept", label: "Allow" },
+              { decision: "decline", label: "Decline" },
+            ],
+          },
+        });
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        mastra.finishSend();
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { entityMemoryRepository, memoryCandidateRepository },
     );
   });
 

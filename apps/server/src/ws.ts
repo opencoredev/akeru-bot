@@ -5,6 +5,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -29,6 +30,7 @@ import {
   type FileManagerRevealKind,
   type OrchestrationClientOrigin,
   type OrchestrationCommand,
+  type OrchestrationReadModel,
   type GitActionProgressEvent,
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
@@ -41,6 +43,8 @@ import {
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
   PortabilityArchiveError,
+  type PortabilityArchive,
+  type PortabilityProjectFolderMap,
   ORCHESTRATION_WS_METHODS,
   type ProjectId,
   type ProjectEntriesFailure,
@@ -182,6 +186,36 @@ const availablePortabilityProviderIds = (providers: ReadonlyArray<ServerProvider
       )
       .map((provider) => provider.instanceId),
   );
+
+const validatePortabilityProjectFolders = Effect.fn("validatePortabilityProjectFolders")(function* (
+  archive: PortabilityArchive,
+  snapshot: OrchestrationReadModel,
+  projectFolders: PortabilityProjectFolderMap,
+  operation: "preview" | "apply",
+) {
+  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+  const path = yield* Path.Path;
+  for (const [projectId, destination] of Object.entries(projectFolders)) {
+    if (!path.isAbsolute(destination) || path.dirname(destination) === destination) {
+      return yield* portabilityError(
+        operation,
+        new Error(`Project '${projectId}' destination must be an absolute non-root path.`),
+      );
+    }
+  }
+  const normalized = Portability.normalizePortabilityProjectFolders(
+    archive,
+    snapshot,
+    projectFolders,
+  );
+  return Object.fromEntries(
+    yield* Effect.forEach(Object.entries(normalized), ([projectId, workspaceRoot]) =>
+      workspacePaths
+        .normalizeWorkspaceRoot(workspaceRoot)
+        .pipe(Effect.map((normalizedRoot) => [projectId, normalizedRoot] as const)),
+    ),
+  ) as PortabilityProjectFolderMap;
+});
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -1979,7 +2013,7 @@ const makeWsRpcLayer = (
             }).pipe(Effect.mapError((cause) => portabilityError("export", cause))),
             { "rpc.aggregate": "portability" },
           ),
-        [WS_METHODS.portabilityPreviewImport]: ({ contents }) =>
+        [WS_METHODS.portabilityPreviewImport]: ({ contents, projectFolders = {} }) =>
           observeRpcEffect(
             WS_METHODS.portabilityPreviewImport,
             Effect.gen(function* () {
@@ -1992,17 +2026,25 @@ const makeWsRpcLayer = (
                 serverSettings.getSettings,
                 providerRegistry.getProviders,
               ]);
+              const validatedProjectFolders = yield* validatePortabilityProjectFolders(
+                archive,
+                snapshot,
+                projectFolders,
+                "preview",
+              );
               return Portability.previewPortabilityImport(
                 archive,
                 snapshot,
                 settings,
                 availablePortabilityProviderIds(providers),
+                validatedProjectFolders,
               );
             }).pipe(Effect.mapError((cause) => portabilityError("preview", cause))),
             { "rpc.aggregate": "portability" },
           ),
         [WS_METHODS.portabilityApplyImport]: ({
           contents,
+          projectFolders = {},
           expectedSnapshotSequence,
           expectedStateChecksum,
         }) =>
@@ -2019,11 +2061,23 @@ const makeWsRpcLayer = (
                 providerRegistry.getProviders,
               ]);
               const availableProviderIds = availablePortabilityProviderIds(providers);
+              const validatedProjectFolders = yield* validatePortabilityProjectFolders(
+                archive,
+                snapshot,
+                projectFolders,
+                "apply",
+              );
               if (
-                !Portability.isPortabilityPreviewCurrent(snapshot, settings, availableProviderIds, {
-                  snapshotSequence: expectedSnapshotSequence,
-                  stateChecksum: expectedStateChecksum,
-                })
+                !Portability.isPortabilityPreviewCurrent(
+                  snapshot,
+                  settings,
+                  availableProviderIds,
+                  {
+                    snapshotSequence: expectedSnapshotSequence,
+                    stateChecksum: expectedStateChecksum,
+                  },
+                  validatedProjectFolders,
+                )
               ) {
                 return yield* portabilityError(
                   "apply",
@@ -2035,6 +2089,7 @@ const makeWsRpcLayer = (
                 snapshot,
                 settings,
                 availableProviderIds,
+                validatedProjectFolders,
               );
               yield* decideCommandSequence({ commands: plan.commands, readModel: snapshot }).pipe(
                 Effect.provideService(Crypto.Crypto, crypto),

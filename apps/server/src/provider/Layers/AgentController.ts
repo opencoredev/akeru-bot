@@ -30,6 +30,7 @@ import {
   type RuntimeMode,
   type ThreadId,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  type AkeruMemoryThreadAccess,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -41,6 +42,15 @@ import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
+import { createMemoryToolHandlers } from "../../memory/MemoryToolHandlers.ts";
+import {
+  EntityMemoryRepository,
+  type EntityMemoryRepositoryShape,
+} from "../../memory/Services/EntityMemoryRepository.ts";
+import {
+  MemoryCandidateRepository,
+  type MemoryCandidateRepositoryShape,
+} from "../../memory/Services/MemoryCandidateRepository.ts";
 import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   SubscriptionAuthService,
@@ -54,7 +64,11 @@ import {
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
-import { createAkeruToolRuntime, type AkeruToolSession } from "../AkeruToolRuntime.ts";
+import {
+  createAkeruToolRuntime,
+  isMemoryToolId,
+  type AkeruToolSession,
+} from "../AkeruToolRuntime.ts";
 import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
 import { AkeruSessionResources } from "../AkeruSessionResources.ts";
 import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
@@ -118,6 +132,8 @@ export interface AgentControllerLiveOptions {
     input: CreateRemoteBotWorkspaceInput,
   ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
+  readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
+  readonly memoryCandidateRepository?: MemoryCandidateRepositoryShape;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -358,6 +374,14 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       },
     });
+    const memoryHandlers = (access: AkeruMemoryThreadAccess | undefined) =>
+      access && options?.entityMemoryRepository && options.memoryCandidateRepository
+        ? createMemoryToolHandlers(
+            options.entityMemoryRepository,
+            options.memoryCandidateRepository,
+            access,
+          )
+        : undefined;
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
     const bundle = yield* runMastra("construct", () =>
       makeMastraHarness({
@@ -630,6 +654,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                       { decision: "decline", label: "Cancel" },
                     ]
                   : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
+                      isMemoryToolId(event.toolName) ||
                       akeruActionNeedsApproval(event.toolName, event.args)
                     ? [
                         { decision: "accept", label: "Allow" },
@@ -800,11 +825,14 @@ const make = (options?: AgentControllerLiveOptions) =>
         const toolSession = { ...existing.toolSession };
         delete toolSession.botId;
         delete toolSession.botName;
+        delete toolSession.memoryHandlers;
+        const nextMemoryHandlers = memoryHandlers(input.memoryAccess);
         existing.toolSession = {
           ...toolSession,
           runtimeMode: input.runtimeMode,
           ...(input.botId ? { botId: input.botId } : {}),
           ...(input.botName ? { botName: input.botName } : {}),
+          ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
         };
         toolRuntime.registerSession(key, existing.toolSession);
         yield* setCategoryPermissions(existing.session, input.runtimeMode);
@@ -845,6 +873,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         input.botSandbox && input.botSandbox !== "local" ? "cloud" : "local";
       const userComputerWorkspace =
         workspaceType === "local" && input.cwd ? resources.workspace : undefined;
+      const registeredMemoryHandlers = memoryHandlers(input.memoryAccess);
       const toolSession: AkeruToolSession = {
         ...(input.botId ? { botId: input.botId } : {}),
         ...(input.botName ? { botName: input.botName } : {}),
@@ -852,6 +881,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         workspaceType,
         workspace: resources.botWorkspace,
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
+        ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
       };
       toolRuntime.registerSession(key, toolSession);
       return yield* Effect.gen(function* () {
@@ -1068,17 +1098,18 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.approvalRequests.delete(toolCallId);
       const { name: toolName, input: toolInput } = toolRequest;
       const akeruTool = AKERU_TOOL_CATALOG.find((tool) => tool.id === toolName);
-      if (akeruTool && input.decision !== "decline" && input.decision !== "cancel") {
+      const runtimeToolId = akeruTool?.id ?? (isMemoryToolId(toolName) ? toolName : undefined);
+      if (runtimeToolId && input.decision !== "decline" && input.decision !== "cancel") {
         toolRuntime.grantApproval({
           threadId: key,
           toolCallId,
-          toolId: akeruTool.id,
+          toolId: runtimeToolId,
           input: toolInput,
         });
       }
       if (
         input.decision === "acceptForSession" &&
-        !akeruTool &&
+        !runtimeToolId &&
         !akeruActionNeedsApproval(toolName, toolInput) &&
         toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
       ) {
@@ -1091,7 +1122,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.session.respondToToolApproval({
         toolCallId,
         decision:
-          akeruTool && input.decision !== "decline" && input.decision !== "cancel"
+          runtimeToolId && input.decision !== "decline" && input.decision !== "cancel"
             ? "approve"
             : approvalDecision(input.decision),
       });
@@ -1290,4 +1321,11 @@ function toProviderSession(threadId: ThreadId, active: ActiveSession): ProviderS
 export const makeAgentControllerLive = (options?: AgentControllerLiveOptions) =>
   Layer.effect(AgentController, make(options));
 
-export const AgentControllerLive = makeAgentControllerLive();
+export const AgentControllerLive = Layer.effect(
+  AgentController,
+  Effect.gen(function* () {
+    const entityMemoryRepository = yield* EntityMemoryRepository;
+    const memoryCandidateRepository = yield* MemoryCandidateRepository;
+    return yield* make({ entityMemoryRepository, memoryCandidateRepository });
+  }),
+);

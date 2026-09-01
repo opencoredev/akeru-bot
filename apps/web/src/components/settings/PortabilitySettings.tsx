@@ -7,13 +7,18 @@ import type {
   PortabilityApplyImportResult,
   PortabilityImportItem,
   PortabilityImportPreview,
+  PortabilityProjectFolderMap,
+  ProjectId,
 } from "@t3tools/contracts";
 import { useRef, useState } from "react";
 
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { usePrimaryEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
+import { readLocalApi } from "../../localApi";
 import { portabilityEnvironment } from "../../state/portability";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { resolveProjectPickerTarget } from "../../wslPaths";
 import { Button } from "../ui/button";
+import { DraftInput } from "../ui/draft-input";
 import {
   Dialog,
   DialogDescription,
@@ -27,6 +32,8 @@ import { toastManager } from "../ui/toast";
 import {
   canApplyPortabilityPreview,
   portabilityArchiveFileError,
+  portabilityProjectPickerTarget,
+  updatePortabilityProjectFolderMap,
 } from "./PortabilitySettings.logic";
 import { SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
@@ -35,6 +42,7 @@ interface ImportPreviewState {
   readonly contents: string;
   readonly filename: string;
   readonly preview: PortabilityImportPreview;
+  readonly projectFolders: PortabilityProjectFolderMap;
 }
 
 function downloadArchive(filename: string, contents: string): void {
@@ -82,9 +90,61 @@ function ImportItems({
   );
 }
 
-function ImportPreview({ preview }: { readonly preview: PortabilityImportPreview }) {
+function ImportPreview({
+  preview,
+  projectFolders,
+  canPickProjectFolders,
+  pending,
+  onProjectFolderChange,
+  onProjectFolderPick,
+}: {
+  readonly preview: PortabilityImportPreview;
+  readonly projectFolders: PortabilityProjectFolderMap;
+  readonly canPickProjectFolders: boolean;
+  readonly pending: boolean;
+  readonly onProjectFolderChange: (projectId: ProjectId, destination: string) => void;
+  readonly onProjectFolderPick: (projectId: ProjectId, destination: string | null) => void;
+}) {
+  const unsupported = preview.unsupported.filter((item) => item.count > 0);
   return (
     <div className="space-y-5">
+      {preview.projectFolders.length > 0 ? (
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold text-foreground">Project locations</h3>
+          <p className="text-xs text-muted-foreground">
+            Choose an existing folder for each project. Akeru Bot links the project to the folder
+            without copying its files.
+          </p>
+          {preview.projectFolders.map((project) => (
+            <div key={project.projectId} className="space-y-1">
+              <label className="text-xs text-foreground/80" htmlFor={`folder-${project.projectId}`}>
+                {project.title}
+              </label>
+              <div className="flex gap-1.5">
+                <DraftInput
+                  id={`folder-${project.projectId}`}
+                  size="compact"
+                  disabled={pending}
+                  value={projectFolders[project.projectId] ?? project.destination ?? ""}
+                  placeholder={project.workspaceName}
+                  onCommit={(destination) => onProjectFolderChange(project.projectId, destination)}
+                />
+                {canPickProjectFolders ? (
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => onProjectFolderPick(project.projectId, project.destination)}
+                  >
+                    Choose
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <ImportItems title="Additions" items={preview.additions} />
         <ImportItems title="Changes" items={preview.changes} />
@@ -102,37 +162,42 @@ function ImportPreview({ preview }: { readonly preview: PortabilityImportPreview
       </section>
 
       <section className="space-y-1.5">
-        <h3 className="text-xs font-semibold text-foreground">Secrets not included</h3>
+        <h3 className="text-xs font-semibold text-foreground">Not transferred</h3>
         <ul className="space-y-1 text-xs text-muted-foreground">
           {preview.skippedSecrets.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
+        <p className="text-xs text-muted-foreground">
+          After restore, sign in to providers and reconnect imported MCP servers on this device.
+        </p>
       </section>
 
-      <section className="space-y-1.5">
-        <h3 className="text-xs font-semibold text-foreground">Unsupported</h3>
-        <ul className="space-y-2 text-xs text-muted-foreground">
-          {preview.unsupported.map((item) => (
-            <li key={item.kind}>
-              <span className="font-medium text-foreground/80">
-                {item.kind} ({item.count})
-              </span>
-              <span className="block">{item.reason}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {unsupported.length > 0 ? (
+        <section className="space-y-1.5">
+          <h3 className="text-xs font-semibold text-foreground">Not restored</h3>
+          <ul className="space-y-2 text-xs text-muted-foreground">
+            {unsupported.map((item) => (
+              <li key={item.kind}>
+                <span className="font-medium text-foreground/80">
+                  {item.kind} ({item.count})
+                </span>
+                <span className="block">{item.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }
 
 function importResultDescription(result: PortabilityApplyImportResult): string {
   const counts = [
-    `${result.applied} applied`,
+    `${result.applied} restored`,
     ...(result.skipped > 0 ? [`${result.skipped} skipped`] : []),
     ...(result.failed > 0 ? [`${result.failed} failed`] : []),
-    ...(result.partial > 0 ? [`${result.partial} partly applied`] : []),
+    ...(result.partial > 0 ? [`${result.partial} partly restored`] : []),
   ];
   const firstFailure = result.failures[0];
   return `${counts.join(". ")}.${firstFailure ? ` ${firstFailure.title}: ${firstFailure.message}` : ""}`;
@@ -140,7 +205,14 @@ function importResultDescription(result: PortabilityApplyImportResult): string {
 
 export function PortabilitySettings() {
   const environmentId = usePrimaryEnvironmentId();
+  const primaryEnvironment = usePrimaryEnvironment();
+  const projectPickerTarget = portabilityProjectPickerTarget(
+    primaryEnvironment?.entry.target ?? null,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectFoldersRef = useRef<PortabilityProjectFolderMap>({});
+  const importSessionIdRef = useRef(0);
+  const previewRequestIdRef = useRef(0);
   const exportArchive = useAtomCommand(portabilityEnvironment.exportArchive, {
     reportFailure: false,
   });
@@ -175,22 +247,102 @@ export function PortabilitySettings() {
       toastManager.add({ type: "error", title: "Could not read archive", description: fileError });
       return;
     }
+    importSessionIdRef.current += 1;
+    const requestId = ++previewRequestIdRef.current;
+    projectFoldersRef.current = {};
     setPending("preview");
     try {
       const contents = await file.text();
       const result = await previewImport({ environmentId, input: { contents } });
+      if (requestId !== previewRequestIdRef.current) return;
       setPending(null);
       if (result._tag === "Failure") {
         reportFailure("Could not preview archive", result);
         return;
       }
-      setImportState({ contents, filename: file.name, preview: result.value });
+      setImportState({ contents, filename: file.name, preview: result.value, projectFolders: {} });
     } catch (error) {
+      if (requestId !== previewRequestIdRef.current) return;
       setPending(null);
       toastManager.add({
         type: "error",
         title: "Could not read archive",
         description: error instanceof Error ? error.message : "The file could not be read.",
+      });
+    }
+  };
+
+  const handleProjectFolder = async (projectId: ProjectId, destination: string) => {
+    if (environmentId === null || importState === null) return;
+    const reviewedProjectFolders = projectFoldersRef.current;
+    const projectFolders = updatePortabilityProjectFolderMap(
+      projectFoldersRef.current,
+      projectId,
+      destination,
+    );
+    projectFoldersRef.current = projectFolders;
+    const requestId = ++previewRequestIdRef.current;
+    const contents = importState.contents;
+    setImportState((current) =>
+      current?.contents === contents ? { ...current, projectFolders } : current,
+    );
+    setPending("preview");
+    const result = await previewImport({
+      environmentId,
+      input: { contents, projectFolders },
+    });
+    if (requestId !== previewRequestIdRef.current) return;
+    setPending(null);
+    if (result._tag === "Failure") {
+      projectFoldersRef.current = reviewedProjectFolders;
+      setImportState((current) =>
+        current?.contents === contents
+          ? { ...current, projectFolders: reviewedProjectFolders }
+          : current,
+      );
+      reportFailure("Could not use project folder", result);
+      return;
+    }
+    setImportState((current) =>
+      current?.contents === contents && current.projectFolders === projectFolders
+        ? { ...current, preview: result.value }
+        : current,
+    );
+  };
+
+  const handleProjectFolderPick = async (projectId: ProjectId, destination: string | null) => {
+    if (environmentId === null || importState === null) return;
+    const importSessionId = importSessionIdRef.current;
+    if (!window.desktopBridge || projectPickerTarget === undefined) {
+      toastManager.add({
+        type: "error",
+        title: "Folder picker unavailable",
+        description: "Enter an absolute folder path, or open Akeru Bot on desktop.",
+      });
+      return;
+    }
+    try {
+      const wslConfiguration = await window.desktopBridge.getWslState().catch(() => null);
+      const targetEnvironmentId = resolveProjectPickerTarget({
+        browseEnvironmentId: environmentId,
+        primaryEnvironmentId: environmentId,
+        // Settings only targets the primary environment. The WSL state routes a WSL-only primary.
+        desktopInstanceId: projectPickerTarget,
+        wslConfiguration,
+      });
+      const picked = await readLocalApi()?.dialogs.pickFolder({
+        ...(destination ? { initialPath: destination } : {}),
+        ...(targetEnvironmentId ? { targetEnvironmentId } : {}),
+      });
+      if (picked && importSessionId === importSessionIdRef.current) {
+        await handleProjectFolder(projectId, picked);
+      }
+    } catch (error) {
+      if (importSessionId !== importSessionIdRef.current) return;
+      toastManager.add({
+        type: "error",
+        title: "Could not choose project folder",
+        description: error instanceof Error ? error.message : "The folder could not be selected.",
       });
     }
   };
@@ -202,6 +354,7 @@ export function PortabilitySettings() {
       environmentId,
       input: {
         contents: importState.contents,
+        projectFolders: importState.projectFolders,
         expectedSnapshotSequence: importState.preview.snapshotSequence,
         expectedStateChecksum: importState.preview.stateChecksum,
       },
@@ -213,10 +366,14 @@ export function PortabilitySettings() {
     }
     const hasFailures = result.value.failed > 0 || result.value.partial > 0;
     if (hasFailures) setApplyResult(result.value);
-    else setImportState(null);
+    else {
+      importSessionIdRef.current += 1;
+      projectFoldersRef.current = {};
+      setImportState(null);
+    }
     toastManager.add({
       type: hasFailures ? "error" : "success",
-      title: hasFailures ? "Archive partly imported" : "Archive imported",
+      title: hasFailures ? "Archive partly restored" : "Archive restored",
       description: importResultDescription(result.value),
     });
   };
@@ -225,7 +382,7 @@ export function PortabilitySettings() {
     <>
       <SettingsRow
         {...searchableSetting("data-portability")}
-        description="Export safe settings, workspaces, and conversation history, or preview an archive before import."
+        description="Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included."
         control={
           <div className="flex items-center gap-1.5">
             <Button
@@ -264,6 +421,10 @@ export function PortabilitySettings() {
         open={importState !== null}
         onOpenChange={(open) => {
           if (!open && pending !== "apply") {
+            importSessionIdRef.current += 1;
+            previewRequestIdRef.current += 1;
+            projectFoldersRef.current = {};
+            setPending(null);
             setImportState(null);
             setApplyResult(null);
           }
@@ -271,13 +432,28 @@ export function PortabilitySettings() {
       >
         <DialogPopup className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Import preview</DialogTitle>
+            <DialogTitle>Restore preview</DialogTitle>
             <DialogDescription>
-              {importState?.filename}. MCP servers stay disabled until you reconnect their secrets.
+              {importState?.filename}. Review what Akeru Bot will restore on this environment.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
-            {importState ? <ImportPreview preview={importState.preview} /> : null}
+            {importState ? (
+              <ImportPreview
+                preview={importState.preview}
+                projectFolders={importState.projectFolders}
+                canPickProjectFolders={
+                  window.desktopBridge !== undefined && projectPickerTarget !== undefined
+                }
+                pending={pending !== null}
+                onProjectFolderChange={(projectId, destination) =>
+                  void handleProjectFolder(projectId, destination)
+                }
+                onProjectFolderPick={(projectId, destination) =>
+                  void handleProjectFolderPick(projectId, destination)
+                }
+              />
+            ) : null}
             {applyResult && applyResult.failures.length > 0 ? (
               <section className="mt-5 space-y-1.5">
                 <h3 className="text-xs font-semibold text-destructive">Restore failures</h3>
@@ -286,7 +462,7 @@ export function PortabilitySettings() {
                     <li key={`${failure.recordType}:${failure.id}`}>
                       <span className="font-medium text-foreground/80">{failure.title}</span>
                       <span className="block">
-                        {failure.partial ? "Partly applied. " : "Not applied. "}
+                        {failure.partial ? "Partly restored. " : "Not restored. "}
                         {failure.message}
                       </span>
                     </li>
@@ -299,20 +475,26 @@ export function PortabilitySettings() {
             <Button
               variant="ghost"
               disabled={pending === "apply"}
-              onClick={() => setImportState(null)}
+              onClick={() => {
+                importSessionIdRef.current += 1;
+                previewRequestIdRef.current += 1;
+                projectFoldersRef.current = {};
+                setPending(null);
+                setImportState(null);
+              }}
             >
               Cancel
             </Button>
             <Button
               disabled={
                 importState === null ||
-                pending === "apply" ||
+                pending !== null ||
                 applyResult !== null ||
                 !canApplyPortabilityPreview(importState.preview)
               }
               onClick={() => void handleApply()}
             >
-              {pending === "apply" ? "Applying..." : "Apply safe changes"}
+              {pending === "apply" ? "Restoring..." : "Restore"}
             </Button>
           </DialogFooter>
         </DialogPopup>

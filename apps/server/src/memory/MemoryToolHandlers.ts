@@ -6,6 +6,8 @@ import {
   AkeruMemoryEntityId,
   AkeruMemoryId,
   AkeruMemoryRootId,
+  PositiveInt,
+  TrimmedNonEmptyString,
   type AkeruMemoryCandidateDecision,
   type AkeruMemoryDecisionReceipt,
   type AkeruMemoryRevision,
@@ -15,6 +17,7 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { AkeruToolExecution } from "../provider/AkeruToolRuntime.ts";
 import { deriveAkeruWorkspaceId, resolveAuthorizedMemoryPartitions } from "./EntityMemoryAccess.ts";
@@ -22,6 +25,32 @@ import type { EntityMemoryRepositoryShape } from "./Services/EntityMemoryReposit
 import type { MemoryCandidateRepositoryShape } from "./Services/MemoryCandidateRepository.ts";
 
 export type AkeruMemoryToolId = "recall_memory" | "remember" | "update_memory" | "forget_memory";
+
+const MemoryTargetScope = Schema.Literals(["private", "bot", "project", "group", "workspace"]);
+
+export const AkeruMemoryToolInputSchemas = {
+  recall_memory: Schema.Struct({
+    query: TrimmedNonEmptyString,
+    limit: Schema.optional(PositiveInt),
+    includeSensitive: Schema.optional(Schema.Boolean),
+  }),
+  remember: Schema.Struct({
+    fact: TrimmedNonEmptyString,
+    scope: MemoryTargetScope,
+    sensitive: Schema.optional(Schema.Boolean),
+  }),
+  update_memory: Schema.Struct({
+    memoryId: AkeruMemoryRootId,
+    expectedRevision: PositiveInt,
+    fact: TrimmedNonEmptyString,
+    scope: MemoryTargetScope,
+    sensitive: Schema.optional(Schema.Boolean),
+  }),
+  forget_memory: Schema.Struct({
+    memoryId: AkeruMemoryRootId,
+    expectedRevision: PositiveInt,
+  }),
+} as const;
 
 export type AkeruMemoryToolHandler = (
   input: Omit<AkeruToolExecution, "toolId"> & { readonly toolId: AkeruMemoryToolId },
