@@ -19,7 +19,6 @@ import {
 } from "../desktopUpdate.logic";
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
-import { Separator } from "../ui/separator";
 import { SidebarMenuItem } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -53,67 +52,6 @@ function resolveSidebarUpdatePresentation({
     showUpdateDetails,
     showUpdateIconState: showUpdateDetails && !showCheckIcon,
   } as const;
-}
-
-function keyReleaseNoteItems(items: ReadonlyArray<string>) {
-  const occurrences = new Map<string, number>();
-  return items.map((item) => {
-    const occurrence = occurrences.get(item) ?? 0;
-    occurrences.set(item, occurrence + 1);
-    return { item, key: JSON.stringify([item, occurrence]) };
-  });
-}
-
-function SidebarUpdateReleaseNotesTooltip({
-  state,
-  tooltip,
-}: {
-  readonly state: NonNullable<ReturnType<typeof useDesktopUpdateState>>;
-  readonly tooltip: string;
-}) {
-  if (state.channel !== "nightly" || state.releaseNotes.length === 0) {
-    return <>{tooltip}</>;
-  }
-
-  return (
-    <div className="w-fit max-w-[min(24rem,calc(100vw-2rem))] text-left">
-      <div className="px-1">
-        {state.status === "available" ? (
-          <div>
-            <div className="whitespace-nowrap text-sm leading-5 font-medium">
-              Update ready to download
-            </div>
-            {state.availableVersion ? (
-              <div className="mt-0.5 text-xs leading-4 text-update-foreground">
-                {state.availableVersion}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="text-sm leading-5 font-medium">{tooltip}</div>
-        )}
-      </div>
-      <div className="max-h-[min(28rem,calc(100vh-6rem))] overflow-y-auto px-1 pt-4 pb-1">
-        {state.releaseNotes.map((releaseNote, index) => (
-          <div key={releaseNote.version}>
-            {index > 0 && <Separator className="my-3 bg-border/60" />}
-            <section>
-              <h3 className="text-foreground text-xs leading-4 font-semibold">
-                {index === 0 ? "What's changed" : `Changes in ${releaseNote.version}`}
-              </h3>
-              <ul className="mt-2 space-y-1.5 pl-4 text-xs leading-5 text-popover-foreground/90">
-                {keyReleaseNoteItems(releaseNote.items).map(({ item, key }) => (
-                  <li className="list-disc break-words" key={key}>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function SidebarUpdateArchitectureWarning() {
@@ -343,13 +281,6 @@ function SidebarUpdateControl() {
         />
         <TooltipPopup
           align="center"
-          className={
-            showUpdateDetails && state?.channel === "nightly" && state.releaseNotes.length > 0
-              ? // pointer-events-auto overrides the positioner's pointer-events-none so the
-                // release notes stay open (and scrollable) when the cursor moves into them.
-                "pointer-events-auto max-w-none text-balance"
-              : undefined
-          }
           side="top"
           style={
             showUpdateDetails
@@ -362,11 +293,7 @@ function SidebarUpdateControl() {
           }
           variant={showUpdateDetails ? "glass" : "default"}
         >
-          {showUpdateDetails && state ? (
-            <SidebarUpdateReleaseNotesTooltip state={state} tooltip={tooltip} />
-          ) : (
-            tooltip
-          )}
+          {tooltip}
         </TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>

@@ -19,12 +19,9 @@ it("renders the branded loopback authorization completion page", () => {
   expect(html).not.toContain('class="status"');
 });
 
-it("renders the matching header treatment for each release channel", () => {
-  const nightly = renderLoopbackAuthorizationCompleteHtml("nightly");
+it("renders the latest header treatment", () => {
   const latest = renderLoopbackAuthorizationCompleteHtml("latest");
 
-  expect(nightly).toContain("T3 Code (Nightly)");
-  expect(nightly).toContain('class="stage stage-nightly"');
   expect(latest).toContain('<p class="brand">T3 Code</p>');
   expect(latest).not.toContain("(Latest)");
   expect(latest).toContain('class="stage stage-latest"');
