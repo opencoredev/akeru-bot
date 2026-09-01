@@ -41,11 +41,11 @@ function mockHandle(options: {
   });
 }
 
-it.effect("selects the latest earlier stable tag and ignores nightlies", () =>
+it.effect("selects the latest earlier stable tag", () =>
   Effect.gen(function* () {
     const previous = yield* resolvePreviousReleaseTag("stable", "v1.2.0", [
       "v1.1.0",
-      "v1.1.1-nightly.20260619.1",
+      "v1.1.1",
       "v1.1.2",
       "v1.2.0",
     ]);

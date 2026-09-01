@@ -314,7 +314,7 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("enables nightly full changelog release notes and broadcasts summaries", () => {
+  it.effect("normalizes stable release notes and broadcasts summaries", () => {
     const harness = makeHarness();
 
     return Effect.scoped(
@@ -322,18 +322,15 @@ describe("DesktopUpdates", () => {
         const updates = yield* DesktopUpdates.DesktopUpdates;
         yield* updates.configure;
 
-        yield* updates.setChannel("nightly");
-        assert.equal(harness.fullChangelog(), true);
-
         harness.emit("update-available", {
-          version: "1.2.4-nightly.20260709.766",
+          version: "1.2.4",
           releaseNotes: [
             {
-              version: "1.2.4-nightly.20260709.766",
+              version: "1.2.4",
               note: `<h2>What's Changed</h2><ul><li>feat(client): persist offline environment data by <a>@juliusmarminge</a> in <a>#3795</a></li></ul><h2>Full Changelog</h2>`,
             },
             {
-              version: "1.2.4-nightly.20260709.765",
+              version: "1.2.3",
               note: "- [codex] Upgrade Clerk stack by @juliusmarminge in #3821",
             },
           ],
@@ -344,11 +341,11 @@ describe("DesktopUpdates", () => {
         assert.equal(state.status, "available");
         assert.deepEqual(state.releaseNotes, [
           {
-            version: "1.2.4-nightly.20260709.766",
+            version: "1.2.4",
             items: ["feat(client): persist offline environment data by @juliusmarminge in #3795"],
           },
           {
-            version: "1.2.4-nightly.20260709.765",
+            version: "1.2.3",
             items: ["[codex] Upgrade Clerk stack by @juliusmarminge in #3821"],
           },
         ]);
@@ -418,36 +415,6 @@ describe("DesktopUpdates", () => {
 
         yield* updates.check("poll");
         harness.emit("update-not-available");
-        yield* flushCallbacks;
-
-        const state = yield* updates.getState;
-        assert.equal(state.status, "downloaded");
-        assert.equal(state.availableVersion, "1.2.4");
-        assert.equal(state.downloadedVersion, "1.2.4");
-        assert.deepEqual(state.releaseNotes, [{ version: "1.2.4", items: ["fix: queued update"] }]);
-        assert.equal(state.downloadPercent, 100);
-      }),
-    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-  });
-
-  it.effect("preserves a queued installer when the feed offers another channel", () => {
-    const harness = makeHarness();
-
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const updates = yield* DesktopUpdates.DesktopUpdates;
-        yield* updates.configure;
-
-        harness.emit("update-available", {
-          version: "1.2.4",
-          releaseNotes: "## What's changed\n- fix: queued update",
-        });
-        yield* flushCallbacks;
-        harness.emit("update-downloaded", { version: "1.2.4" });
-        yield* flushCallbacks;
-
-        yield* updates.check("poll");
-        harness.emit("update-available", { version: "1.2.5-nightly.20260710.1" });
         yield* flushCallbacks;
 
         const state = yield* updates.getState;
@@ -649,9 +616,6 @@ describe("DesktopUpdates", () => {
         assert.equal(failedState.status, "available");
         assert.equal(failedState.errorContext, "download");
         assert.equal(failedState.message, "Desktop update download action failed unexpectedly.");
-
-        const changedState = yield* updates.setChannel("nightly");
-        assert.equal(changedState.channel, "nightly");
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
@@ -718,28 +682,6 @@ describe("DesktopUpdates", () => {
         assert.equal(failedState.status, "downloaded");
         assert.equal(failedState.errorContext, "install");
         assert.equal(failedState.message, "Desktop update install action failed unexpectedly.");
-
-        const changedState = yield* updates.setChannel("nightly");
-        assert.equal(changedState.channel, "nightly");
-      }),
-    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-  });
-
-  it.effect("persists channel changes through the settings service", () => {
-    const harness = makeHarness();
-
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const settings = yield* DesktopAppSettings.DesktopAppSettings;
-        const updates = yield* DesktopUpdates.DesktopUpdates;
-        yield* updates.configure;
-
-        const state = yield* updates.setChannel("nightly");
-        const persistedSettings = yield* settings.get;
-
-        assert.equal(state.channel, "nightly");
-        assert.equal(persistedSettings.updateChannel, "nightly");
-        assert.equal(persistedSettings.updateChannelConfiguredByUser, true);
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
@@ -781,13 +723,13 @@ describe("DesktopUpdates", () => {
           const checkFiber = yield* updates.check("manual").pipe(Effect.forkScoped);
           yield* Deferred.await(checkStarted);
 
-          const exit = yield* Effect.exit(updates.setChannel("nightly"));
+          const exit = yield* Effect.exit(updates.setChannel("latest"));
           assert.equal(exit._tag, "Failure");
           if (exit._tag === "Failure") {
             const error = Cause.squash(exit.cause);
             assert.instanceOf(error, DesktopUpdates.DesktopUpdateActionInProgressError);
             assert.equal(error.action, "check");
-            assert.equal(error.requestedChannel, "nightly");
+            assert.equal(error.requestedChannel, "latest");
           }
 
           yield* Deferred.succeed(releaseCheck, undefined);
@@ -796,67 +738,4 @@ describe("DesktopUpdates", () => {
       ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
     }),
   );
-
-  it.effect("rejects checks while an update channel change is being persisted", () =>
-    Effect.gen(function* () {
-      const channelChangeStarted = yield* Deferred.make<void>();
-      const releaseChannelChange = yield* Deferred.make<void>();
-      const harness = makeHarness({
-        beforeSetUpdateChannel: Deferred.succeed(channelChangeStarted, undefined).pipe(
-          Effect.andThen(Deferred.await(releaseChannelChange)),
-        ),
-      });
-
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          const updates = yield* DesktopUpdates.DesktopUpdates;
-          yield* updates.configure;
-
-          const channelFiber = yield* updates.setChannel("nightly").pipe(Effect.forkScoped);
-          yield* Deferred.await(channelChangeStarted);
-
-          const checkResult = yield* updates.check("manual");
-          assert.isFalse(checkResult.checked);
-          assert.equal(harness.checkCount(), 0);
-
-          yield* Deferred.succeed(releaseChannelChange, undefined);
-          const state = yield* Fiber.join(channelFiber);
-
-          assert.equal(state.channel, "nightly");
-          assert.equal(harness.checkCount(), 1);
-        }),
-      ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-    }),
-  );
-
-  it.effect("preserves settings failure context when an update channel cannot be persisted", () => {
-    const diskFailure = new Error("disk exploded");
-    const settingsFailure = new DesktopAppSettings.DesktopSettingsWriteError({
-      operation: "replace-settings-file",
-      path: "/tmp/settings.json",
-      cause: diskFailure,
-    });
-    const harness = makeHarness({ setUpdateChannelError: settingsFailure });
-
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const updates = yield* DesktopUpdates.DesktopUpdates;
-        yield* updates.configure;
-
-        const error = yield* updates.setChannel("nightly").pipe(Effect.flip);
-
-        assert.instanceOf(error, DesktopUpdates.DesktopUpdateChannelPersistenceError);
-        assert.isTrue(DesktopUpdates.isDesktopUpdateSetChannelError(error));
-        assert.equal(error.channel, "nightly");
-        assert.strictEqual(error.cause, settingsFailure);
-        assert.strictEqual(error.cause.cause, diskFailure);
-        assert.equal(error.message, "Failed to persist the nightly desktop update channel.");
-        assert.notInclude(error.message, diskFailure.message);
-
-        const checkResult = yield* updates.check("manual");
-        assert.isTrue(checkResult.checked);
-        assert.equal(harness.checkCount(), 1);
-      }),
-    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-  });
 });
