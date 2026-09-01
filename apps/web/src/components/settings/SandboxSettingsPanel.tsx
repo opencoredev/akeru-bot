@@ -55,7 +55,7 @@ export function SandboxSettingsPanel() {
       <div className="p-6 text-sm text-muted-foreground">Connect to an environment first.</div>
     );
   }
-  return <EnvironmentSandboxSettingsPanel environmentId={environmentId} />;
+  return <EnvironmentSandboxSettingsPanel key={environmentId} environmentId={environmentId} />;
 }
 
 function EnvironmentSandboxSettingsPanel({
