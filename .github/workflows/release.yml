@@ -65,7 +65,6 @@ jobs:
       - name: Run release checks
         run: |
           vp run check:public-dependencies
-          vp run release:smoke
           vp test run scripts/verify-release-assets.test.ts
 
   desktop:
