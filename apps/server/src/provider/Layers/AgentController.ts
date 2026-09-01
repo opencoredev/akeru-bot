@@ -348,6 +348,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     let delegationRuntime: AkeruDelegationRuntime | undefined;
     let channelRuntime: AkeruChannelRuntime | undefined;
     let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
+    let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
     const childWaiters = new Map<
       string,
       { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
@@ -1099,7 +1100,21 @@ const make = (options?: AgentControllerLiveOptions) =>
                   subscriptionAuth.recordMcpRequestSuccess(serverId, at),
                 recordFailure: (serverId, message, at) =>
                   subscriptionAuth.recordMcpRequestFailure(serverId, message, at),
-                getDependencies: async () => mcpDependencies,
+                getDependencies: async (serverId) => {
+                  const snapshot = await pluginRuntimeOptions?.readSnapshot();
+                  return snapshot
+                    ? {
+                        dependentBots: snapshot.bots
+                          .filter(
+                            (bot) =>
+                              bot.archivedAt === null &&
+                              !bot.disabledMcpServerIds.some((id) => String(id) === serverId),
+                          )
+                          .map((bot) => ({ id: bot.id, name: bot.name })),
+                        dependentRoutines: [],
+                      }
+                    : mcpDependencies;
+                },
                 onFailure: (serverId, message, dependencies) => {
                   for (const bot of dependencies.dependentBots) {
                     botInbox.ensureOpen({
@@ -1578,6 +1593,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     return AgentController.of({
       configurePluginRuntime: (input: AkeruPluginRuntimeOptions) =>
         Effect.sync(() => {
+          pluginRuntimeOptions = input;
           pluginRuntime = createAkeruPluginRuntime(input);
         }),
       configureDelegation: (input) =>
