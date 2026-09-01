@@ -43,6 +43,7 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
+import { BotBrowserPreview } from "./BotBrowserPreview";
 import { BotChannelsSheet } from "./BotChannelsSheet";
 import { BotModelPicker } from "./BotModelPicker";
 import { BotUsageSection } from "./BotUsageSection";

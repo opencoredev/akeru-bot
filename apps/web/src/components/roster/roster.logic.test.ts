@@ -3,6 +3,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   blinkDelayMs,
+  buildGroupedRosterSections,
+  buildRosterSections,
+  buildRosterStrip,
+  buildRosterTiles,
   filterRosterBots,
   filterRosterGroups,
   DEFAULT_BLOB_COLOR,

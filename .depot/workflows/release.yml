@@ -3,6 +3,7 @@
 name: Stable release
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -194,7 +195,7 @@ jobs:
         run: |
           args=(--platform "${{ matrix.platform }}" --target "${{ matrix.target }}" --arch "${{ matrix.arch }}" --build-version "$RELEASE_VERSION" --verbose)
           if test "$SIGNED" = true; then args+=(--signed); fi
-          vp run dist:desktop:artifact -- "${args[@]}"
+          vp run dist:desktop:artifact "${args[@]}"
 
       - name: Notarize and verify macOS DMG
         if: matrix.platform == 'mac' && env.SIGNED == 'true'

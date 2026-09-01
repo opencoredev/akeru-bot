@@ -21,6 +21,7 @@ import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
+import { GroupMemberStack } from "./GroupMemberStack";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { BotMessageAttachments } from "./BotMessageAttachments";
