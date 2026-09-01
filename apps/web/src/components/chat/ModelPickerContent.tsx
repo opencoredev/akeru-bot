@@ -36,7 +36,7 @@ import { cn } from "~/lib/utils";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import { TooltipProvider } from "../ui/tooltip";
 import {
-  isProviderInstancePickerReady,
+  isProviderInstancePickerSelectable,
   isProviderInstancePickerVisible,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
@@ -189,14 +189,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     [props.lockedContinuationGroupKey, props.lockedProvider],
   );
 
-  const readyInstanceSet = useMemo(() => {
-    const ready = new Set<ProviderInstanceId>();
+  const selectableInstanceSet = useMemo(() => {
+    const selectable = new Set<ProviderInstanceId>();
     for (const entry of instanceEntries) {
-      if (isProviderInstancePickerReady(entry)) {
-        ready.add(entry.instanceId);
+      if (isProviderInstancePickerSelectable(entry)) {
+        selectable.add(entry.instanceId);
       }
     }
-    return ready;
+    return selectable;
   }, [instanceEntries]);
 
   // Flatten models into a searchable array. One pass over the
@@ -212,7 +212,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         // its models — stale options shouldn't appear in the picker.
         continue;
       }
-      if (!readyInstanceSet.has(instanceId)) {
+      if (!selectableInstanceSet.has(instanceId)) {
         continue;
       }
       for (const model of models) {
@@ -233,7 +233,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       }
     }
     return out;
-  }, [modelOptionsByInstance, entryByInstanceId, readyInstanceSet]);
+  }, [modelOptionsByInstance, entryByInstanceId, selectableInstanceSet]);
 
   const isLocked = props.lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;

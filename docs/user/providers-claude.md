@@ -1,229 +1,44 @@
 # Claude
 
-This guide is for people who want to use more than one Claude setup in Akeru Bot. For Codex, see
-[Codex](./providers-codex.md). For first-time setup, see [Install Akeru Bot](./install.md).
+Connect a Claude Pro or Max subscription from Akeru. Claude threads run through Akeru's Claude
+adapter, which keeps Claude-specific session behavior behind the same thread controls as other
+providers.
 
-Common reasons:
+## Connect Claude
 
-- use separate work and personal Claude accounts
-- try a different Claude Code configuration without disturbing your main setup
-- run Claude through a router such as Claude Code Router
-- use external providers exposed through a Claude-compatible workflow
+1. Open **Settings > Providers**.
+2. Find **Claude** and select **Connect**.
+3. Finish the Anthropic sign-in flow in the browser.
+4. Copy the authorization code from Anthropic.
+5. Paste the code into Akeru and select **Connect**.
 
-## I Only Use One Claude Account
+The environment server completes the exchange and stores the credential. No inbound callback to the
+Akeru server is required, so this flow also works from a remote browser or mobile client.
 
-Use the default provider.
+## Check the connection
 
-Log in with Claude Code normally:
+The provider card reports the current state. A connected account can still show **Detected** until a
+real provider request succeeds.
 
-```bash
-claude auth login
-```
+- Select **Check OAuth** to test the stored login.
+- Select **Reconnect** after an expired or revoked login.
+- Disconnect the account to remove its stored credential from this environment.
 
-In Akeru Bot Settings, your Claude provider can stay like this:
+Sign-in state belongs to one environment. Connect Claude again on each separate Akeru server that
+should use the account.
 
-```text
-Display name: Claude
-Binary path: claude
-CLAUDE_CONFIG_DIR path: empty
-```
+## Continue a Claude thread
 
-An empty `CLAUDE_CONFIG_DIR path` means Akeru Bot uses Claude Code's normal config directory.
+Akeru keeps Claude's provider-specific session identity when a thread continues. Changing to an
+incompatible provider starts a new provider session instead of reusing Claude's resume state.
 
-When you set this field, Akeru Bot points Claude Code at that directory with the
-`CLAUDE_CONFIG_DIR` environment variable. It does not change `HOME`, so your system keychain and
-the rest of your environment stay as they are.
+Installed plugins and MCP servers stay attached to the Akeru thread. A provider change restarts the
+provider session with the same enabled plugin set.
 
-## Reduce Context Usage
+## Permissions
 
-In Settings, open your Claude provider and set **Auto-compact after** to a token count between
-`100000` and `1000000`. For example, `300000` compacts the conversation into a summary once it
-reaches about 300,000 tokens, without changing the model's context window. Leave the field
-empty to keep Claude Code's default behavior.
+Claude maps Akeru's thread mode to its own permission behavior. Protected actions still ask even when
+the thread uses **Full access**.
 
-On web and desktop, when you return to an older Claude thread with a large context, Akeru Bot
-offers to compact the conversation before you continue. You can also select **Compact context**
-from the context meter. On every client, you can enter `/compact` in the message composer, and
-Claude can show its own resume prompt when you continue an old session.
-
-## Where Claude Skills Are Loaded
-
-Akeru Bot looks for Claude skills in the Claude config directory's `skills` folder, then
-`<workspace>/.agents/skills`, then `<workspace>/.claude/skills`.
-
-If the same skill name exists in more than one folder, the later folder wins.
-
-## I Want Work And Personal Claude Accounts
-
-Use a different Claude config directory for each account.
-
-Example:
-
-```text
-default config dir           work account
-~/.claude_personal_home      personal account
-```
-
-### Set Up The First Account
-
-Log in normally:
-
-```bash
-claude auth login
-```
-
-In Akeru Bot Settings:
-
-```text
-Display name: Claude Work
-Binary path: claude
-CLAUDE_CONFIG_DIR path: empty
-```
-
-### Set Up The Second Account
-
-Log in with a separate config directory:
-
-```bash
-mkdir -p ~/.claude_personal_home
-CLAUDE_CONFIG_DIR=~/.claude_personal_home claude auth login
-```
-
-Use `CLAUDE_CONFIG_DIR`, not `HOME`. Setting `HOME` writes the login to
-`~/.claude_personal_home/.claude`, which is not where Akeru Bot looks.
-
-Then add another Claude provider in Akeru Bot:
-
-```text
-Display name: Claude Personal
-Binary path: claude
-CLAUDE_CONFIG_DIR path: ~/.claude_personal_home
-```
-
-Use the email shown in Settings to confirm each provider is using the intended account. Emails are
-blurred by default; click the blurred email to reveal it.
-
-## Can I Switch Claude Accounts In An Existing Thread?
-
-Usually, no.
-
-Akeru Bot only offers Claude providers that use the same config directory for an existing thread. A
-different config directory is treated as a different Claude environment.
-
-This is different from the recommended Codex setup. Claude Code keeps account and local state across
-multiple files under its config directory, so Akeru Bot keeps separate config directories isolated
-instead of trying to share part of the state.
-
-## I Want To Use OpenRouter
-
-Use this when you want Claude Code to talk to OpenRouter directly, without running a local router.
-This is the simplest external-provider setup.
-
-OpenRouter provides a Claude Code integration through Claude's Anthropic-compatible environment
-variables.
-
-### Configure A Claude OpenRouter Provider
-
-Add or edit a Claude provider in Akeru Bot Settings:
-
-```text
-Display name: Claude OpenRouter
-Binary path: claude
-CLAUDE_CONFIG_DIR path: ~/.claude_openrouter_home
-```
-
-In that provider's Environment variables section, add:
-
-```text
-ANTHROPIC_BASE_URL   https://openrouter.ai/api
-ANTHROPIC_AUTH_TOKEN sk-or-...                Sensitive
-ANTHROPIC_API_KEY                              Empty value
-```
-
-Mark `ANTHROPIC_AUTH_TOKEN` as sensitive. Akeru Bot stores the value as a server secret and does not
-send it back to the app after saving.
-
-If you want this setup isolated from your normal Claude account, create that home first:
-
-```bash
-mkdir -p ~/.claude_openrouter_home
-```
-
-If you previously used the same Claude home with a normal Anthropic login, run `/logout` in a Claude
-Code session for that home before using OpenRouter. Otherwise Claude Code may keep using cached
-Anthropic credentials instead of the OpenRouter token.
-
-### Pick OpenRouter Models
-
-OpenRouter can route Claude Code's default model roles to OpenRouter model IDs.
-
-Example:
-
-```text
-ANTHROPIC_DEFAULT_OPUS_MODEL    anthropic/claude-opus-4.6
-ANTHROPIC_DEFAULT_SONNET_MODEL  anthropic/claude-sonnet-4.6
-ANTHROPIC_DEFAULT_HAIKU_MODEL   anthropic/claude-haiku-4.5
-CLAUDE_CODE_SUBAGENT_MODEL      anthropic/claude-sonnet-4.6
-```
-
-Add those to the same provider's Environment variables section if you want stable model choices.
-
-### Verify OpenRouter Is Being Used
-
-Open a Claude session and run:
-
-```text
-/status
-```
-
-You should see the Anthropic base URL set to:
-
-```text
-https://openrouter.ai/api
-```
-
-You can also check the OpenRouter activity dashboard for requests from your API key.
-
-### Common OpenRouter Mistakes
-
-- Use `https://openrouter.ai/api`, not `https://openrouter.ai/api/v1`, for Claude Code.
-- Set `ANTHROPIC_AUTH_TOKEN` to your OpenRouter API key.
-- Set `ANTHROPIC_API_KEY` to an empty string so Claude Code does not try to use an Anthropic login.
-- Put these variables on the Claude provider instance, not in global shell startup files.
-
-OpenRouter's setup can change over time. Use its upstream Claude Code guide for the current details:
-<https://openrouter.ai/docs/guides/guides/claude-code-integration>.
-
-## I Want To Use Claude Code Router
-
-Claude Code Router is useful when you want a local routing layer with more control than a direct
-OpenRouter setup.
-
-Akeru Bot does not need a special Claude Code Router provider. Treat the router as a Claude
-environment: give a Claude provider its own `CLAUDE_CONFIG_DIR path`, and put whatever variables
-the router tells you to export into that provider's Environment variables section. Mark tokens
-and API keys as sensitive.
-
-```text
-Display name: Claude Router
-Binary path: claude
-CLAUDE_CONFIG_DIR path: ~/.claude_router_home
-```
-
-Follow the upstream project's README for the router's own install, startup, and configuration
-steps: <https://github.com/musistudio/claude-code-router>.
-
-## I Want Different Claude Settings, Not A Different Account
-
-Create another Claude provider with the same account if you want a named preset.
-
-Examples:
-
-- "Claude Default"
-- "Claude Router"
-- "Claude Experimental"
-
-If the preset needs different Claude files, give it a different `CLAUDE_CONFIG_DIR path`. If it needs
-different API keys, base URLs, or router settings, use Environment variables.
-
-Do not put environment variable assignments in `Launch arguments`.
+See [Permission modes](./permission-modes.md) for the four modes and the actions that always need
+approval.

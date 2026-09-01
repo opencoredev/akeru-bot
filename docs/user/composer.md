@@ -1,27 +1,31 @@
 # Message composer
 
-Messages can contain up to 120,000 characters. If a draft is longer, Akeru Bot keeps it in the
-composer and shows how many characters need to be removed. Shorten the draft or split it into
-multiple messages, then send again in the same thread.
+Messages can contain up to 120,000 characters. Akeru keeps an oversized draft in the composer and
+shows how many characters you must remove. Shorten the draft or send it as several messages.
 
-On servers that support direct uploads, images upload as soon as you add them. The send button
-becomes available after every upload finishes. Failed uploads can be retried or removed.
+## Attach images
 
-On web and desktop, HEIC and HEIF photos are automatically converted to JPEG when you drag them into
-the composer or paste them into a message.
+On servers with direct uploads, an image starts uploading when you add it. Akeru enables **Send**
+after every upload finishes. Retry or remove a failed upload.
+
+Web and desktop convert HEIC and HEIF photos to JPEG when you drag or paste them into the composer.
 
 ## Commands and skills
 
-Type `/` to open the command menu. Type `$` to find and add a skill. Skill rows show their source,
-such as System, Personal, Project, or App.
+Type `/` to open the command menu. Type `$` to search for a skill and add its token to the message.
 
-By default, the `/` menu includes skills. To keep this menu command-only, turn off **Show skills in
-slash menu** in **Settings → General**. Skill results use the `/skill:Skill Name` label and add the
-same `$name` skill token to your message. The original skill name remains searchable. If the provider
-also reports that skill as a native slash command, Akeru Bot hides the duplicate native entry and keeps
-the `/skill:Skill Name` label.
+Skill results identify their source as App, Repo, Project, Personal, System, or Provider. A selected
+skill appears as a badge in the composer.
 
-On desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux from a new thread to
-start it in the background. Akeru Bot opens another new thread and shows an **Open** action for the
-thread that started. The new thread keeps the selected workspace mode and base branch. If **New
-worktree** is selected, each background thread creates its own worktree.
+The slash menu includes skills by default. Turn off **Show skills in slash menu** under
+**Settings > General** to keep it command-only. Slash-menu skill results use the
+`/skill:Skill Name` label and insert the same `$name` token. Akeru hides duplicate native provider
+commands when the same skill is already available.
+
+## Start work in the background
+
+From a new thread on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux. Akeru
+starts the thread, opens another new thread, and shows an **Open** action for the work in progress.
+
+The background thread keeps the selected workspace mode and base branch. If **New worktree** is
+selected, each background thread creates a separate worktree.

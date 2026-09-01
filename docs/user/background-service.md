@@ -1,65 +1,63 @@
-# Running Akeru Bot in the background
+# Run Akeru in the background
 
-On Linux and macOS, Akeru Bot can run as a background service for your user, so it is ready without
-keeping a terminal open.
+Linux and macOS can run the command-line server as a service for the current user.
 
 ## Manage the service
 
-Install it with the latest Akeru Bot release:
+Install the latest release:
 
-```sh
+```bash
 npx akeru-bot@latest service install
 ```
 
-Check whether it is installed:
+Check its state:
 
-```sh
+```bash
 npx akeru-bot@latest service status
 ```
 
 Update or repair it:
 
-```sh
+```bash
 npx akeru-bot@latest service update
 ```
 
 Stop it and remove it from startup:
 
-```sh
+```bash
 npx akeru-bot@latest service uninstall
 ```
 
-Updating restarts Akeru Bot briefly. Let active agent work and terminal commands finish first.
-If a remote update is already in progress, wait for it to finish before retrying a local update.
+An update restarts Akeru. Let active agent work and terminal commands finish first. Wait when another
+local or remote update is already running.
 
-The service runs a small stable launcher. Exact Akeru Bot versions are installed separately, so a
-failed remote candidate can return to the previous version without rewriting the service
-definition. The launcher snapshots the database before a remote candidate starts, so database
-updates roll back with the server version. An older launcher may require one local
-`service update` before this is available.
+## Updates and rollback
 
-## Platform support
+The service uses a stable launcher and installs exact Akeru versions separately. Before a remote
+candidate starts, the launcher snapshots the database. A failed candidate can return to the previous
+server and database without rewriting the service definition.
 
-**Linux** uses a systemd user unit at `~/.config/systemd/user/t3code.service`. The service starts
-when the machine boots and keeps running after you log out (lingering is enabled during install).
+An older launcher can require one local `service update` before remote rollback is available.
 
-**macOS** uses a launch agent at `~/Library/LaunchAgents/com.t3tools.t3code.service.plist`. It
-starts when you log in, not when the Mac boots, and it stops when you log out; macOS has no
-equivalent of Linux lingering for user agents. For a Mac that should stay reachable unattended,
-turn on automatic login (System Settings → Users & Groups; unavailable while FileVault is on) and
-keep the Mac from sleeping.
+## Linux
 
-A few more macOS notes:
+Linux installs a systemd user unit at `~/.config/systemd/user/t3code.service`. Installation enables
+lingering, so the service starts at boot and remains available after you log out.
 
-- Installing over SSH needs someone logged in at the Mac's screen to start the agent right away.
-  Without that, the install command reports an error at the final start step, but the agent is
-  fully installed and starts at the next login.
-- macOS may show privacy prompts for protected folders such as Desktop, Documents, or Downloads,
-  attributed to a bare `node` process, or deny access without a prompt. If agent work fails to
-  read those folders, grant Full Disk Access to the node binary listed in the launch agent's
-  `ProgramArguments`.
-- The agent appears under System Settings → General → Login Items. If it was switched off there,
-  or disabled with `launchctl disable`, macOS will not start it at login until you switch it back
-  on.
+## macOS
 
-**Windows** is not supported yet.
+macOS installs a launch agent at
+`~/Library/LaunchAgents/com.t3tools.t3code.service.plist`. It starts when you log in and stops when
+you log out.
+
+For an unattended Mac, keep the Mac awake and configure an account to log in after restart. FileVault
+can prevent automatic login.
+
+An install over SSH needs a user logged in at the Mac to start the launch agent immediately. Without
+that session, installation can finish but the agent starts at the next login.
+
+If agent work cannot read Desktop, Documents, or Downloads, grant Full Disk Access to the Node.js
+binary listed in the launch agent's `ProgramArguments`. Also check **System Settings > General >
+Login Items** if the launch agent does not start.
+
+Windows does not support the background service yet.

@@ -12,8 +12,8 @@ import {
   DEFAULT_BLOB_COLOR,
   DEFAULT_BLOB_SHAPE,
   formatRosterTimestamp,
-  groupContainsBot,
   isRecordableChatPath,
+  orderRosterBotsForShortcuts,
   parseChatPath,
   randomBotAvatar,
   resolveBlobRendering,
@@ -21,6 +21,7 @@ import {
   resolveLatestRosterMessage,
   resolveRosterBotId,
   resolveRosterIndicator,
+  resolveRosterShortcutBot,
   parseRosterBotDragId,
   parseRosterGroupDropId,
   rosterBotDragId,
@@ -245,6 +246,51 @@ describe("filterRosterBots", () => {
     expect(filterRosterBots(bots, "research").map((entry) => entry.id)).toEqual(["1"]);
     expect(filterRosterBots(bots, "interfaces").map((entry) => entry.id)).toEqual(["2"]);
     expect(filterRosterBots(bots, "nobody")).toEqual([]);
+  });
+});
+
+describe("roster bot shortcuts", () => {
+  it("puts pinned bots first, then follows section and unassigned order", () => {
+    const bots = [
+      bot({ id: "free-a", name: "Free A" }),
+      bot({ id: "section-b", name: "Section B" }),
+      bot({ id: "pinned-a", name: "Pinned A" }),
+      bot({ id: "section-a", name: "Section A" }),
+      bot({ id: "pinned-b", name: "Pinned B" }),
+      bot({ id: "archived", name: "Archived", archivedAt: "2026-08-20T00:00:00.000Z" }),
+      bot({ id: "free-b", name: "Free B" }),
+    ];
+
+    const ordered = orderRosterBotsForShortcuts(
+      bots,
+      [
+        { kind: "group", id: "group-a" },
+        { kind: "bot", id: "pinned-b" },
+        { kind: "bot", id: "archived" },
+        { kind: "bot", id: "pinned-a" },
+      ],
+      [{ botIds: ["section-a", "pinned-a", "section-b"] }],
+    );
+
+    expect(ordered.map((entry) => entry.id)).toEqual([
+      "pinned-b",
+      "pinned-a",
+      "section-a",
+      "section-b",
+      "free-a",
+      "free-b",
+    ]);
+  });
+
+  it("maps jump commands to the matching bot and ignores empty slots", () => {
+    const ordered = Array.from({ length: 9 }, (_, index) =>
+      bot({ id: `bot-${index + 1}`, name: `Bot ${index + 1}` }),
+    );
+
+    expect(resolveRosterShortcutBot("thread.jump.1", ordered)?.id).toBe("bot-1");
+    expect(resolveRosterShortcutBot("thread.jump.9", ordered)?.id).toBe("bot-9");
+    expect(resolveRosterShortcutBot("thread.jump.9", ordered.slice(0, 8))).toBeNull();
+    expect(resolveRosterShortcutBot("thread.next", ordered)).toBeNull();
   });
 });
 

@@ -6,6 +6,7 @@ import {
   deriveProviderInstanceEntries,
   getDefaultProviderInstanceModel,
   isProviderInstancePickerReady,
+  isProviderInstancePickerSelectable,
   isProviderInstancePickerVisible,
   resolveDefaultProviderModelSelection,
   resolveSelectableProviderInstance,
@@ -16,7 +17,9 @@ function provider(input: {
   provider: ProviderDriverKind;
   instanceId: string;
   enabled?: boolean;
+  installed?: boolean;
   availability?: ServerProvider["availability"];
+  authStatus?: ServerProvider["auth"]["status"];
   displayName?: string;
   accentColor?: string;
   status?: ServerProvider["status"];
@@ -28,11 +31,11 @@ function provider(input: {
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     enabled: input.enabled ?? true,
-    installed: true,
+    installed: input.installed ?? true,
     version: null,
     status: input.status ?? "ready",
     ...(input.availability ? { availability: input.availability } : {}),
-    auth: { status: "authenticated" },
+    auth: { status: input.authStatus ?? "authenticated" },
     checkedAt: "2026-01-01T00:00:00.000Z",
     models: input.models ?? [],
     slashCommands: [],
@@ -68,6 +71,60 @@ describe("isProviderInstancePickerReady", () => {
     ]);
 
     expect(entry && isProviderInstancePickerReady(entry)).toBe(true);
+  });
+});
+
+describe("isProviderInstancePickerSelectable", () => {
+  it("keeps installed provider models selectable while the probe is limited", () => {
+    const [entry] = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        status: "warning",
+        models: [model("grok-build")],
+      }),
+    ]);
+
+    expect(entry && isProviderInstancePickerSelectable(entry)).toBe(true);
+  });
+
+  it("rejects missing and explicitly unauthenticated providers", () => {
+    const [missing, unauthenticated] = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok_missing",
+        installed: false,
+      }),
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok_signed_out",
+        authStatus: "unauthenticated",
+      }),
+    ]);
+
+    expect(missing && isProviderInstancePickerSelectable(missing)).toBe(false);
+    expect(unauthenticated && isProviderInstancePickerSelectable(unauthenticated)).toBe(false);
+  });
+
+  it("rejects disabled provider snapshots with explicit or omitted availability", () => {
+    const [available, availabilityOmitted] = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok_available",
+        status: "disabled",
+        availability: "available",
+      }),
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok_availability_omitted",
+        status: "disabled",
+      }),
+    ]);
+
+    expect(available && isProviderInstancePickerSelectable(available)).toBe(false);
+    expect(availabilityOmitted && isProviderInstancePickerSelectable(availabilityOmitted)).toBe(
+      false,
+    );
   });
 });
 

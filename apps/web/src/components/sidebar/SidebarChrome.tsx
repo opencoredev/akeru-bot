@@ -32,7 +32,6 @@ import { environmentSnapshotAtom } from "../../state/shell";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { AkeruMark } from "../AkeruMark";
-import { PluginLogoImage } from "../plugins/PluginsCatalog";
 import { isBuiltinMcpServer } from "../plugins/pluginRegistry";
 import { cn } from "../../lib/utils";
 import {
@@ -167,6 +166,11 @@ export function formatEnabledPluginStatus(enabledCount: number): string {
   return `${enabledCount} ${enabledCount === 1 ? "plugin" : "plugins"} enabled`;
 }
 
+export function formatEnabledPluginBadge(enabledCount: number): string | null {
+  if (enabledCount === 0) return null;
+  return enabledCount > 99 ? "99+" : String(enabledCount);
+}
+
 export function summarizeEnabledPlugins(
   servers: readonly McpServer[],
   catalog: readonly PluginDefinition[] = PLUGIN_CATALOG,
@@ -198,44 +202,49 @@ function SidebarPluginSummaryForEnvironment({
   readonly onClick: () => void;
 }) {
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
-  const { enabledCount, enabledPlugins } = summarizeEnabledPlugins(servers);
+  const { enabledCount } = summarizeEnabledPlugins(servers);
   const statusLabel = formatEnabledPluginStatus(enabledCount);
 
   return (
-    <SidebarMenuItem>
+    <SidebarPluginButton enabledCount={enabledCount} onClick={onClick} statusLabel={statusLabel} />
+  );
+}
+
+function SidebarPluginButton({
+  enabledCount,
+  onClick,
+  statusLabel,
+}: {
+  readonly enabledCount: number;
+  readonly onClick: () => void;
+  readonly statusLabel: string;
+}) {
+  const badgeLabel = formatEnabledPluginBadge(enabledCount);
+
+  return (
+    <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
             <SidebarMenuButton
               aria-label={`Plugins, ${statusLabel}`}
-              className="h-auto min-h-12 gap-2 rounded-xl px-2 py-2 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:min-h-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
+              className="relative overflow-visible!"
+              size="icon"
               onClick={onClick}
             >
-              <AppIcon className="size-[18px] shrink-0" icon={PlugSocketIcon} />
-              <span className="flex min-w-0 flex-1 flex-col items-start group-data-[collapsible=icon]:hidden">
-                <span className="text-sm font-medium leading-5">Plugins</span>
-                <span className="truncate text-xs leading-4 text-sidebar-muted-foreground">
-                  {statusLabel}
-                </span>
-              </span>
-              {enabledPlugins.length > 0 ? (
+              <AppIcon className="size-4" icon={PlugSocketIcon} />
+              {badgeLabel ? (
                 <span
                   aria-hidden="true"
-                  className="flex shrink-0 -space-x-1.5 group-data-[collapsible=icon]:hidden"
+                  className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sidebar-primary px-1 text-[9px] font-semibold tabular-nums text-sidebar-primary-foreground"
                 >
-                  {enabledPlugins.slice(0, 3).map((plugin) => (
-                    <PluginLogoImage
-                      className="size-6 rounded-md"
-                      key={plugin.id}
-                      plugin={plugin}
-                    />
-                  ))}
+                  {badgeLabel}
                 </span>
               ) : null}
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="right">{`Plugins · ${statusLabel}`}</TooltipPopup>
+        <TooltipPopup side="top">{`Plugins · ${statusLabel}`}</TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -245,21 +254,11 @@ function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
   const environmentId = usePrimaryEnvironmentId();
   if (!environmentId) {
     return (
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          aria-label="Plugins, connect an environment to manage plugins"
-          className="h-auto min-h-12 gap-2 rounded-xl px-2 py-2"
-          onClick={onClick}
-        >
-          <AppIcon className="size-[18px] shrink-0" icon={PlugSocketIcon} />
-          <span className="flex min-w-0 flex-1 flex-col items-start group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-medium leading-5">Plugins</span>
-            <span className="truncate text-xs leading-4 text-sidebar-muted-foreground">
-              Connect an environment
-            </span>
-          </span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+      <SidebarPluginButton
+        enabledCount={0}
+        onClick={onClick}
+        statusLabel="Connect an environment"
+      />
     );
   }
   return <SidebarPluginSummaryForEnvironment environmentId={environmentId} onClick={onClick} />;
@@ -350,17 +349,12 @@ function SidebarUtilityItem({
   onClick: () => void;
 }) {
   return (
-    <SidebarMenuItem className="min-w-0 flex-1 group-data-[collapsible=icon]:flex-none">
+    <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton
-              aria-label={label}
-              className="w-full justify-center gap-1.5 text-xs group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-0!"
-              onClick={onClick}
-            >
+            <SidebarMenuButton aria-label={label} size="icon" onClick={onClick}>
               {icon}
-              <span className="group-data-[collapsible=icon]:hidden">{label}</span>
             </SidebarMenuButton>
           }
         />
@@ -399,10 +393,8 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarProviderUpdatePill />
         <SidebarUpdateArchitectureWarning />
       </div>
-      <SidebarMenu>
+      <SidebarMenu className="flex-row items-center justify-center gap-1 group-data-[collapsible=icon]:flex-col">
         <SidebarPluginSummary onClick={handlePluginsClick} />
-      </SidebarMenu>
-      <SidebarMenu className="flex-row items-center gap-1 group-data-[collapsible=icon]:flex-col">
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}
           label="Settings"

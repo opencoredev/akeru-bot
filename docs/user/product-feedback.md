@@ -1,16 +1,28 @@
 # Product feedback
 
-Open **Feedback** from the sidebar or command palette. You can also select **Send feedback** in **Settings → About**. Desktop builds include **Help → Send Feedback**.
+Open **Feedback** from the sidebar or command palette. You can also select **Send feedback** under
+**Settings > About**. Desktop builds include **Help > Send Feedback**.
 
-Write the feedback and select **Send**. Select **Choose an element** to attach a privacy-safe reference to part of the Akeru Bot interface. The picker does not collect form values, page HTML, screenshots, files, workspace paths, or full URLs.
+Write up to 4,000 characters and select **Send**. Select **Choose an element** to attach a safe
+description of one interface element.
 
-A submission contains:
+## What Akeru sends
 
-- Feedback text, up to 4,000 characters.
-- An optional interface element descriptor.
+A submission contains the feedback text and, when selected, one interface element descriptor. It
+does not contain a screenshot, raw page content, input value, credential, tool result, workspace
+path, full URL, thread, or conversation.
 
-It does not contain screenshots, raw DOM, input values, credentials, tool results, a thread, or a full conversation. No account is required. A failed send keeps the draft. A confirmed send clears it.
+A failed send keeps the draft. A confirmed send clears it. No account is required. The service can
+keep accepted feedback for up to 90 days.
 
-Akeru Bot keeps accepted feedback for 90 days. Turn off **Product feedback** in **Settings → Privacy** to disable sending. Self-hosted environments can set an HTTPS endpoint in **Settings → About**. Loopback HTTP endpoints are allowed for local testing.
+Turn off **Product feedback** under **Settings > Privacy** to disable sending. A self-hosted
+environment can set an HTTPS endpoint under **Settings > About**. Loopback HTTP is allowed for local
+testing.
 
-Codex-backed Akeru bots can propose feedback text. A proposal can only add bounded text to the same editable draft after one-time approval. The bot cannot send it. You must select **Send** for each submission. Review agent proposals on web or desktop. Mobile can cancel them but cannot open the draft in this version.
+## Bot-proposed feedback
+
+A Codex-backed Akeru bot can propose text for the same feedback draft after one-time approval. The
+bot cannot submit it. Review the draft and select **Send** yourself.
+
+Web and desktop can open the proposed draft. Mobile can decline the approval but cannot open the
+draft in this version.

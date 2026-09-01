@@ -5,6 +5,7 @@ import {
   type GroupPersonMembership,
 } from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
+import { threadJumpIndexFromCommand } from "../../keybindings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
 import type { Bot, BotAvatar, BotBlobShape, Group } from "./types";
 
@@ -227,6 +228,42 @@ export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
       (bot.label?.toLowerCase().includes(needle) ?? false) ||
       (bot.description?.toLowerCase().includes(needle) ?? false),
   );
+}
+
+type RosterShortcutItem = { kind: "bot" | "group"; id: string };
+type RosterShortcutSection = { botIds: readonly string[] };
+
+export function orderRosterBotsForShortcuts(
+  bots: readonly Bot[],
+  pinnedItems: readonly RosterShortcutItem[],
+  sections: readonly RosterShortcutSection[],
+): Bot[] {
+  const botsById = new Map(
+    bots.filter((bot) => bot.archivedAt === null).map((bot) => [bot.id, bot] as const),
+  );
+  const ordered: Bot[] = [];
+  const addedIds = new Set<string>();
+  const addBot = (botId: string) => {
+    const bot = botsById.get(botId);
+    if (!bot || addedIds.has(botId)) return;
+    addedIds.add(botId);
+    ordered.push(bot);
+  };
+
+  for (const item of pinnedItems) {
+    if (item.kind === "bot") addBot(item.id);
+  }
+  for (const section of sections) {
+    for (const botId of section.botIds) addBot(botId);
+  }
+  for (const bot of bots) addBot(bot.id);
+
+  return ordered;
+}
+
+export function resolveRosterShortcutBot(command: string, orderedBots: readonly Bot[]): Bot | null {
+  const index = threadJumpIndexFromCommand(command);
+  return index === null ? null : (orderedBots[index] ?? null);
 }
 
 export function isCurrentGroupPerson(

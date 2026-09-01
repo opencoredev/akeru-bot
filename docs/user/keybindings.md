@@ -1,12 +1,11 @@
-# Keybindings
+# Keyboard shortcuts
 
-Edit keybindings from **Settings** → **Keybindings**. That page lists every command, its current
+Edit shortcuts from **Settings > Keybindings**. The page lists every command, its current
 shortcut, whether it is a default or your own, and warns about conflicts.
 
 The same configuration lives in `~/.akeru/userdata/keybindings.json` on the machine running the
-server, if you prefer editing it directly. Akeru Bot writes the built-in defaults into that file on
-first run, and adds any new defaults on later startups unless a rule of yours already claims the
-command or the shortcut.
+server. Akeru merges your rules with the built-in defaults. It keeps a default when no custom rule
+claims that command. An absent or empty file therefore still resolves to the built-in shortcuts.
 
 The file is a JSON array of rules.
 
@@ -19,13 +18,13 @@ The file is a JSON array of rules.
 
 Invalid rules are ignored. An invalid file is ignored entirely, and the server logs a warning.
 
-## Rule Shape
+## Rule shape
 
 - `key` (required): shortcut string, like `mod+j`, `ctrl+k`, `cmd+shift+d`
 - `command` (required): the command ID to run
 - `when` (optional): boolean expression controlling when the shortcut is active
 
-## Key Syntax
+## Key syntax
 
 Modifiers: `mod` (`cmd` on macOS, `ctrl` elsewhere), `cmd` / `meta`, `ctrl` / `control`, `shift`,
 `alt` / `option`.
@@ -50,17 +49,21 @@ successful pick; its hover glow and badge preview the element and color family t
 **Cancel** or `Escape` exits Inspect and clears its selection and spotlight.
 
 `rightPanel.toggleMaximized` maximizes or restores the open right panel. It has no default shortcut,
-so add one in **Settings** → **Keybindings** if you want to use it.
+so add one in **Settings > Keybindings** if you want to use it.
 
 `thread.settle` settles the active thread or restores it when it is already settled. Its default
 shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
+
+`thread.jump.1` through `thread.jump.9` switch to the matching bot and default to `mod+1` through
+`mod+9`. Pinned bots come first. Other bots follow their section and roster order. Groups do not
+take a shortcut number.
 
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while
 keeping the thread's project, branch, and machine context visible. Message search begins after two
 characters and uses SQLite's ASCII case-insensitive matching.
 
-The full command list and the current defaults are shown in **Settings** → **Keybindings**, which
+The full command list and the current defaults are shown in **Settings > Keybindings**, which
 always matches the build you are running. Use that rather than a copied list.
 
 Note that `chat.new` and `chat.newLocal` both create a thread through the same path. A new thread
@@ -74,7 +77,7 @@ Background submission from a new thread is the exception. `mod+enter` starts tha
 another new thread with the same workspace mode and base branch. **New worktree** remains selected,
 but the new thread does not reuse the worktree created for the thread that just started.
 
-## `when` Conditions
+## `when` conditions
 
 A `when` expression is evaluated against context keys describing the current UI state. The keys
 the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, and

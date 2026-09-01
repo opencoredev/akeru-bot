@@ -1,151 +1,117 @@
-# Source Control Integrations
+# Source control integrations
 
-Akeru Bot connects to your Git hosting provider so you can create pull requests, review code, and manage repositories without leaving the app.
+Akeru can clone and publish repositories, create and inspect change requests, and show review state
+beside the thread that owns the work.
 
-## Supported Providers
+## Supported hosts
 
-Akeru Bot works with the platforms your team already uses:
+| Host         | Authentication                      | Change request name |
+| ------------ | ----------------------------------- | ------------------- |
+| GitHub       | GitHub CLI                          | Pull request        |
+| GitLab       | GitLab CLI                          | Merge request       |
+| Bitbucket    | Access token or account API token   | Pull request        |
+| Azure DevOps | Azure CLI with the DevOps extension | Pull request        |
 
-- **GitHub** – Pull requests, repository creation, and clone integration
-- **GitLab** – Merge requests, repository publishing, and hosted clones
-- **Bitbucket** – Pull request workflows (via API token authentication)
-- **Azure DevOps** – Pull request support for Microsoft-hosted repositories
+Git is required on the environment server for every local repository operation.
 
-## What You Can Do
+## Add a project from a remote
 
-### Start Projects from Anywhere
+1. Open the command palette with `Cmd/Ctrl+K`.
+2. Select **Add Project**.
+3. Choose a listed host or **Git URL**.
+4. Enter the repository name or full URL.
+5. Choose the destination directory.
 
-**Clone repositories directly**
+Akeru accepts host-specific names such as `owner/repo`, `group/project`,
+`workspace/repository`, or `project/repository`.
 
-- Open the Command Palette (`Cmd/Ctrl + K`) → **Add Project**
-- Choose **GitHub repository**, **GitLab repository**, **Bitbucket repository**, **Azure DevOps repository**, or paste any **Git URL**
-- Enter the repository path (`owner/repo`, `group/project`, `workspace/repository`, or `project/repository`) or a full Git URL, pick a destination, and start coding
+## Publish a local repository
 
-**Publish local projects to the cloud**
+Use **Publish Repository** on a local Git repository without a remote. Akeru creates the hosted
+repository, adds it as `origin`, and pushes the current branch.
 
-- Have a local Git repository without a remote?
-- Use the **Publish Repository** action to create a new hosted repository (GitHub, GitLab, Bitbucket, or Azure DevOps), add it as your origin remote, and push, in one flow
-- If the local repository has no commits yet, publishing creates the remote and wires it up but does not push. Make a commit, then push normally.
+If the repository has no commits, Akeru creates the remote and adds `origin` but does not push. Make
+the first commit, then push it.
 
-### Manage Code Reviews Without Context Switching
+## Work with change requests
 
-**Create pull requests while you work**
+Use the Git controls in the thread toolbar to push a branch and create a pull request or merge
+request. Akeru can draft a title and description from the branch commits.
 
-- Push a branch and create a pull request from the Git actions controls in the toolbar
-- Akeru Bot can suggest titles and descriptions based on your commits
-- Supports GitHub Pull Requests, GitLab Merge Requests, Bitbucket Pull Requests, and Azure DevOps Pull Requests
+The **Pull requests** page opens reviews in right-panel tabs. From a thread, you can open a linked
+review in the panel or in the system browser. Command-click on macOS, or Control-click on Windows and
+Linux, opens a sidebar change-request number in the browser.
 
-**Stay on top of open reviews**
+Akeru can check out another branch for local review. GitHub, GitLab, and Bitbucket also support
+editing change-request text and your own comments in place. Azure DevOps supports title and
+description edits, but its comments stay read-only in Akeru.
 
-- See if your current branch already has an open PR/MR
-- Open several reviews from the **Pull requests** page as tabs in the right panel
-- While working in a thread, open linked reviews in the same compact right-panel tabs without
-  leaving the conversation
-- Open the review directly in your browser with one click
-- Command-click (Control-click on Windows and Linux) a pull request number in the sidebar to open it in your browser instead of in Akeru Bot
-- Check out a teammate's branch to review code locally
+## Configure authentication
 
-**Fix what you wrote, in place**
+Open **Settings > Source Control**. The page shows **Version Control** and **Source Control
+Providers**. Use the rescan icon after you install a CLI or change credentials. Its tooltip reads
+**Rescan Git and hosting integrations**.
 
-- Rewrite a pull request's title and description from the review itself, in Markdown, with a
-  preview before you save
-- Rewrite your own comments the same way, wherever they are shown
-- Works on GitHub, GitLab, and Bitbucket. Azure DevOps takes a new title and description; its
-  comments stay read-only here, as they already were
+Authentication belongs to the environment server. Run these commands on that machine.
 
-### Know Your Setup at a Glance
+### GitHub
 
-The **Source Control settings** page shows you exactly what's connected:
+Install GitHub CLI 2.81.0 or newer, then sign in:
 
-- ✅ Which providers are authenticated and ready
-- ⚠️ What's missing and how to fix it
-- 👤 Which account is signed in (when available)
+```bash
+brew install gh
+gh auth login
+```
 
-Run a quick **Rescan** after setting up a new machine or changing credentials.
+### GitLab
 
-## Getting Started
+Install and authenticate GitLab CLI:
 
-### For GitHub (Recommended for most users)
+```bash
+brew install glab
+glab auth login
+```
 
-1. Install the GitHub CLI (version 2.81.0 or newer) on the machine running Akeru Bot:
-   ```bash
-   brew install gh
-   ```
-2. Sign in:
-   ```bash
-   gh auth login
-   ```
-3. Open **Settings → Source Control** in Akeru Bot and verify GitHub shows as authenticated
+### Bitbucket
 
-You can now clone, publish, and create pull requests.
-
-### For GitLab
-
-1. Install the GitLab CLI:
-   ```bash
-   brew install glab
-   ```
-2. Authenticate:
-   ```bash
-   glab auth login
-   ```
-3. Check **Settings → Source Control** to confirm the connection
-
-### For Bitbucket
-
-Bitbucket uses tokens instead of a CLI tool. Two options, both set as environment variables on the
-machine running Akeru Bot.
-
-Recommended, a Bitbucket access token:
+Set a Bitbucket access token:
 
 ```bash
 export T3CODE_BITBUCKET_ACCESS_TOKEN="your-access-token"
 ```
 
-Or an Atlassian account email plus API token, with read/write access to pull requests and
-repositories, plus read access to your user account (`read:user:bitbucket`, used to verify the
-connection):
+Or set an Atlassian account email and API token:
 
 ```bash
 export T3CODE_BITBUCKET_EMAIL="you@example.com"
 export T3CODE_BITBUCKET_API_TOKEN="your-token"
 ```
 
-If both are set, the access token wins. Restart Akeru Bot and verify the connection in **Source
-Control settings**.
+The API token needs repository and pull-request read/write access plus `read:user:bitbucket`. The
+access token wins when both methods are set. Restart Akeru after you change these environment
+variables.
 
-### For Azure DevOps
+### Azure DevOps
 
-1. Install Azure CLI:
-   ```bash
-   brew install azure-cli
-   ```
-2. Add the DevOps extension:
-   ```bash
-   az extension add --name azure-devops
-   ```
-3. Sign in:
-   ```bash
-   az login
-   ```
+Install Azure CLI and its DevOps extension:
 
----
+```bash
+brew install azure-cli
+az extension add --name azure-devops
+az login
+```
 
-## Requirements & Troubleshooting
+If Akeru reports that Azure DevOps still needs authentication, run:
 
-**Git is required** – Akeru Bot uses Git for all local operations. Ensure `git` is installed on your server.
+```bash
+az devops login
+```
 
-**Server-side setup** – Authentication happens on the machine running Akeru Bot (the server), not your local browser. If you're using a hosted or team instance, your administrator may have already configured providers.
+Rescan after authentication succeeds.
 
-**Common issues:**
+## Fix connection problems
 
-- **Provider shows "Not authenticated"** – Run the login command for that provider (e.g., `gh auth login`) in a terminal on the server, then rescan in Settings
-- **GitHub says it could not verify sign-in status** – Akeru Bot needs GitHub CLI 2.81.0 or newer to check sign-in status. Update `gh` (e.g., `brew upgrade gh`), then rescan
-- **Bitbucket not connecting** – Double-check your environment variables are set in the correct shell profile and the server was restarted
-- **Can't push to a remote** – Verify your Git remote URL matches the provider you've authenticated with (SSH vs HTTPS remotes may need different credentials)
-
-**Need more help?** Check your provider's CLI documentation:
-
-- [GitHub CLI](https://cli.github.com/)
-- [GitLab CLI](https://gitlab.com/gitlab-org/cli)
-- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/)
+- Update GitHub CLI when Akeru cannot verify its sign-in state.
+- Confirm that authentication and Git remotes use compatible SSH or HTTPS credentials.
+- Restart the server after changing Bitbucket environment variables.
+- Run the provider's login command on the server, not on a remote client.

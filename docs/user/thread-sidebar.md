@@ -1,34 +1,39 @@
-# Organizing threads
+# Organize threads
 
-Pin a thread from its context menu to keep it in the pinned section above your active work.
-Pinned threads are shown independently of their project, including when you connect to more than
-one environment.
+Use a thread's menu to settle, snooze, wake, archive, delete, pin, or unpin it.
 
-Pinned threads still move to **Settled** when they become inactive. They also move when their pull
-request merges if **Auto-settle merged threads** is enabled.
+## Active and settled threads
 
-When you un-settle a thread, it returns to the top of the active list so you can find it right
-away. Its timestamps do not change. Other threads keep their positions.
+Akeru settles inactive threads after three days by default. An open pull request blocks inactivity
+settlement. Closed pull requests settle their threads, and merged pull requests settle them when
+**Auto-settle merged threads** is on.
 
-Right-click a pull request link in a thread and choose **Link to thread** to show that pull request
-in the sidebar. The thread settles when the linked pull request merges if **Auto-settle merged
-threads** is enabled. Right-click the same link and choose **Unlink from thread** to remove it.
+Settling a pinned thread also removes its pin. **Un-settle thread** returns the thread to the top of
+the active list without changing its timestamps.
 
-On web and desktop, drag a pinned thread to change its position. On mobile, open the thread's menu
-and choose **Move up** or **Move down**. The order is stored by the server and appears on your
-other connected devices.
+Use **Snooze** to hide a thread until its wake time. Use **Wake thread** to return it early.
 
-If reordering is unavailable for one environment, update the Akeru Bot server running in that
-environment. Older servers can still pin and unpin threads, but do not understand synced ordering;
-their pinned threads keep the default newest-first order below the ones you have arranged.
+## Pinned order
 
-## Environment artwork
+Pinned threads appear above active work across projects and environments. On web and desktop, drag a
+pinned thread to reorder it. On mobile, open its menu and select **Move up** or **Move down**.
 
-Dev environments can identify themselves with artwork at the top of the sidebar and in
-the send button. Choose **Artwork**, **Version pill**, or **None** in Settings under environment
-identification. Artwork is recolored to match each built-in theme. Custom themes use the **Version
-pill** fallback because their colors are not controlled by Akeru Bot.
+The environment server stores the order. An older server can still pin a thread but keeps its default
+newest-first order until it is updated.
 
-To generate a fresh title from the conversation, open a thread's context menu and choose
-**Regenerate title**. While Akeru Bot is generating it, the action reads **Regenerating…** and cannot
-be selected again. The option is hidden when the connected environment needs a server update.
+## Link a pull request
+
+Right-click a pull-request link and select **Link to thread**. Select **Unlink from thread** from the
+same menu to remove it. Linked review state appears with the thread and can trigger automatic
+settlement.
+
+## Regenerate a title
+
+Open the thread menu and select **Regenerate title**. The action changes to **Regenerating…** until
+the new title is ready. Akeru hides this action when the environment server is too old to support it.
+
+## Environment identification
+
+Development environments can show **Artwork**, a **Version pill**, or **None** at the top of the
+sidebar and in the send button. Artwork follows built-in theme colors. Custom themes use the version
+pill because Akeru does not control their color palette.
