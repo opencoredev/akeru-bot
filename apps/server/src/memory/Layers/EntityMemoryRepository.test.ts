@@ -137,6 +137,7 @@ const privateAccess = (botId: string) =>
     threadId: ThreadId.make(`thread-${botId}`),
     projectId: ProjectId.make("project"),
     workspaceRoot: "/workspace",
+    legacyWorkspaceOwnerProjectId: ProjectId.make("project"),
     botId: BotId.make(botId),
     groupId: null,
     respondingBotId: null,
