@@ -48,6 +48,7 @@ import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
   createAkeruMastraAuthStorage,
   makeAgentControllerLive,
+  mcpServerIdForToolName,
   recordProviderAccessHealth,
   toMcpServerConfigs,
   type AgentControllerLiveOptions,
@@ -310,6 +311,16 @@ function resolveCodex(controller: AgentController["Service"]) {
 }
 
 describe("toMcpServerConfigs", () => {
+  it("attributes namespaced MCP tools to the exact server id", () => {
+    expect(
+      mcpServerIdForToolName(
+        [McpServerId.make("builtin-exa"), McpServerId.make("builtin-exa-search")],
+        "builtin-exa-search_find",
+      ),
+    ).toBe("builtin-exa-search");
+    expect(mcpServerIdForToolName([McpServerId.make("builtin-exa")], "read_file")).toBeUndefined();
+  });
+
   it("converts only the bot's filtered MCP registrations for Mastra", () => {
     expect(
       toMcpServerConfigs([
@@ -1263,10 +1274,12 @@ describe("AgentControllerLive", () => {
   it.effect("attaches the globally installed MCP servers selected for the bot", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-mcp-"));
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ exa_search: {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {} })),
+      getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> =
@@ -1303,10 +1316,10 @@ describe("AgentControllerLive", () => {
         expect(mcpManager.init).toHaveBeenCalledOnce();
         assert.property(
           mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
-          "exa_search",
+          "builtin-exa_search",
         );
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           policy: "ask",
         });
 
@@ -1314,7 +1327,7 @@ describe("AgentControllerLive", () => {
         mastra.emit({
           type: "tool_approval_required",
           toolCallId: "exa-tool-1",
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           args: { operation: "read" },
         } as AgentControllerEvent);
         yield* controller.respondToRequest({
@@ -1324,24 +1337,64 @@ describe("AgentControllerLive", () => {
         });
         const syncApproval = mastra.harnessOptions[0]?.syncThreadToolApproval;
         assert.isDefined(syncApproval);
-        yield* Effect.promise(() => syncApproval(String(codexThreadId), "exa_search", true));
+        yield* Effect.promise(() =>
+          syncApproval(String(codexThreadId), "builtin-exa_search", true),
+        );
         expect(mastra.session.permissions.setForTool).toHaveBeenLastCalledWith({
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           policy: "ask",
         });
-        yield* Effect.promise(() => syncApproval(String(codexThreadId), "exa_search", false));
+        yield* Effect.promise(() =>
+          syncApproval(String(codexThreadId), "builtin-exa_search", false),
+        );
         expect(mastra.session.permissions.setForTool).toHaveBeenLastCalledWith({
-          toolName: "exa_search",
+          toolName: "builtin-exa_search",
           policy: "allow",
         });
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "exa-tool-1",
+          result: "failed",
+          isError: true,
+          denied: false,
+        } as AgentControllerEvent);
+        expect(
+          SubscriptionAuthService.forSecretsDir(
+            NodePath.join(baseDir, "userdata", "secrets"),
+          ).mcpRequestHealth(exaServer.id)?.health,
+        ).toBe("failed-first-request");
+
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "exa-tool-2",
+          toolName: "builtin-exa_search",
+          args: { operation: "read" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "exa-tool-2",
+          result: "ok",
+          isError: false,
+          denied: false,
+        } as AgentControllerEvent);
+        expect(
+          SubscriptionAuthService.forSecretsDir(
+            NodePath.join(baseDir, "userdata", "secrets"),
+          ).mcpRequestHealth(exaServer.id)?.health,
+        ).toBe("recovered");
         mastra.finishSend();
 
         yield* controller.stopSession({ threadId: codexThreadId });
         expect(mcpManager.disconnect).toHaveBeenCalledOnce();
-      }),
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(baseDir, { recursive: true, force: true })),
+        ),
+      ),
       bridge.service,
       mastra.factory,
       makeMcpManager,
+      baseDir,
     );
   });
 

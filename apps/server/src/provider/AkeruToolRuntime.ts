@@ -17,6 +17,7 @@ import {
 import * as Schema from "effect/Schema";
 
 import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
+import { redactComputerScreenshot } from "../mcp/PreviewSnapshotRedaction.ts";
 import {
   AkeruMemoryToolInputSchemas,
   type AkeruMemoryToolHandler,
@@ -361,6 +362,21 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               log: () => undefined,
             },
           });
+        }
+        if (input.toolId === "Screenshot") {
+          const mediaType = field(result, "mediaType");
+          const data = field(result, "data");
+          if (mediaType !== "image/png" || typeof data !== "string") {
+            throw new Error("Screenshot result is invalid.");
+          }
+          const redacted = redactComputerScreenshot({
+            mediaType,
+            data: Buffer.from(data, "base64"),
+          });
+          result = {
+            ...(result as Record<string, unknown>),
+            data: Buffer.from(redacted.data).toString("base64"),
+          };
         }
         emitReceipt(input, "success");
         return result;

@@ -54,6 +54,16 @@ const remoteInput = {
   mcpServers: [],
 };
 
+const exaServer = {
+  id: McpServerId.make("builtin-exa"),
+  name: "Exa",
+  transport: "url" as const,
+  url: "https://mcp.exa.ai/mcp",
+  enabled: true,
+  createdAt: "2026-08-31T00:00:00.000Z",
+  updatedAt: "2026-08-31T00:00:00.000Z",
+};
+
 describe("AkeruSessionResources", () => {
   afterEach(() => {
     for (const directory of directories) {
@@ -112,6 +122,52 @@ describe("AkeruSessionResources", () => {
     expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
     await resources.release("same-thread");
     expect(stop).toHaveBeenCalledOnce();
+    await resources.shutdown();
+  });
+
+  it("reports MCP connection failures at the resource boundary", async () => {
+    const onMcpServerConnectionFailure = vi.fn();
+    const manager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({})),
+      getServerStatuses: vi.fn(() => [{ name: String(exaServer.id), connected: false }]),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      onMcpServerConnectionFailure,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "mcp-failure", mcpServers: [exaServer] });
+    expect(onMcpServerConnectionFailure).toHaveBeenCalledExactlyOnceWith(exaServer.id);
+    await resources.shutdown();
+  });
+
+  it("reports every configured MCP server when manager initialization fails", async () => {
+    const onMcpServerConnectionFailure = vi.fn();
+    const manager = {
+      init: vi.fn(async () => Promise.reject(new Error("MCP init failed"))),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({})),
+      getServerStatuses: vi.fn(() => []),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      onMcpServerConnectionFailure,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await expect(
+      resources.acquire({ ...remoteInput, threadId: "mcp-init-failure", mcpServers: [exaServer] }),
+    ).rejects.toThrow("MCP init failed");
+    expect(onMcpServerConnectionFailure).toHaveBeenCalledExactlyOnceWith(exaServer.id);
     await resources.shutdown();
   });
 
@@ -297,6 +353,7 @@ describe("AkeruSessionResources", () => {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({ exa_search: {} })),
+      getServerStatuses: vi.fn(() => []),
     };
     const makeBotBrowser = vi.fn(() => browser());
     const toMcpServerConfigs = vi.fn(() => ({}));

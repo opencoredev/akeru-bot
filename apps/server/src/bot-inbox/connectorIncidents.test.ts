@@ -3,11 +3,11 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { BotId } from "@t3tools/contracts";
+import { BotId, type ProviderAccessStatus } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ProviderStatus } from "../subscription-auth/service.ts";
-import { syncConnectorIncidents } from "./connectorIncidents.ts";
+import { syncAccessIncidents, syncConnectorIncidents } from "./connectorIncidents.ts";
 import { BotInboxService } from "./service.ts";
 
 const directories: string[] = [];
@@ -130,5 +130,40 @@ describe("connector inbox incidents", () => {
         lastFailure: "The account lost access.",
       }),
     ]);
+  });
+
+  it("opens and resolves an MCP access incident without retry claims", () => {
+    const inbox = fixture();
+    const access: ProviderAccessStatus = {
+      id: "mcp-builtin-exa",
+      label: "Exa",
+      accessMethod: "mcp",
+      health: "failed-first-request",
+      apiAccess: "not-applicable",
+      nextAction: "Reconnect Exa, then retry its failed request.",
+      repairAction: "Reconnect",
+      reconnectAction: "Reconnect",
+      serverId: "builtin-exa",
+      pluginId: "exa",
+      lastFailedRequest: {
+        at: "2026-08-30T20:00:00.000Z",
+        message: "The MCP tool request failed.",
+      },
+      dependentBots: [{ id: BotId.make("bot-akeru"), name: "Akeru" }],
+      dependentRoutines: [],
+    };
+
+    syncAccessIncidents(inbox, [access]);
+    expect(inbox.list()[0]).toEqual(
+      expect.objectContaining({
+        incidentKey: "access:mcp-builtin-exa:bot-akeru",
+        lastFailure: "The MCP tool request failed.",
+        nextAction: "Reconnect Exa, then retry its failed request.",
+        status: "open",
+      }),
+    );
+
+    syncAccessIncidents(inbox, [{ ...access, health: "recovered" }]);
+    expect(inbox.list()[0]?.status).toBe("resolved");
   });
 });

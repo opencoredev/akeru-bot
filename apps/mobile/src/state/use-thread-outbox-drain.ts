@@ -6,8 +6,8 @@ import type {
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import {
   CommandId,
+  DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
-  DEFAULT_RUNTIME_MODE,
   type MessageId,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
@@ -268,7 +268,7 @@ export function useThreadOutboxDrain(): void {
           text: queuedMessage.text.trim(),
           attachments: queuedMessage.attachments,
           modelSelection,
-          runtimeMode: queuedMessage.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+          runtimeMode: queuedMessage.runtimeMode ?? DEFAULT_LOCAL_EXECUTION_MODE,
           interactionMode: queuedMessage.interactionMode ?? DEFAULT_PROVIDER_INTERACTION_MODE,
           workspaceMode: creation.workspaceMode,
           branch: creation.branch,

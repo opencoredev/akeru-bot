@@ -154,6 +154,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "local-execution",
+    title: "Local execution",
+    to: "/settings/general",
+  },
+  {
     id: "voice-enabled",
     title: "Voice",
     to: "/settings/voice",

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   defaultInstanceIdForDriver,
@@ -33,7 +34,7 @@ import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model"
 import { useMemo } from "react";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
 import { resolveAppModelSelection, resolveAppModelSelectionForInstance } from "./modelSelection";
-import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type ChatImageAttachment } from "./types";
+import { DEFAULT_INTERACTION_MODE, type ChatImageAttachment } from "./types";
 import {
   type TerminalContextDraft,
   ensureInlineTerminalContextPlaceholders,
@@ -1406,7 +1407,8 @@ function createDraftThreadState(
     projectId: projectRef.projectId,
     logicalProjectKey,
     createdAt: options?.createdAt ?? existingThread?.createdAt ?? new Date().toISOString(),
-    runtimeMode: options?.runtimeMode ?? existingThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+    runtimeMode:
+      options?.runtimeMode ?? existingThread?.runtimeMode ?? DEFAULT_LOCAL_EXECUTION_MODE,
     interactionMode:
       options?.interactionMode ?? existingThread?.interactionMode ?? DEFAULT_INTERACTION_MODE,
     branch: nextBranch,
@@ -1579,7 +1581,7 @@ function normalizePersistedDraftThreads(
             : new Date().toISOString(),
         runtimeMode: isRuntimeMode(candidateDraftThread.runtimeMode)
           ? candidateDraftThread.runtimeMode
-          : DEFAULT_RUNTIME_MODE,
+          : DEFAULT_LOCAL_EXECUTION_MODE,
         interactionMode:
           candidateDraftThread.interactionMode === "plan" ||
           candidateDraftThread.interactionMode === "default"
@@ -1629,7 +1631,7 @@ function normalizePersistedDraftThreads(
           projectId: projectRef.projectId,
           logicalProjectKey,
           createdAt: new Date().toISOString(),
-          runtimeMode: DEFAULT_RUNTIME_MODE,
+          runtimeMode: DEFAULT_LOCAL_EXECUTION_MODE,
           interactionMode: DEFAULT_INTERACTION_MODE,
           branch: null,
           worktreePath: null,

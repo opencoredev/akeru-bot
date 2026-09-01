@@ -42,6 +42,7 @@ import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
+import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import {
   buildGroupedRosterSections,
   buildRosterStrip,
@@ -451,7 +452,7 @@ export default function BotRosterSidebar() {
         avatar,
         engine: null,
         sandbox: null,
-        runtimeMode: "full-access",
+        runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
         usageCap: null,
         groupId: null,
       },

@@ -215,6 +215,15 @@ export function toMcpServerConfigs(
   );
 }
 
+export function mcpServerIdForToolName(
+  serverIds: readonly McpServer["id"][],
+  toolName: string,
+): McpServer["id"] | undefined {
+  return serverIds
+    .toSorted((left, right) => String(right).length - String(left).length)
+    .find((serverId) => toolName.startsWith(`${serverId}_`));
+}
+
 function permissionPolicy(
   runtimeMode: RuntimeMode,
   category: "read" | "edit" | "execute" | "mcp" | "other",
@@ -357,6 +366,8 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
       toMcpServerConfigs,
+      onMcpServerConnectionFailure: (serverId) =>
+        subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
       ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
@@ -665,6 +676,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           active.approvalRequests.delete(event.toolCallId);
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
           active.toolNames.delete(event.toolCallId);
+          const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
+          if (mcpServerId && !event.denied) {
+            if (event.isError) {
+              subscriptionAuth.recordMcpRequestFailure(mcpServerId, "The MCP tool request failed.");
+            } else {
+              subscriptionAuth.recordMcpRequestSuccess(mcpServerId);
+            }
+          }
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
