@@ -1,12 +1,21 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ServerSettingsPatch } from "@t3tools/contracts";
 
-export function resolveAgentAwarenessPlatformPresentation(platform: string): {
-  readonly supported: boolean;
-  readonly subtitle: string | undefined;
-} {
-  return platform === "ios"
-    ? { supported: true, subtitle: undefined }
-    : { supported: false, subtitle: "iOS only" };
+export type PrivacyControl = "analytics" | "product-feedback" | "voice" | "provider-update-checks";
+
+export function privacyControlPatch(
+  control: PrivacyControl,
+  enabled: boolean,
+): ServerSettingsPatch {
+  switch (control) {
+    case "analytics":
+      return { analyticsEnabled: enabled };
+    case "product-feedback":
+      return { productFeedbackEnabled: enabled };
+    case "voice":
+      return { voice: { enabled } };
+    case "provider-update-checks":
+      return { enableProviderUpdateChecks: enabled };
+  }
 }
 
 export function resolveSettingsEnvironmentId(

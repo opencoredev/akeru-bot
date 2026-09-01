@@ -1,6 +1,6 @@
-import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
-
 import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "./pairingUrl";
+
+const DEFAULT_HOSTED_APP_URL = "https://app.t3.codes";
 
 export interface HostedPairingRequest {
   readonly host: string;

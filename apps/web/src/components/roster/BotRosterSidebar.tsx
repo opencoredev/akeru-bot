@@ -38,11 +38,11 @@ import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatarView } from "./BotAvatarView";
+import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
-import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import {
   buildGroupedRosterSections,
   buildRosterStrip,
@@ -369,8 +369,8 @@ export default function BotRosterSidebar() {
   const pinnedBots = visibleBots.filter((bot) => bot.pinned);
   const unpinnedBots = visibleBots.filter((bot) => !bot.pinned);
   const groupSections = useMemo(
-    () => buildGroupedRosterSections(visibleBots, groups),
-    [groups, visibleBots],
+    () => buildGroupedRosterSections(dragLayout ?? bots, groups, query),
+    [bots, dragLayout, groups, query],
   );
   const activeBot =
     activeBotId === null

@@ -190,6 +190,7 @@ describe("OrchestrationEngine", () => {
               snapshotSequence: projectionSnapshot.snapshotSequence,
               bots: [],
               groups: [],
+              delegations: [],
               projects: [],
               threads: [],
               updatedAt: projectionSnapshot.updatedAt,
@@ -199,6 +200,7 @@ describe("OrchestrationEngine", () => {
               snapshotSequence: projectionSnapshot.snapshotSequence,
               bots: [],
               groups: [],
+              delegations: [],
               projects: [],
               threads: [],
               updatedAt: projectionSnapshot.updatedAt,
@@ -206,6 +208,7 @@ describe("OrchestrationEngine", () => {
           getSnapshotSequence: () =>
             Effect.succeed({ snapshotSequence: projectionSnapshot.snapshotSequence }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),
+          getOriginalProjectIdByWorkspaceRoot: () => Effect.die("unused"),
           getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
           getProjectShellById: () => Effect.succeed(Option.none()),
           getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),

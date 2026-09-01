@@ -1390,6 +1390,62 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("accumulates independent model-call usage within a turn", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 3)).pipe(
+        Effect.forkChild,
+      );
+
+      for (const [index, totalTokens] of [400, 800, 1_200].entries()) {
+        yield* runtime.emit({
+          id: asEventId(`evt-codex-usage-${index}`),
+          kind: "notification",
+          provider: ProviderDriverKind.make("codex"),
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("turn-1"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+          method: "thread/tokenUsage/updated",
+          payload: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            tokenUsage: {
+              total: {
+                inputTokens: totalTokens - 100,
+                cachedInputTokens: 0,
+                outputTokens: 100,
+                reasoningOutputTokens: 0,
+                totalTokens,
+              },
+              last: {
+                inputTokens: 300,
+                cachedInputTokens: 0,
+                outputTokens: 100,
+                reasoningOutputTokens: 0,
+                totalTokens: 400,
+              },
+              modelContextWindow: 258_400,
+            },
+          },
+        } satisfies ProviderEvent);
+      }
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events.map((event) =>
+          event.type === "thread.token-usage.updated" ? event.payload.usage.lastUsedTokens : null,
+        ),
+        [400, 800, 1_200],
+      );
+      NodeAssert.deepEqual(
+        events.map((event) =>
+          event.type === "thread.token-usage.updated" ? event.payload.usage.lastInputTokens : null,
+        ),
+        [300, 600, 900],
+      );
+    }),
+  );
+
   // Production calls startSession from a request fiber that finishes as soon as
   // the session exists. `Effect.forkChild` made the runtime event consumer a
   // child of that fiber, and Effect interrupts a fiber's children when it

@@ -1,10 +1,15 @@
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off
+// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
+import {
+  createMcpManager,
+  type McpManager,
+  type McpServerConfig,
+} from "@mastra/code-sdk/mcp/index";
+import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import type {
   AgentControllerEvent,
   MastraDBMessage,
@@ -12,6 +17,8 @@ import type {
 } from "@mastra/core/agent-controller";
 import { Workspace } from "@mastra/core/workspace";
 import {
+  AkeruUsageReservationId,
+  CommandId,
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -20,18 +27,25 @@ import {
   TurnId,
   AKERU_TOOL_CATALOG,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+  type BotId,
   type McpServer,
   type ModelSelection,
   type ProviderApprovalDecision,
   type ProviderRuntimeEvent,
   type ProviderSession,
   type RuntimeMode,
-  type ThreadId,
+  ThreadId,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  type AkeruDelegationAccessGrant,
+  type AkeruDelegationRecord,
   type AkeruMemoryThreadAccess,
+  type OrchestrationCommand,
+  type OrchestrationReadModel,
 } from "@t3tools/contracts";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -49,13 +63,18 @@ import {
   MemoryCandidateRepository,
   type MemoryCandidateRepositoryShape,
 } from "../../memory/Services/MemoryCandidateRepository.ts";
+import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
 } from "../../subscription-auth/service.ts";
 import {
   akeruActionNeedsApproval,
+  akeruToolCategory,
   createAkeruMastraHarness,
+  criticalAkeruAction,
   mastraModelId,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
@@ -63,11 +82,18 @@ import {
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
 import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
+import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
   type AkeruDelegationRuntime,
+  type AkeruDelegationRuntimeOptions,
 } from "../AkeruDelegationRuntime.ts";
+import {
+  createAkeruCatalogToolHandlers,
+  createAkeruPluginRuntime,
+  type AkeruPluginRuntimeOptions,
+} from "../AkeruCatalogToolHandlers.ts";
 import {
   createAkeruToolRuntime,
   isMemoryToolId,
@@ -75,6 +101,11 @@ import {
 } from "../AkeruToolRuntime.ts";
 import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
 import { AkeruSessionResources } from "../AkeruSessionResources.ts";
+import {
+  isCodexComputerUseServer,
+  isCodexComputerUseTool,
+  resolveCodexComputerUseServer,
+} from "../CodexComputerUse.ts";
 import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
@@ -87,6 +118,9 @@ import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 
 const DEFAULT_MODE_ID = "build";
 const PLAN_MODE_ID = "plan";
+const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
+  Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
+);
 type MastraSession = AkeruMastraSession;
 
 interface ResolvedEngine {
@@ -110,10 +144,11 @@ interface ActiveTurn {
   readonly assistantMessages: Map<string, ActiveAssistantMessage>;
   waiting: boolean;
   finished: boolean;
-  memoryQueued: boolean;
-  assistantText: string;
   inputTokens: number;
   outputTokens: number;
+  reasoningTokens: number;
+  memoryQueued: boolean;
+  assistantText: string;
 }
 
 interface ActiveSession {
@@ -132,7 +167,13 @@ interface ActiveSession {
   readonly connectorSessionApprovals: Set<string>;
   toolSession: AkeruToolSession;
   readonly workspaceResourceKey: string;
+  readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
+}
+
+interface PendingApproval {
+  readonly toolName: string;
+  readonly action: string;
 }
 
 export interface AgentControllerLiveOptions {
@@ -142,8 +183,14 @@ export interface AgentControllerLiveOptions {
     input: CreateRemoteBotWorkspaceInput,
   ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
+  readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
   readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
   readonly memoryCandidateRepository?: MemoryCandidateRepositoryShape;
+  readonly delegationRuntime?: Pick<
+    AkeruDelegationRuntime,
+    "send" | "sendToUser" | "parentFinished" | "accessForThread"
+  > &
+    Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -154,12 +201,50 @@ function failureDetail(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+function sessionFailureDetail(active: Pick<ActiveSession, "mcpServerIds">, cause: unknown): string {
+  return active.mcpServerIds.some((id) => isCodexComputerUseServer(String(id)))
+    ? "Computer Use session failed."
+    : failureDetail(cause);
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
 
 function eventId(): EventId {
   return EventId.make(`mastra-${NodeCrypto.randomUUID()}`);
+}
+
+type DelegatedUsage = Parameters<NonNullable<AkeruDelegationRuntimeOptions["recordUsage"]>>[0];
+
+export function delegatedUsageReceipt(
+  usage: DelegatedUsage,
+  active: {
+    readonly provider: ProviderDriverKind;
+    readonly providerInstanceId: ProviderInstanceId;
+  },
+  createdAt = nowIso(),
+): Extract<ProviderRuntimeEvent, { readonly type: "tool.receipt" }> {
+  return {
+    eventId: eventId(),
+    provider: active.provider,
+    providerInstanceId: active.providerInstanceId,
+    threadId: usage.threadId,
+    ...(usage.turnId ? { turnId: usage.turnId } : {}),
+    createdAt,
+    type: "tool.receipt",
+    payload: {
+      receiptId: `delegation:usage:${NodeCrypto.randomUUID()}`,
+      toolId: "SendToAgent",
+      phase: "success",
+      threadId: usage.threadId,
+      botId: usage.botId,
+      billedBotId: usage.botId,
+      fatalToThread: false,
+      usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+      createdAt,
+    },
+  };
 }
 
 function messageText(message: MastraDBMessage): string {
@@ -229,12 +314,29 @@ export function mcpServerIdForToolName(
 
 function permissionPolicy(
   runtimeMode: RuntimeMode,
-  category: "read" | "edit" | "execute" | "mcp" | "other",
+  category: ReturnType<typeof akeruToolCategory>,
 ): "allow" | "ask" {
   if (runtimeMode === "full-access" || runtimeMode === "auto") return "allow";
   if (category === "read") return "allow";
   if (runtimeMode === "auto-accept-edits" && category === "edit") return "allow";
   return "ask";
+}
+
+function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string): boolean {
+  if (BUILTIN_MASTRA_TOOL_NAMES.has(toolName)) return false;
+  if (!manager) return true;
+  const tools = manager.getTools();
+  if (!tools || !Object.hasOwn(tools, toolName)) return true;
+  const tool = tools[toolName] as {
+    readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } };
+  };
+  return tool.mcp?.annotations?.readOnlyHint !== true;
+}
+
+function approvalDetail(toolName: string, action: string | null, oneUse: boolean): string {
+  if (!oneUse) return `Allow ${toolName}?`;
+  const target = action ? `${action} action with ${toolName}` : `action with ${toolName}`;
+  return `Approve this ${target}? This approval applies only to the pending action. It cannot undo completed work.`;
 }
 
 function usesMastraCode(provider: ProviderDriverKind): boolean {
@@ -310,20 +412,39 @@ function itemType(
 const make = (options?: AgentControllerLiveOptions) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig;
+    const hostPlatform = yield* HostProcessPlatform;
     const legacyProviderBridge = yield* LegacyProviderBridge;
+    const botUsageLedger = yield* BotUsageLedger;
+    const runtimeContext = yield* Effect.context<never>();
+    const runPromise = Effect.runPromiseWith(runtimeContext);
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+    const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
+    const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const sessions = new Map<string, ActiveSession>();
-    let delegationRuntime: AkeruDelegationRuntime | undefined;
+    const memoryUsageByThread = new Map<
+      string,
+      { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
+    >();
     let channelRuntime: AkeruChannelRuntime | undefined;
+    let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
+    let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
+    let botStateRuntime: AkeruBotStateRuntime | undefined;
     const childWaiters = new Map<
       string,
-      { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
+      {
+        readonly resolve: (outcome: AkeruDelegationChildOutcome) => void;
+        readonly reject: (cause: Error) => void;
+        readonly timer: ReturnType<typeof setTimeout> | undefined;
+      }
     >();
     const resolveChildWaiter = (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => {
-      childWaiters.get(String(threadId))?.resolve(outcome);
+      const waiter = childWaiters.get(String(threadId));
+      if (!waiter) return;
+      if (waiter.timer) clearTimeout(waiter.timer);
       childWaiters.delete(String(threadId));
+      waiter.resolve(outcome);
     };
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
@@ -345,25 +466,66 @@ const make = (options?: AgentControllerLiveOptions) =>
     const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
+      hostPlatform,
       toMcpServerConfigs,
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
       ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
+      ...(options?.resolveComputerUseServer
+        ? { resolveComputerUseServer: options.resolveComputerUseServer }
+        : {}),
     });
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const toolRuntime = createAkeruToolRuntime({
       onUserActionRequired: (input) => {
         recordUserActionIncident(botInbox, input);
       },
+      onReceipt: (receipt) => {
+        const active = sessions.get(String(receipt.threadId));
+        if (!active) return;
+        PubSub.publishUnsafe(runtimeEvents, {
+          eventId: eventId(),
+          provider: active.provider,
+          providerInstanceId: active.providerInstanceId,
+          threadId: receipt.threadId,
+          ...(active.activeTurn ? { turnId: active.activeTurn.turnId } : {}),
+          type: "tool.receipt",
+          payload: receipt,
+          createdAt: receipt.createdAt,
+        });
+      },
+      onProgress: ({ threadId, toolId, toolCallId, summary }) => {
+        const active = sessions.get(threadId);
+        if (!active) return;
+        PubSub.publishUnsafe(runtimeEvents, {
+          ...baseEvent(ThreadId.make(threadId), active, active.activeTurn?.turnId),
+          type: "tool.receipt",
+          payload: {
+            receiptId: toolCallId,
+            toolId,
+            phase: "progress",
+            threadId: ThreadId.make(threadId),
+            ...(active.toolSession.botId ? { botId: active.toolSession.botId } : {}),
+            summary,
+            fatalToThread: false,
+            createdAt: nowIso(),
+          },
+        });
+      },
     });
-    const memoryHandlers = (access: AkeruMemoryThreadAccess | undefined) =>
+    const memoryHandlers = (
+      access: AkeruMemoryThreadAccess | undefined,
+      allowedScopes?: AkeruDelegationAccessGrant["memoryScopes"],
+    ) =>
       access && options?.entityMemoryRepository && options.memoryCandidateRepository
         ? createMemoryToolHandlers(
             options.entityMemoryRepository,
             options.memoryCandidateRepository,
             access,
+            undefined,
+            allowedScopes,
           )
         : undefined;
     const legacyResourceIdentity = new Map<
@@ -375,6 +537,49 @@ const make = (options?: AgentControllerLiveOptions) =>
         readonly providerInstanceId: ProviderInstanceId;
       }
     >();
+    let delegationRuntime = options?.delegationRuntime;
+    const delegationFor = (input: {
+      readonly threadId: ThreadId;
+      readonly botId: BotId;
+      readonly parentDelegation: AkeruDelegationRecord | undefined;
+      readonly access: AkeruDelegationAccessGrant;
+      readonly snapshot: OrchestrationReadModel | undefined;
+    }): NonNullable<AkeruToolSession["delegation"]> => {
+      const parent = () => {
+        const turnId = sessions.get(String(input.threadId))?.activeTurn?.turnId;
+        if (!turnId || !delegationRuntime) {
+          throw new Error("Bot management requires an active parent turn.");
+        }
+        return {
+          threadId: input.threadId,
+          turnId,
+          botId: input.botId,
+          parentDelegationId: input.parentDelegation?.delegationId ?? null,
+          ancestorBotIds: input.parentDelegation?.ancestorBotIds ?? [],
+          depth: input.parentDelegation?.depth ?? 0,
+          access: input.access,
+        };
+      };
+      const createAgent = delegationRuntime?.create;
+      const checkAgent = delegationRuntime?.check;
+      const stopAgent = delegationRuntime?.stop;
+      return {
+        depth: input.parentDelegation?.depth ?? 0,
+        activeDelegations:
+          input.snapshot?.delegations.filter(
+            (candidate) =>
+              candidate.parentThreadId === input.threadId &&
+              candidate.state !== "completed" &&
+              candidate.state !== "failed" &&
+              candidate.state !== "canceled",
+          ).length ?? 0,
+        access: input.access,
+        ...(createAgent ? { create: (request) => createAgent(parent(), request) } : {}),
+        ...(checkAgent ? { check: (request) => checkAgent(parent(), request) } : {}),
+        send: (request) => delegationRuntime!.send(parent(), request),
+        ...(stopAgent ? { stop: (request) => stopAgent(parent(), request) } : {}),
+      };
+    };
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
     const bundle = yield* runMastra("construct", () =>
       makeMastraHarness({
@@ -393,6 +598,58 @@ const make = (options?: AgentControllerLiveOptions) =>
         },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
         toolRuntime,
+        startMemoryCall: async ({ threadId, category }) => {
+          const context = memoryUsageByThread.get(threadId);
+          const active = sessions.get(threadId);
+          if (!context || !active) return undefined;
+          const callId = `${category}:${NodeCrypto.randomUUID()}`;
+          await runPromise(
+            botUsageLedger.reserve({
+              reservationId: AkeruUsageReservationId.make(callId),
+              sourceKey: callId,
+              botId: context.botId,
+              threadId: ThreadIdBrand(threadId),
+              turnId: context.turnId,
+              category,
+              maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
+              capLimit: context.capLimit,
+              provider: active.provider,
+              model: active.model,
+              createdAt: nowIso(),
+            }),
+          );
+          return callId;
+        },
+        finishMemoryCall: async ({ callId, usage, error }) => {
+          const outputTokens = usage?.outputTokens ?? 0;
+          const inputTokens =
+            usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
+          await runPromise(
+            botUsageLedger.settle(
+              usage
+                ? {
+                    reservationId: AkeruUsageReservationId.make(callId),
+                    state: "reported",
+                    inputTokens,
+                    outputTokens,
+                    reasoningTokens: null,
+                    settledAt: nowIso(),
+                  }
+                : error
+                  ? {
+                      reservationId: AkeruUsageReservationId.make(callId),
+                      state: "unavailable",
+                      reason: error.message || "Observational Memory usage was unavailable.",
+                      settledAt: nowIso(),
+                    }
+                  : {
+                      reservationId: AkeruUsageReservationId.make(callId),
+                      state: "released",
+                      settledAt: nowIso(),
+                    },
+            ),
+          );
+        },
       }),
     );
     yield* runMastra("init", () => bundle.controller.init());
@@ -400,6 +657,55 @@ const make = (options?: AgentControllerLiveOptions) =>
     const publish = (event: ProviderRuntimeEvent) => {
       PubSub.publishUnsafe(runtimeEvents, event);
     };
+    const makeDelegationRuntime = (input: {
+      readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+      readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+    }) =>
+      createAkeruDelegationRuntime({
+        ...input,
+        awaitChild: (threadId, deadline) =>
+          new Promise((resolve, reject) => {
+            const key = String(threadId);
+            if (childWaiters.has(key)) {
+              reject(new Error(`Delegation waiter already exists for '${threadId}'.`));
+              return;
+            }
+            const delay = deadline === null ? undefined : Date.parse(deadline) - Date.now();
+            if (delay !== undefined && delay <= 0) {
+              reject(new Error("The delegation deadline expired."));
+              return;
+            }
+            const timer =
+              delay === undefined
+                ? undefined
+                : setTimeout(() => {
+                    childWaiters.delete(key);
+                    reject(new Error("The delegation deadline expired."));
+                  }, delay);
+            childWaiters.set(key, { resolve, reject, timer });
+          }),
+        interruptChild: (threadId, turnId) =>
+          input
+            .dispatch({
+              type: "thread.turn.interrupt",
+              commandId: CommandId.make(`delegation:interrupt:${NodeCrypto.randomUUID()}`),
+              threadId,
+              ...(turnId ? { turnId } : {}),
+              createdAt: nowIso(),
+            })
+            .then(() => undefined),
+        recordUsage: async (usage) => {
+          const active = sessions.get(String(usage.threadId));
+          if (active) publish(delegatedUsageReceipt(usage, active));
+        },
+      });
+    delegationRuntime ??=
+      Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)
+        ? makeDelegationRuntime({
+            readSnapshot: () => Effect.runPromise(projectionSnapshotQuery.value.getSnapshot()),
+            dispatch: (command) => Effect.runPromise(orchestrationEngine.value.dispatch(command)),
+          })
+        : undefined;
 
     const queueTurnMemory = (threadId: ThreadId, active: ActiveSession, turn: ActiveTurn) => {
       const resolved = resolvedByThread.get(String(threadId));
@@ -482,6 +788,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         type: "content.delta",
         payload: { streamKind: "assistant_text", delta: text },
       });
+      turn.assistantText += text;
       publish({
         ...baseEvent(threadId, active, turn.turnId),
         itemId,
@@ -502,6 +809,36 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
     };
 
+    const cancelPendingApproval = (
+      threadId: ThreadId,
+      active: ActiveSession,
+      requestId: string,
+      pending: PendingApproval,
+    ) => {
+      publish({
+        ...baseEvent(threadId, active, active.activeTurn?.turnId),
+        requestId: RuntimeRequestId.make(requestId),
+        type: "request.resolved",
+        payload: {
+          requestType: "dynamic_tool_call",
+          decision: "cancel",
+          actor: "system",
+          target: pending.toolName,
+          action: pending.action,
+          outcome: "cancelled",
+        },
+      });
+    };
+
+    const cancelAllPendingApprovals = (threadId: ThreadId, active: ActiveSession) => {
+      for (const [requestId, pending] of active.pendingApprovals) {
+        cancelPendingApproval(threadId, active, requestId, pending);
+      }
+      active.pendingApprovals.clear();
+      active.approvalRequests.clear();
+      toolRuntime.clearApprovals(String(threadId));
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -513,6 +850,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       queueTurnMemory(threadId, active, turn);
       turn.finished = true;
       completeAssistantMessages(threadId, active, turn);
+      cancelAllPendingApprovals(threadId, active);
       publish({
         ...baseEvent(threadId, active, turn.turnId),
         type: "turn.completed",
@@ -522,14 +860,24 @@ const make = (options?: AgentControllerLiveOptions) =>
         },
       });
       resolveChildWaiter(threadId, {
+        state: state === "completed" ? "completed" : "failed",
         turnId: turn.turnId,
         ...(state === "completed" && turn.assistantText.trim()
-          ? { result: turn.assistantText.trim() }
+          ? { summary: turn.assistantText.trim() }
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
-      active.approvalRequests.clear();
-      toolRuntime.clearApprovals(String(threadId));
+      if (state !== "completed") {
+        void delegationRuntime
+          ?.parentFinished({ threadId, failed: state === "failed" })
+          .catch((cause) => {
+            publish({
+              ...baseEvent(threadId, active, turn.turnId),
+              type: "runtime.error",
+              payload: { message: failureDetail(cause), class: "provider_error" },
+            });
+          });
+      }
       active.activeTurn = null;
       publishSessionState(threadId, active, "ready");
     };
@@ -544,7 +892,6 @@ const make = (options?: AgentControllerLiveOptions) =>
       const turn = active.activeTurn;
       if (!turn) return;
       const text = messageText(message);
-      turn.assistantText = text;
       const messageKey = String(message.id);
       let activeMessage = turn.assistantMessages.get(messageKey);
       if (!activeMessage) {
@@ -567,6 +914,29 @@ const make = (options?: AgentControllerLiveOptions) =>
       event: AgentControllerEvent,
     ) => {
       const turn = active.activeTurn;
+      const publishToolReceipt = (
+        toolCallId: string,
+        toolId: string,
+        phase: "start" | "progress" | "success" | "failure",
+      ) => {
+        const billedBotId = active.toolSession.billedBotId;
+        if (!billedBotId || !turn) return;
+        const createdAt = nowIso();
+        publish({
+          ...baseEvent(threadId, active, turn.turnId),
+          type: "tool.receipt",
+          payload: {
+            receiptId: `${toolCallId}:${phase}`,
+            toolId,
+            phase,
+            threadId,
+            botId: billedBotId,
+            billedBotId,
+            fatalToThread: false,
+            createdAt,
+          },
+        });
+      };
       switch (event.type) {
         case "message_update":
           publishAssistantText(threadId, active, event.message, false);
@@ -578,6 +948,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
+          publishToolReceipt(event.toolCallId, event.toolName, "start");
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
@@ -585,14 +956,21 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               itemType: itemType(event.toolName),
               status: "inProgress",
-              title: event.toolName,
-              data: { args: event.args },
+              title: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
+              data: isCodexComputerUseTool(event.toolName)
+                ? { action: "computer-use" }
+                : { args: event.args },
             },
           });
           return;
         }
         case "tool_update":
           if (!turn) return;
+          publishToolReceipt(
+            event.toolCallId,
+            active.toolNames.get(event.toolCallId) ?? "tool",
+            "progress",
+          );
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
@@ -600,7 +978,9 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               itemType: itemType(active.toolNames.get(event.toolCallId) ?? "tool"),
               status: "inProgress",
-              data: { partialResult: event.partialResult },
+              data: isCodexComputerUseTool(active.toolNames.get(event.toolCallId) ?? "")
+                ? { action: "computer-use" }
+                : { partialResult: event.partialResult },
             },
           });
           return;
@@ -608,6 +988,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
           active.approvalRequests.delete(event.toolCallId);
+          active.toolNames.delete(event.toolCallId);
           const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
           if (mcpServerId && !event.denied) {
             if (event.isError) {
@@ -616,6 +997,16 @@ const make = (options?: AgentControllerLiveOptions) =>
               subscriptionAuth.recordMcpRequestSuccess(mcpServerId);
             }
           }
+          publishToolReceipt(
+            event.toolCallId,
+            toolName,
+            event.isError || event.denied ? "failure" : "success",
+          );
+          const pending = active.pendingApprovals.get(event.toolCallId);
+          if (pending) {
+            cancelPendingApproval(threadId, active, event.toolCallId, pending);
+            active.pendingApprovals.delete(event.toolCallId);
+          }
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             itemId: RuntimeItemId.make(event.toolCallId),
@@ -623,19 +1014,40 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               itemType: itemType(toolName),
               status: event.isError ? "failed" : event.denied ? "declined" : "completed",
-              title: toolName,
-              data: { result: event.result },
+              title: isCodexComputerUseTool(toolName) ? "Computer Use" : toolName,
+              data: isCodexComputerUseTool(toolName)
+                ? { action: "computer-use" }
+                : { result: event.result },
             },
           });
           return;
         }
-        case "tool_approval_required":
+        case "tool_approval_required": {
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
+          const action = criticalAkeruAction(event.toolName, event.args);
+          const oneUseApproval =
+            akeruActionNeedsApproval(event.toolName, event.args) ||
+            mcpToolNeedsApproval(sessionResources.getMcpManager(String(threadId)), event.toolName);
+          if (
+            event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
+            !oneUseApproval &&
+            permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) === "allow"
+          ) {
+            active.session.respondToToolApproval({
+              toolCallId: event.toolCallId,
+              decision: "approve",
+            });
+            return;
+          }
           active.approvalRequests.set(event.toolCallId, {
             name: event.toolName,
             input: event.args,
+          });
+          active.pendingApprovals.set(event.toolCallId, {
+            toolName: event.toolName,
+            action: action ?? "unclassified",
           });
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
@@ -645,24 +1057,35 @@ const make = (options?: AgentControllerLiveOptions) =>
             type: "request.opened",
             payload: {
               requestType: "dynamic_tool_call",
-              detail:
-                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+              actor: "agent",
+              target: event.toolName,
+              detail: isCodexComputerUseTool(event.toolName)
+                ? "Allow Computer Use?"
+                : event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
                   ? "Review product feedback"
-                  : `Allow ${event.toolName}?`,
-              toolName: event.toolName,
-              args: event.args,
-              options:
-                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+                  : approvalDetail(event.toolName, action, oneUseApproval),
+              toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
+              ...(action ? { action } : {}),
+              args: isCodexComputerUseTool(event.toolName) ? undefined : event.args,
+              options: isCodexComputerUseTool(event.toolName)
+                ? [
+                    { decision: "accept", label: "Allow" },
+                    { decision: "decline", label: "Decline" },
+                  ]
+                : event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
                   ? [
                       { decision: "accept", label: "Add to feedback draft" },
                       { decision: "decline", label: "Cancel" },
                     ]
                   : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
                       isMemoryToolId(event.toolName) ||
-                      akeruActionNeedsApproval(event.toolName, event.args)
+                      oneUseApproval
                     ? [
-                        { decision: "accept", label: "Allow" },
                         { decision: "decline", label: "Decline" },
+                        {
+                          decision: "accept",
+                          label: oneUseApproval ? "Approve" : "Allow",
+                        },
                       ]
                     : [
                         { decision: "accept", label: "Allow" },
@@ -672,6 +1095,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             },
           });
           return;
+        }
         case "tool_suspended":
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
@@ -697,32 +1121,35 @@ const make = (options?: AgentControllerLiveOptions) =>
           return;
         case "usage_update":
           if (!turn) return;
-          turn.inputTokens = Math.max(0, event.usage.promptTokens ?? 0);
-          turn.outputTokens = Math.max(0, event.usage.completionTokens ?? 0);
+          turn.inputTokens += Math.max(0, event.usage.promptTokens ?? 0);
+          turn.outputTokens += Math.max(0, event.usage.completionTokens ?? 0);
+          turn.reasoningTokens += Math.max(0, event.usage.reasoningTokens ?? 0);
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             type: "thread.token-usage.updated",
             payload: {
               usage: {
-                usedTokens: Math.max(0, event.usage.totalTokens ?? 0),
-                inputTokens: Math.max(0, event.usage.promptTokens ?? 0),
-                outputTokens: Math.max(0, event.usage.completionTokens ?? 0),
-                reasoningOutputTokens: Math.max(0, event.usage.reasoningTokens ?? 0),
+                usedTokens: turn.inputTokens + turn.outputTokens,
+                inputTokens: turn.inputTokens,
+                outputTokens: turn.outputTokens,
+                reasoningOutputTokens: turn.reasoningTokens,
               },
             },
           });
           return;
-        case "error":
+        case "error": {
+          const detail = sessionFailureDetail(active, event.error);
           publish({
             ...baseEvent(threadId, active, turn?.turnId),
             type: "runtime.error",
             payload: {
-              message: event.error.message || "Mastra agent failed.",
+              message: detail,
               class: "provider_error",
             },
           });
-          finishTurn(threadId, active, "failed", event.error.message || "Mastra agent failed.");
+          finishTurn(threadId, active, "failed", detail);
           return;
+        }
         case "agent_end":
           if (event.reason === "suspended") {
             if (turn) turn.waiting = true;
@@ -808,37 +1235,118 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
+      const snapshot = Option.isSome(projectionSnapshotQuery)
+        ? yield* projectionSnapshotQuery.value.getSnapshot()
+        : undefined;
+      const thread = snapshot?.threads.find((candidate) => candidate.id === threadId);
+      const parentDelegation = snapshot?.delegations.find(
+        (candidate) =>
+          candidate.childThreadId === threadId &&
+          candidate.state !== "completed" &&
+          candidate.state !== "failed" &&
+          candidate.state !== "canceled",
+      );
+      const respondingBotId = thread?.respondingBotId ?? thread?.botId ?? input.botId ?? null;
+      const group = thread?.groupId
+        ? snapshot?.groups.find((candidate) => candidate.id === thread.groupId)
+        : undefined;
+      const botId = respondingBotId ?? group?.bossBotId ?? null;
+      const bot = snapshot?.bots.find((candidate) => candidate.id === botId);
+      const delegatedAccess =
+        delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
+      const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
+        allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
+        memoryScopes: ["private", "bot", "project", "group", "workspace"],
+        sandbox: input.botSandbox ?? null,
+        runtimeMode: input.runtimeMode,
+        hasUserComputer: Boolean(input.cwd),
+        enabledMcpServerIds: (input.mcpServers ?? [])
+          .map((server) => server.id)
+          .filter((serverId) => !bot?.disabledMcpServerIds.includes(serverId)),
+        disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
+        approvalCeiling: "secrets",
+      };
+      const mcpServers = (input.mcpServers ?? []).filter(
+        (server) =>
+          access.enabledMcpServerIds.includes(server.id) &&
+          !access.disabledMcpServerIds.includes(server.id),
+      );
+      const workspaceType =
+        delegatedAccess && access.sandbox === null
+          ? "none"
+          : access.sandbox === null || access.sandbox === "local"
+            ? "local"
+            : "cloud";
       const resourceScope = botRuntimeResourceScope({
         sharing: input.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
-        ...(input.botId ? { botId: input.botId } : {}),
+        ...(botId ? { botId } : {}),
         threadId: key,
       });
       const workspaceResourceKey = botWorkspaceResourceKey({
         resourceScope,
-        ...(input.botSandbox !== undefined ? { sandbox: input.botSandbox } : {}),
+        sandbox: access.sandbox,
       });
       const workspaceId = botWorkspaceIdentity(workspaceResourceKey);
       const existing = sessions.get(key);
       const resolved = resolvedByThread.get(key);
+      if (!resolved) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "startSession",
+          detail: `Thread '${threadId}' has no resolved engine.`,
+        });
+      }
+      if (
+        mcpServers.some((server) => isCodexComputerUseServer(String(server.id))) &&
+        resolved.provider !== ProviderDriverKind.make("codex")
+      ) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "startSession",
+          detail: "Computer Use requires a Codex bot.",
+        });
+      }
       if (
         existing?.workspaceResourceKey === workspaceResourceKey &&
         existing.cwd === input.cwd &&
+        existing.toolSession.workspaceType === workspaceType &&
+        existing.mcpServerIds.length === mcpServers.length &&
+        existing.mcpServerIds.every((id) => mcpServers.some((server) => server.id === id)) &&
         resolved &&
         existing.provider === resolved.provider &&
-        existing.providerInstanceId === resolved.providerInstanceId
+        existing.providerInstanceId === resolved.providerInstanceId &&
+        existing.mcpServerIds.length === (input.mcpServers?.length ?? 0) &&
+        existing.mcpServerIds.every((id) => input.mcpServers?.some((server) => server.id === id))
       ) {
-        existing.runtimeMode = input.runtimeMode;
+        existing.runtimeMode = access.runtimeMode;
         const toolSession = { ...existing.toolSession };
         delete toolSession.botId;
         delete toolSession.botName;
+        delete toolSession.billedBotId;
+        delete toolSession.delegation;
         delete toolSession.memoryHandlers;
-        const nextMemoryHandlers = memoryHandlers(input.memoryAccess);
+        delete toolSession.botState;
+        const nextMemoryHandlers =
+          access.memoryScopes.length > 0
+            ? memoryHandlers(input.memoryAccess, access.memoryScopes)
+            : undefined;
         existing.toolSession = {
           ...toolSession,
-          runtimeMode: input.runtimeMode,
-          ...(input.botId ? { botId: input.botId } : {}),
+          runtimeMode: access.runtimeMode,
+          ...(botId ? { botId } : {}),
           ...(input.botName ? { botName: input.botName } : {}),
           ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
+          ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
+          ...(delegationRuntime && botId
+            ? {
+                delegation: delegationFor({
+                  threadId,
+                  botId,
+                  parentDelegation,
+                  access,
+                  snapshot,
+                }),
+              }
+            : {}),
+          ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
         };
         toolRuntime.registerSession(key, existing.toolSession);
         return toProviderSession(threadId, existing);
@@ -869,24 +1377,28 @@ const make = (options?: AgentControllerLiveOptions) =>
           previousWorkspaceResourceKey !== workspaceResourceKey,
         );
       }
-      if (!resolved) {
+      if (delegatedAccess && !usesMastraCode(resolved.provider)) {
         return yield* new AgentControllerRuntimeError({
           operation: "startSession",
-          detail: `Thread '${threadId}' has no resolved engine.`,
+          detail: `Provider '${resolved.provider}' cannot enforce delegated access.`,
         });
       }
-      const mcpServers = input.mcpServers ?? [];
-      const resources = yield* runMastra("resources.acquire", () =>
-        sessionResources.acquire({
-          threadId: key,
-          resourceScope,
-          workspaceResourceKey,
-          workspaceId,
-          ...(input.botSandbox !== undefined ? { botSandbox: input.botSandbox } : {}),
-          ...(input.cwd ? { userComputerCwd: input.cwd } : {}),
-          mcpServers,
-        }),
-      );
+      const resources =
+        delegatedAccess && access.sandbox === null
+          ? ({ workspaceType: "none" } as const)
+          : yield* runMastra("resources.acquire", () =>
+              sessionResources.acquire({
+                threadId: key,
+                resourceScope,
+                workspaceResourceKey,
+                workspaceId,
+                ...(access.sandbox !== null ? { botSandbox: access.sandbox } : {}),
+                ...((!delegatedAccess || access.hasUserComputer) && input.cwd
+                  ? { userComputerCwd: input.cwd }
+                  : {}),
+                mcpServers,
+              }),
+            );
       if (!usesMastraCode(resolved.provider)) {
         return yield* legacyProviderBridge.startSession(threadId, input).pipe(
           Effect.tap((session) =>
@@ -907,51 +1419,96 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         );
       }
-      const registeredMemoryHandlers = memoryHandlers(input.memoryAccess);
-      const workspaceType: "cloud" | "local" =
-        input.botSandbox && input.botSandbox !== "local" ? "cloud" : "local";
+      const workspace = "botWorkspace" in resources ? resources.botWorkspace : undefined;
       const userComputerWorkspace =
-        workspaceType === "local" && input.cwd ? resources.workspace : undefined;
+        "workspace" in resources && access.hasUserComputer && workspaceType === "local" && input.cwd
+          ? resources.workspace
+          : undefined;
+      const registeredMemoryHandlers =
+        access.memoryScopes.length > 0
+          ? memoryHandlers(input.memoryAccess, access.memoryScopes)
+          : undefined;
+      const mcpManager = sessionResources.getMcpManager(key);
+      const mcpDependencies =
+        input.botId && input.botName
+          ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
+          : { dependentBots: [], dependentRoutines: [] };
       const toolSession: AkeruToolSession = {
-        ...(input.botId ? { botId: input.botId } : {}),
+        ...(botId ? { botId } : {}),
         ...(input.botName ? { botName: input.botName } : {}),
-        runtimeMode: input.runtimeMode,
+        runtimeMode: access.runtimeMode,
         workspaceType,
-        workspace: resources.botWorkspace,
+        ...(workspace ? { workspace } : {}),
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
-        ...(input.botId && delegationRuntime
+        ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+        catalogHandlers: createAkeruCatalogToolHandlers(
+          mcpManager,
+          pluginRuntime,
+          mcpManager
+            ? {
+                getRequestHealth: (serverId) => subscriptionAuth.mcpRequestHealth(serverId),
+                recordSuccess: (serverId, at) =>
+                  subscriptionAuth.recordMcpRequestSuccess(serverId, at),
+                recordFailure: (serverId, message, at) =>
+                  subscriptionAuth.recordMcpRequestFailure(serverId, message, at),
+                getDependencies: async (serverId) => {
+                  const snapshot = await pluginRuntimeOptions?.readSnapshot();
+                  return snapshot
+                    ? {
+                        dependentBots: snapshot.bots
+                          .filter(
+                            (bot) =>
+                              bot.archivedAt === null &&
+                              !bot.disabledMcpServerIds.some((id) => String(id) === serverId),
+                          )
+                          .map((bot) => ({ id: bot.id, name: bot.name })),
+                        dependentRoutines: [],
+                      }
+                    : mcpDependencies;
+                },
+                onFailure: (serverId, message, dependencies) => {
+                  for (const bot of dependencies.dependentBots) {
+                    botInbox.ensureOpen({
+                      incidentKey: `access:mcp-${serverId}:${bot.id}`,
+                      kind: "connector-failure",
+                      botId: bot.id,
+                      botName: bot.name,
+                      taskOrRoutine: `${serverId} access`,
+                      lastFailure: message,
+                      nextAction: `Reconnect ${serverId}, then retry its failed request.`,
+                    });
+                  }
+                },
+                onRecovery: (serverId, dependencies) => {
+                  for (const bot of dependencies.dependentBots) {
+                    botInbox.resolve(`access:mcp-${serverId}:${bot.id}`);
+                  }
+                },
+              }
+            : undefined,
+        ),
+        ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
+        ...(delegationRuntime && botId
           ? {
               sendToUser: async (request) => {
                 const active = sessions.get(key);
                 const turnId = active?.activeTurn?.turnId;
                 if (!turnId) throw new Error("User messaging requires an active turn.");
                 return delegationRuntime!.sendToUser(
-                  { threadId, turnId, botId: input.botId!, depth: 0 },
+                  {
+                    threadId,
+                    turnId,
+                    botId,
+                    parentDelegationId: parentDelegation?.delegationId ?? null,
+                    ancestorBotIds: parentDelegation?.ancestorBotIds ?? [],
+                    depth: parentDelegation?.depth ?? 0,
+                    access,
+                  },
                   request,
                 );
               },
-              delegation: {
-                send: async (request) => {
-                  const active = sessions.get(key);
-                  const turnId = active?.activeTurn?.turnId;
-                  if (!turnId) throw new Error("Delegation requires an active parent turn.");
-                  const snapshot = await delegationRuntime!.readSnapshot();
-                  const parentDelegation = snapshot.delegations.find(
-                    (delegation) =>
-                      delegation.childThreadId === threadId && delegation.outcome === null,
-                  );
-                  return delegationRuntime!.send(
-                    {
-                      threadId,
-                      turnId,
-                      botId: input.botId!,
-                      depth: parentDelegation?.depth ?? 0,
-                    },
-                    request,
-                  );
-                },
-              },
+              delegation: delegationFor({ threadId, botId, parentDelegation, access, snapshot }),
             }
           : {}),
         ...(input.botId && channelRuntime
@@ -971,7 +1528,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           resourceId: key,
           threadId: key,
           ...(input.cwd ? { tags: { projectPath: input.cwd } } : {}),
-          workspace: resources.workspace,
+          ...(workspace ? { workspace } : {}),
         }),
       ).pipe(
         Effect.tapError(() =>
@@ -986,67 +1543,78 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         ),
       );
-      yield* runMastra("state.set", () =>
-        session.state.set({
-          ...(input.cwd ? { projectPath: input.cwd } : {}),
-          yolo: false,
-          botConversation: resolved.botConversation,
-        }),
-      );
-      yield* runMastra("model.switch", () =>
-        session.model.switch({ modelId: resolved.mastraModelId }),
-      );
-      const modeId = mastraModeId(resolved.mode);
-      if (session.mode.get() !== modeId) {
-        yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
-      }
-      yield* Effect.forEach(
-        ["read", "edit", "execute", "mcp", "other"] as const,
-        (category) =>
-          runMastra("permissions.setForCategory", () =>
-            session.permissions.setForCategory({
-              category,
-              policy: permissionPolicy(input.runtimeMode, category),
-            }),
-          ),
-        { discard: true },
-      );
-      yield* Effect.forEach(
-        new Set([
-          ...toolRuntime.toolsForThread(key).map((tool) => tool.id),
-          ...Object.keys(sessionResources.getConnectorTools(key)),
-          AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-          "RestartMcpServers",
-        ]),
-        (toolName) =>
-          runMastra("permissions.setForTool", () =>
-            session.permissions.setForTool({ toolName, policy: "ask" }),
-          ),
-        { discard: true },
-      );
-      const createdAt = nowIso();
-      const activeWithoutUnsubscribe = {
-        session,
-        provider: resolved.provider,
-        providerInstanceId: resolved.providerInstanceId,
-        cwd: input.cwd,
-        createdAt,
-        mcpServerIds: mcpServers.map((server) => server.id),
-        runtimeMode: input.runtimeMode,
-        model: resolved.modelSelection.model,
-        status: "ready" as const,
-        activeTurn: null,
-        toolNames: new Map<string, string>(),
-        approvalRequests: new Map(),
-        connectorSessionApprovals: new Set<string>(),
-        toolSession,
-        workspaceResourceKey,
-      };
-      const unsubscribe = session.subscribe((event) => {
-        const active = sessions.get(key);
-        if (active) handleControllerEvent(threadId, active, event);
+      const cleanupCreatedSession = Effect.gen(function* () {
+        yield* runMastra("deleteSession", () =>
+          bundle.controller.deleteSession({ resourceId: key }),
+        ).pipe(Effect.ignoreCause({ log: true }));
+        yield* runMastra("resources.release", () =>
+          sessionResources.release(key, { destroy: true }),
+        ).pipe(Effect.ignoreCause({ log: true }));
+        toolRuntime.unregisterSession(key);
       });
-      const active: ActiveSession = { ...activeWithoutUnsubscribe, unsubscribe };
+      const active = yield* Effect.gen(function* () {
+        yield* runMastra("state.set", () =>
+          session.state.set({
+            ...(input.cwd ? { projectPath: input.cwd } : {}),
+            yolo: false,
+            botConversation: resolved.botConversation,
+          }),
+        );
+        yield* runMastra("model.switch", () =>
+          session.model.switch({ modelId: resolved.mastraModelId }),
+        );
+        const modeId = mastraModeId(resolved.mode);
+        if (session.mode.get() !== modeId) {
+          yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
+        }
+        yield* Effect.forEach(
+          ["read", "edit", "execute", "mcp", "other"] as const,
+          (category) =>
+            runMastra("permissions.setForCategory", () =>
+              session.permissions.setForCategory({
+                category,
+                policy: permissionPolicy(access.runtimeMode, category),
+              }),
+            ),
+          { discard: true },
+        );
+        yield* Effect.forEach(
+          new Set([
+            ...toolRuntime.toolsForThread(key).map((tool) => tool.id),
+            ...Object.keys(sessionResources.getConnectorTools(key)),
+            AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+            "RestartMcpServers",
+          ]),
+          (toolName) =>
+            runMastra("permissions.setForTool", () =>
+              session.permissions.setForTool({ toolName, policy: "ask" }),
+            ),
+          { discard: true },
+        );
+        const unsubscribe = session.subscribe((event) => {
+          const current = sessions.get(key);
+          if (current) handleControllerEvent(threadId, current, event);
+        });
+        return {
+          session,
+          provider: resolved.provider,
+          providerInstanceId: resolved.providerInstanceId,
+          cwd: input.cwd,
+          createdAt: nowIso(),
+          mcpServerIds: mcpServers.map((server) => server.id),
+          runtimeMode: access.runtimeMode,
+          model: resolved.modelSelection.model,
+          status: "ready" as const,
+          activeTurn: null,
+          toolNames: new Map<string, string>(),
+          approvalRequests: new Map(),
+          connectorSessionApprovals: new Set<string>(),
+          toolSession,
+          workspaceResourceKey,
+          pendingApprovals: new Map<string, PendingApproval>(),
+          unsubscribe,
+        } satisfies ActiveSession;
+      }).pipe(Effect.onError(() => cleanupCreatedSession));
       sessions.set(key, active);
       publish({
         ...baseEvent(threadId, active),
@@ -1071,13 +1639,16 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           }
           const resolved = resolvedByThread.get(key);
+          const { botUsage: _, ...providerInput } = input;
           return yield* legacyProviderBridge.sendTurn(
             resolved?.botConversation === true && String(resolved.provider) !== "claudeAgent"
               ? {
-                  ...input,
-                  input: [AKERU_BOT_TURN_INSTRUCTIONS, input.input].filter(Boolean).join("\n\n"),
+                  ...providerInput,
+                  input: [AKERU_BOT_TURN_INSTRUCTIONS, providerInput.input]
+                    .filter(Boolean)
+                    .join("\n\n"),
                 }
-              : input,
+              : providerInput,
           );
         }
         if (active.activeTurn) {
@@ -1121,15 +1692,21 @@ const make = (options?: AgentControllerLiveOptions) =>
           .join("\n\n");
         const files = attachmentFiles.map(({ file }) => file);
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
+        if (input.botUsage) {
+          memoryUsageByThread.set(key, { ...input.botUsage, turnId });
+        } else {
+          memoryUsageByThread.delete(key);
+        }
         active.activeTurn = {
           turnId,
           assistantMessages: new Map(),
           waiting: false,
           finished: false,
-          memoryQueued: false,
-          assistantText: "",
           inputTokens: 0,
           outputTokens: 0,
+          reasoningTokens: 0,
+          memoryQueued: false,
+          assistantText: "",
         };
         active.status = "running";
         publish({
@@ -1146,7 +1723,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             }
           })
           .catch((cause: unknown) => {
-            const detail = failureDetail(cause);
+            const detail = sessionFailureDetail(active, cause);
             publish({
               ...baseEvent(input.threadId, active, turnId),
               type: "runtime.error",
@@ -1191,8 +1768,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (!active.activeTurn) return;
       const toolCallId = String(input.requestId);
       const toolRequest = active.approvalRequests.get(toolCallId);
-      if (!toolRequest) return;
+      const pendingApproval = active.pendingApprovals.get(toolCallId);
+      if (!toolRequest || !pendingApproval) return;
       active.approvalRequests.delete(toolCallId);
+      active.pendingApprovals.delete(toolCallId);
       const { name: toolName, input: toolInput } = toolRequest;
       const akeruTool = AKERU_TOOL_CATALOG.find((tool) => tool.id === toolName);
       const runtimeToolId = akeruTool?.id ?? (isMemoryToolId(toolName) ? toolName : undefined);
@@ -1207,6 +1786,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (
         input.decision === "acceptForSession" &&
         !runtimeToolId &&
+        !isCodexComputerUseTool(toolName) &&
         !akeruActionNeedsApproval(toolName, toolInput) &&
         toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
       ) {
@@ -1215,19 +1795,31 @@ const make = (options?: AgentControllerLiveOptions) =>
           active.session.permissions.setForTool({ toolName, policy: "allow" }),
         );
       }
+      const target = pendingApproval.toolName;
+      const decision =
+        input.decision === "acceptForSession" || input.decision === "acceptAlways"
+          ? "accept"
+          : input.decision;
       if (active.activeTurn) active.activeTurn.waiting = false;
       active.session.respondToToolApproval({
         toolCallId,
         decision:
           runtimeToolId && input.decision !== "decline" && input.decision !== "cancel"
             ? "approve"
-            : approvalDecision(input.decision),
+            : approvalDecision(decision),
       });
       publish({
         ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
         requestId: RuntimeRequestId.make(toolCallId),
         type: "request.resolved",
-        payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
+        payload: {
+          requestType: "dynamic_tool_call" as const,
+          decision,
+          actor: "user",
+          target,
+          action: pendingApproval.action,
+          outcome: decision === "accept" ? "approved" : "denied",
+        },
       });
       publishSessionState(input.threadId, active, "running");
     });
@@ -1268,29 +1860,51 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (!active) {
         const legacySessions = yield* legacyProviderBridge.listSessions();
         if (legacySessions.some((session) => session.threadId === input.threadId)) {
-          yield* legacyProviderBridge.stopSession(input);
-          yield* runMastra("resources.release", () =>
-            sessionResources.release(key, { destroy: destroyResources }),
-          ).pipe(Effect.ignoreCause({ log: true }));
-          legacyResourceIdentity.delete(key);
+          yield* legacyProviderBridge.stopSession(input).pipe(
+            Effect.ensuring(
+              Effect.gen(function* () {
+                yield* runMastra("resources.release", () =>
+                  sessionResources.release(key, { destroy: destroyResources }),
+                ).pipe(Effect.ignoreCause({ log: true }));
+                legacyResourceIdentity.delete(key);
+              }),
+            ),
+          );
           return;
         }
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
         ) {
+          yield* runMastra("resources.release", () =>
+            sessionResources.release(key, { destroy: destroyResources }),
+          ).pipe(Effect.ignoreCause({ log: true }));
+          toolRuntime.unregisterSession(key);
           return;
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
       active.session.abort();
+      if (active.activeTurn) {
+        finishTurn(input.threadId, active, "interrupted");
+      } else {
+        cancelAllPendingApprovals(input.threadId, active);
+      }
       active.unsubscribe();
       publishSessionState(input.threadId, active, "stopped");
-      yield* runMastra("deleteSession", () => bundle.controller.deleteSession({ resourceId: key }));
-      yield* runMastra("resources.release", () =>
-        sessionResources.release(key, { destroy: destroyResources }),
-      ).pipe(Effect.ignoreCause({ log: true }));
-      toolRuntime.unregisterSession(key);
-      sessions.delete(key);
+      yield* runMastra("deleteSession", () =>
+        bundle.controller.deleteSession({ resourceId: key }),
+      ).pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            yield* runMastra("resources.release", () =>
+              sessionResources.release(key, { destroy: destroyResources }),
+            ).pipe(Effect.ignoreCause({ log: true }));
+            toolRuntime.unregisterSession(key);
+            sessions.delete(key);
+            memoryUsageByThread.delete(key);
+          }),
+        ),
+      );
     });
 
     const stopSession: AgentControllerShape["stopSession"] = (input) =>
@@ -1316,6 +1930,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
           active.session.abort();
+          if (active.activeTurn) {
+            finishTurn(ThreadId.make(threadId), active, "interrupted");
+          }
           active.unsubscribe();
           yield* runMastra("deleteSession", () =>
             bundle.controller.deleteSession({ resourceId: threadId }),
@@ -1324,6 +1941,11 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         legacyResourceIdentity.clear();
         sessions.clear();
+        for (const waiter of childWaiters.values()) {
+          if (waiter.timer) clearTimeout(waiter.timer);
+          waiter.reject(new Error("The agent controller stopped."));
+        }
+        childWaiters.clear();
         yield* runMastra("resources.shutdown", () => sessionResources.shutdown()).pipe(
           Effect.ignoreCause({ log: true }),
         );
@@ -1337,25 +1959,19 @@ const make = (options?: AgentControllerLiveOptions) =>
     );
 
     return AgentController.of({
+      configurePluginRuntime: (input: AkeruPluginRuntimeOptions) =>
+        Effect.sync(() => {
+          pluginRuntimeOptions = input;
+          pluginRuntime = createAkeruPluginRuntime(input);
+        }),
       configureDelegation: (input) =>
         Effect.sync(() => {
+          botStateRuntime = createAkeruBotStateRuntime(input);
           channelRuntime = createAkeruChannelRuntime(input);
-          delegationRuntime = createAkeruDelegationRuntime({
-            ...input,
-            failChild: (threadId, error) => resolveChildWaiter(threadId, { turnId: null, error }),
-            awaitChild: (threadId) =>
-              new Promise((resolve, reject) => {
-                const key = String(threadId);
-                if (childWaiters.has(key)) {
-                  reject(new Error(`Delegation waiter already exists for '${threadId}'.`));
-                  return;
-                }
-                childWaiters.set(key, { resolve });
-              }),
-          });
+          delegationRuntime ??= makeDelegationRuntime(input);
         }),
       failDelegation: ({ threadId, error }) =>
-        Effect.sync(() => resolveChildWaiter(threadId, { turnId: null, error })),
+        Effect.sync(() => resolveChildWaiter(threadId, { state: "failed", turnId: null, error })),
       readConversationMemory: (threadId) =>
         bundle.readObservationalMemory
           ? runMastra("memory.read", () =>

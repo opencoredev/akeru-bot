@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type BotEngine } from "@t3tools/contracts";
+import { BotId, type BotEngine, type EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -16,7 +16,9 @@ import {
 } from "../../providerInstances";
 import { botEnvironment } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { openSettings } from "../../settingsDialogStore";
@@ -25,17 +27,24 @@ import { toastManager } from "../ui/toast";
 import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { BotActivityStatus } from "./BotActivityStatus";
+import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
+import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotStepMeter } from "./BotStepMeter";
+import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
+import { useRosterPendingApproval } from "./useRosterPendingApproval";
+
+const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
@@ -43,7 +52,8 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
-  const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
+  const bots = useRosterStore((state) => state.bots);
+  const bot = bots.find((candidate) => candidate.id === botId);
   const [pendingEngine, setPendingEngine] = useState<BotEngine | null>(null);
   const [modelUpdatePending, setModelUpdatePending] = useState(false);
   const configuredEngine = pendingEngine ?? bot?.engine ?? null;
@@ -80,6 +90,9 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   );
   const effectiveModelSelection = stickyEngine;
   const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
+  const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
+  const activities = useThreadActivities(runtime.linkedThreadRef);
+  const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
   const voiceCall = useVoiceCall();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
@@ -87,6 +100,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
 
   useEffect(() => {
     if (
@@ -109,7 +123,13 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   if (!bot || bot.archivedAt !== null) return null;
   const working = runtime.sending || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages);
+  const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
+  const delegations = runtime.linkedThreadRef
+    ? (snapshot?.delegations.filter(
+        (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
+      ) ?? [])
+    : [];
 
   return (
     <SidebarInset
@@ -150,8 +170,11 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                       name={bot.name}
                       className="mt-0.5 size-7 shrink-0"
                     />
-                    <div className="min-w-0 max-w-[85%]">
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">{bot.name}</div>
+                      <BotStepMeter
+                        meter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
+                      />
                       <ChatMarkdown
                         className="mt-1"
                         cwd={runtime.defaultProject?.workspaceRoot}
@@ -181,6 +204,27 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 ),
               )
             )}
+            {pendingApproval ? (
+              <BotApprovalPrompt
+                approval={pendingApproval}
+                pendingCount={approvalState.pendingCount}
+                responding={approvalState.responding}
+                error={approvalState.responseError}
+                onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
+              />
+            ) : null}
+            {delegations.map((delegation) => (
+              <DelegationCard
+                key={delegation.delegationId}
+                delegation={delegation}
+                childBot={
+                  bots.find(
+                    (candidate) =>
+                      candidate.id === delegation.childBotId && candidate.archivedAt === null,
+                  ) ?? null
+                }
+              />
+            ))}
             {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
           </BotConversationScrollArea>
           <BotInboxAlertStack
@@ -197,6 +241,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             draftKey={bot.id}
             disabled={
               runtime.sending ||
+              pendingApproval !== null ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||
               modelUpdatePending ||

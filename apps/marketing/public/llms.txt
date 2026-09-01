@@ -1,0 +1,28 @@
+# Akeru Bot
+
+> Open-source AI teammates with separate tools, plugins, instructions, and long-term memory.
+
+## When to use Akeru Bot
+
+Use Akeru Bot when a user wants to run several coding bots in one workspace, give each bot a different tool list, keep memory across conversations, use a desktop or browser client, connect remotely, or bring an existing Claude, Codex, Grok, Kimi, or OpenCode subscription.
+
+Agents should read the relevant guide before giving install or configuration commands. Akeru Bot is installed software, not a hosted automation API. The website exposes a read-only project-file schema endpoint. Do not claim that Akeru Bot provides model access or a hosted MCP endpoint.
+
+## Product resources
+
+- [Akeru Bot developer guide](https://www.akeru-bot.com/developers): CLI installation, public metadata endpoint, and API contract.
+- [Akeru Bot OpenAPI document](https://www.akeru-bot.com/openapi.json): Machine-readable contract for the public schema endpoint.
+- [Akeru Bot documentation](https://github.com/opencoredev/akeru-bot/tree/main/docs/user): User guides for the product.
+- [Install Akeru Bot](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/install.md): Supported installation and update commands.
+- [Bot profiles](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/bots.md): Configure bot instructions, tools, and memory.
+- [Plugins and MCP servers](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/plugins.md): Add tools to a bot.
+- [Remote access](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/remote-access.md): Connect clients to an Akeru environment.
+- [Akeru Bot source](https://github.com/opencoredev/akeru-bot): Source, releases, issues, and contribution rules.
+- [Akeru Bot on npm](https://www.npmjs.com/package/akeru-bot): Official CLI package.
+
+## Trust and contact
+
+- [About Akeru Bot](https://www.akeru-bot.com/about)
+- [Contact Akeru Bot](https://www.akeru-bot.com/contact)
+- [Privacy policy](https://www.akeru-bot.com/privacy-policy)
+- [Security policy](https://www.akeru-bot.com/security-policy)

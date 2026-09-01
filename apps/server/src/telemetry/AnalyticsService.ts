@@ -153,7 +153,7 @@ function normalizeProvider(value: string): UsageAnalyticsProvider {
   return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";
 }
 
-const sandboxValues = new Set(["none", "local", "vercel", "akeru-cloud", "upstash"]);
+const sandboxValues = new Set(["none", "local", "e2b", "daytona", "vercel", "upstash"]);
 function normalizeSandbox(value: string): UsageSandboxProvider {
   if (value === "other") return "other";
   return sandboxValues.has(value) ? (value as UsageSandboxProvider) : "other";

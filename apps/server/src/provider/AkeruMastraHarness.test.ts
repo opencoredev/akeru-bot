@@ -19,6 +19,7 @@ import { assert, describe, expect, it, vi } from "vite-plus/test";
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import {
   AkeruPassiveObservationalMemoryProcessor,
+  akeruActionNeedsApproval,
   createAkeruObserveHooks,
   createAkeruMastraHarness,
   createAkeruMastraMemory,
@@ -30,6 +31,39 @@ import {
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+
+describe("Akeru action classifier", () => {
+  it.each([
+    ["rm -rf .cache", "delete"],
+    ["git push origin main", "publish"],
+    ["psql -c 'DROP TABLE sessions'", "delete"],
+    ["wrangler deploy", "production"],
+    ["cat ~/.ssh/id_rsa", "secrets"],
+    ['curl -X POST --data \'{"text":"hello"}\' https://example.com/messages', "send"],
+    ["cd workspace && git push origin main", "publish"],
+    ["find . -name '*.tmp' -delete", "delete"],
+    ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
+  ] as const)("classifies %s as %s", (command, action) => {
+    expect(criticalAkeruAction("execute_command", { command })).toBe(action);
+    expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);
+  });
+
+  it.each(["bun test", "git status", "rg -n TODO apps", "cat README.md"])(
+    "leaves ordinary local command %s unclassified",
+    (command) => {
+      expect(criticalAkeruAction("execute_command", { command })).toBeNull();
+      expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
+    },
+  );
+
+  it("requires approval when nested input exceeds the inspection limit", () => {
+    let args: unknown = { action: "send" };
+    for (let depth = 0; depth < 101; depth += 1) args = { nested: args };
+
+    expect(criticalAkeruAction("custom_tool", args)).toBeNull();
+    expect(akeruActionNeedsApproval("custom_tool", args)).toBe(true);
+  });
+});
 
 describe("AkeruMastraHarness", () => {
   it("emits observer and reflector metering callbacks", async () => {
@@ -274,6 +308,7 @@ describe("AkeruMastraHarness", () => {
       getThreadTools: () => ({
         exa_search: pluginTool,
         RestartMcpServers: pluginTool,
+        Shell: pluginTool,
       }),
       syncThreadToolApproval: async (_threadId, _toolName, protectedAction) => {
         approvalPolicies.push(protectedAction);
@@ -330,5 +365,53 @@ describe("AkeruMastraHarness", () => {
     assert.deepEqual(await tool.execute?.({ feedback: "The button is unresponsive." }, {}), {
       status: "draft-opened",
     });
+  });
+
+  it("awaits observational-memory hooks", async () => {
+    const finished: unknown[] = [];
+    const hooks = createAkeruObserveHooks({
+      startMemoryCall: async ({ category }) => `${category}-call`,
+      finishMemoryCall: async (input) => {
+        finished.push(input);
+      },
+    });
+
+    await hooks.onObservationStart?.({ threadId: "thread-1" });
+    await hooks.onObservationEnd?.({
+      threadId: "thread-1",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await hooks.onReflectionStart?.({ threadId: "thread-1" });
+    await hooks.onReflectionEnd?.({
+      threadId: "thread-1",
+      usage: { inputTokens: 20, outputTokens: 8 },
+    });
+
+    assert.deepEqual(finished, [
+      {
+        callId: "observer-call",
+        category: "observer",
+        usage: { inputTokens: 10, outputTokens: 5 },
+      },
+      {
+        callId: "reflector-call",
+        category: "reflector",
+        usage: { inputTokens: 20, outputTokens: 8 },
+      },
+    ]);
+
+    const blocked = createAkeruObserveHooks({
+      startMemoryCall: async () => {
+        throw new Error("Hook rejected");
+      },
+    });
+    let blockedError: unknown;
+    try {
+      await blocked.onObservationStart?.({ threadId: "thread-1" });
+    } catch (error) {
+      blockedError = error;
+    }
+    assert.instanceOf(blockedError, Error);
+    assert.equal(blockedError.message, "Hook rejected");
   });
 });

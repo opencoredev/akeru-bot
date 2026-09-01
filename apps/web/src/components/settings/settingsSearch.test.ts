@@ -86,10 +86,10 @@ describe("searchSettings", () => {
     });
   });
 
-  it("routes analytics to General settings", () => {
+  it("routes analytics to Privacy settings", () => {
     expect(searchSettings("analytics")[0]).toMatchObject({
-      id: "analytics",
-      to: "/settings/general",
+      id: "anonymous-analytics",
+      to: "/settings/privacy",
     });
   });
 
@@ -106,6 +106,17 @@ describe("searchSettings", () => {
       id: "environment-identification",
       to: "/settings/appearance",
       targetId: "appearance",
+    });
+  });
+
+  it("routes privacy controls to Privacy settings", () => {
+    expect(searchSettings("anonymous analytics")[0]).toMatchObject({
+      id: "anonymous-analytics",
+      to: "/settings/privacy",
+    });
+    expect(searchSettings("voice calls")[0]).toMatchObject({
+      id: "privacy-voice-calls",
+      to: "/settings/privacy",
     });
   });
 });

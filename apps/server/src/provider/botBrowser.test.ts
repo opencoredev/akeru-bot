@@ -7,6 +7,7 @@ import {
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  browserRpcErrorMessage,
   createBotBrowser,
   createBotBrowserTools,
   lightpandaMcpCommand,
@@ -40,6 +41,15 @@ async function executeTool(
 }
 
 describe("sandbox bot browser", () => {
+  it("redacts sensitive browser RPC errors", () => {
+    expect(
+      browserRpcErrorMessage({
+        code: -1,
+        message: "Browser failed for leo@example.com token=secret-value-1234",
+      }),
+    ).toBe("Browser failed for [REDACTED] [REDACTED]");
+  });
+
   it("exposes only the Akeru navigate, snapshot, click, and type tools", () => {
     expect(Object.keys(createBotBrowserTools(rpc()))).toEqual([
       "browser_navigate",

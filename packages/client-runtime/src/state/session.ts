@@ -10,7 +10,6 @@ import { EnvironmentRegistry } from "../connection/registry.ts";
 import type { PreparedConnection } from "../connection/model.ts";
 import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
-import { ManagedRelayDpopSigner } from "../relay/managedRelay.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import { executeEnvironmentHttpRequest, makeEnvironmentHttpApiClient } from "../rpc/http.ts";
 import { buildEnvironmentAuthHeaders, withEnvironmentCredentials } from "./environmentHttpAuth.ts";
@@ -37,23 +36,14 @@ const DEFAULT_SESSION_STATE_TIMEOUT_MS = 6_000;
 /**
  * Read the granted scopes of this client's session on one environment via its
  * `/api/auth/session` endpoint, authenticated with whatever credential the
- * connection was prepared with (cookie, bearer, or DPoP).
+ * connection was prepared with (cookie or bearer).
  */
 export const fetchEnvironmentSessionState = Effect.fn(
   "clientRuntime.state.fetchEnvironmentSessionState",
-)(function* (input: {
-  readonly prepared: PreparedConnection;
-  readonly signer: Option.Option<ManagedRelayDpopSigner["Service"]>;
-  readonly timeoutMs?: number;
-}) {
+)(function* (input: { readonly prepared: PreparedConnection; readonly timeoutMs?: number }) {
   const requestUrl = environmentEndpointUrl(input.prepared.httpBaseUrl, "/api/auth/session");
   const client = yield* makeEnvironmentHttpApiClient(input.prepared.httpBaseUrl);
-  const headers = yield* buildEnvironmentAuthHeaders(
-    input.prepared.httpAuthorization,
-    "GET",
-    requestUrl,
-    input.signer,
-  );
+  const headers = yield* buildEnvironmentAuthHeaders(input.prepared.httpAuthorization);
   return yield* executeEnvironmentHttpRequest(
     requestUrl,
     input.timeoutMs ?? DEFAULT_SESSION_STATE_TIMEOUT_MS,
@@ -133,8 +123,7 @@ export function createEnvironmentSessionAtoms<R, E>(
           return Effect.never;
         }
         return Effect.gen(function* () {
-          const signer = yield* Effect.serviceOption(ManagedRelayDpopSigner);
-          return yield* fetchEnvironmentSessionState({ prepared, signer });
+          return yield* fetchEnvironmentSessionState({ prepared });
         });
       })
       .pipe(

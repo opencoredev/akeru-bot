@@ -99,6 +99,7 @@ function resolveDesktopAppStageLabel(input: {
 
 function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
+  readonly isPackaged: boolean;
   readonly appVersion: string;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
@@ -106,6 +107,7 @@ function resolveDesktopAppBranding(input: {
     baseName: APP_BASE_NAME,
     stageLabel,
     displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    isPackaged: input.isPackaged,
   };
 }
 
@@ -168,6 +170,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : appRoot;
   const branding = resolveDesktopAppBranding({
     isDevelopment,
+    isPackaged: input.isPackaged,
     appVersion: input.appVersion,
   });
   const displayName = branding.displayName;

@@ -1,5 +1,10 @@
-import type { PluginCategory } from "./categories";
-import { parsePluginManifest, type PluginManifest, type PluginSkill } from "./schema";
+import type { PluginCategory } from "./categories.ts";
+import {
+  isInstallableManifest,
+  loadManifestCatalog,
+  type CatalogManifestModules,
+} from "./manifestCatalog.ts";
+import type { PluginManifest, PluginSkill } from "./schema.ts";
 
 export interface PluginLogo {
   readonly src: string;
@@ -58,7 +63,6 @@ export type PluginDirectoryDefinition =
 export type PluginDefinition = CatalogPluginDefinition;
 export type { PluginSkill };
 
-type CatalogModules = Readonly<Record<string, unknown>>;
 type AssetModules = Readonly<Record<string, string>>;
 
 const catalogModules = import.meta.glob<unknown>("./entries/*/plugin.json", {
@@ -74,12 +78,6 @@ const catalogAssets = import.meta.glob<string>(
   },
 );
 
-function pluginDirectory(manifestPath: string): string {
-  const match = /^\.\/entries\/([^/]+)\/plugin\.json$/.exec(manifestPath);
-  if (!match?.[1]) throw new TypeError(`Invalid plugin manifest path '${manifestPath}'.`);
-  return match[1];
-}
-
 function assetUrl(
   assets: AssetModules,
   directory: string,
@@ -94,16 +92,12 @@ function assetUrl(
 
 function toPluginDefinition(
   manifest: PluginManifest,
-  directory: string,
   assets: AssetModules,
 ): PluginDirectoryDefinition {
-  if (manifest.id !== directory) {
-    throw new TypeError(`Plugin '${manifest.id}' must live in entries/${manifest.id}/.`);
-  }
   const logo = {
     ...manifest.logo,
-    src: assetUrl(assets, directory, "logo.svg", manifest.id),
-    darkSrc: assetUrl(assets, directory, "logo-dark.svg", manifest.id),
+    src: assetUrl(assets, manifest.id, "logo.svg", manifest.id),
+    darkSrc: assetUrl(assets, manifest.id, "logo-dark.svg", manifest.id),
   };
   const base = {
     ...manifest,
@@ -138,42 +132,21 @@ function toPluginDefinition(
   });
 }
 
-function comparePluginOrder(
-  left: PluginDirectoryDefinition,
-  right: PluginDirectoryDefinition,
-): number {
-  return (
-    (left.featuredRank ?? Number.POSITIVE_INFINITY) -
-      (right.featuredRank ?? Number.POSITIVE_INFINITY) || left.id.localeCompare(right.id)
-  );
-}
-
 export function loadDirectoryCatalog(
-  modules: CatalogModules = catalogModules,
+  modules: CatalogManifestModules = catalogModules,
   assets: AssetModules = catalogAssets,
 ): readonly PluginDirectoryDefinition[] {
-  const ids = new Set<string>();
-  const plugins = Object.entries(modules).map(([path, input]) => {
-    const directory = pluginDirectory(path);
-    const manifest = parsePluginManifest(input, path);
-    if (ids.has(manifest.id)) throw new TypeError(`Duplicate plugin id '${manifest.id}'.`);
-    ids.add(manifest.id);
-    return toPluginDefinition(manifest, directory, assets);
-  });
-  return Object.freeze(plugins.toSorted(comparePluginOrder));
+  return Object.freeze(
+    loadManifestCatalog(modules).map((manifest) => toPluginDefinition(manifest, assets)),
+  );
 }
 
 export function isInstallablePlugin(plugin: PluginDirectoryDefinition): plugin is PluginDefinition {
-  return (
-    plugin.catalogStatus === "available" &&
-    plugin.kind !== "mcp-unavailable" &&
-    plugin.connection.type !== "approval-pending" &&
-    plugin.connection.type !== "verification-pending"
-  );
+  return isInstallableManifest(plugin) && plugin.kind !== "mcp-unavailable";
 }
 
 export function loadCatalog(
-  modules: CatalogModules = catalogModules,
+  modules: CatalogManifestModules = catalogModules,
   assets: AssetModules = catalogAssets,
 ): readonly CatalogPluginDefinition[] {
   return loadDirectoryCatalog(modules, assets).filter(isInstallablePlugin);

@@ -438,6 +438,8 @@ export type ContentDeltaPayload = typeof ContentDeltaPayload.Type;
 const RequestOpenedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
   detail: Schema.optional(TrimmedNonEmptyStringSchema),
+  actor: Schema.optional(TrimmedNonEmptyStringSchema),
+  target: Schema.optional(TrimmedNonEmptyStringSchema),
   appName: Schema.optional(TrimmedNonEmptyStringSchema),
   options: Schema.optional(Schema.Array(ProviderApprovalOption)),
   toolName: Schema.optional(TrimmedNonEmptyStringSchema),
@@ -451,6 +453,10 @@ export type RequestOpenedPayload = typeof RequestOpenedPayload.Type;
 const RequestResolvedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
   decision: Schema.optional(TrimmedNonEmptyStringSchema),
+  actor: Schema.optional(TrimmedNonEmptyStringSchema),
+  target: Schema.optional(TrimmedNonEmptyStringSchema),
+  action: Schema.optional(TrimmedNonEmptyStringSchema),
+  outcome: Schema.optional(TrimmedNonEmptyStringSchema),
   resolution: Schema.optional(Schema.Unknown),
 });
 export type RequestResolvedPayload = typeof RequestResolvedPayload.Type;

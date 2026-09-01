@@ -1,24 +1,35 @@
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
+import { useThreadActivities } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { SidebarInset } from "../ui/sidebar";
 import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotActivityStatus } from "./BotActivityStatus";
+import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
+import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotStepMeter } from "./BotStepMeter";
+import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
+import { useRosterPendingApproval } from "./useRosterPendingApproval";
+
+const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const navigate = useNavigate();
@@ -28,12 +39,16 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
+  const activities = useThreadActivities(runtime.linkedThreadRef);
+  const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
   const presence = useGroupPresence(groupId);
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
 
   useEffect(() => {
     if (!group) void navigate({ to: "/", replace: true });
@@ -45,11 +60,17 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   if (!boss) return null;
   const working = runtime.sending || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages);
+  const pendingApproval = approvalState.pendingApproval;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
   const inboxItems = selectOpenBotInboxItems(
     inboxQuery.data?.inbox ?? [],
     new Set(members.map((bot) => bot.id)),
   );
+  const delegations = runtime.linkedThreadRef
+    ? (snapshot?.delegations.filter(
+        (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
+      ) ?? [])
+    : [];
 
   return (
     <SidebarInset
@@ -104,8 +125,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                       name={respondingBot.name}
                       className="mt-0.5 size-7 shrink-0"
                     />
-                    <div className="min-w-0 max-w-[85%]">
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">{respondingBot.name}</div>
+                      <BotStepMeter
+                        meter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
+                      />
                       <ChatMarkdown
                         className="mt-1"
                         cwd={runtime.defaultProject?.workspaceRoot}
@@ -125,6 +149,27 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               );
             })
           )}
+          {pendingApproval ? (
+            <BotApprovalPrompt
+              approval={pendingApproval}
+              pendingCount={approvalState.pendingCount}
+              responding={approvalState.responding}
+              error={approvalState.responseError}
+              onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
+            />
+          ) : null}
+          {delegations.map((delegation) => (
+            <DelegationCard
+              key={delegation.delegationId}
+              delegation={delegation}
+              childBot={
+                bots.find(
+                  (candidate) =>
+                    candidate.id === delegation.childBotId && candidate.archivedAt === null,
+                ) ?? null
+              }
+            />
+          ))}
           {working ? <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} /> : null}
         </BotConversationScrollArea>
         <BotInboxAlertStack
@@ -141,6 +186,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           draftKey={`group:${group.id}`}
           disabled={
             runtime.sending ||
+            pendingApproval !== null ||
             !runtime.groupReady ||
             !runtime.bootstrapped ||
             runtime.defaultProject === null

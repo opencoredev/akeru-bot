@@ -97,15 +97,6 @@ export function createEnvironmentCatalogAtoms<R, E>(
         Effect.flatMap((registry) => registry.remove(environmentId)),
       ),
   });
-  const removeRelayEnvironments = createRuntimeCommand(runtime, {
-    label: "environment-catalog:remove-relay-environments",
-    scheduler: commandScheduler,
-    concurrency: serial,
-    execute: (_input: void) =>
-      EnvironmentRegistry.EnvironmentRegistry.pipe(
-        Effect.flatMap((registry) => registry.removeRelayEnvironments()),
-      ),
-  });
   const retryNow = createRuntimeCommand(runtime, {
     label: "environment-catalog:retry-now",
     scheduler: commandScheduler,
@@ -124,7 +115,6 @@ export function createEnvironmentCatalogAtoms<R, E>(
     stateAtom,
     register,
     remove,
-    removeRelayEnvironments,
     retryNow,
   };
 }

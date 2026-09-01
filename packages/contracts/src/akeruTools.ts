@@ -1,14 +1,20 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 
 import {
   BotId,
   GroupId,
   IsoDateTime,
   NonNegativeInt,
+  PositiveInt,
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
+import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
+import { McpServerId } from "./mcpServer.ts";
+import { BotSandbox, RuntimeMode } from "./orchestration.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
 export const AKERU_PATH_MAX_CHARS = 512;
@@ -28,6 +34,81 @@ const CommandInput = Schema.Struct({
 });
 const PathInput = Schema.Struct({ path: PathText });
 const CopyInput = Schema.Struct({ sourcePath: PathText, destinationPath: PathText });
+const McpServerIdInput = Schema.Struct({ serverId: TrimmedNonEmptyString });
+const UpdateBotProfileInput = Schema.Struct({
+  name: Schema.optional(TrimmedNonEmptyString),
+  title: Schema.optional(TrimmedNonEmptyString),
+  label: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+}).check(
+  Schema.makeFilter(
+    (input) =>
+      input.name !== undefined ||
+      input.title !== undefined ||
+      input.label !== undefined ||
+      input.description !== undefined ||
+      new SchemaIssue.InvalidValue({ message: "At least one profile field is required." }),
+    { identifier: "UpdateBotProfileInput" },
+  ),
+);
+
+export const AkeruToolId = Schema.Literals([
+  "Shell",
+  "Read",
+  "Screenshot",
+  "CopyToBox",
+  "CopyFromBox",
+  "request_box_help",
+  "ExternalShell",
+  "ExternalRead",
+  "AwaitShell",
+  "AwaitExternalShell",
+  "CreateAgent",
+  "CheckAgent",
+  "MessageAgent",
+  "StopAgent",
+  "SendToAgent",
+  "CreateChannel",
+  "UpdateChannel",
+  "SendToUser",
+  "SearchPlugins",
+  "GetPlugin",
+  "InstallPlugin",
+  "UninstallPlugin",
+  "GetMcpServerStatus",
+  "TestMcpServer",
+  "ReconnectMcpServer",
+  "UpdateBotProfile",
+  "AuthenticateMcpServer",
+  "RestartMcpServers",
+]);
+export type AkeruToolId = typeof AkeruToolId.Type;
+
+export const AkeruToolApprovalClass = Schema.Literals([
+  "none",
+  "user-computer",
+  "send",
+  "pay",
+  "delete",
+  "production",
+  "secrets",
+]);
+export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
+
+const AgentMessageInput = Schema.Struct({
+  botId: BotId,
+  task: TrimmedNonEmptyString,
+  expectedResult: TrimmedNonEmptyString,
+  deadline: Schema.optional(IsoDateTime),
+  allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
+  memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
+  mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
+  sandbox: Schema.optional(
+    Schema.NullOr(Schema.suspend((): Schema.Codec<BotSandbox> => BotSandbox)),
+  ),
+  runtimeMode: Schema.optional(Schema.suspend((): Schema.Codec<RuntimeMode> => RuntimeMode)),
+  approvalCeiling: Schema.optional(AkeruToolApprovalClass),
+});
 
 export const AkeruToolInputSchemas = {
   Shell: CommandInput,
@@ -43,11 +124,15 @@ export const AkeruToolInputSchemas = {
   ExternalRead: PathInput,
   AwaitShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
   AwaitExternalShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
-  SendToAgent: Schema.Struct({
-    botId: BotId,
-    task: TrimmedNonEmptyString,
-    expectedResult: TrimmedNonEmptyString,
+  CreateAgent: Schema.Struct({
+    name: TrimmedNonEmptyString,
+    title: Schema.optional(TrimmedNonEmptyString),
+    description: Schema.optional(TrimmedNonEmptyString),
   }),
+  CheckAgent: Schema.Struct({ botId: BotId }),
+  MessageAgent: AgentMessageInput,
+  StopAgent: Schema.Struct({ botId: BotId }),
+  SendToAgent: AgentMessageInput,
   CreateChannel: Schema.Struct({
     name: TrimmedNonEmptyString,
     specialistBotIds: Schema.optional(Schema.Array(BotId)),
@@ -59,8 +144,22 @@ export const AkeruToolInputSchemas = {
   SendToUser: Schema.Struct({
     message: TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_COMMAND_MAX_CHARS)),
   }),
-} as const;
-export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
+  SearchPlugins: Schema.Struct({
+    query: Schema.optional(TrimmedNonEmptyString),
+    limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(50))),
+  }),
+  GetPlugin: Schema.Struct({ pluginId: TrimmedNonEmptyString }),
+  InstallPlugin: Schema.Struct({ pluginId: TrimmedNonEmptyString }),
+  UninstallPlugin: Schema.Struct({ pluginId: TrimmedNonEmptyString }),
+  GetMcpServerStatus: McpServerIdInput,
+  TestMcpServer: McpServerIdInput,
+  ReconnectMcpServer: McpServerIdInput,
+  UpdateBotProfile: UpdateBotProfileInput,
+  AuthenticateMcpServer: McpServerIdInput,
+  RestartMcpServers: Schema.Struct({
+    serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  }),
+} as const satisfies Record<AkeruToolId, Schema.Top>;
 
 const AkeruToolInputDecoders = Object.fromEntries(
   Object.entries(AkeruToolInputSchemas).map(([toolId, schema]) => [
@@ -88,16 +187,6 @@ export const AKERU_PROTECTED_APPROVAL_CLASSES: ReadonlySet<AkeruProtectedApprova
   "secrets",
 ]);
 
-export const AkeruToolApprovalClass = Schema.Literals([
-  "none",
-  "user-computer",
-  "send",
-  "pay",
-  "delete",
-  "production",
-  "secrets",
-]);
-export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
 export const AkeruToolCapability = Schema.Literals(["bot-workspace", "user-computer"]);
 export type AkeruToolCapability = typeof AkeruToolCapability.Type;
 export const AkeruToolWorkspaceType = Schema.Literals(["none", "local", "cloud"]);
@@ -187,6 +276,14 @@ export const AKERU_TOOL_CATALOG = [
     workspace: "user-computer",
     requiresUserComputer: true,
   }),
+  define("CreateAgent", "bot-workspace", "Create a durable named bot."),
+  define("CheckAgent", "bot-workspace", "Inspect a durable named bot and its delegated work."),
+  define("MessageAgent", "bot-workspace", "Send bounded work to a durable named bot.", {
+    approval: "send",
+  }),
+  define("StopAgent", "bot-workspace", "Cancel a durable bot's delegated work.", {
+    approval: "delete",
+  }),
   define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
     approval: "send",
   }),
@@ -194,6 +291,32 @@ export const AKERU_TOOL_CATALOG = [
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
     approval: "send",
+  }),
+  define("SearchPlugins", "bot-workspace", "Search the curated plugin directory."),
+  define(
+    "GetPlugin",
+    "bot-workspace",
+    "Inspect a plugin, its connection, permissions, health, and dependents.",
+  ),
+  define("InstallPlugin", "bot-workspace", "Install a curated plugin after inspecting it.", {
+    approval: "production",
+  }),
+  define("UninstallPlugin", "bot-workspace", "Remove a curated plugin after inspecting it.", {
+    approval: "delete",
+  }),
+  define("GetMcpServerStatus", "bot-workspace", "Inspect an MCP server connection."),
+  define("TestMcpServer", "bot-workspace", "Run a real MCP server connection test.", {
+    approval: "production",
+  }),
+  define("ReconnectMcpServer", "bot-workspace", "Reconnect one MCP server.", {
+    approval: "production",
+  }),
+  define("UpdateBotProfile", "bot-workspace", "Update this bot's public profile."),
+  define("AuthenticateMcpServer", "bot-workspace", "Authenticate an MCP server.", {
+    approval: "secrets",
+  }),
+  define("RestartMcpServers", "bot-workspace", "Restart MCP servers.", {
+    approval: "production",
   }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
@@ -203,6 +326,8 @@ export interface AkeruToolAvailabilityContext {
   readonly hasUserComputer: boolean;
   readonly localFullAccess: boolean;
   readonly implementedTools: ReadonlySet<string>;
+  readonly delegationDepth?: number;
+  readonly activeDelegations?: number;
 }
 
 export function filterAkeruTools(
@@ -211,6 +336,12 @@ export function filterAkeruTools(
   return AKERU_TOOL_CATALOG.filter((tool) => {
     if (!context.capabilities.has(tool.capability)) return false;
     if (!context.implementedTools.has(tool.id)) return false;
+    if (
+      (tool.id === "SendToAgent" || tool.id === "MessageAgent") &&
+      ((context.delegationDepth ?? 0) >= AKERU_DELEGATION_MAX_DEPTH ||
+        (context.activeDelegations ?? 0) >= AKERU_DELEGATION_MAX_CONCURRENCY)
+    )
+      return false;
     if (tool.workspace === "bot-workspace" && context.workspaceType === "none") return false;
     if (tool.workspace === "user-computer" && !context.hasUserComputer) return false;
     return !(tool.requiresUserComputer && !context.hasUserComputer);

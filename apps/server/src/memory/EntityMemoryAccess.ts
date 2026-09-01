@@ -5,6 +5,7 @@ import {
   type AkeruMemoryPartition,
   type AkeruMemoryThreadAccess,
   type AkeruMemoryVisibility,
+  type ProjectId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -34,11 +35,28 @@ const partition = (
   visibility,
 });
 
-export function deriveAkeruWorkspaceId(workspaceRoot: string): AkeruMemoryPartitionId {
-  return AkeruMemoryPartitionId.make(
-    `workspace:${NodeCrypto.createHash("sha256").update(workspaceRoot).digest("hex")}`,
-  );
+export function deriveAkeruWorkspaceId(projectId: ProjectId): AkeruMemoryPartitionId {
+  return AkeruMemoryPartitionId.make(`workspace:${projectId}`);
 }
+
+const workspacePartitions = (input: AkeruMemoryThreadAccess) => {
+  const canonical = partition(
+    input,
+    "workspace",
+    deriveAkeruWorkspaceId(input.projectId),
+    "shared",
+  );
+  if (input.legacyWorkspaceOwnerProjectId !== input.projectId) return [canonical];
+  return [
+    canonical,
+    partition(
+      input,
+      "workspace",
+      `workspace:${NodeCrypto.createHash("sha256").update(input.workspaceRoot).digest("hex")}`,
+      "shared",
+    ),
+  ];
+};
 
 export function resolveAuthorizedMemoryPartitions(
   input: AkeruMemoryThreadAccess,
@@ -58,7 +76,7 @@ export function resolveAuthorizedMemoryPartitions(
     return Effect.succeed([
       partition(input, "group", input.groupId, "shared"),
       partition(input, "project", input.projectId, "shared"),
-      partition(input, "workspace", deriveAkeruWorkspaceId(input.workspaceRoot), "shared"),
+      ...workspacePartitions(input),
       partition(input, "thread", input.threadId, "shared"),
     ]);
   }
@@ -69,28 +87,16 @@ export function resolveAuthorizedMemoryPartitions(
       partition(input, "bot-user", `${input.botId}:${input.userId}`, "private"),
       partition(input, "bot", input.botId, "private"),
       partition(input, "project", input.projectId, "shared"),
-      partition(input, "workspace", deriveAkeruWorkspaceId(input.workspaceRoot), "shared"),
+      ...workspacePartitions(input),
       partition(input, "thread", input.threadId, "private"),
     ]);
   }
 
   return Effect.succeed([
     partition(input, "project", input.projectId, "shared"),
-    partition(input, "workspace", deriveAkeruWorkspaceId(input.workspaceRoot), "shared"),
+    ...workspacePartitions(input),
     partition(input, "thread", input.threadId, "shared"),
   ]);
-}
-
-export function resolveRecallMemoryPartitions(
-  input: AkeruMemoryThreadAccess,
-): Effect.Effect<ReadonlyArray<AuthorizedMemoryPartition>, AkeruMemoryAccessDenied> {
-  return resolveAuthorizedMemoryPartitions(input).pipe(
-    Effect.map((partitions) =>
-      input.groupId === null && input.botId !== null
-        ? partitions.filter((candidate) => candidate.visibility === "private")
-        : partitions,
-    ),
-  );
 }
 
 export function resolveMemoryArchivePartitions(

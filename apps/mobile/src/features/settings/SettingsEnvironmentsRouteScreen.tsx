@@ -8,17 +8,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { CloudEnvironmentRows } from "../connection/CloudEnvironmentRows";
 import { ConnectionEnvironmentRow } from "../connection/ConnectionEnvironmentRow";
-import { splitEnvironmentSections } from "../connection/environmentSections";
 import { cn } from "../../lib/cn";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 import {
   applyShowcaseLocalEnvironmentDisplayUrls,
   resolveShowcaseEnvironmentUpdateDisplayUrl,
-  SHOWCASE_AVAILABLE_CLOUD_ENVIRONMENTS,
-  SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS,
 } from "../showcase/showcaseEnvironmentRows";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
@@ -32,16 +28,9 @@ export function SettingsEnvironmentsRouteScreen() {
   } = useRemoteConnections();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const environmentSections = splitEnvironmentSections({
-    connectedEnvironments,
-    cloudEnvironments: null,
-  });
   const localEnvironments = SHOWCASE_ENABLED
-    ? applyShowcaseLocalEnvironmentDisplayUrls(environmentSections.localEnvironments)
-    : environmentSections.localEnvironments;
-  const connectedCloudEnvironments = SHOWCASE_ENABLED
-    ? SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS
-    : environmentSections.connectedCloudEnvironments;
+    ? applyShowcaseLocalEnvironmentDisplayUrls(connectedEnvironments)
+    : connectedEnvironments;
   const hasLocalEnvironments = localEnvironments.length > 0;
   const [expandedId, setExpandedId] = useState<EnvironmentId | null>(null);
   const accentColor = useThemeColor("--color-icon-muted");
@@ -56,7 +45,7 @@ export function SettingsEnvironmentsRouteScreen() {
       updates: { readonly label: string; readonly displayUrl: string },
     ) => {
       if (!SHOWCASE_ENABLED) return onUpdateEnvironment(environmentId, updates);
-      const actualEnvironment = environmentSections.localEnvironments.find(
+      const actualEnvironment = connectedEnvironments.find(
         (environment) => environment.environmentId === environmentId,
       );
       const presentedEnvironment = localEnvironments.find(
@@ -74,7 +63,7 @@ export function SettingsEnvironmentsRouteScreen() {
             : updates.displayUrl,
       });
     },
-    [environmentSections.localEnvironments, localEnvironments, onUpdateEnvironment],
+    [connectedEnvironments, localEnvironments, onUpdateEnvironment],
   );
 
   return (
@@ -158,20 +147,6 @@ export function SettingsEnvironmentsRouteScreen() {
             </Text>
           </View>
         )}
-
-        {/* Always mounted: already-connected relay environments must stay
-            visible (and removable) even when cloud config is missing or the
-            user is signed out — the component gates discovery itself. */}
-        <CloudEnvironmentRows
-          connectedCloudEnvironments={connectedCloudEnvironments}
-          onReconnectEnvironment={onReconnectEnvironment}
-          {...(SHOWCASE_ENABLED
-            ? {
-                showcaseAvailableEnvironments: SHOWCASE_AVAILABLE_CLOUD_ENVIRONMENTS,
-                showcaseSignedIn: true,
-              }
-            : {})}
-        />
       </ScrollView>
     </View>
   );

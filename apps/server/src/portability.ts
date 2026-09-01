@@ -5,6 +5,7 @@ import {
   AKERU_ARCHIVE_VERSION,
   BotId,
   CommandId,
+  DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   EventId,
   GroupId,
   MessageId,
@@ -44,7 +45,7 @@ const ARCHIVE_RECORD_TYPES = [
   "thread",
 ] as const;
 const ARCHIVE_EXCLUSIONS = [
-  "Access tokens, cookies, passwords, secret values, environment variables, pairing and relay credentials",
+  "Access tokens, cookies, passwords, secret values, environment variables, and pairing credentials",
   "Absolute local paths, project scripts, attachments, image avatar files, Git refs, pull request links, and diff blobs",
   "Event identifiers, event sequences, command receipts, provider sessions, and opaque provider configuration",
   "Conversation attachments, raw approval payloads, provider request details, and deleted threads and projects",
@@ -205,6 +206,7 @@ export function safeServerSettings(settings: ServerSettings): PortabilitySafeSer
     enableLegacyTokenStreaming: settings.enableLegacyTokenStreaming,
     enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
     enableAgentBrowserAccess: settings.enableAgentBrowserAccess,
+    botSandboxBrowserSharing: settings.botSandboxBrowserSharing,
     backgroundActivity: {
       schemaVersion: 1,
       profile: settings.backgroundActivity.profile,
@@ -275,6 +277,8 @@ function settingsPatchFromPortable(settings: PortabilitySafeServerSettings): Ser
     enableLegacyTokenStreaming: settings.enableLegacyTokenStreaming,
     enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
     enableAgentBrowserAccess: settings.enableAgentBrowserAccess,
+    botSandboxBrowserSharing:
+      settings.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
     backgroundActivity: {
       schemaVersion: 1,
       profile: settings.backgroundActivity.profile,
@@ -483,6 +487,10 @@ export function portableRecords(
             const requestKind = stringField(activity.payload, "requestKind");
             const requestType = stringField(activity.payload, "requestType");
             const decision = stringField(activity.payload, "decision");
+            const actor = stringField(activity.payload, "actor");
+            const target = stringField(activity.payload, "target");
+            const action = stringField(activity.payload, "action");
+            const outcome = stringField(activity.payload, "outcome");
             return [
               {
                 originalKind: originalKind as
@@ -494,6 +502,10 @@ export function portableRecords(
                 ...(requestKind ? { requestKind } : {}),
                 ...(requestType ? { requestType } : {}),
                 ...(decision ? { decision } : {}),
+                ...(actor ? { actor } : {}),
+                ...(target ? { target } : {}),
+                ...(action ? { action } : {}),
+                ...(outcome ? { outcome } : {}),
                 provider:
                   stringField(activity.payload, "provider") ?? thread.modelSelection.instanceId,
                 createdAt: activity.createdAt,
@@ -661,6 +673,10 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
         approval.requestKind,
         approval.requestType,
         approval.decision,
+        approval.actor,
+        approval.target,
+        approval.action,
+        approval.outcome,
       ]) {
         if (value !== undefined)
           assertSafeImportedText(`Thread '${record.id}' approval field`, value);
@@ -1007,6 +1023,16 @@ function mutableProjectData(data: PortabilityProjectData) {
   };
 }
 
+function portableSettingsWithArchiveDefaults(
+  settings: PortabilitySafeServerSettings,
+): PortabilitySafeServerSettings {
+  return {
+    ...settings,
+    botSandboxBrowserSharing:
+      settings.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+  };
+}
+
 export function portabilityStateChecksum(
   snapshot: OrchestrationReadModel,
   settings: ServerSettings,
@@ -1172,7 +1198,9 @@ export function previewPortabilityImport(
       record.type === "thread" &&
       (projectMatch?.kind === "matched" || projectMatch?.kind === "created")
         ? { ...record.data, projectId: projectMatch.targetId }
-        : record.data;
+        : record.type === "server-settings"
+          ? portableSettingsWithArchiveDefaults(record.data)
+          : record.data;
     if (!existing) additions.push(item(record));
     else if (
       record.type === "project" &&
@@ -1293,8 +1321,10 @@ function itemForCommand(
       case "mcp-server.disable":
         return `mcp-server:${command.mcpServerId}`;
       case "delegation.create":
-      case "delegation.complete":
-        return `thread:${command.delegation.sourceThreadId}`;
+      case "delegation.state.set":
+        return `delegation:${command.delegation.delegationId}`;
+      case "delegation.cancel":
+        return `delegation:${command.delegationId}`;
       default:
         return `thread:${command.threadId}`;
     }
@@ -1409,7 +1439,10 @@ export function commandsForPortabilityImport(
   for (const record of archive.records) {
     if (conflictKeys.has(`${record.type}:${record.id}`)) continue;
     if (record.type === "server-settings") {
-      if (canonicalJson(safeServerSettings(settings)) !== canonicalJson(record.data)) {
+      if (
+        canonicalJson(safeServerSettings(settings)) !==
+        canonicalJson(portableSettingsWithArchiveDefaults(record.data))
+      ) {
         settingsPatch = settingsPatchFromPortable(record.data);
         applied += 1;
       }
@@ -1741,6 +1774,10 @@ export function commandsForPortabilityImport(
                 ...(approval.requestKind ? { requestKind: approval.requestKind } : {}),
                 ...(approval.requestType ? { requestType: approval.requestType } : {}),
                 ...(approval.decision ? { decision: approval.decision } : {}),
+                ...(approval.actor ? { actor: approval.actor } : {}),
+                ...(approval.target ? { target: approval.target } : {}),
+                ...(approval.action ? { action: approval.action } : {}),
+                ...(approval.outcome ? { outcome: approval.outcome } : {}),
                 provider: approval.provider,
               },
               turnId: null,

@@ -2,24 +2,20 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { EnvironmentId } from "@t3tools/contracts";
 
-import {
-  resolveAgentAwarenessPlatformPresentation,
-  resolveSettingsEnvironmentId,
-} from "./SettingsRouteScreen.logic";
+import { privacyControlPatch, resolveSettingsEnvironmentId } from "./SettingsRouteScreen.logic";
 
-describe("resolveAgentAwarenessPlatformPresentation", () => {
-  it("explains that agent awareness settings are unavailable on Android", () => {
-    expect(resolveAgentAwarenessPlatformPresentation("android")).toEqual({
-      supported: false,
-      subtitle: "iOS only",
-    });
-  });
-
-  it("leaves supported iOS settings unchanged", () => {
-    expect(resolveAgentAwarenessPlatformPresentation("ios")).toEqual({
-      supported: true,
-      subtitle: undefined,
-    });
+describe("privacyControlPatch", () => {
+  it.each([
+    ["analytics", true, { analyticsEnabled: true }],
+    ["analytics", false, { analyticsEnabled: false }],
+    ["product-feedback", true, { productFeedbackEnabled: true }],
+    ["product-feedback", false, { productFeedbackEnabled: false }],
+    ["voice", true, { voice: { enabled: true } }],
+    ["voice", false, { voice: { enabled: false } }],
+    ["provider-update-checks", true, { enableProviderUpdateChecks: true }],
+    ["provider-update-checks", false, { enableProviderUpdateChecks: false }],
+  ] as const)("maps %s to its server settings patch", (control, enabled, expected) => {
+    expect(privacyControlPatch(control, enabled)).toEqual(expected);
   });
 });
 

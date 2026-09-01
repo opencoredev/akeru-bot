@@ -2,6 +2,7 @@ import type {
   AkeruConversationMemorySnapshot,
   AkeruMemoryThreadAccess,
   BotEngine,
+  BotId,
   ModelSelection,
   ProviderInteractionMode,
   ProviderInterruptTurnInput,
@@ -37,10 +38,21 @@ export interface AgentControllerEngineSelection extends AgentControllerAvailable
   readonly mode: ProviderInteractionMode;
 }
 
+export type AgentControllerSendTurnInput = ProviderSendTurnInput & {
+  readonly botUsage?: {
+    readonly botId: BotId;
+    readonly capLimit: number;
+  };
+};
+
 export interface AgentControllerShape {
-  readonly configureDelegation?: (input: {
+  readonly configurePluginRuntime?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
     readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  }) => Effect.Effect<void>;
+  readonly configureDelegation?: (input: {
+    readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+    readonly dispatch: (command: OrchestrationCommand) => Promise<{ readonly sequence: number }>;
   }) => Effect.Effect<void>;
   readonly failDelegation?: (input: {
     readonly threadId: ThreadId;
@@ -75,7 +87,7 @@ export interface AgentControllerShape {
   ) => Effect.Effect<ProviderSession, AgentControllerError>;
 
   readonly sendTurn: (
-    input: ProviderSendTurnInput,
+    input: AgentControllerSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, AgentControllerError>;
 
   readonly interruptTurn: (

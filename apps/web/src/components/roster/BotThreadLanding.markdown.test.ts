@@ -5,15 +5,33 @@ import { describe, expect, it } from "vite-plus/test";
 
 describe("BotThreadLanding message formatting", () => {
   it("renders assistant messages with the shared rich markdown component", () => {
-    const sources = ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"].map((file) =>
-      NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8"),
-    );
+    const entries = [
+      ["BotThreadLanding.tsx", "bot-provider-message", "bot-user-message"],
+      ["GroupThreadLanding.tsx", "group-provider-message", "group-user-message"],
+    ] as const;
 
-    for (const source of sources) {
-      expect(source).toContain('import ChatMarkdown from "../ChatMarkdown"');
-      expect(source).toContain("<ChatMarkdown");
-      expect(source).toContain("cwd={runtime.defaultProject?.workspaceRoot}");
-      expect(source).toContain("threadRef={runtime.linkedThreadRef ?? undefined}");
+    for (const [file, assistantTestId, userTestId] of entries) {
+      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+      const assistantStart = source.indexOf(`data-testid="${assistantTestId}"`);
+      const userStart = source.indexOf(`data-testid="${userTestId}"`, assistantStart);
+      const assistantSource = source.slice(assistantStart, userStart);
+
+      expect(assistantStart).toBeGreaterThan(-1);
+      expect(userStart).toBeGreaterThan(assistantStart);
+      expect(assistantSource).toContain("<ChatMarkdown");
+      expect(assistantSource).toContain("cwd={runtime.defaultProject?.workspaceRoot}");
+      expect(assistantSource).toContain("threadRef={runtime.linkedThreadRef ?? undefined}");
+      expect(assistantSource).toContain('className="min-w-0 flex-1"');
+      expect(assistantSource).not.toContain("onTaskListChange");
+      expect(source.slice(userStart)).toContain('className="whitespace-pre-wrap"');
+    }
+  });
+
+  it("renders step meters for bot and group replies", () => {
+    for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
+      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+      expect(source).toContain("<BotStepMeter");
+      expect(source).toContain("stepMeters.get(message.turnId)");
     }
   });
 
@@ -31,6 +49,18 @@ describe("BotThreadLanding message formatting", () => {
     expect(groupSource).toContain("<BotConversationScrollArea>");
     expect(botSource).not.toContain("justify-end gap-4");
     expect(groupSource).not.toContain("justify-end gap-4");
+  });
+
+  it("renders the shared approval card in bot and group threads", () => {
+    const sources = ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"].map((file) =>
+      NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8"),
+    );
+
+    for (const source of sources) {
+      expect(source).toContain("<BotApprovalPrompt");
+      expect(source).toContain("useRosterPendingApproval(runtime.linkedThreadRef)");
+      expect(source).toContain("pendingApproval !== null ||");
+    }
   });
 
   it("mounts the voice action in the live bot chat header", () => {

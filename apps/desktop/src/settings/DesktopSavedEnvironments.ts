@@ -23,6 +23,7 @@ interface PersistedSavedEnvironmentStorageRecord extends Omit<
   "desktopSsh"
 > {
   readonly desktopSsh?: PersistedSavedEnvironmentDesktopSsh;
+  readonly relayManaged?: { readonly relayUrl: string };
   readonly encryptedBearerToken?: string;
 }
 
@@ -206,7 +207,6 @@ function toPersistedSavedEnvironmentRecord(
   return {
     ...nextRecord,
     ...(record.desktopSsh ? { desktopSsh: record.desktopSsh } : {}),
-    ...(record.relayManaged ? { relayManaged: record.relayManaged } : {}),
   };
 }
 
@@ -224,7 +224,6 @@ function toSavedEnvironmentStorageRecord(
   };
   const metadata = {
     ...(record.desktopSsh ? { desktopSsh: record.desktopSsh } : {}),
-    ...(record.relayManaged ? { relayManaged: record.relayManaged } : {}),
   };
   return Option.match(encryptedBearerToken, {
     onNone: () => ({ ...nextRecord, ...metadata }),
@@ -237,7 +236,7 @@ function normalizeSavedEnvironmentRegistryDocument(
 ): SavedEnvironmentRegistryDocument {
   return {
     version: document.version ?? 1,
-    records: document.records ?? [],
+    records: (document.records ?? []).filter((record) => record.relayManaged === undefined),
   };
 }
 

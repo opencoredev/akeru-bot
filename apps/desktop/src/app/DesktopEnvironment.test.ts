@@ -145,6 +145,7 @@ describe("DesktopEnvironment", () => {
         baseName: "Akeru Bot",
         stageLabel: "Alpha",
         displayName: "Akeru Bot (Alpha)",
+        isPackaged: false,
       });
       assert.equal(alpha.userDataDirName, "akeru-bot");
       assert.equal(development.userDataDirName, "akeru-bot-dev");

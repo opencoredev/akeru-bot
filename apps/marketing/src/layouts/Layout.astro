@@ -1,6 +1,7 @@
 ---
 import { GITHUB_REPOSITORY_URL, UPSTREAM_REPOSITORY_URL, DOCS_URL, docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
+import PostHog from "../components/PostHog.astro";
 
 interface Props {
   title?: string;
@@ -22,6 +23,48 @@ const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
 const canonicalUrl = new URL(Astro.url.pathname, siteOrigin);
 const socialImageUrl = new URL("/og.png", siteOrigin);
 const year = new Date().getFullYear();
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": `${siteOrigin.href}#organization`,
+    name: "T3 Tools, Inc.",
+    url: siteOrigin.href,
+    logo: new URL("/icon.png", siteOrigin).href,
+    sameAs: [GITHUB_REPOSITORY_URL],
+    contactPoint: {
+      "@type": "ContactPoint",
+      email: "legal@t3.tools",
+      contactType: "customer support",
+    },
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: "2261 Market Street #5309",
+      addressLocality: "San Francisco",
+      addressRegion: "CA",
+      postalCode: "94114",
+      addressCountry: "US",
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "@id": `${siteOrigin.href}#akeru-bot`,
+    name: "Akeru Bot",
+    description,
+    url: siteOrigin.href,
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "macOS, Windows, Linux",
+    isAccessibleForFree: true,
+    author: { "@id": `${siteOrigin.href}#organization` },
+    sameAs: [GITHUB_REPOSITORY_URL],
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+  },
+];
 ---
 
 <html lang="en">
@@ -61,7 +104,9 @@ const year = new Date().getFullYear();
     <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
     <title>{title}</title>
+    <PostHog />
   </head>
   <body>
     <div class:list={["page", pageClass]}>
@@ -72,6 +117,7 @@ const year = new Date().getFullYear();
         <div class="nav-links">
           <a class="nav-link" href="/#bots">Bots</a>
           <a class="nav-link" href="/#demos">Demos</a>
+          <a class="nav-link" href="/developers">Developers</a>
           <a class="nav-link" href={DOCS_URL} target="_blank" rel="noopener noreferrer">Docs</a>
         </div>
         <div class="nav-side nav-side--end">
@@ -122,9 +168,12 @@ const year = new Date().getFullYear();
               <a href={docsUrl("bots")} target="_blank" rel="noopener noreferrer">Bot profiles</a>
               <a href={docsUrl("plugins")} target="_blank" rel="noopener noreferrer">Plugins</a>
               <a href={docsUrl("remote-access")} target="_blank" rel="noopener noreferrer">Remote access</a>
+              <a href="/developers">Developer guide</a>
             </div>
             <div class="footer-col">
               <span class="footer-col-title">PROJECT</span>
+              <a href="/about">About</a>
+              <a href="/contact">Contact</a>
               <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
               <a href={`${GITHUB_REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">License</a>
               <a href={`${GITHUB_REPOSITORY_URL}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener noreferrer">
@@ -137,7 +186,7 @@ const year = new Date().getFullYear();
         <div class="footer-bottom">
           <span>&copy; {year} Akeru. MIT licensed.</span>
           <span class="footer-legal">
-            <a href="/terms-of-service">Terms</a>
+            <a href="/terms-of-service">Terms of Use</a>
             <a href="/privacy-policy">Privacy</a>
             <a href="/security-policy">Security</a>
           </span>

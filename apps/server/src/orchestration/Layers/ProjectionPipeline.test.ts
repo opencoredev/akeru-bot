@@ -2086,13 +2086,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_pending_approvals
         WHERE request_id = 'approval-request-stale-1'
       `;
-      assert.deepEqual(approvalRows, [
-        {
-          requestId: "approval-request-stale-1",
-          status: "resolved",
-          resolvedAt: "2026-02-26T12:30:03.000Z",
-        },
-      ]);
+      assert.deepEqual(approvalRows, []);
 
       const threadRows = yield* sql<{
         readonly pendingApprovalCount: number;

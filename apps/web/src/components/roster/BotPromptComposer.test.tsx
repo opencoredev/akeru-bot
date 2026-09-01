@@ -5,12 +5,19 @@ import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { composerTestInstanceId, makeComposerTestProvider } from "../../test/chatComposerProps";
 import {
   BotPromptComposer,
+  canSubmitBotPrompt,
   findMentionedBotId,
   isBotPromptExpanded,
   shouldFocusBotPromptForKey,
 } from "./BotPromptComposer";
 
 describe("bot prompt composer", () => {
+  it("does not submit while disabled", () => {
+    expect(canSubmitBotPrompt(true, "Send this", 0)).toBe(false);
+    expect(canSubmitBotPrompt(false, "Send this", 0)).toBe(true);
+    expect(canSubmitBotPrompt(false, "", 1)).toBe(true);
+  });
+
   it("expands for long or multiline prompts", () => {
     expect(isBotPromptExpanded("Short prompt")).toBe(false);
     expect(isBotPromptExpanded("Line one\nLine two")).toBe(true);

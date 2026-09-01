@@ -4,7 +4,12 @@ import * as NodeFS from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { BotDetailsPanel, reduceBotDetailsPanelState } from "./BotDetailsPanel";
+import {
+  BotDetailsPanel,
+  parseBotUsageCapInput,
+  reduceBotDetailsPanelState,
+  resolveBotUsageCapForProvider,
+} from "./BotDetailsPanel";
 import type { Bot } from "./types";
 
 const bot: Bot = {
@@ -36,11 +41,17 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain('aria-label="Bot label"');
     expect(markup).toContain('aria-label="Bot description"');
     expect(markup).toContain("Connect a provider");
+    expect(markup).toContain("Token hard stop");
+    expect(markup).toContain('aria-label="Token hard stop"');
     expect(markup).toContain(">Sandbox</div>");
     expect(markup).toContain('aria-label="Sandbox provider"');
     expect(markup).toContain('aria-label="Bot usage"');
     expect(markup).toContain(">Voice calls</span>");
     expect(markup).toContain('aria-label="Enable voice calls for Akeru"');
+    expect(markup).toContain('aria-label="Bot usage"');
+    expect(markup).toContain(">Memory</div>");
+    expect(markup).toContain('aria-label="Manage bot memory"');
+    expect(markup).toContain("Facts and history");
     expect(markup).toContain(">Tools</div>");
     expect(markup).toContain("No workspace tools");
     expect(markup).toContain(">Manage</span>");
@@ -50,6 +61,34 @@ describe("BotDetailsPanel", () => {
     expect(markup).not.toContain("mock data");
     expect(markup).not.toContain("border-b border-border");
     expect(markup).not.toContain("border-t border-border");
+  });
+
+  it("sets, clears, and rejects invalid hard stops", () => {
+    expect(parseBotUsageCapInput("50000")).toEqual({
+      valid: true,
+      value: { unit: "tokens", limit: 50_000 },
+    });
+    expect(parseBotUsageCapInput(" ")).toEqual({ valid: true, value: null });
+    expect(parseBotUsageCapInput("0")).toEqual({ valid: false, value: null });
+    expect(parseBotUsageCapInput("1.5")).toEqual({ valid: false, value: null });
+  });
+
+  it("clears hard stops for occupancy-only providers", () => {
+    expect(resolveBotUsageCapForProvider("50000", "cursor")).toEqual({
+      available: false,
+      valid: true,
+      value: null,
+    });
+    expect(resolveBotUsageCapForProvider("50000", "grok")).toEqual({
+      available: false,
+      valid: true,
+      value: null,
+    });
+    expect(resolveBotUsageCapForProvider("50000", "codex")).toEqual({
+      available: true,
+      valid: true,
+      value: { unit: "tokens", limit: 50_000 },
+    });
   });
 
   it("uses the configured right-panel shortcut while open or closed", () => {
@@ -102,7 +141,9 @@ describe("BotDetailsPanel", () => {
     );
     expect(source).toContain("<BotDetailsPanel");
     expect(source).toContain("onSaveBot=");
+    expect(source).toContain("threadRef={threadRef}");
     expect(source).toContain("voiceEnabled,");
+    expect(source).toContain("usageCap,");
     expect(source).toContain("sandbox,");
     expect(source).toContain("disabledMcpServerIds,");
     expect(source).not.toContain("RightPanelTabs");

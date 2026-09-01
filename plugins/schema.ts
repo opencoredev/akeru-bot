@@ -393,7 +393,11 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
       `Plugin '${manifest.id}' labels an API key connection without API key authentication.`,
     );
   }
-  if (manifest.transport.type === "stdio" && manifest.connection.type !== "local") {
+  if (
+    manifest.transport.type === "stdio" &&
+    manifest.connection.type !== "local" &&
+    manifest.connection.type !== "verification-pending"
+  ) {
     throw new TypeError(`Plugin '${manifest.id}' must label its stdio connection as local.`);
   }
   if (

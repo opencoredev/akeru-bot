@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as McpInvocationContext from "./McpInvocationContext.ts";
+import { redactProviderVisiblePreviewResult } from "./PreviewSnapshotRedaction.ts";
 
 export interface PreviewAutomationInvokeInput {
   readonly scope: McpInvocationContext.McpInvocationScope;
@@ -412,7 +413,15 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
     });
     if (!pending) return;
     if (response.ok) {
-      yield* Deferred.succeed(pending.deferred, response.result);
+      yield* Effect.try({
+        try: () => redactProviderVisiblePreviewResult(pending.context.operation, response.result),
+        catch: () => new PreviewAutomationMalformedResponseError(pending.context),
+      }).pipe(
+        Effect.matchEffect({
+          onFailure: (error) => Deferred.fail(pending.deferred, error),
+          onSuccess: (result) => Deferred.succeed(pending.deferred, result),
+        }),
+      );
     } else {
       yield* Deferred.fail(
         pending.deferred,

@@ -80,11 +80,36 @@ export function reduceBotDetailsPanelState(
   return { ...state, mobileOpen: action.open };
 }
 
+export function parseBotUsageCapInput(input: string): {
+  readonly valid: boolean;
+  readonly value: Bot["usageCap"];
+} {
+  if (input.trim().length === 0) return { valid: true, value: null };
+  const limit = Number(input);
+  if (!Number.isSafeInteger(limit) || limit <= 0) return { valid: false, value: null };
+  return { valid: true, value: { unit: "tokens", limit } };
+}
+
+export function resolveBotUsageCapForProvider(
+  input: string,
+  providerDriver?: string,
+): {
+  readonly available: boolean;
+  readonly valid: boolean;
+  readonly value: Bot["usageCap"];
+} {
+  if (providerDriver === "cursor" || providerDriver === "grok") {
+    return { available: false, valid: true, value: null };
+  }
+  return { available: true, ...parseBotUsageCapInput(input) };
+}
+
 export interface BotProfileUpdate {
   readonly name: string;
   readonly label: string | null;
   readonly description: string | null;
   readonly engine: BotEngine | null;
+  readonly usageCap: Bot["usageCap"];
   readonly sandbox: Bot["sandbox"];
   readonly voiceEnabled: boolean;
   readonly disabledMcpServerIds: readonly McpServerId[];
@@ -94,10 +119,12 @@ function BotProfileEditor({
   bot,
   onSave,
   threadRef,
+  active,
 }: {
   readonly bot: Bot;
   readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
   readonly threadRef: ScopedThreadRef | null;
+  readonly active: boolean;
 }) {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -110,6 +137,7 @@ function BotProfileEditor({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [engineChanged, setEngineChanged] = useState(false);
+  const [usageCap, setUsageCap] = useState(() => bot.usageCap?.limit.toString() ?? "");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
@@ -157,6 +185,9 @@ function BotProfileEditor({
   const normalizedLabel = label.trim() || null;
   const normalizedDescription = description.trim() || null;
   const nextEngine: Bot["engine"] = engineChanged && model ? { provider, model } : bot.engine;
+  const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
+  const usageCapDirty =
+    !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
   const nextSandbox: Bot["sandbox"] = sandbox;
   const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);
   const enabledToolCount = tools.filter(
@@ -171,6 +202,7 @@ function BotProfileEditor({
     normalizedLabel !== bot.label ||
     normalizedDescription !== bot.description ||
     engineChanged ||
+    usageCapDirty ||
     sandboxDirty ||
     voiceEnabled !== bot.voiceEnabled ||
     toolOverridesDirty;
@@ -258,7 +290,7 @@ function BotProfileEditor({
           </div>
         </div>
 
-        <BotUsageSection environmentId={environmentId} botId={bot.id} />
+        <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
 
         <div className="space-y-2">
           <div className="text-sm font-medium">Memory</div>
@@ -299,6 +331,32 @@ function BotProfileEditor({
           </Select>
         </div>
 
+        {resolvedUsageCap.available ? (
+          <label className="block space-y-2 text-sm font-medium">
+            <span>
+              Token hard stop <span className="font-normal text-muted-foreground">(optional)</span>
+            </span>
+            <Input
+              aria-label="Token hard stop"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={usageCap}
+              placeholder="No limit"
+              onChange={(event) => {
+                setUsageCap(event.currentTarget.value);
+                markChanged();
+              }}
+            />
+          </label>
+        ) : (
+          <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
+            <span className="text-sm font-medium">Token hard stop</span>
+            <span className="text-sm text-muted-foreground">Unavailable for this provider</span>
+          </div>
+        )}
+
         <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
           <span className="text-sm font-medium">Voice calls</span>
           <Switch
@@ -335,7 +393,7 @@ function BotProfileEditor({
         {saved ? <span className="mr-auto text-xs text-success">Saved</span> : null}
         <Button
           size="sm"
-          disabled={saving || !dirty || !name.trim() || !onSave}
+          disabled={saving || !dirty || !name.trim() || !resolvedUsageCap.valid || !onSave}
           onClick={() => {
             if (!onSave) return;
             setSaving(true);
@@ -344,6 +402,7 @@ function BotProfileEditor({
               label: normalizedLabel,
               description: normalizedDescription,
               engine: nextEngine,
+              usageCap: resolvedUsageCap.value,
               sandbox: nextSandbox,
               voiceEnabled,
               disabledMcpServerIds,
@@ -414,7 +473,7 @@ export function BotDetailsPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings]);
 
-  const content = (closeButton?: ReactNode) => (
+  const content = (active: boolean, closeButton?: ReactNode) => (
     <>
       <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
         <h2 className="text-sm font-medium">Settings</h2>
@@ -423,6 +482,7 @@ export function BotDetailsPanel({
       <BotProfileEditor
         bot={bot}
         threadRef={threadRef}
+        active={active}
         {...(onSaveBot ? { onSave: onSaveBot } : {})}
       />
     </>
@@ -441,6 +501,7 @@ export function BotDetailsPanel({
         }
       >
         {content(
+          panelState.desktopOpen,
           <Tooltip>
             <TooltipTrigger
               render={
@@ -504,6 +565,7 @@ export function BotDetailsPanel({
         >
           <SheetTitle className="sr-only">Edit {bot.name}</SheetTitle>
           {content(
+            panelState.mobileOpen,
             <SheetClose
               aria-label="Close bot sidebar"
               render={<Button size="icon-sm" variant="ghost" />}

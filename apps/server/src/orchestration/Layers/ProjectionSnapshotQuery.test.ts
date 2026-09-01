@@ -1,4 +1,5 @@
 import {
+  AkeruDelegationRecord,
   CheckpointRef,
   EventId,
   MessageId,
@@ -11,6 +12,7 @@ import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
@@ -27,6 +29,10 @@ const asTurnId = (value: string): TurnId => TurnId.make(value);
 const asMessageId = (value: string): MessageId => MessageId.make(value);
 const asEventId = (value: string): EventId => EventId.make(value);
 const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.make(value);
+const decodeDelegationRecord = Schema.decodeUnknownEffect(AkeruDelegationRecord);
+const encodeDelegationRecordJson = Schema.encodeEffect(
+  Schema.fromJsonString(AkeruDelegationRecord),
+);
 
 const projectionSnapshotLayer = it.layer(
   OrchestrationProjectionSnapshotQueryLive.pipe(
@@ -39,6 +45,65 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect("includes delegation records in the shell snapshot", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      const record = {
+        delegationId: "delegation-shell",
+        parentDelegationId: null,
+        parentBotId: "bot-parent",
+        childBotId: "bot-child",
+        parentThreadId: "thread-parent",
+        childThreadId: null,
+        parentTurnId: "turn-parent",
+        childTurnId: null,
+        ancestorBotIds: ["bot-parent"],
+        depth: 1,
+        task: "Compare the release options.",
+        expectedResult: "A short comparison.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read"],
+          memoryScopes: ["project"],
+          sandbox: "local",
+          runtimeMode: "approval-required",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "none",
+        },
+        state: "queued",
+        billedBotId: "bot-child",
+        result: null,
+        failure: null,
+        keep: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        startedAt: null,
+        completedAt: null,
+      };
+      const recordJson = yield* decodeDelegationRecord(record).pipe(
+        Effect.flatMap(encodeDelegationRecordJson),
+      );
+
+      yield* sql`DELETE FROM projection_delegations`;
+      yield* sql`
+        INSERT INTO projection_delegations (delegation_id, record_json)
+        VALUES (
+          ${record.delegationId},
+          ${recordJson}
+        )
+      `;
+
+      const snapshot = yield* snapshotQuery.getShellSnapshot();
+      assert.equal(snapshot.delegations.length, 1);
+      assert.equal(snapshot.delegations[0]?.delegationId, "delegation-shell");
+      assert.equal(snapshot.delegations[0]?.task, "Compare the release options.");
+      yield* sql`DELETE FROM projection_delegations`;
+    }),
+  );
+
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
@@ -391,6 +456,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             status: "running",
             providerName: "codex",
             runtimeMode: "approval-required",
+            mcpServerIds: [],
             activeTurnId: asTurnId("turn-1"),
             lastError: null,
             updatedAt: "2026-02-24T00:00:07.000Z",
@@ -477,6 +543,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             status: "running",
             providerName: "codex",
             runtimeMode: "approval-required",
+            mcpServerIds: [],
             activeTurnId: asTurnId("turn-1"),
             lastError: null,
             updatedAt: "2026-02-24T00:00:07.000Z",
@@ -739,6 +806,55 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         yield* sql`DELETE FROM projection_projects`;
         yield* sql`DELETE FROM projection_threads`;
         yield* sql`DELETE FROM projection_turns`;
+        yield* sql`DELETE FROM orchestration_events`;
+
+        yield* sql`
+        INSERT INTO orchestration_events (
+          event_id,
+          aggregate_kind,
+          stream_id,
+          stream_version,
+          event_type,
+          occurred_at,
+          actor_kind,
+          payload_json,
+          metadata_json
+        )
+        VALUES
+          (
+            'event-project-deleted-created',
+            'project',
+            'project-deleted',
+            1,
+            'project.created',
+            '2026-02-28T00:00:00.000Z',
+            'user',
+            '{"projectId":"project-deleted","workspaceRoot":"/tmp/workspace"}',
+            '{}'
+          ),
+          (
+            'event-project-deleted-moved',
+            'project',
+            'project-deleted',
+            2,
+            'project.meta-updated',
+            '2026-02-28T00:00:01.000Z',
+            'user',
+            '{"projectId":"project-deleted","workspaceRoot":"/tmp/moved"}',
+            '{}'
+          ),
+          (
+            'event-project-active-created',
+            'project',
+            'project-active',
+            1,
+            'project.created',
+            '2026-03-01T00:00:00.000Z',
+            'user',
+            '{"projectId":"project-active","workspaceRoot":"/tmp/workspace"}',
+            '{}'
+          )
+      `;
 
         yield* sql`
         INSERT INTO projection_projects (
@@ -765,12 +881,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'project-deleted',
             'Deleted Project',
-            '/tmp/deleted',
+            '/tmp/moved',
             NULL,
             '[]',
-            '2026-03-01T00:00:02.000Z',
-            '2026-03-01T00:00:03.000Z',
-            '2026-03-01T00:00:04.000Z'
+            '2026-02-28T00:00:00.000Z',
+            '2026-02-28T00:00:01.000Z',
+            '2026-02-28T00:00:02.000Z'
           )
       `;
 
@@ -850,8 +966,18 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           assert.equal(project.value.id, asProjectId("project-active"));
         }
 
+        const originalProjectId =
+          yield* snapshotQuery.getOriginalProjectIdByWorkspaceRoot("/tmp/workspace");
+        assert.equal(originalProjectId._tag, "Some");
+        if (originalProjectId._tag === "Some") {
+          assert.equal(originalProjectId.value, asProjectId("project-deleted"));
+        }
+
         const missingProject = yield* snapshotQuery.getActiveProjectByWorkspaceRoot("/tmp/missing");
         assert.equal(missingProject._tag, "None");
+        const missingOriginalProjectId =
+          yield* snapshotQuery.getOriginalProjectIdByWorkspaceRoot("/tmp/missing");
+        assert.equal(missingOriginalProjectId._tag, "None");
 
         const firstThreadId = yield* snapshotQuery.getFirstActiveThreadIdByProjectId(
           asProjectId("project-active"),
@@ -2429,12 +2555,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const detailWithPinnedRequests = yield* snapshotQuery.getThreadDetailById(threadW);
       assert.equal(detailWithPinnedRequests._tag, "Some");
       if (detailWithPinnedRequests._tag === "Some") {
-        const ids = detailWithPinnedRequests.value.activities.map((activity) => activity.id);
+        const ids = new Set(
+          detailWithPinnedRequests.value.activities.map((activity) => activity.id),
+        );
         assert.equal(detailWithPinnedRequests.value.activities.length, 503);
-        assert.equal(ids.includes(asEventId("approval-old")), true);
-        assert.equal(ids.includes(asEventId("user-input-old")), true);
-        assert.equal(ids.includes(asEventId("user-input-closed")), false);
-        assert.equal(ids.includes(asEventId("user-input-tied-z-request")), true);
+        assert.equal(ids.has(asEventId("approval-old")), true);
+        assert.equal(ids.has(asEventId("user-input-old")), true);
+        assert.equal(ids.has(asEventId("user-input-closed")), false);
+        assert.equal(ids.has(asEventId("user-input-tied-z-request")), true);
       }
 
       const windowWithPinnedRequests = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
@@ -2442,12 +2570,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       });
       assert.equal(windowWithPinnedRequests._tag, "Some");
       if (windowWithPinnedRequests._tag === "Some") {
-        const ids = windowWithPinnedRequests.value.thread.activities.map((activity) => activity.id);
+        const ids = new Set(
+          windowWithPinnedRequests.value.thread.activities.map((activity) => activity.id),
+        );
         assert.equal(windowWithPinnedRequests.value.thread.activities.length, 503);
-        assert.equal(ids.includes(asEventId("approval-old")), true);
-        assert.equal(ids.includes(asEventId("user-input-old")), true);
-        assert.equal(ids.includes(asEventId("user-input-closed")), false);
-        assert.equal(ids.includes(asEventId("user-input-tied-z-request")), true);
+        assert.equal(ids.has(asEventId("approval-old")), true);
+        assert.equal(ids.has(asEventId("user-input-old")), true);
+        assert.equal(ids.has(asEventId("user-input-closed")), false);
+        assert.equal(ids.has(asEventId("user-input-tied-z-request")), true);
       }
     }),
   );

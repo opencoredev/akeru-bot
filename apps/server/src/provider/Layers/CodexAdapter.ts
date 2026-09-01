@@ -157,15 +157,40 @@ function isFatalCodexProcessStderrMessage(message: string): boolean {
   return FATAL_CODEX_STDERR_SNIPPETS.some((snippet) => normalized.includes(snippet));
 }
 
+interface CodexTurnTokenUsage {
+  readonly threadTotalTokens: number;
+  readonly totalTokens: number;
+  readonly inputTokens: number;
+  readonly cachedInputTokens: number;
+  readonly outputTokens: number;
+  readonly reasoningOutputTokens: number;
+}
+
 function normalizeCodexTokenUsage(
   usage: EffectCodexSchema.V2ThreadTokenUsageUpdatedNotification["tokenUsage"],
-): ThreadTokenUsageSnapshot | undefined {
+  previous: CodexTurnTokenUsage | undefined,
+):
+  | { readonly snapshot: ThreadTokenUsageSnapshot; readonly total: CodexTurnTokenUsage }
+  | undefined {
   const totalProcessedTokens = usage.total.totalTokens;
   const usedTokens = usage.last.totalTokens;
   if (usedTokens === undefined || usedTokens <= 0) {
     return undefined;
   }
 
+  const isNewModelCall =
+    previous === undefined || totalProcessedTokens > previous.threadTotalTokens;
+  const total = isNewModelCall
+    ? {
+        threadTotalTokens: totalProcessedTokens,
+        totalTokens: (previous?.totalTokens ?? 0) + usedTokens,
+        inputTokens: (previous?.inputTokens ?? 0) + usage.last.inputTokens,
+        cachedInputTokens: (previous?.cachedInputTokens ?? 0) + usage.last.cachedInputTokens,
+        outputTokens: (previous?.outputTokens ?? 0) + usage.last.outputTokens,
+        reasoningOutputTokens:
+          (previous?.reasoningOutputTokens ?? 0) + usage.last.reasoningOutputTokens,
+      }
+    : previous;
   const maxTokens = usage.modelContextWindow ?? undefined;
   const inputTokens = usage.last.inputTokens;
   const cachedInputTokens = usage.last.cachedInputTokens;
@@ -173,23 +198,24 @@ function normalizeCodexTokenUsage(
   const reasoningOutputTokens = usage.last.reasoningOutputTokens;
 
   return {
-    usedTokens,
-    ...(totalProcessedTokens !== undefined && totalProcessedTokens > usedTokens
-      ? { totalProcessedTokens }
-      : {}),
-    ...(maxTokens !== undefined ? { maxTokens } : {}),
-    ...(inputTokens !== undefined ? { inputTokens } : {}),
-    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
-    ...(outputTokens !== undefined ? { outputTokens } : {}),
-    ...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
-    ...(usedTokens !== undefined ? { lastUsedTokens: usedTokens } : {}),
-    ...(inputTokens !== undefined ? { lastInputTokens: inputTokens } : {}),
-    ...(cachedInputTokens !== undefined ? { lastCachedInputTokens: cachedInputTokens } : {}),
-    ...(outputTokens !== undefined ? { lastOutputTokens: outputTokens } : {}),
-    ...(reasoningOutputTokens !== undefined
-      ? { lastReasoningOutputTokens: reasoningOutputTokens }
-      : {}),
-    compactsAutomatically: true,
+    total,
+    snapshot: {
+      usedTokens,
+      ...(totalProcessedTokens !== undefined && totalProcessedTokens > usedTokens
+        ? { totalProcessedTokens }
+        : {}),
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(inputTokens !== undefined ? { inputTokens } : {}),
+      ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+      ...(outputTokens !== undefined ? { outputTokens } : {}),
+      ...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
+      lastUsedTokens: total.totalTokens,
+      lastInputTokens: total.inputTokens,
+      lastCachedInputTokens: total.cachedInputTokens,
+      lastOutputTokens: total.outputTokens,
+      lastReasoningOutputTokens: total.reasoningOutputTokens,
+      compactsAutomatically: true,
+    },
   };
 }
 
@@ -764,6 +790,7 @@ function mapCollabAgentEvent(
 function mapToRuntimeEvents(
   event: ProviderEvent,
   canonicalThreadId: ThreadId,
+  tokenUsageByTurnId?: Map<string, CodexTurnTokenUsage>,
 ): ReadonlyArray<ProviderRuntimeEvent> {
   if (event.kind === "notification" && event.method.startsWith("collabAgent/")) {
     return mapCollabAgentEvent(event, canonicalThreadId);
@@ -1019,16 +1046,21 @@ function mapToRuntimeEvents(
       EffectCodexSchema.V2ThreadTokenUsageUpdatedNotification,
       event.payload,
     );
-    const normalizedUsage = payload ? normalizeCodexTokenUsage(payload.tokenUsage) : undefined;
-    if (!normalizedUsage) {
+    if (!payload) {
       return [];
     }
+    const normalizedUsage = normalizeCodexTokenUsage(
+      payload.tokenUsage,
+      tokenUsageByTurnId?.get(payload.turnId),
+    );
+    if (!normalizedUsage) return [];
+    tokenUsageByTurnId?.set(payload.turnId, normalizedUsage.total);
     return [
       {
         type: "thread.token-usage.updated",
         ...runtimeEventBase(event, canonicalThreadId),
         payload: {
-          usage: normalizedUsage,
+          usage: normalizedUsage.snapshot,
         },
       },
     ];
@@ -1039,6 +1071,7 @@ function mapToRuntimeEvents(
     if (!turnId) {
       return [];
     }
+    tokenUsageByTurnId?.delete(turnId);
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -1054,6 +1087,7 @@ function mapToRuntimeEvents(
     if (!payload) {
       return [];
     }
+    if (event.turnId) tokenUsageByTurnId?.delete(event.turnId);
     const errorMessage = trimText(payload.turn.error?.message);
     return [
       {
@@ -1068,6 +1102,7 @@ function mapToRuntimeEvents(
   }
 
   if (event.method === "turn/aborted") {
+    if (event.turnId) tokenUsageByTurnId?.delete(event.turnId);
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -1733,10 +1768,11 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         // this a child of `startSession`, and Effect interrupts a fiber's
         // children when it completes, so the consumer died on return and every
         // runtime event the session emitted afterwards was dropped.
+        const tokenUsageByTurnId = new Map<string, CodexTurnTokenUsage>();
         const eventFiber = yield* Stream.runForEach(runtime.events, (event) =>
           Effect.gen(function* () {
             yield* writeNativeEvent(event);
-            const runtimeEvents = mapToRuntimeEvents(event, event.threadId);
+            const runtimeEvents = mapToRuntimeEvents(event, event.threadId, tokenUsageByTurnId);
             if (runtimeEvents.length === 0) {
               yield* Effect.logDebug("ignoring unhandled Codex provider event", {
                 method: event.method,

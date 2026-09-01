@@ -1,12 +1,20 @@
+import {
+  PreviewAutomationRecordingArtifact,
+  PreviewAutomationSnapshot,
+  type PreviewAutomationOperation,
+} from "@t3tools/contracts";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
+import * as Schema from "effect/Schema";
 import { PNG } from "pngjs";
 
-import { redactSensitiveText } from "./SensitiveDataRedaction.ts";
-
 const REDACTED = "[REDACTED]";
-const MAX_SCREENSHOT_BYTES = 20 * 1_024 * 1_024;
+export const MAX_SCREENSHOT_BYTES = 20 * 1_024 * 1_024;
 const MAX_SCREENSHOT_PIXELS = 16_000_000;
+const screenshotField = /^(?:screenshot|image|frame)$/i;
 const secretField =
-  /^(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|cookie|set-cookie|session|sessionId|clientSecret|awsSecretAccessKey)$/i;
+  /^(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|cookie|set-cookie|session|sessionId|clientSecret|awsSecretAccessKey|(?:artifact|chat|file|log|recording|upload)?path)$/i;
+const decodeSnapshot = Schema.decodeUnknownSync(PreviewAutomationSnapshot);
+const decodeRecordingArtifact = Schema.decodeUnknownSync(PreviewAutomationRecordingArtifact);
 
 function redactValue(value: unknown, fieldName?: string): { value: unknown; redacted: boolean } {
   if (fieldName && secretField.test(fieldName)) return { value: REDACTED, redacted: true };
@@ -23,13 +31,32 @@ function redactValue(value: unknown, fieldName?: string): { value: unknown; reda
   if (typeof value !== "object" || value === null) return { value, redacted: false };
 
   let redacted = false;
-  const object: Record<string, unknown> = {};
+  const entries: Array<[string, unknown]> = [];
   for (const [key, item] of Object.entries(value)) {
     const result = redactValue(item, key);
     redacted ||= result.redacted;
-    object[key] = result.value;
+    entries.push([key, result.value]);
   }
-  return { value: object, redacted };
+  return { value: Object.fromEntries(entries), redacted };
+}
+
+function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
+  if (typeof value === "string" && fieldName && screenshotField.test(fieldName)) {
+    throw new Error("Unredacted screenshot data is not provider-safe.");
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) rejectScreenshotPayload(item, fieldName);
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  if (
+    Object.hasOwn(value, "data") &&
+    ((fieldName !== undefined && screenshotField.test(fieldName)) ||
+      Object.hasOwn(value, "mimeType"))
+  ) {
+    throw new Error("Unredacted screenshot data is not provider-safe.");
+  }
+  for (const [key, item] of Object.entries(value)) rejectScreenshotPayload(item, key);
 }
 
 function readPngDimensions(bytes: Uint8Array) {
@@ -98,7 +125,35 @@ export function redactPreviewSnapshot(
   }
   return {
     page: redactedPage.value as Readonly<Record<string, unknown>>,
-    screenshot: blankPng(bytes),
+    screenshot: redactComputerScreenshot({ mediaType: "image/png", data: bytes }).data,
     frameRedacted: true,
   };
+}
+
+export function redactProviderVisiblePreviewResult(
+  operation: PreviewAutomationOperation,
+  input: unknown,
+): unknown {
+  if (operation === "evaluate") {
+    return { redactionStatus: "omitted-unverified-preview-evaluation" };
+  }
+  if (operation === "snapshot") {
+    const snapshot = decodeSnapshot(input);
+    const { accessibilityTree: _accessibilityTree, screenshot, ...page } = snapshot;
+    const redacted = redactPreviewSnapshot(page, screenshot);
+    return {
+      ...redacted.page,
+      accessibilityTree: { redactionStatus: "omitted-unverified-accessibility-tree" },
+      screenshot: {
+        ...screenshot,
+        data: Buffer.from(redacted.screenshot).toString("base64"),
+      },
+    };
+  }
+
+  rejectScreenshotPayload(input);
+  if (operation === "recordingStop") {
+    return { ...decodeRecordingArtifact(input), path: REDACTED };
+  }
+  return redactValue(input).value;
 }

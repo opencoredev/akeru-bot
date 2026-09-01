@@ -1,4 +1,5 @@
 import type { PreviewAnnotationPayload } from "@t3tools/contracts";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 import { buildElementContextBlock, normalizeElementContextSelection } from "./elementContext";
 
 const TRAILING_PREVIEW_ANNOTATION_BLOCK_PATTERN =
@@ -48,14 +49,15 @@ export function buildPreviewAnnotationPrompt(annotation: PreviewAnnotationPayloa
     }
   }
   if (annotation.screenshot) {
-    lines.push("The attached screenshot is the annotated preview crop.");
+    lines.push("Screenshot omitted because local pixel redaction is unavailable.");
   }
   const elementContexts = annotation.elements
     .map((target) => normalizeElementContextSelection(target.element))
     .filter((context) => context !== null);
   const elementBlock = buildElementContextBlock(elementContexts);
   if (elementBlock) lines.push(elementBlock);
-  return ["<preview_annotation>", ...lines, "</preview_annotation>"].join("\n");
+  return redactSensitiveText(["<preview_annotation>", ...lines, "</preview_annotation>"].join("\n"))
+    .value;
 }
 
 export function appendPreviewAnnotationPrompt(
@@ -100,12 +102,7 @@ export function extractTrailingPreviewAnnotation(prompt: string): ExtractedPrevi
 }
 
 export async function previewAnnotationScreenshotFile(
-  annotation: PreviewAnnotationPayload,
+  _annotation: PreviewAnnotationPayload,
 ): Promise<File | null> {
-  if (!annotation.screenshot) return null;
-  const response = await fetch(annotation.screenshot.dataUrl);
-  const blob = await response.blob();
-  return new File([blob], `preview-annotation-${annotation.id}.png`, {
-    type: blob.type || "image/png",
-  });
+  return null;
 }

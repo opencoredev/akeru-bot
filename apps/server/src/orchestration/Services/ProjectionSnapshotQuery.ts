@@ -127,6 +127,13 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<Option.Option<OrchestrationProject>, ProjectionRepositoryError>;
 
   /**
+   * Read the first project that used an exact workspace root, including deleted projects.
+   */
+  readonly getOriginalProjectIdByWorkspaceRoot: (
+    workspaceRoot: string,
+  ) => Effect.Effect<Option.Option<ProjectId>, ProjectionRepositoryError>;
+
+  /**
    * Read a single active project shell row by id.
    */
   readonly getProjectShellById: (

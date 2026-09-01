@@ -37,6 +37,7 @@ import {
   resolveBotThreadTarget,
   reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
+import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;

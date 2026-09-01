@@ -7,7 +7,32 @@ import {
   formatHourShort,
   formatRelativeHourShort,
   makeWindow,
+  stepTokenCount,
+  stepUsageTokenTotals,
 } from "./usageFormat.ts";
+
+describe("step usage", () => {
+  it("accounts for per-step tokens without using context occupancy", () => {
+    const usage = {
+      usedTokens: 90_000,
+      lastUsedTokens: 90_000,
+      lastInputTokens: 1_200,
+      lastCachedInputTokens: 200,
+      lastOutputTokens: 300,
+      lastReasoningOutputTokens: 100,
+    };
+
+    expect(stepTokenCount(usage)).toBe(1_500);
+    expect(stepUsageTokenTotals(usage)).toEqual({
+      uncachedInputTokens: 1_000,
+      cachedInputTokens: 200,
+      cacheCreationTokens: 0,
+      outputTokens: 300,
+      reasoningTokens: 100,
+    });
+    expect(stepTokenCount({ usedTokens: 90_000 })).toBeNull();
+  });
+});
 
 describe("hourly usage formatting", () => {
   it("enumerates 24 fixed buckets across a rolling window", () => {

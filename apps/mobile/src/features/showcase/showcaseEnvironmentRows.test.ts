@@ -16,7 +16,6 @@ function environment(
     environmentId: EnvironmentId.make(environmentId),
     environmentLabel,
     displayUrl,
-    isRelayManaged: false,
     connectionState: "connected",
     connectionError: null,
     connectionErrorTraceId: null,

@@ -3,8 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { BotThreadLanding } from "../components/roster/BotThreadLanding";
 import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
-import { useRosterStore } from "../components/roster/rosterStore";
 import { useBotThreadRef } from "../components/roster/useBotThreadRef";
+import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
 import { botEnvironment } from "../state/bots";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -14,10 +14,10 @@ function BotThreadRouteView() {
   const { botId } = Route.useParams();
   const environmentId = usePrimaryEnvironmentId();
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
-  const threadRef = useBotThreadRef(botId);
   const bot = useRosterStore((state) =>
     state.bots.find((candidate) => candidate.id === botId && candidate.archivedAt === null),
   );
+  const threadRef = useBotThreadRef(botId);
 
   return (
     <>
@@ -32,6 +32,7 @@ function BotThreadRouteView() {
             label,
             description,
             engine,
+            usageCap,
             sandbox,
             voiceEnabled,
             disabledMcpServerIds,
@@ -45,6 +46,7 @@ function BotThreadRouteView() {
                 label,
                 description,
                 engine,
+                usageCap,
                 sandbox,
                 voiceEnabled,
                 disabledMcpServerIds,

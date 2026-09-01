@@ -36,6 +36,7 @@ function makeElectronAppLayer(
     systemLocale: Effect.succeed("en-US"),
     whenReady: Effect.void,
     quit,
+    requestSingleInstanceLock: Effect.succeed(true),
     exit: () => Effect.void,
     relaunch: () => Effect.void,
     setPath: () => Effect.void,

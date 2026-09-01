@@ -19,6 +19,7 @@ import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
+import { PNG } from "pngjs";
 
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 
@@ -37,6 +38,37 @@ const makeHost = (overrides: Partial<PreviewAutomationHost> = {}): PreviewAutoma
   clientId: "client-1",
   environmentId: scope.environmentId,
   ...overrides,
+});
+
+const snapshotResult = (() => {
+  const png = new PNG({ width: 1, height: 1 });
+  png.data.fill(255);
+  return {
+    url: "http://localhost:3200",
+    title: "Example",
+    loading: false,
+    visibleText: "Example",
+    interactiveElements: [],
+    accessibilityTree: {},
+    consoleEntries: [],
+    networkEntries: [],
+    actionTimeline: [],
+    screenshot: {
+      mimeType: "image/png" as const,
+      data: PNG.sync.write(png).toString("base64"),
+      width: 1,
+      height: 1,
+    },
+  };
+})();
+
+const recordingResult = (tabId: PreviewTabId) => ({
+  id: "recording-1",
+  tabId,
+  path: "/Users/leo/.akeru/browser-artifacts/recording.webm",
+  mimeType: "video/webm",
+  sizeBytes: 123,
+  createdAt: "2026-01-01T00:00:00Z",
 });
 
 type RoutedRequest = PreviewAutomationRequest & {
@@ -84,6 +116,69 @@ it.effect("atomically registers a connected host and correlates its response", (
   ),
 );
 
+it.effect("fails closed when a provider-bound frame cannot be masked", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const requests = requestsFrom(yield* broker.connect(makeHost()));
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: true,
+          result: {
+            ...snapshotResult,
+            screenshot: {
+              ...snapshotResult.screenshot,
+              data: Buffer.from("raw pixels").toString("base64"),
+            },
+          },
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+
+      const error = yield* broker
+        .invoke<void>({ scope, operation: "snapshot", input: {} })
+        .pipe(Effect.flip);
+
+      expect(error).toBeInstanceOf(PreviewAutomationMalformedResponseError);
+    }),
+  ),
+);
+
+it.effect("rejects screenshot payloads from non-snapshot operations", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const requests = requestsFrom(yield* broker.connect(makeHost()));
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: true,
+          result:
+            request.operation === "status"
+              ? { data: "raw pixels", mimeType: "image/png" }
+              : { screenshot: { data: "raw pixels" } },
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+
+      const statusError = yield* broker
+        .invoke<void>({ scope, operation: "status", input: {} })
+        .pipe(Effect.flip);
+      const navigateError = yield* broker
+        .invoke<void>({ scope, operation: "navigate", input: { url: "https://example.test" } })
+        .pipe(Effect.flip);
+
+      expect(statusError).toBeInstanceOf(PreviewAutomationMalformedResponseError);
+      expect(navigateError).toBeInstanceOf(PreviewAutomationMalformedResponseError);
+    }),
+  ),
+);
+
 it.effect("targets multiple tabs explicitly while retaining a default tab", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -104,7 +199,7 @@ it.effect("targets multiple tabs explicitly while retaining a default tab", () =
           result:
             request.operation === "open"
               ? { available: true, tabId: openedTabIds[openIndex++] }
-              : { url: "http://localhost:3200" },
+              : snapshotResult,
         });
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -147,7 +242,7 @@ it.effect("does not let an older response replace a newer explicit tab target", 
             connectionId: request.connectionId,
             requestId: request.requestId,
             ok: true,
-            result: { url: "http://localhost:3200" },
+            result: snapshotResult,
           });
           if (request.tabId === newerTabId) {
             yield* Deferred.succeed(releaseOlderResponse, undefined);
@@ -192,8 +287,8 @@ it.effect("tracks the tab returned by a targeted recording stop", () =>
             request.operation === "open"
               ? { available: true, tabId: browsingTabId }
               : request.operation === "recordingStop"
-                ? { id: "recording-1", tabId: recordingTabId }
-                : { url: "http://localhost:3200" },
+                ? recordingResult(recordingTabId)
+                : snapshotResult,
         });
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -234,7 +329,7 @@ it.effect("does not let a no-tab response suppress an earlier tab decision", () 
             result:
               request.operation === "open"
                 ? { available: true, tabId: marker === "older" ? openedTabId : initialTabId }
-                : { url: "http://localhost:3200" },
+                : snapshotResult,
           });
           if (marker === "newer") {
             yield* Deferred.succeed(releaseOpenResponse, undefined);

@@ -5,6 +5,7 @@ import {
   KeyboardIcon,
   Link02Icon,
   PaintBrush01Icon,
+  SecurityCheckIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
@@ -31,6 +32,9 @@ const ProvidersPanel = lazy(async () => ({
 const VoiceSettingsPanel = lazy(async () => ({
   default: (await import("./VoiceSettings")).VoiceSettingsPanel,
 }));
+const PrivacySettingsPanel = lazy(async () => ({
+  default: (await import("./PrivacySettings")).PrivacySettingsPanel,
+}));
 const ConnectionsSettings = lazy(async () => ({
   default: (await import("./ConnectionsSettings")).ConnectionsSettings,
 }));
@@ -50,6 +54,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
   voice: VoiceSettingsPanel,
+  privacy: PrivacySettingsPanel,
   connections: ConnectionsSettings,
   keybindings: KeybindingsSettingsPanel,
   "source-control": SourceControlSettingsPanel,
@@ -66,6 +71,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
   { section: "providers", label: "Providers", icon: BotIcon },
   { section: "voice", label: "Voice", icon: CallIcon },
+  { section: "privacy", label: "Privacy", icon: SecurityCheckIcon },
   { section: "inbox", label: "Errors", icon: AlertCircleIcon },
   { section: "connections", label: "Connections", icon: Link02Icon },
   { section: "keybindings", label: "Keybindings", icon: KeyboardIcon },

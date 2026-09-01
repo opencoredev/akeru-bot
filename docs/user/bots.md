@@ -6,11 +6,14 @@ Open a bot to edit its profile in the panel beside the conversation.
 - Set the bot name.
 - Add an optional label and description.
 - Choose the model that the bot uses.
+- Set an optional **Token hard stop**. Akeru Bot interrupts the current step at the limit.
 - Turn on **Voice calls** to show the phone button in that bot's chat header.
 - Open **Tools** to choose which installed plugins and MCP servers the bot can use. New tools are enabled for every bot by default.
 - Select **Save** to apply profile, model, voice, and tool changes.
 
 Akeru Bot stores the profile in the connected environment. Other clients connected to the same environment see the same bot configuration. Workspace-disabled tools stay unavailable to all bots.
+
+Each settled bot reply shows its engine, step tokens, and estimated USD cost when the provider reports enough usage data.
 
 Settings controls whether bots share their workspace and browser. **Separate** is the default and gives each bot its own workspace identity and browser profile. **Shared** lets bots share files and cookies. Bots can use Local, E2B, Daytona, Vercel Sandbox, or Upstash Box workspaces. Remote workspaces use the provider credentials available to the environment and fail if those credentials are missing.
 

@@ -105,6 +105,37 @@ it.layer(layer)("MemoryToolHandlers", (it) => {
     }),
   );
 
+  it.effect("enforces delegated memory scopes on reads and writes", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const candidates = yield* MemoryCandidateRepository;
+      const unrestricted = createMemoryToolHandlers(repository, candidates, access);
+      yield* Effect.promise(() =>
+        execute("remember", unrestricted.remember, {
+          fact: "Private delegated detail.",
+          scope: "private",
+        }),
+      );
+      const restricted = createMemoryToolHandlers(repository, candidates, access, undefined, [
+        "project",
+      ]);
+      const recalled = (yield* Effect.promise(() =>
+        execute("recall_memory", restricted.recall_memory, { query: "Private delegated detail" }),
+      )) as ReadonlyArray<{ readonly scope: string }>;
+      assert.deepEqual(recalled, []);
+      const rejected = yield* Effect.promise(() =>
+        execute("remember", restricted.remember, {
+          fact: "Another private detail.",
+          scope: "private",
+        }).then(
+          () => false,
+          () => true,
+        ),
+      );
+      assert.isTrue(rejected);
+    }),
+  );
+
   it.effect("updates private non-sensitive facts directly", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;

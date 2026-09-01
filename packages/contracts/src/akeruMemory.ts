@@ -418,6 +418,7 @@ export const AkeruMemoryThreadAccess = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
   workspaceRoot: TrimmedNonEmptyString,
+  legacyWorkspaceOwnerProjectId: Schema.optional(ProjectId),
   botId: Schema.NullOr(BotId),
   groupId: Schema.NullOr(GroupId),
   respondingBotId: Schema.NullOr(BotId),

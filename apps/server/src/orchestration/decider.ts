@@ -1,5 +1,8 @@
 import {
+  AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_DELEGATION_MAX_DEPTH,
+  type AkeruDelegationRecord,
+  type AkeruDelegationState,
   BotId,
   DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -20,7 +23,7 @@ import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
   listThreadsByProjectId,
   requireActiveGroupMember,
-  requireActiveProjectWorkspaceRootAbsent,
+  requireProjectWorkspaceRootAbsent,
   requireBot,
   requireBotAbsent,
   requireBotArchived,
@@ -46,6 +49,79 @@ const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 // window is a failed/stale start, not pending work. Mirrors the client's
 // QUEUED_TURN_START_GRACE_MS in client-runtime threadSettled.ts.
 const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
+const TERMINAL_DELEGATION_STATES = new Set<AkeruDelegationState>([
+  "failed",
+  "canceled",
+  "completed",
+]);
+const DELEGATION_STATE_TRANSITIONS: Record<
+  Exclude<AkeruDelegationState, "failed" | "canceled" | "completed">,
+  ReadonlySet<AkeruDelegationState>
+> = {
+  queued: new Set(["running", "failed"]),
+  running: new Set(["blocked", "failed", "completed"]),
+  blocked: new Set(["running", "failed"]),
+};
+
+function delegationStateError(delegation: AkeruDelegationRecord): string | null {
+  switch (delegation.state) {
+    case "queued":
+      return delegation.startedAt === null &&
+        delegation.completedAt === null &&
+        delegation.result === null &&
+        delegation.failure === null
+        ? null
+        : "Queued delegations cannot have start, completion, result, or failure data.";
+    case "running":
+    case "blocked":
+      return delegation.childThreadId !== null &&
+        delegation.startedAt !== null &&
+        delegation.completedAt === null &&
+        delegation.result === null &&
+        delegation.failure === null
+        ? null
+        : `${delegation.state} delegations require childThreadId and startedAt without completion data.`;
+    case "failed":
+      return delegation.completedAt !== null &&
+        delegation.result === null &&
+        delegation.failure !== null
+        ? null
+        : "Failed delegations require completedAt and failure without a result.";
+    case "canceled":
+      return delegation.completedAt !== null &&
+        delegation.result === null &&
+        delegation.failure === null
+        ? null
+        : "Canceled delegations require completedAt without result or failure data.";
+    case "completed":
+      return delegation.childThreadId !== null &&
+        delegation.startedAt !== null &&
+        delegation.completedAt !== null &&
+        delegation.result !== null &&
+        delegation.result.childThreadId === delegation.childThreadId &&
+        delegation.result.childTurnId === delegation.childTurnId &&
+        delegation.failure === null
+        ? null
+        : "Completed delegations require start, completion, and result data without a failure.";
+  }
+}
+
+function hasSameDelegationOwnership(
+  current: AkeruDelegationRecord,
+  next: AkeruDelegationRecord,
+): boolean {
+  return NodeUtil.isDeepStrictEqual(current, {
+    ...next,
+    childThreadId: current.childThreadId,
+    childTurnId: current.childTurnId,
+    state: current.state,
+    result: current.result,
+    failure: current.failure,
+    updatedAt: current.updatedAt,
+    startedAt: current.startedAt,
+    completedAt: current.completedAt,
+  });
+}
 
 /**
  * Blocked-on-you work derived from the thread's retained activities: an
@@ -272,7 +348,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
-      yield* requireActiveProjectWorkspaceRootAbsent({
+      yield* requireProjectWorkspaceRootAbsent({
         readModel,
         command,
         workspaceRoot: command.workspaceRoot,
@@ -307,7 +383,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
       });
       if (command.workspaceRoot !== undefined) {
-        yield* requireActiveProjectWorkspaceRootAbsent({
+        yield* requireProjectWorkspaceRootAbsent({
           readModel,
           command,
           workspaceRoot: command.workspaceRoot,
@@ -997,69 +1073,73 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         delegationId: delegation.delegationId,
       });
-      const sourceThread = yield* requireThread({
-        readModel,
-        command,
-        threadId: delegation.sourceThreadId,
-      });
-      const childThread = yield* requireThread({
-        readModel,
-        command,
-        threadId: delegation.childThreadId,
-      });
-      yield* requireBotNotArchived({
-        readModel,
-        command,
-        botId: delegation.targetBotId,
-      });
+      yield* requireBotNotArchived({ readModel, command, botId: delegation.parentBotId });
+      yield* requireBotNotArchived({ readModel, command, botId: delegation.childBotId });
+      yield* requireThread({ readModel, command, threadId: delegation.parentThreadId });
+      if (delegation.childThreadId !== null) {
+        yield* requireThread({ readModel, command, threadId: delegation.childThreadId });
+      }
 
+      if (delegation.billedBotId !== delegation.childBotId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' must bill child bot '${delegation.childBotId}'.`,
+        });
+      }
+
+      const parentDelegation =
+        delegation.parentDelegationId === null
+          ? null
+          : yield* requireDelegation({
+              readModel,
+              command,
+              delegationId: delegation.parentDelegationId,
+            });
+      if (parentDelegation !== null && parentDelegation.childBotId !== delegation.parentBotId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Parent delegation '${parentDelegation.delegationId}' does not belong to bot '${delegation.parentBotId}'.`,
+        });
+      }
+
+      const expectedDepth = parentDelegation === null ? 1 : parentDelegation.depth + 1;
+      const expectedAncestorBotIds =
+        parentDelegation === null
+          ? [delegation.parentBotId]
+          : [...parentDelegation.ancestorBotIds, delegation.parentBotId];
       if (
-        sourceThread.botId !== delegation.sourceBotId ||
-        sourceThread.latestTurn?.turnId !== delegation.sourceTurnId
+        expectedDepth > AKERU_DELEGATION_MAX_DEPTH ||
+        delegation.depth !== expectedDepth ||
+        !NodeUtil.isDeepStrictEqual(delegation.ancestorBotIds, expectedAncestorBotIds)
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' does not match its source thread, turn, and bot.`,
+          detail: `Delegation '${delegation.delegationId}' has an invalid ancestor chain or depth.`,
         });
       }
-      if (delegation.sourceBotId === delegation.targetBotId) {
+      if (delegation.ancestorBotIds.includes(delegation.childBotId)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Bot '${delegation.sourceBotId}' cannot delegate to itself.`,
+          detail: `Delegation '${delegation.delegationId}' would create a bot cycle.`,
         });
       }
-      if (sourceThread.projectId !== childThread.projectId) {
+
+      const activeDelegationCount = readModel.delegations.filter(
+        (candidate) =>
+          candidate.parentBotId === delegation.parentBotId &&
+          !TERMINAL_DELEGATION_STATES.has(candidate.state),
+      ).length;
+      if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' cannot cross projects.`,
+          detail: `Bot '${delegation.parentBotId}' already has ${activeDelegationCount} active delegations.`,
         });
       }
-      if (
-        childThread.botId !== delegation.targetBotId ||
-        (delegation.childTurnId !== null &&
-          childThread.latestTurn?.turnId !== delegation.childTurnId)
-      ) {
+      const stateError = delegationStateError(delegation);
+      if (delegation.state !== "queued" || stateError !== null) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' child thread and turn must belong to target bot '${delegation.targetBotId}'.`,
-        });
-      }
-      if (delegation.depth < 1 || delegation.depth > AKERU_DELEGATION_MAX_DEPTH) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' exceeds the maximum depth of ${AKERU_DELEGATION_MAX_DEPTH}.`,
-        });
-      }
-      if (delegation.billedBotId !== delegation.targetBotId) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' must bill target bot '${delegation.targetBotId}'.`,
-        });
-      }
-      if (delegation.outcome !== null || delegation.completedAt !== null) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' cannot be completed when created.`,
+          detail: stateError ?? "New delegations must start queued.",
         });
       }
 
@@ -1075,54 +1155,118 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
-    case "delegation.complete": {
-      const delegation = command.delegation;
+    case "delegation.state.set": {
       const current = yield* requireDelegation({
         readModel,
         command,
-        delegationId: delegation.delegationId,
+        delegationId: command.delegation.delegationId,
       });
+      const next = command.delegation;
+      if (!hasSameDelegationOwnership(current, next)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${next.delegationId}' ownership and access fields are immutable.`,
+        });
+      }
       if (
-        !NodeUtil.isDeepStrictEqual(current, {
-          ...delegation,
-          childTurnId: current.childTurnId,
-          outcome: current.outcome,
-          completedAt: current.completedAt,
-        }) ||
-        (current.childTurnId !== null && current.childTurnId !== delegation.childTurnId)
+        (current.childThreadId !== null && next.childThreadId !== current.childThreadId) ||
+        (current.childTurnId !== null && next.childTurnId !== current.childTurnId)
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' ownership fields are immutable.`,
+          detail: `Delegation '${next.delegationId}' child ownership is immutable once assigned.`,
         });
       }
-      if (delegation.outcome === null || delegation.completedAt === null) {
+      if (next.childThreadId !== null) {
+        yield* requireThread({ readModel, command, threadId: next.childThreadId });
+      }
+      if (!(Date.parse(next.updatedAt) >= Date.parse(current.updatedAt))) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' requires an outcome and completion time.`,
+          detail: `Delegation '${next.delegationId}' cannot move updatedAt backward.`,
         });
       }
-      if (delegation.outcome.status === "succeeded" && delegation.childTurnId === null) {
+      if (current.state === next.state) {
+        const assignsChildOwnership =
+          (current.childThreadId === null && next.childThreadId !== null) ||
+          (current.childTurnId === null && next.childTurnId !== null);
+        const changesOnlyChildOwnership = NodeUtil.isDeepStrictEqual(current, {
+          ...next,
+          childThreadId: current.childThreadId,
+          childTurnId: current.childTurnId,
+          updatedAt: current.updatedAt,
+        });
+        if (
+          !NodeUtil.isDeepStrictEqual(current, next) &&
+          (!assignsChildOwnership || !changesOnlyChildOwnership)
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Delegation '${next.delegationId}' cannot change data without a state transition.`,
+          });
+        }
+      } else if (
+        TERMINAL_DELEGATION_STATES.has(current.state) ||
+        !DELEGATION_STATE_TRANSITIONS[
+          current.state as keyof typeof DELEGATION_STATE_TRANSITIONS
+        ].has(next.state)
+      ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Successful delegation '${delegation.delegationId}' requires a child turn.`,
+          detail: `Delegation '${next.delegationId}' cannot transition from '${current.state}' to '${next.state}'.`,
         });
       }
-      if (Date.parse(delegation.completedAt) < Date.parse(delegation.createdAt)) {
+      const stateError = delegationStateError(next);
+      if (stateError !== null) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${delegation.delegationId}' cannot complete before it was created.`,
+          detail: stateError,
         });
       }
 
       return {
         ...(yield* withEventBase({
           aggregateKind: "delegation",
-          aggregateId: delegation.delegationId,
-          occurredAt: delegation.completedAt,
+          aggregateId: next.delegationId,
+          occurredAt: next.updatedAt,
           commandId: command.commandId,
         })),
-        type: "delegation.completed",
+        type: "delegation.updated",
+        payload: { delegation: next },
+      };
+    }
+
+    case "delegation.cancel": {
+      const current = yield* requireDelegation({
+        readModel,
+        command,
+        delegationId: command.delegationId,
+      });
+      const canceledAt =
+        Date.parse(command.createdAt) >= Date.parse(current.updatedAt)
+          ? command.createdAt
+          : current.updatedAt;
+      const delegation = command.keep
+        ? { ...current, keep: true, updatedAt: canceledAt }
+        : TERMINAL_DELEGATION_STATES.has(current.state)
+          ? current
+          : {
+              ...current,
+              state: "canceled" as const,
+              result: null,
+              failure: null,
+              updatedAt: canceledAt,
+              completedAt: canceledAt,
+            };
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: delegation.updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.updated",
         payload: { delegation },
       };
     }

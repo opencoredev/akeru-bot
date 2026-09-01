@@ -1,6 +1,7 @@
 export * from "./baseSchemas.ts";
 export * from "./background.ts";
 export * from "./akeruTools.ts";
+export * from "./akeruDelegation.ts";
 export * from "./productFeedback.ts";
 export * from "./akeruMemory.ts";
 export * from "./akeruUsage.ts";
@@ -8,7 +9,6 @@ export * from "./analytics.ts";
 export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";
-export * from "./relayClient.ts";
 export * from "./desktopBootstrap.ts";
 export * from "./remoteAccess.ts";
 export * from "./ipc.ts";

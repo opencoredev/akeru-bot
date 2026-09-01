@@ -15,6 +15,8 @@ The available action matches the current state:
 
 Approval-pending plugins remain visible, but Akeru disables **Connect** and shows the vendor blocker. Plugins removed from the directory remain under **Installed** until you remove them.
 
+Codex Computer Use runs only on the local Mac. It does not use a hosted desktop or remote-control service. When a Codex bot starts control, macOS requests Screen Recording and Accessibility access if the helper does not have them. Akeru allows one controlling bot at a time and shows its name in the sidebar. **Stop** ends that session. **Revoke** ends it and disables Computer Use for every bot. Akeru keeps screenshots, typed text, window titles, and application content out of stored runtime events.
+
 Akeru enables each installed plugin for every bot by default. Use a bot's **Plugins** setting to disable it for that bot. A provider change starts a fresh provider session with the same enabled plugins.
 
 Ask the agent to add a Custom MCP server when a connector is not in the directory. Existing Custom MCP servers remain under **Installed**, where you can edit, disable, or delete them. Akeru stores no plugin credentials in the directory or MCP registry. Keep credentials in the host environment or the service sign-in flow.

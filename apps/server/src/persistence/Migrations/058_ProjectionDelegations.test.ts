@@ -19,7 +19,9 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("058_ProjectionDelegati
       assert.deepEqual(before, []);
 
       yield* runMigrations();
-      assert.deepEqual(migrationManifest.at(-1), [58, "ProjectionDelegations"]);
+      assert.isTrue(
+        migrationManifest.some(([id, name]) => id === 58 && name === "ProjectionDelegations"),
+      );
 
       yield* sql`
         INSERT INTO projection_delegations (delegation_id, record_json)

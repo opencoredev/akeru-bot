@@ -62,6 +62,35 @@ function makePreferencesState(
 }
 
 describe("mobile preferences state", () => {
+  it.effect("persists reviewed policy versions locally", () =>
+    Effect.gen(function* () {
+      const savePatch = vi.fn((patch: Partial<Preferences>) => Effect.succeed(patch));
+      const state = makePreferencesState({ load: Effect.succeed({}), savePatch });
+      const registry = AtomRegistry.make();
+      const unmountPreferences = registry.mount(state.preferencesAtom);
+      const unmountUpdate = registry.mount(state.updatePreferencesAtom);
+
+      yield* AtomRegistry.getResult(registry, state.preferencesAtom, { suspendOnWaiting: true });
+      registry.set(state.updatePreferencesAtom, {
+        reviewedPrivacyPolicyVersion: "2026-08-31",
+        reviewedTermsVersion: "2026-08-31",
+      });
+
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(savePatch).toHaveBeenCalledWith({
+            reviewedPrivacyPolicyVersion: "2026-08-31",
+            reviewedTermsVersion: "2026-08-31",
+          });
+        }),
+      );
+
+      unmountUpdate();
+      unmountPreferences();
+      registry.dispose();
+    }),
+  );
+
   it.effect("shares one preference load across consumers", () =>
     Effect.gen(function* () {
       const load = vi.fn(() => Promise.resolve<Preferences>({ baseFontSize: 17 }));

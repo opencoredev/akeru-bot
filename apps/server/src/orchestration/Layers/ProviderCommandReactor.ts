@@ -6,6 +6,7 @@ import {
   CommandId,
   EventId,
   type ModelSelection,
+  type McpServer,
   type OrchestrationEvent,
   ProviderDriverKind,
   type ProjectId,
@@ -87,7 +88,8 @@ type ProviderIntentEvent = Extract<
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
-      | "thread.session-stop-requested";
+      | "thread.session-stop-requested"
+      | "delegation.updated";
   }
 >;
 
@@ -341,6 +343,12 @@ const make = Effect.gen(function* () {
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  if (agentController.configurePluginRuntime) {
+    yield* agentController.configurePluginRuntime({
+      readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
+      dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
+    });
+  }
   const failDelegation = (threadId: ThreadId, error: string) =>
     agentController.failDelegation?.({ threadId, error }) ?? Effect.void;
   if (agentController.configureDelegation) {
@@ -367,6 +375,7 @@ const make = Effect.gen(function* () {
 
   const threadModelSelections = new Map<string, ModelSelection>();
   const threadBotWorkspaceKeys = new Map<string, string>();
+  const threadMcpServers = new Map<string, readonly McpServer[]>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -675,6 +684,7 @@ const make = Effect.gen(function* () {
           providerName: activeSession?.provider ?? preferredProvider,
           providerInstanceId: activeSession?.providerInstanceId ?? desiredInstanceId,
           runtimeMode: desiredRuntimeMode,
+          mcpServerIds: activeSession?.mcpServerIds ?? [],
           activeTurnId: null,
           lastError: null,
           updatedAt: createdAt,
@@ -698,6 +708,9 @@ const make = Effect.gen(function* () {
     }
     const providerChanged = currentInfo.driverKind !== desiredInfo.driverKind;
     const project = yield* resolveProject(thread.projectId);
+    const legacyWorkspaceOwnerProjectId = project
+      ? yield* projectionSnapshotQuery.getOriginalProjectIdByWorkspaceRoot(project.workspaceRoot)
+      : Option.none<ProjectId>();
     const mcpServers = yield* resolveControllerMcpServers(thread);
     const botSandboxBrowserSharing = (yield* serverSettingsService.getSettings)
       .botSandboxBrowserSharing;
@@ -749,6 +762,9 @@ const make = Effect.gen(function* () {
                 threadId,
                 projectId: thread.projectId,
                 workspaceRoot: project.workspaceRoot,
+                ...(Option.isSome(legacyWorkspaceOwnerProjectId)
+                  ? { legacyWorkspaceOwnerProjectId: legacyWorkspaceOwnerProjectId.value }
+                  : {}),
                 botId: thread.groupId == null ? respondingBotId : null,
                 groupId: thread.groupId ?? null,
                 respondingBotId,
@@ -782,6 +798,7 @@ const make = Effect.gen(function* () {
             providerName: session.provider,
             providerInstanceId: session.providerInstanceId,
             runtimeMode: desiredRuntimeMode,
+            mcpServerIds: session.mcpServerIds ?? [],
             // Provider turn ids are not orchestration turn ids.
             activeTurnId: null,
             lastError: session.lastError ?? null,
@@ -809,10 +826,13 @@ const make = Effect.gen(function* () {
         preferredProvider === "claudeAgent" &&
         effectiveRequestedModelSelection !== undefined &&
         !Equal.equals(previousModelSelection, effectiveRequestedModelSelection);
-      const mcpServersChanged = !Equal.equals(
-        activeSession?.mcpServerIds ?? [],
-        mcpServers.map((server) => server.id),
-      );
+      const previousMcpServers = threadMcpServers.get(threadId);
+      const mcpServersChanged = previousMcpServers
+        ? !Equal.equals(previousMcpServers, mcpServers)
+        : !Equal.equals(
+            activeSession?.mcpServerIds ?? [],
+            mcpServers.map((server) => server.id),
+          );
       const previousBotWorkspaceKey = threadBotWorkspaceKeys.get(threadId);
       const botWorkspaceChanged =
         previousBotWorkspaceKey !== undefined && previousBotWorkspaceKey !== botWorkspaceKey;
@@ -838,6 +858,7 @@ const make = Effect.gen(function* () {
         !botWorkspaceChanged
       ) {
         threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+        threadMcpServers.set(threadId, mcpServers);
         return { threadId: existingSessionThreadId, engine: desiredEngine };
       }
 
@@ -883,12 +904,14 @@ const make = Effect.gen(function* () {
       });
       yield* bindSessionToThread(restartedSession);
       threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+      threadMcpServers.set(threadId, mcpServers);
       return { threadId: restartedSession.threadId, engine: desiredEngine };
     }
 
     const startedSession = yield* startProviderSession(undefined);
     yield* bindSessionToThread(startedSession);
     threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+    threadMcpServers.set(threadId, mcpServers);
     return { threadId: startedSession.threadId, engine: desiredEngine };
   });
 
@@ -1650,6 +1673,7 @@ const make = Effect.gen(function* () {
           ? { providerInstanceId: thread.session.providerInstanceId }
           : {}),
         runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        mcpServerIds: [],
         activeTurnId: null,
         lastError: thread.session?.lastError ?? null,
         updatedAt: now,
@@ -1663,13 +1687,25 @@ const make = Effect.gen(function* () {
   ) {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
-      "orchestration.thread_id": event.payload.threadId,
+      ...(event.type === "delegation.updated"
+        ? { "orchestration.thread_id": event.payload.delegation.childThreadId ?? "unassigned" }
+        : { "orchestration.thread_id": event.payload.threadId }),
       ...(event.commandId ? { "orchestration.command_id": event.commandId } : {}),
     });
     yield* increment(orchestrationEventsProcessedTotal, {
       eventType: event.type,
     });
     switch (event.type) {
+      case "delegation.updated": {
+        const delegation = event.payload.delegation;
+        if (delegation.state === "canceled" && delegation.childThreadId !== null) {
+          yield* agentController.interruptTurn({
+            threadId: delegation.childThreadId,
+            ...(delegation.childTurnId ? { turnId: delegation.childTurnId } : {}),
+          });
+        }
+        return;
+      }
       case "thread.meta-updated":
         yield* threadTitleRegenerationWorker.enqueue(event);
         return;
@@ -1739,7 +1775,8 @@ const make = Effect.gen(function* () {
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
-        event.type === "thread.session-stop-requested"
+        event.type === "thread.session-stop-requested" ||
+        event.type === "delegation.updated"
       ) {
         return yield* worker.enqueue(event);
       }

@@ -39,6 +39,7 @@ function shellState(input: {
             projects: [],
             bots: [],
             groups: [],
+            delegations: [],
             threads: [],
           }),
     status: input.status,
