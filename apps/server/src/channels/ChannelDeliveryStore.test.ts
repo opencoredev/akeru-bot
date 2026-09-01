@@ -20,7 +20,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
         messageId: MessageId.make("message-1"),
         botId: BotId.make("bot-1"),
         threadId: ThreadId.make("thread-1"),
-        provider: "telegram" as const,
+        provider: "whatsapp" as const,
         externalThreadId: "chat-1",
         requestedAt: "2026-08-27T20:00:00.000Z",
       };

@@ -6,12 +6,12 @@ import {
   connectedChannelBinding,
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
-import { bindingFor, selfHostedIMessageConnectInput } from "./BotChannelRows";
+import { bindingFor, selfHostedIMessageConnectInput, whatsAppConnectInput } from "./BotChannelRows";
 
 describe("bot channel settings", () => {
   const botId = BotId.make("bot-1");
 
-  it("shows disconnected live adapters and an unavailable WhatsApp state", () => {
+  it("shows disconnected live adapters", () => {
     const bot = { id: botId, channelBindings: [] };
 
     expect(bindingFor(bot, "telegram")).toEqual({
@@ -22,7 +22,7 @@ describe("bot channel settings", () => {
       connectedAt: null,
       sentMessageIds: [],
     });
-    expect(bindingFor(bot, "whatsapp").status).toBe("not-live");
+    expect(bindingFor(bot, "whatsapp").status).toBe("disconnected");
   });
 
   it("uses a persisted binding", () => {
@@ -61,6 +61,25 @@ describe("bot channel settings", () => {
     expect(selfHostedIMessageConnectInput(botId, "server", "key", "   ")).not.toHaveProperty(
       "phone",
     );
+  });
+
+  it("sends trimmed WhatsApp credentials", () => {
+    expect(
+      whatsAppConnectInput(
+        botId,
+        " access-token ",
+        " app-secret ",
+        " phone-number-id ",
+        " verify-token ",
+      ),
+    ).toEqual({
+      botId,
+      provider: "whatsapp",
+      accessToken: "access-token",
+      appSecret: "app-secret",
+      phoneNumberId: "phone-number-id",
+      verifyToken: "verify-token",
+    });
   });
 
   it("requires access write scope for channel controls", () => {

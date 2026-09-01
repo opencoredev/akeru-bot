@@ -85,7 +85,7 @@ it.effect("decodes every bot avatar variant", () =>
   }),
 );
 
-it.effect("decodes live channel commands and keeps WhatsApp unavailable", () =>
+it.effect("decodes live channel commands", () =>
   Effect.gen(function* () {
     const telegram = yield* decodeClientOrchestrationCommand({
       type: "channel.connect",
@@ -103,20 +103,16 @@ it.effect("decodes live channel commands and keeps WhatsApp unavailable", () =>
       projectId: " photon-project ",
       projectSecret: " photon-secret ",
     });
-    const whatsappDisconnect = yield* decodeClientOrchestrationCommand({
-      type: "channel.disconnect",
-      commandId: "disconnect-whatsapp",
+    const whatsapp = yield* decodeClientOrchestrationCommand({
+      type: "channel.connect",
+      commandId: "connect-whatsapp",
       botId: "bot-1",
       provider: "whatsapp",
+      accessToken: " access-token ",
+      appSecret: " app-secret ",
+      phoneNumberId: " phone-number-id ",
+      verifyToken: " verify-token ",
     });
-    const whatsappConnect = yield* Effect.exit(
-      decodeClientOrchestrationCommand({
-        type: "channel.connect",
-        commandId: "connect-whatsapp",
-        botId: "bot-1",
-        provider: "whatsapp",
-      }),
-    );
 
     assert.deepInclude(telegram, { provider: "telegram", token: "token" });
     assert.deepInclude(imessage, {
@@ -124,8 +120,45 @@ it.effect("decodes live channel commands and keeps WhatsApp unavailable", () =>
       projectId: "photon-project",
       projectSecret: "photon-secret",
     });
-    assert.strictEqual(whatsappDisconnect.type, "channel.disconnect");
-    assert.strictEqual(whatsappConnect._tag, "Failure");
+    assert.deepInclude(whatsapp, {
+      provider: "whatsapp",
+      accessToken: "access-token",
+      appSecret: "app-secret",
+      phoneNumberId: "phone-number-id",
+      verifyToken: "verify-token",
+    });
+  }),
+);
+
+it.effect("decodes WhatsApp message origins", () =>
+  Effect.gen(function* () {
+    const command = yield* decodeOrchestrationCommand({
+      type: "thread.turn.start",
+      commandId: "turn-whatsapp",
+      threadId: "thread-whatsapp",
+      message: {
+        messageId: "message-whatsapp",
+        role: "user",
+        text: "Hello",
+        attachments: [],
+        channelOrigin: {
+          provider: "whatsapp",
+          externalThreadId: "whatsapp:phone:user",
+          externalSenderId: "user",
+        },
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      createdAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.equal(command.type, "thread.turn.start");
+    if (command.type !== "thread.turn.start") return;
+    assert.deepEqual(command.message.channelOrigin, {
+      provider: "whatsapp",
+      externalThreadId: "whatsapp:phone:user",
+      externalSenderId: "user",
+    });
   }),
 );
 

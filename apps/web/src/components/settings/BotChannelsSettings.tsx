@@ -65,7 +65,7 @@ export function BotChannelsSettingsPanel() {
           />
           <TelegramChannelRow environmentId={environmentId} bot={bot} />
           <IMessageChannelRow environmentId={environmentId} bot={bot} />
-          <WhatsAppChannelRow bot={bot} />
+          <WhatsAppChannelRow environmentId={environmentId} bot={bot} />
         </SettingsSection>
       )}
     </SettingsPageContainer>

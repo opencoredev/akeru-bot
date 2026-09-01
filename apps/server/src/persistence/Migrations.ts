@@ -70,6 +70,7 @@ import Migration0054 from "./Migrations/054_GroupPeopleAndMessageAuthors.ts";
 import Migration0055 from "./Migrations/055_BotChannelBindings.ts";
 import Migration0056 from "./Migrations/056_ChannelMessageOrigin.ts";
 import Migration0057 from "./Migrations/057_ChannelDeliveries.ts";
+import Migration0058 from "./Migrations/058_WhatsAppChannelDeliveries.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -139,6 +140,7 @@ export const migrationEntries = [
   [55, "BotChannelBindings", Migration0055],
   [56, "ChannelMessageOrigin", Migration0056],
   [57, "ChannelDeliveries", Migration0057],
+  [58, "WhatsAppChannelDeliveries", Migration0058],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

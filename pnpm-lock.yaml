@@ -463,6 +463,9 @@ importers:
       '@chat-adapter/state-memory':
         specifier: 4.39.0
         version: 4.39.0(zod@4.4.3)
+      '@chat-adapter/whatsapp':
+        specifier: 4.39.0
+        version: 4.39.0(zod@4.4.3)
       '@effect/platform-bun':
         specifier: 4.0.0-beta.103
         version: 4.0.0-beta.103(bufferutil@4.1.0)(effect@4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6))(utf-8-validate@6.0.6)
@@ -2294,6 +2297,10 @@ packages:
 
   '@chat-adapter/telegram@4.39.0':
     resolution: {integrity: sha512-mzifgrQ50UTrBOqzcqiixK9FlNUniqgfBSOAXWyufDr/1xTHibbmSxVeHqnuupGEwqOX2o4r7bl0TwoG7qJ2yQ==}
+    engines: {node: '>=20'}
+
+  '@chat-adapter/whatsapp@4.39.0':
+    resolution: {integrity: sha512-rI35+Iixl/S7J4UYDJEJJ4GhRtjaCDV2JLelMhRV6KJ2h5tQ07OMsTRtwT9PBv91C2bhMaGYOQ2alNkhzcdvVw==}
     engines: {node: '>=20'}
 
   '@chevrotain/types@11.1.2':
@@ -15530,6 +15537,16 @@ snapshots:
       - workflow
       - zod
 
+  '@chat-adapter/whatsapp@4.39.0(zod@4.4.3)':
+    dependencies:
+      '@chat-adapter/shared': 4.39.0(zod@4.4.3)
+      chat: 4.39.0(ai@6.0.266(zod@4.4.3))(zod@4.4.3)
+    transitivePeerDependencies:
+      - ai
+      - supports-color
+      - workflow
+      - zod
+
   '@chevrotain/types@11.1.2': {}
 
   '@clack/core@0.5.0':
@@ -16367,7 +16384,7 @@ snapshots:
       node-forge: 1.4.0
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       pretty-format: 29.7.0
       progress: 2.0.3
       prompts: 2.4.2
@@ -16443,7 +16460,7 @@ snapshots:
       node-forge: 1.4.0
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       pretty-format: 29.7.0
       progress: 2.0.3
       prompts: 2.4.2
@@ -16663,12 +16680,12 @@ snapshots:
       glob: 13.0.6
       hermes-parser: 0.33.3
       jsc-safe-url: 0.2.4
-      lightningcss: 1.32.0
-      picomatch: 4.0.4
-      postcss: 8.5.15
+      lightningcss: 1.33.0
+      picomatch: 4.0.7
+      postcss: 8.5.26
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -21449,8 +21466,8 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
-      expo-widgets: 56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      expo-widgets: 56.0.19(32843e0c0883df8bccfa0b8323659df5)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -23337,6 +23354,22 @@ snapshots:
       expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
       react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
 
+  expo-widgets@56.0.19(32843e0c0883df8bccfa0b8323659df5):
+    dependencies:
+      '@expo/plist': 0.7.0
+      '@expo/ui': 56.0.18(32843e0c0883df8bccfa0b8323659df5)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      react: 19.2.6
+      react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
+      - react-native-reanimated
+      - react-native-worklets
+    optional: true
+
   expo-widgets@56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0):
     dependencies:
       '@expo/plist': 0.7.0
@@ -23572,9 +23605,9 @@ snapshots:
     dependencies:
       pend: 1.2.0
 
-  fdir@6.5.0(picomatch@4.0.4):
+  fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
-      picomatch: 4.0.4
+      picomatch: 4.0.7
 
   fetch-blob@3.2.0:
     dependencies:
@@ -28237,8 +28270,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinypool@2.1.0: {}
 

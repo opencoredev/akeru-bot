@@ -395,7 +395,7 @@ export const OrchestrationGroup = Schema.Struct({
 export type OrchestrationGroup = typeof OrchestrationGroup.Type;
 
 export const ChannelMessageOrigin = Schema.Struct({
-  provider: Schema.Literals(["telegram", "imessage"]),
+  provider: ChannelProvider,
   externalThreadId: TrimmedNonEmptyString,
   externalSenderId: Schema.optional(TrimmedNonEmptyString),
 });
@@ -975,6 +975,16 @@ const ChannelConnectCommand = Schema.Union([
     apiKey: TrimmedNonEmptyString,
     phone: Schema.optional(TrimmedNonEmptyString),
   }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("whatsapp"),
+    accessToken: TrimmedNonEmptyString,
+    appSecret: TrimmedNonEmptyString,
+    phoneNumberId: TrimmedNonEmptyString,
+    verifyToken: TrimmedNonEmptyString,
+  }),
 ]);
 
 const ChannelDisconnectCommand = Schema.Struct({
@@ -988,7 +998,7 @@ const ChannelReconnectCommand = Schema.Struct({
   type: Schema.Literal("channel.reconnect"),
   commandId: CommandId,
   botId: BotId,
-  provider: Schema.Literals(["telegram", "imessage"]),
+  provider: ChannelProvider,
 });
 
 const ChannelSendCommand = Schema.Struct({

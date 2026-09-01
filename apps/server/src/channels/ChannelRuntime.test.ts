@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import {
   BotId,
   CommandId,
@@ -60,6 +62,7 @@ import {
   connectChannel,
   disconnectChannel,
   dispatchInboundChannelMessage,
+  handleWhatsAppWebhook,
   reconnectChannel,
   restoreConnectedChannels,
   sendChannelMessage,
@@ -302,6 +305,27 @@ const imessageConnect = (botId: BotId) => ({
   projectSecret: "photon-secret",
 });
 
+const whatsappConnect = (botId: BotId) => ({
+  type: "channel.connect" as const,
+  commandId: CommandId.make(`connect-whatsapp-${botId}`),
+  botId,
+  provider: "whatsapp" as const,
+  accessToken: "access-token",
+  appSecret: "app-secret",
+  phoneNumberId: "phone-number-id",
+  verifyToken: "verify-token",
+});
+
+const signedWhatsAppRequest = (body: string) =>
+  new Request(`https://akeru.example/api/channels/whatsapp/${BOT_ID}/webhook`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-hub-signature-256": `sha256=${createHmac("sha256", "app-secret").update(body).digest("hex")}`,
+    },
+    body,
+  });
+
 afterEach(async () => {
   await shutdownAllChannels();
   photon.adapter = null;
@@ -337,6 +361,85 @@ describe("channel runtime", () => {
       provider: "telegram",
       externalThreadId: "chat-a",
       externalSenderId: "sender-7",
+    });
+  });
+
+  it("verifies WhatsApp webhook challenges", async () => {
+    const harness = makeHarness({ startTransport: null });
+    await connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+
+    const accepted = await handleWhatsAppWebhook(
+      BOT_ID,
+      new Request(
+        `https://akeru.example/api/channels/whatsapp/${BOT_ID}/webhook?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=challenge-123`,
+      ),
+    );
+    const rejected = await handleWhatsAppWebhook(
+      BOT_ID,
+      new Request(
+        `https://akeru.example/api/channels/whatsapp/${BOT_ID}/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=challenge-123`,
+      ),
+    );
+
+    expect(accepted.status).toBe(200);
+    expect(await accepted.text()).toBe("challenge-123");
+    expect(rejected.status).toBe(403);
+  });
+
+  it("validates and dispatches inbound WhatsApp DMs", async () => {
+    const harness = makeHarness({ startTransport: null });
+    await connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+    const payload = JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "business-id",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: {
+                  display_phone_number: "+15550001111",
+                  phone_number_id: "phone-number-id",
+                },
+                contacts: [{ profile: { name: "Alice" }, wa_id: "15551234567" }],
+                messages: [
+                  {
+                    from: "15551234567",
+                    id: "wamid.1",
+                    timestamp: "1788220000",
+                    text: { body: "Hello from WhatsApp" },
+                    type: "text",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const invalidSignature = await handleWhatsAppWebhook(
+      BOT_ID,
+      new Request(`https://akeru.example/api/channels/whatsapp/${BOT_ID}/webhook`, {
+        method: "POST",
+        body: payload,
+      }),
+    );
+    const invalidPayload = await handleWhatsAppWebhook(BOT_ID, signedWhatsAppRequest("{}"));
+    const accepted = await handleWhatsAppWebhook(BOT_ID, signedWhatsAppRequest(payload));
+
+    expect(invalidSignature.status).toBe(401);
+    expect(invalidPayload.status).toBe(400);
+    expect(accepted.status).toBe(200);
+    const turn = harness.commands.find((command) => command.type === "thread.turn.start");
+    expect(turn?.type).toBe("thread.turn.start");
+    if (turn?.type !== "thread.turn.start") throw new Error("Expected a turn command.");
+    expect(turn.message.channelOrigin).toEqual({
+      provider: "whatsapp",
+      externalThreadId: "whatsapp:phone-number-id:15551234567",
+      externalSenderId: "15551234567",
     });
   });
 
@@ -723,6 +826,57 @@ describe("channel runtime", () => {
     expect(stops).toBe(3);
     expect(harness.readModel().bots[0]?.channelBindings?.[0]?.status).toBe("disconnected");
     expect(harness.secrets.size).toBe(0);
+  });
+
+  it("restores saved WhatsApp credentials", async () => {
+    let starts = 0;
+    const harness = makeHarness({
+      startTransport: async (input) => {
+        starts += 1;
+        expect(input).toMatchObject({
+          provider: "whatsapp",
+          accessToken: "access-token",
+          appSecret: "app-secret",
+          phoneNumberId: "phone-number-id",
+          verifyToken: "verify-token",
+        });
+        return {
+          externalIdentity: "phone-number-id",
+          runtime: { post: async () => undefined, shutdown: async () => undefined },
+        };
+      },
+    });
+
+    await connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+    await stopChannelsForBot(BOT_ID);
+    await restoreConnectedChannels(harness.dependencies);
+
+    expect(starts).toBe(2);
+  });
+
+  it("sends an approved WhatsApp reply to the inbound DM", async () => {
+    const messageId = MessageId.make("whatsapp-reply");
+    const externalThreadId = "whatsapp:phone-number-id:15551234567";
+    const threadId = channelThreadId(BOT_ID, "whatsapp", externalThreadId);
+    const posts: Array<{ readonly externalThreadId: string; readonly text: string }> = [];
+    const harness = makeHarness({
+      threads: [
+        makeThread(threadId, BOT_ID, [
+          makeMessage(MessageId.make("whatsapp-inbound"), "user", "Question", {
+            provider: "whatsapp",
+            externalThreadId,
+            externalSenderId: "15551234567",
+          }),
+          makeMessage(messageId, "assistant", "Approved answer"),
+        ]),
+      ],
+      post: async (target, text) => void posts.push({ externalThreadId: target, text }),
+    });
+    await connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+
+    await sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
+
+    expect(posts).toEqual([{ externalThreadId, text: "Approved answer" }]);
   });
 
   it("uses collision-free secret names for distinct bot IDs", async () => {

@@ -22,7 +22,7 @@ export function bindingFor(
     bot.channelBindings?.find((binding) => binding.provider === provider) ?? {
       botId: bot.id,
       provider,
-      status: provider === "whatsapp" ? "not-live" : "disconnected",
+      status: "disconnected",
       externalIdentity: null,
       connectedAt: null,
       sentMessageIds: [],
@@ -47,6 +47,23 @@ export function selfHostedIMessageConnectInput(
   };
 }
 
+export function whatsAppConnectInput(
+  botId: OrchestrationBot["id"],
+  accessToken: string,
+  appSecret: string,
+  phoneNumberId: string,
+  verifyToken: string,
+) {
+  return {
+    botId,
+    provider: "whatsapp" as const,
+    accessToken: accessToken.trim(),
+    appSecret: appSecret.trim(),
+    phoneNumberId: phoneNumberId.trim(),
+    verifyToken: verifyToken.trim(),
+  };
+}
+
 function statusLabel(status: ChannelBinding["status"]): string {
   switch (status) {
     case "connected":
@@ -67,7 +84,7 @@ function description(binding: ChannelBinding): string {
 function useChannelActions(
   environmentId: EnvironmentId,
   bot: OrchestrationBot,
-  provider: "telegram" | "imessage",
+  provider: ChannelProvider,
   label: string,
 ) {
   const binding = bindingFor(bot, provider);
@@ -281,12 +298,89 @@ export function IMessageChannelRow({
   );
 }
 
-export function WhatsAppChannelRow({ bot }: { readonly bot: OrchestrationBot }) {
+export function WhatsAppChannelRow({
+  environmentId,
+  bot,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly bot: OrchestrationBot;
+}) {
+  const connect = useAtomCommand(botEnvironment.channels.connect, { reportFailure: false });
+  const [accessToken, setAccessToken] = useState("");
+  const [appSecret, setAppSecret] = useState("");
+  const [phoneNumberId, setPhoneNumberId] = useState("");
+  const [verifyToken, setVerifyToken] = useState("");
+  const actions = useChannelActions(environmentId, bot, "whatsapp", "WhatsApp");
+  const missingCredentials =
+    !accessToken.trim() || !appSecret.trim() || !phoneNumberId.trim() || !verifyToken.trim();
   return (
     <SettingsRow
       title="WhatsApp"
-      description={description(bindingFor(bot, "whatsapp"))}
-      control={<span className="text-sm text-muted-foreground">Not available</span>}
+      description={description(actions.binding)}
+      control={
+        actions.connected ? (
+          actions.connectedControl
+        ) : (
+          <div className="flex w-72 flex-col gap-2">
+            <Input
+              aria-label="WhatsApp access token"
+              placeholder="Access token"
+              type="password"
+              value={accessToken}
+              onChange={(event) => setAccessToken(event.currentTarget.value)}
+            />
+            <Input
+              aria-label="WhatsApp app secret"
+              placeholder="App secret"
+              type="password"
+              value={appSecret}
+              onChange={(event) => setAppSecret(event.currentTarget.value)}
+            />
+            <Input
+              aria-label="WhatsApp phone number ID"
+              placeholder="Phone number ID"
+              value={phoneNumberId}
+              onChange={(event) => setPhoneNumberId(event.currentTarget.value)}
+            />
+            <Input
+              aria-label="WhatsApp verify token"
+              placeholder="Verify token"
+              type="password"
+              value={verifyToken}
+              onChange={(event) => setVerifyToken(event.currentTarget.value)}
+            />
+            <Button
+              disabled={actions.busy || missingCredentials}
+              onClick={() =>
+                void actions
+                  .run(
+                    () =>
+                      connect({
+                        environmentId,
+                        input: whatsAppConnectInput(
+                          bot.id,
+                          accessToken,
+                          appSecret,
+                          phoneNumberId,
+                          verifyToken,
+                        ),
+                      }),
+                    "Could not connect WhatsApp",
+                  )
+                  .then((success) => {
+                    if (!success) return;
+                    setAccessToken("");
+                    setAppSecret("");
+                    setPhoneNumberId("");
+                    setVerifyToken("");
+                  })
+              }
+            >
+              Connect
+            </Button>
+          </div>
+        )
+      }
     />
   );
 }

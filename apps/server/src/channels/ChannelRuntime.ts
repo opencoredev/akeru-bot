@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { createMemoryState } from "@chat-adapter/state-memory";
+import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
 import { TelegramProvider } from "@mastra/telegram";
 import { createiMessageAdapter } from "@photon-ai/chat-adapter-imessage";
 import {
@@ -16,11 +17,13 @@ import {
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
-import { Chat } from "chat";
+import { type Adapter, Chat } from "chat";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import type { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import type * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
@@ -29,6 +32,7 @@ import type { ChannelDeliveryStoreShape } from "./ChannelDeliveryStore.ts";
 interface ChannelRuntimeEntry {
   readonly post: (externalThreadId: string, text: string) => Promise<void>;
   readonly shutdown: () => Promise<void>;
+  readonly webhook?: (request: Request) => Promise<Response>;
 }
 
 interface StartedChannel {
@@ -48,7 +52,7 @@ interface ChannelTransportContext {
   readonly onIMessageGroupMessage: (input: InboundChannelMessage) => Promise<void>;
 }
 
-type LiveProvider = "telegram" | "imessage";
+type LiveProvider = ChannelProvider;
 type ChannelConnectInput = Extract<
   ClientOrchestrationCommand,
   { readonly type: "channel.connect" }
@@ -88,6 +92,13 @@ const StoredChannelSecret = Schema.Union([
     apiKey: Schema.optional(Schema.String),
     phone: Schema.optional(Schema.String),
   }),
+  Schema.Struct({
+    provider: Schema.Literal("whatsapp"),
+    accessToken: Schema.String,
+    appSecret: Schema.String,
+    phoneNumberId: Schema.String,
+    verifyToken: Schema.String,
+  }),
 ]);
 type StoredChannelSecret = typeof StoredChannelSecret.Type;
 const decodeStoredChannelSecret = Schema.decodeUnknownEffect(StoredChannelSecret);
@@ -106,6 +117,32 @@ export const channelThreadId = (
   ThreadId.make(
     `channel-${createHash("sha256").update(`${botId}\0${provider}\0${externalThreadId}`).digest("hex")}`,
   );
+
+export const WHATSAPP_WEBHOOK_PATH = "/api/channels/whatsapp/:botId/webhook";
+
+export async function handleWhatsAppWebhook(botId: BotId, request: Request): Promise<Response> {
+  const webhook = runtimes.get(runtimeKey(botId, "whatsapp"))?.webhook;
+  return webhook ? webhook(request) : new Response("Not Found", { status: 404 });
+}
+
+const whatsAppWebhookHttpHandler = Effect.gen(function* () {
+  const params = yield* HttpRouter.schemaPathParams(Schema.Struct({ botId: BotId })).pipe(
+    Effect.option,
+  );
+  if (params._tag === "None") return HttpServerResponse.text("Not Found", { status: 404 });
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.option);
+  if (webRequest._tag === "None") return HttpServerResponse.text("Bad Request", { status: 400 });
+  const response = yield* Effect.promise(() =>
+    handleWhatsAppWebhook(params.value.botId, webRequest.value),
+  );
+  return HttpServerResponse.fromWeb(response);
+});
+
+export const whatsAppWebhookRouteLayer = Layer.merge(
+  HttpRouter.add("GET", WHATSAPP_WEBHOOK_PATH, whatsAppWebhookHttpHandler),
+  HttpRouter.add("POST", WHATSAPP_WEBHOOK_PATH, whatsAppWebhookHttpHandler),
+);
 
 const isIMessageDirectThread = (externalThreadId: string) => externalThreadId.includes(";-;");
 
@@ -340,7 +377,7 @@ async function stopRuntime(botId: BotId, provider: ChannelProvider): Promise<voi
 
 export async function stopChannelsForBot(botId: BotId): Promise<void> {
   await Promise.allSettled(
-    (["telegram", "imessage"] as const).map((provider) =>
+    (["telegram", "imessage", "whatsapp"] as const).map((provider) =>
       withChannelOperation(botId, provider, () => stopRuntime(botId, provider)),
     ),
   );
@@ -484,6 +521,56 @@ async function startIMessage(
   };
 }
 
+async function startWhatsApp(
+  input: Extract<ChannelConnectInput, { readonly provider: "whatsapp" }>,
+  context: ChannelTransportContext,
+  onDirectMessage: Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1],
+): Promise<{ readonly externalIdentity: string; readonly runtime: ChannelRuntimeEntry }> {
+  const adapter = createWhatsAppAdapter({
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    phoneNumberId: input.phoneNumberId,
+    verifyToken: input.verifyToken,
+    userName: context.botName,
+  });
+  const chat = new Chat({
+    userName: context.botName,
+    adapters: { whatsapp: adapter as Adapter },
+    state: createMemoryState(),
+  });
+  chat.onDirectMessage(async (thread, message) => {
+    if (!message.text.trim()) return;
+    await onDirectMessage({
+      externalThreadId: thread.id,
+      externalSenderId: message.author.userId,
+      text: message.text,
+    });
+  });
+  await chat.initialize();
+  return {
+    externalIdentity: input.phoneNumberId,
+    runtime: {
+      post: async (externalThreadId, text) => void (await chat.thread(externalThreadId).post(text)),
+      shutdown: () => chat.shutdown(),
+      webhook: async (request) => {
+        const tasks: Promise<unknown>[] = [];
+        let response: Response;
+        try {
+          response = await adapter.handleWebhook(request, {
+            waitUntil: (task) => void tasks.push(task),
+          });
+        } catch {
+          return new Response("Invalid webhook payload", { status: 400 });
+        }
+        const results = await Promise.allSettled(tasks);
+        return results.some((result) => result.status === "rejected")
+          ? new Response("Webhook processing failed", { status: 500 })
+          : response;
+      },
+    },
+  };
+}
+
 async function startChannel(
   dependencies: ChannelRuntimeDependencies,
   input: ChannelConnectInput,
@@ -537,7 +624,9 @@ async function startChannel(
     ? await dependencies.startTransport(input, onDirectMessage, context)
     : input.provider === "telegram"
       ? await startTelegram(bot.id, input.token, onDirectMessage)
-      : await startIMessage(input, context, onDirectMessage);
+      : input.provider === "imessage"
+        ? await startIMessage(input, context, onDirectMessage)
+        : await startWhatsApp(input, context, onDirectMessage);
   return {
     runtime: started.runtime,
     binding: {
@@ -600,20 +689,28 @@ export async function connectChannel(
     const secret: StoredChannelSecret =
       input.provider === "telegram"
         ? { provider: "telegram", token: input.token }
-        : input.mode === "hosted"
+        : input.provider === "whatsapp"
           ? {
-              provider: "imessage",
-              mode: "hosted",
-              projectId: input.projectId,
-              projectSecret: input.projectSecret,
+              provider: "whatsapp",
+              accessToken: input.accessToken,
+              appSecret: input.appSecret,
+              phoneNumberId: input.phoneNumberId,
+              verifyToken: input.verifyToken,
             }
-          : {
-              provider: "imessage",
-              mode: "self-hosted",
-              serverUrl: input.serverUrl,
-              apiKey: input.apiKey,
-              ...(input.phone ? { phone: input.phone } : {}),
-            };
+          : input.mode === "hosted"
+            ? {
+                provider: "imessage",
+                mode: "hosted",
+                projectId: input.projectId,
+                projectSecret: input.projectSecret,
+              }
+            : {
+                provider: "imessage",
+                mode: "self-hosted",
+                serverUrl: input.serverUrl,
+                apiKey: input.apiKey,
+                ...(input.phone ? { phone: input.phone } : {}),
+              };
     return commitStartedChannel(dependencies, started, secret);
   });
 }
@@ -632,7 +729,7 @@ export async function disconnectChannel(
       sequence = await replaceBinding(dependencies, {
         botId,
         provider,
-        status: provider === "whatsapp" ? "not-live" : "disconnected",
+        status: "disconnected",
         externalIdentity: null,
         connectedAt: null,
         sentMessageIds: [],
@@ -663,36 +760,47 @@ export async function reconnectChannel(
     const input: ChannelConnectInput =
       secret.provider === "telegram"
         ? { type: "channel.connect", commandId, botId, provider: "telegram", token: secret.token }
-        : secret.mode === "hosted"
-          ? (() => {
-              if (!secret.projectId || !secret.projectSecret) {
-                throw new Error("Saved Photon hosted credentials are incomplete.");
-              }
-              return {
-                type: "channel.connect",
-                commandId,
-                botId,
-                provider: "imessage",
-                mode: "hosted",
-                projectId: secret.projectId,
-                projectSecret: secret.projectSecret,
-              } as const;
-            })()
-          : (() => {
-              if (!secret.serverUrl || !secret.apiKey) {
-                throw new Error("Saved Photon self-hosted credentials are incomplete.");
-              }
-              return {
-                type: "channel.connect",
-                commandId,
-                botId,
-                provider: "imessage",
-                mode: "self-hosted",
-                serverUrl: secret.serverUrl,
-                apiKey: secret.apiKey,
-                ...(secret.phone ? { phone: secret.phone } : {}),
-              } as const;
-            })();
+        : secret.provider === "whatsapp"
+          ? {
+              type: "channel.connect",
+              commandId,
+              botId,
+              provider: "whatsapp",
+              accessToken: secret.accessToken,
+              appSecret: secret.appSecret,
+              phoneNumberId: secret.phoneNumberId,
+              verifyToken: secret.verifyToken,
+            }
+          : secret.mode === "hosted"
+            ? (() => {
+                if (!secret.projectId || !secret.projectSecret) {
+                  throw new Error("Saved Photon hosted credentials are incomplete.");
+                }
+                return {
+                  type: "channel.connect",
+                  commandId,
+                  botId,
+                  provider: "imessage",
+                  mode: "hosted",
+                  projectId: secret.projectId,
+                  projectSecret: secret.projectSecret,
+                } as const;
+              })()
+            : (() => {
+                if (!secret.serverUrl || !secret.apiKey) {
+                  throw new Error("Saved Photon self-hosted credentials are incomplete.");
+                }
+                return {
+                  type: "channel.connect",
+                  commandId,
+                  botId,
+                  provider: "imessage",
+                  mode: "self-hosted",
+                  serverUrl: secret.serverUrl,
+                  apiKey: secret.apiKey,
+                  ...(secret.phone ? { phone: secret.phone } : {}),
+                } as const;
+              })();
     const started = await startChannel(dependencies, input);
     return commitStartedChannel(dependencies, started);
   });
@@ -707,8 +815,7 @@ export async function restoreConnectedChannels(
   const candidates = model.bots.flatMap((bot) =>
     bot.archivedAt === null
       ? (bot.channelBindings ?? []).flatMap((binding) =>
-          (binding.provider === "telegram" || binding.provider === "imessage") &&
-          (binding.status === "connected" || binding.status === "needs-reconnect")
+          binding.status === "connected" || binding.status === "needs-reconnect"
             ? [{ botId: bot.id, provider: binding.provider }]
             : [],
         )
@@ -769,7 +876,7 @@ export async function sendChannelMessage(
       if (!runtime) {
         await Effect.runPromise(dependencies.deliveryStore.releaseRequested(input.messageId));
         throw new Error(
-          `${origin.provider === "imessage" ? "iMessage" : "Telegram"} needs reconnect before this reply can send.`,
+          `${origin.provider === "imessage" ? "iMessage" : origin.provider === "whatsapp" ? "WhatsApp" : "Telegram"} needs reconnect before this reply can send.`,
         );
       }
       try {
