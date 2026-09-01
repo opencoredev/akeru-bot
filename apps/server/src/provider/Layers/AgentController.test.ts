@@ -34,8 +34,14 @@ import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
-import type { EntityMemoryRepositoryShape } from "../../memory/Services/EntityMemoryRepository.ts";
-import type { MemoryCandidateRepositoryShape } from "../../memory/Services/MemoryCandidateRepository.ts";
+import {
+  EntityMemoryRepository,
+  type EntityMemoryRepositoryShape,
+} from "../../memory/Services/EntityMemoryRepository.ts";
+import {
+  MemoryCandidateRepository,
+  type MemoryCandidateRepositoryShape,
+} from "../../memory/Services/MemoryCandidateRepository.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
@@ -48,6 +54,11 @@ import {
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import {
+  BotUsageCapExceeded,
+  BotUsageLedger,
+  type BotUsageLedgerShape,
+} from "../../usage/BotUsageLedger.ts";
 
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
@@ -134,6 +145,25 @@ function makeBridge() {
     stopSession,
     rollbackConversation,
     getCapabilities,
+  };
+}
+
+function makeUsageLedger() {
+  const reserve = vi.fn<BotUsageLedgerShape["reserve"]>(() => Effect.succeed({} as never));
+  const settle = vi.fn<BotUsageLedgerShape["settle"]>(() => Effect.succeed({} as never));
+  const unused = () => Effect.die("unused");
+  return {
+    reserve,
+    settle,
+    service: BotUsageLedger.of({
+      reserve,
+      settle,
+      bindTurn: unused,
+      settleForTurn: unused,
+      finalizeForTurn: unused,
+      recordMeasurement: unused,
+      summarize: unused,
+    }),
   };
 }
 
@@ -228,6 +258,7 @@ function makeLayer(
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
+  usageLedger: BotUsageLedgerShape = makeUsageLedger().service,
   memory?: Pick<AgentControllerLiveOptions, "entityMemoryRepository" | "memoryCandidateRepository">,
 ) {
   return makeAgentControllerLive({
@@ -243,8 +274,11 @@ function makeLayer(
       }) as never,
   }).pipe(
     Layer.provide(
-      Layer.merge(
+      Layer.mergeAll(
         Layer.succeed(LegacyProviderBridge, bridge),
+        Layer.succeed(BotUsageLedger, usageLedger),
+        Layer.mock(EntityMemoryRepository)({}),
+        Layer.mock(MemoryCandidateRepository)({}),
         ServerConfig.layerTest(
           process.cwd(),
           baseDir ?? { prefix: "akeru-mastra-controller-test-" },
@@ -260,10 +294,11 @@ function provideController<A, E>(
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
+  usageLedger?: BotUsageLedgerShape,
   memory?: Pick<AgentControllerLiveOptions, "entityMemoryRepository" | "memoryCandidateRepository">,
 ) {
   return effect.pipe(
-    Effect.provide(makeLayer(bridge, factory, makeMcpManager, baseDir, memory)),
+    Effect.provide(makeLayer(bridge, factory, makeMcpManager, baseDir, usageLedger, memory)),
     Effect.orDie,
   );
 }
@@ -617,6 +652,7 @@ describe("AgentControllerLive", () => {
       mastra.factory,
       undefined,
       undefined,
+      undefined,
       { entityMemoryRepository, memoryCandidateRepository },
     );
   });
@@ -625,8 +661,9 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const layer = makeAgentControllerLive().pipe(
       Layer.provide(
-        Layer.merge(
+        Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-real-controller-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -716,6 +753,54 @@ describe("AgentControllerLive", () => {
         expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Reply once." });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("adds every Mastra step usage update", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Use two steps." });
+        mastra.emit({
+          type: "usage_update",
+          usage: { promptTokens: 10, completionTokens: 4, reasoningTokens: 2, totalTokens: 14 },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "usage_update",
+          usage: { promptTokens: 7, completionTokens: 3, reasoningTokens: 1, totalTokens: 10 },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events
+            .filter((event) => event.type === "thread.token-usage.updated")
+            .map((event) => event.payload.usage),
+          [
+            { usedTokens: 14, inputTokens: 10, outputTokens: 4, reasoningOutputTokens: 2 },
+            { usedTokens: 24, inputTokens: 17, outputTokens: 7, reasoningOutputTokens: 3 },
+          ],
+        );
+        mastra.finishSend();
       }),
       bridge.service,
       mastra.factory,
@@ -826,6 +911,135 @@ describe("AgentControllerLive", () => {
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("adds every Mastra step usage update", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Use two steps." });
+        mastra.emit({
+          type: "usage_update",
+          usage: { promptTokens: 10, completionTokens: 4, reasoningTokens: 2, totalTokens: 14 },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "usage_update",
+          usage: { promptTokens: 7, completionTokens: 3, reasoningTokens: 1, totalTokens: 10 },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events
+            .filter((event) => event.type === "thread.token-usage.updated")
+            .map((event) => event.payload.usage),
+          [
+            { usedTokens: 14, inputTokens: 10, outputTokens: 4, reasoningOutputTokens: 2 },
+            { usedTokens: 24, inputTokens: 17, outputTokens: 7, reasoningOutputTokens: 3 },
+          ],
+        );
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("reserves and settles billed observational-memory usage", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const usageLedger = makeUsageLedger();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const botId = BotId.make("bot-memory");
+        yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Remember this.",
+          botUsage: { botId, capLimit: 50_000 },
+        });
+        const options = mastra.harnessOptions[0]!;
+        const callId = yield* Effect.promise(() =>
+          options.startMemoryCall!({ threadId: codexThreadId, category: "observer" }),
+        );
+        assert.isDefined(callId);
+        expect(usageLedger.reserve).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reservationId: callId,
+            botId,
+            threadId: codexThreadId,
+            category: "observer",
+            maximumTokens: 32_000,
+            capLimit: 50_000,
+            provider: "codex",
+            model: "gpt-5.6-sol",
+          }),
+        );
+
+        yield* Effect.promise(() =>
+          options.finishMemoryCall!({
+            callId: callId!,
+            category: "observer",
+            usage: { inputTokens: 12, outputTokens: 5, totalTokens: 17 },
+          }),
+        );
+        expect(usageLedger.settle).toHaveBeenCalledWith({
+          reservationId: callId,
+          state: "reported",
+          inputTokens: 12,
+          outputTokens: 5,
+          reasoningTokens: null,
+          settledAt: expect.any(String),
+        });
+
+        usageLedger.reserve.mockImplementationOnce(() =>
+          Effect.fail(
+            new BotUsageCapExceeded({
+              botId,
+              limit: 50_000,
+              consumedTokens: 20_000,
+              reservedTokens: 30_000,
+              requestedTokens: 32_000,
+            }),
+          ),
+        );
+        yield* Effect.promise(() =>
+          expect(
+            options.startMemoryCall!({ threadId: codexThreadId, category: "reflector" }),
+          ).rejects.toBeInstanceOf(BotUsageCapExceeded),
+        );
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      usageLedger.service,
     );
   });
 
@@ -1058,7 +1272,20 @@ describe("AgentControllerLive", () => {
           input: { command: "pwd" },
           approvalMode: "require-grant" as const,
         };
+        const receiptsFiber = yield* controller.streamEvents.pipe(
+          Stream.filter((event) => event.type === "tool.receipt"),
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
         yield* Effect.promise(() => runtime.execute(execution));
+        const receipts = yield* Fiber.join(receiptsFiber);
+        assert.deepEqual(
+          [...receipts].map((event) => event.payload.phase),
+          ["start", "success"],
+        );
+        assert.isTrue([...receipts].every((event) => event.payload.fatalToThread === false));
         yield* Effect.promise(() =>
           expect(runtime.execute(execution)).rejects.toThrow("Tool 'Shell' requires approval."),
         );
@@ -1097,10 +1324,20 @@ describe("AgentControllerLive", () => {
           toolName: "Shell",
           args: { command: "pwd" },
         } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "shell-tool-stale",
+          result: "cancelled",
+          isError: true,
+        } as AgentControllerEvent);
         yield* controller.respondToRequest({
           threadId: codexThreadId,
           requestId: ApprovalRequestId.make("shell-tool-stale"),
           decision: "accept",
+        });
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
+          toolCallId: "shell-tool-stale",
+          decision: "approve",
         });
         yield* controller.interruptTurn({ threadId: codexThreadId });
         yield* Effect.promise(() =>
@@ -1455,8 +1692,9 @@ describe("AgentControllerLive", () => {
       makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
-        Layer.merge(
+        Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-remote-sandbox-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -1514,8 +1752,9 @@ describe("AgentControllerLive", () => {
       makeRemoteWorkspace,
     }).pipe(
       Layer.provide(
-        Layer.merge(
+        Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-resource-finalizer-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -1604,8 +1843,9 @@ describe("AgentControllerLive", () => {
       makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
-        Layer.merge(
+        Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-same-workspace-test-",
           }).pipe(Layer.provide(NodeServices.layer)),

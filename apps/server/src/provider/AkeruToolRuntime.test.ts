@@ -11,7 +11,7 @@ import {
 } from "@mastra/core/workspace";
 import { PNG } from "pngjs";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { BotId } from "@t3tools/contracts";
+import { BotId, ThreadId, type AkeruToolReceipt } from "@t3tools/contracts";
 
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
@@ -130,7 +130,8 @@ describe("AkeruToolRuntime", () => {
   });
 
   it("requires an exact one-shot grant for local shell commands", async () => {
-    const runtime = createAkeruToolRuntime();
+    const receipts: AkeruToolReceipt[] = [];
+    const runtime = createAkeruToolRuntime({ onReceipt: (receipt) => receipts.push(receipt) });
     runtime.registerSession("thread-1", {
       runtimeMode: "full-access",
       workspaceType: "local",
@@ -144,10 +145,15 @@ describe("AkeruToolRuntime", () => {
       approvalMode: "require-grant" as const,
     };
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
+    expect(receipts[1]).toMatchObject({ failureCode: "denied", fatalToThread: false });
+    receipts.length = 0;
     runtime.grantApproval({ ...execution, input: { command: "echo wrong" } });
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    receipts.length = 0;
     runtime.grantApproval({ ...execution, input: { command: " pwd " } });
     await expect(runtime.execute(execution)).resolves.toBeDefined();
+    expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "success"]);
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
   });
 
@@ -257,7 +263,7 @@ describe("AkeruToolRuntime", () => {
 
     await expect(
       runtime.execute({
-        threadId: "thread-1",
+        threadId: ThreadId.make("thread-1"),
         toolId: "request_box_help",
         toolCallId: "tool-help",
         input: { reason: "captcha", message: "Complete the CAPTCHA." },
@@ -275,7 +281,6 @@ describe("AkeruToolRuntime", () => {
       },
     ]);
   });
-
   it("isolates delegation failures from the parent thread", async () => {
     const runtime = createAkeruToolRuntime();
     const execution = {
@@ -309,7 +314,6 @@ describe("AkeruToolRuntime", () => {
       summary: "Provider unavailable",
     });
   });
-
   it("isolates user-message failures from the current thread", async () => {
     const runtime = createAkeruToolRuntime({ now: () => "2026-09-01T00:00:00.000Z" });
     const execution = {
@@ -337,6 +341,41 @@ describe("AkeruToolRuntime", () => {
       fatalToThread: false,
       summary: "Message dispatch failed",
     });
+  });
+
+  it("publishes a failure receipt when user messaging returns one", async () => {
+    const receipts: AkeruToolReceipt[] = [];
+    const runtime = createAkeruToolRuntime({
+      now: () => "2026-09-01T00:00:00.000Z",
+      onReceipt: (receipt) => receipts.push(receipt),
+    });
+    const execution = {
+      threadId: "thread-1",
+      toolId: "SendToUser" as const,
+      toolCallId: "tool-message",
+      input: { message: "The export is ready." },
+      approvalMode: "require-grant" as const,
+    };
+    runtime.registerSession("thread-1", {
+      botId: BotId.make("parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      sendToUser: async () => ({
+        receiptId: "tool-message",
+        toolId: "SendToUser",
+        phase: "failure",
+        threadId: ThreadId.make("thread-1"),
+        botId: BotId.make("parent"),
+        summary: "Message dispatch failed",
+        failureCode: "internal",
+        fatalToThread: false,
+        createdAt: "2026-09-01T00:00:00.000Z",
+      }),
+    });
+    runtime.grantApproval(execution);
+
+    await expect(runtime.execute(execution)).resolves.toMatchObject({ phase: "failure" });
+    expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
   });
 
   it("translates await handles to workspace process ids", async () => {

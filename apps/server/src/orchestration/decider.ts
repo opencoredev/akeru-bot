@@ -20,7 +20,7 @@ import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
   listThreadsByProjectId,
   requireActiveGroupMember,
-  requireActiveProjectWorkspaceRootAbsent,
+  requireProjectWorkspaceRootAbsent,
   requireBot,
   requireBotAbsent,
   requireBotArchived,
@@ -272,7 +272,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
-      yield* requireActiveProjectWorkspaceRootAbsent({
+      yield* requireProjectWorkspaceRootAbsent({
         readModel,
         command,
         workspaceRoot: command.workspaceRoot,
@@ -307,7 +307,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
       });
       if (command.workspaceRoot !== undefined) {
-        yield* requireActiveProjectWorkspaceRootAbsent({
+        yield* requireProjectWorkspaceRootAbsent({
           readModel,
           command,
           workspaceRoot: command.workspaceRoot,

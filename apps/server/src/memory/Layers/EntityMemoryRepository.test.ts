@@ -50,38 +50,41 @@ const makeRevision = (
   id: string,
   partitionId: string,
   overrides: Partial<AkeruMemoryRevision> = {},
-): AkeruMemoryRevision => ({
-  id: AkeruMemoryId.make(id),
-  rootId: AkeruMemoryRootId.make(id),
-  revision: 1,
-  partition: {
-    tenantId: AkeruMemoryTenantId.make("tenant"),
-    scope: "bot-user",
-    partitionId: AkeruMemoryPartitionId.make(partitionId),
-  },
-  entityKind: "user",
-  entityId: AkeruMemoryEntityId.make("user"),
-  kind: "preference",
-  value: { editor: "vim" },
-  fact: `The user in ${partitionId} prefers vim.`,
-  sourceThreadId: ThreadId.make("thread"),
-  sourceMessageId: MessageId.make("message"),
-  authorBotId: BotId.make("bot"),
-  initiatingUserId: AkeruMemoryUserId.make("user"),
-  createdAt: "2026-08-30T21:00:00.000Z",
-  confirmedAt: "2026-08-30T21:00:00.000Z",
-  updatedAt: "2026-08-30T21:00:00.000Z",
-  confidence: 0.9,
-  approvalState: "approved",
-  supersedesId: null,
-  supersededById: null,
-  visibility: "private",
-  deletionState: "active",
-  pinned: false,
-  sensitive: false,
-  affectedBotIds: [BotId.make("bot")],
-  ...overrides,
-});
+): AkeruMemoryRevision => {
+  const authorBotId = BotId.make(partitionId.includes(":") ? partitionId.split(":")[0]! : "bot");
+  return {
+    id: AkeruMemoryId.make(id),
+    rootId: AkeruMemoryRootId.make(id),
+    revision: 1,
+    partition: {
+      tenantId: AkeruMemoryTenantId.make("tenant"),
+      scope: "bot-user",
+      partitionId: AkeruMemoryPartitionId.make(partitionId),
+    },
+    entityKind: "user",
+    entityId: AkeruMemoryEntityId.make("user"),
+    kind: "preference",
+    value: { editor: "vim" },
+    fact: `The user in ${partitionId} prefers vim.`,
+    sourceThreadId: ThreadId.make(`thread-${authorBotId}`),
+    sourceMessageId: MessageId.make("message"),
+    authorBotId,
+    initiatingUserId: AkeruMemoryUserId.make("user"),
+    createdAt: "2026-08-30T21:00:00.000Z",
+    confirmedAt: "2026-08-30T21:00:00.000Z",
+    updatedAt: "2026-08-30T21:00:00.000Z",
+    confidence: 0.9,
+    approvalState: "approved",
+    supersedesId: null,
+    supersededById: null,
+    visibility: "private",
+    deletionState: "active",
+    pinned: false,
+    sensitive: false,
+    affectedBotIds: [authorBotId],
+    ...overrides,
+  };
+};
 
 it("preserves revision history and FTS recall after repository restart", () =>
   Effect.gen(function* () {
@@ -170,6 +173,112 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.deepEqual(
         rows.map((row) => row.id),
         ["first"],
+      );
+    }),
+  );
+
+  it.effect("rejects unapproved, forged, and mismatched direct inserts", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const invalid = [
+        makeRevision("pending-insert", "bot:user", { approvalState: "pending" }),
+        makeRevision("forged-user-insert", "bot:user", {
+          initiatingUserId: AkeruMemoryUserId.make("other-user"),
+        }),
+        makeRevision("forged-bot-insert", "bot:user", {
+          authorBotId: BotId.make("other-bot"),
+        }),
+        makeRevision("mismatched-entity-insert", "bot:user", {
+          entityKind: "project",
+          entityId: AkeruMemoryEntityId.make("project"),
+        }),
+      ];
+
+      const exits = yield* Effect.forEach(invalid, (revision) =>
+        repository.insert({ access: botAccess, revision }).pipe(Effect.exit),
+      );
+      assert.isTrue(exits.every((exit) => exit._tag === "Failure"));
+    }),
+  );
+
+  it.effect("rejects unapproved, forged, and mismatched direct revisions", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("validated-revise-root");
+      const first = makeRevision("validated-revise-1", "bot:user", { rootId });
+      yield* repository.insert({ access: botAccess, revision: first });
+      const baseRevision = makeRevision("validated-revise-2", "bot:user", {
+        rootId,
+        revision: 2,
+        supersedesId: first.id,
+      });
+      const invalid = [
+        { ...baseRevision, approvalState: "rejected" as const },
+        { ...baseRevision, initiatingUserId: AkeruMemoryUserId.make("other-user") },
+        { ...baseRevision, authorBotId: BotId.make("other-bot") },
+        {
+          ...baseRevision,
+          entityKind: "project" as const,
+          entityId: AkeruMemoryEntityId.make("project"),
+        },
+      ];
+
+      const exits = yield* Effect.forEach(invalid, (revision) =>
+        repository.revise({ access: botAccess, expectedRevision: 1, revision }).pipe(Effect.exit),
+      );
+      assert.isTrue(exits.every((exit) => exit._tag === "Failure"));
+      assert.equal((yield* repository.getCurrent({ access: botAccess, rootId })).id, first.id);
+    }),
+  );
+
+  it.effect("recalls authorized project and workspace facts in a one-to-one thread", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const recallAccess = {
+        ...botAccess,
+        projectId: ProjectId.make("shared-recall-project"),
+        workspaceRoot: "/workspace/shared-recall",
+      } as const;
+      yield* repository.insert({
+        access: recallAccess,
+        revision: makeRevision("shared-project", "project", {
+          partition: {
+            tenantId: recallAccess.tenantId,
+            scope: "project",
+            partitionId: AkeruMemoryPartitionId.make(recallAccess.projectId),
+          },
+          entityKind: "project",
+          entityId: AkeruMemoryEntityId.make(recallAccess.projectId),
+          fact: "shared recall marker project",
+          visibility: "shared",
+        }),
+      });
+      const workspaceId = deriveAkeruWorkspaceId(recallAccess.projectId);
+      yield* repository.insert({
+        access: recallAccess,
+        revision: makeRevision("shared-workspace", "workspace", {
+          partition: {
+            tenantId: recallAccess.tenantId,
+            scope: "workspace",
+            partitionId: workspaceId,
+          },
+          entityKind: "workspace",
+          entityId: AkeruMemoryEntityId.make(workspaceId),
+          fact: "shared recall marker workspace",
+          sourceThreadId: null,
+          visibility: "shared",
+        }),
+      });
+
+      assert.deepEqual(
+        (yield* repository.search({
+          access: recallAccess,
+          query: "shared recall marker",
+          limit: 10,
+        }))
+          .map((revision) => revision.id)
+          .sort(),
+        ["shared-project", "shared-workspace"],
       );
     }),
   );
@@ -286,6 +395,8 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           entityKind: "project",
           entityId: AkeruMemoryEntityId.make("project"),
           visibility: "shared",
+          authorBotId: BotId.make("bot-1"),
+          affectedBotIds: [BotId.make("bot-1")],
         }),
       });
 
@@ -363,84 +474,6 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       if (resurrection._tag === "Failure") {
         assert.instanceOf(Cause.squash(resurrection.cause), EntityMemoryConflictError);
       }
-    }),
-  );
-
-  it.effect("keeps derived-copy invalidations durable until every thread is cleared", () =>
-    Effect.gen(function* () {
-      const repository = yield* EntityMemoryRepository;
-      const rootId = AkeruMemoryRootId.make("derived-copy-root");
-      const recordDerivedCopies = repository.recordDerivedCopies;
-      const listDerivedCopies = repository.listDerivedCopies;
-      const listPendingDerivedCopies = repository.listPendingDerivedCopies;
-      const removeDerivedCopy = repository.removeDerivedCopy;
-      assert.isDefined(recordDerivedCopies);
-      assert.isDefined(listDerivedCopies);
-      assert.isDefined(listPendingDerivedCopies);
-      assert.isDefined(removeDerivedCopy);
-      yield* repository.insert({
-        access: botAccess,
-        revision: makeRevision("derived-copy-memory", "bot:user", { rootId }),
-      });
-      yield* recordDerivedCopies({
-        tenantId: botAccess.tenantId,
-        revisions: [{ rootId, revisionId: AkeruMemoryId.make("derived-copy-memory") }],
-        threadId: ThreadId.make("derived-thread-1"),
-        createdAt: "2026-08-30T22:00:00.000Z",
-      });
-      yield* recordDerivedCopies({
-        tenantId: botAccess.tenantId,
-        revisions: [{ rootId, revisionId: AkeruMemoryId.make("derived-copy-memory") }],
-        threadId: ThreadId.make("derived-thread-2"),
-        createdAt: "2026-08-30T22:00:01.000Z",
-      });
-      assert.deepEqual(
-        (yield* listDerivedCopies({ tenantId: botAccess.tenantId, rootId })).map(
-          (copy) => copy.threadId,
-        ),
-        ["derived-thread-1", "derived-thread-2"],
-      );
-
-      const revised = makeRevision("derived-copy-memory-2", "bot:user", {
-        rootId,
-        revision: 2,
-        supersedesId: AkeruMemoryId.make("derived-copy-memory"),
-        fact: "The current fact changed.",
-      });
-      yield* repository.revise({ access: botAccess, expectedRevision: 1, revision: revised });
-      assert.deepEqual(
-        (yield* listPendingDerivedCopies()).map((copy) => copy.threadId),
-        ["derived-thread-1", "derived-thread-2"],
-      );
-      yield* recordDerivedCopies({
-        tenantId: botAccess.tenantId,
-        revisions: [{ rootId, revisionId: revised.id }],
-        threadId: ThreadId.make("derived-thread-1"),
-        createdAt: "2026-08-30T22:00:01.500Z",
-      });
-      assert.deepEqual(
-        (yield* listPendingDerivedCopies()).map((copy) => copy.threadId),
-        ["derived-thread-2"],
-      );
-
-      yield* repository.tombstone({
-        access: botAccess,
-        rootId,
-        expectedRevision: 2,
-        memoryId: AkeruMemoryId.make("derived-copy-tombstone"),
-        updatedAt: "2026-08-30T22:00:02.000Z",
-      });
-      const pending = yield* listPendingDerivedCopies();
-      assert.deepEqual(
-        pending.map((copy) => copy.threadId),
-        ["derived-thread-1", "derived-thread-2"],
-      );
-
-      yield* removeDerivedCopy(pending[0]!);
-      assert.deepEqual(
-        (yield* listPendingDerivedCopies()).map((copy) => copy.threadId),
-        ["derived-thread-2"],
-      );
     }),
   );
 
@@ -867,7 +900,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
       const workspaceAccess = privateAccess("bot-workspace-roundtrip");
-      const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.workspaceRoot);
+      const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.projectId);
       const rootId = AkeruMemoryRootId.make("workspace-archive-roundtrip-root");
       const revision = makeRevision("workspace-archive-roundtrip-revision", workspaceId, {
         rootId,
@@ -912,6 +945,57 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.equal(restored.entityKind, "workspace");
       assert.equal(restored.entityId, AkeruMemoryEntityId.make(workspaceId));
       assert.equal(restored.partition.partitionId, workspaceId);
+    }),
+  );
+
+  it.effect("edits and pins memory in the legacy workspace partition", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const workspaceAccess = privateAccess("bot-legacy-workspace");
+      const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.projectId);
+      const legacyWorkspaceId = (yield* resolveMemoryArchivePartitions(
+        workspaceAccess,
+        "workspace",
+      )).find((partition) => partition.partitionId !== workspaceId)?.partitionId;
+      if (!legacyWorkspaceId) return assert.fail("Expected a legacy workspace partition.");
+      const rootId = AkeruMemoryRootId.make("legacy-workspace-root");
+      const initial = makeRevision("legacy-workspace-1", legacyWorkspaceId, {
+        rootId,
+        partition: {
+          tenantId: workspaceAccess.tenantId,
+          scope: "workspace",
+          partitionId: legacyWorkspaceId,
+        },
+        entityKind: "workspace",
+        entityId: AkeruMemoryEntityId.make(legacyWorkspaceId),
+        visibility: "shared",
+        sourceThreadId: null,
+        authorBotId: workspaceAccess.botId,
+        initiatingUserId: workspaceAccess.userId,
+        affectedBotIds: [workspaceAccess.botId!],
+      });
+      const edited = {
+        ...initial,
+        id: AkeruMemoryId.make("legacy-workspace-2"),
+        revision: 2,
+        supersedesId: initial.id,
+        fact: "The legacy workspace fact was edited.",
+      };
+      const pinned = {
+        ...edited,
+        id: AkeruMemoryId.make("legacy-workspace-3"),
+        revision: 3,
+        supersedesId: edited.id,
+        pinned: true,
+      };
+
+      yield* repository.insert({ access: workspaceAccess, revision: initial });
+      yield* repository.revise({ access: workspaceAccess, revision: edited, expectedRevision: 1 });
+      yield* repository.revise({ access: workspaceAccess, revision: pinned, expectedRevision: 2 });
+
+      const current = yield* repository.getCurrent({ access: workspaceAccess, rootId });
+      assert.equal(current.fact, edited.fact);
+      assert.isTrue(current.pinned);
     }),
   );
 });

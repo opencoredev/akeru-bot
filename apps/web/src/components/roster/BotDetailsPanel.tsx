@@ -94,10 +94,12 @@ function BotProfileEditor({
   bot,
   onSave,
   threadRef,
+  active,
 }: {
   readonly bot: Bot;
   readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
   readonly threadRef: ScopedThreadRef | null;
+  readonly active: boolean;
 }) {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -258,7 +260,7 @@ function BotProfileEditor({
           </div>
         </div>
 
-        <BotUsageSection environmentId={environmentId} botId={bot.id} />
+        <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
 
         <div className="space-y-2">
           <div className="text-sm font-medium">Memory</div>
@@ -414,7 +416,7 @@ export function BotDetailsPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings]);
 
-  const content = (closeButton?: ReactNode) => (
+  const content = (active: boolean, closeButton?: ReactNode) => (
     <>
       <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
         <h2 className="text-sm font-medium">Settings</h2>
@@ -423,6 +425,7 @@ export function BotDetailsPanel({
       <BotProfileEditor
         bot={bot}
         threadRef={threadRef}
+        active={active}
         {...(onSaveBot ? { onSave: onSaveBot } : {})}
       />
     </>
@@ -441,6 +444,7 @@ export function BotDetailsPanel({
         }
       >
         {content(
+          panelState.desktopOpen,
           <Tooltip>
             <TooltipTrigger
               render={
@@ -504,6 +508,7 @@ export function BotDetailsPanel({
         >
           <SheetTitle className="sr-only">Edit {bot.name}</SheetTitle>
           {content(
+            panelState.mobileOpen,
             <SheetClose
               aria-label="Close bot sidebar"
               render={<Button size="icon-sm" variant="ghost" />}

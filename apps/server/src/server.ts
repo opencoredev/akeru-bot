@@ -108,6 +108,9 @@ import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts
 import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { EntityMemoryRepositoryLive } from "./memory/Layers/EntityMemoryRepository.ts";
+import { MemoryCandidateRepositoryLive } from "./memory/Layers/MemoryCandidateRepository.ts";
+import { MemoryRevisionWriteLockLive } from "./memory/Services/MemoryRevisionWriteLock.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -276,9 +279,21 @@ const LegacyProviderLayerLive = LegacyProviderBridgeLive.pipe(
   Layer.provide(ProviderServiceLayerLive),
 );
 
-const ProviderLayerLive = AgentControllerLive.pipe(Layer.provide(LegacyProviderLayerLive));
-
 const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
+
+export const RuntimeMemoryRepositoriesLive = Layer.mergeAll(
+  EntityMemoryRepositoryLive,
+  MemoryCandidateRepositoryLive,
+).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+
+const RuntimeMemoryRepositoriesWithPersistenceLive = RuntimeMemoryRepositoriesLive.pipe(
+  Layer.provideMerge(PersistenceLayerLive),
+);
+
+const ProviderLayerLive = AgentControllerLive.pipe(
+  Layer.provide(LegacyProviderLayerLive),
+  Layer.provide(RuntimeMemoryRepositoriesWithPersistenceLive),
+);
 
 const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
   Layer.provide(VcsProjectConfig.layer),
@@ -392,7 +407,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
   Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive)),
-  Layer.provideMerge(PersistenceLayerLive),
+  Layer.provideMerge(RuntimeMemoryRepositoriesWithPersistenceLive),
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
   // The instance registry is the new routing keystone — text generation,

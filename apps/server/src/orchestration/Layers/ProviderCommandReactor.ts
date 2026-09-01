@@ -6,6 +6,7 @@ import {
   CommandId,
   EventId,
   type ModelSelection,
+  type McpServer,
   type OrchestrationEvent,
   ProviderDriverKind,
   type ProjectId,
@@ -343,6 +344,12 @@ const make = Effect.gen(function* () {
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  if (agentController.configurePluginRuntime) {
+    yield* agentController.configurePluginRuntime({
+      readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
+      dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
+    });
+  }
   const failDelegation = (threadId: ThreadId, error: string) =>
     agentController.failDelegation?.({ threadId, error }) ?? Effect.void;
   if (agentController.configureDelegation) {
@@ -369,6 +376,7 @@ const make = Effect.gen(function* () {
 
   const threadModelSelections = new Map<string, ModelSelection>();
   const threadBotWorkspaceKeys = new Map<string, string>();
+  const threadMcpServers = new Map<string, readonly McpServer[]>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -839,10 +847,13 @@ const make = Effect.gen(function* () {
         preferredProvider === "claudeAgent" &&
         effectiveRequestedModelSelection !== undefined &&
         !Equal.equals(previousModelSelection, effectiveRequestedModelSelection);
-      const mcpServersChanged = !Equal.equals(
-        activeSession?.mcpServerIds ?? [],
-        mcpServers.map((server) => server.id),
-      );
+      const previousMcpServers = threadMcpServers.get(threadId);
+      const mcpServersChanged = previousMcpServers
+        ? !Equal.equals(previousMcpServers, mcpServers)
+        : !Equal.equals(
+            activeSession?.mcpServerIds ?? [],
+            mcpServers.map((server) => server.id),
+          );
       const previousBotWorkspaceKey = threadBotWorkspaceKeys.get(threadId);
       const botWorkspaceChanged =
         previousBotWorkspaceKey !== undefined && previousBotWorkspaceKey !== botWorkspaceKey;
@@ -868,6 +879,7 @@ const make = Effect.gen(function* () {
         !botWorkspaceChanged
       ) {
         threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+        threadMcpServers.set(threadId, mcpServers);
         return { threadId: existingSessionThreadId, engine: desiredEngine };
       }
 
@@ -913,12 +925,14 @@ const make = Effect.gen(function* () {
       });
       yield* bindSessionToThread(restartedSession);
       threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+      threadMcpServers.set(threadId, mcpServers);
       return { threadId: restartedSession.threadId, engine: desiredEngine };
     }
 
     const startedSession = yield* startProviderSession(undefined);
     yield* bindSessionToThread(startedSession);
     threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+    threadMcpServers.set(threadId, mcpServers);
     return { threadId: startedSession.threadId, engine: desiredEngine };
   });
 
