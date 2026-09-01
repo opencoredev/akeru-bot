@@ -532,7 +532,7 @@ function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspec
       if (typeof entry === "object" && entry !== null) pending.push(entry);
     }
   }
-  return { action: null, hasUnclassifiedIntent };
+  return { action: null, hasUnclassifiedIntent: hasUnclassifiedIntent || pending.length > 0 };
 }
 
 export function criticalAkeruAction(toolName: string, args?: unknown): AkeruCriticalAction | null {
