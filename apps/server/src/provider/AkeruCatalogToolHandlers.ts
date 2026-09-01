@@ -18,6 +18,15 @@ import {
   type PluginDirectoryDefinition,
 } from "../../../../plugins/catalog.ts";
 
+declare global {
+  interface ImportMeta {
+    glob<T>(
+      pattern: string | readonly string[],
+      options: { readonly eager: true; readonly import: string; readonly query?: string },
+    ): Record<string, T>;
+  }
+}
+
 export interface AkeruCatalogToolHandlerInput {
   readonly input: unknown;
   readonly emitProgress: (summary: string) => void | Promise<void>;

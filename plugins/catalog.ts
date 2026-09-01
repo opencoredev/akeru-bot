@@ -1,15 +1,6 @@
 import type { PluginCategory } from "./categories.ts";
 import { parsePluginManifest, type PluginManifest, type PluginSkill } from "./schema.ts";
 
-declare global {
-  interface ImportMeta {
-    glob<T>(
-      pattern: string | readonly string[],
-      options: { readonly eager: true; readonly import: string; readonly query?: string },
-    ): Record<string, T>;
-  }
-}
-
 export interface PluginLogo {
   readonly src: string;
   readonly darkSrc?: string;
