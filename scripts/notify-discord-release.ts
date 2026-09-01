@@ -16,7 +16,7 @@ import {
   HttpClientResponse,
 } from "effect/unstable/http";
 
-export type DiscordReleaseTarget = "prerelease" | "latest";
+export type DiscordReleaseTarget = "latest";
 
 export interface DiscordReleaseAnnouncementOptions {
   readonly target: DiscordReleaseTarget;
@@ -47,12 +47,12 @@ interface DiscordWebhookPayload {
   }>;
 }
 
-const DISCORD_RELEASE_TARGETS = ["prerelease", "latest"] as const;
+const DISCORD_RELEASE_TARGETS = ["latest"] as const;
 const DiscordRoleIdSchema = Schema.String.check(Schema.isPattern(/^\d+$/));
 const DiscordWebhookUrl = Config.url("DISCORD_WEBHOOK_URL");
 
 const discordReleaseErrorContext = {
-  target: Schema.Literals(["prerelease", "latest"]),
+  target: Schema.Literal("latest"),
   releaseName: Schema.String,
   version: Schema.String,
   tag: Schema.String,
@@ -98,12 +98,10 @@ export type DiscordReleaseAnnouncementError = typeof DiscordReleaseAnnouncementE
 export const isDiscordReleaseAnnouncementError = Schema.is(DiscordReleaseAnnouncementError);
 
 const targetLabels = {
-  prerelease: "Prerelease",
   latest: "Latest",
 } as const satisfies Record<DiscordReleaseTarget, string>;
 
 const targetColors = {
-  prerelease: 0x5865f2,
   latest: 0x2ecc71,
 } as const satisfies Record<DiscordReleaseTarget, number>;
 
@@ -135,10 +133,7 @@ export const buildDiscordReleaseAnnouncement = (
     {
       title: options.releaseName,
       url: options.releaseUrl.href,
-      description:
-        options.target === "prerelease"
-          ? "A new T3 Code prerelease is available for nightly testers."
-          : "A new T3 Code latest release is available.",
+      description: "A new T3 Code latest release is available.",
       color: targetColors[options.target],
       fields: [
         {
@@ -222,7 +217,7 @@ export const notifyDiscordReleaseCommand = Command.make(
   "notify-discord-release",
   {
     target: Argument.choice("target", DISCORD_RELEASE_TARGETS).pipe(
-      Argument.withDescription("Discord announcement target: prerelease or latest."),
+      Argument.withDescription("Discord announcement target."),
     ),
     roleId: Flag.string("role-id").pipe(
       Flag.withSchema(DiscordRoleIdSchema),
