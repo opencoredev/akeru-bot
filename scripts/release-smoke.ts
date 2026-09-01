@@ -92,7 +92,7 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["needs: [preflight, desktop, cli]", "build gates"],
+  ["needs: [preflight, desktop]", "build gates"],
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
@@ -102,9 +102,6 @@ for (const [needle, label] of [
   ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
-  ["vp run --filter akeru-bot build", "CLI build"],
-  ["--dry-run", "CLI package check"],
-  ['test -f "release/akeru-bot-$RELEASE_VERSION.tgz"', "exact CLI package asset check"],
   ["verify-release-assets.ts", "asset name and hash verification"],
   ["gh release create", "stable GitHub Release"],
 ] as const) {

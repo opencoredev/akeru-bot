@@ -15,7 +15,6 @@ export function expectedReleaseAssetNames(version: string): readonly string[] {
     "latest-mac.yml",
     "latest.yml",
     "latest-linux.yml",
-    `akeru-bot-${version}.tgz`,
   ];
 }
 

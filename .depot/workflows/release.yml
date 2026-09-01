@@ -228,37 +228,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  cli:
-    name: Akeru CLI package
-    needs: preflight
-    runs-on: depot-ubuntu-24.04-8
-    timeout-minutes: 20
-    env:
-      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-      - name: Build and check CLI
-        run: |
-          vp run --filter akeru-bot build
-          node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose
-          mkdir -p release
-          vp pm pack --filter akeru-bot --pack-destination release
-          test -f "release/akeru-bot-$RELEASE_VERSION.tgz"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: stable-cli
-          path: release/akeru-bot-${{ env.RELEASE_VERSION }}.tgz
-          if-no-files-found: error
-          retention-days: 7
-
   release:
     name: Publish stable release
-    needs: [preflight, desktop, cli]
+    needs: [preflight, desktop]
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 15
     env:
