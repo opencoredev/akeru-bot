@@ -68,9 +68,11 @@ function screenshotDataUrl(url: string, temporaryDirectory?: string): string {
     if (encoded.length > MAX_SCREENSHOT_BASE64_LENGTH) {
       throw new Error("Computer Use returned an oversized screenshot.");
     }
-    const bytes = Buffer.from(encoded, "base64");
-    redactComputerScreenshot({ mediaType: "image/png", data: bytes });
-    return url;
+    const redacted = redactComputerScreenshot({
+      mediaType: "image/png",
+      data: Buffer.from(encoded, "base64"),
+    });
+    return `data:image/png;base64,${Buffer.from(redacted.data).toString("base64")}`;
   }
   if (!url.startsWith("file:")) throw new Error("Computer Use returned an unknown screenshot.");
   if (!temporaryDirectory) throw new Error("Computer Use screenshot cleanup is unavailable.");
@@ -87,8 +89,11 @@ function screenshotDataUrl(url: string, temporaryDirectory?: string): string {
   }
   let bytes: Buffer | undefined;
   try {
-    bytes = NodeFS.readFileSync(path);
-    redactComputerScreenshot({ mediaType: "image/png", data: bytes });
+    const redacted = redactComputerScreenshot({
+      mediaType: "image/png",
+      data: NodeFS.readFileSync(path),
+    });
+    bytes = Buffer.from(redacted.data);
   } catch {
     bytes = undefined;
   }
@@ -125,10 +130,11 @@ export function sanitizeCodexComputerUseResult(
       if (object.data.length > MAX_SCREENSHOT_BASE64_LENGTH) {
         throw new Error("Computer Use returned an oversized screenshot.");
       }
-      redactComputerScreenshot({
+      const redacted = redactComputerScreenshot({
         mediaType: "image/png",
         data: Buffer.from(object.data, "base64"),
       });
+      return { ...object, data: Buffer.from(redacted.data).toString("base64") };
     }
     if (field === "screenshot") {
       if (typeof object.url !== "string") {

@@ -153,7 +153,7 @@ describe("Codex Computer Use resolver", () => {
     const frame = PNG.sync.read(
       Buffer.from(frameUrl.slice("data:image/png;base64,".length), "base64"),
     );
-    expect([...frame.data]).toEqual([255, 255, 255, 255]);
+    expect([...frame.data]).toEqual([0, 0, 0, 255]);
     expect(NodeFS.existsSync(path)).toBe(false);
 
     const inline = sanitizeCodexComputerUseResult({
@@ -161,9 +161,16 @@ describe("Codex Computer Use resolver", () => {
       mimeType: "image/png",
       data: PNG.sync.write(png).toString("base64"),
     }) as { data: string };
-    expect([...PNG.sync.read(Buffer.from(inline.data, "base64")).data]).toEqual([
-      255, 255, 255, 255,
-    ]);
+    expect([...PNG.sync.read(Buffer.from(inline.data, "base64")).data]).toEqual([0, 0, 0, 255]);
+
+    const dataUrl = sanitizeCodexComputerUseResult({
+      screenshot: { url: `data:image/png;base64,${PNG.sync.write(png).toString("base64")}` },
+    }) as { screenshot: { url: string } };
+    expect([
+      ...PNG.sync.read(
+        Buffer.from(dataUrl.screenshot.url.slice("data:image/png;base64,".length), "base64"),
+      ).data,
+    ]).toEqual([0, 0, 0, 255]);
 
     const missingPath = NodePath.join(directory, "private-window-title.png");
     expect(() =>
