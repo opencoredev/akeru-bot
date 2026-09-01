@@ -324,11 +324,20 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       startedAt: null,
       completedAt: null,
     };
-    await dispatch({
-      type: "delegation.create",
-      commandId: commandId("create"),
-      delegation,
-    });
+    try {
+      await dispatch({
+        type: "delegation.create",
+        commandId: commandId("create"),
+        delegation,
+      });
+    } catch (cause) {
+      await dispatch({
+        type: "thread.delete",
+        commandId: commandId("cleanup"),
+        threadId: childThreadId,
+      });
+      throw cause;
+    }
 
     const startedAt = now();
     delegation = {

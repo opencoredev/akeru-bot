@@ -411,6 +411,30 @@ describe("AkeruDelegationRuntime", () => {
     ).rejects.toThrow("more than 3");
   });
 
+  it("deletes the child thread when authoritative delegation admission fails", async () => {
+    const commands: OrchestrationCommand[] = [];
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => snapshot(),
+      dispatch: async (command) => {
+        commands.push(command);
+        if (command.type === "delegation.create") throw new Error("Delegation limit reached.");
+      },
+      awaitChild: async () => ({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." }),
+      interruptChild: async () => undefined,
+      now: () => NOW,
+      id: () => String(commands.length + 1),
+    });
+
+    await expect(runtime.send(parent(), request() as never)).rejects.toThrow(
+      "Delegation limit reached.",
+    );
+    expect(commands.map((command) => command.type)).toEqual([
+      "thread.create",
+      "delegation.create",
+      "thread.delete",
+    ]);
+  });
+
   it("rejects delegated memory until a bounded child packet exists", async () => {
     await expect(
       harness().runtime.send(parent(), request({ memoryScopes: ["project"] }) as never),
