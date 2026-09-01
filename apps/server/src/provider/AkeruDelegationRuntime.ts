@@ -16,6 +16,7 @@ import {
   type OrchestrationReadModel,
   type TurnId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
 export interface AkeruDelegationParent {
   readonly threadId: ThreadId;
@@ -40,7 +41,7 @@ export interface AkeruDelegationRuntimeOptions {
 }
 
 export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOptions) {
-  const now = options.now ?? (() => new Date().toISOString());
+  const now = options.now ?? (() => DateTime.formatIso(DateTime.nowUnsafe()));
   const id = options.id ?? (() => NodeCrypto.randomUUID());
   const commandId = (label: string) => CommandId.make(`delegation:${label}:${id()}`);
 

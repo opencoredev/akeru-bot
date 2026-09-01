@@ -340,10 +340,11 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   if (agentController.configureDelegation) {
     yield* agentController.configureDelegation({
-      readSnapshot: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-      dispatch: (command) => Effect.runPromise(orchestrationEngine.dispatch(command)),
+      readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
+      dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
     });
   }
   const serverCommandId = (tag: string) =>

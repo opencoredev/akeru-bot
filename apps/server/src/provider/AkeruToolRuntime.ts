@@ -8,10 +8,12 @@ import {
   type AkeruToolId,
   type AkeruToolWorkspaceType,
   type RuntimeMode,
+  ThreadId,
   akeruToolRequiresApproval,
   decodeAkeruToolInput,
   filterAkeruTools,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
@@ -64,6 +66,7 @@ export interface AkeruToolSession {
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
+  readonly now?: () => string;
 }
 
 export interface AkeruToolExecution {
@@ -288,20 +291,21 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
 
       if (input.toolId === "SendToAgent") {
         if (!session.delegation) throw new Error("Delegation is not available for this session.");
+        const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);
         try {
-          return await session.delegation.send(decoded);
+          return await session.delegation.send(delegationInput);
         } catch (cause) {
           return {
             receiptId: input.toolCallId,
             toolId: input.toolId,
             phase: "failure",
-            threadId: input.threadId,
+            threadId: ThreadId.make(input.threadId),
             botId: session.botId,
             summary: cause instanceof Error ? cause.message : String(cause),
             failureCode: "internal",
             fatalToThread: false,
-            billedBotId: decoded.botId,
-            createdAt: new Date().toISOString(),
+            billedBotId: delegationInput.botId,
+            createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
           } satisfies AkeruToolReceipt;
         }
       }

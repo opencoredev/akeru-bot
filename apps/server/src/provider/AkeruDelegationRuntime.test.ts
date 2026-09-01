@@ -1,11 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "@effect/vitest";
 
 import {
   BotId,
   ProjectId,
+  ProviderInstanceId,
   ThreadId,
   TurnId,
+  type OrchestrationBot,
   type OrchestrationReadModel,
+  type OrchestrationThread,
 } from "@t3tools/contracts";
 
 import { createAkeruDelegationRuntime } from "./AkeruDelegationRuntime.ts";
@@ -14,25 +17,62 @@ const sourceBotId = BotId.make("source-bot");
 const targetBotId = BotId.make("target-bot");
 const sourceThreadId = ThreadId.make("source-thread");
 const sourceTurnId = TurnId.make("source-turn");
+const now = "2026-09-01T00:00:00.000Z";
 
-const snapshot = {
-  bots: [
-    {
-      id: targetBotId,
-      name: "Reviewer",
-      engine: null,
-      runtimeMode: "approval-required",
-      archivedAt: null,
-    },
-  ],
-  threads: [
-    {
-      id: sourceThreadId,
-      projectId: ProjectId.make("project-1"),
-      modelSelection: { instanceId: "codex", model: "gpt-5" },
-    },
-  ],
-} as OrchestrationReadModel;
+const targetBot: OrchestrationBot = {
+  id: targetBotId,
+  name: "Reviewer",
+  title: "Reviewer",
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "dither", seed: "reviewer" },
+  engine: null,
+  sandbox: "local",
+  runtimeMode: "approval-required",
+  usageCap: null,
+  voiceEnabled: false,
+  groupId: null,
+  archivedAt: null,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const sourceThread: OrchestrationThread = {
+  id: sourceThreadId,
+  projectId: ProjectId.make("project-1"),
+  botId: sourceBotId,
+  groupId: null,
+  respondingBotId: null,
+  title: "Source thread",
+  modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
+  runtimeMode: "approval-required",
+  interactionMode: "default",
+  branch: null,
+  worktreePath: null,
+  latestTurn: null,
+  createdAt: now,
+  updatedAt: now,
+  archivedAt: null,
+  settledOverride: null,
+  settledAt: null,
+  deletedAt: null,
+  messages: [],
+  proposedPlans: [],
+  activities: [],
+  checkpoints: [],
+  session: null,
+};
+
+const snapshot: OrchestrationReadModel = {
+  snapshotSequence: 0,
+  projects: [],
+  bots: [targetBot],
+  groups: [],
+  delegations: [],
+  threads: [sourceThread],
+  updatedAt: now,
+};
 
 const request = { botId: targetBotId, task: "Review the patch", expectedResult: "A verdict" };
 
@@ -64,7 +104,7 @@ describe("AkeruDelegationRuntime", () => {
         result: "The patch is correct.",
         usage: { inputTokens: 11, outputTokens: 7 },
       }),
-      now: () => "2026-09-01T00:00:00.000Z",
+      now: () => now,
       id: (() => {
         let value = 0;
         return () => String(++value);
