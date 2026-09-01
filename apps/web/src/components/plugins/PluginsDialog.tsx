@@ -3,7 +3,12 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { McpServerId, type EnvironmentId, type McpServer } from "@t3tools/contracts";
+import {
+  McpServerId,
+  type EnvironmentId,
+  type McpServer,
+  type ProviderAccessStatus,
+} from "@t3tools/contracts";
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 import {
@@ -18,6 +23,8 @@ import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
 import { environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcpServers";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import {
@@ -129,6 +136,9 @@ export function validateMcpServerDraft(draft: McpServerDraft): string | null {
 function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const bots = useAtomValue(environmentBotsAtom(environmentId));
+  const subscriptionAuth = useEnvironmentQuery(
+    serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
+  );
   const createServer = useAtomCommand(mcpServerEnvironment.create, { reportFailure: false });
   const updateServer = useAtomCommand(mcpServerEnvironment.update, { reportFailure: false });
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
@@ -152,6 +162,9 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   const validationError = validateMcpServerDraft(draft);
   const selectedPluginServer = selectedPlugin
     ? findPluginServer(selectedPlugin, servers)
+    : undefined;
+  const selectedPluginAccess: ProviderAccessStatus | undefined = selectedPlugin
+    ? subscriptionAuth.data?.access.find((status) => status.pluginId === selectedPlugin.id)
     : undefined;
 
   const reportFailure = (
@@ -186,8 +199,13 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   };
 
   const togglePlugin = async (plugin: PluginDirectoryDefinition, enabled: boolean) => {
-    if (!isInstallablePlugin(plugin)) return;
-    const plan = planPluginToggle(plugin, servers, enabled);
+    let plan;
+    if (enabled) {
+      if (!isInstallablePlugin(plugin)) return;
+      plan = planPluginToggle(plugin, servers, true);
+    } else {
+      plan = { action: "disable" as const, mcpServerId: pluginMcpServerId(plugin) };
+    }
     setPendingServerId(plan.mcpServerId);
     if (plan.action === "refresh-and-enable") {
       const updateResult = await updateServer({
@@ -288,6 +306,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
         <PluginDetails
           plugin={selectedPlugin}
           server={selectedPluginServer}
+          {...(selectedPluginAccess ? { accessStatus: selectedPluginAccess } : {})}
           activeDependentBotNames={pluginActiveDependentBotNames(selectedPluginServer, bots)}
           pending={pendingServerId === pluginMcpServerId(selectedPlugin)}
           onBack={() => setSelectedPlugin(null)}

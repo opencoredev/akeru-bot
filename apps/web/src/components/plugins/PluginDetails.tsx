@@ -1,4 +1,4 @@
-import type { McpServer } from "@t3tools/contracts";
+import type { McpServer, ProviderAccessStatus } from "@t3tools/contracts";
 import { ArrowUpRightIcon, ChevronLeftIcon } from "lucide-react";
 import type { PluginDirectoryDefinition, PluginSkill } from "../../../../../plugins";
 import { Button } from "../ui/button";
@@ -14,6 +14,7 @@ import {
 interface PluginDetailsContentProps {
   readonly plugin: PluginDirectoryDefinition;
   readonly server: McpServer | undefined;
+  readonly accessStatus?: ProviderAccessStatus;
   readonly activeDependentBotNames: readonly string[];
   readonly pending: boolean;
   readonly onToggle: (enabled: boolean) => void;
@@ -32,6 +33,7 @@ function transportLabel(plugin: PluginDirectoryDefinition): string {
 export function PluginDetailsContent({
   plugin,
   server,
+  accessStatus,
   activeDependentBotNames,
   pending,
   onToggle,
@@ -116,7 +118,13 @@ export function PluginDetailsContent({
               ["Execution", pluginExecutionLabel(plugin)],
               ["Transport", transportLabel(plugin)],
               ["Status", server ? (server.enabled ? "Enabled" : "Disabled") : "Not installed"],
-              ["Health", "Not checked"],
+              [
+                "Health",
+                accessStatus
+                  ? `${accessStatus.health.charAt(0).toUpperCase()}${accessStatus.health.slice(1).replaceAll("-", " ")}`
+                  : "Not checked",
+              ],
+              ...(accessStatus?.repairAction ? [["Repair", accessStatus.repairAction]] : []),
               ["Platforms", plugin.platforms.join(", ")],
               ["License", plugin.license],
             ].map(([label, value]) => (
@@ -232,6 +240,7 @@ export function PluginDetailsContent({
 export function PluginDetails({
   plugin,
   server,
+  accessStatus,
   activeDependentBotNames,
   pending,
   onBack,
@@ -254,6 +263,7 @@ export function PluginDetails({
       <PluginDetailsContent
         plugin={plugin}
         server={server}
+        {...(accessStatus ? { accessStatus } : {})}
         activeDependentBotNames={activeDependentBotNames}
         pending={pending}
         onToggle={onToggle}
