@@ -228,7 +228,7 @@ function SidebarPluginButton({
           render={
             <SidebarMenuButton
               aria-label={`Plugins, ${statusLabel}`}
-              className="relative"
+              className="relative overflow-visible!"
               size="icon"
               onClick={onClick}
             >

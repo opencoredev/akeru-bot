@@ -38,6 +38,9 @@ describe("sidebar footer", () => {
     expect(formatEnabledPluginBadge(0)).toBeNull();
     expect(formatEnabledPluginBadge(3)).toBe("3");
     expect(formatEnabledPluginBadge(100)).toBe("99+");
+
+    const source = NodeFS.readFileSync(new URL("./SidebarChrome.tsx", import.meta.url), "utf8");
+    expect(source).toContain('className="relative overflow-visible!"');
   });
 
   it("counts removed builtins and custom MCP servers without inventing catalog logos", () => {
