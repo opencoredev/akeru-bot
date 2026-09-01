@@ -189,9 +189,9 @@ describe("plugin contribution policy", () => {
     const pullRequestTemplate = text(".github/pull_request_template.md");
 
     expect(issueConfig.contact_links.find((link) => link.name === "Feature request")?.url).toBe(
-      "https://github.com/pingdotgg/t3code/discussions/categories/ideas",
+      "https://github.com/opencoredev/akeru-bot/discussions/categories/ideas",
     );
-    expect(contributionGuide).not.toContain("opencoredev/akeru-bot/discussions");
+    expect(contributionGuide).toContain("opencoredev/akeru-bot/discussions");
     expect(contributionGuide).toContain("plugin and provider proposal forms");
     expect(contributionGuide).toContain("issues/new?template=plugin_proposal.yml");
     expect(contributionGuide).toContain("issues/new?template=provider_proposal.yml");

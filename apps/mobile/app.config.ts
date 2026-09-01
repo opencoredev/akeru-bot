@@ -10,9 +10,16 @@ Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+const appleTeamId = repoEnv.AKERU_APPLE_TEAM_ID?.trim();
+const expoProjectId = repoEnv.AKERU_EXPO_PROJECT_ID?.trim();
+const expoOwner = repoEnv.AKERU_EXPO_OWNER?.trim();
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/;
+const EXPO_PROJECT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EXPO_OWNER_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 
@@ -24,6 +31,18 @@ if (
   throw new Error(
     "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as dev.example.akeru when T3CODE_IOS_PERSONAL_TEAM=1.",
   );
+}
+
+if (appleTeamId && !APPLE_TEAM_ID_PATTERN.test(appleTeamId)) {
+  throw new Error("AKERU_APPLE_TEAM_ID must be a 10-character Apple team identifier.");
+}
+
+if (expoProjectId && !EXPO_PROJECT_ID_PATTERN.test(expoProjectId)) {
+  throw new Error("AKERU_EXPO_PROJECT_ID must be an Expo project UUID.");
+}
+
+if (expoOwner && !EXPO_OWNER_PATTERN.test(expoOwner)) {
+  throw new Error("AKERU_EXPO_OWNER must be an Expo account name.");
 }
 
 const DEVELOPMENT_ASSETS = {
@@ -153,12 +172,14 @@ const config: ExpoConfig = {
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  updates: expoProjectId
+    ? {
+        enabled: true,
+        url: `https://u.expo.dev/${expoProjectId}`,
+        checkAutomatically: "ON_LOAD",
+        fallbackToCacheTimeout: 0,
+      }
+    : { enabled: false },
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
@@ -166,10 +187,9 @@ const config: ExpoConfig = {
     // showcase capture build requires full screen (see infoPlist below).
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
-    // does not fall back to a personal team (which cannot sign app groups,
-    // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
+    // Release builders can pin their own Apple team. Personal-team builds let
+    // Xcode select the local account because they remove restricted capabilities.
+    ...(!isIosPersonalTeamBuild && appleTeamId ? { appleTeamId } : {}),
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
@@ -323,11 +343,9 @@ const config: ExpoConfig = {
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
-    eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    },
+    ...(expoProjectId ? { eas: { projectId: expoProjectId } } : {}),
   },
-  owner: "pingdotgg",
+  ...(expoOwner ? { owner: expoOwner } : {}),
 };
 
 export default config;

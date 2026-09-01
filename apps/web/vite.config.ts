@@ -1,11 +1,13 @@
 import * as NodeURL from "node:url";
 import * as NodeZlib from "node:zlib";
 
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import compression from "compression";
+import * as Effect from "effect/Effect";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
 import "vite-plus/test/config";
 import { defineConfig, type Connect, type Plugin } from "vite-plus";
@@ -14,8 +16,25 @@ import pkg from "./package.json" with { type: "json" };
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
+import { stageReleaseLegalFiles } from "../../scripts/lib/release-legal";
 
 const reactGrabEntry = NodeURL.fileURLToPath(import.meta.resolve("react-grab"));
+const repoRoot = NodeURL.fileURLToPath(new URL("../..", import.meta.url));
+
+function releaseLegalFilesPlugin(): Plugin {
+  return {
+    name: "akeru:release-legal-files",
+    apply: "build",
+    closeBundle() {
+      return Effect.runPromise(
+        stageReleaseLegalFiles({
+          repoRoot,
+          destination: NodeURL.fileURLToPath(new URL("./dist/legal", import.meta.url)),
+        }).pipe(Effect.provide(NodeServices.layer)),
+      );
+    },
+  };
+}
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -152,6 +171,7 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
+      releaseLegalFilesPlugin(),
       tanstackRouter(),
       react(),
       babel({

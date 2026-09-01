@@ -251,6 +251,9 @@ jobs:
         run: |
           node scripts/update-release-package-versions.ts "$RELEASE_VERSION"
           vp run --filter akeru-bot build
+          test -f apps/server/dist/legal/LICENSE
+          test -f apps/server/dist/legal/THIRD_PARTY_NOTICES.md
+          test -f apps/server/dist/legal/licenses/Apache-2.0.txt
 
       - name: Dry-run CLI package
         run: node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose

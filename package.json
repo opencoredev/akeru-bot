@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/monorepo",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "prepare": "node scripts/clean-tsgo-backups.mjs && effect-tsgo patch && vp config --no-agent",

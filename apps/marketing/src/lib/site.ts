@@ -1,5 +1,5 @@
 export const GITHUB_REPOSITORY_URL = "https://github.com/opencoredev/akeru-bot";
-export const UPSTREAM_REPOSITORY_URL = "https://github.com/pingdotgg/t3code";
+export const T3_CODE_WEBSITE_URL = "https://t3.codes";
 
 /** User docs live in the repository, so every docs link points at GitHub. */
 export const DOCS_URL = `${GITHUB_REPOSITORY_URL}/tree/main/docs/user`;

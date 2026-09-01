@@ -26,6 +26,7 @@ const resolveShikiDependencyRoot = (packageName) => {
 config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
 config.resolver = {
   ...config.resolver,
+  assetExts: [...new Set([...(config.resolver?.assetExts ?? []), "md", "txt"])],
   blockList: [
     ...(Array.isArray(config.resolver?.blockList)
       ? config.resolver.blockList

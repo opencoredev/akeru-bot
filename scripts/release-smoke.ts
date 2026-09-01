@@ -52,6 +52,16 @@ assertContains(
   "Desktop artifacts do not use the Akeru Bot release name.",
 );
 assertContains(serverCli, '"akeru-bot",', "CLI publishing does not select the Akeru package.");
+assertContains(
+  serverCli,
+  "license: serverPackageJson.license",
+  "CLI publishing drops MIT metadata.",
+);
+assertContains(
+  desktopArtifactBuilder,
+  "stageReleaseLegalFiles",
+  "Desktop artifacts do not stage the release legal bundle.",
+);
 
 for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
@@ -71,6 +81,9 @@ for (const [needle, label] of [
   ["spctl --assess", "Gatekeeper verification"],
   ["vp run --filter akeru-bot build", "CLI and web build"],
   ["--dry-run", "CLI package dry-run"],
+  ["test -f apps/server/dist/legal/LICENSE", "CLI project license"],
+  ["test -f apps/server/dist/legal/THIRD_PARTY_NOTICES.md", "CLI third-party notice"],
+  ["test -f apps/server/dist/legal/licenses/Apache-2.0.txt", "CLI license bundle"],
   ["vp run --filter @t3tools/marketing typecheck", "marketing typecheck"],
   ["vp run --filter @t3tools/marketing build", "marketing build"],
 ] as const) {
