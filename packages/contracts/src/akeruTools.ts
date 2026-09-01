@@ -49,6 +49,7 @@ export const AkeruToolId = Schema.Literals([
   "CreateChannel",
   "UpdateChannel",
   "SendToUser",
+  "InstallPlugin",
   "AuthenticateMcpServer",
   "RestartMcpServers",
 ]);

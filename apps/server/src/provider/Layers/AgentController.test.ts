@@ -557,14 +557,22 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const parentFinished = vi.fn(async () => undefined);
-    const layer = makeLayer(bridge.service, mastra.factory, undefined, undefined, undefined, {
-      send: vi.fn(async () => null),
-      sendToUser: vi.fn(async () => {
-        throw new Error("not used");
-      }),
-      parentFinished,
-      accessForThread: () => undefined,
-    });
+    const layer = makeLayer(
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        send: vi.fn(async () => null),
+        sendToUser: vi.fn(async () => {
+          throw new Error("not used");
+        }),
+        parentFinished,
+        accessForThread: () => undefined,
+      },
+    );
 
     return Effect.gen(function* () {
       const controller = yield* AgentController;
@@ -1959,6 +1967,8 @@ describe("AgentControllerLive", () => {
         }),
       },
     );
+  });
+
   it.effect("exposes only MCP servers in the persisted delegation grant", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -1995,6 +2005,7 @@ describe("AgentControllerLive", () => {
       bridge.service,
       mastra.factory,
       makeMcpManager,
+      undefined,
       undefined,
       undefined,
       runtime,
@@ -2048,14 +2059,22 @@ describe("AgentControllerLive", () => {
       disabledMcpServerIds: [],
       approvalCeiling: "send",
     };
-    const layer = makeLayer(bridge.service, mastra.factory, undefined, undefined, undefined, {
-      send: vi.fn(async () => null),
-      sendToUser: vi.fn(async () => {
-        throw new Error("not used");
-      }),
-      parentFinished: vi.fn(async () => undefined),
-      accessForThread: () => access,
-    });
+    const layer = makeLayer(
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        send: vi.fn(async () => null),
+        sendToUser: vi.fn(async () => {
+          throw new Error("not used");
+        }),
+        parentFinished: vi.fn(async () => undefined),
+        accessForThread: () => access,
+      },
+    );
 
     return Effect.gen(function* () {
       const controller = yield* AgentController;

@@ -534,10 +534,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               candidate.state !== "canceled",
           ).length ?? 0,
         access: input.access,
-        create: (request) => delegationRuntime!.create(parent(), request),
-        check: (request) => delegationRuntime!.check(parent(), request),
         send: (request) => delegationRuntime!.send(parent(), request),
-        stop: (request) => delegationRuntime!.stop(parent(), request),
       };
     };
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
@@ -803,9 +800,10 @@ const make = (options?: AgentControllerLiveOptions) =>
         },
       });
       resolveChildWaiter(threadId, {
+        state: state === "completed" ? "completed" : "failed",
         turnId: turn.turnId,
         ...(state === "completed" && turn.assistantText.trim()
-          ? { result: turn.assistantText.trim() }
+          ? { summary: turn.assistantText.trim() }
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
@@ -878,7 +876,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             createdAt,
           },
         });
-      });
+      };
       switch (event.type) {
         case "message_update":
           publishAssistantText(threadId, active, event.message, false);
@@ -1420,7 +1418,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           sessionResources.release(key, { destroy: true }),
         ).pipe(Effect.ignoreCause({ log: true }));
         toolRuntime.unregisterSession(key);
-      };
+      });
       const active = yield* Effect.gen(function* () {
         yield* runMastra("state.set", () =>
           session.state.set({
