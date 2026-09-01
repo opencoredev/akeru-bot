@@ -1,6 +1,7 @@
 ---
 import { GITHUB_REPOSITORY_URL, UPSTREAM_REPOSITORY_URL, DOCS_URL, docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
+import PostHog from "../components/PostHog.astro";
 
 interface Props {
   title?: string;
@@ -62,6 +63,7 @@ const year = new Date().getFullYear();
     <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>{title}</title>
+    <PostHog />
   </head>
   <body>
     <div class:list={["page", pageClass]}>
