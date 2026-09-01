@@ -87,6 +87,10 @@ export interface AkeruToolSession {
     input: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
   ) => Promise<AkeruToolReceipt>;
   readonly botState?: Pick<AkeruBotStateRuntime, "updateProfile">;
+  readonly reactToMessage?: (
+    input: (typeof AkeruToolInputSchemas.ReactToMessage)["Type"],
+    toolCallId: string,
+  ) => Promise<unknown>;
   readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
 }
 
@@ -141,6 +145,7 @@ const BACKEND_NAMES: Record<
     | "UpdateBotProfile"
     | "SearchPlugins"
     | "GetPlugin"
+    | "ReactToMessage"
     | "InstallPlugin"
     | "UninstallPlugin"
     | "AuthenticateMcpServer"
@@ -368,6 +373,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     }
     if (session.sendToUser) tools.add("SendToUser");
     if (session.botId && session.botState) tools.add("UpdateBotProfile");
+    if (session.reactToMessage) tools.add("ReactToMessage");
     for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
       tools.add(toolId);
     }
@@ -677,6 +683,15 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
             emitReceipt(input, "failure", { failureCode, summary });
             return result;
           }
+        } else if (input.toolId === "ReactToMessage") {
+          if (!session.reactToMessage) {
+            throw new Error("Message reactions are not available for this session.");
+          }
+          failureCode = "internal";
+          result = await session.reactToMessage(
+            decodeAkeruToolInput("ReactToMessage", decoded),
+            input.toolCallId,
+          );
         } else if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
           const source =
             input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;

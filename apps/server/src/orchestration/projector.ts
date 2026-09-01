@@ -40,6 +40,7 @@ import {
   ThreadCreatedPayload,
   ThreadDeletedPayload,
   ThreadInteractionModeSetPayload,
+  ThreadMessageReactionSetPayload,
   ThreadMetaUpdatedPayload,
   ThreadProposedPlanUpsertedPayload,
   ThreadRuntimeModeSetPayload,
@@ -845,6 +846,39 @@ export function projectEvent(
           }),
         };
       });
+
+    case "thread.message-reaction-set":
+      return decodeForEvent(
+        ThreadMessageReactionSetPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread) return nextBase;
+          const messages = thread.messages.map((message) => {
+            if (message.id !== payload.messageId) return message;
+            const withoutReaction = (message.reactions ?? []).filter(
+              (reaction) => reaction.botId !== payload.botId || reaction.emoji !== payload.emoji,
+            );
+            return {
+              ...message,
+              reactions: payload.present
+                ? [...withoutReaction, { botId: payload.botId, emoji: payload.emoji }]
+                : withoutReaction,
+              updatedAt: payload.updatedAt,
+            };
+          });
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              messages,
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
+      );
 
     case "thread.turn-start-requested":
       return decodeForEvent(

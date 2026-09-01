@@ -755,6 +755,28 @@ describe("AkeruToolRuntime", () => {
     expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
   });
 
+  it("requires approval before a message reaction runs", async () => {
+    const reactToMessage = vi.fn(async () => ({ status: "applied", changed: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-reaction", {
+      botId: BotId.make("parent"),
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      reactToMessage,
+    });
+    const execution = {
+      threadId: "thread-reaction",
+      toolId: "ReactToMessage" as const,
+      toolCallId: "reaction-1",
+      input: { messageId: "message-1", emoji: "👍", action: "add" as const },
+      approvalMode: "require-grant" as const,
+    };
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    runtime.grantApproval(execution);
+    await expect(runtime.execute(execution)).resolves.toMatchObject({ status: "applied" });
+    expect(reactToMessage).toHaveBeenCalledWith(execution.input, execution.toolCallId);
+  });
+
   it("translates await handles to workspace process ids", async () => {
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-1", {

@@ -149,6 +149,13 @@ describe("Akeru tool contracts", () => {
     ).toThrow();
   });
 
+  it("validates message reactions and keeps them approval-gated", () => {
+    const input = { messageId: "message-1", emoji: "👍", action: "add" as const };
+    expect(decodeAkeruToolInput("ReactToMessage", input)).toEqual(input);
+    expect(() => decodeAkeruToolInput("ReactToMessage", { ...input, action: "toggle" })).toThrow();
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "ReactToMessage")?.approval).toBe("send");
+  });
+
   it("never lets full access bypass protected commands or paths", () => {
     const shell = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalShell")!;
     const read = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalRead")!;

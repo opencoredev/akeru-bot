@@ -2298,6 +2298,50 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.message.reaction.set": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (!thread.messages.some((message) => message.id === command.messageId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Message '${command.messageId}' is not visible in thread '${command.threadId}'.`,
+        });
+      }
+      if (thread.groupId != null) {
+        yield* requireActiveGroupMember({
+          readModel,
+          command,
+          groupId: thread.groupId,
+          botId: command.botId,
+        });
+      } else if (thread.botId !== command.botId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-reaction-set",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          botId: command.botId,
+          emoji: command.emoji,
+          present: command.present,
+          updatedAt: command.updatedAt,
+        },
+      };
+    }
+
     case "thread.proposed-plan.upsert": {
       yield* requireThread({
         readModel,

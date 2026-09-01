@@ -354,6 +354,12 @@ const make = Effect.gen(function* () {
   if (agentController.configureDelegation) {
     yield* agentController.configureDelegation({
       readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
+      readThread: (threadId) =>
+        runPromise(
+          projectionSnapshotQuery
+            .getThreadDetailById(threadId)
+            .pipe(Effect.map(Option.getOrUndefined)),
+        ),
       dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
     });
   }

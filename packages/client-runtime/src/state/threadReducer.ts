@@ -391,6 +391,36 @@ export function applyThreadDetailEvent(
       };
     }
 
+    case "thread.message-reaction-set": {
+      const message = thread.messages.find((entry) => entry.id === event.payload.messageId);
+      if (!message) return { kind: "unchanged" };
+      const withoutReaction = (message.reactions ?? []).filter(
+        (reaction) =>
+          reaction.botId !== event.payload.botId || reaction.emoji !== event.payload.emoji,
+      );
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          messages: thread.messages.map((entry) =>
+            entry.id === event.payload.messageId
+              ? {
+                  ...entry,
+                  reactions: event.payload.present
+                    ? [
+                        ...withoutReaction,
+                        { botId: event.payload.botId, emoji: event.payload.emoji },
+                      ]
+                    : withoutReaction,
+                  updatedAt: event.payload.updatedAt,
+                }
+              : entry,
+          ),
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+    }
+
     // ── Session ─────────────────────────────────────────────────────
     case "thread.session-set": {
       // Leaving the "running" session status is the turn-end signal: settle a

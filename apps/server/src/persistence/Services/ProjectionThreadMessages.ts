@@ -10,6 +10,7 @@ import {
   BotId,
   ChatAttachment,
   MessageId,
+  OrchestrationMessageReaction,
   OrchestrationMessageRole,
   ThreadId,
   TurnId,
@@ -18,7 +19,7 @@ import {
 import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
 
@@ -30,6 +31,7 @@ export const ProjectionThreadMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  reactions: Schema.optional(Schema.Array(OrchestrationMessageReaction)),
   isStreaming: Schema.Boolean,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

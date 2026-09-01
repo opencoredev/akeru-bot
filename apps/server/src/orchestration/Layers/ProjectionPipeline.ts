@@ -1264,8 +1264,28 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             role: event.payload.role,
             text: nextText,
             ...(nextAttachments !== undefined ? { attachments: [...nextAttachments] } : {}),
+            reactions: previousMessage?.reactions ?? [],
             isStreaming: event.payload.streaming,
             createdAt: previousMessage?.createdAt ?? event.payload.createdAt,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.message-reaction-set": {
+          const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
+            messageId: event.payload.messageId,
+          });
+          if (Option.isNone(existingMessage)) return;
+          const withoutReaction = (existingMessage.value.reactions ?? []).filter(
+            (reaction) =>
+              reaction.botId !== event.payload.botId || reaction.emoji !== event.payload.emoji,
+          );
+          yield* projectionThreadMessageRepository.upsert({
+            ...existingMessage.value,
+            reactions: event.payload.present
+              ? [...withoutReaction, { botId: event.payload.botId, emoji: event.payload.emoji }]
+              : withoutReaction,
             updatedAt: event.payload.updatedAt,
           });
           return;

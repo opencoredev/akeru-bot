@@ -18,6 +18,7 @@ import type {
   ProviderUploadFeedbackResult,
   OrchestrationCommand,
   OrchestrationReadModel,
+  OrchestrationThread,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -52,6 +53,7 @@ export interface AgentControllerShape {
   }) => Effect.Effect<void>;
   readonly configureDelegation?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+    readonly readThread?: (threadId: ThreadId) => Promise<OrchestrationThread | undefined>;
     readonly dispatch: (command: OrchestrationCommand) => Promise<{ readonly sequence: number }>;
   }) => Effect.Effect<void>;
   readonly failDelegation?: (input: {
