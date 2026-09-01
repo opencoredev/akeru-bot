@@ -50,6 +50,7 @@ function bot(id: BotId): OrchestrationBot {
     runtimeMode: "full-access",
     usageCap: null,
     voiceEnabled: false,
+    channelBindings: [],
     groupId: null,
     archivedAt: null,
     createdAt: now,

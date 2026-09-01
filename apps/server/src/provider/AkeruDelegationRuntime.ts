@@ -21,6 +21,7 @@ import {
   type OrchestrationCommand,
   type OrchestrationReadModel,
   type TurnId,
+  isGroupBotMember,
 } from "@t3tools/contracts";
 
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
@@ -367,7 +368,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       bot.groupId !== null &&
       (!group ||
         parentThread.groupId !== group.id ||
-        !group.members.some((member) => member.botId === bot.id))
+        !group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id))
     ) {
       throw new Error("The target bot is not available in the current group.");
     }

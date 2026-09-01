@@ -9,6 +9,7 @@ import {
   type ModelSelection,
   type McpServer,
   type OrchestrationEvent,
+  isGroupBotMember,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -874,7 +875,9 @@ const make = Effect.gen(function* () {
                 botId: thread.groupId == null ? respondingBotId : null,
                 groupId: thread.groupId ?? null,
                 respondingBotId,
-                groupMemberBotIds: respondingGroup?.members.map((member) => member.botId) ?? [],
+                groupMemberBotIds:
+                  respondingGroup?.members.filter(isGroupBotMember).map((member) => member.botId) ??
+                  [],
               },
             }
           : {}),

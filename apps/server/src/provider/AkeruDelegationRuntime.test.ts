@@ -58,6 +58,7 @@ function bot(id: BotId, overrides: Partial<OrchestrationBot> = {}): Orchestratio
     runtimeMode: "approval-required",
     usageCap: null,
     voiceEnabled: false,
+    channelBindings: [],
     groupId: null,
     archivedAt: null,
     createdAt: NOW,
@@ -576,8 +577,8 @@ describe("AkeruDelegationRuntime", () => {
       name: "Research",
       bossBotId: PARENT_BOT_ID,
       members: [
-        { botId: PARENT_BOT_ID, role: "boss" as const },
-        { botId: CHILD_BOT_ID, role: "specialist" as const },
+        { kind: "bot" as const, botId: PARENT_BOT_ID, role: "boss" as const },
+        { kind: "bot" as const, botId: CHILD_BOT_ID, role: "specialist" as const },
       ],
       createdAt: NOW,
       updatedAt: NOW,
@@ -614,7 +615,7 @@ describe("AkeruDelegationRuntime", () => {
       id: groupId,
       name: "Research",
       bossBotId: PARENT_BOT_ID,
-      members: [{ botId: PARENT_BOT_ID, role: "boss" as const }],
+      members: [{ kind: "bot" as const, botId: PARENT_BOT_ID, role: "boss" as const }],
       createdAt: NOW,
       updatedAt: NOW,
     };

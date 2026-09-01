@@ -46,6 +46,7 @@ function makeBot(id: BotId): OrchestrationBot {
     runtimeMode: "approval-required",
     usageCap: null,
     voiceEnabled: false,
+    channelBindings: [],
     groupId: null,
     archivedAt: null,
     createdAt: NOW,

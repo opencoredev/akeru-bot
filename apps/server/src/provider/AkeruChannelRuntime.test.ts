@@ -31,6 +31,7 @@ const bot = (id: BotId, groupId: GroupId | null) => ({
   runtimeMode: "approval-required" as const,
   usageCap: null,
   voiceEnabled: false,
+  channelBindings: [],
   groupId,
   archivedAt: null,
   createdAt: now,
@@ -47,8 +48,8 @@ const snapshot: OrchestrationReadModel = {
       name: "Launch",
       bossBotId,
       members: [
-        { botId: bossBotId, role: "boss" },
-        { botId: specialistBotId, role: "specialist" },
+        { kind: "bot", botId: bossBotId, role: "boss" },
+        { kind: "bot", botId: specialistBotId, role: "specialist" },
       ],
       createdAt: now,
       updatedAt: now,
