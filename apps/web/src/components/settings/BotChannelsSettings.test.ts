@@ -6,7 +6,7 @@ import {
   connectedChannelBinding,
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
-import { bindingFor } from "./BotChannelRows";
+import { bindingFor, selfHostedIMessageConnectInput } from "./BotChannelRows";
 
 describe("bot channel settings", () => {
   const botId = BotId.make("bot-1");
@@ -45,6 +45,22 @@ describe("bot channel settings", () => {
         "imessage",
       ),
     ).toMatchObject({ status: "connected", externalIdentity: "+15551234567", connectedAt });
+  });
+
+  it("sends a trimmed Photon phone when self-hosted", () => {
+    expect(
+      selfHostedIMessageConnectInput(botId, " photon.test:443 ", " secret ", " +15551234567 "),
+    ).toEqual({
+      botId,
+      provider: "imessage",
+      mode: "self-hosted",
+      serverUrl: "photon.test:443",
+      apiKey: "secret",
+      phone: "+15551234567",
+    });
+    expect(selfHostedIMessageConnectInput(botId, "server", "key", "   ")).not.toHaveProperty(
+      "phone",
+    );
   });
 
   it("requires access write scope for channel controls", () => {

@@ -30,6 +30,23 @@ export function bindingFor(
   );
 }
 
+export function selfHostedIMessageConnectInput(
+  botId: OrchestrationBot["id"],
+  serverUrl: string,
+  apiKey: string,
+  phone: string,
+) {
+  const trimmedPhone = phone.trim();
+  return {
+    botId,
+    provider: "imessage" as const,
+    mode: "self-hosted" as const,
+    serverUrl: serverUrl.trim(),
+    apiKey: apiKey.trim(),
+    ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+  };
+}
+
 function statusLabel(status: ChannelBinding["status"]): string {
   switch (status) {
     case "connected":
@@ -162,6 +179,7 @@ export function IMessageChannelRow({
   const [projectSecret, setProjectSecret] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [phone, setPhone] = useState("");
   const actions = useChannelActions(environmentId, bot, "imessage", "iMessage");
   const missingCredentials =
     mode === "hosted"
@@ -216,6 +234,12 @@ export function IMessageChannelRow({
                   value={apiKey}
                   onChange={(event) => setApiKey(event.currentTarget.value)}
                 />
+                <Input
+                  aria-label="Photon phone or line"
+                  placeholder="Phone or line (optional)"
+                  value={phone}
+                  onChange={(event) => setPhone(event.currentTarget.value)}
+                />
               </>
             )}
             <div className="flex justify-between gap-2">
@@ -241,13 +265,7 @@ export function IMessageChannelRow({
                                 projectId: projectId.trim(),
                                 projectSecret: projectSecret.trim(),
                               }
-                            : {
-                                botId: bot.id,
-                                provider: "imessage",
-                                mode,
-                                serverUrl: serverUrl.trim(),
-                                apiKey: apiKey.trim(),
-                              },
+                            : selfHostedIMessageConnectInput(bot.id, serverUrl, apiKey, phone),
                       }),
                     "Could not connect iMessage",
                   )
