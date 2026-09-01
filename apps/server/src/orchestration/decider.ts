@@ -10,7 +10,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
-import { isDeepStrictEqual } from "node:util";
+import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -1083,7 +1083,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         delegationId: delegation.delegationId,
       });
       if (
-        !isDeepStrictEqual(current, {
+        !NodeUtil.isDeepStrictEqual(current, {
           ...delegation,
           childTurnId: current.childTurnId,
           outcome: current.outcome,

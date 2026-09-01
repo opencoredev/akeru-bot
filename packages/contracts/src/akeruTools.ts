@@ -50,6 +50,16 @@ export const AkeruToolInputSchemas = {
 } as const;
 export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
 
+const AkeruToolInputDecoders = Object.fromEntries(
+  Object.entries(AkeruToolInputSchemas).map(([toolId, schema]) => [
+    toolId,
+    Schema.decodeUnknownSync(schema),
+  ]),
+) as Record<
+  AkeruToolId,
+  (input: unknown, options: { readonly onExcessProperty: "error" }) => unknown
+>;
+
 export const AkeruProtectedApprovalClass = Schema.Literals([
   "send",
   "pay",
@@ -267,7 +277,7 @@ export function decodeAkeruToolInput<Name extends AkeruToolId>(
   toolId: Name,
   input: unknown,
 ): (typeof AkeruToolInputSchemas)[Name]["Type"] {
-  return Schema.decodeUnknownSync(AkeruToolInputSchemas[toolId])(input, {
+  return AkeruToolInputDecoders[toolId](input, {
     onExcessProperty: "error",
   }) as (typeof AkeruToolInputSchemas)[Name]["Type"];
 }
