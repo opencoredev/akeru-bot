@@ -30,10 +30,11 @@ describe("botSandbox", () => {
   it("lists the first sandbox providers", () => {
     expect(BOT_SANDBOX_OPTIONS.map((option) => option.value)).toEqual([
       "local",
+      "e2b",
+      "daytona",
       "vercel",
-      "akeru-cloud",
       "upstash",
     ]);
-    expect(botSandboxLabel("akeru-cloud")).toBe("Akeru Cloud");
+    expect(botSandboxLabel("vercel")).toBe("Vercel Sandbox");
   });
 });

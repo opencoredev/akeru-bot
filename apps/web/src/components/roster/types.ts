@@ -31,7 +31,7 @@ export interface Bot {
   disabledMcpServerIds: readonly McpServerId[];
   avatar: BotAvatar;
   engine: { provider: string; model: string } | null;
-  sandbox: "local" | "vercel" | "akeru-cloud" | "upstash" | null;
+  sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   usageCap: { unit: "tokens"; limit: number } | null;
   voiceEnabled: boolean;

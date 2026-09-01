@@ -1214,9 +1214,16 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const makeRemoteWorkspace = vi.fn(async () => remote);
+    const makeBotBrowser = vi.fn(() => ({
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    }));
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
+      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.merge(
@@ -1241,17 +1248,21 @@ describe("AgentControllerLive", () => {
       });
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
-      expect(makeRemoteWorkspace).toHaveBeenCalledWith({
-        threadId: `thread-${codexThreadId}`,
-        sandbox: "upstash",
-        workspaceId: expect.stringMatching(/^akeru-[a-f0-9]{24}$/),
-      });
+      expect(makeRemoteWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: `thread-${codexThreadId}`,
+          sandbox: "upstash",
+          workspaceId: expect.stringMatching(/^akeru-[a-f0-9]{24}$/),
+          identityFile: expect.stringMatching(/provider\.json$/),
+        }),
+      );
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
+      expect(makeBotBrowser).not.toHaveBeenCalled();
       yield* controller.stopSession({ threadId: codexThreadId });
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
-  it.effect("destroys obsolete and final pooled session resources", () => {
+  it.effect("destroys obsolete and final pooled remote workspaces", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const firstWorkspace = new Workspace({
@@ -1268,26 +1279,9 @@ describe("AgentControllerLive", () => {
       .fn()
       .mockResolvedValueOnce(firstWorkspace)
       .mockResolvedValueOnce(secondWorkspace);
-    const firstBrowser = {
-      tools: {},
-      attachment: vi.fn(async () => undefined),
-      reconnect: vi.fn(async () => undefined),
-      close: vi.fn(async () => undefined),
-    };
-    const secondBrowser = {
-      tools: {},
-      attachment: vi.fn(async () => undefined),
-      reconnect: vi.fn(async () => undefined),
-      close: vi.fn(async () => undefined),
-    };
-    const makeBotBrowser = vi
-      .fn()
-      .mockReturnValueOnce(firstBrowser)
-      .mockReturnValueOnce(secondBrowser);
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
-      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.merge(
@@ -1315,11 +1309,9 @@ describe("AgentControllerLive", () => {
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "vercel" });
         expect(firstDestroy).toHaveBeenCalledOnce();
-        expect(firstBrowser.close).toHaveBeenCalledOnce();
       }).pipe(Effect.provide(layer), Effect.orDie);
 
       expect(secondDestroy).toHaveBeenCalledOnce();
-      expect(secondBrowser.close).toHaveBeenCalledOnce();
     });
   });
 
@@ -1360,7 +1352,7 @@ describe("AgentControllerLive", () => {
     });
   });
 
-  it.effect("keeps the same workspace when only session input changes", () => {
+  it.effect("keeps the same remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({
@@ -1369,16 +1361,11 @@ describe("AgentControllerLive", () => {
     });
     const destroy = vi.spyOn(remote, "destroy");
     const makeRemoteWorkspace = vi.fn(async () => remote);
-    const sharedBrowser = {
-      tools: {},
-      attachment: vi.fn(async () => undefined),
-      reconnect: vi.fn(async () => undefined),
-      close: vi.fn(async () => undefined),
-    };
+    const makeBotBrowser = vi.fn();
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
-      makeBotBrowser: (() => sharedBrowser) as never,
+      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.merge(
@@ -1406,7 +1393,7 @@ describe("AgentControllerLive", () => {
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(destroy).not.toHaveBeenCalled();
-      expect(sharedBrowser.reconnect).toHaveBeenCalledOnce();
+      expect(makeBotBrowser).not.toHaveBeenCalled();
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
