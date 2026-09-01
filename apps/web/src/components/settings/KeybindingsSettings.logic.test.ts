@@ -171,34 +171,28 @@ describe("KeybindingsSettings.logic", () => {
     const rows = buildKeybindingRows(
       [
         {
-          command: "chat.new",
+          command: "preview.zoomIn",
           shortcut: {
-            key: "n",
+            key: "=",
             modKey: true,
             metaKey: false,
             ctrlKey: false,
             altKey: false,
             shiftKey: false,
           },
-          whenAst: {
-            type: "not",
-            node: { type: "identifier", name: "terminalFocus" },
-          },
+          whenAst: { type: "identifier", name: "previewFocus" },
         },
         {
-          command: "chat.new",
+          command: "preview.zoomIn",
           shortcut: {
-            key: "o",
+            key: "+",
             modKey: true,
             metaKey: false,
             ctrlKey: false,
             altKey: false,
-            shiftKey: true,
+            shiftKey: false,
           },
-          whenAst: {
-            type: "not",
-            node: { type: "identifier", name: "terminalFocus" },
-          },
+          whenAst: { type: "identifier", name: "previewFocus" },
         },
       ] satisfies ResolvedKeybindingsConfig,
       "",
