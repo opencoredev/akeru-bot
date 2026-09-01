@@ -232,6 +232,19 @@ describe("subscription auth storage", () => {
     expect(JSON.stringify(restarted.mcpRequestHealth("builtin-executor"))).not.toContain("token");
   });
 
+  it("uses the last MCP health result when requests finish in the same millisecond", () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const at = "2026-08-31T20:00:00.000Z";
+
+    service.recordMcpRequestFailure("builtin-executor", "The request failed.", at);
+    service.recordMcpRequestSuccess("builtin-executor", at);
+    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
+
+    service.recordMcpRequestFailure("builtin-executor", "The retry failed.", at);
+    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("failed");
+  });
+
   it("preserves health updates written by another service instance", () => {
     const { authPath } = fixture();
     const providerRuntime = new SubscriptionAuthService(authPath);

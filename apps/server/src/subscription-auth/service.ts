@@ -366,7 +366,9 @@ export class SubscriptionAuthService {
     if (
       health.lastFailedRequest &&
       (!health.lastSuccessfulRequestAt ||
-        health.lastFailedRequest.at >= health.lastSuccessfulRequestAt)
+        health.lastFailedRequest.at > health.lastSuccessfulRequestAt ||
+        (health.lastFailedRequest.at === health.lastSuccessfulRequestAt &&
+          health.healthTest?.status === "failed"))
     ) {
       return {
         health: health.lastSuccessfulRequestAt ? "failed" : "failed-first-request",
@@ -380,7 +382,9 @@ export class SubscriptionAuthService {
     if (
       health.lastSuccessfulRequestAt &&
       health.lastFailedRequest &&
-      health.lastSuccessfulRequestAt > health.lastFailedRequest.at
+      (health.lastSuccessfulRequestAt > health.lastFailedRequest.at ||
+        (health.lastSuccessfulRequestAt === health.lastFailedRequest.at &&
+          health.healthTest?.status === "passed"))
     ) {
       return {
         health: "recovered",
