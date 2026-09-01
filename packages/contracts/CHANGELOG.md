@@ -1,3 +1,12 @@
+## @t3tools/contracts@0.0.36
+
+### Changes
+
+- [#114](https://github.com/opencoredev/akeru-bot/pull/114) fix(release): ship desktop apps without CLI
+- [#115](https://github.com/opencoredev/akeru-bot/pull/115) fix(legal): preserve licenses and correct fork attribution
+- [#116](https://github.com/opencoredev/akeru-bot/pull/116) feat(marketing): explain unsigned macOS downloads
+- [#117](https://github.com/opencoredev/akeru-bot/pull/117) fix(release): launch packaged desktop apps before publishing
+
 ## @t3tools/contracts@0.0.35
 
 ### Changes
