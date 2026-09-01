@@ -8,6 +8,7 @@ import {
   canSubmitBotPrompt,
   findMentionedBotId,
   isBotPromptExpanded,
+  restoreBotStashPrompt,
   shouldFocusBotPromptForKey,
 } from "./BotPromptComposer";
 
@@ -52,6 +53,15 @@ describe("bot prompt composer", () => {
     expect(shouldFocusBotPromptForKey({ ...baseInput, isComposing: true })).toBe(false);
   });
 
+  it("restores stashed text after the current draft", () => {
+    expect(restoreBotStashPrompt("Current draft  ", "Stashed follow-up")).toBe(
+      "Current draft\n\nStashed follow-up",
+    );
+    expect(restoreBotStashPrompt("", "Stashed follow-up")).toBe("Stashed follow-up");
+    expect(restoreBotStashPrompt("   ", "Stashed follow-up")).toBe("Stashed follow-up");
+    expect(restoreBotStashPrompt("Current draft", "")).toBe("Current draft");
+  });
+
   it("uses the available chat width", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer
@@ -62,7 +72,7 @@ describe("bot prompt composer", () => {
       />,
     );
 
-    expect(markup).toContain('<form class="w-full ');
+    expect(markup).toContain('class="w-full px-4');
     expect(markup).not.toContain("max-w-4xl");
   });
 

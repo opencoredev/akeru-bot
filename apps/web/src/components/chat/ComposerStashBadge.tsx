@@ -3,11 +3,11 @@ import { memo } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import { ComposerBanner } from "./ComposerBanner";
 
 /**
- * Bookmark control that shows the stash count and opens the stash menu. It
- * sits behind the composer's shoulder unless another drawer needs that space,
- * then moves into the composer's existing controls.
+ * Bookmark tab that shows the stash count beside the composer's other attachments
+ * and opens the stash menu.
  *
  * On save the badge gives one quiet acknowledgement: it lifts to full
  * opacity and the count ticks over. `pulseKey` changes per stash, remounting
@@ -24,17 +24,16 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
   if (props.count === 0) return null;
   const inline = props.placement === "inline";
   const count = (
-    <span
+    <ComposerBanner.Count
       key={props.pulseKey}
       className={cn(
-        "text-[10px] font-medium leading-none tabular-nums",
         props.pulsing
           ? "animate-[prompt-stash-count-enter_180ms_ease-out_both] text-primary motion-reduce:animate-none"
           : "text-muted-foreground",
       )}
     >
       {props.count}
-    </span>
+    </ComposerBanner.Count>
   );
 
   if (inline) {
@@ -60,28 +59,28 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
   }
 
   return (
-    <button
-      type="button"
-      data-prompt-stash-badge="true"
-      aria-label={`Stashed prompts: ${props.count}. Open stash.`}
-      aria-expanded={props.menuOpen}
-      className={cn(
-        "chat-composer-shoulder-tab chat-composer-stash-tab absolute -top-7 right-4 z-0 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-t-xl border border-b-0 px-3 pb-1 text-xs leading-none",
-        "transition-[color,border-color] duration-200",
-        props.menuOpen && "pointer-events-none",
-        props.menuOpen || props.pulsing
-          ? "text-foreground"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-      onPointerDown={(event) => {
-        // Keep composer focus so Escape/typing flows stay intact.
-        event.preventDefault();
-      }}
-      onClick={props.onToggleMenu}
-    >
-      <BookmarkIcon className="size-3 shrink-0" aria-hidden="true" />
-      Stash
-      {count}
-    </button>
+    <ComposerBanner.Root width="content" data-composer-shoulder-tab className="ml-auto">
+      <ComposerBanner.Row
+        render={<button type="button" />}
+        data-prompt-stash-badge="true"
+        aria-label={`Stashed prompts: ${props.count}. Open stash.`}
+        aria-expanded={props.menuOpen}
+        className={cn(
+          "transition-colors duration-200",
+          props.menuOpen && "pointer-events-none",
+          props.menuOpen || props.pulsing
+            ? "text-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={props.onToggleMenu}
+      >
+        <ComposerBanner.Icon>
+          <BookmarkIcon />
+        </ComposerBanner.Icon>
+        <ComposerBanner.Content>Stash</ComposerBanner.Content>
+        <ComposerBanner.Actions>{count}</ComposerBanner.Actions>
+      </ComposerBanner.Row>
+    </ComposerBanner.Root>
   );
 });

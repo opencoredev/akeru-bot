@@ -58,6 +58,11 @@ export {
   parseKeybindingShortcut,
 };
 
+/** Exact former defaults that startup removes without touching user overrides. */
+const RETIRED_DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
+  { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
+];
+
 export const ResolvedKeybindingFromConfig = KeybindingRule.pipe(
   Schema.decodeTo(
     Schema.toType(ResolvedKeybindingRule),
@@ -492,7 +497,12 @@ const make = Effect.gen(function* () {
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
-      const customConfig = runtimeConfig.keybindings;
+      const persistedConfig = runtimeConfig.keybindings;
+      const customConfig = persistedConfig.filter(
+        (entry) =>
+          !RETIRED_DEFAULT_KEYBINDINGS.some((retired) => isSameKeybindingRule(entry, retired)),
+      );
+      const removedRetiredDefaults = customConfig.length !== persistedConfig.length;
       const existingCommands = new Set(customConfig.map((entry) => entry.command));
       const missingDefaults: KeybindingRule[] = [];
       const shortcutConflictWarnings: Array<{
@@ -530,6 +540,9 @@ const make = Effect.gen(function* () {
         });
       }
       if (missingDefaults.length === 0) {
+        if (removedRetiredDefaults) {
+          yield* writeConfigAtomically(customConfig);
+        }
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
@@ -559,6 +572,9 @@ const make = Effect.gen(function* () {
         });
       }
       if (defaultsToAppend.length === 0) {
+        if (removedRetiredDefaults) {
+          yield* writeConfigAtomically(customConfig);
+        }
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
