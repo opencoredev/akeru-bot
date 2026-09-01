@@ -310,6 +310,58 @@ describe("portability archive", () => {
     expect(parsePortabilityArchive(serializePortabilityArchive(first))).toEqual(first);
   });
 
+  it("roundtrips sandbox browser sharing and leaves it unchanged for older archives", () => {
+    const snapshot = makeSnapshot();
+    const sharedSettings = { ...makeSettings(), botSandboxBrowserSharing: "shared" as const };
+    const archive = createPortabilityArchive(snapshot, sharedSettings, NOW);
+    const settingsRecord = archive.records.find((record) => record.type === "server-settings");
+    expect(settingsRecord?.data.botSandboxBrowserSharing).toBe("shared");
+
+    const separateSettings = { ...sharedSettings, botSandboxBrowserSharing: "separate" as const };
+    const preview = previewPortabilityImport(
+      archive,
+      snapshot,
+      separateSettings,
+      AVAILABLE_PROVIDER_IDS,
+    );
+    expect(preview.changes).toContainEqual(
+      expect.objectContaining({ recordType: "server-settings" }),
+    );
+    expect(
+      isPortabilityPreviewCurrent(snapshot, sharedSettings, AVAILABLE_PROVIDER_IDS, preview),
+    ).toBe(false);
+    expect(
+      commandsForPortabilityImport(archive, snapshot, separateSettings, AVAILABLE_PROVIDER_IDS)
+        .settingsPatch,
+    ).toEqual(expect.objectContaining({ botSandboxBrowserSharing: "shared" }));
+
+    const legacy = resignArchive(
+      archive,
+      archive.records.map((record) => {
+        if (record.type !== "server-settings") return record;
+        const { botSandboxBrowserSharing: _sharing, ...data } = record.data;
+        return { ...record, data };
+      }),
+    );
+    const parsedLegacy = parsePortabilityArchive(JSON.stringify(legacy));
+    expect(
+      previewPortabilityImport(parsedLegacy, snapshot, separateSettings, AVAILABLE_PROVIDER_IDS)
+        .changes,
+    ).not.toContainEqual(expect.objectContaining({ recordType: "server-settings" }));
+    expect(
+      commandsForPortabilityImport(parsedLegacy, snapshot, separateSettings, AVAILABLE_PROVIDER_IDS)
+        .settingsPatch,
+    ).toBeUndefined();
+    expect(
+      previewPortabilityImport(parsedLegacy, snapshot, sharedSettings, AVAILABLE_PROVIDER_IDS)
+        .changes,
+    ).toContainEqual(expect.objectContaining({ recordType: "server-settings" }));
+    expect(
+      commandsForPortabilityImport(parsedLegacy, snapshot, sharedSettings, AVAILABLE_PROVIDER_IDS)
+        .settingsPatch,
+    ).toEqual(expect.objectContaining({ botSandboxBrowserSharing: "separate" }));
+  });
+
   it("removes credentials, local state, Git state, and event internals", () => {
     const text = serializePortabilityArchive(
       createPortabilityArchive(makeSnapshot(), makeSettings(), NOW),

@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeURL from "node:url";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";

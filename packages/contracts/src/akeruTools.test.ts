@@ -40,6 +40,9 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "RestartMcpServers")?.approval).toBe(
       "production",
     );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "InstallPlugin")?.approval).toBe(
+      "production",
+    );
   });
 
   it("decodes SendToAgent input and rejects server-owned fields", () => {

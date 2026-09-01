@@ -274,6 +274,7 @@ describe("AkeruMastraHarness", () => {
       getThreadTools: () => ({
         exa_search: pluginTool,
         RestartMcpServers: pluginTool,
+        Shell: pluginTool,
       }),
       syncThreadToolApproval: async (_threadId, _toolName, protectedAction) => {
         approvalPolicies.push(protectedAction);
@@ -330,5 +331,53 @@ describe("AkeruMastraHarness", () => {
     assert.deepEqual(await tool.execute?.({ feedback: "The button is unresponsive." }, {}), {
       status: "draft-opened",
     });
+  });
+
+  it("awaits observational-memory hooks", async () => {
+    const finished: unknown[] = [];
+    const hooks = createAkeruObserveHooks({
+      startMemoryCall: async ({ category }) => `${category}-call`,
+      finishMemoryCall: async (input) => {
+        finished.push(input);
+      },
+    });
+
+    await hooks.onObservationStart?.({ threadId: "thread-1" });
+    await hooks.onObservationEnd?.({
+      threadId: "thread-1",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await hooks.onReflectionStart?.({ threadId: "thread-1" });
+    await hooks.onReflectionEnd?.({
+      threadId: "thread-1",
+      usage: { inputTokens: 20, outputTokens: 8 },
+    });
+
+    assert.deepEqual(finished, [
+      {
+        callId: "observer-call",
+        category: "observer",
+        usage: { inputTokens: 10, outputTokens: 5 },
+      },
+      {
+        callId: "reflector-call",
+        category: "reflector",
+        usage: { inputTokens: 20, outputTokens: 8 },
+      },
+    ]);
+
+    const blocked = createAkeruObserveHooks({
+      startMemoryCall: async () => {
+        throw new Error("Hook rejected");
+      },
+    });
+    let blockedError: unknown;
+    try {
+      await blocked.onObservationStart?.({ threadId: "thread-1" });
+    } catch (error) {
+      blockedError = error;
+    }
+    assert.instanceOf(blockedError, Error);
+    assert.equal(blockedError.message, "Hook rejected");
   });
 });

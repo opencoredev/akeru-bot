@@ -176,7 +176,66 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
       );
 
       expect(failure.message).toContain(
-        "Active project 'project-existing' already exists for workspace root '/tmp/project'.",
+        "Project 'project-existing' already owns workspace root '/tmp/project'.",
+      );
+    }),
+  );
+
+  it.effect("rejects project.create for a deleted project's workspace root", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const initial = createEmptyReadModel(now);
+      const withProject = yield* projectEvent(initial, {
+        sequence: 1,
+        eventId: asEventId("evt-project-create-deleted-root"),
+        aggregateKind: "project",
+        aggregateId: asProjectId("project-deleted-root"),
+        type: "project.created",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-project-create-deleted-root"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-project-create-deleted-root"),
+        metadata: {},
+        payload: {
+          projectId: asProjectId("project-deleted-root"),
+          title: "Deleted Project",
+          workspaceRoot: "/tmp/project-deleted-root",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      const readModel = yield* projectEvent(withProject, {
+        sequence: 2,
+        eventId: asEventId("evt-project-delete-root"),
+        aggregateKind: "project",
+        aggregateId: asProjectId("project-deleted-root"),
+        type: "project.deleted",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-project-delete-root"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-project-delete-root"),
+        metadata: {},
+        payload: { projectId: asProjectId("project-deleted-root"), deletedAt: now },
+      });
+
+      const failure = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "project.create",
+            commandId: CommandId.make("cmd-project-reuse-deleted-root"),
+            projectId: asProjectId("project-replacement"),
+            title: "Replacement",
+            workspaceRoot: "/tmp/project-deleted-root",
+            createdAt: now,
+          },
+          readModel,
+        }),
+      );
+
+      expect(failure.message).toContain(
+        "Project 'project-deleted-root' already owns workspace root '/tmp/project-deleted-root'.",
       );
     }),
   );
@@ -241,7 +300,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
       );
 
       expect(failure.message).toContain(
-        "Active project 'project-first' already exists for workspace root '/tmp/project-first'.",
+        "Project 'project-first' already owns workspace root '/tmp/project-first'.",
       );
     }),
   );

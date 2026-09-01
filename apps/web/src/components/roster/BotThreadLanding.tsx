@@ -25,6 +25,7 @@ import { toastManager } from "../ui/toast";
 import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { BotActivityStatus } from "./BotActivityStatus";
+import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
@@ -36,6 +37,7 @@ import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
+import { useRosterPendingApproval } from "./useRosterPendingApproval";
 
 export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
@@ -80,6 +82,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   );
   const effectiveModelSelection = stickyEngine;
   const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
+  const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const voiceCall = useVoiceCall();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
@@ -109,6 +112,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   if (!bot || bot.archivedAt !== null) return null;
   const working = runtime.sending || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages);
+  const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
 
   return (
@@ -181,6 +185,15 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 ),
               )
             )}
+            {pendingApproval ? (
+              <BotApprovalPrompt
+                approval={pendingApproval}
+                pendingCount={approvalState.pendingCount}
+                responding={approvalState.responding}
+                error={approvalState.responseError}
+                onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
+              />
+            ) : null}
             {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
           </BotConversationScrollArea>
           <BotInboxAlertStack
@@ -197,6 +210,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             draftKey={bot.id}
             disabled={
               runtime.sending ||
+              pendingApproval !== null ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||
               modelUpdatePending ||

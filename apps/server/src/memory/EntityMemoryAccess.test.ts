@@ -1,6 +1,9 @@
+import * as NodeCrypto from "node:crypto";
+
 import { assert, describe, it } from "@effect/vitest";
 import {
   AkeruMemoryTenantId,
+  AkeruMemoryPartitionId,
   AkeruMemoryUserId,
   BotId,
   GroupId,
@@ -13,7 +16,6 @@ import {
   deriveAkeruWorkspaceId,
   resolveAuthorizedMemoryPartitions,
   resolveMemoryArchivePartitions,
-  resolveRecallMemoryPartitions,
 } from "./EntityMemoryAccess.ts";
 
 const base = {
@@ -42,16 +44,16 @@ describe("entity memory access", () => {
 
       assert.isTrue(first.some((value) => value.partitionId === "bot-1:owner"));
       assert.isFalse(second.some((value) => value.partitionId === "bot-1:owner"));
-      const recalled = yield* resolveRecallMemoryPartitions({
-        ...base,
-        botId: BotId.make("bot-1"),
-        groupId: null,
-      });
       assert.deepEqual(
-        recalled.map((value) => value.scope),
-        ["user", "bot-user", "bot", "thread"],
+        first.map((value) => value.scope),
+        ["user", "bot-user", "bot", "project", "workspace", "workspace", "thread"],
       );
-      assert.isTrue(recalled.every((value) => value.visibility === "private"));
+      assert.isTrue(
+        first.some((value) => value.scope === "project" && value.visibility === "shared"),
+      );
+      assert.isTrue(
+        first.some((value) => value.scope === "workspace" && value.visibility === "shared"),
+      );
     }),
   );
 
@@ -67,7 +69,7 @@ describe("entity memory access", () => {
 
       assert.deepEqual(
         partitions.map((value) => value.scope),
-        ["group", "project", "workspace", "thread"],
+        ["group", "project", "workspace", "workspace", "thread"],
       );
       assert.isTrue(partitions.every((value) => value.visibility === "shared"));
     }),
@@ -88,15 +90,20 @@ describe("entity memory access", () => {
     }),
   );
 
-  it("derives stable opaque workspace partitions", () => {
-    const first = deriveAkeruWorkspaceId("/workspaces/akeru");
-    const second = deriveAkeruWorkspaceId("/workspaces/akeru");
-    assert.equal(first, second);
-    assert.notInclude(first, "/workspaces/akeru");
+  it("keeps the workspace partition stable when the project root moves", () => {
+    const beforeMove = deriveAkeruWorkspaceId(base.projectId);
+    const afterMove = deriveAkeruWorkspaceId(
+      { ...base, workspaceRoot: "/workspace/two" }.projectId,
+    );
+    assert.equal(beforeMove, afterMove);
+    assert.notEqual(beforeMove, deriveAkeruWorkspaceId(ProjectId.make("project-2")));
   });
 
-  it.effect("selects the derived workspace archive partition", () =>
+  it.effect("keeps legacy workspace memory reachable in reads and archives", () =>
     Effect.gen(function* () {
+      const legacyWorkspaceId = AkeruMemoryPartitionId.make(
+        `workspace:${NodeCrypto.createHash("sha256").update(base.workspaceRoot).digest("hex")}`,
+      );
       const partitions = yield* resolveMemoryArchivePartitions(
         { ...base, botId: BotId.make("bot-1"), groupId: null },
         "workspace",
@@ -105,7 +112,13 @@ describe("entity memory access", () => {
         {
           tenantId: base.tenantId,
           scope: "workspace",
-          partitionId: deriveAkeruWorkspaceId(base.workspaceRoot),
+          partitionId: deriveAkeruWorkspaceId(base.projectId),
+          visibility: "shared",
+        },
+        {
+          tenantId: base.tenantId,
+          scope: "workspace",
+          partitionId: legacyWorkspaceId,
           visibility: "shared",
         },
       ]);

@@ -1,7 +1,11 @@
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
+import type { OrchestrationCommand } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createAkeruCatalogToolHandlers } from "./AkeruCatalogToolHandlers.ts";
+import {
+  createAkeruCatalogToolHandlers,
+  createAkeruPluginRuntime,
+} from "./AkeruCatalogToolHandlers.ts";
 
 describe("Akeru catalog MCP tool handlers", () => {
   it("authenticates through the session manager and reports the authorization URL", async () => {
@@ -81,5 +85,82 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("omits every catalog handler when no production manager exists", () => {
     expect(createAkeruCatalogToolHandlers()).toEqual({});
+  });
+
+  it("persists and enables URL plugins through orchestration commands", async () => {
+    const dispatch = vi.fn<(command: OrchestrationCommand) => Promise<void>>(async () => undefined);
+    const install = createAkeruPluginRuntime({
+      readSnapshot: async () =>
+        ({
+          mcpServers: [
+            {
+              id: "builtin-search",
+              name: "Old search",
+              transport: "url",
+              url: "https://old.example.com/mcp",
+              enabled: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        }) as never,
+      dispatch,
+      id: () => "test-id",
+    });
+
+    await expect(
+      install({
+        pluginId: "search",
+        name: "Search",
+        url: "https://example.com/mcp",
+        authentication: "oauth",
+      }),
+    ).resolves.toEqual({
+      mcpServerId: "builtin-search",
+      enabled: true,
+      authenticationRequired: true,
+    });
+    expect(dispatch.mock.calls.map(([command]) => command.type)).toEqual([
+      "mcp-server.update",
+      "mcp-server.enable",
+    ]);
+    expect(dispatch.mock.calls[0]?.[0]).toMatchObject({
+      name: "Search",
+      url: "https://example.com/mcp",
+    });
+  });
+
+  it("creates enabled plugins and rejects credential-bearing URLs before persistence", async () => {
+    const dispatch = vi.fn<(command: OrchestrationCommand) => Promise<void>>(async () => undefined);
+    const install = createAkeruPluginRuntime({
+      readSnapshot: async () => ({ mcpServers: [] }) as never,
+      dispatch,
+      now: () => "2026-01-01T00:00:00.000Z",
+      id: () => "test-id",
+    });
+
+    await install({
+      pluginId: "public-search",
+      name: "Public search",
+      url: "https://example.com/mcp",
+      authentication: "none",
+    });
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "mcp-server.create",
+        mcpServerId: "builtin-public-search",
+        enabled: true,
+      }),
+    );
+
+    await expect(
+      install({
+        pluginId: "secret-search",
+        name: "Secret search",
+        url: "https://token@example.com/mcp",
+        authentication: "oauth",
+      }),
+    ).rejects.toThrow("must not contain credentials");
+    expect(dispatch).toHaveBeenCalledOnce();
   });
 });

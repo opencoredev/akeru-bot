@@ -131,7 +131,7 @@ const expectedEntityId = (scope: AkeruMemoryTargetScope, access: AkeruMemoryThre
     case "group":
       return access.groupId === null ? null : AkeruMemoryEntityId.make(access.groupId);
     case "workspace":
-      return AkeruMemoryEntityId.make(deriveAkeruWorkspaceId(access.workspaceRoot));
+      return AkeruMemoryEntityId.make(deriveAkeruWorkspaceId(access.projectId));
   }
 };
 
@@ -247,6 +247,7 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
           revision.approvalState !== "approved" ||
           revision.deletionState !== "active" ||
           revision.fact.length === 0 ||
+          revision.entityKind !== (scope === "private" ? "user" : scope) ||
           revision.entityId !== expectedEntityId(scope, input.access) ||
           !sameIds(revision.affectedBotIds, affectedBotIds(input.access))
         ) {

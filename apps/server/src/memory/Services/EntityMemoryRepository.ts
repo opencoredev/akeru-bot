@@ -5,7 +5,6 @@ import type {
   AkeruMemoryThreadAccess,
   AkeruMemoryImportPreview,
   AkeruMemoryImportApplyResult,
-  ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -87,13 +86,6 @@ export interface ApplyEntityMemoryImportInput extends ImportEntityMemoryInput {
   readonly previewHash: string;
 }
 
-export interface EntityMemoryDerivedCopy {
-  readonly tenantId: AkeruMemoryThreadAccess["tenantId"];
-  readonly rootId: AkeruMemoryRootId;
-  readonly revisionId: AkeruMemoryId;
-  readonly threadId: ThreadId;
-}
-
 export class EntityMemoryImportError extends Schema.TaggedErrorClass<EntityMemoryImportError>()(
   "EntityMemoryImportError",
   { detail: Schema.String },
@@ -135,34 +127,14 @@ export interface EntityMemoryRepositoryShape {
   readonly listByPartitions: (
     input: ListEntityMemoryPartitionsInput,
   ) => Effect.Effect<ReadonlyArray<AkeruMemoryRevision>, EntityMemoryRepositoryError>;
-  readonly previewImport?: (
+  readonly previewImport: (
     input: ImportEntityMemoryInput,
   ) => Effect.Effect<AkeruMemoryImportPreview, EntityMemoryRepositoryError>;
-  readonly applyImport?: (
+  readonly applyImport: (
     input: ApplyEntityMemoryImportInput,
   ) => Effect.Effect<AkeruMemoryImportApplyResult, EntityMemoryRepositoryError>;
   readonly deleteRoot: (
     input: DeleteEntityMemoryInput,
-  ) => Effect.Effect<void, EntityMemoryRepositoryError>;
-  readonly recordDerivedCopies?: (input: {
-    readonly tenantId: AkeruMemoryThreadAccess["tenantId"];
-    readonly threadId: ThreadId;
-    readonly revisions: ReadonlyArray<{
-      readonly rootId: AkeruMemoryRootId;
-      readonly revisionId: AkeruMemoryId;
-    }>;
-    readonly createdAt: string;
-  }) => Effect.Effect<void, EntityMemoryRepositoryError>;
-  readonly listDerivedCopies?: (input: {
-    readonly tenantId: AkeruMemoryThreadAccess["tenantId"];
-    readonly rootId: AkeruMemoryRootId;
-  }) => Effect.Effect<ReadonlyArray<EntityMemoryDerivedCopy>, EntityMemoryRepositoryError>;
-  readonly listPendingDerivedCopies?: () => Effect.Effect<
-    ReadonlyArray<EntityMemoryDerivedCopy>,
-    EntityMemoryRepositoryError
-  >;
-  readonly removeDerivedCopy?: (
-    input: Omit<EntityMemoryDerivedCopy, "revisionId">,
   ) => Effect.Effect<void, EntityMemoryRepositoryError>;
 }
 
