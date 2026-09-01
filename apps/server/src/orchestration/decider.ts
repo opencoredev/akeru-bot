@@ -13,7 +13,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
-import { isDeepStrictEqual } from "node:util";
+import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -110,7 +110,7 @@ function hasSameDelegationOwnership(
   current: AkeruDelegationRecord,
   next: AkeruDelegationRecord,
 ): boolean {
-  return isDeepStrictEqual(current, {
+  return NodeUtil.isDeepStrictEqual(current, {
     ...next,
     childThreadId: current.childThreadId,
     childTurnId: current.childTurnId,
@@ -1110,7 +1110,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       if (
         expectedDepth > AKERU_DELEGATION_MAX_DEPTH ||
         delegation.depth !== expectedDepth ||
-        !isDeepStrictEqual(delegation.ancestorBotIds, expectedAncestorBotIds)
+        !NodeUtil.isDeepStrictEqual(delegation.ancestorBotIds, expectedAncestorBotIds)
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
@@ -1190,14 +1190,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         const assignsChildOwnership =
           (current.childThreadId === null && next.childThreadId !== null) ||
           (current.childTurnId === null && next.childTurnId !== null);
-        const changesOnlyChildOwnership = isDeepStrictEqual(current, {
+        const changesOnlyChildOwnership = NodeUtil.isDeepStrictEqual(current, {
           ...next,
           childThreadId: current.childThreadId,
           childTurnId: current.childTurnId,
           updatedAt: current.updatedAt,
         });
         if (
-          !isDeepStrictEqual(current, next) &&
+          !NodeUtil.isDeepStrictEqual(current, next) &&
           (!assignsChildOwnership || !changesOnlyChildOwnership)
         ) {
           return yield* new OrchestrationCommandInvariantError({

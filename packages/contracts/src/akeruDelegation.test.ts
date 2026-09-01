@@ -9,6 +9,11 @@ import {
 } from "./akeruDelegation.ts";
 import { OrchestrationCommand, OrchestrationEvent } from "./orchestration.ts";
 
+const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
+const decodeDelegationState = Schema.decodeUnknownSync(AkeruDelegationState);
+const decodeOrchestrationCommand = Schema.decodeUnknownSync(OrchestrationCommand);
+const decodeOrchestrationEvent = Schema.decodeUnknownSync(OrchestrationEvent);
+
 const record = {
   delegationId: "delegation-1",
   parentDelegationId: null,
@@ -50,7 +55,7 @@ const record = {
 
 describe("Akeru delegation contracts", () => {
   it("decodes a durable delegation record", () => {
-    expect(Schema.decodeUnknownSync(AkeruDelegationRecord)(record)).toMatchObject({
+    expect(decodeDelegationRecord(record)).toMatchObject({
       delegationId: "delegation-1",
       billedBotId: "bot-child",
       result: { childThreadId: "thread-child" },
@@ -58,17 +63,16 @@ describe("Akeru delegation contracts", () => {
   });
 
   it("decodes every lifecycle state", () => {
-    const decode = Schema.decodeUnknownSync(AkeruDelegationState);
     expect(
       ["queued", "running", "blocked", "failed", "canceled", "completed"].map((state) =>
-        decode(state),
+        decodeDelegationState(state),
       ),
     ).toEqual(["queued", "running", "blocked", "failed", "canceled", "completed"]);
   });
 
   it("caps delegation depth and publishes the concurrency limit", () => {
     expect(() =>
-      Schema.decodeUnknownSync(AkeruDelegationRecord)({
+      decodeDelegationRecord({
         ...record,
         depth: AKERU_DELEGATION_MAX_DEPTH + 1,
       }),
@@ -77,20 +81,19 @@ describe("Akeru delegation contracts", () => {
   });
 
   it("decodes delegation commands and events", () => {
-    const decodeCommand = Schema.decodeUnknownSync(OrchestrationCommand);
     expect(
       [
-        decodeCommand({
+        decodeOrchestrationCommand({
           type: "delegation.create",
           commandId: "command-create",
           delegation: record,
         }),
-        decodeCommand({
+        decodeOrchestrationCommand({
           type: "delegation.state.set",
           commandId: "command-update",
           delegation: record,
         }),
-        decodeCommand({
+        decodeOrchestrationCommand({
           type: "delegation.cancel",
           commandId: "command-cancel",
           delegationId: "delegation-1",
@@ -111,11 +114,10 @@ describe("Akeru delegation contracts", () => {
       metadata: {},
       payload: { delegation: record },
     };
-    const decodeEvent = Schema.decodeUnknownSync(OrchestrationEvent);
     expect(
       [
-        decodeEvent({ ...eventBase, type: "delegation.created" }),
-        decodeEvent({ ...eventBase, eventId: "event-2", type: "delegation.updated" }),
+        decodeOrchestrationEvent({ ...eventBase, type: "delegation.created" }),
+        decodeOrchestrationEvent({ ...eventBase, eventId: "event-2", type: "delegation.updated" }),
       ].map((event) => event.type),
     ).toEqual(["delegation.created", "delegation.updated"]);
   });
