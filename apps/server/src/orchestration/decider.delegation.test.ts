@@ -209,7 +209,10 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           message: "source thread, turn, and bot",
         },
         {
-          command: makeDelegation({ sourceBotId: TARGET_BOT_ID }),
+          command: makeDelegation({
+            targetBotId: SOURCE_BOT_ID,
+            billedBotId: SOURCE_BOT_ID,
+          }),
           readModel: makeReadModel(),
           message: "delegate to itself",
         },
