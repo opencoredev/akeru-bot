@@ -672,19 +672,26 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
-  it("uses the configured bot engine instead of the thread default", async () => {
+  it.each([
+    ["codex", "gpt-5.6-sol"],
+    ["claudeAgent", "claude-fable-5"],
+    ["cursor", "composer-1.5"],
+    ["grok", "grok-code-fast-1"],
+    ["opencode", "anthropic/claude-sonnet-4-5"],
+    ["kimi", "k3-256k"],
+  ] as const)("routes a saved %s bot model to its provider driver", async (provider, model) => {
     const harness = await createHarness({
-      botEngine: { provider: "claudeAgent", model: "claude-fable-5" },
+      botEngine: { provider, model },
     });
     const now = "2026-01-01T00:00:00.000Z";
 
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-configured-bot"),
+        commandId: CommandId.make(`cmd-turn-start-${provider}-bot`),
         threadId: ThreadId.make("thread-1"),
         message: {
-          messageId: asMessageId("user-message-configured-bot"),
+          messageId: asMessageId(`user-message-${provider}-bot`),
           role: "user",
           text: "use the bot engine",
           attachments: [],
@@ -698,20 +705,20 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.startSession.mock.calls.length === 1);
     expect(harness.resolveEngine).toHaveBeenCalledWith({
       threadId: ThreadId.make("thread-1"),
-      engine: { provider: "claudeAgent", model: "claude-fable-5" },
+      engine: { provider, model },
       fallback: {
-        instanceId: ProviderInstanceId.make("claudeAgent"),
-        model: "claude-fable-5",
+        instanceId: ProviderInstanceId.make(provider),
+        model,
       },
       mode: "default",
       botConversation: true,
     });
     expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
-      provider: ProviderDriverKind.make("claudeAgent"),
-      providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+      provider: ProviderDriverKind.make(provider),
+      providerInstanceId: ProviderInstanceId.make(provider),
       modelSelection: {
-        instanceId: ProviderInstanceId.make("claudeAgent"),
-        model: "claude-fable-5",
+        instanceId: ProviderInstanceId.make(provider),
+        model,
       },
       botSandbox: "local",
     });
