@@ -82,6 +82,13 @@ describe("searchSettings", () => {
     });
   });
 
+  it("routes analytics to General settings", () => {
+    expect(searchSettings("analytics")[0]).toMatchObject({
+      id: "analytics",
+      to: "/settings/general",
+    });
+  });
+
   it("routes appearance settings to their current section", () => {
     expect(searchSettings("theme")[0]).toMatchObject({
       id: "theme",

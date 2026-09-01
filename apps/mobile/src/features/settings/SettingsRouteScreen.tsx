@@ -44,6 +44,8 @@ import {
   runAppUpdateCheck,
 } from "../updates/app-updates";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
@@ -129,7 +131,7 @@ function LocalSettingsRouteScreen() {
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
-        <GeneralSettingsSection />
+        <GeneralSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
@@ -517,7 +519,7 @@ function ConfiguredSettingsRouteScreen() {
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
-        <GeneralSettingsSection />
+        <GeneralSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
@@ -559,7 +561,34 @@ function ErrorsSettingsSection({
   );
 }
 
-function GeneralSettingsSection() {
+function AnalyticsSettingsSwitch({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings);
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <SettingsSwitchRow
+      disabled={settings === null || saving}
+      icon="chart.bar"
+      label="Analytics"
+      value={settings?.analyticsEnabled ?? true}
+      onValueChange={async (analyticsEnabled) => {
+        setSaving(true);
+        try {
+          await updateSettings({ environmentId, input: { patch: { analyticsEnabled } } });
+        } finally {
+          setSaving(false);
+        }
+      }}
+    />
+  );
+}
+
+function GeneralSettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const autoSettleOnMerge =
@@ -576,6 +605,17 @@ function GeneralSettingsSection() {
         onValueChange={(value) => savePreferences({ autoSettleOnMerge: value })}
       />
       <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
+      {environmentId === null ? (
+        <SettingsSwitchRow
+          disabled
+          icon="chart.bar"
+          label="Analytics"
+          value
+          onValueChange={() => {}}
+        />
+      ) : (
+        <AnalyticsSettingsSwitch environmentId={environmentId} />
+      )}
     </SettingsSection>
   );
 }
