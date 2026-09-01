@@ -1,4 +1,9 @@
 import type { OrchestrationThreadShell } from "@t3tools/contracts";
+import {
+  isGroupBotMember,
+  isGroupPersonMember,
+  type GroupPersonMembership,
+} from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
 import type { Bot, BotAvatar, BotBlobShape, Group } from "./types";
@@ -149,77 +154,6 @@ export function resolveLatestRosterMessage(
   return latest.at >= fallback.at ? latest : fallback;
 }
 
-export interface RosterSection {
-  id: "pinned" | "unpinned";
-  name: "Pinned" | "Bots";
-  bots: Bot[];
-}
-
-function lastMessageSortValue(
-  bot: Bot,
-  lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): number | null {
-  const at = lastMessageByBotId[bot.id]?.at;
-  if (at === undefined) return null;
-  return parseTimestampDate(at)?.getTime() ?? null;
-}
-
-/** Latest conversation first; bots without messages trail, alphabetized. */
-export function compareRosterBots(
-  a: Bot,
-  b: Bot,
-  lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): number {
-  const aAt = lastMessageSortValue(a, lastMessageByBotId);
-  const bAt = lastMessageSortValue(b, lastMessageByBotId);
-  if (aAt !== null && bAt !== null && aAt !== bAt) return bAt - aAt;
-  if (aAt !== null && bAt === null) return -1;
-  if (aAt === null && bAt !== null) return 1;
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-}
-
-type RosterSectionsInput = readonly Bot[] | { bots: readonly Bot[] };
-
-function isPreviousRosterSectionsInput(
-  input: RosterSectionsInput,
-): input is { bots: readonly Bot[] } {
-  return !Array.isArray(input);
-}
-
-/**
- * Pinned and unpinned bots keep their persisted order within each section.
- * The object form covers a previous caller that can remain mounted during HMR.
- */
-export function buildRosterSections(input: RosterSectionsInput): RosterSection[] {
-  const bots = isPreviousRosterSectionsInput(input) ? input.bots : input;
-  const visibleBots = bots.filter((bot) => bot.archivedAt === null);
-  const pinned = visibleBots.filter((bot) => bot.pinned);
-  const unpinned = visibleBots.filter((bot) => !bot.pinned);
-  return [
-    ...(pinned.length > 0 ? [{ id: "pinned", name: "Pinned", bots: pinned } as const] : []),
-    ...(unpinned.length > 0 ? [{ id: "unpinned", name: "Bots", bots: unpinned } as const] : []),
-  ];
-}
-
-export const ROSTER_TILE_LIMIT = 5;
-
-/** Visible bots, pinned first, with persisted order preserved in each partition. */
-export function buildRosterStrip(
-  bots: readonly Bot[],
-  _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): Bot[] {
-  const visible = bots.filter((bot) => bot.archivedAt === null);
-  return [...visible.filter((bot) => bot.pinned), ...visible.filter((bot) => !bot.pinned)];
-}
-
-/** The expanded roster shows pinned bots in a fixed grid, never a carousel. */
-export function buildRosterTiles(
-  bots: readonly Bot[],
-  _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
-): Bot[] {
-  return bots.filter((bot) => bot.archivedAt === null && bot.pinned).slice(0, ROSTER_TILE_LIMIT);
-}
-
 export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return [...bots];
@@ -231,10 +165,18 @@ export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   );
 }
 
-export interface RosterGroupSection {
-  readonly id: string;
-  readonly name: string;
-  readonly bots: ReadonlyArray<Bot>;
+export function filterRosterGroups(
+  groups: readonly Group[],
+  bots: readonly Bot[],
+  query: string,
+): Group[] {
+  const needle = query.trim().toLowerCase();
+  if (needle.length === 0) return [...groups];
+  return groups.filter(
+    (group) =>
+      group.name.toLowerCase().includes(needle) ||
+      groupBotMembers(group, bots).some((bot) => bot.name.toLowerCase().includes(needle)),
+  );
 }
 
 /**

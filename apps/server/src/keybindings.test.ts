@@ -204,11 +204,56 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+shift+f");
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
+      assert.isFalse(
+        Keybindings.DEFAULT_KEYBINDINGS.some(
+          (binding) =>
+            binding.key === "mod+n" &&
+            binding.command === "chat.new" &&
+            binding.when === "!terminalFocus",
+        ),
+      );
+      assert.isTrue(
+        Keybindings.DEFAULT_KEYBINDINGS.some(
+          (binding) =>
+            binding.key === "mod+n" &&
+            binding.command === "terminal.new" &&
+            binding.when === "terminalFocus",
+        ),
+      );
+      assert.equal(defaultsByCommand.get("chat.new"), "mod+shift+o");
       assert.isFalse(defaultsByCommand.has("rightPanel.toggleMaximized"));
       assert.equal(defaultsByCommand.get("terminal.splitVertical"), "mod+shift+d");
       assert.equal(defaultsByCommand.get("modelPicker.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("modelPicker.jump.9"), "mod+9");
     }),
+  );
+
+  it.effect("removes the retired Command+N chat default without removing user shortcuts", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [
+        { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
+        { key: "mod+alt+n", command: "chat.new", when: "!terminalFocus" },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const keybindings = yield* Keybindings.Keybindings;
+        yield* keybindings.syncDefaultKeybindingsOnStartup;
+      });
+
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      assert.isFalse(
+        persisted.some(
+          (binding) =>
+            binding.key === "mod+n" &&
+            binding.command === "chat.new" &&
+            binding.when === "!terminalFocus",
+        ),
+      );
+      assert.isTrue(
+        persisted.some((binding) => binding.key === "mod+alt+n" && binding.command === "chat.new"),
+      );
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
   it.effect("uses defaults in runtime when config is malformed without overriding file", () =>

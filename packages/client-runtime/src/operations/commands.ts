@@ -35,17 +35,35 @@ export type CreateBotInput = CommandInput<"bot.create">;
 export type UpdateBotInput = CommandInput<"bot.update">;
 export type ArchiveBotInput = CommandInput<"bot.archive">;
 export type RestoreBotInput = CommandInput<"bot.restore">;
+export type ConnectChannelInput = CommandInput<"channel.connect">;
+export type SaveChannelConnectionInput = CommandInput<"channel.connection.save">;
+export type DeleteChannelConnectionInput = CommandInput<"channel.connection.delete">;
+export type AttachChannelInput = CommandInput<"channel.attach">;
+export type DisconnectChannelInput = CommandInput<"channel.disconnect">;
+export type ReconnectChannelInput = CommandInput<"channel.reconnect">;
+export type SendChannelMessageInput = CommandInput<"channel.send">;
 export type CreateGroupInput = CommandInput<"group.create">;
 export type RenameGroupInput = CommandInput<"group.rename">;
 export type DeleteGroupInput = CommandInput<"group.delete">;
 export type AssignGroupMemberInput = CommandInput<"group.member.assign">;
 export type UnassignGroupMemberInput = CommandInput<"group.member.unassign">;
+export type AssignGroupPersonInput = CommandInput<"group.person.assign">;
+export type UnassignGroupPersonInput = CommandInput<"group.person.unassign">;
+export type LeaveGroupInput = CommandInput<"group.leave">;
 export type SetGroupBossInput = CommandInput<"group.boss.set">;
 export type CreateMcpServerInput = CommandInput<"mcp-server.create">;
 export type UpdateMcpServerInput = CommandInput<"mcp-server.update">;
 export type DeleteMcpServerInput = CommandInput<"mcp-server.delete">;
 export type EnableMcpServerInput = CommandInput<"mcp-server.enable">;
 export type DisableMcpServerInput = CommandInput<"mcp-server.disable">;
+export type DraftRoutineInput = CommandInput<"routine.draft">;
+export type ApproveRoutineInput = CommandInput<"routine.approve">;
+export type EnableRoutineInput = CommandInput<"routine.enable">;
+export type PauseRoutineInput = CommandInput<"routine.pause">;
+export type RunRoutineInput = CommandInput<"routine.run">;
+export type DeleteRoutineInput = CommandInput<"routine.delete">;
+export type AssignRoutineSkillInput = CommandInput<"routine.skill.assign">;
+export type UnassignRoutineSkillInput = CommandInput<"routine.skill.unassign">;
 export type CreateThreadInput = CommandInput<"thread.create">;
 export type DeleteThreadInput = CommandInput<"thread.delete">;
 export type ArchiveThreadInput = CommandInput<"thread.archive">;
@@ -287,12 +305,106 @@ export const unassignGroupMember: (input: UnassignGroupMemberInput) => CommandEf
   });
 });
 
+export const assignGroupPerson: (input: AssignGroupPersonInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.assignGroupPerson",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.person.assign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const unassignGroupPerson: (input: UnassignGroupPersonInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.unassignGroupPerson",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.person.unassign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const leaveGroup: (input: LeaveGroupInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.leaveGroup",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.leave",
+    commandId: yield* commandId(input),
+  });
+});
+
 export const setGroupBoss: (input: SetGroupBossInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.setGroupBoss",
 )(function* (input) {
   return yield* dispatch({
     ...input,
     type: "group.boss.set",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const connectChannel: (input: ConnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.connectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.connect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const saveChannelConnection: (input: SaveChannelConnectionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.saveChannelConnection")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "channel.connection.save",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const deleteChannelConnection: (input: DeleteChannelConnectionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.deleteChannelConnection")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "channel.connection.delete",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const attachChannel: (input: AttachChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.attachChannel",
+)(function* (input) {
+  return yield* dispatch({ ...input, type: "channel.attach", commandId: yield* commandId(input) });
+});
+
+export const disconnectChannel: (input: DisconnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.disconnectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.disconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const reconnectChannel: (input: ReconnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.reconnectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.reconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const sendChannelMessage: (input: SendChannelMessageInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.sendChannelMessage",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.send",
     commandId: yield* commandId(input),
   });
 });
@@ -304,6 +416,102 @@ export const disableMcpServer: (input: DisableMcpServerInput) => CommandEffect =
     ...input,
     type: "mcp-server.disable",
     commandId: yield* commandId(input),
+  });
+});
+
+export const draftRoutine: (input: DraftRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.draftRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.draft",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const approveRoutine: (input: ApproveRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.approveRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.approve",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const enableRoutine: (input: EnableRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.enableRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.enable",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const pauseRoutine: (input: PauseRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.pauseRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.pause",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const runRoutine: (input: RunRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.runRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.run",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const deleteRoutine: (input: DeleteRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.deleteRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.delete",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const assignRoutineSkill: (input: AssignRoutineSkillInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.assignRoutineSkill",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.skill.assign",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const unassignRoutineSkill: (input: UnassignRoutineSkillInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.unassignRoutineSkill",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.skill.unassign",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
   });
 });
 
@@ -458,6 +666,7 @@ export const startThreadTurn: (input: StartThreadTurnInput) => CommandEffect = E
   const metadata = yield* timestampedCommandMetadata(input);
   return yield* dispatch({
     ...input,
+    timezone: input.timezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"),
     type: "thread.turn.start",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,

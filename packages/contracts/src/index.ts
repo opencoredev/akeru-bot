@@ -6,6 +6,7 @@ export * from "./productFeedback.ts";
 export * from "./akeruMemory.ts";
 export * from "./akeruUsage.ts";
 export * from "./analytics.ts";
+export * from "./routines.ts";
 export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";

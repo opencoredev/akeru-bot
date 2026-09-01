@@ -9,6 +9,7 @@ import {
   Cancel01Icon,
   Brain02Icon,
   Edit02Icon,
+  Link02Icon,
   PanelRightCloseIcon,
   PanelRightIcon,
   WrenchIcon,
@@ -42,6 +43,7 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
+import { BotChannelsSheet } from "./BotChannelsSheet";
 import { BotModelPicker } from "./BotModelPicker";
 import { BotUsageSection } from "./BotUsageSection";
 import { BotMemorySheet } from "./BotMemorySheet";
@@ -52,6 +54,7 @@ import {
   type BotSandboxChoice,
 } from "./botSandbox";
 import { BotToolsSheet, buildBotToolItems } from "./BotToolsSheet";
+import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
 import type { Bot } from "./types";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
@@ -120,11 +123,13 @@ function BotProfileEditor({
   onSave,
   threadRef,
   active,
+  routinePanel,
 }: {
   readonly bot: Bot;
   readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
   readonly threadRef: ScopedThreadRef | null;
   readonly active: boolean;
+  readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
 }) {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -192,6 +197,9 @@ function BotProfileEditor({
   const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);
   const enabledToolCount = tools.filter(
     (tool) => tool.workspaceEnabled && !disabledMcpServerIds.includes(tool.id),
+  ).length;
+  const connectedChannelCount = (bot.channelBindings ?? []).filter(
+    (binding) => binding.status !== "disconnected",
   ).length;
   const toolOverridesDirty =
     [...disabledMcpServerIds].sort().join("\u0000") !==
@@ -387,6 +395,23 @@ function BotProfileEditor({
             <span className="text-xs text-muted-foreground">Manage</span>
           </button>
         </div>
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Channels</div>
+          <button
+            type="button"
+            aria-label="Manage bot channels"
+            aria-expanded={channelsOpen}
+            onClick={() => setChannelsOpen(true)}
+            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Link02Icon} />
+            <span className="min-w-0 flex-1 text-sm">
+              {connectedChannelCount === 0 ? "No channels" : `${connectedChannelCount} connected`}
+            </span>
+            <span className="text-xs text-muted-foreground">Manage</span>
+          </button>
+        </div>
       </div>
 
       <div className="mt-7 flex items-center justify-end gap-3">
@@ -417,6 +442,8 @@ function BotProfileEditor({
         </Button>
       </div>
 
+      <RoutinePanel botName={bot.name} {...(routinePanel ?? { status: "unavailable" as const })} />
+
       <AvatarPickerDialog bot={bot} open={avatarOpen} onOpenChange={setAvatarOpen} />
       <BotToolsSheet
         open={toolsOpen}
@@ -437,16 +464,19 @@ export function BotDetailsPanel({
   bot,
   onSaveBot,
   threadRef = null,
+  routinePanel,
 }: {
   readonly bot: Bot;
   readonly onSaveBot?: (input: BotProfileUpdate) => Promise<boolean>;
   readonly threadRef?: ScopedThreadRef | null;
+  readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
     desktopOpen: true,
     mobileOpen: false,
   });
+  const [browserExpanded, setBrowserExpanded] = useState(false);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
 
   useEffect(() => {
@@ -473,18 +503,31 @@ export function BotDetailsPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings]);
 
-  const content = (active: boolean, closeButton?: ReactNode) => (
+  const content = (active: boolean, closeButton?: ReactNode, canExpandBrowser = false) => (
     <>
-      <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-        <h2 className="text-sm font-medium">Settings</h2>
-        <div className="absolute right-3 flex items-center">{closeButton}</div>
-      </header>
-      <BotProfileEditor
-        bot={bot}
+      <BotBrowserPreview
+        botName={bot.name}
         threadRef={threadRef}
-        active={active}
-        {...(onSaveBot ? { onSave: onSaveBot } : {})}
+        expanded={canExpandBrowser && browserExpanded}
+        visible={active}
+        onExpandedChange={setBrowserExpanded}
+        trailingAction={browserExpanded && canExpandBrowser ? closeButton : undefined}
       />
+      {!browserExpanded || !canExpandBrowser ? (
+        <>
+          <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
+            <h2 className="text-sm font-medium">Settings</h2>
+            <div className="absolute right-3 flex items-center">{closeButton}</div>
+          </header>
+          <BotProfileEditor
+            bot={bot}
+            threadRef={threadRef}
+            active={active}
+            {...(onSaveBot ? { onSave: onSaveBot } : {})}
+            {...(routinePanel ? { routinePanel } : {})}
+          />
+        </>
+      ) : null}
     </>
   );
 
@@ -496,7 +539,9 @@ export function BotDetailsPanel({
         data-testid="bot-details-panel"
         className={
           panelState.desktopOpen
-            ? "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
+            ? browserExpanded
+              ? "hidden h-full w-[min(48rem,52vw)] shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
+              : "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
             : "hidden"
         }
       >
@@ -520,6 +565,7 @@ export function BotDetailsPanel({
               Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
             </TooltipPopup>
           </Tooltip>,
+          true,
         )}
       </aside>
       {!panelState.desktopOpen ? (

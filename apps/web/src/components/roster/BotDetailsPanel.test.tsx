@@ -35,6 +35,8 @@ const bot: Bot = {
 describe("BotDetailsPanel", () => {
   it("shows the per-bot profile editor with simple panel chrome", () => {
     const markup = renderToStaticMarkup(<BotDetailsPanel bot={bot} />);
+    expect(markup).toContain("Akeru&#x27;s browser");
+    expect(markup).toContain("Open the desktop app to view the browser.");
     expect(markup).toContain(">Settings</h2>");
     expect(markup).toContain('aria-label="Change bot avatar"');
     expect(markup).toContain('aria-label="Bot name"');
@@ -54,13 +56,17 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain("Facts and history");
     expect(markup).toContain(">Tools</div>");
     expect(markup).toContain("No workspace tools");
+    expect(markup).toContain(">Channels</div>");
+    expect(markup).toContain('aria-label="Manage bot channels"');
+    expect(markup).toContain("No channels");
     expect(markup).toContain(">Manage</span>");
     expect(markup).toContain('aria-label="Collapse Akeru bot sidebar"');
     expect(markup).toContain('aria-label="Open Akeru bot sidebar"');
-    expect(markup).not.toContain("Routines");
+    expect(markup).toContain("Routines");
+    expect(markup).toContain("Routines are not available for this environment.");
     expect(markup).not.toContain("mock data");
     expect(markup).not.toContain("border-b border-border");
-    expect(markup).not.toContain("border-t border-border");
+    expect(markup).toContain("border-t border-border");
   });
 
   it("sets, clears, and rejects invalid hard stops", () => {
@@ -95,7 +101,8 @@ describe("BotDetailsPanel", () => {
     const source = NodeFS.readFileSync(new URL("./BotDetailsPanel.tsx", import.meta.url), "utf8");
 
     expect(source).toContain('resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle"');
-    expect(source).toContain('shortcutLabelForCommand(keybindings, "rightPanel.toggle")');
+    expect(source).toContain("shortcutLabelForCommand(");
+    expect(source).toContain('"rightPanel.toggle"');
     expect(source).toContain('window.addEventListener("keydown", onKeyDown, true)');
     expect(source).toContain("RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY");
   });

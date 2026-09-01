@@ -24,6 +24,9 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as ServerConfig from "./config.ts";
+import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
@@ -44,6 +47,7 @@ import {
   isWildcardHost,
   issueHeadlessServeAccessInfo,
 } from "./startupAccess.ts";
+import { RoutineRuntime } from "./routines/Runtime.ts";
 
 export class ServerRuntimeStartupError extends Schema.TaggedErrorClass<ServerRuntimeStartupError>()(
   "ServerRuntimeStartupError",
@@ -370,12 +374,22 @@ export const make = (options?: StartupOptions) =>
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
     const crypto = yield* Crypto.Crypto;
     const launcher = yield* ServiceLauncherClient.ServiceLauncherClient;
+    const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+    const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+    const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
+    const channelDeliveryStore = yield* Effect.serviceOption(
+      ChannelDeliveryStore.ChannelDeliveryStore,
+    );
 
     const commandGate = yield* makeCommandGate;
     const httpListening = yield* Deferred.make<void>();
     const reactorScope = yield* Scope.make("sequential");
 
-    yield* Effect.addFinalizer(() => Scope.close(reactorScope, Exit.void));
+    yield* Effect.addFinalizer(() =>
+      Effect.promise(ChannelRuntime.shutdownAllChannels).pipe(
+        Effect.andThen(Scope.close(reactorScope, Exit.void)),
+      ),
+    );
 
     const startup = Effect.gen(function* () {
       yield* Effect.logDebug("startup phase: starting keybindings runtime");
@@ -414,10 +428,61 @@ export const make = (options?: StartupOptions) =>
         Effect.gen(function* () {
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+          yield* forkParked(
+            ChannelRuntime.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
+          ).pipe(Scope.provide(reactorScope));
+          const routineRuntime = yield* Effect.serviceOption(RoutineRuntime);
+          if (Option.isSome(routineRuntime)) {
+            yield* routineRuntime.value.start.pipe(Scope.provide(reactorScope));
+          }
         }),
       );
 
       yield* runStartupPhase("provider-sessions.reconcile", reconcileProviderSessions);
+
+      yield* runStartupPhase(
+        "channels.restore",
+        Option.all({ secretStore, channelDeliveryStore }).pipe(
+          Option.match({
+            onNone: () => Effect.void,
+            onSome: ({ secretStore, channelDeliveryStore }) =>
+              Effect.promise(() =>
+                ChannelRuntime.restoreConnectedChannels({
+                  engine: orchestrationEngine,
+                  secretStore,
+                  settings: serverSettings,
+                  deliveryStore: channelDeliveryStore,
+                  readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+                  readThread: (threadId) =>
+                    Effect.runPromise(
+                      projectionSnapshotQuery
+                        .getThreadDetailById(threadId)
+                        .pipe(Effect.map(Option.getOrNull)),
+                    ),
+                  nowIso: () =>
+                    Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
+                  randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
+                }),
+              ).pipe(
+                Effect.flatMap((failures) =>
+                  Effect.forEach(
+                    failures,
+                    (failure) =>
+                      Effect.logWarning("failed to restore external channel", {
+                        botId: failure.botId,
+                        provider: failure.provider,
+                        cause: failure.cause,
+                      }),
+                    { discard: true },
+                  ),
+                ),
+                Effect.catchCause((cause) =>
+                  Effect.logWarning("external channel startup restore failed", { cause }),
+                ),
+              ),
+          }),
+        ),
+      );
 
       const welcomeBase = yield* resolveWelcomeBase;
       const environment = yield* serverEnvironment.getDescriptor;
@@ -476,7 +541,7 @@ export const make = (options?: StartupOptions) =>
             const startupBrowserTarget = yield* resolveStartupBrowserTarget;
             if (serverConfig.mode !== "desktop") {
               yield* Effect.logInfo(
-                "Authentication required. Open T3 Code using the pairing URL.",
+                "Authentication required. Open Akeru Bot using the pairing URL.",
               ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
             }
             yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));

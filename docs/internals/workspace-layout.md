@@ -13,7 +13,7 @@ the task commands.
 - `apps/web` (`@t3tools/web`): React + Vite UI. Consumes the shared client runtime and adds routing,
   components, and web-specific platform layers.
 - `apps/desktop` (`@t3tools/desktop`): Electron shell. Supervises a desktop-scoped `t3` backend,
-  loads the web bundle over the `t3code://` protocol, and owns SSH-managed remote environments.
+  loads the web bundle over the `akeru://` protocol, and owns SSH-managed remote environments.
 - `apps/mobile` (`@t3tools/mobile`): Expo/React Native client. Same client runtime composition as
   web, different platform layer and UI.
 - `apps/marketing` (`@t3tools/marketing`): Astro marketing site.

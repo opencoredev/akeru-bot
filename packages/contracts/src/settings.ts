@@ -2,7 +2,8 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
+import * as Struct from "effect/Struct";
+import { ChannelConnectionId, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { ThreadEnvMode } from "./environment.ts";
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
@@ -14,6 +15,7 @@ import {
   BotSandboxBrowserSharing,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   DEFAULT_LOCAL_EXECUTION_MODE,
+  ChannelProvider,
   LocalExecutionMode,
   ModelSelection,
 } from "./orchestration.ts";
@@ -569,7 +571,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server URL",
-        description: "Leave blank to let T3 Code spawn the server when needed.",
+        description: "Leave blank to let Akeru Bot spawn the server when needed.",
         providerSettingsForm: {
           placeholder: "http://127.0.0.1:4096",
           clearWhenEmpty: "omit",
@@ -665,6 +667,16 @@ export const BackgroundActivitySettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
+export const ChannelConnectionProfile = Schema.Struct({
+  id: ChannelConnectionId,
+  provider: ChannelProvider,
+  adapter: Schema.Literals(["telegram", "photon", "whatsapp"]),
+  name: TrimmedNonEmptyString,
+  externalIdentity: Schema.optional(TrimmedNonEmptyString),
+  managementUrl: Schema.optional(TrimmedNonEmptyString),
+});
+export type ChannelConnectionProfile = typeof ChannelConnectionProfile.Type;
+
 export const SandboxProvider = BotSandbox;
 export type SandboxProvider = BotSandbox;
 export type CloudSandboxProvider = Exclude<SandboxProvider, "local">;
@@ -707,6 +719,13 @@ export const SandboxSettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type SandboxSettings = typeof SandboxSettings.Type;
 
+export const BrowserProviderSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  browserbaseApiKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  browserbaseApiKeyRedacted: Schema.optionalKey(Schema.Boolean),
+}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
+export type BrowserProviderSettings = typeof BrowserProviderSettings.Type;
+
 export const ServerSettings = Schema.Struct({
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
   // `enableAssistantStreaming`): decoding drops the old key, so everyone,
@@ -738,6 +757,7 @@ export const ServerSettings = Schema.Struct({
    * between a desktop window and a phone attached to the same server.
    */
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  browserProvider: BrowserProviderSettings,
   voice: VoiceSettings,
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
@@ -804,6 +824,9 @@ export const ServerSettings = Schema.Struct({
   // See providerInstance.ts for the forward/backward compatibility invariant.
   providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  channelConnections: Schema.Array(ChannelConnectionProfile).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   sandbox: SandboxSettings,
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -975,7 +998,7 @@ const SandboxSettingsPatch = Schema.Struct({
   ),
 });
 
-export const ServerSettingsPatch = Schema.Struct({
+const ServerSettingsPatchFields = {
   // Server settings
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
@@ -985,6 +1008,13 @@ export const ServerSettingsPatch = Schema.Struct({
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
+  browserProvider: Schema.optionalKey(
+    Schema.Struct({
+      enabled: Schema.optionalKey(Schema.Boolean),
+      browserbaseApiKey: Schema.optionalKey(TrimmedString),
+      browserbaseApiKeyRedacted: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
   voice: Schema.optionalKey(
     Schema.Struct({
       enabled: Schema.optionalKey(Schema.Boolean),
@@ -1037,8 +1067,15 @@ export const ServerSettingsPatch = Schema.Struct({
   // patches risk leaving driver-specific config in a half-merged state.
   // The web UI sends a fully-formed map every time it edits this field.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
-});
+  channelConnections: Schema.optionalKey(Schema.Array(ChannelConnectionProfile)),
+} as const;
+export const ServerSettingsPatch = Schema.Struct(ServerSettingsPatchFields);
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
+
+export const ServerSettingsRpcPatch = Schema.Struct(
+  Struct.omit(ServerSettingsPatchFields, ["channelConnections"]),
+);
+export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
   reviewedPrivacyPolicyVersion: Schema.optionalKey(TrimmedString),

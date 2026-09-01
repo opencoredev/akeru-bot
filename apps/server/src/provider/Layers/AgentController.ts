@@ -24,11 +24,13 @@ import {
   ProviderInstanceId,
   RuntimeItemId,
   RuntimeRequestId,
+  RoutineId,
   TurnId,
   AKERU_TOOL_CATALOG,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   type BotId,
   type McpServer,
+  type AkeruCreateRoutineInput,
   type ModelSelection,
   type ProviderApprovalDecision,
   type ProviderRuntimeEvent,
@@ -41,6 +43,7 @@ import {
   type AkeruMemoryThreadAccess,
   type OrchestrationCommand,
   type OrchestrationReadModel,
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
@@ -65,7 +68,11 @@ import {
 } from "../../memory/Services/MemoryCandidateRepository.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import * as ServerSettings from "../../serverSettings.ts";
 import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
+import { persistAkeruPreviewSnapshot } from "../AkeruPreviewSnapshotAttachment.ts";
 import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
@@ -114,8 +121,13 @@ import {
   botWorkspaceResourceKey,
 } from "../botWorkspacePool.ts";
 import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
-import { AgentController, type AgentControllerShape } from "../Services/AgentController.ts";
+import {
+  AgentController,
+  type AgentControllerSendTurnInput,
+  type AgentControllerShape,
+} from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
+import { RoutineDraftDispatcher } from "../../routines/RoutineDraftDispatcher.ts";
 
 const DEFAULT_MODE_ID = "build";
 const PLAN_MODE_ID = "plan";
@@ -152,6 +164,13 @@ interface ActiveTurn {
   assistantText: string;
 }
 
+interface PendingTurn {
+  readonly threadId: ThreadId;
+  readonly turnId: TurnId;
+  readonly message: Parameters<MastraSession["sendMessage"]>[0];
+  readonly botUsage: AgentControllerSendTurnInput["botUsage"];
+}
+
 interface ActiveSession {
   readonly session: MastraSession;
   readonly provider: ProviderDriverKind;
@@ -163,6 +182,7 @@ interface ActiveSession {
   model: string;
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
+  readonly pendingTurns: PendingTurn[];
   readonly toolNames: Map<string, string>;
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
   readonly connectorSessionApprovals: Set<string>;
@@ -185,6 +205,8 @@ export interface AgentControllerLiveOptions {
   ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
+  readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
+  readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
   readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
   readonly memoryCandidateRepository?: MemoryCandidateRepositoryShape;
   readonly delegationRuntime?: Pick<
@@ -198,8 +220,18 @@ export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
   return new AuthStorage(NodePath.join(secretsDir, "subscription-auth.json"));
 }
 
+const MISSING_SUSPENDED_RUN = "AGENT_SEND_STREAM_RESUME_NO_SUSPENDED_THREAD_RUN";
+const RESUME_FAILED_MESSAGE = "This response could not resume. Send your reply again.";
+
+function isMissingSuspendedRun(detail: string): boolean {
+  return (
+    detail.includes(MISSING_SUSPENDED_RUN) || detail.includes("could not find a suspended run")
+  );
+}
+
 function failureDetail(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  return isMissingSuspendedRun(detail) ? RESUME_FAILED_MESSAGE : detail;
 }
 
 function sessionFailureDetail(active: Pick<ActiveSession, "mcpServerIds">, cause: unknown): string {
@@ -416,8 +448,12 @@ const make = (options?: AgentControllerLiveOptions) =>
     const hostPlatform = yield* HostProcessPlatform;
     const legacyProviderBridge = yield* LegacyProviderBridge;
     const botUsageLedger = yield* BotUsageLedger;
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+    const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
     const runtimeContext = yield* Effect.context<never>();
     const runPromise = Effect.runPromiseWith(runtimeContext);
+    const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
+    const routineDispatcher = Option.getOrUndefined(routineDraftDispatcher);
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
     const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
@@ -428,6 +464,41 @@ const make = (options?: AgentControllerLiveOptions) =>
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
     >();
+    const issueMcpCredential =
+      options?.issueMcpCredential ??
+      (Option.isSome(mcpSessionRegistry)
+        ? (request: McpSessionRegistry.McpCredentialRequest) =>
+            mcpSessionRegistry.value.revokeThread(request.threadId).pipe(
+              Effect.andThen(mcpSessionRegistry.value.issue(request)),
+              Effect.map((credential) => ({ config: credential.config })),
+            )
+        : McpSessionRegistry.issueActiveMcpCredential);
+    const revokeMcpCredential =
+      options?.revokeMcpCredential ??
+      (Option.isSome(mcpSessionRegistry)
+        ? mcpSessionRegistry.value.revokeThread
+        : McpSessionRegistry.revokeActiveMcpThread);
+    const clearPreviewMcpSession = (threadId: ThreadId) =>
+      revokeMcpCredential(threadId).pipe(
+        Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
+      );
+    const preparePreviewMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
+      Effect.gen(function* () {
+        const enabled = Option.isSome(serverSettings)
+          ? yield* serverSettings.value.getSettings.pipe(
+              Effect.map((settings) => settings.enableAgentBrowserAccess),
+              Effect.orElseSucceed(() => false),
+            )
+          : true;
+        if (!enabled) {
+          yield* clearPreviewMcpSession(threadId);
+          return;
+        }
+        const credential = yield* issueMcpCredential({ threadId, providerInstanceId });
+        if (credential) {
+          yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
+        }
+      });
     let channelRuntime: AkeruChannelRuntime | undefined;
     let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
     let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
@@ -447,6 +518,16 @@ const make = (options?: AgentControllerLiveOptions) =>
       childWaiters.delete(String(threadId));
       waiter.resolve(outcome);
     };
+    const pendingRoutineRequests = new Map<
+      string,
+      {
+        readonly threadId: string;
+        readonly input: AkeruCreateRoutineInput;
+        readonly timezone: string;
+        readonly resolve: (result: unknown) => void;
+        readonly reject: (cause: unknown) => void;
+      }
+    >();
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -468,6 +549,15 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
       hostPlatform,
+      getPreviewMcpServerConfig: (threadId) => {
+        const session = McpProviderSession.readMcpProviderSession(ThreadId.make(threadId));
+        return session
+          ? {
+              url: session.endpoint,
+              headers: { Authorization: session.authorizationHeader },
+            }
+          : undefined;
+      },
       toMcpServerConfigs,
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
@@ -598,6 +688,64 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
+        ...(routineDispatcher
+          ? {
+              listRoutines: (threadId: string) =>
+                runPromise(
+                  routineDispatcher
+                    .listForThread(ThreadIdBrand(threadId))
+                    .pipe(Effect.map((routines) => ({ routines: [...routines] }))),
+                ),
+              deleteRoutines: (threadId: string, routineIds: ReadonlyArray<string>) =>
+                runPromise(
+                  routineDispatcher
+                    .deleteForThread(
+                      ThreadIdBrand(threadId),
+                      routineIds.map((routineId) => RoutineId.make(routineId)),
+                    )
+                    .pipe(
+                      Effect.map((result) => ({
+                        status: result.status,
+                        deletedRoutineIds: [...result.routineIds],
+                      })),
+                    ),
+                ),
+              createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
+                const active = sessions.get(threadId);
+                const timezone = active?.toolSession.timezone;
+                if (!timezone) {
+                  return Promise.reject(new Error("Send a message before creating a routine."));
+                }
+                const requestId = `routine-${NodeCrypto.randomUUID()}`;
+                return new Promise((resolve, reject) => {
+                  pendingRoutineRequests.set(requestId, {
+                    threadId,
+                    input,
+                    timezone,
+                    resolve,
+                    reject,
+                  });
+                  if (active.activeTurn) active.activeTurn.waiting = true;
+                  publishSessionState(ThreadIdBrand(threadId), active, "waiting");
+                  publish({
+                    ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
+                    requestId: RuntimeRequestId.make(requestId),
+                    type: "request.opened",
+                    payload: {
+                      requestType: "dynamic_tool_call",
+                      detail: "Review routine",
+                      toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                      args: { ...input, timezone },
+                      options: [
+                        { decision: "accept", label: "Create routine" },
+                        { decision: "decline", label: "Cancel" },
+                      ],
+                    },
+                  });
+                });
+              },
+            }
+          : {}),
         toolRuntime,
         startMemoryCall: async ({ threadId, category }) => {
           const context = memoryUsageByThread.get(threadId);
@@ -840,6 +988,64 @@ const make = (options?: AgentControllerLiveOptions) =>
       toolRuntime.clearApprovals(String(threadId));
     };
 
+    const startPendingTurn = (
+      active: ActiveSession,
+      { threadId, turnId, message, botUsage }: PendingTurn,
+    ) => {
+      const key = String(threadId);
+      if (botUsage) {
+        memoryUsageByThread.set(key, { ...botUsage, turnId });
+      } else {
+        memoryUsageByThread.delete(key);
+      }
+      active.activeTurn = {
+        turnId,
+        assistantMessages: new Map(),
+        waiting: false,
+        finished: false,
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        memoryQueued: false,
+        assistantText: "",
+      };
+      active.status = "running";
+      publish({
+        ...baseEvent(threadId, active, turnId),
+        type: "turn.started",
+        payload: { model: active.model },
+      });
+      publishSessionState(threadId, active, "running");
+      void active.session
+        .sendMessage(message)
+        .then(() => {
+          const turn = active.activeTurn;
+          if (turn?.turnId === turnId && !turn.waiting) {
+            finishTurn(threadId, active, "completed");
+          }
+        })
+        .catch(async (cause: unknown) => {
+          if (active.activeTurn?.turnId !== turnId) return;
+          const detail = sessionFailureDetail(active, cause);
+          publish({
+            ...baseEvent(threadId, active, turnId),
+            type: "runtime.error",
+            payload: { message: detail, class: "provider_error" },
+          });
+          finishTurn(threadId, active, "failed", detail);
+          await runPromise(
+            stopSessionWithResources({ threadId }, false).pipe(
+              Effect.catchCause((resetCause) =>
+                Effect.logWarning("provider session reset failed", {
+                  threadId,
+                  cause: resetCause,
+                }),
+              ),
+            ),
+          );
+        });
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -879,8 +1085,18 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           });
       }
+      for (const [requestId, request] of pendingRoutineRequests) {
+        if (request.threadId !== String(threadId)) continue;
+        pendingRoutineRequests.delete(requestId);
+        request.reject(new Error("The routine review ended before it received a response."));
+      }
       active.activeTurn = null;
-      publishSessionState(threadId, active, "ready");
+      const nextTurn = active.pendingTurns.shift();
+      if (nextTurn) {
+        startPendingTurn(active, nextTurn);
+      } else {
+        publishSessionState(threadId, active, "ready");
+      }
     };
 
     const publishAssistantText = (
@@ -988,6 +1204,14 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_end": {
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
+          const previewSnapshot =
+            toolName === "preview_snapshot" && !event.isError && !event.denied
+              ? persistAkeruPreviewSnapshot({
+                  attachmentsDir: config.attachmentsDir,
+                  threadId: String(threadId),
+                  result: event.result,
+                })
+              : null;
           active.approvalRequests.delete(event.toolCallId);
           active.toolNames.delete(event.toolCallId);
           const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
@@ -1018,7 +1242,12 @@ const make = (options?: AgentControllerLiveOptions) =>
               title: isCodexComputerUseTool(toolName) ? "Computer Use" : toolName,
               data: isCodexComputerUseTool(toolName)
                 ? { action: "computer-use" }
-                : { result: event.result },
+                : {
+                    result: previewSnapshot?.activityResult ?? event.result,
+                    ...(previewSnapshot?.attachment
+                      ? { chatAttachment: previewSnapshot.attachment }
+                      : {}),
+                  },
             },
           });
           return;
@@ -1064,7 +1293,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                 ? "Allow Computer Use?"
                 : event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
                   ? "Review product feedback"
-                  : approvalDetail(event.toolName, action, oneUseApproval),
+                  : event.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
+                    ? "Review routine"
+                    : approvalDetail(event.toolName, action, oneUseApproval),
               toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
               ...(action ? { action } : {}),
               args: isCodexComputerUseTool(event.toolName) ? undefined : event.args,
@@ -1078,21 +1309,26 @@ const make = (options?: AgentControllerLiveOptions) =>
                       { decision: "accept", label: "Add to feedback draft" },
                       { decision: "decline", label: "Cancel" },
                     ]
-                  : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
-                      isMemoryToolId(event.toolName) ||
-                      oneUseApproval
+                  : event.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
                     ? [
-                        { decision: "decline", label: "Decline" },
-                        {
-                          decision: "accept",
-                          label: oneUseApproval ? "Approve" : "Allow",
-                        },
+                        { decision: "accept", label: "Create routine" },
+                        { decision: "decline", label: "Cancel" },
                       ]
-                    : [
-                        { decision: "accept", label: "Allow" },
-                        { decision: "acceptForSession", label: "Allow for session" },
-                        { decision: "decline", label: "Decline" },
-                      ],
+                    : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
+                        isMemoryToolId(event.toolName) ||
+                        oneUseApproval
+                      ? [
+                          { decision: "decline", label: "Decline" },
+                          {
+                            decision: "accept",
+                            label: oneUseApproval ? "Approve" : "Allow",
+                          },
+                        ]
+                      : [
+                          { decision: "accept", label: "Allow" },
+                          { decision: "acceptForSession", label: "Allow for session" },
+                          { decision: "decline", label: "Decline" },
+                        ],
             },
           });
           return;
@@ -1103,6 +1339,31 @@ const make = (options?: AgentControllerLiveOptions) =>
           active.toolNames.set(event.toolCallId, event.toolName);
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
+          const suspendPayload =
+            event.suspendPayload && typeof event.suspendPayload === "object"
+              ? (event.suspendPayload as Record<string, unknown>)
+              : {};
+          const question =
+            typeof suspendPayload.question === "string" && suspendPayload.question.trim()
+              ? suspendPayload.question.trim()
+              : `Input required for ${event.toolName}`;
+          const options = Array.isArray(suspendPayload.options)
+            ? suspendPayload.options.flatMap((option) => {
+                if (!option || typeof option !== "object") return [];
+                const value = option as Record<string, unknown>;
+                if (typeof value.label !== "string" || !value.label.trim()) return [];
+                const label = value.label.trim();
+                return [
+                  {
+                    label,
+                    description:
+                      typeof value.description === "string" && value.description.trim()
+                        ? value.description.trim()
+                        : label,
+                  },
+                ];
+              })
+            : [];
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             requestId: RuntimeRequestId.make(event.toolCallId),
@@ -1111,10 +1372,10 @@ const make = (options?: AgentControllerLiveOptions) =>
               questions: [
                 {
                   id: event.toolCallId,
-                  header: event.toolName,
-                  question: `Input required for ${event.toolName}`,
-                  options: [],
-                  multiSelect: false,
+                  header: "Question",
+                  question,
+                  options,
+                  multiSelect: suspendPayload.selectionMode === "multi_select",
                 },
               ],
             },
@@ -1389,6 +1650,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: `Provider '${resolved.provider}' cannot enforce delegated access.`,
         });
       }
+      if (usesMastraCode(resolved.provider) && !(delegatedAccess && access.sandbox === null)) {
+        yield* preparePreviewMcpSession(threadId, resolved.providerInstanceId);
+      }
       const resources =
         delegatedAccess && access.sandbox === null
           ? ({ workspaceType: "none" } as const)
@@ -1409,7 +1673,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   : {}),
                 mcpServers,
               }),
-            );
+            ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {
         return yield* legacyProviderBridge.startSession(threadId, input).pipe(
           Effect.tap((session) =>
@@ -1619,6 +1883,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           model: resolved.modelSelection.model,
           status: "ready" as const,
           activeTurn: null,
+          pendingTurns: [],
           toolNames: new Map<string, string>(),
           approvalRequests: new Map(),
           connectorSessionApprovals: new Set<string>(),
@@ -1664,11 +1929,9 @@ const make = (options?: AgentControllerLiveOptions) =>
               : providerInput,
           );
         }
-        if (active.activeTurn) {
-          return yield* new AgentControllerRuntimeError({
-            operation: "sendTurn",
-            detail: `Mastra session for thread '${input.threadId}' already has an active turn.`,
-          });
+        if (input.timezone !== undefined) {
+          active.toolSession = { ...active.toolSession, timezone: input.timezone };
+          toolRuntime.registerSession(key, active.toolSession);
         }
         const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
           const path = resolveAttachmentPath({
@@ -1705,45 +1968,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           .join("\n\n");
         const files = attachmentFiles.map(({ file }) => file);
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
-        if (input.botUsage) {
-          memoryUsageByThread.set(key, { ...input.botUsage, turnId });
-        } else {
-          memoryUsageByThread.delete(key);
-        }
-        active.activeTurn = {
+        active.pendingTurns.push({
+          threadId: input.threadId,
           turnId,
-          assistantMessages: new Map(),
-          waiting: false,
-          finished: false,
-          inputTokens: 0,
-          outputTokens: 0,
-          reasoningTokens: 0,
-          memoryQueued: false,
-          assistantText: "",
-        };
-        active.status = "running";
-        publish({
-          ...baseEvent(input.threadId, active, turnId),
-          type: "turn.started",
-          payload: { model: active.model },
+          message: { content, ...(files.length > 0 ? { files } : {}) },
+          botUsage: input.botUsage,
         });
-        publishSessionState(input.threadId, active, "running");
-        void active.session
-          .sendMessage({ content, ...(files.length > 0 ? { files } : {}) })
-          .then(() => {
-            if (!active.activeTurn?.waiting) {
-              finishTurn(input.threadId, active, "completed");
-            }
-          })
-          .catch((cause: unknown) => {
-            const detail = sessionFailureDetail(active, cause);
-            publish({
-              ...baseEvent(input.threadId, active, turnId),
-              type: "runtime.error",
-              payload: { message: detail, class: "provider_error" },
-            });
-            finishTurn(input.threadId, active, "failed", detail);
-          });
+        if (!active.activeTurn) {
+          const nextTurn = active.pendingTurns.shift();
+          if (nextTurn) startPendingTurn(active, nextTurn);
+        }
         return { threadId: input.threadId, turnId };
       },
     );
@@ -1761,6 +1995,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.interruptTurn(input);
       }
+      active.pendingTurns.length = 0;
       active.session.abort();
       finishTurn(input.threadId, active, "interrupted");
     });
@@ -1774,12 +2009,59 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
         ) {
-          return;
+          return yield* new AgentControllerRuntimeError({
+            operation: "respondToRequest",
+            detail: `Stale pending approval request: ${input.requestId}. The agent session restarted. Send the request again.`,
+          });
         }
         return yield* legacyProviderBridge.respondToRequest(input);
       }
-      if (!active.activeTurn) return;
+      if (!active.activeTurn) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToRequest",
+          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+        });
+      }
       const toolCallId = String(input.requestId);
+      const routineRequest = pendingRoutineRequests.get(toolCallId);
+      if (routineRequest) {
+        pendingRoutineRequests.delete(toolCallId);
+        if (active.activeTurn) active.activeTurn.waiting = false;
+        publish({
+          ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
+          requestId: RuntimeRequestId.make(toolCallId),
+          type: "request.resolved",
+          payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
+        });
+        publishSessionState(input.threadId, active, "running");
+        if (input.decision === "decline" || input.decision === "cancel") {
+          routineRequest.resolve({ status: "cancelled" });
+          return;
+        }
+        const result = yield* routineDispatcher!
+          .createApprovedForThread(
+            ThreadIdBrand(routineRequest.threadId),
+            routineRequest.timezone,
+            routineRequest.input,
+          )
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new AgentControllerRuntimeError({
+                  operation: "respondToRequest.routine",
+                  detail: cause.message,
+                  cause,
+                }),
+            ),
+            Effect.tapError((cause) =>
+              Effect.sync(() => {
+                routineRequest.reject(cause);
+              }),
+            ),
+          );
+        routineRequest.resolve(result);
+        return;
+      }
       const toolRequest = active.approvalRequests.get(toolCallId);
       const pendingApproval = active.pendingApprovals.get(toolCallId);
       if (!toolRequest || !pendingApproval) return;
@@ -1846,15 +2128,40 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
         ) {
-          return;
+          return yield* new AgentControllerRuntimeError({
+            operation: "respondToUserInput",
+            detail: `Unknown pending user-input request: ${input.requestId}. The agent session restarted. Send the request again.`,
+          });
         }
         return yield* legacyProviderBridge.respondToUserInput(input);
       }
       const toolCallId = String(input.requestId);
+      const answer = input.answers[toolCallId];
+      if (answer === undefined) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToToolSuspension",
+          detail: `No answer was supplied for pending user-input request '${toolCallId}'.`,
+        });
+      }
       if (active.activeTurn) active.activeTurn.waiting = false;
+      let resumeFailure: string | undefined;
+      const unsubscribe = active.session.subscribe((event) => {
+        if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
+          resumeFailure = event.reason;
+        } else if (event.type === "error") {
+          resumeFailure ??= event.error.message;
+        }
+      });
       yield* runMastra("respondToToolSuspension", () =>
-        active.session.respondToToolSuspension({ toolCallId, resumeData: input.answers }),
-      );
+        active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
+      ).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
+      if (resumeFailure !== undefined) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToToolSuspension",
+          detail: `Unknown pending user-input request: ${toolCallId}. ${resumeFailure}`,
+          cause: new Error(resumeFailure),
+        });
+      }
       publish({
         ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
         requestId: RuntimeRequestId.make(toolCallId),
@@ -1891,11 +2198,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("resources.release", () =>
             sessionResources.release(key, { destroy: destroyResources }),
           ).pipe(Effect.ignoreCause({ log: true }));
+          yield* clearPreviewMcpSession(input.threadId);
           toolRuntime.unregisterSession(key);
           return;
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      active.pendingTurns.length = 0;
       active.session.abort();
       if (active.activeTurn) {
         finishTurn(input.threadId, active, "interrupted");
@@ -1912,6 +2221,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             yield* runMastra("resources.release", () =>
               sessionResources.release(key, { destroy: destroyResources }),
             ).pipe(Effect.ignoreCause({ log: true }));
+            yield* clearPreviewMcpSession(input.threadId);
             toolRuntime.unregisterSession(key);
             sessions.delete(key);
             memoryUsageByThread.delete(key);
@@ -1942,6 +2252,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
+          active.pendingTurns.length = 0;
           active.session.abort();
           if (active.activeTurn) {
             finishTurn(ThreadId.make(threadId), active, "interrupted");
@@ -1950,6 +2261,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("deleteSession", () =>
             bundle.controller.deleteSession({ resourceId: threadId }),
           ).pipe(Effect.ignoreCause({ log: true }));
+          yield* clearPreviewMcpSession(ThreadId.make(threadId));
           toolRuntime.unregisterSession(threadId);
         }
         legacyResourceIdentity.clear();

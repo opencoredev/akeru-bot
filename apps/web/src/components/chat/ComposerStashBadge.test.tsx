@@ -4,7 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ComposerStashBadge } from "./ComposerStashBadge";
 
 describe("ComposerStashBadge", () => {
-  it("renders as an attached composer tab instead of a floating pill", () => {
+  it("renders as a compact composer banner tab", () => {
     const markup = renderToStaticMarkup(
       <ComposerStashBadge
         count={3}
@@ -15,14 +15,11 @@ describe("ComposerStashBadge", () => {
       />,
     );
 
-    expect(markup).toContain("chat-composer-stash-tab");
-    expect(markup).toContain("rounded-t-xl");
-    expect(markup).toContain("border-b-0");
-    expect(markup).toContain("items-center");
-    expect(markup).not.toContain("items-start");
-    expect(markup).not.toContain("rounded-full");
-    expect(markup).not.toContain("opacity-70");
-    expect(markup).not.toContain("border-border");
+    expect(markup).toContain('data-composer-banner-surface="attached"');
+    expect(markup).toContain('data-composer-shoulder-tab="true"');
+    expect(markup).toContain('data-prompt-stash-badge="true"');
+    expect(markup).toContain("Stash");
+    expect(markup).toContain("Stashed prompts: 3. Open stash.");
     expect(markup).toContain('aria-expanded="false"');
   });
 
@@ -61,8 +58,7 @@ describe("ComposerStashBadge", () => {
     expect(markup).toContain("pointer-coarse:after:min-h-11");
     expect(markup).toContain("Stashed prompts: 3. Open stash.");
     expect(markup).toContain('aria-expanded="true"');
-    expect(markup).not.toContain("chat-composer-stash-tab");
-    expect(markup).not.toContain("rounded-t-xl");
+    expect(markup).not.toContain('data-composer-banner-surface="attached"');
     expect(markup).not.toContain(" pointer-events-none ");
   });
 });

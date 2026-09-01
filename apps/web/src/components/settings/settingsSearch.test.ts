@@ -53,6 +53,12 @@ describe("searchSettings", () => {
     expect(searchSettings("xyzzy")).toEqual([]);
   });
 
+  it("finds bot channels by provider name", () => {
+    for (const query of ["telegram", "imessage", "photon", "whatsapp"]) {
+      expect(searchSettings(query).map((item) => item.id)).toContain("bot-channels");
+    }
+  });
+
   it("keeps catalog order for multiple title matches", () => {
     expect(searchSettings("update", ITEMS).map((item) => item.id)).toEqual([
       "provider-updates",

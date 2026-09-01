@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import {
+  AkeruUsageReservationId,
   BotId,
   IsoDateTime,
   NonNegativeInt,
@@ -10,11 +11,6 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
 import { BotEngine, BotUsageCap } from "./orchestration.ts";
-
-export const AkeruUsageReservationId = TrimmedNonEmptyString.pipe(
-  Schema.brand("AkeruUsageReservationId"),
-);
-export type AkeruUsageReservationId = typeof AkeruUsageReservationId.Type;
 
 export const AkeruUsageCategory = Schema.Literals([
   "turn",

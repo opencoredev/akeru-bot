@@ -1,5 +1,8 @@
 import { memo } from "react";
-import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME } from "@t3tools/contracts";
+import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+} from "@t3tools/contracts";
 import { type PendingApproval } from "../../session-logic";
 import { cn } from "~/lib/utils";
 
@@ -15,49 +18,138 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   className,
 }: ComposerPendingApprovalPanelProps) {
   const isProductFeedback = approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
-  const fallbackLabel = isProductFeedback
-    ? "Product feedback approval"
-    : approval.requestKind === "mcp-elicitation"
-      ? "App access approval"
-      : approval.requestKind === "command"
-        ? "Command approval"
-        : approval.requestKind === "file-read"
-          ? "File read approval"
-          : "File change approval";
-  const detailAriaLabel = isProductFeedback
-    ? "Product feedback draft"
-    : approval.requestKind === "mcp-elicitation"
-      ? "App access request"
-      : approval.requestKind === "command"
-        ? "Command"
-        : approval.requestKind === "file-read"
-          ? "File to read"
-          : "File change";
+  const isRoutine = approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME;
+  const routineArgs =
+    isRoutine && approval.args && typeof approval.args === "object"
+      ? (approval.args as Record<string, unknown>)
+      : null;
+  const routineName = typeof routineArgs?.name === "string" ? routineArgs.name : "New routine";
+  const routineInstructions =
+    typeof routineArgs?.instructions === "string" ? routineArgs.instructions : null;
+  const routineSchedule =
+    routineArgs?.schedule && typeof routineArgs.schedule === "object"
+      ? (routineArgs.schedule as Record<string, unknown>)
+      : null;
+  const scheduleTime = typeof routineSchedule?.time === "string" ? routineSchedule.time : null;
+  const scheduleTimezone = typeof routineArgs?.timezone === "string" ? routineArgs.timezone : null;
+  const weeklyDays = Array.isArray(routineSchedule?.weekdays)
+    ? routineSchedule.weekdays.filter((day): day is string => typeof day === "string")
+    : [];
+  const scheduleKind =
+    routineSchedule?.kind === "weekdays"
+      ? "Weekdays"
+      : routineSchedule?.kind === "weekly"
+        ? weeklyDays.length > 0
+          ? weeklyDays.map((day) => `${day.slice(0, 1).toUpperCase()}${day.slice(1)}`).join(", ")
+          : "Weekly"
+        : "Daily";
+  const fallbackLabel = isRoutine
+    ? "Routine approval"
+    : isProductFeedback
+      ? "Product feedback approval"
+      : approval.requestKind === "mcp-elicitation"
+        ? "App access approval"
+        : approval.requestKind === "command"
+          ? "Command approval"
+          : approval.requestKind === "file-read"
+            ? "File read approval"
+            : "File change approval";
+  const detailAriaLabel = isRoutine
+    ? "Routine details"
+    : isProductFeedback
+      ? "Product feedback draft"
+      : approval.requestKind === "mcp-elicitation"
+        ? "App access request"
+        : approval.requestKind === "command"
+          ? "Command"
+          : approval.requestKind === "file-read"
+            ? "File to read"
+            : "File change";
+  const command =
+    approval.requestKind === "command" &&
+    approval.args &&
+    typeof approval.args === "object" &&
+    "command" in approval.args &&
+    typeof approval.args.command === "string"
+      ? approval.args.command
+      : null;
+  const detail = command ?? approval.detail ?? fallbackLabel;
+
+  if (isRoutine) {
+    return (
+      <div
+        aria-label={fallbackLabel}
+        className={cn("flex min-w-0 flex-1 flex-col gap-2", className)}
+        role="group"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-xs font-medium text-foreground">Review routine</span>
+          {pendingCount > 1 ? (
+            <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+              1/{pendingCount}
+            </span>
+          ) : null}
+        </div>
+        <div aria-label={detailAriaLabel} className="rounded-lg bg-foreground/[0.04] px-3 py-2.5">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <span className="truncate text-sm font-medium text-foreground">{routineName}</span>
+            {scheduleTime ? (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {scheduleKind} at {scheduleTime}
+                {scheduleTimezone ? ` (${scheduleTimezone})` : ""}
+              </span>
+            ) : null}
+          </div>
+          {routineInstructions ? (
+            <p className="mt-1.5 line-clamp-3 text-xs leading-5 text-muted-foreground">
+              {routineInstructions}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       aria-label={fallbackLabel}
-      className={cn("flex min-w-0 flex-1 items-center gap-2", className)}
+      className={cn("flex min-w-0 flex-1 flex-col gap-1.5", className)}
       role="group"
     >
-      {approval.appName ? (
-        <span className="max-w-32 shrink truncate text-[11px] font-medium text-foreground">
-          {approval.appName}
-        </span>
-      ) : null}
-      <code
-        aria-label={detailAriaLabel}
-        className="block max-h-20 min-w-0 flex-1 overflow-auto whitespace-pre font-mono text-[11px] text-foreground/85 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
-        data-approval-detail="complete"
-        tabIndex={0}
-      >
-        {approval.detail || fallbackLabel}
-      </code>
-      {pendingCount > 1 ? (
-        <span className="shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
-          1/{pendingCount}
-        </span>
-      ) : null}
+      <div className="flex w-full min-w-0 items-center gap-2">
+        <span className="text-xs font-medium text-foreground">{fallbackLabel}</span>
+        {approval.appName ? (
+          <span className="max-w-32 shrink truncate text-[11px] text-muted-foreground">
+            {approval.appName}
+          </span>
+        ) : null}
+        {pendingCount > 1 ? (
+          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
+            1/{pendingCount}
+          </span>
+        ) : null}
+      </div>
+      <details className="group w-full min-w-0">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md bg-foreground/[0.04] px-2.5 py-2 marker:content-none">
+          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/85">
+            {detail.split("\n", 1)[0]}
+          </code>
+          <span className="shrink-0 text-[10px] text-muted-foreground group-open:hidden">
+            Expand
+          </span>
+          <span className="hidden shrink-0 text-[10px] text-muted-foreground group-open:inline">
+            Collapse
+          </span>
+        </summary>
+        <code
+          aria-label={detailAriaLabel}
+          className="mt-1.5 block max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-foreground/[0.04] px-2.5 py-2 font-mono text-[11px] text-foreground/85 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+          data-approval-detail="complete"
+          tabIndex={0}
+        >
+          {detail}
+        </code>
+      </details>
     </div>
   );
 });

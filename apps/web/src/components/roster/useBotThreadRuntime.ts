@@ -3,9 +3,11 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
+  type ApprovalRequestId,
   EnvironmentId,
   ThreadId,
   type ModelSelection,
+  type ProviderApprovalDecision,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,15 +29,20 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { derivePendingApprovals, derivePendingUserInputs } from "../../session-logic";
+import {
+  applyPendingUserInputSingleSelect,
+  buildPendingUserInputAnswers,
+  type PendingUserInputDraftAnswer,
+  togglePendingUserInputOptionSelection,
+} from "../../pendingUserInput";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { resolveBotRuntimeMode } from "./botSandbox";
 import {
-  acceptBotTurnSubmission,
   buildBotTurnStartInput,
+  createBotTurnSubmissionQueue,
   joinOrStartThreadCreate,
-  releaseBotTurnSubmissionAfterObservation,
   resolveBotThreadTarget,
-  reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -111,6 +118,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   }
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
+  const pendingApprovals = useMemo(() => derivePendingApprovals(activities), [activities]);
+  const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(
     () =>
       bootstrapped && primaryEnvironmentId
@@ -136,24 +145,58 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const respondToApprovalCommand = useAtomCommand(threadEnvironment.respondToApproval, {
+    reportFailure: false,
+  });
+  const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
+    reportFailure: false,
+  });
   const appendVoiceTranscript = useAtomCommand(threadEnvironment.appendVoiceTranscript, {
     reportFailure: false,
   });
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
   const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
-  const sendInFlightRef = useRef(false);
+  const sendQueueRef = useRef(createBotTurnSubmissionQueue());
+  const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
+  const [respondingToApproval, setRespondingToApproval] = useState(false);
+  const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
+  const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
+  const singleSelectInFlightRef = useRef<string | null>(null);
+  const [pendingUserInputAnswers, setPendingUserInputAnswers] = useState<
+    Record<string, PendingUserInputDraftAnswer>
+  >({});
+  const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!primaryEnvironmentId) return;
-    const submissionKey = `${primaryEnvironmentId}:${botId}`;
-    releaseBotTurnSubmissionAfterObservation(
-      submissionKey,
-      rememberedThread?.latestTurn,
-      activities,
-    );
-  }, [activities, botId, primaryEnvironmentId, rememberedThread?.latestTurn]);
+  const submitPendingUserInput = useCallback(
+    async (
+      requestId: ApprovalRequestId,
+      answers: Record<string, string | string[]>,
+    ): Promise<boolean> => {
+      if (!linkedThreadRef || respondingRequestIdsRef.current.has(requestId)) return false;
+      respondingRequestIdsRef.current.add(requestId);
+      setRespondingRequestIds((current) =>
+        current.includes(requestId) ? current : [...current, requestId],
+      );
+      const result = await respondToUserInputCommand({
+        environmentId: linkedThreadRef.environmentId,
+        input: {
+          threadId: linkedThreadRef.threadId,
+          requestId,
+          answers,
+        },
+      });
+      if (result._tag === "Failure") {
+        respondingRequestIdsRef.current.delete(requestId);
+        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+        setError(errorMessage(result));
+        return false;
+      }
+      return true;
+    },
+    [linkedThreadRef, respondToUserInputCommand],
+  );
 
   const ensureTranscriptThread = useCallback(
     async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
@@ -205,135 +248,144 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
 
   const send = useCallback(
     async (prompt: string, files: readonly File[]): Promise<boolean> => {
-      if (sendInFlightRef.current) return false;
+      const pendingUserInput = pendingUserInputs[0];
+      if (pendingUserInput && linkedThreadRef && files.length === 0) {
+        if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
+        const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
+        if (!question || !prompt.trim()) return false;
+        const nextAnswers = {
+          ...pendingUserInputAnswers,
+          [question.id]: { customAnswer: prompt.trim() },
+        };
+        setPendingUserInputAnswers(nextAnswers);
+        if (pendingUserInputQuestionIndex < pendingUserInput.questions.length - 1) {
+          setPendingUserInputQuestionIndex((index) => index + 1);
+          return true;
+        }
+        const answers = buildPendingUserInputAnswers(pendingUserInput.questions, nextAnswers);
+        if (!answers) return false;
+        return submitPendingUserInput(pendingUserInput.requestId, answers);
+      }
       if (!botReady) {
         setError("The bot is still connecting.");
-        return false;
+        return Promise.resolve(false);
       }
       if (!activeProject) {
         setError("Add a project before you message a bot.");
-        return false;
-      }
-      if (rememberedThread?.latestTurn?.state === "running") {
-        setError("Wait for the current reply to finish.");
-        return false;
+        return Promise.resolve(false);
       }
       const unsupported = files.find((file) => !file.type.startsWith("image/"));
       if (unsupported) {
         setError("Bot attachments must be images.");
-        return false;
-      }
-      const submissionKey = `${activeProject.environmentId}:${botId}`;
-      const releaseSubmission = reserveBotTurnSubmissionAfterObservation(
-        submissionKey,
-        rememberedThread?.latestTurn,
-        activities,
-      );
-      if (!releaseSubmission) {
-        setError("Wait for the current reply to start.");
-        return false;
+        return Promise.resolve(false);
       }
 
-      sendInFlightRef.current = true;
+      queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
-      const createdAt = new Date().toISOString();
-      const modelSelection: ModelSelection =
-        effectiveModelSelection ?? activeProject.defaultModelSelection ?? appDefaultModelSelection;
-      const runtimeMode = resolveBotRuntimeMode(bot?.sandbox ?? null, settings.localExecutionMode);
-      const title = threadTitle(prompt, files);
-      const messageId = newMessageId();
-      let accepted = false;
-
-      try {
-        const attachments = await Promise.all(
-          files.map(async (file) => ({
-            type: "image" as const,
-            name: file.name,
-            mimeType: file.type,
-            sizeBytes: file.size,
-            dataUrl: await readFileAsDataUrl(file),
-          })),
+      return sendQueueRef.current.enqueue(async () => {
+        setError(null);
+        const createdAt = new Date().toISOString();
+        const modelSelection: ModelSelection =
+          effectiveModelSelection ??
+          activeProject.defaultModelSelection ??
+          appDefaultModelSelection;
+        const runtimeMode = resolveBotRuntimeMode(
+          bot?.sandbox ?? null,
+          settings.localExecutionMode,
         );
-        const currentThreadRef =
-          retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
-        if (!currentThreadRef) {
-          setError("Could not send the message.");
-          return false;
-        }
-        if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {
-          const modeResult = await setRuntimeMode({
-            environmentId: currentThreadRef.environmentId,
-            input: { threadId: currentThreadRef.threadId, runtimeMode },
-          });
-          if (modeResult._tag === "Failure") {
-            setError(errorMessage(modeResult));
+        const title = threadTitle(prompt, files);
+
+        try {
+          const attachments = await Promise.all(
+            files.map(async (file) => ({
+              type: "image" as const,
+              name: file.name,
+              mimeType: file.type,
+              sizeBytes: file.size,
+              dataUrl: await readFileAsDataUrl(file),
+            })),
+          );
+          const currentThreadRef =
+            retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
+          if (!currentThreadRef) {
+            setError("Could not send the message.");
             return false;
           }
-        }
-        const startResult = await startTurn({
-          environmentId: currentThreadRef.environmentId,
-          input: buildBotTurnStartInput({
-            botId: BotId.make(botId),
-            threadId: currentThreadRef.threadId,
-            projectId: activeProject.id,
-            title,
-            message: {
-              messageId,
-              role: "user",
-              text: prompt,
-              attachments,
-            },
-            modelSelection,
-            runtimeMode,
-            interactionMode: DEFAULT_INTERACTION_MODE,
-            createdAt,
-            createThread: false,
-          }),
-        });
-        if (startResult._tag === "Failure") {
-          setError(errorMessage(startResult));
-          return false;
-        }
+          if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {
+            const modeResult = await setRuntimeMode({
+              environmentId: currentThreadRef.environmentId,
+              input: { threadId: currentThreadRef.threadId, runtimeMode },
+            });
+            if (modeResult._tag === "Failure") {
+              setError(errorMessage(modeResult));
+              return false;
+            }
+          }
+          const startResult = await startTurn({
+            environmentId: currentThreadRef.environmentId,
+            input: buildBotTurnStartInput({
+              botId: BotId.make(botId),
+              threadId: currentThreadRef.threadId,
+              projectId: activeProject.id,
+              title,
+              message: {
+                messageId: newMessageId(),
+                role: "user",
+                text: prompt,
+                attachments,
+              },
+              modelSelection,
+              runtimeMode,
+              interactionMode: DEFAULT_INTERACTION_MODE,
+              createdAt,
+              createThread: false,
+            }),
+          });
+          if (startResult._tag === "Failure") {
+            setError(errorMessage(startResult));
+            return false;
+          }
 
-        accepted = true;
-        acceptBotTurnSubmission(submissionKey, messageId);
-        releaseBotTurnSubmissionAfterObservation(
-          submissionKey,
-          rememberedThread?.latestTurn,
-          activities,
-        );
-        retainedThreadRef.current.threadRef = currentThreadRef;
-        useRosterStore
-          .getState()
-          .recordChatPath(botId, `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`);
-        useRosterStore.getState().recordLastMessage(botId, {
-          text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
-          at: createdAt,
-        });
-        return true;
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not send the message.");
-        return false;
-      } finally {
-        if (!accepted) releaseSubmission();
-        sendInFlightRef.current = false;
-        setSending(false);
-      }
+          retainedThreadRef.current.threadRef = currentThreadRef;
+          useRosterStore
+            .getState()
+            .recordChatPath(
+              botId,
+              `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`,
+            );
+          useRosterStore.getState().recordLastMessage(botId, {
+            text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
+            at: createdAt,
+          });
+          return true;
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not send the message.");
+          return false;
+        } finally {
+          queuedSendCountRef.current -= 1;
+          if (queuedSendCountRef.current === 0) setSending(false);
+        }
+      });
     },
     [
       activeProject,
-      activities,
       appDefaultModelSelection,
       bot,
       botId,
       effectiveModelSelection,
       botReady,
       ensureTranscriptThread,
-      rememberedThread?.latestTurn,
       rememberedThread?.runtimeMode,
       settings.localExecutionMode,
       setRuntimeMode,
+      linkedThreadRef,
+      pendingUserInputAnswers,
+      pendingUserInputQuestionIndex,
+      pendingUserInputs,
+      respondToUserInputCommand,
+      respondingRequestIds,
+      submitPendingUserInput,
       startTurn,
     ],
   );
@@ -358,6 +410,97 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     [appendVoiceTranscript, botId, ensureTranscriptThread],
   );
 
+  const respondToApproval = useCallback(
+    async (
+      requestId: (typeof pendingApprovals)[number]["requestId"],
+      decision: ProviderApprovalDecision,
+    ) => {
+      if (!linkedThreadRef || respondingToApproval) return;
+      setRespondingToApproval(true);
+      const result = await respondToApprovalCommand({
+        environmentId: linkedThreadRef.environmentId,
+        input: { threadId: linkedThreadRef.threadId, requestId, decision },
+      });
+      setRespondingToApproval(false);
+      if (result._tag === "Failure") setError(errorMessage(result));
+    },
+    [linkedThreadRef, pendingApprovals, respondToApprovalCommand, respondingToApproval],
+  );
+
+  useEffect(() => {
+    setPendingUserInputAnswers({});
+    setPendingUserInputQuestionIndex(0);
+    singleSelectInFlightRef.current = null;
+    const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
+    for (const requestId of respondingRequestIdsRef.current) {
+      if (!pendingIds.has(requestId)) respondingRequestIdsRef.current.delete(requestId);
+    }
+    setRespondingRequestIds((current) => current.filter((requestId) => pendingIds.has(requestId)));
+  }, [pendingUserInputs[0]?.requestId]);
+
+  const selectPendingUserInputOption = useCallback(
+    (questionId: string, optionLabel: string) => {
+      const pending = pendingUserInputs[0];
+      const question = pending?.questions.find((entry) => entry.id === questionId);
+      if (!pending || !question) return;
+      if (!question.multiSelect) {
+        const selectionKey = `${pending.requestId}:${questionId}`;
+        if (singleSelectInFlightRef.current === selectionKey) return;
+        const selection = applyPendingUserInputSingleSelect(
+          pending.questions,
+          pendingUserInputAnswers,
+          pendingUserInputQuestionIndex,
+          questionId,
+          optionLabel,
+        );
+        if (!selection) return;
+        singleSelectInFlightRef.current = selectionKey;
+        setPendingUserInputAnswers(selection.draftAnswers);
+        if (!selection.answers) {
+          setPendingUserInputQuestionIndex(selection.questionIndex);
+          return;
+        }
+        void submitPendingUserInput(pending.requestId, selection.answers).then((submitted) => {
+          if (!submitted) singleSelectInFlightRef.current = null;
+        });
+        return;
+      }
+      setPendingUserInputAnswers((current) => ({
+        ...current,
+        [questionId]: togglePendingUserInputOptionSelection(
+          question,
+          current[questionId],
+          optionLabel,
+        ),
+      }));
+    },
+    [
+      pendingUserInputAnswers,
+      pendingUserInputQuestionIndex,
+      pendingUserInputs,
+      submitPendingUserInput,
+    ],
+  );
+
+  const advancePendingUserInput = useCallback(async () => {
+    const pending = pendingUserInputs[0];
+    if (!pending || !linkedThreadRef || respondingRequestIds.includes(pending.requestId)) return;
+    if (pendingUserInputQuestionIndex < pending.questions.length - 1) {
+      setPendingUserInputQuestionIndex((index) => index + 1);
+      return;
+    }
+    const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
+    if (!answers) return;
+    await submitPendingUserInput(pending.requestId, answers);
+  }, [
+    linkedThreadRef,
+    pendingUserInputAnswers,
+    pendingUserInputQuestionIndex,
+    pendingUserInputs,
+    respondingRequestIds,
+    submitPendingUserInput,
+  ]);
+
   return {
     appendTranscript,
     bootstrapped,
@@ -367,6 +510,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
+    pendingApprovals,
+    pendingUserInputs,
+    pendingUserInputAnswers,
+    pendingUserInputQuestionIndex,
+    respondingRequestIds,
+    selectPendingUserInputOption,
+    advancePendingUserInput,
+    respondToApproval,
+    respondingToApproval,
     send,
     sending,
   };

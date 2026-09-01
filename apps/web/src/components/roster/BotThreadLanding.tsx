@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
+import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -20,8 +21,10 @@ import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentQuery } from "../../state/query";
+import { useEnvironmentSessionState } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { openSettings } from "../../settingsDialogStore";
+import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import ChatMarkdown from "../ChatMarkdown";
@@ -32,9 +35,10 @@ import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
-import { visibleBotChatMessages } from "./botConversationPresentation";
+import { isBotConversationWorking, visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
@@ -46,9 +50,61 @@ import { useRosterPendingApproval } from "./useRosterPendingApproval";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
+function ChannelSendApproval({
+  environmentId,
+  botId,
+  origin,
+  threadId,
+  messageId,
+  sent,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly botId: BotId;
+  readonly origin: ChannelMessageOrigin;
+  readonly threadId: ThreadId;
+  readonly messageId: MessageId;
+  readonly sent: boolean;
+}) {
+  const send = useAtomCommand(botEnvironment.channels.send, { reportFailure: false });
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const delivered = sent || submitted;
+  const label = channelProviderLabel(origin.provider);
+  return (
+    <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+      <span className="min-w-0 flex-1 text-muted-foreground">
+        {delivered ? `Sent to ${label}` : `Send this reply to ${label}?`}
+      </span>
+      {!delivered ? (
+        <Button
+          size="xs"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void send({
+              environmentId,
+              input: { botId, threadId, messageId },
+            }).then((result) => {
+              setBusy(false);
+              if (result._tag === "Failure") {
+                toastManager.add({ type: "error", title: `Could not send to ${label}` });
+              } else {
+                setSubmitted(true);
+              }
+            });
+          }}
+        >
+          {busy ? "Sending" : "Send"}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
@@ -121,8 +177,12 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   }, [bot, navigate]);
 
   if (!bot || bot.archivedAt !== null) return null;
-  const working = runtime.sending || presence === "working";
-  const messages = visibleBotChatMessages(runtime.messages);
+  const working = isBotConversationWorking({
+    sending: runtime.sending,
+    respondingToUserInput: runtime.respondingRequestIds.length > 0,
+    presence,
+  });
+  const messages = visibleBotChatMessages(runtime.messages, working);
   const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
   const delegations = runtime.linkedThreadRef
@@ -158,7 +218,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 <h1 className="text-lg font-medium">Message {bot.name}</h1>
               </div>
             ) : (
-              messages.map((message) =>
+              messages.map((message, messageIndex) =>
                 message.role === "assistant" ? (
                   <div
                     key={message.id}
@@ -181,22 +241,36 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      {canManageChannelBindings && environmentId && runtime.linkedThreadRef
+                        ? (() => {
+                            const origin = channelOriginForAssistantMessage(messages, messageIndex);
+                            const binding = origin
+                              ? connectedChannelBinding(bot.channelBindings, origin.provider)
+                              : undefined;
+                            return origin && binding ? (
+                              <ChannelSendApproval
+                                environmentId={environmentId}
+                                botId={BotId.make(bot.id)}
+                                origin={origin}
+                                threadId={runtime.linkedThreadRef.threadId}
+                                messageId={message.id}
+                                sent={binding.sentMessageIds.includes(message.id)}
+                              />
+                            ) : null;
+                          })()
+                        : null}
                     </div>
                   </div>
                 ) : (
                   <div key={message.id} className="flex justify-end" data-testid="bot-user-message">
                     <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                      <p className="whitespace-pre-wrap">{message.text}</p>
+                      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
                       {message.attachments?.length ? (
-                        <div className="mt-1.5 flex flex-wrap justify-end gap-1.5">
-                          {message.attachments.map((attachment) => (
-                            <span
-                              key={attachment.id}
-                              className="rounded-full bg-background/60 px-2 py-0.5 text-xs text-muted-foreground"
-                            >
-                              {attachment.name}
-                            </span>
-                          ))}
+                        <div className={message.text ? "mt-2" : undefined}>
+                          <BotMessageAttachments
+                            attachments={message.attachments}
+                            environmentId={environmentId ?? NO_ENVIRONMENT}
+                          />
                         </div>
                       ) : null}
                     </div>
@@ -240,7 +314,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             botName={bot.name}
             draftKey={bot.id}
             disabled={
-              runtime.sending ||
               pendingApproval !== null ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||

@@ -89,7 +89,7 @@ export class MigrateDevDbServerRunningError extends Schema.TaggedErrorClass<Migr
   },
 ) {
   override get message(): string {
-    return `Dev database at '${this.databasePath}' is open by a running server (pid ${this.pid} per server-runtime.json). Stop that server first; if that pid is not actually a T3 server (stale descriptor, reused pid), delete the server-runtime.json next to the database and retry.`;
+    return `Dev database at '${this.databasePath}' is open by a running server (pid ${this.pid} per server-runtime.json). Stop that server first; if that pid is not an Akeru Bot server (stale descriptor, reused pid), delete the server-runtime.json next to the database and retry.`;
   }
 }
 
@@ -142,7 +142,7 @@ export class MigrateDevDbPhaseError extends Schema.TaggedErrorClass<MigrateDevDb
 }
 
 export interface RunMigrateDevDbInput {
-  /** Isolated .t3 directory. Defaults to `<worktree>/.t3` of the cwd. */
+  /** Isolated .akeru directory. Defaults to `<worktree>/.akeru` of the cwd. */
   readonly baseDir?: string | undefined;
   /** Source database. Defaults to `~/.akeru/userdata/state.sqlite`. */
   readonly source?: string | undefined;

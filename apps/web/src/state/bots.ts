@@ -24,6 +24,26 @@ export const environmentGroupsAtom = Atom.family((environmentId: EnvironmentId) 
   ).pipe(Atom.withLabel(`web-groups:${environmentId}`)),
 );
 
+export const environmentPeopleAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) => {
+    const snapshot = get(environmentSnapshotAtom(environmentId));
+    return {
+      current: snapshot?.currentPersonId
+        ? {
+            id: snapshot.currentPersonId,
+            displayName: snapshot.currentPersonDisplayName ?? "Paired person",
+          }
+        : null,
+      host: snapshot?.environmentHostPersonId
+        ? {
+            id: snapshot.environmentHostPersonId,
+            displayName: snapshot.environmentHostDisplayName ?? "Host",
+          }
+        : null,
+    };
+  }).pipe(Atom.withLabel(`web-people:${environmentId}`)),
+);
+
 /** Snapshot presence gates the server-backed roster swap and bootstrap. */
 export const environmentRosterLoadedAtom = Atom.family((environmentId: EnvironmentId) =>
   Atom.make((get): boolean => get(environmentSnapshotAtom(environmentId)) !== null).pipe(

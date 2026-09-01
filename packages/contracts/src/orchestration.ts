@@ -7,7 +7,9 @@ import { ProviderOptionSelections } from "./model.ts";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import {
   ApprovalRequestId,
+  AuthSessionId,
   BotId,
+  ChannelConnectionId,
   CheckpointRef,
   ClientSurface,
   CommandId,
@@ -27,6 +29,28 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
 import { AkeruDelegationRecord, DelegationId } from "./akeruDelegation.ts";
+import {
+  ClientRoutineCommand,
+  InternalRoutineCommand,
+  Routine,
+  RoutineApprovedPayload,
+  RoutineBlockedPayload,
+  RoutineCompletedPayload,
+  RoutineDeletedPayload,
+  RoutineDraftedPayload,
+  RoutineEnabledPayload,
+  RoutineFailedPayload,
+  RoutineId,
+  RoutinePausedPayload,
+  RoutineRun,
+  RoutineRunCanceledPayload,
+  RoutineRunId,
+  RoutineRunningPayload,
+  RoutineSkillAssignedPayload,
+  RoutineSkillAssignment,
+  RoutineSkillUnassignedPayload,
+  SkillAssignmentId,
+} from "./routines.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -328,6 +352,26 @@ export const BotUsageCap = Schema.Struct({
 });
 export type BotUsageCap = typeof BotUsageCap.Type;
 
+export const ChannelProvider = Schema.Literals(["telegram", "imessage", "whatsapp"]);
+export type ChannelProvider = typeof ChannelProvider.Type;
+export const ChannelBindingStatus = Schema.Literals([
+  "disconnected",
+  "connected",
+  "needs-reconnect",
+  "not-live",
+]);
+export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
+export const ChannelBinding = Schema.Struct({
+  botId: BotId,
+  connectionId: Schema.optional(ChannelConnectionId),
+  provider: ChannelProvider,
+  status: ChannelBindingStatus,
+  externalIdentity: Schema.NullOr(TrimmedNonEmptyString),
+  connectedAt: Schema.NullOr(IsoDateTime),
+  sentMessageIds: Schema.Array(MessageId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+});
+export type ChannelBinding = typeof ChannelBinding.Type;
+
 export const OrchestrationBot = Schema.Struct({
   id: BotId,
   name: TrimmedNonEmptyString,
@@ -345,6 +389,9 @@ export const OrchestrationBot = Schema.Struct({
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  channelBindings: Schema.Array(ChannelBinding).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   groupId: Schema.NullOr(GroupId),
   archivedAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,
@@ -355,11 +402,30 @@ export type OrchestrationBot = typeof OrchestrationBot.Type;
 export const GroupMembershipRole = Schema.Literals(["boss", "specialist"]);
 export type GroupMembershipRole = typeof GroupMembershipRole.Type;
 
-export const GroupMembership = Schema.Struct({
+export const GroupBotMembership = Schema.Struct({
+  kind: Schema.Literal("bot").pipe(Schema.withDecodingDefault(Effect.succeed("bot" as const))),
   botId: BotId,
   role: GroupMembershipRole,
 });
+export type GroupBotMembership = typeof GroupBotMembership.Type;
+
+export const GroupPersonMembership = Schema.Struct({
+  kind: Schema.Literal("person"),
+  personId: AuthSessionId,
+  displayName: TrimmedNonEmptyString,
+});
+export type GroupPersonMembership = typeof GroupPersonMembership.Type;
+
+export const GroupMembership = Schema.Union([GroupBotMembership, GroupPersonMembership]);
 export type GroupMembership = typeof GroupMembership.Type;
+
+export function isGroupBotMember(member: GroupMembership): member is GroupBotMembership {
+  return member.kind === "bot";
+}
+
+export function isGroupPersonMember(member: GroupMembership): member is GroupPersonMembership {
+  return member.kind === "person";
+}
 
 export const GROUP_SHARED_WORKSPACE_WARNING =
   "Bots share this workspace. Anyone who can talk to a bot can reach anything the workspace can.";
@@ -373,6 +439,13 @@ export const OrchestrationGroup = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type OrchestrationGroup = typeof OrchestrationGroup.Type;
+
+export const ChannelMessageOrigin = Schema.Struct({
+  provider: ChannelProvider,
+  externalThreadId: TrimmedNonEmptyString,
+  externalSenderId: Schema.optional(TrimmedNonEmptyString),
+});
+export type ChannelMessageOrigin = typeof ChannelMessageOrigin.Type;
 
 export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
@@ -584,6 +657,9 @@ export const OrchestrationReadModel = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
+  routines: Schema.optional(Schema.Array(Routine)),
+  routineRuns: Schema.optional(Schema.Array(RoutineRun)),
+  skillAssignments: Schema.optional(Schema.Array(RoutineSkillAssignment)),
   threads: Schema.Array(OrchestrationThread),
   updatedAt: IsoDateTime,
 });
@@ -664,6 +740,10 @@ export type OrchestrationThreadShell = typeof OrchestrationThreadShell.Type;
 
 export const OrchestrationShellSnapshot = Schema.Struct({
   snapshotSequence: NonNegativeInt,
+  currentPersonId: Schema.optional(AuthSessionId),
+  currentPersonDisplayName: Schema.optional(TrimmedNonEmptyString),
+  environmentHostPersonId: Schema.optional(AuthSessionId),
+  environmentHostDisplayName: Schema.optional(TrimmedNonEmptyString),
   projects: Schema.Array(OrchestrationProjectShell),
   bots: Schema.Array(OrchestrationBot).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   groups: Schema.Array(OrchestrationGroup).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -671,6 +751,9 @@ export const OrchestrationShellSnapshot = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
+  routines: Schema.optional(Schema.Array(Routine)),
+  routineRuns: Schema.optional(Schema.Array(RoutineRun)),
+  skillAssignments: Schema.optional(Schema.Array(RoutineSkillAssignment)),
   threads: Schema.Array(OrchestrationThreadShell),
   updatedAt: IsoDateTime,
 });
@@ -716,6 +799,27 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("delegation-upserted"),
     sequence: NonNegativeInt,
     delegation: Schema.suspend(() => AkeruDelegationRecord),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("routine-upserted"),
+    sequence: NonNegativeInt,
+    routine: Routine,
+    run: Schema.optional(RoutineRun),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("routine-removed"),
+    sequence: NonNegativeInt,
+    routineId: RoutineId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("skill-assignment-upserted"),
+    sequence: NonNegativeInt,
+    assignment: RoutineSkillAssignment,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("skill-assignment-removed"),
+    sequence: NonNegativeInt,
+    assignmentId: SkillAssignmentId,
   }),
   Schema.Struct({
     kind: Schema.Literal("thread-upserted"),
@@ -899,6 +1003,25 @@ const BotUpdateCommand = Schema.Struct({
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
+  groupId: Schema.optional(Schema.NullOr(GroupId)),
+});
+
+const ClientBotUpdateCommand = Schema.Struct({
+  type: Schema.Literal("bot.update"),
+  commandId: CommandId,
+  botId: BotId,
+  name: Schema.optional(TrimmedNonEmptyString),
+  title: Schema.optional(TrimmedNonEmptyString),
+  label: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+  disabledMcpServerIds: Schema.optional(Schema.Array(McpServerId)),
+  avatar: Schema.optional(BotAvatar),
+  engine: Schema.optional(Schema.NullOr(BotEngine)),
+  sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
+  runtimeMode: Schema.optional(RuntimeMode),
+  usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
 
@@ -914,6 +1037,124 @@ const BotRestoreCommand = Schema.Struct({
   botId: BotId,
 });
 
+const ChannelConnectCommand = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("telegram"),
+    token: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("hosted"),
+    projectId: TrimmedNonEmptyString,
+    projectSecret: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("self-hosted"),
+    serverUrl: TrimmedNonEmptyString,
+    apiKey: TrimmedNonEmptyString,
+    phone: Schema.optional(TrimmedNonEmptyString),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    provider: Schema.Literal("whatsapp"),
+    accessToken: TrimmedNonEmptyString,
+    appSecret: TrimmedNonEmptyString,
+    phoneNumberId: TrimmedNonEmptyString,
+    verifyToken: TrimmedNonEmptyString,
+  }),
+]);
+
+const ChannelConnectionSaveCommand = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("telegram"),
+    token: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("hosted"),
+    projectId: TrimmedNonEmptyString,
+    projectSecret: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("imessage"),
+    mode: Schema.Literal("self-hosted"),
+    serverUrl: TrimmedNonEmptyString,
+    apiKey: TrimmedNonEmptyString,
+    phone: Schema.optional(TrimmedNonEmptyString),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("whatsapp"),
+    accessToken: TrimmedNonEmptyString,
+    appSecret: TrimmedNonEmptyString,
+    phoneNumberId: TrimmedNonEmptyString,
+    verifyToken: TrimmedNonEmptyString,
+  }),
+]);
+
+const ChannelConnectionDeleteCommand = Schema.Struct({
+  type: Schema.Literal("channel.connection.delete"),
+  commandId: CommandId,
+  connectionId: ChannelConnectionId,
+});
+
+const ChannelAttachCommand = Schema.Struct({
+  type: Schema.Literal("channel.attach"),
+  commandId: CommandId,
+  botId: BotId,
+  connectionId: ChannelConnectionId,
+  provider: ChannelProvider,
+});
+
+const ChannelDisconnectCommand = Schema.Struct({
+  type: Schema.Literal("channel.disconnect"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: ChannelProvider,
+});
+
+const ChannelReconnectCommand = Schema.Struct({
+  type: Schema.Literal("channel.reconnect"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: ChannelProvider,
+});
+
+const ChannelSendCommand = Schema.Struct({
+  type: Schema.Literal("channel.send"),
+  commandId: CommandId,
+  botId: BotId,
+  threadId: ThreadId,
+  messageId: MessageId,
+});
+
 const GroupCreateCommand = Schema.Struct({
   type: Schema.Literal("group.create"),
   commandId: CommandId,
@@ -923,6 +1164,7 @@ const GroupCreateCommand = Schema.Struct({
   // missing-boss rejection instead of a generic schema failure.
   bossBotId: Schema.optional(BotId),
   specialistBotIds: Schema.optional(Schema.Array(BotId)),
+  creator: Schema.optional(GroupPersonMembership),
   createdAt: IsoDateTime,
 });
 
@@ -952,6 +1194,27 @@ const GroupMemberUnassignCommand = Schema.Struct({
   commandId: CommandId,
   groupId: GroupId,
   botId: BotId,
+});
+
+const GroupPersonAssignCommand = Schema.Struct({
+  type: Schema.Literal("group.person.assign"),
+  commandId: CommandId,
+  groupId: GroupId,
+  person: GroupPersonMembership,
+});
+
+const GroupPersonUnassignCommand = Schema.Struct({
+  type: Schema.Literal("group.person.unassign"),
+  commandId: CommandId,
+  groupId: GroupId,
+  personId: AuthSessionId,
+});
+
+const GroupLeaveCommand = Schema.Struct({
+  type: Schema.Literal("group.leave"),
+  commandId: CommandId,
+  groupId: GroupId,
+  personId: AuthSessionId,
 });
 
 const GroupBossSetCommand = Schema.Struct({
@@ -1208,6 +1471,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(ChatAttachment),
+    channelOrigin: Schema.optional(ChannelMessageOrigin),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -1220,6 +1484,10 @@ export const ThreadTurnStartCommand = Schema.Struct({
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(BotId),
+  senderPersonId: Schema.optional(AuthSessionId),
+  senderDisplayName: Schema.optional(TrimmedNonEmptyString),
+  senderCanManageGroups: Schema.optional(Schema.Boolean),
+  timezone: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 
@@ -1240,6 +1508,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(BotId),
+  timezone: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 
@@ -1322,12 +1591,16 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   GroupDeleteCommand,
   GroupMemberAssignCommand,
   GroupMemberUnassignCommand,
+  GroupPersonAssignCommand,
+  GroupPersonUnassignCommand,
+  GroupLeaveCommand,
   GroupBossSetCommand,
   McpServerCreateCommand,
   McpServerUpdateCommand,
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
+  ClientRoutineCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1359,20 +1632,31 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   BotCreateCommand,
-  BotUpdateCommand,
+  ClientBotUpdateCommand,
   BotArchiveCommand,
   BotRestoreCommand,
+  ChannelConnectCommand,
+  ChannelConnectionSaveCommand,
+  ChannelConnectionDeleteCommand,
+  ChannelAttachCommand,
+  ChannelDisconnectCommand,
+  ChannelReconnectCommand,
+  ChannelSendCommand,
   GroupCreateCommand,
   GroupRenameCommand,
   GroupDeleteCommand,
   GroupMemberAssignCommand,
   GroupMemberUnassignCommand,
+  GroupPersonAssignCommand,
+  GroupPersonUnassignCommand,
+  GroupLeaveCommand,
   GroupBossSetCommand,
   McpServerCreateCommand,
   McpServerUpdateCommand,
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
+  ClientRoutineCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1412,6 +1696,7 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   delta: Schema.String,
+  attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.optional(TurnId),
   createdAt: IsoDateTime,
 });
@@ -1512,6 +1797,7 @@ export const DelegationStateSetCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  InternalRoutineCommand,
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
@@ -1546,13 +1832,28 @@ export const OrchestrationEventType = Schema.Literals([
   "group.deleted",
   "group.member-assigned",
   "group.member-unassigned",
+  "group.person-assigned",
+  "group.person-unassigned",
   "group.boss-set",
   "mcp-server.created",
   "mcp-server.updated",
   "mcp-server.deleted",
   "mcp-server.enabled",
   "mcp-server.disabled",
+  "routine.drafted",
+  "routine.approved",
+  "routine.enabled",
+  "routine.running",
+  "routine.paused",
+  "routine.blocked",
+  "routine.failed",
+  "routine.completed",
+  "routine.run-canceled",
+  "routine.deleted",
+  "skill-assignment.assigned",
+  "skill-assignment.unassigned",
   "thread.created",
+  "thread.ownership-updated",
   "thread.deleted",
   "thread.archived",
   "thread.unarchived",
@@ -1589,6 +1890,9 @@ export const OrchestrationAggregateKind = Schema.Literals([
   "bot",
   "group",
   "mcp-server",
+  "routine",
+  "routine-run",
+  "skill-assignment",
   "thread",
   "delegation",
 ]);
@@ -1642,6 +1946,9 @@ export const BotCreatedPayload = Schema.Struct({
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  channelBindings: Schema.Array(ChannelBinding).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   groupId: Schema.NullOr(GroupId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1660,6 +1967,7 @@ export const BotUpdatedPayload = Schema.Struct({
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
   updatedAt: IsoDateTime,
 });
@@ -1698,13 +2006,25 @@ export const GroupDeletedPayload = Schema.Struct({
 
 export const GroupMemberAssignedPayload = Schema.Struct({
   groupId: GroupId,
-  member: GroupMembership,
+  member: GroupBotMembership,
   updatedAt: IsoDateTime,
 });
 
 export const GroupMemberUnassignedPayload = Schema.Struct({
   groupId: GroupId,
   botId: BotId,
+  updatedAt: IsoDateTime,
+});
+
+export const GroupPersonAssignedPayload = Schema.Struct({
+  groupId: GroupId,
+  person: GroupPersonMembership,
+  updatedAt: IsoDateTime,
+});
+
+export const GroupPersonUnassignedPayload = Schema.Struct({
+  groupId: GroupId,
+  personId: AuthSessionId,
   updatedAt: IsoDateTime,
 });
 
@@ -1751,6 +2071,13 @@ export const ThreadCreatedPayload = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadOwnershipUpdatedPayload = Schema.Struct({
+  threadId: ThreadId,
+  botId: Schema.NullOr(BotId),
+  groupId: Schema.NullOr(GroupId),
   updatedAt: IsoDateTime,
 });
 
@@ -1858,6 +2185,9 @@ export const ThreadMessageSentPayload = Schema.Struct({
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.NullOr(TurnId),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
+  authorPersonId: Schema.optional(Schema.NullOr(AuthSessionId)),
+  authorDisplayName: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1883,6 +2213,7 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   ),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
+  timezone: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 
@@ -1985,8 +2316,11 @@ const EventBaseFields = {
     BotId,
     GroupId,
     McpServerId,
-    ThreadId,
     Schema.suspend(() => DelegationId),
+    RoutineId,
+    RoutineRunId,
+    SkillAssignmentId,
+    ThreadId,
   ]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
@@ -2058,6 +2392,16 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
+    type: Schema.Literal("group.person-assigned"),
+    payload: GroupPersonAssignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("group.person-unassigned"),
+    payload: GroupPersonUnassignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
     type: Schema.Literal("group.boss-set"),
     payload: GroupBossSetPayload,
   }),
@@ -2088,8 +2432,73 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
+    type: Schema.Literal("routine.drafted"),
+    payload: RoutineDraftedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.approved"),
+    payload: RoutineApprovedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.enabled"),
+    payload: RoutineEnabledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.running"),
+    payload: RoutineRunningPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.paused"),
+    payload: RoutinePausedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.blocked"),
+    payload: RoutineBlockedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.failed"),
+    payload: RoutineFailedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.completed"),
+    payload: RoutineCompletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.run-canceled"),
+    payload: RoutineRunCanceledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.deleted"),
+    payload: RoutineDeletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("skill-assignment.assigned"),
+    payload: RoutineSkillAssignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("skill-assignment.unassigned"),
+    payload: RoutineSkillUnassignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
     type: Schema.Literal("thread.created"),
     payload: ThreadCreatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.ownership-updated"),
+    payload: ThreadOwnershipUpdatedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

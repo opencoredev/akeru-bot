@@ -74,12 +74,11 @@ describe("brand-assets", () => {
     expect(resolveWebAssetBrandForPackageVersion("0.0.29")).toBe("production");
   });
 
-  it("keeps development and production icon families separate", () => {
-    expect([
-      BRAND_ASSET_PATHS.developmentIconComposerProject,
-      BRAND_ASSET_PATHS.productionIconComposerProject,
-    ]).toEqual(["assets/dev/app-icon.icon", "assets/prod/app-icon.icon"]);
+  it("uses the Akeru favicon artwork for production desktop and web icons", () => {
+    expect(BRAND_ASSET_PATHS.developmentIconComposerProject).toBe("assets/dev/app-icon.icon");
     expect(BRAND_ASSET_PATHS.developmentDesktopIconPng).toMatch(/^assets\/dev\/blueprint-/);
-    expect(BRAND_ASSET_PATHS.productionMacIconPng).toMatch(/^assets\/prod\/black-/);
+    expect(BRAND_ASSET_PATHS.productionMacIconPng).toBe("assets/prod/akeru-macos-1024.png");
+    expect(BRAND_ASSET_PATHS.productionLinuxIconPng).toBe("apps/marketing/public/icon.png");
+    expect(BRAND_ASSET_PATHS.productionWindowsIconIco).toBe("apps/web/public/favicon.ico");
   });
 });

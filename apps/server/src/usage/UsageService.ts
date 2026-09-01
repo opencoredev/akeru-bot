@@ -1,8 +1,8 @@
 /**
  * UsageService - scans provider transcripts and returns priced usage buckets.
  *
- * The scan reads the provider CLIs' own session files rather than T3 Code's
- * orchestration projections, so usage covers turns driven outside T3 Code too.
+ * The scan reads the provider CLIs' own session files rather than Akeru Bot's
+ * orchestration projections, so usage covers turns driven outside Akeru Bot too.
  * This is the approach `ccusage` takes.
  *
  * Transcripts are append-only, so parsed records are memoised per file by

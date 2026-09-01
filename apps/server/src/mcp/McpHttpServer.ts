@@ -3,10 +3,11 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import type * as Types from "effect/Types";
-import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
+import { AiError, McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
@@ -127,6 +128,159 @@ const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
   }).pipe(Effect.as(result));
 };
 
+type ToolInputSchema = ReturnType<typeof Tool.getJsonSchema>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const providerScalarAllOfKeys = new Set([
+  "description",
+  "title",
+  "default",
+  "examples",
+  "deprecated",
+  "readOnly",
+  "writeOnly",
+  "pattern",
+  "minLength",
+  "maxLength",
+  "format",
+  "contentEncoding",
+  "contentMediaType",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+]);
+
+/**
+ * Mastra converts scalar `allOf` members into Zod intersections. Constraint-only
+ * members become objects, so Codex receives an object schema and sends `{}` for
+ * fields such as URLs and key names. Flatten only scalar constraint members;
+ * object intersections keep their original JSON Schema semantics.
+ */
+export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolInputSchema => {
+  const visit = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!isRecord(value)) return value;
+
+    const normalized = Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "allOf")
+        .map(([key, child]) => [key, visit(child)]),
+    );
+    const allOf = Array.isArray(value.allOf) ? value.allOf.map(visit) : undefined;
+    const scalar = ["string", "number", "integer", "boolean"].includes(String(value.type));
+    const occupiedKeys = new Set(Object.keys(normalized));
+    const canFlatten =
+      scalar &&
+      allOf?.every((member) => {
+        if (!isRecord(member)) return false;
+        return Object.keys(member).every((key) => {
+          if (!providerScalarAllOfKeys.has(key)) return false;
+          if (key === "description") return true;
+          if (occupiedKeys.has(key)) return false;
+          occupiedKeys.add(key);
+          return true;
+        });
+      });
+
+    if (canFlatten && allOf) {
+      for (const member of allOf) {
+        if (!isRecord(member)) continue;
+        for (const [key, child] of Object.entries(member)) {
+          if (key === "description" && "description" in normalized) continue;
+          normalized[key] = child;
+        }
+      }
+      return normalized;
+    }
+    return allOf ? { ...normalized, allOf } : normalized;
+  };
+
+  return visit(schema) as ToolInputSchema;
+};
+
+const toolErrorResult = (message: string) =>
+  new McpSchema.CallToolResult({
+    isError: true,
+    content: [{ type: "text", text: message }],
+  });
+
+const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPreviewStandardTools")(
+  function* () {
+    const server = yield* McpServer.McpServer;
+    const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const built = yield* PreviewStandardToolkit;
+
+    for (const tool of Object.values(built.tools)) {
+      const outputSchema = Tool.getJsonSchemaFromSchema(tool.successSchema);
+      const isDeclaredFailure = Schema.is(tool.failureSchema);
+      yield* server.addTool({
+        tool: new McpSchema.Tool({
+          name: tool.name,
+          description: Tool.getDescription(tool),
+          inputSchema: normalizeProviderToolInputSchema(Tool.getJsonSchema(tool)),
+          ...(outputSchema.type === "object" ? { outputSchema } : {}),
+          annotations: {
+            ...Context.getOption(tool.annotations, Tool.Title).pipe(
+              Option.map((title) => ({ title })),
+              Option.getOrUndefined,
+            ),
+            readOnlyHint: Context.get(tool.annotations, Tool.Readonly),
+            destructiveHint: Context.get(tool.annotations, Tool.Destructive),
+            idempotentHint: Context.get(tool.annotations, Tool.Idempotent),
+            openWorldHint: Context.get(tool.annotations, Tool.OpenWorld),
+          },
+        }),
+        annotations: tool.annotations,
+        handle: (payload) =>
+          Effect.withFiber((fiber) => {
+            const invocation = Context.getUnsafe(
+              fiber.context,
+              McpInvocationContext.McpInvocationContext,
+            );
+            return built.handle(tool.name, payload).pipe(
+              Stream.unwrap,
+              Stream.run(Sink.last()),
+              Effect.flatMap(Effect.fromOption),
+              Effect.provideService(PreviewAutomationBroker.PreviewAutomationBroker, broker),
+              Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+              Effect.map(
+                ({ encodedResult }) =>
+                  new McpSchema.CallToolResult({
+                    isError: false,
+                    structuredContent:
+                      typeof encodedResult === "object" ? encodedResult : undefined,
+                    content: [{ type: "text", text: JSON.stringify(encodedResult) }],
+                  }),
+              ),
+              Effect.tapCause(Effect.logError),
+              Effect.catch((error) => {
+                if (AiError.isAiError(error)) {
+                  const reason = error.reason;
+                  return reason._tag === "ToolParameterValidationError"
+                    ? Effect.fail(new McpSchema.InvalidParams({ message: reason.message }))
+                    : Effect.succeed(toolErrorResult("Tool execution failed."));
+                }
+                if (isDeclaredFailure(error)) {
+                  return Effect.succeed(
+                    toolErrorResult(
+                      error instanceof Error ? error.message : "Tool execution failed.",
+                    ),
+                  );
+                }
+                return Effect.succeed(toolErrorResult("Tool execution failed."));
+              }),
+              Effect.catchDefect(() => Effect.succeed(toolErrorResult("Tool execution failed."))),
+            );
+          }),
+      });
+    }
+  },
+);
+
 const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot")(function* () {
   const server = yield* McpServer.McpServer;
   const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
@@ -204,9 +358,9 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
   });
 });
 
-const PreviewStandardToolkitRegistrationLive = McpServer.toolkit(PreviewStandardToolkit).pipe(
-  Layer.provide(PreviewStandardToolkitHandlersLive),
-);
+const PreviewStandardToolkitRegistrationLive = Layer.effectDiscard(
+  registerPreviewStandardTools(),
+).pipe(Layer.provide(PreviewStandardToolkitHandlersLive));
 
 const PreviewSnapshotRegistrationLive = Layer.effectDiscard(registerPreviewSnapshot()).pipe(
   Layer.provide(PreviewSnapshotToolkitHandlersLive),
@@ -218,7 +372,7 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
 );
 
 const McpTransportLive = McpServer.layerHttp({
-  name: "T3 Code",
+  name: "Akeru Bot",
   version: packageJson.version,
   path: "/mcp",
   protocols: [McpProtocol.v2025_06_18],

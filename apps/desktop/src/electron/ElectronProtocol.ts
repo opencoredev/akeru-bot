@@ -9,11 +9,17 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 export const DESKTOP_HOST = "app";
-export const DESKTOP_PRODUCTION_SCHEME = "t3code";
-export const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
+export const DESKTOP_PRODUCTION_SCHEME = "akeru";
+export const DESKTOP_DEVELOPMENT_SCHEME = "akeru-dev";
+export const LEGACY_DESKTOP_PRODUCTION_SCHEME = "t3code";
+export const LEGACY_DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
+}
+
+export function getLegacyDesktopScheme(isDevelopment: boolean): string {
+  return isDevelopment ? LEGACY_DESKTOP_DEVELOPMENT_SCHEME : LEGACY_DESKTOP_PRODUCTION_SCHEME;
 }
 
 export function getDesktopOrigin(isDevelopment: boolean): string {
@@ -117,6 +123,24 @@ export function registerDesktopSchemePrivilegesSync(): void {
         corsEnabled: true,
       },
     },
+    {
+      scheme: LEGACY_DESKTOP_PRODUCTION_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+      },
+    },
+    {
+      scheme: LEGACY_DESKTOP_DEVELOPMENT_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+      },
+    },
   ]);
 }
 
@@ -192,11 +216,15 @@ async function fetchWithTransientRetry(url: string, init: RequestInit): Promise<
 }
 
 export const make = Effect.gen(function* () {
-  const registered = yield* Ref.make(false);
+  const registered = yield* Ref.make<ReadonlySet<string>>(new Set());
 
   const registerDesktopProtocol = Effect.fn("desktop.electron.protocol.registerDesktopProtocol")(
     function* (input: DesktopProtocolRegistrationInput) {
-      if (yield* Ref.get(registered)) return;
+      const shouldRegister = yield* Ref.modify(registered, (schemes) => {
+        if (schemes.has(input.scheme)) return [false, schemes] as const;
+        return [true, new Set([...schemes, input.scheme])] as const;
+      });
+      if (!shouldRegister) return;
 
       const contentSecurityPolicy = makeDesktopContentSecurityPolicy(input);
 
@@ -208,7 +236,15 @@ export const make = Effect.gen(function* () {
             );
           },
           catch: (cause) => new ElectronProtocolRegistrationError({ scheme: input.scheme, cause }),
-        }).pipe(Effect.andThen(Ref.set(registered, true))),
+        }).pipe(
+          Effect.tapError(() =>
+            Ref.update(registered, (schemes) => {
+              const next = new Set(schemes);
+              next.delete(input.scheme);
+              return next;
+            }),
+          ),
+        ),
         () =>
           Effect.try({
             try: () => Electron.protocol.unhandle(input.scheme),
@@ -217,7 +253,16 @@ export const make = Effect.gen(function* () {
                 scheme: input.scheme,
                 cause,
               }),
-          }).pipe(Effect.andThen(Ref.set(registered, false)), Effect.orDie),
+          }).pipe(
+            Effect.andThen(
+              Ref.update(registered, (schemes) => {
+                const next = new Set(schemes);
+                next.delete(input.scheme);
+                return next;
+              }),
+            ),
+            Effect.orDie,
+          ),
       );
     },
   );

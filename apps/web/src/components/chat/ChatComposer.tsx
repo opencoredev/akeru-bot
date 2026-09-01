@@ -66,6 +66,7 @@ import {
 } from "../../promptStashStore";
 import { ComposerStashBadge } from "./ComposerStashBadge";
 import { ComposerStashMenu } from "./ComposerStashMenu";
+import { ComposerBanner } from "./ComposerBanner";
 import {
   ComposerTasksBadge,
   ComposerTasksDrawer,
@@ -89,7 +90,7 @@ import {
 } from "../../lib/attachmentUploadState";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { getTerminalFocusOwner } from "../../lib/terminalFocus";
-import { resolveShortcutCommand } from "../../keybindings";
+import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
@@ -2279,10 +2280,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     !isComposerCollapsedMobile;
   const hasShoulderTab =
     showShoulderTabs &&
-    (stashQueue.length > 0 ||
-      (visibleTasksProgress !== null &&
-        visibleTaskSteps !== null &&
-        visibleTasksProgress.totalSteps > 0));
+    visibleTasksProgress !== null &&
+    visibleTaskSteps !== null &&
+    visibleTasksProgress.totalSteps > 0;
   useEffect(() => {
     if (visibleTasksProgress === null || visibleTaskSteps === null) {
       setIsTasksDrawerOpen(false);
@@ -2754,7 +2754,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         <div
           className="chat-composer-top-drawer"
           data-chat-composer-top-drawer="true"
-          data-variant={activePendingApproval ? "warning" : "info"}
+          data-variant={activePendingApproval ? undefined : "info"}
         >
           {!isComposerCollapsedMobile && activePendingApproval ? (
             <div className="flex min-w-0 flex-wrap items-center gap-1 px-3 py-1.5 sm:px-4">
@@ -2765,6 +2765,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               <div className="flex min-w-0 flex-wrap items-center gap-0.5">
                 <ComposerPendingApprovalActions
                   requestId={activePendingApproval.requestId}
+                  requestKind={activePendingApproval.requestKind}
+                  toolName={activePendingApproval.toolName}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
                   options={activePendingApproval.options}
                   onRespondToApproval={respondToApproval}
@@ -2795,6 +2797,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               <div className="flex flex-wrap items-center justify-end gap-1 px-3 pt-2 pb-3 sm:px-4">
                 <ComposerPendingApprovalActions
                   requestId={activePendingApproval.requestId}
+                  requestKind={activePendingApproval.requestKind}
+                  toolName={activePendingApproval.toolName}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
                   options={activePendingApproval.options}
                   onRespondToApproval={respondToApproval}
@@ -2874,6 +2878,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           steps={visibleTaskSteps}
         />
       ) : null}
+      {showShoulderTabs ? (
+        <ComposerBanner.Dock className="relative z-0">
+          <ComposerBanner.Column />
+          <ComposerStashBadge
+            count={stashQueue.length}
+            menuOpen={isStashMenuOpen}
+            pulseKey={stashPulse.key}
+            pulsing={stashPulse.active}
+            onToggleMenu={toggleStashMenu}
+          />
+        </ComposerBanner.Dock>
+      ) : null}
       <div className="relative">
         {showShoulderTabs && visibleTasksProgress && visibleTaskSteps ? (
           <ComposerTasksBadge
@@ -2883,15 +2899,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             onToggle={toggleTasksDrawer}
             progress={visibleTasksProgress}
             steps={visibleTaskSteps}
-          />
-        ) : null}
-        {showShoulderTabs ? (
-          <ComposerStashBadge
-            count={stashQueue.length}
-            menuOpen={isStashMenuOpen}
-            pulseKey={stashPulse.key}
-            pulsing={stashPulse.active}
-            onToggleMenu={toggleStashMenu}
           />
         ) : null}
         <div
@@ -2971,6 +2978,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerCommandMenuLayer anchor={composerMenuAnchor}>
                   <ComposerStashMenu
                     entries={stashQueue}
+                    stashShortcutLabel={shortcutLabelForCommand(keybindings, "composer.stash")}
                     onRestore={restoreStashEntry}
                     onDelete={deleteStashEntry}
                     onClose={() => setIsStashMenuOpen(false)}

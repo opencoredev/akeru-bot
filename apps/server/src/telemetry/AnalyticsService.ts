@@ -41,6 +41,7 @@ const BUCKET_MS = BUCKET_HOURS * 60 * 60 * 1_000;
 const MAX_PENDING_BUCKETS = 256;
 const MAX_BUCKETS_PER_PASS = 8;
 const MAX_BATCH_BYTES = 64 * 1_024;
+const DEFAULT_POSTHOG_KEY = "phc_yuXg3geGrykvtEkQdeG6jWf2jvdA2WSZnQdrKVnMKUa7";
 
 const AnalyticsState = Schema.Struct({
   version: Schema.Literal(1),
@@ -62,7 +63,10 @@ const encodeState = Schema.encodeSync(Schema.fromJsonString(AnalyticsState));
 const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 const TelemetryEnvConfig = Config.all({
-  posthogKey: Config.option(Config.string("T3CODE_POSTHOG_KEY")),
+  posthogKey: Config.string("T3CODE_POSTHOG_KEY").pipe(
+    Config.withDefault(DEFAULT_POSTHOG_KEY),
+    Config.option,
+  ),
   posthogHost: Config.string("T3CODE_POSTHOG_HOST").pipe(
     Config.withDefault("https://us.i.posthog.com"),
   ),

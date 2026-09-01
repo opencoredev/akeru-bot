@@ -15,11 +15,10 @@ describe("ComposerStashMenu", () => {
     );
 
     expect(markup).toContain('data-composer-stash-drawer="true"');
-    expect(markup).toContain("chat-composer-drawer-surface");
-    expect(markup).toContain("chat-composer-drawer-attached");
+    expect(markup).toContain('data-composer-banner-surface="attached"');
     expect(markup).toContain('aria-label="Close stash"');
-    expect(markup).not.toContain("dropdown-glass");
-    expect(markup).not.toContain("Stashed prompts");
+    expect(markup).toContain('aria-label="Stashed prompts"');
+    expect(markup).toContain("Nothing stashed yet.");
   });
 
   it("shows saved image thumbnails and incomplete image states", () => {
@@ -62,13 +61,9 @@ describe("ComposerStashMenu", () => {
     expect(markup).toContain('src="data:image/png;base64,AA=="');
     expect(markup).toContain("1 image dropped");
     expect(markup).toContain("saving 1 image");
-    expect(markup).not.toContain("absolute top-1/2 right-2");
-    expect(markup).toContain("pointer-events-none");
-    expect(markup).toContain("pointer-coarse:pointer-events-auto");
-    expect(markup).toContain("pointer-coarse:opacity-100");
-    expect(markup).not.toContain("bg-popover!");
-    expect(markup).toContain("[--control-icon-color:currentColor]");
-    expect(markup).toContain("size-3.5 stroke-2");
-    expect(markup).not.toContain("bg-background/90");
+    expect(markup).toContain('data-stash-restore="with-images"');
+    expect(markup).toContain('aria-label="Restore stashed prompt: Compare these screenshots"');
+    expect(markup).toContain('aria-label="Delete stashed prompt"');
+    expect(markup).toContain('dateTime="1970-01-01T00:00:00.000Z"');
   });
 });

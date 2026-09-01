@@ -62,6 +62,41 @@ describe("DesktopAssets", () => {
     }),
   );
 
+  it.effect("uses the Akeru favicon artwork for unpackaged production", () =>
+    Effect.gen(function* () {
+      const productionEnvironmentLayer = DesktopEnvironment.layer({
+        dirname: "/repo/apps/desktop/dist-electron",
+        homeDirectory: "/Users/alice",
+        platform: "darwin",
+        processArch: "arm64",
+        appVersion: "1.2.3",
+        appPath: "/repo",
+        isPackaged: false,
+        resourcesPath: "/repo/apps/desktop/resources",
+        runningUnderArm64Translation: false,
+      }).pipe(Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))));
+      const fileSystemLayer = FileSystem.layerNoop({
+        exists: (path) =>
+          Effect.succeed(
+            String(path).includes("/assets/prod/") || String(path).includes("/apps/web/public/"),
+          ),
+      });
+      const assets = yield* DesktopAssets.DesktopAssets.pipe(
+        Effect.provide(
+          DesktopAssets.layer.pipe(
+            Layer.provide(Layer.merge(fileSystemLayer, productionEnvironmentLayer)),
+          ),
+        ),
+      );
+
+      const icons = yield* assets.iconPaths;
+
+      assert.match(Option.getOrThrow(icons.ico), /apps\/web\/public\/favicon\.ico$/);
+      assert.match(Option.getOrThrow(icons.png), /assets\/prod\/akeru-macos-1024\.png$/);
+      assert.isTrue(Option.isNone(icons.icns));
+    }),
+  );
+
   it.effect("preserves the failed asset candidate and filesystem cause", () =>
     Effect.gen(function* () {
       const fileName = "custom.bin";

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useCallback, useEffect } from "react";
 
 import {
@@ -10,7 +10,6 @@ import {
 } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { useRosterStore } from "./rosterStore";
 import type { BotAvatar } from "./types";
 
@@ -23,44 +22,28 @@ export function useServerRosterSync(): void {
   const loaded = useAtomValue(environmentRosterLoadedAtom(atomKey));
   const bots = useAtomValue(environmentBotsAtom(atomKey));
   const groups = useAtomValue(environmentGroupsAtom(atomKey));
-  const createBot = useAtomCommand(botEnvironment.create, { reportFailure: false });
 
   useEffect(() => {
     if (environmentId === null || !loaded) return;
-    if (bots.length === 0) {
-      void createBot({
-        environmentId,
-        input: {
-          botId: BotId.make("bot-akeru"),
-          name: "Akeru",
-          title: "Generalist",
-          label: null,
-          description: null,
-          avatar: { kind: "blob", shape: "circle", color: "#5B7FD4" },
-          engine: null,
-          sandbox: null,
-          runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
-          usageCap: null,
-          groupId: null,
-        },
-      });
-      return;
-    }
     useRosterStore.getState().replaceRoster({
+      environmentId,
       bots: bots.map((bot) => ({
         ...bot,
         avatar: { ...bot.avatar },
+        channelBindings: bot.channelBindings ?? [],
         pinned: false,
       })),
       groups: groups.map((group) => ({ ...group })),
     });
-  }, [bots, createBot, environmentId, groups, loaded]);
+  }, [bots, environmentId, groups, loaded]);
 }
 
 export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promise<boolean> {
   const environmentId = usePrimaryEnvironmentId();
   const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
-  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
+  const updateBot = useAtomCommand(botEnvironment.update, {
+    reportFailure: false,
+  });
 
   return useCallback(
     async (botId: string, avatar: BotAvatar) => {

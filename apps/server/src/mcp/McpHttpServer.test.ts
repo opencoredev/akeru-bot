@@ -57,6 +57,53 @@ it("normalizes empty successful notification responses to accepted", () => {
   expect(resultResponse.status).toBe(200);
 });
 
+it("normalizes only conflict-free scalar allOf constraints", () => {
+  expect(
+    McpHttpServer.normalizeProviderToolInputSchema({
+      type: "object",
+      properties: {
+        url: {
+          anyOf: [
+            {
+              type: "string",
+              description: "parent",
+              allOf: [
+                { pattern: "^https://" },
+                { minLength: 1 },
+                { maxLength: 100, description: "child" },
+              ],
+            },
+          ],
+        },
+      },
+    } as never),
+  ).toEqual({
+    type: "object",
+    properties: {
+      url: {
+        anyOf: [
+          {
+            type: "string",
+            description: "parent",
+            pattern: "^https://",
+            minLength: 1,
+            maxLength: 100,
+          },
+        ],
+      },
+    },
+  });
+
+  for (const schema of [
+    { type: "string", allOf: [{ pattern: "^a" }, { pattern: "b$" }] },
+    { type: "string", minLength: 2, allOf: [{ minLength: 1 }] },
+    { type: "string", allOf: [{ not: { const: "x" } }] },
+    { type: "object", allOf: [{ properties: { a: { type: "string" } } }] },
+  ]) {
+    expect(McpHttpServer.normalizeProviderToolInputSchema(schema as never)).toEqual(schema);
+  }
+});
+
 it.effect("returns bounded structural preview snapshot failures", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -263,6 +310,28 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(navigateTool?.tool.annotations?.destructiveHint).toBe(false);
       expect(navigateTool?.tool.annotations?.openWorldHint).toBe(true);
 
+      const advertisedString = (toolName: string, field: string) => {
+        const registered = server.tools.find(({ tool }) => tool.name === toolName)?.tool;
+        expect(registered, `${toolName} must be advertised`).toBeDefined();
+        const inputSchema = registered?.inputSchema as {
+          readonly properties?: Readonly<Record<string, unknown>>;
+        };
+        const fieldSchema = inputSchema.properties?.[field] as Record<string, unknown>;
+        const variants = Array.isArray(fieldSchema.anyOf)
+          ? (fieldSchema.anyOf as Array<Record<string, unknown>>)
+          : [fieldSchema];
+        return variants.find((variant) => variant.type === "string");
+      };
+      for (const [toolName, field] of [
+        ["preview_navigate", "url"],
+        ["preview_press", "key"],
+        ["preview_evaluate", "expression"],
+      ] as const) {
+        const scalar = advertisedString(toolName, field);
+        expect(scalar, `${toolName}.${field} must advertise as a string`).toBeDefined();
+        expect(scalar?.allOf, `${toolName}.${field} must not expose nested allOf`).toBeUndefined();
+      }
+
       const status = yield* server
         .callTool({ name: "preview_status", arguments: {} })
         .pipe(
@@ -283,6 +352,20 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.flip,
         );
       expect(malformed._tag).toBe("InvalidParams");
+
+      for (const request of [
+        { name: "preview_press", arguments: { key: "" } },
+        { name: "preview_evaluate", arguments: { expression: "   " } },
+      ]) {
+        const invalid = yield* server
+          .callTool(request)
+          .pipe(
+            Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+            Effect.provideService(McpSchema.McpServerClient, client),
+            Effect.flip,
+          );
+        expect(invalid._tag).toBe("InvalidParams");
+      }
 
       const snapshot = yield* server
         .callTool({ name: "preview_snapshot", arguments: { tabId: alternateTabId } })

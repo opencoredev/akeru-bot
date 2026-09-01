@@ -1,6 +1,6 @@
 import type { MobileThemeVariables } from "./mobileTheme";
 
-/** The existing T3 Code mobile palette, retained as the upgrade-safe default. */
+/** The inherited mobile palette, retained as the upgrade-safe default. */
 export const DEFAULT_MOBILE_THEME_VARIABLES = {
   light: {
     "--color-screen": "#f2f2f7",

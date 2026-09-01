@@ -308,7 +308,7 @@ const publishCmd = Command.make(
 // ---------------------------------------------------------------------------
 
 const cli = Command.make("cli").pipe(
-  Command.withDescription("T3 server build & publish CLI."),
+  Command.withDescription("Akeru Bot server build and publish CLI."),
   Command.withSubcommands([buildCmd, publishCmd]),
 );
 

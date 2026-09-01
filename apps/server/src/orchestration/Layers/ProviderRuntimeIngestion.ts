@@ -1,5 +1,8 @@
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  ChatAttachment,
+  AkeruCreateRoutineInput,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -26,6 +29,7 @@ import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -54,6 +58,13 @@ import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import { resolveControllerBotId } from "./ProviderCommandReactor.ts";
+import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
+import * as ChannelDeliveryStore from "../../channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
+
+type AutomaticChannelReplyTarget = NonNullable<
+  Awaited<ReturnType<typeof ChannelRuntime.resolveCompletedChannelReply>>
+>;
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -112,11 +123,30 @@ const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFEC
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
+const decodeRuntimeChatAttachment = Schema.decodeUnknownOption(
+  Schema.Struct({ chatAttachment: ChatAttachment }),
+);
 
-function boundedFeedbackArgs(toolName: string | undefined, args: unknown): unknown {
-  if (toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME || args === undefined) return undefined;
-  const decoded = decodeProductFeedbackToolDraft(args);
-  return Exit.isSuccess(decoded) ? decoded.value : undefined;
+function runtimeChatAttachment(event: ProviderRuntimeEvent) {
+  if (event.type !== "item.completed") return undefined;
+  const data = decodeRuntimeChatAttachment(event.payload.data);
+  return Option.isSome(data) ? data.value.chatAttachment : undefined;
+}
+const decodeCreateRoutineInput = Schema.decodeUnknownExit(AkeruCreateRoutineInput, {
+  onExcessProperty: "error",
+});
+
+function boundedApprovalArgs(toolName: string | undefined, args: unknown): unknown {
+  if (args === undefined) return undefined;
+  if (toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME) {
+    const decoded = decodeProductFeedbackToolDraft(args);
+    return Exit.isSuccess(decoded) ? decoded.value : undefined;
+  }
+  if (toolName === AKERU_CREATE_ROUTINE_TOOL_NAME) {
+    const decoded = decodeCreateRoutineInput(args);
+    return Exit.isSuccess(decoded) ? decoded.value : undefined;
+  }
+  return undefined;
 }
 
 type TurnStartRequestedDomainEvent = Extract<
@@ -395,7 +425,7 @@ export function runtimeEventToActivities(
         return [];
       }
       const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
-      const feedbackArgs = boundedFeedbackArgs(event.payload.toolName, event.payload.args);
+      const approvalArgs = boundedApprovalArgs(event.payload.toolName, event.payload.args);
       return [
         {
           id: event.eventId,
@@ -420,7 +450,7 @@ export function runtimeEventToActivities(
             ...(event.payload.target ? { target: event.payload.target } : {}),
             ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
             ...(event.payload.action ? { action: event.payload.action } : {}),
-            ...(feedbackArgs !== undefined ? { args: feedbackArgs } : {}),
+            ...(approvalArgs !== undefined ? { args: approvalArgs } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.appName ? { appName: event.payload.appName } : {}),
             ...(event.payload.options ? { options: event.payload.options } : {}),
@@ -925,6 +955,46 @@ const make = Effect.gen(function* () {
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const botUsageLedger = yield* BotUsageLedger;
   const serverSettingsService = yield* ServerSettingsService;
+  const channelSecretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
+  const channelDeliveryStore = yield* Effect.serviceOption(
+    ChannelDeliveryStore.ChannelDeliveryStore,
+  );
+  const channelRuntimeDependencies =
+    Option.isSome(channelSecretStore) && Option.isSome(channelDeliveryStore)
+      ? {
+          engine: orchestrationEngine,
+          secretStore: channelSecretStore.value,
+          settings: serverSettingsService,
+          deliveryStore: channelDeliveryStore.value,
+          readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+          readThread: (threadId: ThreadId) =>
+            Effect.runPromise(
+              projectionSnapshotQuery
+                .getThreadDetailById(threadId)
+                .pipe(Effect.map(Option.getOrNull)),
+            ),
+          nowIso: () => Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
+          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
+        }
+      : null;
+  const automaticChannelReplyWorker = yield* makeDrainableWorker(
+    (input: AutomaticChannelReplyTarget) => {
+      if (!channelRuntimeDependencies) {
+        return Effect.void;
+      }
+      return Effect.promise(() =>
+        ChannelRuntime.sendChannelMessage(channelRuntimeDependencies, input),
+      ).pipe(
+        Effect.asVoid,
+        Effect.catchCause((cause) =>
+          Effect.logWarning("failed to send automatic channel reply", {
+            threadId: input.threadId,
+            cause: Cause.pretty(cause),
+          }),
+        ),
+      );
+    },
+  );
   const serverConfig = yield* ServerConfig;
   const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
@@ -1303,6 +1373,7 @@ const make = Effect.gen(function* () {
         });
       }
       yield* clearAssistantMessageState(input.messageId);
+      return Boolean(input.hasProjectedMessage || hasRenderableText);
     });
 
   const finalizeActiveAssistantSegmentForTurn = (input: {
@@ -1839,6 +1910,30 @@ const make = Effect.gen(function* () {
         }
       }
 
+      const chatAttachment = runtimeChatAttachment(event);
+      if (chatAttachment) {
+        const turnId = toTurnId(event.turnId);
+        const messageId = MessageId.make(`provider-attachment-${event.eventId}`);
+        yield* orchestrationEngine.dispatch({
+          type: "thread.message.assistant.delta",
+          commandId: yield* providerCommandId(event, "assistant-attachment"),
+          threadId: thread.id,
+          messageId,
+          delta: "",
+          attachments: [chatAttachment],
+          ...(turnId ? { turnId } : {}),
+          createdAt: now,
+        });
+        yield* orchestrationEngine.dispatch({
+          type: "thread.message.assistant.complete",
+          commandId: yield* providerCommandId(event, "assistant-attachment-complete"),
+          threadId: thread.id,
+          messageId,
+          ...(turnId ? { turnId } : {}),
+          createdAt: now,
+        });
+      }
+
       const pauseForUserTurnId =
         event.type === "request.opened" || event.type === "user-input.requested"
           ? toTurnId(event.turnId)
@@ -1979,7 +2074,7 @@ const make = Effect.gen(function* () {
         const turnId = toTurnId(event.turnId);
         if (turnId) {
           const assistantMessageIds = yield* getAssistantMessageIdsForTurn(thread.id, turnId);
-          yield* Effect.forEach(
+          const finalizedReplyVisibility = yield* Effect.forEach(
             assistantMessageIds,
             (assistantMessageId) =>
               finalizeAssistantMessage({
@@ -1993,7 +2088,7 @@ const make = Effect.gen(function* () {
                 hasProjectedMessage: findMessageById(messages, assistantMessageId) !== undefined,
               }),
             { concurrency: 1 },
-          ).pipe(Effect.asVoid);
+          );
           yield* clearAssistantMessageIdsForTurn(thread.id, turnId);
           yield* clearAssistantSegmentStateForTurn(thread.id, turnId);
 
@@ -2005,6 +2100,27 @@ const make = Effect.gen(function* () {
             turnId,
             updatedAt: now,
           });
+
+          const hasVisibleAssistantReply = messages.some(
+            (message) => message.role === "assistant" && sameId(message.turnId, turnId),
+          );
+          if (!hasVisibleAssistantReply && !finalizedReplyVisibility.some(Boolean)) {
+            const fallbackText =
+              event.payload.state === "failed"
+                ? "I could not complete that request. Check the error details and try again."
+                : "I finished without a text response. Please try again.";
+            yield* finalizeAssistantMessage({
+              event,
+              threadId: thread.id,
+              messageId: MessageId.make(`assistant:${event.eventId}:fallback`),
+              turnId,
+              createdAt: now,
+              commandTag: "assistant-empty-turn-complete",
+              finalDeltaCommandTag: "assistant-empty-turn-delta",
+              hasProjectedMessage: false,
+              fallbackText,
+            });
+          }
         }
       }
 
@@ -2171,6 +2287,23 @@ const make = Effect.gen(function* () {
           ),
         ),
       ).pipe(Effect.asVoid);
+
+      if (
+        event.type === "turn.completed" &&
+        event.payload.state === "completed" &&
+        shouldApplyThreadLifecycle &&
+        eventTurnId &&
+        channelRuntimeDependencies
+      ) {
+        const target = yield* Effect.promise(() =>
+          ChannelRuntime.resolveCompletedChannelReply(
+            channelRuntimeDependencies,
+            thread.id,
+            eventTurnId,
+          ),
+        );
+        if (target) yield* automaticChannelReplyWorker.enqueue(target);
+      }
     });
 
   const processDomainEvent = (_event: TurnStartRequestedDomainEvent) => Effect.void;
@@ -2214,7 +2347,7 @@ const make = Effect.gen(function* () {
 
   return {
     start,
-    drain: worker.drain,
+    drain: worker.drain.pipe(Effect.andThen(automaticChannelReplyWorker.drain)),
   } satisfies ProviderRuntimeIngestionShape;
 });
 

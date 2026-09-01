@@ -31,6 +31,7 @@ import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { resolveBotRuntimeMode } from "./botSandbox";
 import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
+import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -157,7 +158,7 @@ export function useGroupThreadRuntime(groupId: string) {
 
       const respondingBotId = requestedBotId ?? group.bossBotId;
       const respondingBot = bots.find(
-        (bot) => bot.id === respondingBotId && bot.groupId === groupId,
+        (bot) => bot.id === respondingBotId && groupContainsBot(group, bot.id),
       );
       if (!respondingBot) {
         setError("Choose a current group member.");

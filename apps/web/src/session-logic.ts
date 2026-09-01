@@ -422,6 +422,7 @@ export function derivePendingApprovals(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
 ): PendingApproval[] {
   const openByRequestId = new Map<ApprovalRequestId, PendingApproval>();
+  const toolArgsByCallId = new Map<string, unknown>();
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
 
   for (const activity of ordered) {
@@ -429,6 +430,17 @@ export function derivePendingApprovals(
       activity.payload && typeof activity.payload === "object"
         ? (activity.payload as Record<string, unknown>)
         : null;
+    const toolCallId =
+      payload && typeof payload.toolCallId === "string" ? payload.toolCallId : null;
+    const data =
+      payload?.data && typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : null;
+    if (activity.kind === "tool.started" && toolCallId && data) {
+      const toolArgs =
+        data.args ?? (typeof data.command === "string" ? { command: data.command } : undefined);
+      if (toolArgs !== undefined) toolArgsByCallId.set(toolCallId, toolArgs);
+    }
     const requestId =
       payload && typeof payload.requestId === "string"
         ? ApprovalRequestId.make(payload.requestId)
@@ -442,7 +454,7 @@ export function derivePendingApprovals(
     const detail = payload && typeof payload.detail === "string" ? payload.detail : undefined;
     const appName = payload && typeof payload.appName === "string" ? payload.appName : undefined;
     const toolName = payload && typeof payload.toolName === "string" ? payload.toolName : undefined;
-    const args = payload?.args;
+    const args = payload?.args ?? (requestId ? toolArgsByCallId.get(requestId) : undefined);
     const options = Array.isArray(payload?.options)
       ? payload.options.filter(isProviderApprovalOption)
       : undefined;

@@ -189,6 +189,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           turn_id,
           role,
           text,
+          author_person_id,
+          author_display_name,
           is_streaming,
           created_at,
           updated_at
@@ -199,6 +201,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           'turn-1',
           'assistant',
           'hello from projection',
+          'person-1',
+          'Leo',
           0,
           '2026-02-24T00:00:04.000Z',
           '2026-02-24T00:00:05.000Z'

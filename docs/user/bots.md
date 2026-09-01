@@ -19,6 +19,14 @@ Settings controls whether bots share their workspace and browser. **Separate** i
 
 Local bots ask before file changes and shell commands by default. Select **Settings > General > Local execution > Full access** to skip those local prompts. Actions that send, pay, delete, change production, or use secrets still ask. Bots that run in a cloud sandbox do not show the local computer prompt.
 
+## Run a routine
+
+Open **Routines** in a bot's panel. Add a job, procedure, schedule, timezone, required skills, and connectors. Run a dry run and approve the procedure before you enable its schedule.
+
+The panel shows the next and last run, latest result or failure, and the five latest attempts. You can run, pause, resume, edit, or delete the routine. A procedure change requires approval again.
+
+If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and adds one item to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived bot does not resume its routines.
+
 Use the panel button to collapse or reopen the editor. The default shortcut is **Mod+Alt+B**, and you can change `Right Panel: Toggle` in the keybinding settings. On a narrow screen, the same button opens a sheet.
 
 When a request needs tools, the bot first replies in plain language. During longer work, it adds short status notes after meaningful progress. When work resumes automatically, it continues without a repeated opening note.
