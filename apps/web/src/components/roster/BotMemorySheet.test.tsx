@@ -20,7 +20,7 @@ import {
   importStateForThread,
   memoryErrorMessage,
 } from "./BotMemorySheet";
-import { resolveBotThreadTarget } from "./useBotThreadRef";
+import { resolveBotThreadTarget } from "./botThreadRuntime.logic";
 
 const threadRef = scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("thread-1"));
 const decodeArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
@@ -168,7 +168,7 @@ describe("BotMemorySheet", () => {
     expect(route).toContain("threadRef={threadRef}");
   });
 
-  it("keeps memory bound to the selected bot conversation", () => {
+  it("keeps memory and chat bound to the latest active bot conversation", () => {
     expect(
       resolveBotThreadTarget(
         "bot-1",
@@ -193,6 +193,12 @@ describe("BotMemorySheet", () => {
         ],
         "/env-1/thread-selected",
       ),
-    ).toMatchObject({ threadId: "thread-selected" });
+    ).toMatchObject({ threadId: "thread-newer" });
+
+    const runtime = NodeFS.readFileSync(
+      new URL("./useBotThreadRuntime.ts", import.meta.url),
+      "utf8",
+    );
+    expect(runtime).toContain("resolveBotThreadTarget(");
   });
 });

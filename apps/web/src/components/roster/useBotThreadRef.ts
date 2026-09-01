@@ -4,33 +4,8 @@ import { useMemo } from "react";
 
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadShell, useThreadShells } from "../../state/entities";
-import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
-import { parseChatPath } from "./roster.logic";
+import { resolveBotThreadTarget } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
-
-export function resolveBotThreadTarget(
-  botId: string,
-  environmentId: string,
-  threads: Parameters<typeof findLatestBotThreadTarget>[2],
-  rememberedPath: string | undefined,
-) {
-  const remembered = rememberedPath ? parseChatPath(rememberedPath) : null;
-  if (
-    remembered?.kind === "thread" &&
-    remembered.environmentId === environmentId &&
-    threads.some(
-      (thread) =>
-        thread.environmentId === environmentId &&
-        thread.id === remembered.threadId &&
-        thread.botId === botId &&
-        thread.archivedAt === null &&
-        thread.deletedAt == null,
-    )
-  ) {
-    return remembered;
-  }
-  return findLatestBotThreadTarget(botId, environmentId, threads);
-}
 
 export function useBotThreadRef(botId: string): ScopedThreadRef | null {
   const environmentId = usePrimaryEnvironmentId();
