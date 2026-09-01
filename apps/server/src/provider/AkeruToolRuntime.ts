@@ -68,7 +68,12 @@ export interface AkeruToolSession {
     readonly depth: number;
     readonly activeDelegations: number;
     readonly access: AkeruDelegationAccessGrant;
+    readonly create?: (
+      input: (typeof AkeruToolInputSchemas.CreateAgent)["Type"],
+    ) => Promise<unknown>;
+    readonly check?: (input: (typeof AkeruToolInputSchemas.CheckAgent)["Type"]) => Promise<unknown>;
     readonly send: (input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"]) => Promise<unknown>;
+    readonly stop?: (input: (typeof AkeruToolInputSchemas.StopAgent)["Type"]) => Promise<unknown>;
   };
   readonly channels?: {
     readonly create: (
@@ -125,6 +130,10 @@ const BACKEND_NAMES: Record<
     | "CopyToBox"
     | "CopyFromBox"
     | "request_box_help"
+    | "CreateAgent"
+    | "CheckAgent"
+    | "MessageAgent"
+    | "StopAgent"
     | "SendToAgent"
     | "CreateChannel"
     | "UpdateChannel"
@@ -343,7 +352,13 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     if (options?.onUserActionRequired && session.workspace && session.botId && session.botName) {
       tools.add("request_box_help");
     }
-    if (session.delegation) tools.add("SendToAgent");
+    if (session.delegation) {
+      if (session.delegation.create) tools.add("CreateAgent");
+      if (session.delegation.check) tools.add("CheckAgent");
+      tools.add("MessageAgent");
+      if (session.delegation.stop) tools.add("StopAgent");
+      tools.add("SendToAgent");
+    }
     if (session.channels) {
       tools.add("CreateChannel");
       tools.add("UpdateChannel");
@@ -499,9 +514,12 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
                 summary,
               }),
           });
-        } else if (input.toolId === "SendToAgent") {
+        } else if (input.toolId === "SendToAgent" || input.toolId === "MessageAgent") {
           if (!session.delegation) throw new Error("Delegation is not available for this session.");
-          const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);
+          const delegationInput =
+            input.toolId === "MessageAgent"
+              ? decodeAkeruToolInput("MessageAgent", decoded)
+              : decodeAkeruToolInput("SendToAgent", decoded);
           failureCode = "internal";
           try {
             result = await session.delegation.send(delegationInput);
@@ -521,6 +539,25 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });
             return result;
+          }
+        } else if (
+          input.toolId === "CreateAgent" ||
+          input.toolId === "CheckAgent" ||
+          input.toolId === "StopAgent"
+        ) {
+          if (!session.delegation) {
+            throw new Error("Bot management is not available for this session.");
+          }
+          failureCode = "internal";
+          if (input.toolId === "CreateAgent") {
+            if (!session.delegation.create) throw new Error("Bot creation is not available.");
+            result = await session.delegation.create(decodeAkeruToolInput("CreateAgent", decoded));
+          } else if (input.toolId === "CheckAgent") {
+            if (!session.delegation.check) throw new Error("Bot inspection is not available.");
+            result = await session.delegation.check(decodeAkeruToolInput("CheckAgent", decoded));
+          } else {
+            if (!session.delegation.stop) throw new Error("Bot cancellation is not available.");
+            result = await session.delegation.stop(decodeAkeruToolInput("StopAgent", decoded));
           }
         } else if (input.toolId === "CreateChannel" || input.toolId === "UpdateChannel") {
           if (!session.channels || !session.botId) {

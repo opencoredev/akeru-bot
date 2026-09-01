@@ -142,6 +142,78 @@ describe("AkeruToolRuntime", () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
+  it("runs typed durable bot controls through the delegation backend", async () => {
+    const create = vi.fn(async () => ({ botId: "bot-research" }));
+    const check = vi.fn(async () => ({ state: "ready" }));
+    const send = vi.fn(async () => ({ delivered: true }));
+    const stop = vi.fn(async () => ({ stopped: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-controls", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      delegation: {
+        depth: 0,
+        activeDelegations: 0,
+        access: {
+          allowedToolIds: ["CreateAgent", "CheckAgent", "MessageAgent", "StopAgent"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "full-access",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "delete",
+        },
+        create,
+        check,
+        send,
+        stop,
+      },
+    });
+
+    const execute = (toolId: "CreateAgent" | "CheckAgent", input: unknown) =>
+      runtime.execute({
+        threadId: "thread-controls",
+        toolId,
+        toolCallId: `tool-${toolId}`,
+        input,
+        approvalMode: "require-grant",
+      });
+    await expect(execute("CreateAgent", { name: "Research" })).resolves.toEqual({
+      botId: "bot-research",
+    });
+    await expect(execute("CheckAgent", { botId: "bot-research" })).resolves.toEqual({
+      state: "ready",
+    });
+
+    for (const execution of [
+      {
+        threadId: "thread-controls",
+        toolId: "MessageAgent" as const,
+        toolCallId: "tool-message",
+        input: {
+          botId: BotId.make("bot-research"),
+          task: "Compare flights.",
+          expectedResult: "Return a short comparison.",
+        },
+        approvalMode: "require-grant" as const,
+      },
+      {
+        threadId: "thread-controls",
+        toolId: "StopAgent" as const,
+        toolCallId: "tool-stop",
+        input: { botId: BotId.make("bot-research") },
+        approvalMode: "require-grant" as const,
+      },
+    ]) {
+      await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+      runtime.grantApproval(execution);
+      await expect(runtime.execute(execution)).resolves.toBeDefined();
+    }
+    expect(send).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
   it("exposes registered memory handlers and protects sensitive writes", async () => {
     const remember = vi.fn(async () => ({ saved: true }));
     const unavailable = vi.fn(async () => undefined);

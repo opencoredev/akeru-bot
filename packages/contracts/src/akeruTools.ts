@@ -62,6 +62,10 @@ export const AkeruToolId = Schema.Literals([
   "ExternalRead",
   "AwaitShell",
   "AwaitExternalShell",
+  "CreateAgent",
+  "CheckAgent",
+  "MessageAgent",
+  "StopAgent",
   "SendToAgent",
   "CreateChannel",
   "UpdateChannel",
@@ -84,6 +88,21 @@ export const AkeruToolApprovalClass = Schema.Literals([
 ]);
 export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
 
+const AgentMessageInput = Schema.Struct({
+  botId: BotId,
+  task: TrimmedNonEmptyString,
+  expectedResult: TrimmedNonEmptyString,
+  deadline: Schema.optional(IsoDateTime),
+  allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
+  memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
+  mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
+  sandbox: Schema.optional(
+    Schema.NullOr(Schema.suspend((): Schema.Codec<BotSandbox> => BotSandbox)),
+  ),
+  runtimeMode: Schema.optional(Schema.suspend((): Schema.Codec<RuntimeMode> => RuntimeMode)),
+  approvalCeiling: Schema.optional(AkeruToolApprovalClass),
+});
+
 export const AkeruToolInputSchemas = {
   Shell: CommandInput,
   Read: PathInput,
@@ -98,20 +117,15 @@ export const AkeruToolInputSchemas = {
   ExternalRead: PathInput,
   AwaitShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
   AwaitExternalShell: Schema.Struct({ handleId: AkeruAwaitHandleId }),
-  SendToAgent: Schema.Struct({
-    botId: BotId,
-    task: TrimmedNonEmptyString,
-    expectedResult: TrimmedNonEmptyString,
-    deadline: Schema.optional(IsoDateTime),
-    allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
-    memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
-    mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
-    sandbox: Schema.optional(
-      Schema.NullOr(Schema.suspend((): Schema.Codec<BotSandbox> => BotSandbox)),
-    ),
-    runtimeMode: Schema.optional(Schema.suspend((): Schema.Codec<RuntimeMode> => RuntimeMode)),
-    approvalCeiling: Schema.optional(AkeruToolApprovalClass),
+  CreateAgent: Schema.Struct({
+    name: TrimmedNonEmptyString,
+    title: Schema.optional(TrimmedNonEmptyString),
+    description: Schema.optional(TrimmedNonEmptyString),
   }),
+  CheckAgent: Schema.Struct({ botId: BotId }),
+  MessageAgent: AgentMessageInput,
+  StopAgent: Schema.Struct({ botId: BotId }),
+  SendToAgent: AgentMessageInput,
   CreateChannel: Schema.Struct({
     name: TrimmedNonEmptyString,
     specialistBotIds: Schema.optional(Schema.Array(BotId)),
@@ -251,6 +265,14 @@ export const AKERU_TOOL_CATALOG = [
     workspace: "user-computer",
     requiresUserComputer: true,
   }),
+  define("CreateAgent", "bot-workspace", "Create a durable named bot."),
+  define("CheckAgent", "bot-workspace", "Inspect a durable named bot and its delegated work."),
+  define("MessageAgent", "bot-workspace", "Send bounded work to a durable named bot.", {
+    approval: "send",
+  }),
+  define("StopAgent", "bot-workspace", "Cancel a durable bot's delegated work.", {
+    approval: "delete",
+  }),
   define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
     approval: "send",
   }),
@@ -288,7 +310,7 @@ export function filterAkeruTools(
     if (!context.capabilities.has(tool.capability)) return false;
     if (!context.implementedTools.has(tool.id)) return false;
     if (
-      tool.id === "SendToAgent" &&
+      (tool.id === "SendToAgent" || tool.id === "MessageAgent") &&
       ((context.delegationDepth ?? 0) >= AKERU_DELEGATION_MAX_DEPTH ||
         (context.activeDelegations ?? 0) >= AKERU_DELEGATION_MAX_CONCURRENCY)
     )

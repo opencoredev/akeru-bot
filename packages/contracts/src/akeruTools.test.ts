@@ -82,6 +82,20 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
   });
 
+  it("types durable bot management without bypassing send or cancellation approval", () => {
+    expect(decodeAkeruToolInput("CreateAgent", { name: "Research" })).toEqual({
+      name: "Research",
+    });
+    expect(decodeAkeruToolInput("CheckAgent", { botId: "bot-research" })).toEqual({
+      botId: "bot-research",
+    });
+    expect(decodeAkeruToolInput("StopAgent", { botId: "bot-research" })).toEqual({
+      botId: "bot-research",
+    });
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "MessageAgent")?.approval).toBe("send");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "StopAgent")?.approval).toBe("delete");
+  });
+
   it("decodes SendToUser input and keeps it approval-gated", () => {
     expect(decodeAkeruToolInput("SendToUser", { message: "The export is ready." })).toEqual({
       message: "The export is ready.",
