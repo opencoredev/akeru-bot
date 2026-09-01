@@ -25,6 +25,7 @@ function assertOmits(haystack: string, needle: string, message: string): void {
 }
 
 const releaseWorkflow = read(".depot/workflows/release.yml");
+const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
 const ciWorkflow = read(".depot/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
@@ -70,7 +71,7 @@ for (const [needle, label] of [
   ["vp run --filter @t3tools/marketing typecheck", "marketing typecheck"],
   ["vp run --filter @t3tools/marketing build", "marketing build"],
 ] as const) {
-  assertContains(releaseWorkflow, needle, `Release workflow is missing ${label}.`);
+  assertContains(releaseSmokeWorkflow, needle, `Release smoke workflow is missing ${label}.`);
 }
 
 for (const [needle, label] of [
@@ -83,8 +84,31 @@ for (const [needle, label] of [
   ["T3 Code", "T3 release naming"],
   [".env.example", "T3 environment template"],
 ] as const) {
-  assertOmits(releaseWorkflow, needle, `Release workflow still contains ${label}.`);
+  assertOmits(releaseSmokeWorkflow, needle, `Release smoke workflow still contains ${label}.`);
 }
+
+for (const [needle, label] of [
+  ["branches: [main]", "main branch trigger"],
+  ["needs: [preflight, desktop, cli]", "build gates"],
+  ["label: macOS arm64 DMG", "macOS arm64 DMG"],
+  ["label: Windows x64 NSIS", "Windows x64 NSIS"],
+  ["label: Linux x64 AppImage", "Linux x64 AppImage"],
+  ["runner: depot-macos-15", "Depot macOS runner"],
+  ["runner: depot-windows-2025-8", "Depot Windows runner"],
+  ["runner: depot-ubuntu-24.04-8", "Depot Linux runner"],
+  ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
+  ["--signed", "existing signed build path"],
+  ["xcrun notarytool submit", "macOS notarization"],
+  ["vp run --filter akeru-bot build", "CLI build"],
+  ["--dry-run", "CLI package check"],
+  ["verify-release-assets.ts", "asset name and hash verification"],
+  ["gh release create", "stable GitHub Release"],
+] as const) {
+  assertContains(releaseWorkflow, needle, `Stable release workflow is missing ${label}.`);
+}
+
+assertContains(releaseWorkflow, 'tag=v%s\\n', "Stable release workflow does not use a vX.Y.Z tag.");
+assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
 for (const [needle, label] of [
   ["blacksmith", "private CI runners"],

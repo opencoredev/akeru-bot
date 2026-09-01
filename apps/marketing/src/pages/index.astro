@@ -95,10 +95,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           <span>Read the docs</span>
         </a>
       </div>
-      <aside id="install-notice" class="install-notice" hidden>
-        <span>Want your coding agent to install the verified Linux AppImage?</span>
-        <button id="copy-install-prompt" type="button">Copy install prompt</button>
-      </aside>
     </div>
     <div class="hero-shot">
       <img
@@ -179,24 +175,14 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           ))
         }
       </div>
-<<<<<<< HEAD
       <a class="btn-outline" href={RELEASES_URL} target="_blank" rel="noopener noreferrer">
         All downloads
-=======
-      <aside id="windows-install-notice" class="install-notice" hidden>
-        <span>Unsigned Windows install</span>
-        <button id="copy-install-prompt" type="button">Copy verified install prompt</button>
-      </aside>
-      <a class="btn-outline" href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">
-        View on GitHub
->>>>>>> 51de2fb14 (feat(marketing): add verified Windows install prompt)
       </a>
     </div>
   </section>
 </Layout>
 
 <script>
-<<<<<<< HEAD
   import {
     blockDownloadUntilResolved,
     detectDownloadTarget,
@@ -206,11 +192,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     resolveDownloadUrl,
     selectReleaseAsset,
   } from "../lib/releases";
-  import { installPromptForPlatform } from "../lib/installPrompt";
-=======
-  import { fetchLatestRelease, RELEASES_URL, type ReleaseAsset } from "../lib/releases";
-  import { installPromptForPlatform } from "../lib/installPrompts";
->>>>>>> 51de2fb14 (feat(marketing): add verified Windows install prompt)
 
   const UNSIGNED_PROMPT =
     "This build is unsigned. Your system may ask you to confirm the install. Continue?";
@@ -220,13 +201,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     const resolveButton = button ? blockDownloadUntilResolved(button) : null;
     const label = document.getElementById("download-label");
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
-<<<<<<< HEAD
-    const installNotice = document.getElementById("install-notice");
-    const copyInstallPrompt = document.getElementById("copy-install-prompt") as HTMLButtonElement | null;
-=======
-    const installNotice = document.getElementById("windows-install-notice");
-    const copyPrompt = document.getElementById("copy-install-prompt") as HTMLButtonElement | null;
->>>>>>> 51de2fb14 (feat(marketing): add verified Windows install prompt)
 
     // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
     // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
@@ -235,30 +209,10 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     if (platform) {
       if (label) label.textContent = platform.label;
       if (button) button.dataset.os = platform.os;
-<<<<<<< HEAD
     } else if (button && label) {
       label.textContent = "All downloads";
       resolveButton?.(RELEASES_URL);
     }
-
-    const installPrompt = installPromptForPlatform(platform?.os ?? "");
-    if (installPrompt && installNotice && copyInstallPrompt) {
-      installNotice.hidden = false;
-      copyInstallPrompt.addEventListener("click", async () => {
-        await navigator.clipboard.writeText(installPrompt);
-        copyInstallPrompt.textContent = "Copied";
-      });
-=======
-      installNotice?.toggleAttribute("hidden", !installPromptForPlatform(platform.os));
->>>>>>> 51de2fb14 (feat(marketing): add verified Windows install prompt)
-    }
-
-    copyPrompt?.addEventListener("click", async () => {
-      const prompt = platform && installPromptForPlatform(platform.os);
-      if (!prompt) return;
-      await navigator.clipboard.writeText(prompt);
-      copyPrompt.textContent = "Copied";
-    });
 
     try {
       const releasePromise = fetchLatestRelease();
@@ -344,28 +298,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     gap: 12px;
     flex-wrap: wrap;
     padding-top: 4px;
-  }
-
-  .install-notice {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    color: var(--color-muted-foreground);
-    font-size: 13px;
-  }
-
-  .install-notice[hidden] {
-    display: none;
-  }
-
-  .install-notice button {
-    color: var(--color-foreground);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
   }
 
   .hero-shot {
@@ -673,30 +605,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     font-size: 13px;
     line-height: 18px;
     color: var(--color-muted-foreground);
-  }
-
-  .install-notice {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: rgba(15, 15, 15, 0.8);
-    font-size: 13px;
-  }
-
-  .install-notice[hidden] {
-    display: none;
-  }
-
-  .install-notice button {
-    padding: 7px 10px;
-    border: 1px solid var(--color-input);
-    border-radius: var(--radius-md);
-    color: var(--color-foreground);
-    background: transparent;
-    cursor: pointer;
   }
 
   /* ── Small screens ── */

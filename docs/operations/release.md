@@ -2,7 +2,7 @@
 
 > For Akeru Bot maintainers.
 
-`.depot/workflows/release.yml` validates release inputs without publishing or releasing anything.
+`.depot/workflows/release-smoke.yml` validates release inputs without publishing or releasing anything.
 Dispatch it from Depot with a version such as `0.0.0-smoke.0`.
 
 ## What it checks

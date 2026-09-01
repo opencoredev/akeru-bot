@@ -1,31 +1,58 @@
-# Depot CI builds smoke artifacts. It does not publish or release them.
+# Depot builds every stable asset before the final job creates the tag and release.
 
-name: Release artifact smoke
+name: Stable release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Version used for the smoke artifacts
-        required: true
-        default: 0.0.0-smoke.0
-        type: string
+  push:
+    branches: [main]
+    paths:
+      - apps/server/package.json
+      - apps/desktop/package.json
+      - apps/web/package.json
+      - packages/contracts/package.json
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: release-smoke-${{ github.ref }}
-  cancel-in-progress: true
+  group: stable-release
+  cancel-in-progress: false
 
 jobs:
-  release_smoke:
-    name: Release configuration
+  preflight:
+    name: Release preflight
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Read stable version
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./apps/server/package.json').version")"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'Stable release version is invalid: %s\n' "$version" >&2
+            exit 1
+          fi
+          for manifest in apps/desktop/package.json apps/web/package.json packages/contracts/package.json; do
+            actual="$(node -p "require('./$manifest').version")"
+            if test "$actual" != "$version"; then
+              printf '%s has version %s, expected %s.\n' "$manifest" "$actual" "$version" >&2
+              exit 1
+            fi
+          done
+          if git rev-parse --verify --quiet "refs/tags/v$version"; then
+            printf 'Stable tag v%s already exists.\n' "$version" >&2
+            exit 1
+          fi
+          printf 'version=%s\ntag=v%s\n' "$version" "$version" >> "$GITHUB_OUTPUT"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -34,19 +61,32 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Check public dependencies
-        run: vp run check:public-dependencies
-
-      - name: Run release smoke
-        run: vp run release:smoke
+      - name: Run release checks
+        run: |
+          vp run check:public-dependencies
+          vp run release:smoke
+          vp test run scripts/verify-release-assets.test.ts
 
   desktop:
     name: ${{ matrix.label }}
-    needs: release_smoke
+    needs: preflight
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      APPSTORE_API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
+      APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     strategy:
       fail-fast: false
       matrix:
@@ -56,21 +96,18 @@ jobs:
             platform: mac
             target: dmg
             arch: arm64
-            extension: dmg
             rust_target: aarch64-apple-darwin
           - label: Windows x64 NSIS
             runner: depot-windows-2025-8
             platform: win
             target: nsis
             arch: x64
-            extension: exe
             rust_target: x86_64-pc-windows-msvc
           - label: Linux x64 AppImage
             runner: depot-ubuntu-24.04-8
             platform: linux
             target: AppImage
             arch: x64
-            extension: AppImage
             rust_target: x86_64-unknown-linux-gnu
     steps:
       - name: Checkout
@@ -97,44 +134,45 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
+      - name: Validate signing credentials
+        shell: bash
+        run: |
+          signed=false
+          if test "${{ matrix.platform }}" = mac; then
+            values=("$MACOS_CERTIFICATE_P12" "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_SIGNING_IDENTITY" "$APPSTORE_API_KEY_P8" "$APPSTORE_API_KEY_ID" "$APPSTORE_ISSUER_ID")
+          elif test "${{ matrix.platform }}" = win; then
+            values=("$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME" "$AZURE_TRUSTED_SIGNING_ENDPOINT" "$AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME" "$AZURE_TRUSTED_SIGNING_ACCOUNT_NAME" "$AZURE_CLIENT_ID" "$AZURE_TENANT_ID" "$AZURE_CLIENT_SECRET")
+          else
+            values=()
+          fi
+          present=0
+          for value in "${values[@]}"; do test -n "$value" && present=$((present + 1)); done
+          if (( present != 0 && present != ${#values[@]} )); then
+            printf 'Signing credentials must be either complete or absent.\n' >&2
+            exit 1
+          fi
+          if (( present > 0 )); then signed=true; fi
+          printf 'SIGNED=%s\n' "$signed" >> "$GITHUB_ENV"
+
       - name: Import macOS signing certificate
-        if: matrix.platform == 'mac'
+        if: matrix.platform == 'mac' && env.SIGNED == 'true'
         uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
-      - name: Configure App Store Connect API key
-        if: matrix.platform == 'mac'
+      - name: Configure macOS notarization
+        if: matrix.platform == 'mac' && env.SIGNED == 'true'
         shell: bash
-        env:
-          APPSTORE_API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
-          for variable in \
-            APPSTORE_API_KEY_P8 \
-            APPSTORE_API_KEY_ID \
-            APPSTORE_ISSUER_ID \
-            MACOS_SIGNING_IDENTITY; do
-            if test -z "${!variable}"; then
-              printf 'Required GitHub secret is empty: %s\n' "$variable" >&2
-              exit 1
-            fi
-          done
           case "$MACOS_SIGNING_IDENTITY" in
             "Developer ID Application:"*) ;;
-            *)
-              printf 'MACOS_SIGNING_IDENTITY must name a Developer ID Application certificate.\n' >&2
-              exit 1
-              ;;
+            *) printf 'MACOS_SIGNING_IDENTITY must name a Developer ID Application certificate.\n' >&2; exit 1 ;;
           esac
           printf '%s' "$APPSTORE_API_KEY_P8" > "$RUNNER_TEMP/notarytool-api-key.p8"
           chmod 600 "$RUNNER_TEMP/notarytool-api-key.p8"
 
-      - name: Build signed macOS artifact
-        if: matrix.platform == 'mac'
+      - name: Build desktop artifact
         shell: bash
         env:
           APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
@@ -142,139 +180,82 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
           CSC_NAME: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
-          node scripts/update-release-package-versions.ts "$RELEASE_VERSION"
-          vp run dist:desktop:artifact \
-            --platform mac \
-            --target dmg \
-            --arch arm64 \
-            --build-version "$RELEASE_VERSION" \
-            --signed \
-            --verbose
+          args=(--platform "${{ matrix.platform }}" --target "${{ matrix.target }}" --arch "${{ matrix.arch }}" --build-version "$RELEASE_VERSION" --verbose)
+          if test "$SIGNED" = true; then args+=(--signed); fi
+          vp run dist:desktop:artifact -- "${args[@]}"
 
-      - name: Build unsigned desktop artifact
-        if: matrix.platform != 'mac'
+      - name: Notarize and verify macOS DMG
+        if: matrix.platform == 'mac' && env.SIGNED == 'true'
         shell: bash
         run: |
-          node scripts/update-release-package-versions.ts "$RELEASE_VERSION"
-          vp run dist:desktop:artifact \
-            --platform "${{ matrix.platform }}" \
-            --target "${{ matrix.target }}" \
-            --arch "${{ matrix.arch }}" \
-            --build-version "$RELEASE_VERSION" \
-            --verbose
-
-      - name: Verify artifact
-        shell: bash
-        run: |
-          shopt -s nullglob
-          artifacts=(release/*.${{ matrix.extension }})
-          if (( ${#artifacts[@]} != 1 )); then
-            printf 'Expected one .${{ matrix.extension }} artifact, found %s.\n' "${#artifacts[@]}" >&2
-            exit 1
-          fi
-
-      - name: Notarize, staple, and verify macOS DMG
-        if: matrix.platform == 'mac'
-        shell: bash
-        env:
-          APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
-          APPLE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
-        run: |
-          shopt -s nullglob
-          artifacts=(release/*.dmg)
-          if (( ${#artifacts[@]} != 1 )); then
-            printf 'Expected one DMG artifact, found %s.\n' "${#artifacts[@]}" >&2
-            exit 1
-          fi
-          dmg="${artifacts[0]}"
-
-          # electron-builder already submitted and stapled the signed app.
-          # This submission owns the DMG that contains that app.
-          xcrun notarytool submit "$dmg" \
-            --key "$APPLE_API_KEY" \
-            --key-id "$APPLE_API_KEY_ID" \
-            --issuer "$APPLE_API_ISSUER" \
-            --wait
+          dmg="release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
+          xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
           xcrun stapler staple "$dmg"
           xcrun stapler validate "$dmg"
           spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
-
           mount_point="$RUNNER_TEMP/akeru-dmg"
           mkdir -p "$mount_point"
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
-          cleanup() {
-            hdiutil detach "$mount_point" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
+          trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
           apps=("$mount_point"/*.app)
-          if (( ${#apps[@]} != 1 )); then
-            printf 'Expected one app in the DMG, found %s.\n' "${#apps[@]}" >&2
-            exit 1
-          fi
+          test "${#apps[@]}" -eq 1
           codesign --verify --deep --strict --verbose=2 "${apps[0]}"
           xcrun stapler validate "${apps[0]}"
           spctl --assess --type execute --verbose=2 "${apps[0]}"
 
-      - name: Upload smoke artifact
+      - name: Upload desktop assets
         uses: actions/upload-artifact@v7
         with:
-          name: akeru-bot-${{ matrix.platform }}-${{ matrix.arch }}
-          path: release/*.${{ matrix.extension }}
+          name: stable-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/*
           if-no-files-found: error
           retention-days: 7
 
   cli:
-    name: CLI package
-    needs: release_smoke
+    name: Akeru CLI package
+    needs: preflight
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 20
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - uses: actions/checkout@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
           cache: true
-          run-install: |
-            args:
-              - --filter=akeru-bot...
-              - --filter=@t3tools/web...
-              - --filter=@t3tools/scripts...
-
-      - name: Build CLI package
+          run-install: true
+      - name: Build and check CLI
         run: |
-          node scripts/update-release-package-versions.ts "$RELEASE_VERSION"
           vp run --filter akeru-bot build
+          node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose
+          mkdir -p release
+          vp pm pack --filter akeru-bot --pack-destination release
+          mv release/akeru-bot-*.tgz "release/akeru-bot-$RELEASE_VERSION.tgz"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: stable-cli
+          path: release/akeru-bot-${{ env.RELEASE_VERSION }}.tgz
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Dry-run CLI package
-        run: node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose
-
-  marketing:
-    name: Marketing site
-    needs: release_smoke
+  release:
+    name: Publish stable release
+    needs: [preflight, desktop, cli]
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/marketing...
-
-      - name: Typecheck marketing site
-        run: vp run --filter @t3tools/marketing typecheck
-
-      - name: Build marketing site
-        run: vp run --filter @t3tools/marketing build
+          pattern: stable-*
+          path: release
+          merge-multiple: true
+      - name: Verify names and hashes
+        run: node scripts/verify-release-assets.ts release "$RELEASE_VERSION"
+      - name: Create stable tag and GitHub Release
+        run: gh release create "$RELEASE_TAG" release/* --target "$GITHUB_SHA" --title "Akeru Bot $RELEASE_TAG" --generate-notes

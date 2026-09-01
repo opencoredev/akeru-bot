@@ -18,7 +18,7 @@ Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04`
 - **Release smoke.** `scripts/release-smoke.ts` checks the public dependency rule, the supported
   artifact matrix, Akeru naming, and the absence of retired publishing and deployment paths.
 
-[`.depot/workflows/release.yml`](../../.depot/workflows/release.yml) is a manual, non-publishing
+[`.depot/workflows/release-smoke.yml`](../../.depot/workflows/release-smoke.yml) is a manual, non-publishing
 artifact smoke workflow. It uses 8-vCPU Depot runners for Linux and Windows, plus Apple Silicon
 macOS. It builds a Developer ID signed macOS arm64 app. Electron-builder notarizes and staples the
 app before it packages the DMG. The workflow then submits and staples the DMG as a separate object.
@@ -26,5 +26,11 @@ It checks both objects with Apple's verification tools. Windows and Linux artifa
 The workflow also builds and dry-runs the CLI package and checks the marketing site. It uploads
 desktop artifacts for seven days. It does not create a GitHub release, publish a package, or deploy
 a site.
+
+Merging a stable version change to `main` starts [the stable Depot workflow](../../.depot/workflows/release.yml).
+Depot builds the advertised desktop targets and CLI package before it creates the `vX.Y.Z` tag and
+GitHub Release. The final job verifies the exact asset names and `SHA256SUMS`. Missing signing
+credentials produce unsigned macOS and Windows artifacts. Complete credentials use the existing
+Developer ID, notarization, and Azure Trusted Signing paths.
 
 See the [release smoke runbook](../operations/release.md) for the exact validation path.

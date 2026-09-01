@@ -45,6 +45,7 @@
     "release:smoke": "node scripts/release-smoke.ts",
     "tegami": "node scripts/tegami.mts",
     "release:verify": "node scripts/verify-release-candidate.ts",
+    "release:verify-assets": "node scripts/verify-release-assets.ts",
     "connect:announce-ga": "node scripts/announce-connect-ga.ts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .vite-plus apps/*/.vite-plus packages/*/.vite-plus",
     "sync:repos": "node scripts/sync-reference-repos.ts"
