@@ -607,4 +607,31 @@ describe("AkeruDelegationRuntime", () => {
       ).runtime.send(parent(), request() as never),
     ).rejects.toThrow("current group");
   });
+
+  it("requires authoritative group membership for an associated bot", async () => {
+    const groupId = GroupId.make("group-1");
+    const group = {
+      id: groupId,
+      name: "Research",
+      bossBotId: PARENT_BOT_ID,
+      members: [{ botId: PARENT_BOT_ID, role: "boss" as const }],
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+
+    await expect(
+      harness(
+        snapshot({
+          bots: [bot(PARENT_BOT_ID, { groupId }), bot(CHILD_BOT_ID, { groupId })],
+          groups: [group],
+          threads: [
+            thread(PARENT_THREAD_ID, null, {
+              groupId,
+              respondingBotId: PARENT_BOT_ID,
+            }),
+          ],
+        }),
+      ).runtime.send(parent(), request() as never),
+    ).rejects.toThrow("The target bot is not available in the current group.");
+  });
 });

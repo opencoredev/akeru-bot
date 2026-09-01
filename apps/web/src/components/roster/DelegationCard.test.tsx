@@ -191,6 +191,28 @@ describe("DelegationCard", () => {
     expect(failed).not.toContain("Release comparison complete.");
   });
 
+  it("shows fallback text when terminal details are missing", () => {
+    const completed = delegation("completed");
+    const failed = delegation("failed");
+    expect(
+      renderToStaticMarkup(
+        <DelegationCard delegation={{ ...completed, result: null }} childBot={childBot} />,
+      ),
+    ).toContain("Result unavailable");
+    expect(
+      renderToStaticMarkup(
+        <DelegationCard delegation={{ ...failed, failure: null }} childBot={childBot} />,
+      ),
+    ).toContain("Failure details unavailable");
+  });
+
+  it("shows elapsed time and the access grant", () => {
+    const markup = renderCard("completed");
+    expect(markup).toContain(">50s</span>");
+    expect(markup).toContain("approval required · local sandbox · tools: Read");
+    expect(markup).toContain("memory: project · MCP servers: 0 · no user computer · no approvals");
+  });
+
   it("uses only the delegated child turn usage", () => {
     expect(delegationUsageTokens(delegation("completed"), mocks.activities)).toBe(1_234);
     expect(delegationUsageTokens(delegation("queued"), mocks.activities)).toBeNull();
@@ -212,6 +234,13 @@ describe("DelegationCard", () => {
     });
   });
 
+  it.each(["failed", "canceled", "completed"] as const)(
+    "hides cancel for the terminal %s state",
+    (state) => {
+      expect(renderCard(state)).not.toContain(`aria-label="Cancel delegation to Mori"`);
+    },
+  );
+
   it("opens the child through roster thread navigation", () => {
     const open = visitElements(
       cardElement("running"),
@@ -230,6 +259,15 @@ describe("DelegationCard", () => {
     const markup = renderCard("running", null);
     expect(markup).toContain("Unknown bot");
     expect(markup).toContain("Usage unavailable");
+    expect(markup).toContain('aria-label="Open Unknown bot thread" disabled=""');
+  });
+
+  it("treats an archived child as unavailable", () => {
+    const markup = renderCard("running", {
+      ...childBot,
+      archivedAt: "2026-08-31T00:02:00.000Z",
+    });
+    expect(markup).toContain("Unknown bot");
     expect(markup).toContain('aria-label="Open Unknown bot thread" disabled=""');
   });
 

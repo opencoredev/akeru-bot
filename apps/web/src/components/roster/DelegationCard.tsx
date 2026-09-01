@@ -115,10 +115,11 @@ export function DelegationCard({
   );
   const childThread = useThreadShell(childThreadRef);
   const childActivities = useThreadActivities(childThreadRef);
-  const childName = childBot?.name ?? "Unknown bot";
+  const activeChildBot = childBot?.archivedAt === null ? childBot : null;
+  const childName = activeChildBot?.name ?? "Unknown bot";
   const usageTokens = childThread ? delegationUsageTokens(delegation, childActivities) : null;
   const canCancel = !TERMINAL_STATES.has(delegation.state) && environmentId !== null;
-  const canOpen = childBot !== null && childThread !== null && environmentId !== null;
+  const canOpen = activeChildBot !== null && childThread !== null && environmentId !== null;
   const outcome =
     delegation.failure?.message ??
     delegation.result?.summary ??
@@ -136,7 +137,7 @@ export function DelegationCard({
     >
       <div className="flex min-w-0 items-center gap-2">
         <BotAvatarView
-          avatar={childBot?.avatar ?? { kind: "dither", seed: delegation.childBotId }}
+          avatar={activeChildBot?.avatar ?? { kind: "dither", seed: delegation.childBotId }}
           name={childName}
           className="size-7 shrink-0"
         />
@@ -201,8 +202,8 @@ export function DelegationCard({
             if (!canOpen) return;
             useRosterStore
               .getState()
-              .recordChatPath(childBot.id, `/${environmentId}/${childThread.id}`);
-            void navigate({ to: "/bots/$botId", params: { botId: childBot.id } });
+              .recordChatPath(activeChildBot.id, `/${environmentId}/${childThread.id}`);
+            void navigate({ to: "/bots/$botId", params: { botId: activeChildBot.id } });
           }}
         >
           Open thread

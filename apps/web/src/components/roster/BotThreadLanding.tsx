@@ -209,7 +209,12 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               <DelegationCard
                 key={delegation.delegationId}
                 delegation={delegation}
-                childBot={bots.find((candidate) => candidate.id === delegation.childBotId) ?? null}
+                childBot={
+                  bots.find(
+                    (candidate) =>
+                      candidate.id === delegation.childBotId && candidate.archivedAt === null,
+                  ) ?? null
+                }
               />
             ))}
             {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
