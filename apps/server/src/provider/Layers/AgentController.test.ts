@@ -1013,7 +1013,7 @@ describe("AgentControllerLive", () => {
     );
   });
 
-  it.effect("grants one exact Akeru tool call without persisting acceptAlways", () => {
+  it.effect("keeps a pending approval across reconnect and grants one exact tool call", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -1035,6 +1035,14 @@ describe("AgentControllerLive", () => {
           toolName: "Shell",
           args: { command: "pwd" },
         } as AgentControllerEvent);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
         yield* controller.respondToRequest({
           threadId: codexThreadId,
           requestId: ApprovalRequestId.make("shell-tool-1"),
@@ -1064,6 +1072,27 @@ describe("AgentControllerLive", () => {
         });
         mastra.emit({
           type: "tool_approval_required",
+          toolCallId: "send-tool-1",
+          toolName: "gmail_send_message",
+          args: { to: "user@example.com" },
+        } as AgentControllerEvent);
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("send-tool-1"),
+          decision: "decline",
+        });
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("send-tool-1"),
+          decision: "accept",
+        });
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledTimes(2);
+        expect(mastra.session.respondToToolApproval).toHaveBeenLastCalledWith({
+          toolCallId: "send-tool-1",
+          decision: "decline",
+        });
+        mastra.emit({
+          type: "tool_approval_required",
           toolCallId: "shell-tool-stale",
           toolName: "Shell",
           args: { command: "pwd" },
@@ -1080,6 +1109,94 @@ describe("AgentControllerLive", () => {
           ),
         );
         mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("cancels pending approvals when the turn or session ends", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const expectCancelledOnce = (requestId: string) =>
+          expect(
+            events.filter(
+              (event) => event.type === "request.resolved" && event.requestId === requestId,
+            ),
+          ).toEqual([
+            expect.objectContaining({
+              payload: { requestType: "dynamic_tool_call", decision: "cancel" },
+            }),
+          ]);
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Run pwd." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "turn-expiry",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+
+        expectCancelledOnce("turn-expiry");
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("turn-expiry"),
+          decision: "accept",
+        });
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Run pwd again." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "tool-end-expiry",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "tool-end-expiry",
+          result: "cancelled",
+          isError: false,
+          denied: true,
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+        expectCancelledOnce("tool-end-expiry");
+
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "session-expiry",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        yield* controller.stopSession({ threadId: codexThreadId });
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+
+        expectCancelledOnce("session-expiry");
+        yield* Fiber.interrupt(eventsFiber);
       }),
       bridge.service,
       mastra.factory,

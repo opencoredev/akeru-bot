@@ -522,6 +522,19 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
     };
 
+    const cancelPendingApprovals = (threadId: ThreadId, active: ActiveSession) => {
+      for (const requestId of active.approvalRequests.keys()) {
+        publish({
+          ...baseEvent(threadId, active, active.activeTurn?.turnId),
+          requestId: RuntimeRequestId.make(requestId),
+          type: "request.resolved",
+          payload: { requestType: "dynamic_tool_call", decision: "cancel" },
+        });
+      }
+      active.approvalRequests.clear();
+      toolRuntime.clearApprovals(String(threadId));
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -533,6 +546,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       queueTurnMemory(threadId, active, turn);
       turn.finished = true;
       completeAssistantMessages(threadId, active, turn);
+      cancelPendingApprovals(threadId, active);
       publish({
         ...baseEvent(threadId, active, turn.turnId),
         type: "turn.completed",
@@ -548,8 +562,6 @@ const make = (options?: AgentControllerLiveOptions) =>
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
-      active.approvalRequests.clear();
-      toolRuntime.clearApprovals(String(threadId));
       active.activeTurn = null;
       publishSessionState(threadId, active, "ready");
     };
@@ -627,7 +639,14 @@ const make = (options?: AgentControllerLiveOptions) =>
         case "tool_end": {
           if (!turn) return;
           const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
-          active.approvalRequests.delete(event.toolCallId);
+          if (active.approvalRequests.delete(event.toolCallId)) {
+            publish({
+              ...baseEvent(threadId, active, turn.turnId),
+              requestId: RuntimeRequestId.make(event.toolCallId),
+              type: "request.resolved",
+              payload: { requestType: "dynamic_tool_call", decision: "cancel" },
+            });
+          }
           const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
           if (mcpServerId && !event.denied) {
             if (event.isError) {
@@ -1311,6 +1330,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      cancelPendingApprovals(input.threadId, active);
       active.session.abort();
       active.unsubscribe();
       publishSessionState(input.threadId, active, "stopped");
