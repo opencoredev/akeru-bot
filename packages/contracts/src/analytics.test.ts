@@ -55,6 +55,21 @@ describe("Usage3hEvent", () => {
     expect(USAGE_3H_COUNTER_KEYS).toHaveLength(96);
   });
 
+  it("accepts current remote sandboxes and rejects the retired hosted sandbox", () => {
+    for (const sandbox_provider of ["e2b", "daytona", "vercel", "upstash"] as const) {
+      expect(
+        decodeUsage3hEvent({
+          ...event,
+          properties: { ...event.properties, sandbox_provider },
+        }).properties.sandbox_provider,
+      ).toBe(sandbox_provider);
+    }
+    rejects({
+      ...event,
+      properties: { ...event.properties, sandbox_provider: "akeru-cloud" },
+    });
+  });
+
   it("defaults queued events from before install tracking to zero", () => {
     const legacyProperties = Object.fromEntries(
       Object.entries(event.properties).filter(([key]) => key !== "new_installations"),

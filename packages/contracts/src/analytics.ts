@@ -173,8 +173,9 @@ export type UsageAnalyticsProvider = typeof UsageAnalyticsProvider.Type;
 export const UsageSandboxProvider = Schema.Literals([
   "none",
   "local",
+  "e2b",
+  "daytona",
   "vercel",
-  "akeru-cloud",
   "upstash",
   "mixed",
   "other",
