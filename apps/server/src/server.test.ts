@@ -5,12 +5,14 @@ import * as NodeCrypto from "node:crypto";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 import {
+  type AkeruDelegationRecord,
   AuthAccessTokenType,
   AuthEnvironmentBootstrapTokenType,
   AuthTokenExchangeGrantType,
   BotId,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
+  DelegationId,
   EnvironmentId,
   EventId,
   GitCommandError,
@@ -30,6 +32,7 @@ import {
   ProviderInstanceId,
   ResolvedKeybindingRule,
   ThreadId,
+  TurnId,
   WS_METHODS,
   WsRpcGroup,
   EditorId,
@@ -840,6 +843,7 @@ const buildAppUnderTest = (options?: {
                 snapshotSequence: 0,
                 bots: [],
                 groups: [],
+                delegations: [],
                 projects: [],
                 threads: [],
                 updatedAt: "1970-01-01T00:00:00.000Z",
@@ -849,6 +853,7 @@ const buildAppUnderTest = (options?: {
                 snapshotSequence: 0,
                 bots: [],
                 groups: [],
+                delegations: [],
                 projects: [],
                 threads: [],
                 updatedAt: "1970-01-01T00:00:00.000Z",
@@ -6414,6 +6419,103 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("maps delegation lifecycle events into shell upserts", () =>
+    Effect.gen(function* () {
+      const now = "2026-08-31T00:00:00.000Z";
+      const record = (delegationId: DelegationId): AkeruDelegationRecord => ({
+        delegationId,
+        parentDelegationId: null,
+        parentBotId: BotId.make("bot-parent"),
+        childBotId: BotId.make("bot-child"),
+        parentThreadId: ThreadId.make("thread-parent"),
+        childThreadId: null,
+        parentTurnId: TurnId.make("turn-parent"),
+        childTurnId: null,
+        ancestorBotIds: [BotId.make("bot-parent")],
+        depth: 1,
+        task: "Compare the release options.",
+        expectedResult: "A short comparison.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "approval-required",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "none",
+        },
+        state: "queued",
+        billedBotId: BotId.make("bot-child"),
+        result: null,
+        failure: null,
+        keep: false,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: null,
+        completedAt: null,
+      });
+      const created = record(DelegationId.make("delegation-created"));
+      const updated = {
+        ...record(DelegationId.make("delegation-updated")),
+        state: "running",
+      } as const;
+      const events = [
+        {
+          sequence: 1,
+          eventId: EventId.make("event-delegation-created"),
+          aggregateKind: "delegation",
+          aggregateId: created.delegationId,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "delegation.created",
+          payload: { delegation: created },
+        } satisfies Extract<OrchestrationEvent, { type: "delegation.created" }>,
+        {
+          sequence: 2,
+          eventId: EventId.make("event-delegation-updated"),
+          aggregateKind: "delegation",
+          aggregateId: updated.delegationId,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "delegation.updated",
+          payload: { delegation: updated },
+        } satisfies Extract<OrchestrationEvent, { type: "delegation.updated" }>,
+      ];
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(2),
+            readEvents: () => Stream.fromIterable(events),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
+            Stream.take(2),
+            Stream.runCollect,
+          ),
+        ),
+      );
+
+      assert.deepEqual(Array.from(items), [
+        { kind: "delegation-upserted", sequence: 1, delegation: created },
+        { kind: "delegation-upserted", sequence: 2, delegation: updated },
+      ]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("marks a socket thread snapshot as synchronized when requested", () =>
     Effect.gen(function* () {
       const thread = makeDefaultOrchestrationReadModel().threads[0]!;
@@ -6474,6 +6576,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   snapshotSequence: 1,
                   bots: [],
                   groups: [],
+                  delegations: [],
                   projects: [],
                   threads: [makeDefaultOrchestrationThreadShell()],
                   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -6734,6 +6837,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 snapshotSequence: 100_000,
                 bots: [],
                 groups: [],
+                delegations: [],
                 projects: [],
                 threads: [makeDefaultOrchestrationThreadShell({ id: snapshotThreadId })],
                 updatedAt: now,
@@ -6783,6 +6887,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 snapshotSequence: 5,
                 bots: [],
                 groups: [],
+                delegations: [],
                 projects: [],
                 threads: [],
                 updatedAt: "2026-01-01T00:00:00.000Z",

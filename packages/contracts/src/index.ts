@@ -1,6 +1,7 @@
 export * from "./baseSchemas.ts";
 export * from "./background.ts";
 export * from "./akeruTools.ts";
+export * from "./akeruDelegation.ts";
 export * from "./productFeedback.ts";
 export * from "./akeruMemory.ts";
 export * from "./akeruUsage.ts";

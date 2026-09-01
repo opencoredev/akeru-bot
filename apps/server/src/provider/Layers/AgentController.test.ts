@@ -20,6 +20,7 @@ import {
   RuntimeItemId,
   ThreadId,
   TurnId,
+  type AkeruDelegationAccessGrant,
   type ProviderRuntimeEvent,
   type ProviderSession,
 } from "@t3tools/contracts";
@@ -47,6 +48,7 @@ import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
   createAkeruMastraAuthStorage,
+  delegatedUsageReceipt,
   makeAgentControllerLive,
   mcpServerIdForToolName,
   recordProviderAccessHealth,
@@ -295,11 +297,13 @@ function makeLayer(
     AgentControllerLiveOptions,
     "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
   >,
+  delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
 ) {
   return makeAgentControllerLive({
     makeMastraHarness: factory,
     ...(makeMcpManager ? { makeMcpManager } : {}),
     ...overrides,
+    ...(delegationRuntime ? { delegationRuntime } : {}),
     makeBotBrowser: () =>
       ({
         tools: {},
@@ -517,6 +521,78 @@ describe("provider access health", () => {
 });
 
 describe("AgentControllerLive", () => {
+  it("bills delegated usage receipts to the child bot", () => {
+    const childBotId = BotId.make("bot-child");
+    const childThreadId = ThreadId.make("thread-child");
+    const childTurnId = TurnId.make("turn-child");
+    const receipt = delegatedUsageReceipt(
+      {
+        botId: childBotId,
+        threadId: childThreadId,
+        turnId: childTurnId,
+        category: "delegated",
+        inputTokens: 12,
+        outputTokens: 8,
+      },
+      { provider: ProviderDriverKind.make("codex"), providerInstanceId: codexInstanceId },
+      "2026-01-01T00:00:00.000Z",
+    );
+
+    expect(receipt).toMatchObject({
+      type: "tool.receipt",
+      threadId: childThreadId,
+      turnId: childTurnId,
+      payload: {
+        toolId: "SendToAgent",
+        threadId: childThreadId,
+        botId: childBotId,
+        billedBotId: childBotId,
+        fatalToThread: false,
+        usage: { inputTokens: 12, outputTokens: 8 },
+      },
+    });
+  });
+
+  it.effect("runs parent-finished cleanup when a parent turn is interrupted", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const parentFinished = vi.fn(async () => undefined);
+    const layer = makeLayer(
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        send: vi.fn(async () => null),
+        sendToUser: vi.fn(async () => {
+          throw new Error("not used");
+        }),
+        parentFinished,
+        accessForThread: () => undefined,
+      },
+    );
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        cwd: process.cwd(),
+        modelSelection: codexSelection,
+        runtimeMode: "approval-required",
+      });
+      yield* controller.sendTurn({ threadId: codexThreadId, input: "Delegate work." });
+      yield* controller.interruptTurn({ threadId: codexThreadId });
+      yield* Effect.yieldNow;
+
+      expect(parentFinished).toHaveBeenCalledWith({ threadId: codexThreadId, failed: false });
+    }).pipe(Effect.provide(layer), Effect.orDie);
+  });
+
   it.effect("reads Akeru subscription credentials through Mastra AuthStorage", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig;
@@ -1891,6 +1967,133 @@ describe("AgentControllerLive", () => {
         }),
       },
     );
+  });
+
+  it.effect("exposes only MCP servers in the persisted delegation grant", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const mcpManager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({ exa_search: {} })),
+      getServerStatuses: vi.fn(() => [{ name: "web", connected: true }]),
+    };
+    const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
+    const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> =
+      makeMcpManagerMock;
+    const webId = McpServerId.make("web");
+    const emailId = McpServerId.make("email");
+    const access: AkeruDelegationAccessGrant = {
+      allowedToolIds: ["Read", "ExternalRead", "CopyToBox", "CopyFromBox"],
+      memoryScopes: [],
+      sandbox: "local",
+      runtimeMode: "approval-required",
+      hasUserComputer: false,
+      enabledMcpServerIds: [webId],
+      disabledMcpServerIds: [emailId],
+      approvalCeiling: "send",
+    };
+    const runtime = {
+      send: vi.fn(async () => null),
+      sendToUser: vi.fn(async () => {
+        throw new Error("not used");
+      }),
+      parentFinished: vi.fn(async () => undefined),
+      accessForThread: () => access,
+    };
+    const layer = makeLayer(
+      bridge.service,
+      mastra.factory,
+      makeMcpManager,
+      undefined,
+      undefined,
+      undefined,
+      runtime,
+    );
+    const server = (id: typeof webId, name: string) => ({
+      id,
+      name,
+      transport: "url" as const,
+      url: `https://${name}.example/mcp`,
+      enabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      const session = yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        cwd: process.cwd(),
+        modelSelection: codexSelection,
+        runtimeMode: "approval-required",
+        mcpServers: [server(webId, "web"), server(emailId, "email")],
+      });
+
+      expect(session.mcpServerIds).toEqual([webId]);
+      expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
+        web: { url: "https://web.example/mcp" },
+      });
+      const toolIds = mastra.harnessOptions[0]?.toolRuntime
+        .toolsForThread(String(codexThreadId))
+        .map((tool) => tool.id);
+      expect(toolIds).not.toContain("ExternalRead");
+      expect(toolIds).not.toContain("CopyToBox");
+      expect(toolIds).not.toContain("CopyFromBox");
+    }).pipe(Effect.provide(layer), Effect.orDie);
+  });
+
+  it.effect("creates no workspace for a delegated sandbox denial", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const access: AkeruDelegationAccessGrant = {
+      allowedToolIds: ["Shell", "Read"],
+      memoryScopes: [],
+      sandbox: null,
+      runtimeMode: "approval-required",
+      hasUserComputer: false,
+      enabledMcpServerIds: [],
+      disabledMcpServerIds: [],
+      approvalCeiling: "send",
+    };
+    const layer = makeLayer(
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        send: vi.fn(async () => null),
+        sendToUser: vi.fn(async () => {
+          throw new Error("not used");
+        }),
+        parentFinished: vi.fn(async () => undefined),
+        accessForThread: () => access,
+      },
+    );
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        cwd: process.cwd(),
+        botId: BotId.make("delegated-child"),
+        modelSelection: codexSelection,
+        runtimeMode: "approval-required",
+      });
+
+      expect(mastra.createSession.mock.calls[0]?.[0]).not.toHaveProperty("workspace");
+      expect(mastra.harnessOptions[0]?.toolRuntime.toolsForThread(String(codexThreadId))).toEqual(
+        [],
+      );
+    }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
   it.effect("creates a remote Mastra workspace for the bot sandbox provider", () => {

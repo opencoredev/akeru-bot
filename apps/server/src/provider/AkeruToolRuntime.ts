@@ -2,6 +2,8 @@
 import { RequestContext } from "@mastra/core/request-context";
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
+  type AkeruDelegationAccessGrant,
+  type AkeruMemoryTargetScope,
   AkeruToolInputSchemas,
   type BotId,
   type AkeruToolDefinition,
@@ -10,6 +12,7 @@ import {
   type AkeruToolWorkspaceType,
   type RuntimeMode,
   ThreadId,
+  akeruToolApprovalForInput,
   akeruToolRequiresApproval,
   decodeAkeruToolInput,
   filterAkeruTools,
@@ -55,15 +58,17 @@ export function isMemoryToolId(toolId: string): toolId is AkeruMemoryToolId {
 export interface AkeruToolSession {
   readonly botId?: BotId;
   readonly botName?: string;
+  readonly billedBotId?: BotId;
   readonly runtimeMode: RuntimeMode;
   readonly workspaceType: AkeruToolWorkspaceType;
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
   readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;
   readonly delegation?: {
-    readonly send: (
-      input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
-    ) => Promise<AkeruToolReceipt>;
+    readonly depth: number;
+    readonly activeDelegations: number;
+    readonly access: AkeruDelegationAccessGrant;
+    readonly send: (input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"]) => Promise<unknown>;
   };
   readonly channels?: {
     readonly create: (
@@ -167,6 +172,21 @@ function canonicalInput(value: unknown): string {
   return JSON.stringify(value) ?? "undefined";
 }
 
+function ensureWorkspaceCwd(toolId: AkeruToolId, input: unknown): void {
+  if (toolId !== "Shell" && toolId !== "ExternalShell") return;
+  const cwd = field(input, "cwd");
+  if (cwd === undefined) return;
+  if (typeof cwd !== "string") throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
+  if (
+    cwd.startsWith("/") ||
+    cwd.startsWith("\\") ||
+    /^[A-Za-z]:/.test(cwd) ||
+    cwd.split(/[\\/]+/).includes("..")
+  ) {
+    throw new Error(`Tool '${toolId}' cwd must stay inside its workspace.`);
+  }
+}
+
 function workspaceForTool(toolId: AkeruToolId, session: AkeruToolSession) {
   return toolId === "ExternalShell" || toolId === "ExternalRead" || toolId === "AwaitExternalShell"
     ? session.userComputerWorkspace
@@ -190,6 +210,89 @@ function executable(value: unknown): value is {
     "execute" in value &&
     typeof value.execute === "function"
   );
+}
+
+const APPROVAL_RANK = [
+  "none",
+  "user-computer",
+  "send",
+  "pay",
+  "delete",
+  "production",
+  "secrets",
+] as const;
+const RUNTIME_RANK = ["approval-required", "auto-accept-edits", "auto", "full-access"] as const;
+
+function requestedSubset<T>(
+  requested: ReadonlyArray<T> | undefined,
+  ceiling: ReadonlyArray<T>,
+  label: string,
+): ReadonlyArray<T> {
+  if (requested?.some((value) => !ceiling.includes(value))) {
+    throw new Error(`Delegation requested ${label} outside the parent turn grant.`);
+  }
+  return requested ?? ceiling;
+}
+
+export function intersectDelegationAccess(input: {
+  readonly parent: AkeruDelegationAccessGrant;
+  readonly child: AkeruDelegationAccessGrant;
+  readonly requested: (typeof AkeruToolInputSchemas.SendToAgent)["Type"];
+}): AkeruDelegationAccessGrant {
+  const requestedTools = requestedSubset(
+    input.requested.allowedToolIds,
+    input.parent.allowedToolIds,
+    "tools",
+  );
+  const requestedMemory = requestedSubset<AkeruMemoryTargetScope>(
+    input.requested.memoryScopes,
+    input.parent.memoryScopes,
+    "memory scopes",
+  );
+  const requestedMcpServers = requestedSubset(
+    input.requested.mcpServerIds,
+    input.parent.enabledMcpServerIds,
+    "MCP servers",
+  );
+  const requestedRuntime = input.requested.runtimeMode ?? input.parent.runtimeMode;
+  if (RUNTIME_RANK.indexOf(requestedRuntime) > RUNTIME_RANK.indexOf(input.parent.runtimeMode)) {
+    throw new Error("Delegation requested a runtime mode above the parent turn grant.");
+  }
+  const requestedApproval = input.requested.approvalCeiling ?? input.parent.approvalCeiling;
+  if (
+    APPROVAL_RANK.indexOf(requestedApproval) > APPROVAL_RANK.indexOf(input.parent.approvalCeiling)
+  ) {
+    throw new Error("Delegation requested approvals above the parent turn grant.");
+  }
+  if (
+    input.requested.sandbox !== undefined &&
+    input.requested.sandbox !== null &&
+    input.requested.sandbox !== input.parent.sandbox
+  ) {
+    throw new Error("Delegation requested a sandbox outside the parent turn grant.");
+  }
+  const sandbox =
+    input.requested.sandbox === undefined ? input.parent.sandbox : input.requested.sandbox;
+  return {
+    allowedToolIds: requestedTools.filter((toolId) => input.child.allowedToolIds.includes(toolId)),
+    memoryScopes: requestedMemory.filter((scope) => input.child.memoryScopes.includes(scope)),
+    sandbox: sandbox === input.child.sandbox ? sandbox : null,
+    runtimeMode:
+      RUNTIME_RANK.indexOf(requestedRuntime) <= RUNTIME_RANK.indexOf(input.child.runtimeMode)
+        ? requestedRuntime
+        : input.child.runtimeMode,
+    hasUserComputer: input.parent.hasUserComputer && input.child.hasUserComputer,
+    enabledMcpServerIds: requestedMcpServers.filter((serverId) =>
+      input.child.enabledMcpServerIds.includes(serverId),
+    ),
+    disabledMcpServerIds: [
+      ...new Set([...input.parent.disabledMcpServerIds, ...input.child.disabledMcpServerIds]),
+    ],
+    approvalCeiling:
+      APPROVAL_RANK.indexOf(requestedApproval) <= APPROVAL_RANK.indexOf(input.child.approvalCeiling)
+        ? requestedApproval
+        : input.child.approvalCeiling,
+  };
 }
 
 export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): AkeruToolRuntime {
@@ -253,6 +356,11 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
       tools.add(toolId);
     }
+    if (session.delegation) {
+      for (const toolId of tools) {
+        if (!session.delegation.access.allowedToolIds.includes(toolId)) tools.delete(toolId);
+      }
+    }
     return tools;
   };
 
@@ -266,6 +374,12 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       hasUserComputer: Boolean(session.userComputerWorkspace),
       localFullAccess: session.runtimeMode === "full-access",
       implementedTools: implemented,
+      ...(session.delegation
+        ? {
+            delegationDepth: session.delegation.depth,
+            activeDelegations: session.delegation.activeDelegations,
+          }
+        : {}),
     });
     return session.memoryHandlers
       ? [...workspaceTools, ...MEMORY_TOOL_DEFINITIONS]
@@ -294,8 +408,19 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       return field(input, "scope") !== "private" || field(input, "sensitive") === true;
     }
     if (tool.id === "update_memory" || tool.id === "forget_memory") return true;
+    const akeruTool = tool as AkeruToolDefinition;
+    ensureWorkspaceCwd(akeruTool.id, input);
+    const ceiling = session.delegation?.access.approvalCeiling;
+    if (
+      ceiling &&
+      APPROVAL_RANK.indexOf(
+        akeruToolApprovalForInput(akeruTool, input, { workspaceType: session.workspaceType }),
+      ) > APPROVAL_RANK.indexOf(ceiling)
+    ) {
+      throw new Error(`Tool '${tool.id}' exceeds this delegation's approval ceiling.`);
+    }
     return akeruToolRequiresApproval(
-      tool as AkeruToolDefinition,
+      akeruTool,
       {
         localFullAccess: session.runtimeMode === "full-access",
         workspaceType: session.workspaceType,

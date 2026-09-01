@@ -766,7 +766,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const applyDelegationsProjection: ProjectorDefinition["apply"] = Effect.fn(
       "applyDelegationsProjection",
     )((event, _attachmentSideEffects) => {
-      if (event.type !== "delegation.created" && event.type !== "delegation.completed") {
+      if (event.type !== "delegation.created" && event.type !== "delegation.updated") {
         return Effect.void;
       }
       return sql`

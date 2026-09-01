@@ -52,15 +52,40 @@ describe("Akeru tool contracts", () => {
     );
   });
 
-  it("decodes SendToAgent input and rejects server-owned fields", () => {
+  it("hides SendToAgent at delegation limits", () => {
+    const context = {
+      capabilities: new Set(["bot-workspace"] as const),
+      workspaceType: "local" as const,
+      hasUserComputer: false,
+      localFullAccess: false,
+      implementedTools: new Set(["SendToAgent"]),
+    };
+
+    expect(
+      filterAkeruTools({ ...context, delegationDepth: 1, activeDelegations: 2 }).map(
+        (tool) => tool.id,
+      ),
+    ).toEqual(["SendToAgent"]);
+    expect(filterAkeruTools({ ...context, delegationDepth: 2, activeDelegations: 2 })).toEqual([]);
+    expect(filterAkeruTools({ ...context, delegationDepth: 1, activeDelegations: 3 })).toEqual([]);
+  });
+
+  it("decodes the approval limit and keeps escalation fields server-owned", () => {
     const input = {
       botId: "bot-research",
       task: "Compare three flights.",
       expectedResult: "A short comparison with sources.",
+      approvalCeiling: "send" as const,
     };
 
-    expect(decodeAkeruToolInput("SendToAgent", input)).toEqual(input);
+    expect(decodeAkeruToolInput("SendToAgent", input)).toMatchObject(input);
     expect(() => decodeAkeruToolInput("SendToAgent", { ...input, depth: 2 })).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("SendToAgent", {
+        ...input,
+        hasUserComputer: true,
+      }),
+    ).toThrow();
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
   });
 

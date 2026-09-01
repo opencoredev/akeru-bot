@@ -1,0 +1,17 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:air:akeru-bot.com:website",
+      "displayName": "Akeru Bot website",
+      "type": "text/html",
+      "url": "https://www.akeru-bot.com/"
+    },
+    {
+      "identifier": "urn:air:akeru-bot.com:agent-guide",
+      "displayName": "Akeru Bot agent guide",
+      "type": "text/markdown",
+      "url": "https://www.akeru-bot.com/llms.txt"
+    }
+  ]
+}

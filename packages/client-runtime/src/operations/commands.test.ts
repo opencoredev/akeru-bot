@@ -1,6 +1,7 @@
 import {
   BotId,
   CommandId,
+  DelegationId,
   EnvironmentId,
   GroupId,
   McpServerId,
@@ -27,6 +28,7 @@ import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import {
   archiveThread,
   assignGroupMember,
+  cancelDelegation,
   createMcpServer,
   createProject,
   settleThread,
@@ -203,6 +205,30 @@ describe("environment commands", () => {
           commandId: "queued-command",
           threadId: "thread-1",
           createdAt: "2026-06-06T00:01:00.000Z",
+        },
+      ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("dispatches delegation cancellation with the keep choice", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* cancelDelegation({
+        commandId: CommandId.make("cancel-delegation"),
+        delegationId: DelegationId.make("delegation-1"),
+        keep: false,
+        createdAt: "2026-08-31T00:01:00.000Z",
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toEqual([
+        {
+          type: "delegation.cancel",
+          commandId: "cancel-delegation",
+          delegationId: "delegation-1",
+          keep: false,
+          createdAt: "2026-08-31T00:01:00.000Z",
         },
       ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),

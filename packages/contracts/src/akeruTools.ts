@@ -10,7 +10,10 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
-import { McpServerUrl } from "./mcpServer.ts";
+import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
+import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
+import { McpServerId, McpServerUrl } from "./mcpServer.ts";
+import { BotSandbox, RuntimeMode } from "./orchestration.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
 export const AKERU_PATH_MAX_CHARS = 512;
@@ -48,6 +51,42 @@ const UpdateBotProfileInput = Schema.Struct({
   ),
 );
 
+export const AkeruToolId = Schema.Literals([
+  "Shell",
+  "Read",
+  "Screenshot",
+  "CopyToBox",
+  "CopyFromBox",
+  "request_box_help",
+  "ExternalShell",
+  "ExternalRead",
+  "AwaitShell",
+  "AwaitExternalShell",
+  "SendToAgent",
+  "CreateChannel",
+  "UpdateChannel",
+  "SendToUser",
+  "InstallPlugin",
+  "GetMcpServerStatus",
+  "TestMcpServer",
+  "ReconnectMcpServer",
+  "UpdateBotProfile",
+  "AuthenticateMcpServer",
+  "RestartMcpServers",
+]);
+export type AkeruToolId = typeof AkeruToolId.Type;
+
+export const AkeruToolApprovalClass = Schema.Literals([
+  "none",
+  "user-computer",
+  "send",
+  "pay",
+  "delete",
+  "production",
+  "secrets",
+]);
+export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
+
 export const AkeruToolInputSchemas = {
   Shell: CommandInput,
   Read: PathInput,
@@ -66,6 +105,15 @@ export const AkeruToolInputSchemas = {
     botId: BotId,
     task: TrimmedNonEmptyString,
     expectedResult: TrimmedNonEmptyString,
+    deadline: Schema.optional(IsoDateTime),
+    allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
+    memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
+    mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
+    sandbox: Schema.optional(
+      Schema.NullOr(Schema.suspend((): Schema.Codec<BotSandbox> => BotSandbox)),
+    ),
+    runtimeMode: Schema.optional(Schema.suspend((): Schema.Codec<RuntimeMode> => RuntimeMode)),
+    approvalCeiling: Schema.optional(AkeruToolApprovalClass),
   }),
   CreateChannel: Schema.Struct({
     name: TrimmedNonEmptyString,
@@ -92,8 +140,7 @@ export const AkeruToolInputSchemas = {
   RestartMcpServers: Schema.Struct({
     serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   }),
-} as const;
-export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
+} as const satisfies Record<AkeruToolId, Schema.Top>;
 
 const AkeruToolInputDecoders = Object.fromEntries(
   Object.entries(AkeruToolInputSchemas).map(([toolId, schema]) => [
@@ -121,16 +168,6 @@ export const AKERU_PROTECTED_APPROVAL_CLASSES: ReadonlySet<AkeruProtectedApprova
   "secrets",
 ]);
 
-export const AkeruToolApprovalClass = Schema.Literals([
-  "none",
-  "user-computer",
-  "send",
-  "pay",
-  "delete",
-  "production",
-  "secrets",
-]);
-export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
 export const AkeruToolCapability = Schema.Literals(["bot-workspace", "user-computer"]);
 export type AkeruToolCapability = typeof AkeruToolCapability.Type;
 export const AkeruToolWorkspaceType = Schema.Literals(["none", "local", "cloud"]);
@@ -251,6 +288,8 @@ export interface AkeruToolAvailabilityContext {
   readonly hasUserComputer: boolean;
   readonly localFullAccess: boolean;
   readonly implementedTools: ReadonlySet<string>;
+  readonly delegationDepth?: number;
+  readonly activeDelegations?: number;
 }
 
 export function filterAkeruTools(
@@ -259,6 +298,12 @@ export function filterAkeruTools(
   return AKERU_TOOL_CATALOG.filter((tool) => {
     if (!context.capabilities.has(tool.capability)) return false;
     if (!context.implementedTools.has(tool.id)) return false;
+    if (
+      tool.id === "SendToAgent" &&
+      ((context.delegationDepth ?? 0) >= AKERU_DELEGATION_MAX_DEPTH ||
+        (context.activeDelegations ?? 0) >= AKERU_DELEGATION_MAX_CONCURRENCY)
+    )
+      return false;
     if (tool.workspace === "bot-workspace" && context.workspaceType === "none") return false;
     if (tool.workspace === "user-computer" && !context.hasUserComputer) return false;
     return !(tool.requiresUserComputer && !context.hasUserComputer);
