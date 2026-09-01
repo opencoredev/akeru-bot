@@ -518,11 +518,11 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const engine = yield* OrchestrationEngineService;
       const snapshots = yield* ProjectionSnapshotQuery;
 
-      for (const sandbox of [null, "akeru-cloud"] as const) {
+      for (const sandbox of [null, "local", "akeru-cloud"] as const) {
         yield* engine.dispatch({
           type: "bot.create",
-          commandId: CommandId.make(`cmd-bot-default-${sandbox ?? "local"}`),
-          botId: BotId.make(`bot-default-${sandbox ?? "local"}`),
+          commandId: CommandId.make(`cmd-bot-default-${sandbox ?? "null"}`),
+          botId: BotId.make(`bot-default-${sandbox ?? "null"}`),
           name: "Akeru",
           title: "Akeru",
           avatar: { kind: "dither", seed: "akeru" },
@@ -535,6 +535,10 @@ it.layer(TestLayer)("bot persistence", (it) => {
       }
 
       const bots = (yield* snapshots.getShellSnapshot()).bots;
+      assert.equal(
+        bots.find((bot) => bot.id === BotId.make("bot-default-null"))?.runtimeMode,
+        "approval-required",
+      );
       assert.equal(
         bots.find((bot) => bot.id === BotId.make("bot-default-local"))?.runtimeMode,
         "approval-required",

@@ -413,7 +413,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           sandbox: command.sandbox,
           runtimeMode:
             command.runtimeMode ??
-            (command.sandbox === null ? DEFAULT_LOCAL_EXECUTION_MODE : DEFAULT_RUNTIME_MODE),
+            (command.sandbox === null || command.sandbox === "local"
+              ? DEFAULT_LOCAL_EXECUTION_MODE
+              : DEFAULT_RUNTIME_MODE),
           usageCap: command.usageCap,
           voiceEnabled: command.voiceEnabled ?? false,
           groupId: command.groupId,
