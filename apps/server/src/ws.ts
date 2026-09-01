@@ -83,7 +83,7 @@ import {
   subscriptionDependentBots,
 } from "./subscription-auth/snapshot.ts";
 import { BotInboxService } from "./bot-inbox/service.ts";
-import { syncConnectorIncidents } from "./bot-inbox/connectorIncidents.ts";
+import { syncAccessIncidents, syncConnectorIncidents } from "./bot-inbox/connectorIncidents.ts";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
@@ -703,10 +703,13 @@ const makeWsRpcLayer = (
       const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
         subscriptionAuth.reload();
         botInbox.reload();
-        const [providers, bots] = yield* Effect.all([
+        const [providers, bots, snapshot] = yield* Effect.all([
           providerRegistry.getProviders,
           projectionBots
             .listAll()
+            .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message }))),
+          projectionSnapshotQuery
+            .getShellSnapshot()
             .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message }))),
         ]);
         const dependentBots = subscriptionDependentBots(
@@ -714,14 +717,26 @@ const makeWsRpcLayer = (
           providers,
         );
         const subscriptionStatuses = subscriptionAuth.statuses(dependentBots);
+        const access = buildProviderAccessCapabilities(
+          subscriptionStatuses,
+          providers,
+          (instanceId) => subscriptionAuth.providerInstanceRequestHealth(instanceId),
+          snapshot.mcpServers ?? [],
+          bots.map((bot) => ({
+            id: bot.botId,
+            name: bot.name,
+            engine: bot.engine,
+            disabledMcpServerIds: bot.disabledMcpServerIds,
+          })),
+          (serverId) => subscriptionAuth.mcpRequestHealth(serverId),
+        );
 
         syncConnectorIncidents(botInbox, subscriptionStatuses);
+        syncAccessIncidents(botInbox, access);
 
         return {
           providers: subscriptionStatuses,
-          access: buildProviderAccessCapabilities(subscriptionStatuses, providers, (instanceId) =>
-            subscriptionAuth.providerInstanceHealth(instanceId),
-          ),
+          access,
           inbox: botInbox.list(),
         };
       });

@@ -117,6 +117,13 @@ interface ProviderHealthRecord {
   failureKind?: "request" | "revoked";
 }
 
+export interface RequestHealthStatus {
+  readonly health: "healthy" | "failed" | "failed-first-request" | "recovered";
+  readonly lastSuccessfulRequestAt?: string;
+  readonly lastFailedRequest?: { readonly at: string; readonly message: string };
+  readonly nextRetryAt?: string;
+}
+
 type ProviderHealthData = Record<string, ProviderHealthRecord | undefined>;
 
 function oauthFailureKind(cause: unknown): "request" | "revoked" {
@@ -314,6 +321,14 @@ export class SubscriptionAuthService {
     this.recordHealthFailure(`provider:${instanceId}`, message, at, "request");
   }
 
+  recordMcpRequestSuccess(serverId: string, at = new Date().toISOString()): void {
+    this.recordHealthSuccess(`mcp:${serverId}`, at);
+  }
+
+  recordMcpRequestFailure(serverId: string, message: string, at = new Date().toISOString()): void {
+    this.recordHealthFailure(`mcp:${serverId}`, message, at, "request");
+  }
+
   private recordHealthFailure(
     key: string,
     message: string,
@@ -334,23 +349,54 @@ export class SubscriptionAuthService {
   providerInstanceHealth(
     instanceId: string,
   ): "healthy" | "failed" | "failed-first-request" | "recovered" | undefined {
-    const health = this.health[`provider:${instanceId}`];
+    return this.requestHealth(`provider:${instanceId}`)?.health;
+  }
+
+  providerInstanceRequestHealth(instanceId: string): RequestHealthStatus | undefined {
+    return this.requestHealth(`provider:${instanceId}`);
+  }
+
+  mcpRequestHealth(serverId: string): RequestHealthStatus | undefined {
+    return this.requestHealth(`mcp:${serverId}`);
+  }
+
+  private requestHealth(key: string): RequestHealthStatus | undefined {
+    const health = this.health[key];
     if (!health) return undefined;
     if (
       health.lastFailedRequest &&
       (!health.lastSuccessfulRequestAt ||
         health.lastFailedRequest.at >= health.lastSuccessfulRequestAt)
     ) {
-      return health.lastSuccessfulRequestAt ? "failed" : "failed-first-request";
+      return {
+        health: health.lastSuccessfulRequestAt ? "failed" : "failed-first-request",
+        ...(health.lastSuccessfulRequestAt
+          ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
+          : {}),
+        lastFailedRequest: health.lastFailedRequest,
+        ...(health.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
+      };
     }
     if (
       health.lastSuccessfulRequestAt &&
       health.lastFailedRequest &&
       health.lastSuccessfulRequestAt > health.lastFailedRequest.at
     ) {
-      return "recovered";
+      return {
+        health: "recovered",
+        lastSuccessfulRequestAt: health.lastSuccessfulRequestAt,
+        lastFailedRequest: health.lastFailedRequest,
+        ...(health.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
+      };
     }
-    return health.lastSuccessfulRequestAt ? "healthy" : undefined;
+    return health.lastSuccessfulRequestAt
+      ? {
+          health: "healthy",
+          lastSuccessfulRequestAt: health.lastSuccessfulRequestAt,
+          ...(health.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
+          ...(health.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
+        }
+      : undefined;
   }
 
   async testHealth(provider: SubscriptionProviderId): Promise<void> {

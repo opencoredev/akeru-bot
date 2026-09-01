@@ -44,6 +44,7 @@ export interface AkeruSessionResourcesOptions {
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
+  readonly onMcpServerConnectionFailure?: (serverId: McpServer["id"]) => void;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
     browser?: BotBrowserAttachment,
@@ -175,7 +176,20 @@ export class AkeruSessionResources {
           this.options.toMcpServerConfigs(input.mcpServers, attachment),
         );
         this.mcpManagers.set(key, manager);
-        await manager.init();
+        try {
+          await manager.init();
+        } catch (cause) {
+          for (const server of input.mcpServers) {
+            this.options.onMcpServerConnectionFailure?.(server.id);
+          }
+          throw cause;
+        }
+        const serversById = new Map(input.mcpServers.map((server) => [String(server.id), server]));
+        for (const status of manager.getServerStatuses()) {
+          if (status.connected) continue;
+          const server = serversById.get(status.name);
+          if (server) this.options.onMcpServerConnectionFailure?.(server.id);
+        }
       }
 
       return {
@@ -272,7 +286,7 @@ export class AkeruSessionResources {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true;
-    await Promise.allSettled([...this.acquisitions.values()]);
+    await Promise.allSettled(this.acquisitions.values());
     const threadIds = new Set([
       ...this.acquisitions.keys(),
       ...this.workspaceLeases.keys(),
