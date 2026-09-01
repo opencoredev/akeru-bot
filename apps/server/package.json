@@ -45,6 +45,7 @@
     "chat": "4.39.0",
     "e2b": "^2.32.0",
     "effect": "catalog:",
+    "libsql": "0.5.29",
     "msgpackr-extract": "3.0.4",
     "node-pty": "^1.1.0",
     "playwright-core": "1.60.0",

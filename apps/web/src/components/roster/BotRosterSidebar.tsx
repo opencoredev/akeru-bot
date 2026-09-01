@@ -217,7 +217,6 @@ const BotRosterRow = memo(function BotRosterRow({
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage);
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
   return (
     <Draggable
       draggableId={rosterBotDragId(bot.id)}
@@ -545,11 +544,9 @@ export default function BotRosterSidebar() {
     () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
     [bots, query],
   );
-  const pinnedBots = visibleBots.filter((bot) => bot.pinned);
-  const unpinnedBots = visibleBots.filter((bot) => !bot.pinned);
-  const groupSections = useMemo(
-    () => buildGroupedRosterSections(dragLayout ?? bots, groups, query),
-    [bots, dragLayout, groups, query],
+  const visibleGroups = useMemo(
+    () => filterRosterGroups(groups, bots, query),
+    [bots, groups, query],
   );
   const groupRouteActive = pathname.startsWith("/groups/");
   const pinnedBotIds = useMemo(

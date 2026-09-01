@@ -20,6 +20,7 @@ import {
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
+  DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
   MAC_FILE_EXCLUSIONS,
   InvalidMockUpdateServerPortError,
   UnsupportedDesktopBuildArchitectureError,
@@ -458,6 +459,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           from: "apps/desktop/prod-resources/resource-monitor",
           to: "resource-monitor",
         },
+        {
+          from: DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
+          to: "plugins",
+        },
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
       ]);
       assert.deepStrictEqual(win.nsis, { differentialPackage: true });
@@ -518,8 +523,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@ff-labs/fff-node": "0.9.4",
           "@opencode-ai/sdk": "^1.3.15",
           "@pierre/diffs": "1.3.0",
+          libsql: "0.5.29",
           "msgpackr-extract": "3.0.4",
           "node-pty": "1.1.0",
+          "playwright-core": "1.60.0",
         },
         desktopDependencies: {
           "@example/desktop-runtime": "1.0.0",
@@ -530,8 +537,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       }),
       {
         "@ff-labs/fff-node": "0.9.4",
+        libsql: "0.5.29",
         "msgpackr-extract": "3.0.4",
         "node-pty": "1.1.0",
+        "playwright-core": "1.60.0",
         "@example/desktop-runtime": "1.0.0",
         effect: "4.0.0-beta.103",
         "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
@@ -1053,11 +1062,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
-  it("stages the resource monitor as an external executable resource", () => {
+  it("stages runtime resources outside app.asar", () => {
     assert.deepStrictEqual(DESKTOP_EXTRA_RESOURCES, [
       {
         from: "apps/desktop/prod-resources/resource-monitor",
         to: "resource-monitor",
+      },
+      {
+        from: DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
+        to: "plugins",
       },
     ]);
     assert.deepStrictEqual(resolveResourceMonitorRustTargets("mac", "universal"), [

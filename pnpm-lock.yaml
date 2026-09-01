@@ -518,6 +518,9 @@ importers:
       effect:
         specifier: 4.0.0-beta.103
         version: 4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6)
+      libsql:
+        specifier: 0.5.29
+        version: 0.5.29
       msgpackr-extract:
         specifier: 3.0.4
         version: 3.0.4

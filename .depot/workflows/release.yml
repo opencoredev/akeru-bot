@@ -220,6 +220,10 @@ jobs:
           xcrun stapler validate "${apps[0]}"
           spctl --assess --type execute --verbose=2 "${apps[0]}"
 
+      - name: Launch macOS DMG
+        if: matrix.platform == 'mac'
+        run: vp run test:desktop-packaged-mac -- "release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
+
       - name: Upload desktop assets
         uses: actions/upload-artifact@v7
         with:

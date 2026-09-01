@@ -27,7 +27,7 @@ import {
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
-  selectCliRuntimeExternalDependencies,
+  selectCliPackagedRuntimeDependencies,
 } from "./lib/cli-external-packages.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { stageReleaseLegalFiles } from "./lib/release-legal.ts";
@@ -792,6 +792,7 @@ export const MAC_FILE_EXCLUSIONS = [
 // runtime; the WSL backend cannot read asar archives, so enabling WSL lazily
 // extracts the sidecar to a version-keyed directory (see DesktopWslServerTree).
 export const WINDOWS_SERVER_ASAR_RESOURCE = "server.asar";
+export const DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR = "apps/desktop/prod-resources/plugins";
 // dlopen/spawn need real files, so native modules, shared libraries, and
 // helper executables live in the server.asar.unpacked sibling (the standard
 // asar redirect convention). Everything else stays packed.
@@ -839,6 +840,10 @@ export const DESKTOP_EXTRA_RESOURCES = [
   {
     from: "apps/desktop/prod-resources/resource-monitor",
     to: "resource-monitor",
+  },
+  {
+    from: DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
+    to: "plugins",
   },
 ] as const;
 
@@ -893,7 +898,7 @@ export function resolveMacStageDependencies(input: {
   readonly fffNodeVersion: string;
 }) {
   return {
-    ...selectCliRuntimeExternalDependencies(input.serverDependencies),
+    ...selectCliPackagedRuntimeDependencies(input.serverDependencies),
     ...input.desktopDependencies,
     ...resolveFffNativeDependencies("mac", input.arch, input.fffNodeVersion),
   };
@@ -2431,7 +2436,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         cause,
       }),
   });
-  const resolvedServerRuntimeExternalDependencies = selectCliRuntimeExternalDependencies(
+  const resolvedServerPackagedRuntimeDependencies = selectCliPackagedRuntimeDependencies(
     resolvedServerDependencies,
   );
   const resolvedDesktopRuntimeDependencies = yield* Effect.try({
@@ -2604,6 +2609,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
+  yield* fs.copy(
+    path.join(repoRoot, "plugins/entries"),
+    path.join(stageProdResourcesDir, "plugins/entries"),
+  );
 
   const macEntitlementsPath =
     options.platform === "mac" && options.signed
@@ -2710,7 +2719,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       serverDistDir: distDirs.serverDist,
       arch: options.arch,
       appVersion,
-      runtimeExternalDependencies: resolvedServerRuntimeExternalDependencies,
+      runtimeExternalDependencies: resolvedServerPackagedRuntimeDependencies,
       fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
       allowBuilds: workspaceAllowBuilds,
       patchedDependencies: workspacePatchedDependencies,
