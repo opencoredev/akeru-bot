@@ -690,12 +690,11 @@ describe("AgentControllerLive", () => {
         yield* Fiber.interrupt(eventsFiber);
 
         assert.deepEqual(
-          events.slice(0, 7).map((event) => event.type),
+          events.slice(0, 6).map((event) => event.type),
           [
             "turn.started",
             "session.state.changed",
             "item.started",
-            "content.delta",
             "content.delta",
             "item.completed",
             "turn.completed",
@@ -711,6 +710,54 @@ describe("AgentControllerLive", () => {
         expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Reply once." });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("publishes the final text when Mastra rewrites a message snapshot", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.takeUntil((event) => event.type === "turn.completed"),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Say hello." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("Hello world"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("Hi there!"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        assert.equal(
+          events
+            .filter((event) => event.type === "content.delta")
+            .map((event) => event.payload.delta)
+            .join(""),
+          "Hi there!",
+        );
       }),
       bridge.service,
       mastra.factory,

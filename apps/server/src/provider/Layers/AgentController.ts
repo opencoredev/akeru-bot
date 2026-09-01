@@ -94,8 +94,7 @@ interface ResolvedEngine {
 
 interface ActiveAssistantMessage {
   readonly itemId: RuntimeItemId;
-  length: number;
-  started: boolean;
+  text: string;
   completed: boolean;
 }
 
@@ -436,20 +435,41 @@ const make = (options?: AgentControllerLiveOptions) =>
       });
     };
 
+    const completeAssistantMessage = (
+      threadId: ThreadId,
+      active: ActiveSession,
+      turn: ActiveTurn,
+      message: ActiveAssistantMessage,
+    ) => {
+      if (message.completed || message.text.length === 0) return;
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId: message.itemId,
+        type: "item.started",
+        payload: { itemType: "assistant_message", status: "inProgress" },
+      });
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId: message.itemId,
+        type: "content.delta",
+        payload: { streamKind: "assistant_text", delta: message.text },
+      });
+      message.completed = true;
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId: message.itemId,
+        type: "item.completed",
+        payload: { itemType: "assistant_message", status: "completed" },
+      });
+    };
+
     const completeAssistantMessages = (
       threadId: ThreadId,
       active: ActiveSession,
       turn: ActiveTurn,
     ) => {
       for (const message of turn.assistantMessages.values()) {
-        if (!message.started || message.completed) continue;
-        message.completed = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: message.itemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
+        completeAssistantMessage(threadId, active, turn, message);
       }
     };
 
@@ -491,43 +511,17 @@ const make = (options?: AgentControllerLiveOptions) =>
       const messageKey = String(message.id);
       let activeMessage = turn.assistantMessages.get(messageKey);
       if (!activeMessage) {
+        completeAssistantMessages(threadId, active, turn);
         activeMessage = {
           itemId: RuntimeItemId.make(`mastra-answer-${messageKey}`),
-          length: 0,
-          started: false,
+          text: "",
           completed: false,
         };
         turn.assistantMessages.set(messageKey, activeMessage);
       }
       if (activeMessage.completed) return;
-      if (!activeMessage.started && text.length > 0) {
-        activeMessage.started = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "item.started",
-          payload: { itemType: "assistant_message", status: "inProgress" },
-        });
-      }
-      if (text.length > activeMessage.length) {
-        const delta = text.slice(activeMessage.length);
-        activeMessage.length = text.length;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "content.delta",
-          payload: { streamKind: "assistant_text", delta },
-        });
-      }
-      if (complete && activeMessage.started && !activeMessage.completed) {
-        activeMessage.completed = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
-      }
+      activeMessage.text = text;
+      if (complete) completeAssistantMessage(threadId, active, turn, activeMessage);
     };
 
     const handleControllerEvent = (
