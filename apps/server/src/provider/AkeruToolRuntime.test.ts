@@ -281,6 +281,35 @@ describe("AkeruToolRuntime", () => {
       summary: "Provider unavailable",
     });
   });
+  it("isolates user-message failures from the current thread", async () => {
+    const runtime = createAkeruToolRuntime({ now: () => "2026-09-01T00:00:00.000Z" });
+    const execution = {
+      threadId: "thread-1",
+      toolId: "SendToUser" as const,
+      toolCallId: "tool-message",
+      input: { message: "The export is ready." },
+      approvalMode: "require-grant" as const,
+    };
+    runtime.registerSession("thread-1", {
+      botId: BotId.make("parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      sendToUser: async () => {
+        throw new Error("Message dispatch failed");
+      },
+    });
+    runtime.grantApproval(execution);
+
+    await expect(runtime.execute(execution)).resolves.toMatchObject({
+      receiptId: "tool-message",
+      toolId: "SendToUser",
+      phase: "failure",
+      failureCode: "internal",
+      fatalToThread: false,
+      summary: "Message dispatch failed",
+    });
+  });
+
   it("translates await handles to workspace process ids", async () => {
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-1", {
