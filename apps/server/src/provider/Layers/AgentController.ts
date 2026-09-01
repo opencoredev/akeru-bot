@@ -1205,7 +1205,6 @@ const make = (options?: AgentControllerLiveOptions) =>
       const workspaceId = botWorkspaceIdentity(workspaceResourceKey);
       const existing = sessions.get(key);
       const resolved = resolvedByThread.get(key);
-      const mcpServers = input.mcpServers ?? [];
       if (!resolved) {
         return yield* new AgentControllerRuntimeError({
           operation: "startSession",
