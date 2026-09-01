@@ -146,6 +146,7 @@ function BotProfileEditor({
   const [usageCap, setUsageCap] = useState(() => bot.usageCap?.limit.toString() ?? "");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [channelsOpen, setChannelsOpen] = useState(false);
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
@@ -457,6 +458,7 @@ function BotProfileEditor({
         }}
       />
       <BotMemorySheet open={memoryOpen} onOpenChange={setMemoryOpen} threadRef={threadRef} />
+      <BotChannelsSheet bot={bot} open={channelsOpen} onOpenChange={setChannelsOpen} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ export type SettingsPath =
   | "/settings/keybindings"
   | "/settings/providers"
   | "/settings/browser"
+  | "/settings/channels"
   | "/settings/sandbox"
   | "/settings/voice"
   | "/settings/privacy"
@@ -34,6 +35,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/keybindings": "Keybindings",
   "/settings/providers": "Providers",
   "/settings/browser": "Browser",
+  "/settings/channels": "Channels",
   "/settings/sandbox": "Sandbox",
   "/settings/voice": "Voice",
   "/settings/privacy": "Privacy",
@@ -319,6 +321,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Auto-show floating preview",
     to: "/settings/browser",
     targetId: "browser",
+  },
+  {
+    id: "bot-channels",
+    title: "Bot channels",
+    to: "/settings/channels",
+    keywords: ["Telegram", "iMessage", "Photon", "WhatsApp"],
   },
   {
     id: "source-control",

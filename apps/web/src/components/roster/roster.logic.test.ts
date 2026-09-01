@@ -100,8 +100,8 @@ describe("buildGroupedRosterSections", () => {
   const group: Group = {
     id: "group-product",
     name: "Product",
-    bossBotId: "assigned",
-    members: [{ botId: "assigned", role: "boss" }],
+    bossBotId: BotId.make("assigned"),
+    members: [{ kind: "bot", botId: BotId.make("assigned"), role: "boss" }],
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
   };

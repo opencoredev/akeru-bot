@@ -201,7 +201,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               }
             />
           ))}
-          {working ? <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} /> : null}
+          {working && activeBot ? (
+            <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} />
+          ) : null}
         </BotConversationScrollArea>
         <BotInboxAlertStack
           items={inboxItems}

@@ -59,6 +59,7 @@ describe("sidebar footer", () => {
           runtimeMode: "approval-required",
           usageCap: null,
           voiceEnabled: false,
+          channelBindings: [],
           groupId: null,
           disabledMcpServerIds: [],
           avatar: { kind: "blob", shape: "circle", color: "#5B7FD4" },

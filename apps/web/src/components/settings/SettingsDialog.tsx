@@ -65,6 +65,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
   browser: BrowserSettingsPanel,
+  channels: BotChannelsSettingsPanel,
   sandbox: SandboxSettingsPanel,
   voice: VoiceSettingsPanel,
   privacy: PrivacySettingsPanel,

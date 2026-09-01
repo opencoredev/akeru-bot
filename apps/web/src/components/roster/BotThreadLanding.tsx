@@ -1,5 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type BotEngine, type EnvironmentId } from "@t3tools/contracts";
+import {
+  BotId,
+  type BotEngine,
+  type ChannelMessageOrigin,
+  type EnvironmentId,
+  type MessageId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -35,7 +42,12 @@ import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
-import { isBotConversationWorking, visibleBotChatMessages } from "./botConversationPresentation";
+import {
+  channelOriginForAssistantMessage,
+  channelProviderLabel,
+  isBotConversationWorking,
+  visibleBotChatMessages,
+} from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { BotMessageAttachments } from "./BotMessageAttachments";
@@ -105,6 +117,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
+  const canManageChannelBindings = canManageChannels(channelSession.data);
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });

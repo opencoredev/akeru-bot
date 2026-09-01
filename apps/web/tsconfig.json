@@ -32,7 +32,8 @@
     "test",
     "scripts/warm-dep-cache.ts",
     "../../plugins",
-    "../../scripts/lib/public-config.ts"
+    "../../scripts/lib/public-config.ts",
+    "../../scripts/lib/release-legal.ts"
   ],
   "exclude": ["../../plugins/*.test.ts"]
 }
