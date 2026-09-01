@@ -1262,7 +1262,7 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
-  it.effect("destroys obsolete and final pooled remote workspaces", () => {
+  it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const firstWorkspace = new Workspace({
@@ -1274,6 +1274,7 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const firstDestroy = vi.spyOn(firstWorkspace, "destroy");
+    const secondStop = vi.spyOn(secondWorkspace, "stop");
     const secondDestroy = vi.spyOn(secondWorkspace, "destroy");
     const makeRemoteWorkspace = vi
       .fn()
@@ -1311,7 +1312,8 @@ describe("AgentControllerLive", () => {
         expect(firstDestroy).toHaveBeenCalledOnce();
       }).pipe(Effect.provide(layer), Effect.orDie);
 
-      expect(secondDestroy).toHaveBeenCalledOnce();
+      expect(secondStop).toHaveBeenCalledOnce();
+      expect(secondDestroy).not.toHaveBeenCalled();
     });
   });
 
