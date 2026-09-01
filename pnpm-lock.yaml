@@ -198,6 +198,9 @@ importers:
       '@astrojs/check':
         specifier: ^0.9.7
         version: 0.9.9(prettier@3.8.3)(typescript@6.0.3)
+      '@effect/vitest':
+        specifier: 4.0.0-beta.103
+        version: 4.0.0-beta.103(patch_hash=a16b1e870d8c29e4a98b17cc4c638a4ff471753d8ca3487f78a22b759caf951b)(effect@4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6))
       '@vercel/config':
         specifier: ^0.3.0
         version: 0.3.0
@@ -20642,8 +20645,8 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
-      expo-widgets: 56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      expo-widgets: 56.0.19(32843e0c0883df8bccfa0b8323659df5)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -20695,8 +20698,8 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
-      expo-widgets: 56.0.19(32843e0c0883df8bccfa0b8323659df5)
+      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
+      expo-widgets: 56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color

@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.7",
+    "@effect/vitest": "catalog:",
     "@vercel/config": "^0.3.0",
     "typescript": "catalog:"
   }

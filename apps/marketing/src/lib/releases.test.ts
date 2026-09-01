@@ -49,7 +49,9 @@ describe("release downloads", () => {
   });
 
   it("does not advertise macOS Intel or unknown systems", () => {
-    assert.equal(detectDownloadTarget("Macintosh; Intel Mac OS X").assetSuffix, "arm64.dmg");
+    const intelMacTarget = detectDownloadTarget("Macintosh; Intel Mac OS X");
+    assert.isNotNull(intelMacTarget);
+    assert.equal(intelMacTarget.assetSuffix, "arm64.dmg");
     assert.isNull(detectDownloadTarget("Mozilla/5.0 (Android 16)"));
   });
 
@@ -59,7 +61,10 @@ describe("release downloads", () => {
       await resolveDownloadUrl(windows, Promise.resolve({ ...release, assets: [] })),
       RELEASES_URL,
     );
-    assert.equal(await resolveDownloadUrl(windows, Promise.reject(new Error("offline"))), RELEASES_URL);
+    assert.equal(
+      await resolveDownloadUrl(windows, Promise.reject(new Error("offline"))),
+      RELEASES_URL,
+    );
   });
 
   it("blocks a fast click until the primary download resolves", () => {
