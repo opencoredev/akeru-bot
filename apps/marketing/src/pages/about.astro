@@ -1,0 +1,36 @@
+---
+import TrustPage from "../components/TrustPage.astro";
+---
+
+<TrustPage
+  title="About Akeru Bot"
+  description="Learn who builds Akeru Bot, how the open-source project works, and where to find its source and documentation."
+  heading="About Akeru Bot"
+>
+  <p>
+    Akeru Bot is an open-source desktop and web application for people who work with coding agents.
+    Each bot has its own instructions, tools, plugins, and long-term memory. A user can run several
+    bots in one workspace while keeping each bot's setup separate. Akeru Bot runs on the user's own
+    Claude, Codex, Grok, Kimi, or OpenCode access instead of selling model usage.
+  </p>
+  <p>
+    The project is a fork of T3 Code. T3 Tools, Inc. maintains Akeru Bot in public under the MIT
+    License. The source, issue tracker, release history, and contribution guide are available in the
+    <a href="https://github.com/opencoredev/akeru-bot">Akeru Bot GitHub repository</a>. The repository
+    also contains user documentation for installation, bot profiles, plugins, remote access, and
+    security behavior.
+  </p>
+  <h2>How it works</h2>
+  <p>
+    A local server connects the desktop, web, and mobile clients to supported coding-agent providers.
+    Users can keep work on their own machine, connect over their own network, or run a bot inside a
+    cloud sandbox. The app stores project threads and bot memory in the environment that the user
+    controls. Optional hosted services have separate privacy terms and only process data needed for
+    the feature that the user enables.
+  </p>
+  <p>
+    Akeru Bot accepts public contributions and publishes its implementation decisions in the same
+    repository as the product. Read the <a href="https://github.com/opencoredev/akeru-bot/tree/main/docs/user">user documentation</a>
+    to install the app, or use the repository issue tracker to report a product defect.
+  </p>
+</TrustPage>

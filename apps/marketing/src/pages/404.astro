@@ -1,0 +1,50 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+Astro.response.status = 404;
+---
+
+<Layout title="Page not found | Akeru Bot" description="The requested Akeru Bot page does not exist.">
+  <section class="not-found">
+    <h1>Page not found</h1>
+    <p>The requested page does not exist. Use the links below to continue.</p>
+    <ul>
+      <li><a href="/">Akeru Bot home</a></li>
+      <li><a href="/sitemap.xml">Sitemap</a></li>
+      <li><a href="/llms.txt">Agent guide</a></li>
+      <li><a href="https://github.com/opencoredev/akeru-bot/tree/main/docs/user">Documentation</a></li>
+    </ul>
+  </section>
+</Layout>
+
+<style>
+  .not-found {
+    width: min(680px, calc(100% - 48px));
+    margin: auto;
+    padding: 120px 0;
+  }
+
+  h1 {
+    font-size: clamp(3rem, 9vw, 6rem);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+  }
+
+  p,
+  ul {
+    margin-top: 24px;
+    color: var(--color-muted-foreground);
+  }
+
+  ul {
+    display: grid;
+    gap: 10px;
+    padding-left: 20px;
+  }
+
+  a {
+    color: var(--color-foreground);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+</style>

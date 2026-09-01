@@ -1,0 +1,40 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { describe, expect, it } from "vite-plus/test";
+
+const publicFile = (path: string) =>
+  readFileSync(resolve(import.meta.dirname, "../public", path), "utf8");
+
+describe("agent readiness files", () => {
+  it("publishes agent guidance and crawler policy", () => {
+    const llms = publicFile("llms.txt");
+    const robots = publicFile("robots.txt");
+
+    expect(llms).toMatch(/^# Akeru Bot/m);
+    expect(llms).toContain("## When to use Akeru Bot");
+    expect(robots).toContain("User-agent: GPTBot\nAllow: /");
+    expect(robots).toContain("User-agent: CCBot\nDisallow: /");
+    expect(robots).toContain("https://www.akeru-bot.com/sitemap.xml");
+  });
+
+  it("publishes a current sitemap with the trust pages", () => {
+    const sitemap = publicFile("sitemap.xml");
+
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/about</loc>");
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/contact</loc>");
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/privacy-policy</loc>");
+    expect(sitemap).toMatch(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+  });
+
+  it("publishes valid discovery documents", () => {
+    const ard = JSON.parse(publicFile(".well-known/ard.json"));
+
+    expect(ard).toMatchObject({ specVersion: "1.0" });
+    expect(ard.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ identifier: "urn:air:akeru-bot.com:website" }),
+      ]),
+    );
+  });
+});
