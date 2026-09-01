@@ -9,7 +9,8 @@ Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04`
 - **Public dependency install.** The job rejects `file:` and `link:` dependencies that resolve
   outside the repository, then runs `vp install --frozen-lockfile`.
 - **Lint, types, and builds.** The job checks lint and formatting, runs workspace type checks,
-  builds the desktop pipeline, checks the preload output, and builds the marketing site.
+  validates the plugin directory and contribution policy, builds the desktop pipeline, checks the
+  preload output, and builds the marketing site.
 - **Focused tests.** Separate jobs run the shipped desktop and shared-package tests, the sharded
   server tests, and the resource-monitor tests. Relay and mobile-production packages are excluded.
   The server shards exclude `orchestrationEngine.integration.test.ts` until the executor stack

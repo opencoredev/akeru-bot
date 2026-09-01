@@ -24,7 +24,7 @@ Declare an approval for each permission that can send, pay, delete, change produ
 
 ## Add an entry
 
-1. Open a Plugin proposal issue and attach the admission evidence.
+1. Open a [Plugin proposal](https://github.com/opencoredev/akeru-bot/issues/new?template=plugin_proposal.yml) and attach the admission evidence. Use the [Provider proposal](https://github.com/opencoredev/akeru-bot/issues/new?template=provider_proposal.yml) for an agent runtime.
 2. Wait for a maintainer to confirm that the plugin fits the directory.
 3. Add one `entries/<id>/` directory with `plugin.json`, `logo.svg`, and `logo-dark.svg`.
 4. Run the validator and focused tests.
