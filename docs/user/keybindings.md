@@ -55,6 +55,10 @@ so add one in **Settings** → **Keybindings** if you want to use it.
 `thread.settle` settles the active thread or restores it when it is already settled. Its default
 shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
 
+`thread.jump.1` through `thread.jump.9` switch to the matching bot and default to `mod+1` through
+`mod+9`. Pinned bots come first. Other bots follow their section and roster order. Groups do not
+take a shortcut number.
+
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while
 keeping the thread's project, branch, and machine context visible. Message search begins after two

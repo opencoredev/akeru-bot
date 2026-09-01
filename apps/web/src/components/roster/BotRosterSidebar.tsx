@@ -1,4 +1,5 @@
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
+import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -18,10 +19,14 @@ import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
 import { useClientSettings } from "../../hooks/useSettings";
+import { resolveShortcutCommand } from "../../keybindings";
+import { isTerminalFocused } from "../../lib/terminalFocus";
 import { cn, randomUUID } from "../../lib/utils";
+import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { botEnvironment } from "../../state/bots";
 import { useThreadMessages, useThreadShells } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { Button } from "../ui/button";
@@ -55,8 +60,10 @@ import {
   resolveRosterIndicator,
   parseRosterBotDragId,
   parseRosterGroupDropId,
+  orderRosterBotsForShortcuts,
   rosterBotDragId,
   rosterGroupDropId,
+  resolveRosterShortcutBot,
   type RosterLastMessage,
   type RosterPresence,
 } from "./roster.logic";
@@ -520,6 +527,7 @@ function PinnedRosterItem({
 export default function BotRosterSidebar() {
   useServerRosterSync();
   const navigate = useNavigate();
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const environmentId = usePrimaryEnvironmentId();
   const createBotCommand = useAtomCommand(botEnvironment.create, {
     reportFailure: false,
@@ -658,6 +666,33 @@ export default function BotRosterSidebar() {
     useRosterStore.getState().selectBot(bot.id);
     void navigate({ to: "/bots/$botId", params: { botId: bot.id } });
   };
+
+  const shortcutBots = useMemo(
+    () => orderRosterBotsForShortcuts(bots, pinnedItems, sections),
+    [bots, pinnedItems, sections],
+  );
+  useEffect(() => {
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return;
+      const command = resolveShortcutCommand(event, keybindings, {
+        context: {
+          terminalFocus: isTerminalFocused(),
+          modelPickerOpen: isModelPickerOpen(),
+        },
+      });
+      const bot = resolveRosterShortcutBot(command ?? "", shortcutBots);
+      if (!bot) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      pendingClickedBotIdRef.current = bot.id;
+      useRosterStore.getState().selectBot(bot.id);
+      void navigate({ to: "/bots/$botId", params: { botId: bot.id } });
+    };
+
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [keybindings, navigate, shortcutBots]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
