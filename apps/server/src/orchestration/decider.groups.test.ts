@@ -377,14 +377,27 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
-  it.effect("rejects group mutations from an authenticated outsider", () =>
+  it.effect("lets paired clients configure groups but not create group-owned threads", () =>
     Effect.gen(function* () {
       const outsiderId = AuthSessionId.make("person-outsider");
       const actor = { personId: outsiderId, canManageGroups: false } as const;
       const readModel = {
         ...makeReadModel({
-          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
-          groups: [makeGroup()],
+          bots: [
+            makeBot({ id: BOSS_ID }),
+            makeBot({ id: SPECIALIST_ID }),
+            makeBot({ id: OTHER_SPECIALIST_ID }),
+          ],
+          groups: [
+            makeGroup({
+              members: [
+                { kind: "bot", botId: BOSS_ID, role: "boss" },
+                { kind: "bot", botId: SPECIALIST_ID, role: "specialist" },
+                { kind: "bot", botId: OTHER_SPECIALIST_ID, role: "specialist" },
+                { kind: "person", personId: PERSON_ID, displayName: "Member" },
+              ],
+            }),
+          ],
         }),
         projects: [
           {
@@ -486,11 +499,11 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       ]);
 
       expect(results.map((result) => result._tag)).toEqual([
-        "Failure",
-        "Failure",
-        "Failure",
-        "Failure",
-        "Failure",
+        "Success",
+        "Success",
+        "Success",
+        "Success",
+        "Success",
         "Failure",
       ]);
     }),

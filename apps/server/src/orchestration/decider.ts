@@ -25,7 +25,7 @@ import {
   requireBotNotArchived,
   requireGroup,
   requireGroupAbsent,
-  requireGroupMutationAuthorized,
+  requireGroupThreadCreateAuthorized,
   requireGroupOwnedThreadMutationAuthorized,
   requireMcpServer,
   requireMcpServerAbsent,
@@ -721,7 +721,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "group.rename": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      yield* requireGroupMutationAuthorized({ group, command, actor });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -741,7 +740,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "group.delete": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      yield* requireGroupMutationAuthorized({ group, command, actor });
       const occurredAt = yield* nowIso;
       const deletedEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
@@ -796,7 +794,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "group.member.assign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      yield* requireGroupMutationAuthorized({ group, command, actor });
       const bot = yield* requireBotNotArchived({ readModel, command, botId: command.botId });
       if (command.role === "boss" && group.bossBotId !== null && group.bossBotId !== bot.id) {
         return yield* Effect.fail(
@@ -834,7 +831,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "group.member.unassign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      yield* requireGroupMutationAuthorized({ group, command, actor });
       const member = group.members
         .filter(isGroupBotMember)
         .find((entry) => entry.botId === command.botId);
@@ -934,7 +930,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "group.boss.set": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      yield* requireGroupMutationAuthorized({ group, command, actor });
       const nextBoss = yield* requireBotNotArchived({
         readModel,
         command,
@@ -1136,7 +1131,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       }
       if (command.groupId != null) {
         const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-        yield* requireGroupMutationAuthorized({ group, command, actor });
+        yield* requireGroupThreadCreateAuthorized({ group, command, actor });
       }
       yield* requireThreadAbsent({
         readModel,

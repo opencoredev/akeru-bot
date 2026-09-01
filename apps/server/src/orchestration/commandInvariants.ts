@@ -243,19 +243,6 @@ export function requireGroup(input: {
       );
 }
 
-type GroupMutationCommand = Extract<
-  OrchestrationCommand,
-  {
-    type:
-      | "group.rename"
-      | "group.delete"
-      | "group.member.assign"
-      | "group.member.unassign"
-      | "group.boss.set"
-      | "thread.create";
-  }
->;
-
 function requireMutationActorAuthorized(input: {
   readonly group: OrchestrationGroup;
   readonly command: OrchestrationCommand;
@@ -279,9 +266,9 @@ function requireMutationActorAuthorized(input: {
   );
 }
 
-export function requireGroupMutationAuthorized(input: {
+export function requireGroupThreadCreateAuthorized(input: {
   readonly group: OrchestrationGroup;
-  readonly command: GroupMutationCommand;
+  readonly command: Extract<OrchestrationCommand, { readonly type: "thread.create" }>;
   readonly actor: OrchestrationDispatchActor | undefined;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
   return requireMutationActorAuthorized(input);
