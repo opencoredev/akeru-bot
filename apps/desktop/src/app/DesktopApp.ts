@@ -10,9 +10,9 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
-import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
@@ -145,9 +145,9 @@ const bootstrap = Effect.gen(function* () {
   const state = yield* DesktopState.DesktopState;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
   const wslBackend = yield* DesktopWslBackend.DesktopWslBackend;
-  const desktopWindow = yield* DesktopWindow.DesktopWindow;
   yield* logBootstrapInfo("bootstrap start");
 
   if (environment.isDevelopment && Option.isNone(environment.configuredBackendPort)) {
@@ -182,7 +182,6 @@ const bootstrap = Effect.gen(function* () {
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     targetOrigin: rendererTarget,
     backendOrigin: backendConfig.httpBaseUrl,
-    clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });
   yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
     baseUrl: backendConfig.httpBaseUrl.href,
@@ -224,7 +223,7 @@ const startup = Effect.gen(function* () {
   const electronApp = yield* ElectronApp.ElectronApp;
   const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
   const linuxUrlHandler = yield* DesktopLinuxUrlHandler.DesktopLinuxUrlHandler;
-  const clerk = yield* DesktopClerk.DesktopClerk;
+  const electronWindow = yield* ElectronWindow.ElectronWindow;
   const shellEnvironment = yield* DesktopShellEnvironment.DesktopShellEnvironment;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const preReadyElectronOptions = yield* DesktopPreReadyPlatform.DesktopPreReadyElectronOptions;
@@ -255,6 +254,22 @@ const startup = Effect.gen(function* () {
   }
   const userDataPath = yield* appIdentity.resolveUserDataPath;
   yield* electronApp.setPath("userData", userDataPath);
+  if (!(yield* electronApp.requestSingleInstanceLock)) {
+    yield* electronApp.quit;
+    return yield* Effect.interrupt;
+  }
+  const context = yield* Effect.context<ElectronWindow.ElectronWindow>();
+  const runPromise = Effect.runPromiseWith(context);
+  yield* electronApp.on("second-instance", () => {
+    void runPromise(
+      Effect.gen(function* () {
+        const mainWindow = yield* electronWindow.currentMainOrFirst;
+        if (Option.isSome(mainWindow)) {
+          yield* electronWindow.reveal(mainWindow.value);
+        }
+      }),
+    );
+  });
   yield* logStartupInfo("runtime logging configured", { logDir: environment.logDir });
   yield* desktopSettings.load;
 
@@ -270,7 +285,6 @@ const startup = Effect.gen(function* () {
 
   yield* appIdentity.configure;
   yield* lifecycle.register;
-  yield* clerk.configure;
 
   yield* electronApp.whenReady.pipe(
     Effect.withSpan("desktop.electron.whenReady"),

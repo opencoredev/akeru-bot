@@ -9,8 +9,6 @@ import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
-import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
-import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
 import { VoiceCallProvider } from "../components/voice/VoiceCall";
@@ -20,6 +18,7 @@ import { SettingsDialog } from "../components/settings/SettingsDialog";
 import { PluginsDialog } from "../components/plugins/PluginsDialog";
 import { UsageDialog } from "../components/usage/UsageDialog";
 import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
+import { PolicyNotice } from "../components/privacy/PolicyNotice";
 import { RootRouteErrorView } from "./RootRouteErrorView";
 import {
   AnchoredToastProvider,
@@ -101,7 +100,7 @@ function RootRouteView() {
     };
   }, [pathname]);
 
-  if (pathname === "/pair" || pathname === "/connect" || pathname.startsWith("/connect/")) {
+  if (pathname === "/pair") {
     return (
       <>
         <DocumentTitleSync />
@@ -135,8 +134,6 @@ function RootRouteView() {
         <GlassAppearanceSync />
         <FontAppearanceSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
-        <RelayClientInstallDialog />
-        <ConnectOnboardingDialog />
         <SshPasswordPromptDialog />
         <ConfirmDialogHost />
         <SlowRpcRequestToastCoordinator />
@@ -149,6 +146,7 @@ function RootRouteView() {
         <PluginsDialog />
         <UsageDialog />
         <ProductFeedbackDialog />
+        <PolicyNotice />
         {/* Above the router: a theme draft is judged by walking the app, so the
             editor has to survive navigation away from settings. */}
         <ThemeEditorHost />

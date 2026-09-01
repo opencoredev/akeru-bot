@@ -1,7 +1,6 @@
 import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
-  RelayConnectionTarget,
   SshConnectionTarget,
 } from "@t3tools/client-runtime/connection";
 import { buildRemoteOpenUrl, EnvironmentId } from "@t3tools/contracts";
@@ -97,7 +96,11 @@ describe("resolveRemoteOpenState", () => {
     for (const remoteOpenTargets of [[], undefined] as const) {
       expect(
         resolveRemoteOpenState({
-          target: new RelayConnectionTarget({ environmentId, label: "sol" }),
+          target: new BearerConnectionTarget({
+            environmentId,
+            label: "sol",
+            connectionId: "remote-1",
+          }),
           sshAlias: null,
           isDesktopRenderer: false,
           remoteOpenTargets,

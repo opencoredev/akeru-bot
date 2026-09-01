@@ -7,6 +7,7 @@ import type {
   RuntimeMode,
   ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import {
   detectComposerTrigger,
   replaceTextRange,
@@ -35,7 +36,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
-import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 
 import { AppText as Text } from "../../components/AppText";
@@ -66,6 +66,8 @@ import {
 } from "@t3tools/shared/searchRanking";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
+import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 import {
@@ -76,6 +78,7 @@ import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
 } from "./use-thread-settings-sheet-presentation";
+import { buildBotUsageCapPatch } from "./botStepUsage";
 
 /**
  * Height of the collapsed composer (pill + vertical padding, excluding safe-area inset).
@@ -284,6 +287,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     isEditorFocused: isFocused,
   });
   const settingsRoutePresentation = useExistingThreadSettingsRoutePresentation();
+  const bots = useAtomValue(environmentBotsAtom(props.environmentId));
+  const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
+  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
   const inFlightThreadIdsRef = useRef(new Set<string>());
@@ -556,25 +562,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       if (messageId === null) {
         return;
       }
-      // Sending a prompt starts agent work: arm the lock-screen card while the
-      // app is foregrounded and the activity token can be registered. Armed
-      // after the send so its preference read and native Activity start don't
-      // contend with the queued-message feedback on the tap frame.
-      armAgentAwarenessLiveActivityForLocalWork({
-        environmentId: props.environmentId,
-        threadTitle: props.selectedThread.title,
-        projectTitle: props.environmentLabel ?? "T3 Code",
-      });
     } finally {
       inFlightThreadIdsRef.current.delete(threadKey);
     }
-  }, [
-    onSendMessage,
-    props.environmentId,
-    props.environmentLabel,
-    props.selectedThread.id,
-    props.selectedThread.title,
-  ]);
+  }, [onSendMessage, props.environmentId, props.selectedThread.id]);
   const handleCommandSelect = useCallback(
     (item: ComposerCommandItem) => {
       if (!composerTrigger) return;
@@ -644,6 +635,16 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       }),
     [currentModelOption?.capabilities, currentModelSelection.options],
   );
+  const updateBotUsageCap = useCallback(
+    async (input: string) => {
+      if (!bot) return false;
+      const patch = buildBotUsageCapPatch(bot.id, input, currentModelOption?.providerDriver);
+      if (!patch) return false;
+      const result = await updateBot({ environmentId: props.environmentId, input: patch });
+      return result._tag === "Success";
+    },
+    [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
+  );
   const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({
@@ -656,15 +657,24 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         props.onUpdateModelSelection({ ...currentModelSelection, options }),
       runtimeMode: currentRuntimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
+      ...(bot
+        ? {
+            botUsageCap: bot.usageCap,
+            botUsageCapProviderDriver: currentModelOption?.providerDriver,
+            onUpdateBotUsageCap: updateBotUsageCap,
+          }
+        : {}),
     }),
     [
       currentModelSelection,
       currentRuntimeMode,
+      bot,
       props.onUpdateModelSelection,
       props.onUpdateRuntimeMode,
       providerOptionDescriptors,
       settingsOwnerId,
       threadProviderGroups,
+      updateBotUsageCap,
     ],
   );
   const openSettings = useCallback(() => {

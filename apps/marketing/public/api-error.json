@@ -1,0 +1,8 @@
+{
+  "type": "https://www.akeru-bot.com/problems/not-found",
+  "title": "API resource not found",
+  "status": 404,
+  "detail": "The requested Akeru Bot API resource does not exist.",
+  "code": "api_resource_not_found",
+  "resolution": "Read https://www.akeru-bot.com/developers or https://www.akeru-bot.com/openapi.json for supported resources."
+}

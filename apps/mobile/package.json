@@ -44,7 +44,6 @@
   },
   "dependencies": {
     "@callstack/liquid-glass": "^0.7.1",
-    "@clerk/expo": "catalog:",
     "@effect/atom-react": "catalog:",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo/metro-runtime": "~56.0.15",
@@ -124,6 +123,7 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@pierre/trees": "1.0.0-beta.4",
+    "@types/node": "catalog:",
     "@types/react": "~19.2.0",
     "babel-preset-expo": "~56.0.0",
     "tailwindcss": "^4.0.0",

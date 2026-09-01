@@ -1,8 +1,12 @@
 import { PNG } from "pngjs";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 
-import { redactComputerScreenshot, redactPreviewSnapshot } from "./PreviewSnapshotRedaction.ts";
-import { redactSensitiveText } from "./SensitiveDataRedaction.ts";
+import {
+  redactComputerScreenshot,
+  redactPreviewSnapshot,
+  redactProviderVisiblePreviewResult,
+} from "./PreviewSnapshotRedaction.ts";
 
 function testScreenshot() {
   const png = new PNG({ width: 2, height: 2 });
@@ -110,5 +114,115 @@ describe("preview snapshot redaction", () => {
 
     const result = redactComputerScreenshot({ mediaType: "image/png", data: bytes });
     expect(Buffer.from(result.data).includes(text)).toBe(false);
+  });
+
+  it("sanitizes snapshots before they reach a provider", () => {
+    const result = redactProviderVisiblePreviewResult("snapshot", {
+      url: "http://example.test/",
+      title: "leo@example.com",
+      loading: false,
+      visibleText: "token=visible-secret",
+      interactiveElements: [
+        {
+          tag: "input",
+          role: "textbox",
+          name: "leo@example.com",
+          selector: "#email",
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 20,
+        },
+      ],
+      accessibilityTree: {
+        nodes: [{ name: { value: "AX name secret" }, value: { value: "AX value secret" } }],
+      },
+      consoleEntries: [
+        { level: "log", text: "token=console-secret", timestamp: "2026-01-01T00:00:00Z" },
+      ],
+      networkEntries: [],
+      actionTimeline: [],
+      screenshot: testScreenshot(),
+    }) as {
+      readonly accessibilityTree: unknown;
+      readonly title: string;
+      readonly visibleText: string;
+      readonly interactiveElements: ReadonlyArray<{ readonly name: string }>;
+      readonly consoleEntries: ReadonlyArray<{ readonly text: string }>;
+      readonly screenshot: { readonly data: string };
+    };
+
+    expect(result.accessibilityTree).toEqual({
+      redactionStatus: "omitted-unverified-accessibility-tree",
+    });
+    expect(result.title).toBe("[REDACTED]");
+    expect(result.visibleText).toBe("[REDACTED]");
+    expect(result.interactiveElements[0]?.name).toBe("[REDACTED]");
+    expect(result.consoleEntries[0]?.text).toBe("[REDACTED]");
+    const png = PNG.sync.read(Buffer.from(result.screenshot.data, "base64"));
+    expect([...png.data.subarray(0, 4)]).toEqual([0, 0, 0, 255]);
+  });
+
+  it("omits arbitrary evaluation output and redacts local artifact paths", () => {
+    expect(
+      redactProviderVisiblePreviewResult("evaluate", {
+        arbitrary: "unrecognizable-secret",
+        screenshot: testScreenshot(),
+      }),
+    ).toEqual({ redactionStatus: "omitted-unverified-preview-evaluation" });
+
+    expect(
+      redactProviderVisiblePreviewResult("recordingStop", {
+        id: "recording-1",
+        tabId: "tab-1",
+        path: "/Users/leo/.akeru/browser-artifacts/recording.webm",
+        mimeType: "video/webm",
+        sizeBytes: 123,
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toMatchObject({ path: "[REDACTED]" });
+
+    expect(
+      redactProviderVisiblePreviewResult("status", {
+        chatPath: "/tmp/chat.json",
+        logPath: "/tmp/browser.log",
+        uploadPath: "/tmp/upload.png",
+      }),
+    ).toEqual({
+      chatPath: "[REDACTED]",
+      logPath: "[REDACTED]",
+      uploadPath: "[REDACTED]",
+    });
+  });
+
+  it("fails closed when a provider screenshot cannot be masked", () => {
+    expect(() =>
+      redactProviderVisiblePreviewResult("snapshot", {
+        url: "http://example.test/",
+        title: "Example",
+        loading: false,
+        visibleText: "safe",
+        interactiveElements: [],
+        accessibilityTree: {},
+        consoleEntries: [],
+        networkEntries: [],
+        actionTimeline: [],
+        screenshot: { ...testScreenshot(), data: Buffer.from("raw pixels").toString("base64") },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects screenshot strings and nested image data", () => {
+    expect(() =>
+      redactProviderVisiblePreviewResult("status", { screenshot: "raw-base64-data" }),
+    ).toThrow("Unredacted screenshot data is not provider-safe.");
+    expect(() =>
+      redactProviderVisiblePreviewResult("status", { image: { data: "raw-base64-data" } }),
+    ).toThrow("Unredacted screenshot data is not provider-safe.");
+    expect(() =>
+      redactProviderVisiblePreviewResult("status", {
+        screenshot: [{ data: "raw-base64-data" }],
+      }),
+    ).toThrow("Unredacted screenshot data is not provider-safe.");
   });
 });

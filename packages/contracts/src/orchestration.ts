@@ -305,6 +305,19 @@ export type BotEngine = typeof BotEngine.Type;
 export const BotSandbox = Schema.Literals(["local", "e2b", "daytona", "vercel", "upstash"]);
 export type BotSandbox = typeof BotSandbox.Type;
 
+export const PersistedBotSandbox = Schema.Union([
+  Schema.NullOr(BotSandbox),
+  Schema.Literal("akeru-cloud"),
+]).pipe(
+  Schema.decodeTo(
+    Schema.NullOr(BotSandbox),
+    SchemaTransformation.transform({
+      decode: (value) => (value === "akeru-cloud" ? null : value),
+      encode: (value) => value,
+    }),
+  ),
+);
+
 export const BotSandboxBrowserSharing = Schema.Literals(["shared", "separate"]);
 export type BotSandboxBrowserSharing = typeof BotSandboxBrowserSharing.Type;
 export const DEFAULT_BOT_SANDBOX_BROWSER_SHARING: BotSandboxBrowserSharing = "separate";
@@ -328,7 +341,7 @@ export const OrchestrationBot = Schema.Struct({
   ),
   avatar: BotAvatar,
   engine: Schema.NullOr(BotEngine),
-  sandbox: Schema.NullOr(BotSandbox),
+  sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1605,7 +1618,7 @@ export const BotCreatedPayload = Schema.Struct({
   ),
   avatar: BotAvatar,
   engine: Schema.NullOr(BotEngine),
-  sandbox: Schema.NullOr(BotSandbox),
+  sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1623,7 +1636,7 @@ export const BotUpdatedPayload = Schema.Struct({
   disabledMcpServerIds: Schema.optional(Schema.Array(McpServerId)),
   avatar: Schema.optional(BotAvatar),
   engine: Schema.optional(Schema.NullOr(BotEngine)),
-  sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
+  sandbox: Schema.optional(PersistedBotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   voiceEnabled: Schema.optional(Schema.Boolean),

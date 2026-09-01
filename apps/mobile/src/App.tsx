@@ -10,7 +10,7 @@ import { createStaticNavigation } from "@react-navigation/native";
 
 import { RegistryContext } from "@effect/atom-react";
 import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
-import { CloudAuthProvider } from "./features/cloud/CloudAuthProvider";
+import { MobilePolicyNotice } from "./features/settings/MobilePolicyNotice";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
 import { IncomingShareProvider } from "./features/sharing/IncomingShareProvider";
 import {
@@ -61,11 +61,9 @@ function SplashScreenCoordinator() {
 export default function App() {
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
-      <CloudAuthProvider>
-        <AppearancePreferencesProvider>
-          <AppContent />
-        </AppearancePreferencesProvider>
-      </CloudAuthProvider>
+      <AppearancePreferencesProvider>
+        <AppContent />
+      </AppearancePreferencesProvider>
     </RegistryContext.Provider>
   );
 }
@@ -97,6 +95,7 @@ function AppContent() {
                 <Navigation linking={appLinking} theme={navigationTheme} />
               </IncomingShareProvider>
               <ConfirmDialogHost />
+              <MobilePolicyNotice />
             </BlurTargetView>
             {/* Anchored-menu overlays render here — in-window, so the
                 keyboard stays up while a dropdown is open. */}

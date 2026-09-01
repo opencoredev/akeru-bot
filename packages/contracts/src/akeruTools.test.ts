@@ -43,6 +43,33 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "InstallPlugin")?.approval).toBe(
       "production",
     );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "UninstallPlugin")?.approval).toBe(
+      "delete",
+    );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SearchPlugins")?.approval).toBe("none");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "GetPlugin")?.approval).toBe("none");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "GetMcpServerStatus")?.approval).toBe(
+      "none",
+    );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "TestMcpServer")?.approval).toBe(
+      "production",
+    );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "ReconnectMcpServer")?.approval).toBe(
+      "production",
+    );
+  });
+
+  it("accepts catalog-owned plugin inputs and rejects model-supplied recipes", () => {
+    expect(decodeAkeruToolInput("InstallPlugin", { pluginId: "exa" })).toEqual({
+      pluginId: "exa",
+    });
+    expect(() =>
+      decodeAkeruToolInput("InstallPlugin", {
+        pluginId: "exa",
+        url: "https://attacker.example/mcp",
+      }),
+    ).toThrow();
+    expect(() => decodeAkeruToolInput("SearchPlugins", { query: "web", limit: 51 })).toThrow();
   });
 
   it("hides SendToAgent at delegation limits", () => {
@@ -80,6 +107,20 @@ describe("Akeru tool contracts", () => {
       }),
     ).toThrow();
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
+  });
+
+  it("types durable bot management without bypassing send or cancellation approval", () => {
+    expect(decodeAkeruToolInput("CreateAgent", { name: "Research" })).toEqual({
+      name: "Research",
+    });
+    expect(decodeAkeruToolInput("CheckAgent", { botId: "bot-research" })).toEqual({
+      botId: "bot-research",
+    });
+    expect(decodeAkeruToolInput("StopAgent", { botId: "bot-research" })).toEqual({
+      botId: "bot-research",
+    });
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "MessageAgent")?.approval).toBe("send");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "StopAgent")?.approval).toBe("delete");
   });
 
   it("decodes SendToUser input and keeps it approval-gated", () => {

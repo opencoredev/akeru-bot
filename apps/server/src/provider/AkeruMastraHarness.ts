@@ -433,6 +433,25 @@ const READ_ONLY_INTENT_TOKENS = new Set([
   "status",
   "view",
 ]);
+const CRITICAL_SHELL_ACTIONS: ReadonlyArray<readonly [AkeruCriticalAction, RegExp]> = [
+  [
+    "delete",
+    /(?:^|[;&|]\s*)(?:sudo\s+)?(?:rm|rmdir|unlink)\b|\b(?:drop|truncate)\s+(?:database|schema|table)\b|\bdelete\s+from\b/i,
+  ],
+  ["publish", /(?:^|[;&|]\s*)git\s+push\b/i],
+  [
+    "production",
+    /(?:^|[;&|]\s*)(?:kubectl\s+(?:apply|delete|replace|rollout)|terraform\s+(?:apply|destroy)|docker\s+push)\b/i,
+  ],
+  [
+    "secrets",
+    /(?:^|[;&|]\s*)(?:(?:printenv|env)(?:\s|$)|(?:cat|head|tail|less|more|sed|awk|grep|rg)\b[^\n;&|]*(?:\.env\b|\/\.ssh\/id_[\w-]+|credentials?|secrets?|tokens?)|gh\s+auth\s+token|security\s+find-(?:generic|internet)-password|op\s+(?:read|get)|vault\s+(?:kv\s+)?get|aws\s+secretsmanager\s+get-secret-value|gcloud\s+secrets\s+versions\s+access|kubectl\s+get\s+secrets?)\b/i,
+  ],
+  [
+    "send",
+    /(?:^|[;&|]\s*)(?:(?:mail|mailx)\b|curl\b[^\n;&|]*(?:--data(?:-raw|-binary)?|-d\b|--form|-F\b|--request\s+post|-X\s*post))/i,
+  ],
+];
 
 function textTokens(value: string): ReadonlySet<string> {
   return new Set(
@@ -457,6 +476,13 @@ function criticalActionFromText(value: string): AkeruCriticalAction | null {
     return "account";
   }
   return null;
+}
+
+function criticalActionFromShellCommand(value: string): AkeruCriticalAction | null {
+  for (const [action, pattern] of CRITICAL_SHELL_ACTIONS) {
+    if (pattern.test(value)) return action;
+  }
+  return criticalActionFromText(value);
 }
 
 type AkeruActionInspection = {
@@ -484,11 +510,10 @@ function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspec
       const keyedAction = criticalActionFromText(key);
       if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
       if (ACTION_TEXT_KEYS.has(normalizedKey) && typeof entry === "string") {
-        if (normalizedKey === "command") {
-          const action = classifyAkeruExternalCommand(entry);
-          if (action) return { action, hasUnclassifiedIntent: false };
-        }
-        const action = criticalActionFromText(entry);
+        const action =
+          normalizedKey === "command"
+            ? criticalActionFromShellCommand(entry)
+            : criticalActionFromText(entry);
         if (action) return { action, hasUnclassifiedIntent: false };
         if (MUTATING_INTENT_KEYS.has(normalizedKey)) {
           const tokens = textTokens(entry);
@@ -507,7 +532,7 @@ function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspec
       if (typeof entry === "object" && entry !== null) pending.push(entry);
     }
   }
-  return { action: null, hasUnclassifiedIntent };
+  return { action: null, hasUnclassifiedIntent: hasUnclassifiedIntent || pending.length > 0 };
 }
 
 export function criticalAkeruAction(toolName: string, args?: unknown): AkeruCriticalAction | null {

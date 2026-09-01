@@ -142,6 +142,147 @@ describe("AkeruToolRuntime", () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
+  it("runs typed durable bot controls through the delegation backend", async () => {
+    const create = vi.fn(async () => ({ botId: "bot-research" }));
+    const check = vi.fn(async () => ({ state: "ready" }));
+    const send = vi.fn(async () => ({ delivered: true }));
+    const stop = vi.fn(async () => ({ stopped: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-controls", {
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      delegation: {
+        depth: 0,
+        activeDelegations: 0,
+        access: {
+          allowedToolIds: ["CreateAgent", "CheckAgent", "MessageAgent", "StopAgent"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "full-access",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "delete",
+        },
+        create,
+        check,
+        send,
+        stop,
+      },
+    });
+
+    const execute = (toolId: "CreateAgent" | "CheckAgent", input: unknown) =>
+      runtime.execute({
+        threadId: "thread-controls",
+        toolId,
+        toolCallId: `tool-${toolId}`,
+        input,
+        approvalMode: "require-grant",
+      });
+    await expect(execute("CreateAgent", { name: "Research" })).resolves.toEqual({
+      botId: "bot-research",
+    });
+    await expect(execute("CheckAgent", { botId: "bot-research" })).resolves.toEqual({
+      state: "ready",
+    });
+
+    for (const execution of [
+      {
+        threadId: "thread-controls",
+        toolId: "MessageAgent" as const,
+        toolCallId: "tool-message",
+        input: {
+          botId: BotId.make("bot-research"),
+          task: "Compare flights.",
+          expectedResult: "Return a short comparison.",
+        },
+        approvalMode: "require-grant" as const,
+      },
+      {
+        threadId: "thread-controls",
+        toolId: "StopAgent" as const,
+        toolCallId: "tool-stop",
+        input: { botId: BotId.make("bot-research") },
+        approvalMode: "require-grant" as const,
+      },
+    ]) {
+      await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+      runtime.grantApproval(execution);
+      await expect(runtime.execute(execution)).resolves.toBeDefined();
+    }
+    expect(send).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("returns nonfatal receipts when durable bot controls fail", async () => {
+    const fail = vi.fn(async () => {
+      throw new Error("Bot backend unavailable.");
+    });
+    const receipts: AkeruToolReceipt[] = [];
+    const runtime = createAkeruToolRuntime({ onReceipt: (receipt) => receipts.push(receipt) });
+    runtime.registerSession("thread-control-failures", {
+      botId: BotId.make("bot-parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      delegation: {
+        depth: 0,
+        activeDelegations: 0,
+        access: {
+          allowedToolIds: ["CreateAgent", "CheckAgent", "StopAgent"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "full-access",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "delete",
+        },
+        create: fail,
+        check: fail,
+        send: vi.fn(),
+        stop: fail,
+      },
+    });
+
+    for (const execution of [
+      {
+        threadId: "thread-control-failures",
+        toolId: "CreateAgent" as const,
+        toolCallId: "create-failure",
+        input: { name: "Research" },
+        approvalMode: "require-grant" as const,
+      },
+      {
+        threadId: "thread-control-failures",
+        toolId: "CheckAgent" as const,
+        toolCallId: "check-failure",
+        input: { botId: BotId.make("bot-research") },
+        approvalMode: "require-grant" as const,
+      },
+      {
+        threadId: "thread-control-failures",
+        toolId: "StopAgent" as const,
+        toolCallId: "stop-failure",
+        input: { botId: BotId.make("bot-research") },
+        approvalMode: "require-grant" as const,
+      },
+    ]) {
+      if (execution.toolId === "StopAgent") runtime.grantApproval(execution);
+      receipts.length = 0;
+      await expect(runtime.execute(execution)).resolves.toMatchObject({
+        receiptId: execution.toolCallId,
+        toolId: execution.toolId,
+        phase: "failure",
+        threadId: "thread-control-failures",
+        botId: "bot-parent",
+        summary: "Bot backend unavailable.",
+        failureCode: "internal",
+        fatalToThread: false,
+      });
+      expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
+    }
+  });
+
   it("exposes registered memory handlers and protects sensitive writes", async () => {
     const remember = vi.fn(async () => ({ saved: true }));
     const unavailable = vi.fn(async () => undefined);
@@ -298,6 +439,30 @@ describe("AkeruToolRuntime", () => {
     });
   });
 
+  it("requires a production grant before an MCP connection test can reconnect", async () => {
+    const testConnection = vi.fn(async () => ({ connected: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-mcp-test", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: { TestMcpServer: testConnection },
+    });
+    const execution = {
+      threadId: "thread-mcp-test",
+      toolId: "TestMcpServer" as const,
+      toolCallId: "tool-test-mcp",
+      input: { serverId: "search" },
+      approvalMode: "require-grant" as const,
+    };
+
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    expect(testConnection).not.toHaveBeenCalled();
+
+    runtime.grantApproval(execution);
+    await expect(runtime.execute(execution)).resolves.toEqual({ connected: true });
+    expect(testConnection).toHaveBeenCalledOnce();
+  });
+
   it("rejects shell working directories outside both workspace boundaries", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("cwd-bot");
@@ -364,6 +529,46 @@ describe("AkeruToolRuntime", () => {
         approvalMode: "require-grant",
       }),
     ).rejects.toThrow();
+  });
+
+  it("keeps plugin inspection read-only and requires one-shot grants for install and removal", async () => {
+    const search = vi.fn(async () => ({ plugins: [] }));
+    const install = vi.fn(async () => ({ installed: true }));
+    const uninstall = vi.fn(async () => ({ removed: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-plugins", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: {
+        SearchPlugins: search,
+        InstallPlugin: install,
+        UninstallPlugin: uninstall,
+      },
+    });
+
+    await expect(
+      runtime.execute({
+        threadId: "thread-plugins",
+        toolId: "SearchPlugins",
+        toolCallId: "tool-search",
+        input: { query: "web" },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ plugins: [] });
+
+    for (const toolId of ["InstallPlugin", "UninstallPlugin"] as const) {
+      const execution = {
+        threadId: "thread-plugins",
+        toolId,
+        toolCallId: `tool-${toolId}`,
+        input: { pluginId: "exa" },
+        approvalMode: "require-grant" as const,
+      };
+      await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+      runtime.grantApproval(execution);
+      await expect(runtime.execute(execution)).resolves.toBeDefined();
+      await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    }
   });
 
   it("copies files only when both boundaries are registered", async () => {

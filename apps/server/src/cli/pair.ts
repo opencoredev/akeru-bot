@@ -76,9 +76,9 @@ export class NoRunningServerError extends Schema.TaggedErrorClass<NoRunningServe
 ) {
   override get message(): string {
     return [
-      "No running T3 Code server found.",
+      "No running Akeru Bot server found.",
       ...this.checkedStatePaths.map((statePath) => `  checked ${statePath}`),
-      "Start one with `npx akeru-bot serve`, or connect this machine with T3 Connect: `npx akeru-bot connect`.",
+      "Start one with `npx akeru-bot serve`.",
     ].join("\n");
   }
 }

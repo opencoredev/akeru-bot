@@ -4,7 +4,13 @@
  *
  * @module usageFormat
  */
-import { UsageDay, type UsageResolution, type UsageSummaryInput } from "@t3tools/contracts";
+import {
+  UsageDay,
+  type ThreadTokenUsageSnapshot,
+  type UsageResolution,
+  type UsageSummaryInput,
+  type UsageTokenTotals,
+} from "@t3tools/contracts";
 
 const CURRENCY = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -34,6 +40,26 @@ export function formatTokens(value: number): string {
   if (abs >= 1e6) return `${trim(value / 1e6)}M`;
   if (abs >= 1e3) return `${trim(value / 1e3)}K`;
   return INTEGER.format(Math.round(value));
+}
+
+export function stepTokenCount(usage: ThreadTokenUsageSnapshot): number | null {
+  if (usage.lastInputTokens !== undefined || usage.lastOutputTokens !== undefined) {
+    return (usage.lastInputTokens ?? 0) + (usage.lastOutputTokens ?? 0);
+  }
+  return usage.lastUsedTokens ?? null;
+}
+
+export function stepUsageTokenTotals(usage: ThreadTokenUsageSnapshot): UsageTokenTotals {
+  const inputTokens = usage.lastInputTokens ?? 0;
+  const cachedInputTokens = Math.min(inputTokens, usage.lastCachedInputTokens ?? 0);
+  const outputTokens = usage.lastOutputTokens ?? 0;
+  return {
+    uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
+    cachedInputTokens,
+    cacheCreationTokens: 0,
+    outputTokens,
+    reasoningTokens: Math.min(outputTokens, usage.lastReasoningOutputTokens ?? 0),
+  };
 }
 
 function trim(value: number): string {

@@ -2250,7 +2250,7 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("provider-update-checks")}
+          title="Provider update checks"
           description="Check installed provider CLIs for newer available versions."
           resetAction={
             settings.enableProviderUpdateChecks !==
@@ -2665,29 +2665,6 @@ export function GeneralSettingsPanel() {
             description="Current version of the application."
           />
         )}
-        <SettingsRow
-          {...searchableSetting("analytics")}
-          description="Share anonymous usage data to help improve Akeru Bot."
-          control={
-            <Switch
-              aria-label="Analytics"
-              checked={settings.analyticsEnabled}
-              onCheckedChange={(analyticsEnabled) => updateSettings({ analyticsEnabled })}
-            />
-          }
-        />
-        <SettingsRow
-          title="Product feedback"
-          control={
-            <Switch
-              aria-label="Product feedback"
-              checked={settings.productFeedbackEnabled}
-              onCheckedChange={(productFeedbackEnabled) =>
-                updateSettings({ productFeedbackEnabled })
-              }
-            />
-          }
-        />
         <SettingsRow
           title="Feedback endpoint"
           control={

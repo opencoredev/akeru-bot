@@ -60,13 +60,6 @@ function toSavedConnection(
     httpBaseUrl,
     wsBaseUrl,
     bearerToken: authorization?._tag === "Bearer" ? authorization.token : null,
-    ...(environment.relayManaged
-      ? {
-          authenticationMethod: "dpop" as const,
-          relayManaged: true as const,
-          ...(authorization?._tag === "Dpop" ? { dpopAccessToken: authorization.accessToken } : {}),
-        }
-      : { authenticationMethod: "bearer" as const }),
   };
 }
 
@@ -136,7 +129,6 @@ export function useRemoteConnectionStatus() {
         environmentId: environment.environmentId,
         environmentLabel: environment.environmentLabel,
         displayUrl: environment.displayUrl,
-        isRelayManaged: environment.isRelayManaged,
         connectionState: environment.connectionState,
         connectionError: environment.connectionError,
         connectionErrorTraceId: environment.connectionErrorTraceId,

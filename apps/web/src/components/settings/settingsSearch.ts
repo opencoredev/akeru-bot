@@ -7,6 +7,7 @@ export type SettingsPath =
   | "/settings/providers"
   | "/settings/sandbox"
   | "/settings/voice"
+  | "/settings/privacy"
   | "/settings/integrations"
   | "/settings/source-control"
   | "/settings/connections"
@@ -33,6 +34,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/providers": "Providers",
   "/settings/sandbox": "Sandbox",
   "/settings/voice": "Voice",
+  "/settings/privacy": "Privacy",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
@@ -151,9 +153,29 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
-    id: "provider-update-checks",
+    id: "privacy",
+    title: "Privacy",
+    to: "/settings/privacy",
+  },
+  {
+    id: "anonymous-analytics",
+    title: "Anonymous analytics",
+    to: "/settings/privacy",
+  },
+  {
+    id: "privacy-product-feedback",
+    title: "Product feedback",
+    to: "/settings/privacy",
+  },
+  {
+    id: "privacy-voice-calls",
+    title: "Voice calls",
+    to: "/settings/privacy",
+  },
+  {
+    id: "privacy-provider-update-checks",
     title: "Provider update checks",
-    to: "/settings/general",
+    to: "/settings/privacy",
   },
   {
     id: "local-execution",

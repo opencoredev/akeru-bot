@@ -9,7 +9,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
-import { BotUsageCap } from "./orchestration.ts";
+import { BotEngine, BotUsageCap } from "./orchestration.ts";
 
 export const AkeruUsageReservationId = TrimmedNonEmptyString.pipe(
   Schema.brand("AkeruUsageReservationId"),
@@ -68,16 +68,27 @@ export type AkeruBotUsageSummary = typeof AkeruBotUsageSummary.Type;
 export const AkeruBotUsageInput = Schema.Struct({ botId: BotId });
 export type AkeruBotUsageInput = typeof AkeruBotUsageInput.Type;
 
+export const AkeruEstimatedCost = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal("available"),
+    usd: Schema.Number.check(Schema.isFinite(), Schema.isGreaterThanOrEqualTo(0)),
+  }),
+  Schema.Struct({ status: Schema.Literal("unavailable"), usd: Schema.Null }),
+]);
+export type AkeruEstimatedCost = typeof AkeruEstimatedCost.Type;
+
+export const AkeruStepUsageSnapshot = Schema.Struct({
+  botId: BotId,
+  engine: BotEngine,
+  tokens: Schema.NullOr(NonNegativeInt),
+  estimatedCost: AkeruEstimatedCost,
+});
+export type AkeruStepUsageSnapshot = typeof AkeruStepUsageSnapshot.Type;
+
 export const AkeruBotUsageSnapshot = Schema.Struct({
   ...AkeruBotUsageSummary.fields,
   usageCap: Schema.NullOr(BotUsageCap),
-  estimatedCost: Schema.Union([
-    Schema.Struct({
-      status: Schema.Literal("available"),
-      usd: Schema.Number.check(Schema.isFinite(), Schema.isGreaterThanOrEqualTo(0)),
-    }),
-    Schema.Struct({ status: Schema.Literal("unavailable"), usd: Schema.Null }),
-  ]),
+  estimatedCost: AkeruEstimatedCost,
   subscriptionPool: Schema.Union([
     Schema.Struct({
       status: Schema.Literal("available"),

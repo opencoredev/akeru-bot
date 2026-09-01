@@ -38,11 +38,11 @@ import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatarView } from "./BotAvatarView";
+import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
-import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import {
   buildGroupedRosterSections,
   buildRosterStrip,

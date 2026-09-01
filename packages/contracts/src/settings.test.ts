@@ -80,6 +80,24 @@ describe("ServerSettings analytics", () => {
   });
 });
 
+describe("policy records", () => {
+  it("keeps policy acceptance local", () => {
+    expect(decodeClientSettings({})).toMatchObject({
+      reviewedPrivacyPolicyVersion: "",
+      reviewedTermsVersion: "",
+    });
+    expect(
+      decodeClientSettingsPatch({
+        reviewedPrivacyPolicyVersion: "2026-08-31",
+        reviewedTermsVersion: "2026-08-31",
+      }),
+    ).toEqual({
+      reviewedPrivacyPolicyVersion: "2026-08-31",
+      reviewedTermsVersion: "2026-08-31",
+    });
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");
@@ -287,6 +305,16 @@ describe("ServerSettings sandbox providers", () => {
 
   it("keeps automatic idle cleanup enabled", () => {
     expect(() => decodeServerSettingsPatch({ sandbox: { autoIdle: false } })).toThrow();
+  });
+});
+
+describe("ServerSettings local execution", () => {
+  it("asks first by default and accepts full access only as an opt-in", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+    expect(
+      decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
+    ).toBe("full-access");
+    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
   });
 });
 

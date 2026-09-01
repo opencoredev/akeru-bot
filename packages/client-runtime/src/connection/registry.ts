@@ -83,12 +83,6 @@ export class EnvironmentRegistry extends Context.Service<
       | EnvironmentNotRegisteredError
       | PlatformEnvironmentRemovalError
     >;
-    readonly removeRelayEnvironments: () => Effect.Effect<
-      void,
-      | Persistence.ConnectionPersistenceError
-      | ConnectionAttemptError
-      | PlatformEnvironmentRemovalError
-    >;
     readonly retryNow: (environmentId: EnvironmentId) => Effect.Effect<void>;
     readonly state: (
       environmentId: EnvironmentId,
@@ -602,26 +596,6 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const removeRelayEnvironments = Effect.fn("EnvironmentRegistry.removeRelayEnvironments")(
-    function* () {
-      const relayEnvironmentIds = [...(yield* SubscriptionRef.get(entries)).values()]
-        .filter((entry) => entry.target._tag === "RelayConnectionTarget")
-        .map((entry) => entry.target.environmentId);
-
-      yield* Effect.forEach(
-        relayEnvironmentIds,
-        (environmentId) =>
-          remove(environmentId).pipe(
-            Effect.catchTag("EnvironmentNotRegisteredError", () => Effect.void),
-          ),
-        {
-          concurrency: "unbounded",
-          discard: true,
-        },
-      );
-    },
-  );
-
   const retryNow = (environmentId: EnvironmentId) =>
     acquireSupervisor(environmentId).pipe(
       Effect.flatMap((supervisor) => supervisor.retryNow),
@@ -665,7 +639,6 @@ export const make = Effect.gen(function* () {
     registerPlatform,
     reconcilePlatform,
     remove,
-    removeRelayEnvironments,
     retryNow,
     state,
     stateChanges,

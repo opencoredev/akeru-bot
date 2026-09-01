@@ -5,6 +5,7 @@ import type { EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contra
 import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
+import { formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
 import { SymbolView } from "../../components/AppSymbol";
 import { HeaderHeightContext } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -101,6 +102,7 @@ import {
   resolveThreadFeedLiveFollow,
   type ThreadFeedLiveFollowEvent,
 } from "./thread-feed-live-follow";
+import { formatBotStepEngine, type BotStepMeterData } from "./botStepUsage";
 import {
   collapsedWorkLogHeight,
   ThreadWorkGroupToggle,
@@ -1141,6 +1143,7 @@ function renderFeedEntry(
         className={cn(showAssistantMeta ? "mb-5 px-1" : "mb-2 px-1")}
         {...(enterAnimated ? { entering: FadeIn.duration(220) } : {})}
       >
+        {entry.botStepMeter ? <BotStepMeter meter={entry.botStepMeter} /> : null}
         {message.text.trim().length > 0 ? (
           hasNativeSelectableMarkdownText() ? (
             <SelectableMarkdownText
@@ -1199,6 +1202,24 @@ function renderFeedEntry(
       onCopyRow={props.onCopyWorkRow}
       onToggleRow={props.onToggleWorkRow}
     />
+  );
+}
+
+function BotStepMeter(props: { readonly meter: BotStepMeterData }) {
+  const label = `${formatBotStepEngine(props.meter.engine)} · ${
+    props.meter.tokens === null ? "—" : formatTokens(props.meter.tokens)
+  } tokens · ${props.meter.costUsd === null ? "$—" : formatUsd(props.meter.costUsd)}${
+    props.meter.hardStopReached ? " · Hard stop" : ""
+  }`;
+
+  return (
+    <Text
+      accessibilityLabel={label}
+      className="mb-1 font-mono text-xs tabular-nums text-foreground-muted"
+      numberOfLines={1}
+    >
+      {label}
+    </Text>
   );
 }
 

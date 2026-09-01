@@ -5,6 +5,7 @@ import {
   appendPreviewAnnotationPrompt,
   buildPreviewAnnotationPrompt,
   extractTrailingPreviewAnnotation,
+  previewAnnotationScreenshotFile,
 } from "./previewAnnotation";
 
 const annotation: PreviewAnnotationPayload = {
@@ -45,13 +46,13 @@ const annotation: PreviewAnnotationPayload = {
 };
 
 describe("preview annotations", () => {
-  it("describes regions, drawings, styles, and screenshot context", () => {
+  it("describes regions, drawings, styles, and an omitted screenshot", () => {
     const result = buildPreviewAnnotationPrompt(annotation);
     expect(result).toContain("Make these cards feel related.");
     expect(result).toContain("1 marked region");
     expect(result).toContain("1 drawing");
     expect(result).toContain("border-radius: 4px → 16px");
-    expect(result).toContain("attached screenshot");
+    expect(result).toContain("Screenshot omitted because local pixel redaction is unavailable.");
   });
 
   it("appends to an existing composer prompt", () => {
@@ -70,8 +71,43 @@ describe("preview annotations", () => {
     expect(result.annotation).toMatchObject({
       title: "Example",
       targetSummary: "1 marked region, 1 drawing.",
-      hasScreenshot: true,
+      hasScreenshot: false,
     });
+  });
+
+  it("does not turn raw preview pixels into a provider attachment", async () => {
+    expect(await previewAnnotationScreenshotFile(annotation)).toBeNull();
+  });
+
+  it("redacts annotation text and element context before provider egress", () => {
+    const result = buildPreviewAnnotationPrompt({
+      ...annotation,
+      pageTitle: "leo@example.com",
+      comment: "token=annotation-secret",
+      elements: [
+        {
+          id: "element_1",
+          rect: { x: 0, y: 0, width: 10, height: 10 },
+          element: {
+            pageUrl: "file:///Users/leo/private-preview.html",
+            pageTitle: "Private",
+            tagName: "input",
+            selector: "#secret",
+            htmlPreview: '<input value="token=element-secret">',
+            componentName: "SecretInput",
+            source: null,
+            stack: [],
+            styles: "color: red",
+            pickedAt: "2026-06-11T00:00:00.000Z",
+          },
+        },
+      ],
+    });
+
+    expect(result).not.toContain("leo@example.com");
+    expect(result).not.toContain("annotation-secret");
+    expect(result).not.toContain("Users/leo");
+    expect(result).not.toContain("element-secret");
   });
 
   it("extracts multiple trailing annotations one at a time", () => {

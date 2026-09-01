@@ -27,6 +27,7 @@ describe("branding", () => {
             baseName: "Akeru Bot",
             stageLabel: "Nightly",
             displayName: "Akeru Bot (Nightly)",
+            isPackaged: true,
           }),
         },
       },
@@ -37,6 +38,7 @@ describe("branding", () => {
     expect(branding.APP_BASE_NAME).toBe("Akeru Bot");
     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
     expect(branding.APP_DISPLAY_NAME).toBe("Akeru Bot (Nightly)");
+    expect(branding.IS_PACKAGED_DESKTOP).toBe(true);
   });
 
   it("normalizes hosted app channel metadata", async () => {

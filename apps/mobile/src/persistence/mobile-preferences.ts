@@ -16,6 +16,8 @@ const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
+  readonly reviewedPrivacyPolicyVersion?: string;
+  readonly reviewedTermsVersion?: string;
   readonly liveActivitiesEnabled?: boolean;
   readonly themeId?: MobileThemeId;
   readonly lightThemeId?: MobileThemeId;
@@ -26,7 +28,6 @@ export interface Preferences {
   readonly markdownFontSize?: number;
   readonly codeFontSize?: number | null;
   readonly codeWordBreak?: boolean;
-  readonly connectOnboardingOptOutAccounts?: ReadonlyArray<string>;
   readonly collapsedProjectGroups?: readonly string[];
   /** @deprecated Kept temporarily so older OTA bundles retain the selected mode. */
   readonly projectGroupingEnabled?: boolean;
@@ -87,6 +88,8 @@ export class MobilePreferencesStore extends Context.Service<
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    reviewedPrivacyPolicyVersion?: string;
+    reviewedTermsVersion?: string;
     liveActivitiesEnabled?: boolean;
     themeId?: MobileThemeId;
     lightThemeId?: MobileThemeId;
@@ -97,7 +100,6 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     markdownFontSize?: number;
     codeFontSize?: number | null;
     codeWordBreak?: boolean;
-    connectOnboardingOptOutAccounts?: ReadonlyArray<string>;
     collapsedProjectGroups?: readonly string[];
     projectGroupingEnabled?: boolean;
     projectGroupingMode?: SidebarProjectGroupingMode;
@@ -108,6 +110,12 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListV2SnoozedShelfExpanded?: boolean;
   } = {};
 
+  if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
+    preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
+  }
+  if (typeof parsed.reviewedTermsVersion === "string") {
+    preferences.reviewedTermsVersion = parsed.reviewedTermsVersion;
+  }
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
@@ -147,11 +155,6 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.codeFontSize = parsed.codeFontSize;
   }
   if (typeof parsed.codeWordBreak === "boolean") preferences.codeWordBreak = parsed.codeWordBreak;
-  if (Array.isArray(parsed.connectOnboardingOptOutAccounts)) {
-    preferences.connectOnboardingOptOutAccounts = parsed.connectOnboardingOptOutAccounts.filter(
-      (account): account is string => typeof account === "string",
-    );
-  }
   if (Array.isArray(parsed.collapsedProjectGroups)) {
     preferences.collapsedProjectGroups = parsed.collapsedProjectGroups.filter(
       (key): key is string => typeof key === "string",

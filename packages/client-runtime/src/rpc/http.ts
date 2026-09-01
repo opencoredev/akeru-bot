@@ -8,7 +8,6 @@ import {
   type EnvironmentResourceNotFoundError,
   type EnvironmentScopeRequiredError,
 } from "@t3tools/contracts";
-import { httpHeaderRedactionLayer } from "@t3tools/shared/httpObservability";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -81,10 +80,7 @@ export type RemoteEnvironmentRequestError =
 export const remoteHttpClientLayer = (
   fetchFn: typeof globalThis.fetch,
 ): Layer.Layer<HttpClient.HttpClient> =>
-  Layer.merge(
-    FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchFn))),
-    httpHeaderRedactionLayer,
-  );
+  FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchFn)));
 
 const remoteApiBaseUrl = (httpBaseUrl: string): string => {
   const url = new URL(httpBaseUrl);

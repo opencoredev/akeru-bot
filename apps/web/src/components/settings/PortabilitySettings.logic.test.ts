@@ -1,7 +1,6 @@
 import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
-  RelayConnectionTarget,
 } from "@t3tools/client-runtime/connection";
 import { EnvironmentId, ProjectId, type PortabilityImportPreview } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -38,11 +37,6 @@ describe("portabilityProjectPickerTarget", () => {
         }),
       ),
     ).toBe("wsl:Ubuntu");
-    expect(
-      portabilityProjectPickerTarget(
-        new RelayConnectionTarget({ environmentId: ENVIRONMENT_ID, label: "Remote" }),
-      ),
-    ).toBeUndefined();
   });
 });
 

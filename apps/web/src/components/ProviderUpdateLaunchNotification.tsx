@@ -19,8 +19,8 @@ import { openSettings } from "~/settingsDialogStore";
 /**
  * True when a desktop-local secondary backend (the parallel WSL backend) is
  * present alongside the primary. Local secondaries connect over loopback with a
- * `local:<backendInstanceId>` bearer connection id; everything else (SSH, relay,
- * remote) is ignored. Gating on this keeps non-WSL users on the unchanged
+ * `local:<backendInstanceId>` bearer connection id; everything else (SSH or
+ * another remote target) is ignored. Gating on this keeps non-WSL users on the unchanged
  * single-prompt flow.
  */
 function useHasLocalSecondaryEnvironment(): boolean {

@@ -27,6 +27,14 @@ describe("BotThreadLanding message formatting", () => {
     }
   });
 
+  it("renders step meters for bot and group replies", () => {
+    for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
+      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+      expect(source).toContain("<BotStepMeter");
+      expect(source).toContain("stepMeters.get(message.turnId)");
+    }
+  });
+
   it("uses the free-scrolling conversation area instead of end-justified overflow", () => {
     const botSource = NodeFS.readFileSync(
       new URL("./BotThreadLanding.tsx", import.meta.url),

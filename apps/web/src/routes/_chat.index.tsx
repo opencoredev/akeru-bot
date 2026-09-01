@@ -3,7 +3,6 @@ import { LinkIcon, PlusIcon } from "lucide-react";
 import { useEffect } from "react";
 
 import { APP_DISPLAY_NAME } from "~/branding";
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { resolveRosterBotId } from "../components/roster/roster.logic";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { Button } from "../components/ui/button";
@@ -51,8 +50,6 @@ export const Route = createFileRoute("/_chat/")({
 });
 
 function HostedStaticOnboardingState() {
-  const cloudEnabled = hasCloudPublicConfig();
-
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
@@ -74,14 +71,12 @@ function HostedStaticOnboardingState() {
                 Connect an environment to get started
               </EmptyTitle>
               <EmptyDescription className="mt-2 text-sm leading-relaxed text-muted-foreground/78">
-                {cloudEnabled
-                  ? "Sign in to connect a linked environment through its managed tunnel, or add a reachable backend manually."
-                  : "Add a reachable backend manually to start working from this browser."}
+                Add a reachable backend manually to start working from this browser.
               </EmptyDescription>
               <div className="mt-6 flex justify-center">
                 <Button size="sm" onClick={() => openSettings("connections")}>
                   <PlusIcon className="size-4" />
-                  {cloudEnabled ? "Open Connections" : "Add environment"}
+                  Add environment
                 </Button>
               </div>
             </EmptyHeader>

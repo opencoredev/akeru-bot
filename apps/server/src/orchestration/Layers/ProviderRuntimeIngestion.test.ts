@@ -3056,6 +3056,84 @@ describe("ProviderRuntimeIngestion", () => {
     expect(resolvedPayload?.requestType).toBe("command_execution_approval");
   });
 
+  it("removes a pending approval after a lifecycle cancellation", async () => {
+    const harness = await createHarness();
+    const base = {
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-approval-cancel"),
+      requestId: RuntimeRequestId.make("request-approval-cancel"),
+    };
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-approval-cancel-turn"),
+      provider: base.provider,
+      threadId: base.threadId,
+      turnId: base.turnId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.activeTurnId === base.turnId,
+    );
+
+    harness.emit({
+      ...base,
+      type: "request.opened",
+      eventId: asEventId("evt-approval-cancel-opened"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      payload: {
+        requestType: "dynamic_tool_call",
+        actor: "agent",
+        target: "gmail_send_message",
+        action: "send",
+      },
+    });
+    const openedThread = await waitForThread(harness.readModel, (thread) =>
+      thread.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.id === "evt-approval-cancel-opened" && activity.kind === "approval.requested",
+      ),
+    );
+    expect(
+      openedThread.activities.some(
+        (activity: ProviderRuntimeTestActivity) => activity.id === "evt-approval-cancel-resolved",
+      ),
+    ).toBe(false);
+
+    harness.emit({
+      ...base,
+      type: "request.resolved",
+      eventId: asEventId("evt-approval-cancel-resolved"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      payload: {
+        requestType: "dynamic_tool_call",
+        decision: "cancel",
+        actor: "system",
+        target: "gmail_send_message",
+        action: "send",
+        outcome: "cancelled",
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.id === "evt-approval-cancel-resolved" && activity.kind === "approval.resolved",
+      ),
+    );
+    const resolved = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) => activity.id === "evt-approval-cancel-resolved",
+    );
+    expect(resolved?.payload).toMatchObject({
+      actor: "system",
+      target: "gmail_send_message",
+      action: "send",
+      outcome: "cancelled",
+    });
+  });
+
   it("maps runtime.error into errored session state", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

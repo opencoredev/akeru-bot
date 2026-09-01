@@ -209,6 +209,109 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     });
   };
 
+  const availableBot = (
+    snapshot: OrchestrationReadModel,
+    parent: AkeruDelegationParent,
+    botId: BotId,
+  ) => {
+    const parentThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
+    const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+    if (!parentThread || !bot || bot.archivedAt !== null) {
+      throw new Error("The target bot is not available in this workspace.");
+    }
+    if (parentThread.groupId !== null && bot.groupId !== parentThread.groupId) {
+      throw new Error("The target bot is not available in the current group.");
+    }
+    return { parentThread, bot };
+  };
+
+  const create = async (
+    parent: AkeruDelegationParent,
+    request: (typeof AkeruToolInputSchemas.CreateAgent)["Type"],
+  ) => {
+    const snapshot = await options.readSnapshot();
+    const { parentThread, bot: parentBot } = availableBot(snapshot, parent, parent.botId);
+    if (
+      snapshot.bots.some(
+        (candidate) =>
+          candidate.archivedAt === null &&
+          candidate.name.localeCompare(request.name, undefined, { sensitivity: "accent" }) === 0,
+      )
+    ) {
+      throw new Error(`A bot named '${request.name}' already exists.`);
+    }
+    const botId = BotId.make(`bot-${id()}`);
+    await dispatch({
+      type: "bot.create",
+      commandId: commandId("bot-create"),
+      botId,
+      name: request.name,
+      title: request.title ?? "Assistant",
+      label: null,
+      description: request.description ?? null,
+      disabledMcpServerIds: parentBot.disabledMcpServerIds,
+      avatar: { kind: "dither", seed: String(botId) },
+      engine: parentBot.engine,
+      sandbox: parentBot.sandbox,
+      runtimeMode: parent.access.runtimeMode,
+      usageCap: null,
+      voiceEnabled: false,
+      groupId: parentThread.groupId ?? null,
+      createdAt: now(),
+    });
+    return { botId, name: request.name };
+  };
+
+  const check = async (
+    parent: AkeruDelegationParent,
+    request: (typeof AkeruToolInputSchemas.CheckAgent)["Type"],
+  ) => {
+    const snapshot = await options.readSnapshot();
+    const { bot } = availableBot(snapshot, parent, request.botId);
+    return {
+      botId: bot.id,
+      name: bot.name,
+      title: bot.title,
+      delegations: snapshot.delegations
+        .filter(
+          (delegation) =>
+            delegation.parentThreadId === parent.threadId && delegation.childBotId === bot.id,
+        )
+        .map((delegation) => ({
+          delegationId: delegation.delegationId,
+          state: delegation.state,
+          childThreadId: delegation.childThreadId,
+          result: delegation.result,
+          failure: delegation.failure,
+        })),
+    };
+  };
+
+  const stop = async (
+    parent: AkeruDelegationParent,
+    request: (typeof AkeruToolInputSchemas.StopAgent)["Type"],
+  ) => {
+    const snapshot = await options.readSnapshot();
+    availableBot(snapshot, parent, request.botId);
+    const active = snapshot.delegations.filter(
+      (delegation) =>
+        delegation.parentThreadId === parent.threadId &&
+        delegation.childBotId === request.botId &&
+        !TERMINAL_STATES.has(delegation.state),
+    );
+    if (active.length === 0) throw new Error("The target bot has no active delegated work.");
+    for (const delegation of active) {
+      await dispatch({
+        type: "delegation.cancel",
+        commandId: commandId("stop"),
+        delegationId: delegation.delegationId,
+        keep: false,
+        createdAt: now(),
+      });
+    }
+    return { botId: request.botId, stopped: active.map((entry) => entry.delegationId) };
+  };
+
   const fail = async (
     delegation: AkeruDelegationRecord,
     failureCode: AkeruDelegationFailureCode,
@@ -479,7 +582,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   };
 
   return {
+    create,
+    check,
     send,
+    stop,
     sendToUser,
     parentFinished,
     readSnapshot: options.readSnapshot,

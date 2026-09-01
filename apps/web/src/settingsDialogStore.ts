@@ -19,6 +19,7 @@ export const SETTINGS_SECTIONS = [
   "providers",
   "sandbox",
   "voice",
+  "privacy",
   "connections",
   "keybindings",
   "source-control",

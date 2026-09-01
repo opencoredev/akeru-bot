@@ -16,6 +16,7 @@ import {
 } from "../../providerInstances";
 import { botEnvironment } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentQuery } from "../../state/query";
@@ -34,6 +35,8 @@ import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotStepMeter } from "./BotStepMeter";
+import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
@@ -88,6 +91,8 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const effectiveModelSelection = stickyEngine;
   const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
+  const activities = useThreadActivities(runtime.linkedThreadRef);
+  const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
   const voiceCall = useVoiceCall();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
@@ -167,6 +172,9 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">{bot.name}</div>
+                      <BotStepMeter
+                        meter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
+                      />
                       <ChatMarkdown
                         className="mt-1"
                         cwd={runtime.defaultProject?.workspaceRoot}

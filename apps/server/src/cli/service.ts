@@ -49,13 +49,13 @@ export function formatServiceStatus(
   cliVersion: string,
 ): string {
   if (!status.supported) {
-    return "T3 Code service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
+    return "Akeru Bot service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
   }
   if (!status.installed) {
-    return "T3 Code service\n  Status: not installed\n  Next: Run `akeru service install`.";
+    return "Akeru Bot service\n  Status: not installed\n  Next: Run `akeru service install`.";
   }
   return [
-    "T3 Code service",
+    "Akeru Bot service",
     `  Status: ${status.current ? `installed · akeru-bot@${cliVersion}` : "needs an update or repair"}`,
     `  Unit: ${status.unitPath}`,
     `  Logs: ${status.logPath}`,
@@ -73,7 +73,7 @@ const runServiceCommand = Effect.fn("cli.service.run")(function* <A, E>(
 });
 
 const serviceInstallCommand = Command.make("install", projectLocationFlags).pipe(
-  Command.withDescription("Install T3 Code as a background service for this user."),
+  Command.withDescription("Install Akeru Bot as a background service for this user."),
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
@@ -81,12 +81,12 @@ const serviceInstallCommand = Command.make("install", projectLocationFlags).pipe
         const result = yield* reconcileService();
         if (!result.changed) {
           yield* Console.log(
-            `T3 Code service is already installed with akeru-bot@${packageJson.version}.`,
+            `Akeru Bot service is already installed with akeru-bot@${packageJson.version}.`,
           );
           return;
         }
         yield* Console.log(
-          `${result.previouslyInstalled ? "Updated" : "Installed"} T3 Code service with akeru-bot@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
+          `${result.previouslyInstalled ? "Updated" : "Installed"} Akeru Bot service with akeru-bot@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
       }),
     ),
@@ -103,11 +103,13 @@ const serviceUpdateCommand = Command.make("update", projectLocationFlags).pipe(
       Effect.gen(function* () {
         const result = yield* reconcileService();
         if (!result.changed) {
-          yield* Console.log(`T3 Code service is already using akeru-bot@${packageJson.version}.`);
+          yield* Console.log(
+            `Akeru Bot service is already using akeru-bot@${packageJson.version}.`,
+          );
           return;
         }
         yield* Console.log(
-          `${result.previouslyInstalled ? "Updated" : "Installed"} T3 Code service with akeru-bot@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
+          `${result.previouslyInstalled ? "Updated" : "Installed"} Akeru Bot service with akeru-bot@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
       }),
     ),
@@ -115,7 +117,7 @@ const serviceUpdateCommand = Command.make("update", projectLocationFlags).pipe(
 );
 
 const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).pipe(
-  Command.withDescription("Stop and remove the T3 Code background service."),
+  Command.withDescription("Stop and remove the Akeru Bot background service."),
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
@@ -123,7 +125,7 @@ const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).
         const service = yield* BootService.BootService;
         const removed = yield* service.uninstall;
         yield* Console.log(
-          removed ? "Removed the T3 Code service." : "T3 Code service is not installed.",
+          removed ? "Removed the Akeru Bot service." : "Akeru Bot service is not installed.",
         );
       }),
     ),
@@ -131,7 +133,7 @@ const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).
 );
 
 const serviceStatusCommand = Command.make("status", projectLocationFlags).pipe(
-  Command.withDescription("Show whether the T3 Code background service is installed."),
+  Command.withDescription("Show whether the Akeru Bot background service is installed."),
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
@@ -150,7 +152,7 @@ export const offerServiceDuringOnboarding = Effect.gen(function* () {
     return false;
   }
   if (installed && current) {
-    yield* Console.log("T3 Code is already set up to run in the background on this machine.");
+    yield* Console.log("Akeru Bot is already set up to run in the background on this machine.");
     return true;
   }
   // A LaunchAgent starts at login and dies at logout; there is no
@@ -159,12 +161,10 @@ export const offerServiceDuringOnboarding = Effect.gen(function* () {
   const wanted = yield* Prompt.run(
     Prompt.confirm({
       message: installed
-        ? "The installed T3 Code service needs an update or repair. Update it now?"
+        ? "The installed Akeru Bot service needs an update or repair. Update it now?"
         : platform === "darwin"
-          ? "Run T3 Code in the background whenever you log in to this Mac? " +
-            "It stays reachable through T3 Connect while you are logged in."
-          : "Run T3 Code in the background whenever this machine boots? " +
-            "It stays reachable through T3 Connect even after you log out.",
+          ? "Run Akeru Bot in the background whenever you log in to this Mac?"
+          : "Run Akeru Bot in the background whenever this machine boots?",
       initial: true,
     }),
   );
@@ -198,7 +198,7 @@ export const recoverServiceOnboardingOffer = <R>(
   );
 
 export const serviceCommand = Command.make("service").pipe(
-  Command.withDescription("Manage the T3 Code background service."),
+  Command.withDescription("Manage the Akeru Bot background service."),
   Command.withSubcommands([
     serviceInstallCommand,
     serviceUninstallCommand,

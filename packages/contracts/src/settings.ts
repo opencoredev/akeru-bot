@@ -152,6 +152,9 @@ export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200))
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
 
 export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru.bot/v1/feedback";
+export const AKERU_MARKETING_SITE_URL = "https://akeru.bot";
+export const AKERU_PRIVACY_POLICY_VERSION = "2026-08-31";
+export const AKERU_TERMS_VERSION = "2026-08-31";
 export const ProductFeedbackEndpoint = TrimmedNonEmptyString.check(
   Schema.isMaxLength(2_048),
   Schema.isPattern(
@@ -170,6 +173,8 @@ export const DEFAULT_BROWSER_VIEWPORT: PreviewViewportSetting = FILL_PREVIEW_VIE
 export const DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW = true;
 
 export const ClientSettingsSchema = Schema.Struct({
+  reviewedPrivacyPolicyVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  reviewedTermsVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   appearanceContrast: AppearanceContrast.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_APPEARANCE_CONTRAST)),
   ),
@@ -718,6 +723,9 @@ export const ServerSettings = Schema.Struct({
   botSandboxBrowserSharing: BotSandboxBrowserSharing.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BOT_SANDBOX_BROWSER_SHARING)),
   ),
+  localExecutionMode: LocalExecutionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
+  ),
   /**
    * Whether agents may drive the in-app preview browser. Turning this off
    * withholds the MCP credential, so the `t3-code` server (and with it every
@@ -730,9 +738,6 @@ export const ServerSettings = Schema.Struct({
    * between a desktop window and a phone attached to the same server.
    */
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  localExecutionMode: LocalExecutionMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
-  ),
   voice: VoiceSettings,
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
@@ -975,11 +980,11 @@ export const ServerSettingsPatch = Schema.Struct({
   enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   analyticsEnabled: Schema.optionalKey(Schema.Boolean),
+  localExecutionMode: Schema.optionalKey(LocalExecutionMode),
   productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
-  localExecutionMode: Schema.optionalKey(LocalExecutionMode),
   voice: Schema.optionalKey(
     Schema.Struct({
       enabled: Schema.optionalKey(Schema.Boolean),
@@ -1036,6 +1041,8 @@ export const ServerSettingsPatch = Schema.Struct({
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
+  reviewedPrivacyPolicyVersion: Schema.optionalKey(TrimmedString),
+  reviewedTermsVersion: Schema.optionalKey(TrimmedString),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
