@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
 
 export interface ReleaseChange {
   number: number;
@@ -58,7 +58,7 @@ export function renderReleaseChangelog(changes: ReleaseChange[]): string {
 }
 
 function git(...args: string[]): string {
-  return execFileSync("git", args, { encoding: "utf8" }).trim();
+  return NodeChildProcess.execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
 function latestStableTag(): string | undefined {
@@ -110,7 +110,7 @@ export function readReleaseChanges(): ReleaseChange[] {
   const boundary = latestStableTag() ?? latestVersionReleaseCommit();
   const range = boundary ? [`${boundary}..HEAD`] : [];
   const log = git("log", "--first-parent", "--format=%s", ...range);
-  return parseReleaseChanges(log).reverse();
+  return parseReleaseChanges(log).toReversed();
 }
 
 async function main(): Promise<void> {
@@ -125,8 +125,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  await mkdir(".tegami", { recursive: true });
-  await writeFile(".tegami/stable-release.md", renderReleaseChangelog(changes));
+  await NodeFSP.mkdir(".tegami", { recursive: true });
+  await NodeFSP.writeFile(".tegami/stable-release.md", renderReleaseChangelog(changes));
   console.log(`Added ${changes.length} merged pull requests to the release changelog.`);
 }
 
