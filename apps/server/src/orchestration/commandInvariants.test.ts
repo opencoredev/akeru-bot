@@ -25,6 +25,7 @@ const readModel: OrchestrationReadModel = {
   updatedAt: now,
   bots: [],
   groups: [],
+  delegations: [],
   projects: [
     {
       id: ProjectId.make("project-a"),

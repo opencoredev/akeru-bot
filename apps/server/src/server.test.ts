@@ -216,6 +216,7 @@ const makeDefaultOrchestrationReadModel = () => {
     updatedAt: now,
     bots: [],
     groups: [],
+    delegations: [],
     projects: [
       {
         id: defaultProjectId,
@@ -6327,6 +6328,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         updatedAt: now,
         bots: [],
         groups: [],
+        delegations: [],
         projects: [
           {
             id: ProjectId.make("project-a"),

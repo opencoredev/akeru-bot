@@ -137,7 +137,7 @@ function makeReadModel(input: {
         id: CHILD_THREAD_ID,
         botId: input.childBotId ?? TARGET_BOT_ID,
         turnId: null,
-        projectId: input.childProjectId,
+        ...(input.childProjectId !== undefined ? { projectId: input.childProjectId } : {}),
       }),
     ],
     updatedAt: NOW,
@@ -249,6 +249,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           commandId: CommandId.make(`command-${testCase.message.replaceAll(" ", "-")}`),
           delegation: testCase.command,
         }).pipe(Effect.flip);
+        if (error._tag !== "OrchestrationCommandInvariantError") throw error;
         expect(error.detail).toContain(testCase.message);
       }
     }),

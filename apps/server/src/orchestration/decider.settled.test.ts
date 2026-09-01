@@ -36,6 +36,7 @@ function makeReadModel(
     snapshotSequence: 0,
     bots: [],
     groups: [],
+    delegations: [],
     projects: [],
     threads: [
       {
