@@ -4,10 +4,10 @@ import {
   type BotEngine,
   type EnvironmentId,
   type McpServerId,
-  type ScopedThreadRef,
 } from "@t3tools/contracts";
 import {
   Cancel01Icon,
+  Brain02Icon,
   Edit02Icon,
   PanelRightCloseIcon,
   PanelRightIcon,
@@ -43,8 +43,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotModelPicker } from "./BotModelPicker";
-import { BotMemorySheet } from "./BotMemorySheet";
 import { BotUsageSection } from "./BotUsageSection";
+import { BotMemorySheet } from "./BotMemorySheet";
 import {
   BOT_SANDBOX_OPTIONS,
   botSandboxChoice,
@@ -53,6 +53,7 @@ import {
 } from "./botSandbox";
 import { BotToolsSheet, buildBotToolItems } from "./BotToolsSheet";
 import type { Bot } from "./types";
+import type { ScopedThreadRef } from "@t3tools/contracts";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -259,6 +260,23 @@ function BotProfileEditor({
           </div>
         </div>
 
+        <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Memory</div>
+          <button
+            type="button"
+            aria-label="Manage bot memory"
+            disabled={!threadRef}
+            onClick={() => setMemoryOpen(true)}
+            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors enabled:hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Brain02Icon} />
+            <span className="min-w-0 flex-1 text-sm">Facts and history</span>
+            <span className="text-xs text-muted-foreground">Manage</span>
+          </button>
+        </div>
+
         <div className="space-y-2">
           <div className="text-sm font-medium">Sandbox</div>
           <Select
@@ -293,25 +311,6 @@ function BotProfileEditor({
             }}
             aria-label={`${voiceEnabled ? "Disable" : "Enable"} voice calls for ${bot.name}`}
           />
-        </div>
-
-        <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Memory</div>
-          <button
-            type="button"
-            aria-label="Manage bot memory"
-            aria-expanded={memoryOpen}
-            disabled={!threadRef}
-            onClick={() => setMemoryOpen(true)}
-            className="flex min-h-10 w-full items-center rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors enabled:hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-          >
-            <span className="min-w-0 flex-1 text-sm">
-              {threadRef ? "Conversation and durable memory" : "No conversation yet"}
-            </span>
-            {threadRef ? <span className="text-xs text-muted-foreground">Manage</span> : null}
-          </button>
         </div>
 
         <div className="space-y-2">

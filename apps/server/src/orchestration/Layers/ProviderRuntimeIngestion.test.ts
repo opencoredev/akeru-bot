@@ -1343,6 +1343,61 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("persists separate assistant notes while one turn remains active", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = asThreadId("thread-1");
+    const turnId = asTurnId("turn-status-beats");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-status-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId,
+      turnId,
+    });
+    for (const [itemId, text] of [
+      ["reply-before-tools", "I'll check that now."],
+      ["status-after-tool", "I found the relevant setting."],
+    ] as const) {
+      harness.emit({
+        type: "content.delta",
+        eventId: asEventId(`evt-${itemId}-delta`),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: now,
+        threadId,
+        turnId,
+        itemId: asItemId(itemId),
+        payload: { streamKind: "assistant_text", delta: text },
+      });
+      harness.emit({
+        type: "item.completed",
+        eventId: asEventId(`evt-${itemId}-completed`),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: now,
+        threadId,
+        turnId,
+        itemId: asItemId(itemId),
+        payload: { itemType: "assistant_message", status: "completed" },
+      });
+    }
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      ["assistant:reply-before-tools", "assistant:status-after-tool"].every((id) =>
+        entry.messages.some(
+          (message: ProviderRuntimeTestMessage) => message.id === id && !message.streaming,
+        ),
+      ),
+    );
+    expect(
+      thread.messages
+        .filter((message: ProviderRuntimeTestMessage) => message.turnId === turnId)
+        .map((message: ProviderRuntimeTestMessage) => message.text),
+    ).toEqual(["I'll check that now.", "I found the relevant setting."]);
+    expect(thread.session?.activeTurnId).toBe(turnId);
+  });
+
   it("uses assistant item completion detail when no assistant deltas were streamed", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

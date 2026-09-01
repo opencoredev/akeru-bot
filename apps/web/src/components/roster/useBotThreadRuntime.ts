@@ -32,12 +32,11 @@ import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import {
   acceptBotTurnSubmission,
   buildBotTurnStartInput,
-  findLatestBotThreadTarget,
   joinOrStartThreadCreate,
   releaseBotTurnSubmissionAfterObservation,
+  resolveBotThreadTarget,
   reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
-import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -82,7 +81,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const providers = useAtomValue(primaryServerProvidersAtom);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
   const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
-  const target = rememberedPath ? parseChatPath(rememberedPath) : null;
   const primaryThreadShells = useMemo(
     () =>
       primaryEnvironmentId
@@ -90,20 +88,14 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         : [],
     [primaryEnvironmentId, threadShells],
   );
-  const serverTarget = primaryEnvironmentId
-    ? findLatestBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells)
+  const target = primaryEnvironmentId
+    ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
     : null;
   const rememberedThreadRef = useMemo<ScopedThreadRef | null>(() => {
-    const candidate =
-      serverTarget ??
-      (target?.kind === "thread" && target.environmentId === primaryEnvironmentId ? target : null);
-    return candidate
-      ? scopeThreadRef(
-          EnvironmentId.make(candidate.environmentId),
-          ThreadId.make(candidate.threadId),
-        )
+    return target
+      ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
       : null;
-  }, [primaryEnvironmentId, serverTarget, target]);
+  }, [target]);
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
   const retainedThreadRef = useRef<{ botId: string; threadRef: ScopedThreadRef | null }>({

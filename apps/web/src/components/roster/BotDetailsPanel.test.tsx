@@ -44,7 +44,7 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain('aria-label="Bot usage"');
     expect(markup).toContain(">Memory</div>");
     expect(markup).toContain('aria-label="Manage bot memory"');
-    expect(markup).toContain("No conversation yet");
+    expect(markup).toContain("Facts and history");
     expect(markup).toContain(">Tools</div>");
     expect(markup).toContain("No workspace tools");
     expect(markup).toContain(">Manage</span>");

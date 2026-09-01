@@ -17,6 +17,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProjectId,
+  RuntimeItemId,
   ThreadId,
   TurnId,
   type ProviderRuntimeEvent,
@@ -229,9 +230,9 @@ function makeMastraHarness() {
   };
 }
 
-function assistantMessage(text: string): MastraDBMessage {
+function assistantMessage(text: string, id = "assistant-message"): MastraDBMessage {
   return {
-    id: "assistant-message",
+    id,
     role: "assistant",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     content: {
@@ -302,6 +303,7 @@ function resolveCodex(controller: AgentController["Service"]) {
     engine: { provider: "codex", model: "gpt-5.6-sol" },
     fallback: codexSelection,
     mode: "default",
+    botConversation: true,
   });
 }
 
@@ -784,6 +786,68 @@ describe("AgentControllerLive", () => {
           ],
         );
         mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("keeps replies and status beats as separate completed messages", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("I'll check first.", "opening"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "view-1",
+          toolName: "view",
+          args: { path: "package.json" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "view-1",
+          result: "{}",
+          isError: false,
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("I found the configuration.", "status"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
+          [
+            RuntimeItemId.make("mastra-answer-opening"),
+            RuntimeItemId.make("view-1"),
+            RuntimeItemId.make("mastra-answer-status"),
+          ],
+        );
       }),
       bridge.service,
       mastra.factory,
@@ -1310,7 +1374,6 @@ describe("AgentControllerLive", () => {
         threadId: codexThreadId,
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
-        cwd: process.cwd(),
         modelSelection: codexSelection,
         runtimeMode: "full-access",
         botSandbox: "upstash",
@@ -1417,6 +1480,7 @@ describe("AgentControllerLive", () => {
           engine: { provider: "claudeAgent", model: "claude-fable-5" },
           fallback: codexSelection,
           mode: "plan",
+          botConversation: true,
         });
         yield* controller.startSession(claudeThreadId, {
           threadId: claudeThreadId,
@@ -1452,6 +1516,7 @@ describe("AgentControllerLive", () => {
           engine: { provider: "kimi", model: "k3-256k" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: true,
         });
         const session = yield* controller.startSession(kimiThreadId, {
           threadId: kimiThreadId,
@@ -1491,12 +1556,14 @@ describe("AgentControllerLive", () => {
           engine: { provider: "claudeAgent", model: "claude-fable-5" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: false,
         });
         yield* controller.resolveEngine({
           threadId: codexThreadId,
           engine: { provider: "codex", model: "gpt-5.6-sol" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: false,
         });
         yield* controller.stopSession({ threadId: codexThreadId });
 
