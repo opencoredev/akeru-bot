@@ -24,6 +24,7 @@ import {
   type AkeruMemoryToolHandler,
   type AkeruMemoryToolId,
 } from "../memory/MemoryToolHandlers.ts";
+import type { AkeruCatalogToolHandler } from "./AkeruCatalogToolHandlers.ts";
 
 export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
 
@@ -74,11 +75,18 @@ export interface AkeruToolSession {
   readonly sendToUser?: (
     input: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
   ) => Promise<AkeruToolReceipt>;
+  readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
 }
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
   readonly onReceipt?: (receipt: AkeruToolReceipt) => void;
+  readonly onProgress?: (input: {
+    readonly threadId: string;
+    readonly toolId: AkeruToolId;
+    readonly toolCallId: string;
+    readonly summary: string;
+  }) => void | Promise<void>;
   readonly now?: () => string;
 }
 
@@ -114,6 +122,8 @@ const BACKEND_NAMES: Record<
     | "CreateChannel"
     | "UpdateChannel"
     | "SendToUser"
+    | "AuthenticateMcpServer"
+    | "RestartMcpServers"
   >,
   ReadonlyArray<string>
 > = {
@@ -232,6 +242,9 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       tools.add("UpdateChannel");
     }
     if (session.sendToUser) tools.add("SendToUser");
+    for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
+      tools.add(toolId);
+    }
     return tools;
   };
 
@@ -343,6 +356,18 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
           failureCode = "internal";
           result = await handler({ ...input, toolId: input.toolId, input: decoded });
+        } else if (session.catalogHandlers?.[input.toolId]) {
+          failureCode = "internal";
+          result = await session.catalogHandlers[input.toolId]({
+            input: decoded,
+            emitProgress: (summary) =>
+              options?.onProgress?.({
+                threadId: input.threadId,
+                toolId: input.toolId as AkeruToolId,
+                toolCallId: input.toolCallId,
+                summary,
+              }),
+          });
         } else if (input.toolId === "SendToAgent") {
           if (!session.delegation) throw new Error("Delegation is not available for this session.");
           const delegationInput = decodeAkeruToolInput("SendToAgent", decoded);

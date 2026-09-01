@@ -28,6 +28,7 @@ const CommandInput = Schema.Struct({
 });
 const PathInput = Schema.Struct({ path: PathText });
 const CopyInput = Schema.Struct({ sourcePath: PathText, destinationPath: PathText });
+const McpServerIdInput = Schema.Struct({ serverId: TrimmedNonEmptyString });
 
 export const AkeruToolInputSchemas = {
   Shell: CommandInput,
@@ -58,6 +59,10 @@ export const AkeruToolInputSchemas = {
   }),
   SendToUser: Schema.Struct({
     message: TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_COMMAND_MAX_CHARS)),
+  }),
+  AuthenticateMcpServer: McpServerIdInput,
+  RestartMcpServers: Schema.Struct({
+    serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   }),
 } as const;
 export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
@@ -194,6 +199,12 @@ export const AKERU_TOOL_CATALOG = [
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
     approval: "send",
+  }),
+  define("AuthenticateMcpServer", "bot-workspace", "Authenticate an MCP server.", {
+    approval: "secrets",
+  }),
+  define("RestartMcpServers", "bot-workspace", "Restart MCP servers.", {
+    approval: "production",
   }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 

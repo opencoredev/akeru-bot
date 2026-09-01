@@ -28,7 +28,7 @@ import {
   type ProviderRuntimeEvent,
   type ProviderSession,
   type RuntimeMode,
-  type ThreadId,
+  ThreadId,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type AkeruMemoryThreadAccess,
 } from "@t3tools/contracts";
@@ -71,6 +71,7 @@ import {
   type AkeruDelegationChildOutcome,
   type AkeruDelegationRuntime,
 } from "../AkeruDelegationRuntime.ts";
+import { createAkeruCatalogToolHandlers } from "../AkeruCatalogToolHandlers.ts";
 import {
   createAkeruToolRuntime,
   isMemoryToolId,
@@ -380,6 +381,24 @@ const make = (options?: AgentControllerLiveOptions) =>
           type: "tool.receipt",
           payload: receipt,
           createdAt: receipt.createdAt,
+        });
+      },
+      onProgress: ({ threadId, toolId, toolCallId, summary }) => {
+        const active = sessions.get(threadId);
+        if (!active) return;
+        PubSub.publishUnsafe(runtimeEvents, {
+          ...baseEvent(ThreadId.make(threadId), active, active.activeTurn?.turnId),
+          type: "tool.receipt",
+          payload: {
+            receiptId: toolCallId,
+            toolId,
+            phase: "progress",
+            threadId: ThreadId.make(threadId),
+            ...(active.toolSession.botId ? { botId: active.toolSession.botId } : {}),
+            summary,
+            fatalToThread: false,
+            createdAt: nowIso(),
+          },
         });
       },
     });
@@ -999,6 +1018,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         workspace: resources.botWorkspace,
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
+        catalogHandlers: createAkeruCatalogToolHandlers(sessionResources.getMcpManager(key)),
         ...(input.botId && delegationRuntime
           ? {
               sendToUser: async (request) => {

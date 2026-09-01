@@ -157,6 +157,39 @@ describe("AkeruToolRuntime", () => {
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
   });
 
+  it("requires approval before catalog MCP handlers run and forwards progress", async () => {
+    const handler = vi.fn(async ({ emitProgress }) => {
+      await emitProgress("Restarting MCP server 'search'.");
+      return { servers: [{ name: "search", connected: true }] };
+    });
+    const onProgress = vi.fn();
+    const runtime = createAkeruToolRuntime({ onProgress });
+    runtime.registerSession("thread-mcp", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: { RestartMcpServers: handler },
+    });
+    const execution = {
+      threadId: "thread-mcp",
+      toolId: "RestartMcpServers" as const,
+      toolCallId: "tool-restart",
+      input: { serverIds: ["search"] },
+      approvalMode: "require-grant" as const,
+    };
+
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    runtime.grantApproval(execution);
+    await expect(runtime.execute(execution)).resolves.toEqual({
+      servers: [{ name: "search", connected: true }],
+    });
+    expect(onProgress).toHaveBeenCalledWith({
+      threadId: "thread-mcp",
+      toolId: "RestartMcpServers",
+      toolCallId: "tool-restart",
+      summary: "Restarting MCP server 'search'.",
+    });
+  });
+
   it("copies files only when both boundaries are registered", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("copy-bot");
