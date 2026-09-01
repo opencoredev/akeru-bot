@@ -6,7 +6,7 @@ import { useEnvironmentQuery } from "../../state/query";
 
 type UsageMeasurement = AkeruBotUsageSnapshot["measurements"]["input"];
 
-export function formatBotUsage(measurement: UsageMeasurement): string {
+export function formatUsageMeasurement(measurement: UsageMeasurement): string {
   if (measurement.unavailableEntries === 0) return measurement.tokens.toLocaleString();
   return measurement.tokens === 0 ? "Unavailable" : `${measurement.tokens.toLocaleString()}+`;
 }
@@ -30,13 +30,9 @@ export function BotUsageSection({
   );
   const usage = useEnvironmentQuery(usageAtom);
   const snapshot = usage.data;
-  const memoryTokens = snapshot
-    ? snapshot.measurements.observer.tokens + snapshot.measurements.reflector.tokens
-    : 0;
-  const memoryUnavailable = snapshot
-    ? snapshot.measurements.observer.unavailableEntries +
-      snapshot.measurements.reflector.unavailableEntries
-    : 0;
+  const hasUnavailable = snapshot
+    ? Object.values(snapshot.measurements).some((value) => value.unavailableEntries > 0)
+    : false;
 
   return (
     <div className="space-y-2" aria-label="Bot usage">
@@ -47,14 +43,22 @@ export function BotUsageSection({
         ) : !snapshot ? (
           <span className="text-muted-foreground">{usage.isPending ? "Loading…" : "No usage"}</span>
         ) : (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-1.5">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-2">
             <span className="text-muted-foreground">Input</span>
-            <span className="text-right">{formatBotUsage(snapshot.measurements.input)}</span>
-            <span className="text-muted-foreground">Output</span>
-            <span className="text-right">{formatBotUsage(snapshot.measurements.output)}</span>
-            <span className="text-muted-foreground">Memory</span>
             <span className="text-right">
-              {formatBotUsage({ tokens: memoryTokens, unavailableEntries: memoryUnavailable })}
+              {formatUsageMeasurement(snapshot.measurements.input)}
+            </span>
+            <span className="text-muted-foreground">Output</span>
+            <span className="text-right">
+              {formatUsageMeasurement(snapshot.measurements.output)}
+            </span>
+            <span className="text-muted-foreground">Observer</span>
+            <span className="text-right">
+              {formatUsageMeasurement(snapshot.measurements.observer)}
+            </span>
+            <span className="text-muted-foreground">Reflector</span>
+            <span className="text-right">
+              {formatUsageMeasurement(snapshot.measurements.reflector)}
             </span>
             <span className="text-muted-foreground">Cap</span>
             <span className="text-right">
@@ -62,11 +66,27 @@ export function BotUsageSection({
                 ? `${snapshot.consumedTokens.toLocaleString()} / ${snapshot.usageCap.limit.toLocaleString()}`
                 : "No cap"}
             </span>
-            {snapshot.usageCap && snapshot.consumedTokens >= snapshot.usageCap.limit ? (
-              <span className="col-span-2 text-xs text-destructive">Cap reached</span>
-            ) : snapshot.reservedTokens > 0 ? (
+            <span className="text-muted-foreground">Estimated cost</span>
+            <span className="text-right">
+              {snapshot.estimatedCost.status === "available"
+                ? `$${snapshot.estimatedCost.usd.toLocaleString()}`
+                : "Unavailable"}
+            </span>
+            <span className="text-muted-foreground">Subscription pool</span>
+            <span className="text-right">
+              {snapshot.subscriptionPool.status === "available"
+                ? `${snapshot.subscriptionPool.used.toLocaleString()} / ${snapshot.subscriptionPool.limit.toLocaleString()} ${snapshot.subscriptionPool.unit}`
+                : "Unavailable"}
+            </span>
+            {snapshot.reservedTokens > 0 ? (
+              <>
+                <span className="text-muted-foreground">Reserved</span>
+                <span className="text-right">{snapshot.reservedTokens.toLocaleString()}</span>
+              </>
+            ) : null}
+            {hasUnavailable ? (
               <span className="col-span-2 text-xs text-muted-foreground">
-                {snapshot.reservedTokens.toLocaleString()} reserved
+                Some provider usage is unavailable.
               </span>
             ) : null}
           </div>

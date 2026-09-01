@@ -10,6 +10,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
+  AkeruBotUsageReadError,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   type AkeruMemoryThreadAccess,
@@ -18,7 +19,6 @@ import {
   type AuthAccessStreamEvent,
   type AuthEnvironmentScope,
   AuthSessionId,
-  AkeruBotUsageReadError,
   BotId,
   ClientSurface,
   CommandId,
@@ -139,8 +139,8 @@ import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
-import * as UsageService from "./usage/UsageService.ts";
 import { BotUsageLedger } from "./usage/BotUsageLedger.ts";
+import * as UsageService from "./usage/UsageService.ts";
 import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -476,10 +476,10 @@ const makeWsRpcLayer = (
       const voiceCallOwnerId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
       const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
+      const botUsageLedger = yield* BotUsageLedger;
       const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
       const entityMemoryRepository = yield* Effect.serviceOption(EntityMemoryRepository);
       const memoryCandidates = yield* Effect.serviceOption(MemoryCandidateRepository);
-      const botUsageLedger = yield* BotUsageLedger;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Every command dispatched on this connection carries the connecting
@@ -2082,48 +2082,6 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {
             "rpc.aggregate": "server",
           }),
-        [WS_METHODS.botUsage]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.botUsage,
-            Effect.gen(function* () {
-              const bot = yield* projectionBots.getById({ botId: input.botId }).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new AkeruBotUsageReadError({
-                      botId: input.botId,
-                      detail: cause.message,
-                    }),
-                ),
-              );
-              if (Option.isNone(bot)) {
-                return yield* new AkeruBotUsageReadError({
-                  botId: input.botId,
-                  detail: `Bot ${input.botId} was not found.`,
-                });
-              }
-              const summary = yield* botUsageLedger.summarize(input.botId).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new AkeruBotUsageReadError({
-                      botId: input.botId,
-                      detail: cause.message,
-                    }),
-                ),
-              );
-              return {
-                ...summary,
-                usageCap: bot.value.usageCap,
-                estimatedCost: { status: "unavailable", usd: null },
-                subscriptionPool: {
-                  status: "unavailable",
-                  used: null,
-                  limit: null,
-                  unit: null,
-                },
-              };
-            }),
-            { "rpc.aggregate": "bot" },
-          ),
         [WS_METHODS.botInboxList]: (_input) =>
           observeRpcEffect(
             WS_METHODS.botInboxList,
@@ -2369,6 +2327,48 @@ const makeWsRpcLayer = (
               memory: requireMemory("mutate"),
             }).pipe(Effect.flatMap(({ access, memory }) => memory.mutate(access, input.mutation))),
             { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.botUsage]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.botUsage,
+            Effect.gen(function* () {
+              const bot = yield* projectionBots.getById({ botId: input.botId }).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new AkeruBotUsageReadError({
+                      botId: input.botId,
+                      detail: cause.message,
+                    }),
+                ),
+              );
+              if (Option.isNone(bot)) {
+                return yield* new AkeruBotUsageReadError({
+                  botId: input.botId,
+                  detail: `Bot ${input.botId} was not found.`,
+                });
+              }
+              const summary = yield* botUsageLedger.summarize(input.botId).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new AkeruBotUsageReadError({
+                      botId: input.botId,
+                      detail: cause.message,
+                    }),
+                ),
+              );
+              return {
+                ...summary,
+                usageCap: bot.value.usageCap,
+                estimatedCost: { status: "unavailable", usd: null },
+                subscriptionPool: {
+                  status: "unavailable",
+                  used: null,
+                  limit: null,
+                  unit: null,
+                },
+              };
+            }),
+            { "rpc.aggregate": "bot" },
           ),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {

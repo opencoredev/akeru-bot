@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
+import { AkeruBotUsageInput, AkeruBotUsageReadError, AkeruBotUsageSnapshot } from "./akeruUsage.ts";
 import {
   AkeruMemoryArchiveV2,
   AkeruMemoryExportInput,
@@ -15,7 +16,6 @@ import {
   AkeruMemoryOperationError,
   AkeruMemorySnapshot,
 } from "./akeruMemory.ts";
-import { AkeruBotUsageInput, AkeruBotUsageReadError, AkeruBotUsageSnapshot } from "./akeruUsage.ts";
 
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
 import {
