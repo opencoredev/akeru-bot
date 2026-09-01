@@ -64,13 +64,7 @@ const EXPECTED_DIRECTORY_IDS = [
   "zernio",
 ] as const;
 
-const EXPECTED_INSTALLABLE_IDS = [
-  "context",
-  "exa",
-  "executor",
-  "firecrawl",
-  "parallel-search",
-] as const;
+const EXPECTED_INSTALLABLE_IDS = ["context", "exa", "firecrawl", "parallel-search"] as const;
 
 function manifest(id: string) {
   return parsePluginManifestJson(
@@ -167,7 +161,7 @@ describe("plugin catalog loader", () => {
     ]);
   });
 
-  it("loads the complete directory with only the five verified recipes installable", () => {
+  it("loads the complete directory with only verified recipes installable", () => {
     const directory = loadDirectoryCatalog();
     const catalog = loadCatalog();
     expect(directory.map((plugin) => plugin.id).toSorted()).toEqual(EXPECTED_DIRECTORY_IDS);
@@ -207,11 +201,6 @@ describe("plugin catalog loader", () => {
       url: "https://mcp.exa.ai/mcp",
       authentication: "optional-oauth",
     });
-    expect(byId.get("executor")).toMatchObject({
-      kind: "mcp-stdio",
-      command: "bunx",
-      args: ["-y", "executor", "mcp"],
-    });
     expect(byId.get("firecrawl")).toMatchObject({
       kind: "mcp-url",
       url: "https://mcp.firecrawl.dev/v2/mcp-oauth",
@@ -228,13 +217,13 @@ describe("plugin catalog loader", () => {
     const pending = loadDirectoryCatalog().filter(
       (plugin) => !EXPECTED_INSTALLABLE_IDS.some((id) => id === plugin.id),
     );
-    expect(pending).toHaveLength(46);
+    expect(pending).toHaveLength(47);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(30);
+    ).toHaveLength(31);
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
       expect(plugin.connection).toMatchObject({
@@ -274,7 +263,15 @@ describe("plugin catalog loader", () => {
     expect(byId.get("typefully")).toMatchObject({
       authentication: "oauth",
       requiredCredentials: [],
+      documentationUrl: "https://typefully.com/ai-agents",
       transport: { type: "url", url: "https://mcp.typefully.com/mcp" },
+      connection: { type: "verification-pending" },
+      catalogStatus: "verification-pending",
+    });
+    expect(byId.get("executor")).toMatchObject({
+      authentication: "oauth",
+      requiredCredentials: [],
+      transport: { type: "url", url: "https://executor.sh/mcp" },
       connection: { type: "verification-pending" },
       catalogStatus: "verification-pending",
     });

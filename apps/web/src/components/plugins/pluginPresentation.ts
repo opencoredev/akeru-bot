@@ -7,16 +7,23 @@ import {
 
 export type PluginFilter = "All" | "Featured" | "Installed" | PluginCategory;
 
+function pluginMatchesCategory(
+  plugin: PluginDirectoryDefinition,
+  category: PluginCategory,
+): boolean {
+  return (
+    plugin.category === category ||
+    plugin.tags.some((tag) => tag.toLocaleLowerCase() === category.toLocaleLowerCase())
+  );
+}
+
 export function buildPluginFilters(
   plugins: readonly PluginDirectoryDefinition[],
 ): readonly PluginFilter[] {
-  const categories = new Set(plugins.map((plugin) => plugin.category));
-  return [
-    "All",
-    "Featured",
-    "Installed",
-    ...PLUGIN_CATEGORIES.filter((category) => categories.has(category)),
-  ];
+  const categories = PLUGIN_CATEGORIES.filter((category) =>
+    plugins.some((plugin) => pluginMatchesCategory(plugin, category)),
+  );
+  return ["All", "Featured", "Installed", ...categories];
 }
 
 export interface PluginSection {
@@ -69,7 +76,7 @@ export function buildPluginSections(input: {
       if (input.filter === "All") return true;
       if (input.filter === "Featured") return plugin.featured === true;
       if (input.filter === "Installed") return input.installedPluginIds?.has(plugin.id) ?? false;
-      return plugin.category === input.filter;
+      return pluginMatchesCategory(plugin, input.filter);
     });
   if (input.query.trim()) return [{ title: "Search results", plugins }];
   if (input.filter !== "All") return [{ title: input.filter, plugins }];
