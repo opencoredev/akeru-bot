@@ -497,6 +497,10 @@ export const make = Effect.gen(function* () {
         if (Option.isSome(environment.enabled)) yield* removeAnalyticsState;
         return;
       }
+      if (Option.isNone(environment.posthogKey)) {
+        yield* removeAnalyticsState;
+        return;
+      }
 
       const now = DateTime.toEpochMillis(yield* DateTime.now);
       const state = yield* loadState(now);

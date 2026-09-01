@@ -392,10 +392,10 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
     }),
   );
 
-  it.effect("does not discard or overfill a full pending queue", () =>
+  it.effect("deletes analytics state when no PostHog key is configured", () =>
     Effect.gen(function* () {
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-        prefix: "akeru-analytics-full-",
+        prefix: "akeru-analytics-no-key-",
       });
       const analyticsLayer = makeLayers(serverConfigLayer).pipe(
         Layer.provide(
@@ -407,15 +407,47 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         const config = yield* ServerConfig.ServerConfig;
         const fs = yield* FileSystem.FileSystem;
         const analytics = yield* AnalyticsService.AnalyticsService;
+        yield* fs.writeFileString(config.analyticsStatePath, "queued analytics");
+
+        yield* analytics.flush;
+
+        assert.isFalse(yield* fs.exists(config.analyticsStatePath));
+      }).pipe(Effect.provide(analyticsLayer));
+    }),
+  );
+
+  it.effect("does not discard or overfill a full pending queue", () =>
+    Effect.gen(function* () {
+      const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
+        prefix: "akeru-analytics-full-",
+      });
+      const analyticsLayer = makeLayers(serverConfigLayer).pipe(
+        Layer.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              T3CODE_TELEMETRY_ENABLED: true,
+              T3CODE_POSTHOG_KEY: "phc_test",
+            }),
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const analytics = yield* AnalyticsService.AnalyticsService;
         const cursorBucketStart = "2026-08-30T00:00:00.000Z";
+        const deliveryDay = AnalyticsService.bucketStartAt(
+          DateTime.toEpochMillis(yield* DateTime.now),
+        ).slice(0, 10);
         yield* fs.writeFileString(
           config.analyticsStatePath,
           encodeJson({
             version: 1,
             installationId: pendingEvent.distinct_id,
             cursorBucketStart,
-            deliveryDay: "2026-08-30",
-            deliveredToday: 0,
+            deliveryDay,
+            deliveredToday: 8,
             firstActiveInstallReported: true,
             pending: Array.from({ length: 256 }, () => pendingEvent),
           }),

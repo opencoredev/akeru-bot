@@ -168,7 +168,10 @@ export function HomeRouteScreen() {
           onOpenSettings={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
-              params: { screen: "Settings" },
+              params: {
+                screen: "Settings",
+                params: { environmentId: selectedEnvironmentId },
+              },
             })
           }
           onProjectSortOrderChange={setProjectSortOrder}
@@ -201,7 +204,10 @@ export function HomeRouteScreen() {
           onOpenSettings={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
-              params: { screen: "Settings" },
+              params: {
+                screen: "Settings",
+                params: { environmentId: selectedEnvironmentId },
+              },
             })
           }
           onProjectSortOrderChange={setProjectSortOrder}
