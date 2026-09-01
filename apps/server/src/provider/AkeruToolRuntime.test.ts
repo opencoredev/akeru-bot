@@ -214,6 +214,75 @@ describe("AkeruToolRuntime", () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
+  it("returns nonfatal receipts when durable bot controls fail", async () => {
+    const fail = vi.fn(async () => {
+      throw new Error("Bot backend unavailable.");
+    });
+    const receipts: AkeruToolReceipt[] = [];
+    const runtime = createAkeruToolRuntime({ onReceipt: (receipt) => receipts.push(receipt) });
+    runtime.registerSession("thread-control-failures", {
+      botId: BotId.make("bot-parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      delegation: {
+        depth: 0,
+        activeDelegations: 0,
+        access: {
+          allowedToolIds: ["CreateAgent", "CheckAgent", "StopAgent"],
+          memoryScopes: [],
+          sandbox: "local",
+          runtimeMode: "full-access",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "delete",
+        },
+        create: fail,
+        check: fail,
+        send: vi.fn(),
+        stop: fail,
+      },
+    });
+
+    for (const execution of [
+      {
+        threadId: "thread-control-failures",
+        toolId: "CreateAgent" as const,
+        toolCallId: "create-failure",
+        input: { name: "Research" },
+        approvalMode: "require-grant" as const,
+      },
+      {
+        threadId: "thread-control-failures",
+        toolId: "CheckAgent" as const,
+        toolCallId: "check-failure",
+        input: { botId: BotId.make("bot-research") },
+        approvalMode: "require-grant" as const,
+      },
+      {
+        threadId: "thread-control-failures",
+        toolId: "StopAgent" as const,
+        toolCallId: "stop-failure",
+        input: { botId: BotId.make("bot-research") },
+        approvalMode: "require-grant" as const,
+      },
+    ]) {
+      if (execution.toolId === "StopAgent") runtime.grantApproval(execution);
+      receipts.length = 0;
+      await expect(runtime.execute(execution)).resolves.toMatchObject({
+        receiptId: execution.toolCallId,
+        toolId: execution.toolId,
+        phase: "failure",
+        threadId: "thread-control-failures",
+        botId: "bot-parent",
+        summary: "Bot backend unavailable.",
+        failureCode: "internal",
+        fatalToThread: false,
+      });
+      expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
+    }
+  });
+
   it("exposes registered memory handlers and protects sensitive writes", async () => {
     const remember = vi.fn(async () => ({ saved: true }));
     const unavailable = vi.fn(async () => undefined);

@@ -549,15 +549,40 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
             throw new Error("Bot management is not available for this session.");
           }
           failureCode = "internal";
-          if (input.toolId === "CreateAgent") {
-            if (!session.delegation.create) throw new Error("Bot creation is not available.");
-            result = await session.delegation.create(decodeAkeruToolInput("CreateAgent", decoded));
-          } else if (input.toolId === "CheckAgent") {
-            if (!session.delegation.check) throw new Error("Bot inspection is not available.");
-            result = await session.delegation.check(decodeAkeruToolInput("CheckAgent", decoded));
-          } else {
-            if (!session.delegation.stop) throw new Error("Bot cancellation is not available.");
-            result = await session.delegation.stop(decodeAkeruToolInput("StopAgent", decoded));
+          let billedBotId = session.botId;
+          try {
+            if (input.toolId === "CreateAgent") {
+              if (!session.delegation.create) throw new Error("Bot creation is not available.");
+              result = await session.delegation.create(
+                decodeAkeruToolInput("CreateAgent", decoded),
+              );
+            } else if (input.toolId === "CheckAgent") {
+              if (!session.delegation.check) throw new Error("Bot inspection is not available.");
+              const checkInput = decodeAkeruToolInput("CheckAgent", decoded);
+              billedBotId = checkInput.botId;
+              result = await session.delegation.check(checkInput);
+            } else {
+              if (!session.delegation.stop) throw new Error("Bot cancellation is not available.");
+              const stopInput = decodeAkeruToolInput("StopAgent", decoded);
+              billedBotId = stopInput.botId;
+              result = await session.delegation.stop(stopInput);
+            }
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              ...(billedBotId ? { billedBotId } : {}),
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
           }
         } else if (input.toolId === "CreateChannel" || input.toolId === "UpdateChannel") {
           if (!session.channels || !session.botId) {
