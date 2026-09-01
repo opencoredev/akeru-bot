@@ -1024,7 +1024,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             finishTurn(threadId, active, "completed");
           }
         })
-        .catch((cause: unknown) => {
+        .catch(async (cause: unknown) => {
           if (active.activeTurn?.turnId !== turnId) return;
           const detail = sessionFailureDetail(active, cause);
           publish({
@@ -1033,6 +1033,16 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: { message: detail, class: "provider_error" },
           });
           finishTurn(threadId, active, "failed", detail);
+          await runPromise(
+            stopSessionWithResources({ threadId }, false).pipe(
+              Effect.catchCause((resetCause) =>
+                Effect.logWarning("provider session reset failed", {
+                  threadId,
+                  cause: resetCause,
+                }),
+              ),
+            ),
+          );
         });
     };
 

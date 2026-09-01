@@ -1821,7 +1821,7 @@ describe("AgentControllerLive", () => {
         yield* controller.respondToUserInput({
           threadId: codexThreadId,
           requestId: ApprovalRequestId.make("tool-input-1"),
-          answers: { answer: "Continue" },
+          answers: { "tool-input-1": "Continue" },
         });
         mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
 
@@ -1829,7 +1829,7 @@ describe("AgentControllerLive", () => {
         assert.isUndefined(completed?.activeTurnId);
         expect(mastra.session.respondToToolSuspension).toHaveBeenCalledWith({
           toolCallId: "tool-input-1",
-          resumeData: { answer: "Continue" },
+          resumeData: "Continue",
         });
       }),
       bridge.service,
@@ -1886,7 +1886,7 @@ describe("AgentControllerLive", () => {
           .respondToUserInput({
             threadId: codexThreadId,
             requestId: ApprovalRequestId.make("tool-input-cancelled"),
-            answers: { answer: "Continue" },
+            answers: { "tool-input-cancelled": "Continue" },
           })
           .pipe(Effect.exit);
         assert.isTrue(Exit.isFailure(responseExit));

@@ -12,7 +12,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("062_Routines", (it) =>
   it.effect("persists routine projections and rejects duplicate scheduled slots", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 56 });
+      yield* runMigrations({ toMigrationInclusive: 61 });
 
       yield* sql`
         INSERT INTO routine_run_claims (
@@ -56,7 +56,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("062_Routines", (it) =>
   it.effect("loads at most five history entries for each routine", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 56 });
+      yield* runMigrations({ toMigrationInclusive: 61 });
 
       yield* sql`
         WITH RECURSIVE runs(number) AS (

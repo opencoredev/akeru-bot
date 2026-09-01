@@ -202,7 +202,14 @@ export interface AkeruBackgroundObservationInput {
 
 type AkeruMastraToolOptions = Pick<
   AkeruMastraHarnessOptions,
-  "authStorage" | "getKimiAccess" | "getThreadTools" | "syncThreadToolApproval" | "toolRuntime"
+  | "authStorage"
+  | "getKimiAccess"
+  | "getThreadTools"
+  | "syncThreadToolApproval"
+  | "toolRuntime"
+  | "createRoutine"
+  | "listRoutines"
+  | "deleteRoutines"
 >;
 
 export function createAkeruObserveHooks(

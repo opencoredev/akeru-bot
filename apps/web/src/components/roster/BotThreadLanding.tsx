@@ -179,7 +179,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   if (!bot || bot.archivedAt !== null) return null;
   const working = isBotConversationWorking({
     sending: runtime.sending,
-    respondingToUserInput: runtime.respondingToUserInput,
+    respondingToUserInput: runtime.respondingRequestIds.length > 0,
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);

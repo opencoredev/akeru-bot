@@ -437,7 +437,12 @@ const buildAppUnderTest = (options?: {
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     routineRepository?: Partial<RoutineRepositoryShape>;
     routineRuntime?: Partial<RoutineRuntimeShape>;
-    analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
+    analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]> & {
+      readonly record?: (
+        event: string,
+        properties?: Readonly<Record<string, unknown>>,
+      ) => Effect.Effect<void>;
+    };
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
     botUsageLedger?: Partial<BotUsageLedgerShape>;

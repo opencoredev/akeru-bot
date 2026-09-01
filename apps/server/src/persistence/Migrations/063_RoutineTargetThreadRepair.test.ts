@@ -10,7 +10,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("063_RoutineTargetThrea
   it.effect("repairs databases that already ran the first routine schema", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 55 });
+      yield* runMigrations({ toMigrationInclusive: 60 });
       yield* sql`
         CREATE TABLE projection_routines (
           routine_id TEXT PRIMARY KEY, bot_id TEXT NOT NULL, project_id TEXT NOT NULL,
@@ -32,7 +32,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("063_RoutineTargetThrea
           updated_at TEXT NOT NULL, UNIQUE (routine_id, scheduled_for)
         )
       `;
-      yield* runMigrations({ toMigrationInclusive: 57 });
+      yield* runMigrations({ toMigrationInclusive: 62 });
 
       const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_routines)`;
       assert.isTrue(columns.some((column) => column.name === "target_thread_id"));
