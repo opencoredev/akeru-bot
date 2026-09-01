@@ -707,6 +707,9 @@ const make = Effect.gen(function* () {
     }
     const providerChanged = currentInfo.driverKind !== desiredInfo.driverKind;
     const project = yield* resolveProject(thread.projectId);
+    const legacyWorkspaceOwnerProjectId = project
+      ? yield* projectionSnapshotQuery.getOriginalProjectIdByWorkspaceRoot(project.workspaceRoot)
+      : Option.none<ProjectId>();
     const mcpServers = yield* resolveControllerMcpServers(thread);
     const botSandboxBrowserSharing = (yield* serverSettingsService.getSettings)
       .botSandboxBrowserSharing;
@@ -758,6 +761,9 @@ const make = Effect.gen(function* () {
                 threadId,
                 projectId: thread.projectId,
                 workspaceRoot: project.workspaceRoot,
+                ...(Option.isSome(legacyWorkspaceOwnerProjectId)
+                  ? { legacyWorkspaceOwnerProjectId: legacyWorkspaceOwnerProjectId.value }
+                  : {}),
                 botId: thread.groupId == null ? respondingBotId : null,
                 groupId: thread.groupId ?? null,
                 respondingBotId,

@@ -204,6 +204,7 @@ const ThreadTurnRangeLookupInput = Schema.Struct({
   beforeTurnKey: Schema.String,
 });
 const ProjectionProjectLookupRowSchema = ProjectionProjectDbRowSchema;
+const ProjectionProjectIdLookupRowSchema = Schema.Struct({ projectId: ProjectId });
 const ProjectionThreadIdLookupRowSchema = Schema.Struct({
   threadId: ThreadId,
 });
@@ -1000,6 +1001,21 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         WHERE workspace_root = ${workspaceRoot}
           AND deleted_at IS NULL
         ORDER BY created_at ASC, project_id ASC
+        LIMIT 1
+      `,
+  });
+
+  const getOriginalProjectIdRowByWorkspaceRoot = SqlSchema.findOneOption({
+    Request: WorkspaceRootLookupInput,
+    Result: ProjectionProjectIdLookupRowSchema,
+    execute: ({ workspaceRoot }) =>
+      sql`
+        SELECT stream_id AS "projectId"
+        FROM orchestration_events
+        WHERE aggregate_kind = 'project'
+          AND event_type IN ('project.created', 'project.meta-updated')
+          AND json_extract(payload_json, '$.workspaceRoot') = ${workspaceRoot}
+        ORDER BY sequence ASC
         LIMIT 1
       `,
   });
@@ -2625,6 +2641,18 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         ),
       );
 
+  const getOriginalProjectIdByWorkspaceRoot: ProjectionSnapshotQueryShape["getOriginalProjectIdByWorkspaceRoot"] =
+    (workspaceRoot) =>
+      getOriginalProjectIdRowByWorkspaceRoot({ workspaceRoot }).pipe(
+        Effect.map(Option.map((row) => row.projectId)),
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.getOriginalProjectIdByWorkspaceRoot:query",
+            "ProjectionSnapshotQuery.getOriginalProjectIdByWorkspaceRoot:decodeRow",
+          ),
+        ),
+      );
+
   const getProjectShellById: ProjectionSnapshotQueryShape["getProjectShellById"] = (projectId) =>
     getActiveProjectRowById({ projectId }).pipe(
       Effect.mapError(
@@ -3147,6 +3175,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getSnapshotSequence,
     getCounts,
     getActiveProjectByWorkspaceRoot,
+    getOriginalProjectIdByWorkspaceRoot,
     getProjectShellById,
     getFirstActiveThreadIdByProjectId,
     getThreadCheckpointContext,

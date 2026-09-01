@@ -617,6 +617,9 @@ const makeWsRpcLayer = (
           if (Option.isNone(project)) {
             return yield* memoryOperationError(operation, "The thread project does not exist.");
           }
+          const legacyWorkspaceOwnerProjectId = yield* projectionSnapshotQuery
+            .getOriginalProjectIdByWorkspaceRoot(project.value.workspaceRoot)
+            .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
           const groupId = thread.value.groupId ?? null;
           const groupMemberBotIds =
             groupId === null
@@ -640,6 +643,9 @@ const makeWsRpcLayer = (
             threadId,
             projectId: thread.value.projectId,
             workspaceRoot: project.value.workspaceRoot,
+            ...(Option.isSome(legacyWorkspaceOwnerProjectId)
+              ? { legacyWorkspaceOwnerProjectId: legacyWorkspaceOwnerProjectId.value }
+              : {}),
             botId:
               groupId === null
                 ? (thread.value.respondingBotId ?? thread.value.botId ?? null)

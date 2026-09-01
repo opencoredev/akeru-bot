@@ -39,15 +39,24 @@ export function deriveAkeruWorkspaceId(projectId: ProjectId): AkeruMemoryPartiti
   return AkeruMemoryPartitionId.make(`workspace:${projectId}`);
 }
 
-const workspacePartitions = (input: AkeruMemoryThreadAccess) => [
-  partition(input, "workspace", deriveAkeruWorkspaceId(input.projectId), "shared"),
-  partition(
+const workspacePartitions = (input: AkeruMemoryThreadAccess) => {
+  const canonical = partition(
     input,
     "workspace",
-    `workspace:${NodeCrypto.createHash("sha256").update(input.workspaceRoot).digest("hex")}`,
+    deriveAkeruWorkspaceId(input.projectId),
     "shared",
-  ),
-];
+  );
+  if (input.legacyWorkspaceOwnerProjectId !== input.projectId) return [canonical];
+  return [
+    canonical,
+    partition(
+      input,
+      "workspace",
+      `workspace:${NodeCrypto.createHash("sha256").update(input.workspaceRoot).digest("hex")}`,
+      "shared",
+    ),
+  ];
+};
 
 export function resolveAuthorizedMemoryPartitions(
   input: AkeruMemoryThreadAccess,

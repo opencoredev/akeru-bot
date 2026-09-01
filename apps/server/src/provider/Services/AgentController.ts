@@ -52,7 +52,7 @@ export interface AgentControllerShape {
   }) => Effect.Effect<void>;
   readonly configureDelegation?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-    readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+    readonly dispatch: (command: OrchestrationCommand) => Promise<{ readonly sequence: number }>;
   }) => Effect.Effect<void>;
   readonly failDelegation?: (input: {
     readonly threadId: ThreadId;
