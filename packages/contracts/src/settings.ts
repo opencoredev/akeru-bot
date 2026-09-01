@@ -814,6 +814,7 @@ export const ServerSettingsOperation = Schema.Literals([
   "read-secret",
   "remove-secret",
   "remove-stale-secret",
+  "remove-analytics-state",
   "write-secret",
   "write-file",
   "prepare-directory",

@@ -115,6 +115,76 @@ describe("buildGroupedRosterSections", () => {
     expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["assigned"]);
     expect(sections[1]?.bots.map((entry) => entry.id)).toEqual(["free"]);
   });
+
+  it("keeps every group member when the group name matches a search", () => {
+    const sections = buildGroupedRosterSections(
+      [
+        bot({ id: "atlas", name: "Atlas", groupId: group.id }),
+        bot({ id: "mori", name: "Mori", groupId: group.id }),
+        bot({ id: "free", name: "Free" }),
+      ],
+      [group],
+      "product",
+    );
+
+    expect(sections.map((section) => section.name)).toEqual(["Product"]);
+    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["atlas", "mori"]);
+  });
+
+  it("keeps every group member when one member matches a search", () => {
+    const sections = buildGroupedRosterSections(
+      [
+        bot({ id: "atlas", name: "Atlas", groupId: group.id }),
+        bot({ id: "mori", name: "Mori", groupId: group.id }),
+      ],
+      [group],
+      "atlas",
+    );
+
+    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["atlas", "mori"]);
+  });
+
+  it("hides a name-matching group when every member is pinned or archived", () => {
+    const sections = buildGroupedRosterSections(
+      [
+        bot({ id: "atlas", name: "Atlas", groupId: group.id, pinned: true }),
+        bot({
+          id: "gone",
+          name: "Gone",
+          groupId: group.id,
+          archivedAt: "2026-08-20T00:00:00.000Z",
+        }),
+      ],
+      [group],
+      "product",
+    );
+
+    expect(sections).toEqual([]);
+  });
+
+  it("hides groups whose name and members miss the search", () => {
+    const sections = buildGroupedRosterSections(
+      [bot({ id: "atlas", name: "Atlas", groupId: group.id }), bot({ id: "free", name: "Free" })],
+      [group],
+      "asdfasdf",
+    );
+
+    expect(sections).toEqual([]);
+  });
+
+  it("keeps only matching unassigned bots", () => {
+    const sections = buildGroupedRosterSections(
+      [
+        bot({ id: "1", name: "Akeru", label: "Research" }),
+        bot({ id: "2", name: "Mori", label: "Design" }),
+      ],
+      [],
+      "research",
+    );
+
+    expect(sections.map((section) => section.name)).toEqual(["Unassigned"]);
+    expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["1"]);
+  });
 });
 
 describe("buildRosterStrip", () => {

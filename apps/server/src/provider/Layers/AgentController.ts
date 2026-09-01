@@ -62,6 +62,7 @@ import {
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
+import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
@@ -315,6 +316,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const sessions = new Map<string, ActiveSession>();
     let delegationRuntime: AkeruDelegationRuntime | undefined;
+    let channelRuntime: AkeruChannelRuntime | undefined;
     const childWaiters = new Map<
       string,
       { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
@@ -939,6 +941,15 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && delegationRuntime
           ? {
+              sendToUser: async (request) => {
+                const active = sessions.get(key);
+                const turnId = active?.activeTurn?.turnId;
+                if (!turnId) throw new Error("User messaging requires an active turn.");
+                return delegationRuntime!.sendToUser(
+                  { threadId, turnId, botId: input.botId!, depth: 0 },
+                  request,
+                );
+              },
               delegation: {
                 send: async (request) => {
                   const active = sessions.get(key);
@@ -959,6 +970,14 @@ const make = (options?: AgentControllerLiveOptions) =>
                     request,
                   );
                 },
+              },
+            }
+          : {}),
+        ...(input.botId && channelRuntime
+          ? {
+              channels: {
+                create: (request) => channelRuntime!.create(input.botId!, request),
+                update: (request) => channelRuntime!.update(input.botId!, request),
               },
             }
           : {}),
@@ -1340,6 +1359,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     return AgentController.of({
       configureDelegation: (input) =>
         Effect.sync(() => {
+          channelRuntime = createAkeruChannelRuntime(input);
           delegationRuntime = createAkeruDelegationRuntime({
             ...input,
             failChild: (threadId, error) => resolveChildWaiter(threadId, { turnId: null, error }),

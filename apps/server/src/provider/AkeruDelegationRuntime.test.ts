@@ -37,6 +37,12 @@ const targetBot: OrchestrationBot = {
   createdAt: now,
   updatedAt: now,
 };
+const sourceBot: OrchestrationBot = {
+  ...targetBot,
+  id: sourceBotId,
+  name: "Source",
+  title: "Source",
+};
 
 const sourceThread: OrchestrationThread = {
   id: sourceThreadId,
@@ -67,7 +73,7 @@ const sourceThread: OrchestrationThread = {
 const snapshot: OrchestrationReadModel = {
   snapshotSequence: 0,
   projects: [],
-  bots: [targetBot],
+  bots: [sourceBot, targetBot],
   groups: [],
   delegations: [],
   threads: [sourceThread],
@@ -77,6 +83,75 @@ const snapshot: OrchestrationReadModel = {
 const request = { botId: targetBotId, task: "Review the patch", expectedResult: "A verdict" };
 
 describe("AkeruDelegationRuntime", () => {
+  it("sends a bot message through the current thread assistant-message path", async () => {
+    const commands: Array<{ type: string; [key: string]: unknown }> = [];
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => ({
+        ...snapshot,
+        threads: [
+          {
+            ...sourceThread,
+            latestTurn: {
+              turnId: sourceTurnId,
+              state: "running",
+              requestedAt: now,
+              startedAt: now,
+              completedAt: null,
+              assistantMessageId: null,
+            },
+          },
+        ],
+      }),
+      dispatch: async (command) => commands.push(command),
+      awaitChild: vi.fn(),
+      now: () => now,
+      id: () => "1",
+    });
+
+    await expect(
+      runtime.sendToUser(
+        { threadId: sourceThreadId, turnId: sourceTurnId, botId: sourceBotId, depth: 0 },
+        { message: "The export is ready." },
+      ),
+    ).resolves.toMatchObject({
+      toolId: "SendToUser",
+      phase: "success",
+      threadId: sourceThreadId,
+      botId: sourceBotId,
+      fatalToThread: false,
+    });
+    expect(commands).toMatchObject([
+      {
+        type: "thread.message.assistant.delta",
+        threadId: sourceThreadId,
+        turnId: sourceTurnId,
+        delta: "The export is ready.",
+      },
+      {
+        type: "thread.message.assistant.complete",
+        threadId: sourceThreadId,
+        turnId: sourceTurnId,
+      },
+    ]);
+  });
+
+  it("rejects a bot that does not own the active thread", async () => {
+    const dispatch = vi.fn();
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => snapshot,
+      dispatch,
+      awaitChild: vi.fn(),
+    });
+
+    await expect(
+      runtime.sendToUser(
+        { threadId: sourceThreadId, turnId: sourceTurnId, botId: targetBotId, depth: 0 },
+        { message: "Wrong thread." },
+      ),
+    ).rejects.toThrow("not authorized");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("enforces depth from the server-owned parent context", async () => {
     const dispatch = vi.fn();
     const runtime = createAkeruDelegationRuntime({
