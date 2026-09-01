@@ -1,7 +1,7 @@
 import { BotId, ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildProviderAccessCapabilities } from "./snapshot.ts";
+import { buildProviderAccessCapabilities, subscriptionDependentBots } from "./snapshot.ts";
 import type { ProviderStatus } from "./service.ts";
 
 const baseSubscription: ProviderStatus = {
@@ -52,6 +52,30 @@ function providerFixture(
 }
 
 describe("provider access capabilities", () => {
+  it("maps Kimi bots to the Kimi subscription", () => {
+    expect(
+      subscriptionDependentBots(
+        [
+          {
+            id: BotId.make("bot-kimi"),
+            name: "Kimi bot",
+            engine: {
+              provider: ProviderInstanceId.make("kimi-custom"),
+              model: "k3-256k",
+            },
+          },
+        ],
+        [providerFixture("kimi-custom", "kimi", "oauth")],
+      ),
+    ).toEqual([
+      {
+        id: BotId.make("bot-kimi"),
+        name: "Kimi bot",
+        provider: "kimi-for-coding",
+      },
+    ]);
+  });
+
   it.each([
     ["openai-codex", "chatgpt", "expired"],
     ["anthropic", "claude-max", "revoked"],

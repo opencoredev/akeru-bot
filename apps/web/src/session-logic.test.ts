@@ -19,10 +19,19 @@ import {
   findLatestProposedPlan,
   hasActionableProposedPlan,
   isLatestTurnSettled,
+  PROVIDER_OPTIONS,
   workEntryIndicatesToolFailure,
   workEntryIndicatesToolNeutralStatus,
   workEntryIndicatesToolSuccess,
 } from "./session-logic";
+
+describe("provider options", () => {
+  it("offers Kimi without Cursor", () => {
+    const providers = PROVIDER_OPTIONS.map((option) => String(option.value));
+    expect(providers).toContain("kimi");
+    expect(providers).not.toContain("cursor");
+  });
+});
 
 let nextActivityId = 0;
 

@@ -627,9 +627,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       const routing = yield* legacyProviderBridge
         .getInstanceInfo(modelSelection.instanceId)
         .pipe(Effect.mapError(unavailable));
-      const capabilities = yield* legacyProviderBridge
-        .getCapabilities(modelSelection.instanceId)
-        .pipe(Effect.mapError(unavailable));
+      const capabilities = usesMastraCode(routing.driverKind)
+        ? { sessionModelSwitch: "in-session" as const }
+        : yield* legacyProviderBridge
+            .getCapabilities(modelSelection.instanceId)
+            .pipe(Effect.mapError(unavailable));
       return { modelSelection, routing, capabilities };
     });
 
@@ -877,7 +879,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         const key = String(input.threadId);
         const active = sessions.get(key);
         if (!active) {
-          if (resolvedByThread.get(key)?.provider === ProviderDriverKind.make("codex")) {
+          if (
+            usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
+          ) {
             return yield* new AgentControllerRuntimeError({
               operation: "sendTurn",
               detail: `Mastra session for thread '${input.threadId}' is not running.`,

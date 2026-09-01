@@ -13,7 +13,7 @@ const SUBSCRIPTION_DRIVER: Readonly<Record<SubscriptionProviderId, string>> = {
   "openai-codex": "codex",
   cursor: "cursor",
   xai: "grok",
-  "kimi-for-coding": "opencode",
+  "kimi-for-coding": "kimi",
 };
 
 export function subscriptionDependentBots(

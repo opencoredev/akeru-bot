@@ -91,15 +91,15 @@ A typed signal emitted when an async milestone completes, such as `checkpoint.ba
 
 ### Subscription provider
 
-A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Cursor, Grok, or Kimi For Coding. The environment server stores the credential and gives a run only the short-lived access token it needs. See [subscription authentication](./subscription-auth.md).
+A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Grok, or Kimi For Coding. The environment server stores the credential and gives a run only the short-lived access token it needs. See [subscription authentication](./subscription-auth.md).
 
 ## Provider runtime
 
-The live backend agent implementation and its event stream. Desktop turns cross [AgentController][25]. Codex uses Akeru's memory-free Mastra Core controller, custom workspace and MCP tools, an explicit subscription `AuthStorage`, and normalized Mastra runtime events. Claude, Cursor, Grok, and OpenCode keep their existing adapters behind the legacy bridge. The adapter contract is [ProviderAdapter.ts][15], and the overview is in [providers.md][16].
+The live backend agent implementation and its event stream. Desktop turns cross [AgentController][25]. Codex and Kimi use Akeru's Mastra Core controller, custom workspace and MCP tools, server-owned subscription access, and normalized Mastra runtime events. Claude, Grok, and OpenCode keep their existing adapters behind the legacy bridge. The adapter contract is [ProviderAdapter.ts][15], and the overview is in [providers.md][16].
 
 #### Provider
 
-The backend agent runtime that actually performs work. Five drivers ship built in: Codex, Claude, Cursor, Grok, and OpenCode. See [ProviderService.ts][14], [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
+The backend agent runtime that actually performs work. Five drivers ship built in: Codex, Claude, Grok, Kimi For Coding, and OpenCode. See [ProviderService.ts][14], [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
 
 #### Session
 

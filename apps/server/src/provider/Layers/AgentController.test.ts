@@ -45,7 +45,7 @@ const claudeThreadId = ThreadId.make("thread-legacy-claude");
 const kimiThreadId = ThreadId.make("thread-mastra-kimi");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
-const kimiInstanceId = ProviderInstanceId.make("kimi");
+const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -84,6 +84,9 @@ function makeBridge() {
   const rollbackConversation = vi.fn<ProviderServiceShape["rollbackConversation"]>(
     () => Effect.void,
   );
+  const getCapabilities = vi.fn<ProviderServiceShape["getCapabilities"]>(() =>
+    Effect.succeed({ sessionModelSwitch: "in-session" }),
+  );
   const service: ProviderServiceShape = {
     startSession,
     sendTurn,
@@ -93,9 +96,11 @@ function makeBridge() {
     stopSession,
     rollbackConversation,
     listSessions: () => Effect.succeed([]),
-    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+    getCapabilities,
     getInstanceInfo: (instanceId) => {
-      const driverKind = ProviderDriverKind.make(String(instanceId));
+      const driverKind = ProviderDriverKind.make(
+        instanceId === kimiInstanceId ? "kimi" : String(instanceId),
+      );
       return Effect.succeed({
         instanceId,
         driverKind,
@@ -119,6 +124,7 @@ function makeBridge() {
     respondToUserInput,
     stopSession,
     rollbackConversation,
+    getCapabilities,
   };
 }
 
@@ -1193,7 +1199,7 @@ describe("AgentControllerLive", () => {
         const controller = yield* AgentController;
         yield* controller.resolveEngine({
           threadId: kimiThreadId,
-          engine: { provider: "kimi", model: "k3-256k" },
+          engine: { provider: String(kimiInstanceId), model: "k3-256k" },
           fallback: codexSelection,
           mode: "default",
         });
@@ -1212,6 +1218,7 @@ describe("AgentControllerLive", () => {
           modelId: "kimi-for-coding/k3-256k",
         });
         expect(bridge.startSession).not.toHaveBeenCalled();
+        expect(bridge.getCapabilities).not.toHaveBeenCalled();
       }),
       bridge.service,
       mastra.factory,
@@ -1260,6 +1267,30 @@ describe("AgentControllerLive", () => {
         yield* resolveCodex(controller);
         const error = yield* controller
           .sendTurn({ threadId: codexThreadId, input: "No legacy fallback." })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "AgentControllerRuntimeError");
+        expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("does not fall back to the legacy Kimi loop when its Mastra session is absent", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: kimiThreadId,
+          engine: { provider: String(kimiInstanceId), model: "k3-256k" },
+          fallback: codexSelection,
+          mode: "default",
+        });
+        const error = yield* controller
+          .sendTurn({ threadId: kimiThreadId, input: "No legacy fallback." })
           .pipe(Effect.flip);
 
         assert.equal(error._tag, "AgentControllerRuntimeError");
