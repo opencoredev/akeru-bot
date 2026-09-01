@@ -130,15 +130,20 @@ describe("ClaudeSettings auto-compaction", () => {
 });
 
 describe("ServerSettings local execution", () => {
-  it("asks before local execution by default and accepts an explicit full-access opt-in", () => {
-    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+  it("auto-reviews local execution by default and accepts each supported policy", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("auto");
+    expect(
+      decodeServerSettingsPatch({ localExecutionMode: "approval-required" }).localExecutionMode,
+    ).toBe("approval-required");
+    expect(decodeServerSettingsPatch({ localExecutionMode: "auto" }).localExecutionMode).toBe(
+      "auto",
+    );
     expect(
       decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
     ).toBe("full-access");
   });
 
-  it("rejects other runtime modes", () => {
-    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
+  it("rejects edit-only automatic approval", () => {
     expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto-accept-edits" })).toThrow();
   });
 });
@@ -311,12 +316,14 @@ describe("ServerSettings sandbox providers", () => {
 });
 
 describe("ServerSettings local execution", () => {
-  it("asks first by default and accepts full access only as an opt-in", () => {
-    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+  it("keeps auto review as the unified default", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("auto");
+    expect(decodeServerSettingsPatch({ localExecutionMode: "auto" }).localExecutionMode).toBe(
+      "auto",
+    );
     expect(
       decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
     ).toBe("full-access");
-    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
   });
 });
 

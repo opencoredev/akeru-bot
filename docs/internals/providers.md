@@ -44,9 +44,10 @@ resolves the selected subscription model through explicit server-owned auth. Age
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
-Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves only
-the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
-that sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
+Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves
+`ask_user`, then converts its suspension into a user-input request. In automatic mode, it approves
+only the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
+that can write through MCP, sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
 an account. Unknown mutating intent also asks. The pending approval map binds the response to the
 exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
 as one-use approval.

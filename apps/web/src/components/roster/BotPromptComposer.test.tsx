@@ -104,6 +104,49 @@ describe("bot prompt composer", () => {
     expect(markup).not.toContain("max-w-4xl");
   });
 
+  it("attaches a pending question above the custom answer field", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Akeru"
+        disabled={false}
+        modelPicker={null}
+        pendingActionSlot={<div data-testid="pending-question">Question</div>}
+        placeholder="Write a custom answer..."
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="pending-question"');
+    expect(markup).toContain('data-testid="bot-pending-action-motion"');
+    expect(markup).toContain('placeholder="Write a custom answer..."');
+    expect(markup).toContain("rounded-t-md border-t-transparent");
+  });
+
+  it("squares the prompt box against an approval rendered above it", () => {
+    const withoutApproval = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Akeru"
+        disabled={false}
+        modelPicker={null}
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+    const withApproval = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Akeru"
+        disabled={false}
+        modelPicker={null}
+        pendingActionSlot={<div data-testid="approval-slot">Run this command?</div>}
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+
+    expect(withoutApproval).not.toContain("rounded-t-md");
+    expect(withApproval).toContain('data-testid="approval-slot"');
+    expect(withApproval).toContain("rounded-t-md");
+    expect(withApproval).toContain("border-t-transparent");
+  });
+
   it("shows the active model and keeps it changeable", () => {
     const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
     const markup = renderToStaticMarkup(

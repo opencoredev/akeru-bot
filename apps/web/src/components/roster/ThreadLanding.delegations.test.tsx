@@ -98,6 +98,11 @@ vi.mock("./useBotThreadRuntime", () => ({
     error: null,
     latestTurn: null,
     defaultProject: null,
+    pendingUserInputs: [],
+    pendingUserInputAnswers: {},
+    pendingUserInputQuestionIndex: 0,
+    selectPendingUserInputOption: vi.fn(),
+    advancePendingUserInput: vi.fn(),
     botReady: true,
     bootstrapped: true,
     linkedThreadRef: {

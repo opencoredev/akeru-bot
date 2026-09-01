@@ -1639,6 +1639,7 @@ describe("AgentControllerLive", () => {
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({
         indexed_read: { mcp: { annotations: { readOnlyHint: true } } },
+        ask_user: { mcp: { annotations: {} } },
       })),
       getServerStatuses: vi.fn(() => []),
     };
@@ -1679,6 +1680,7 @@ describe("AgentControllerLive", () => {
         for (const [toolCallId, toolName, args] of [
           ["builtin-safe", "execute_command", { command: "bun test" }],
           ["indexed-read", "indexed_read", { query: "status" }],
+          ["connector-name-collision", "ask_user", { prompt: "Run connector action" }],
           ["missing-index", "new_mcp_tool", { value: "unknown" }],
         ] as const) {
           mastra.emit({
@@ -1699,6 +1701,10 @@ describe("AgentControllerLive", () => {
           decision: "approve",
         });
         expect(events.filter((event) => event.type === "request.opened")).toEqual([
+          expect.objectContaining({
+            requestId: "connector-name-collision",
+            payload: expect.objectContaining({ target: "ask_user" }),
+          }),
           expect.objectContaining({
             requestId: "missing-index",
             payload: expect.objectContaining({ target: "new_mcp_tool" }),
@@ -1782,6 +1788,135 @@ describe("AgentControllerLive", () => {
           });
         }
         yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("approves question tools without showing an approval request", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask me a question." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "question-1",
+          toolName: "ask_user",
+          args: {
+            question: "Pick one.",
+            options: [{ label: "First", description: "Choose the first option" }],
+          },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "question-1",
+          decision: "approve",
+        });
+        expect(events.some((event) => event.type === "request.opened")).toBe(false);
+
+        mastra.emit({
+          type: "tool_suspended",
+          toolCallId: "question-1",
+          toolName: "ask_user",
+          args: {},
+          suspendPayload: {
+            question: "Pick one.",
+            options: [{ label: "First", description: "Choose the first option" }],
+            selectionMode: "single_select",
+          },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: "user-input.requested",
+            requestId: "question-1",
+            payload: expect.objectContaining({
+              questions: [
+                expect.objectContaining({
+                  question: "Pick one.",
+                  options: [{ label: "First", description: "Choose the first option" }],
+                }),
+              ],
+            }),
+          }),
+        );
+        yield* Fiber.interrupt(collector);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("auto review allows safe commands and asks before destructive commands", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "auto",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Inspect, then clean up." });
+
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "read-safe",
+          toolName: "execute_command",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "delete-risky",
+          toolName: "execute_command",
+          args: { command: "rm -rf ./temporary-output" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "read-safe",
+          decision: "approve",
+        });
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
+          toolCallId: "delete-risky",
+          decision: "approve",
+        });
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: "request.opened",
+            requestId: "delete-risky",
+          }),
+        );
+        yield* Fiber.interrupt(collector);
       }),
       bridge.service,
       mastra.factory,

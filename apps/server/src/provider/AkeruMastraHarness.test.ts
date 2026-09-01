@@ -48,6 +48,9 @@ describe("Akeru action classifier", () => {
     ['curl -X POST --data \'{"text":"hello"}\' https://example.com/messages', "send"],
     ["cd workspace && git push origin main", "publish"],
     ["find . -name '*.tmp' -delete", "delete"],
+    ["git reset --hard HEAD~1", "delete"],
+    ["git clean -fd", "delete"],
+    ["find . -name '*.tmp' -exec rm -rf {} \\;", "delete"],
     ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);

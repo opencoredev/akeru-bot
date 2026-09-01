@@ -38,6 +38,7 @@ import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
+import { BotUserInputPrompt } from "./BotUserInputPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
@@ -197,6 +198,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
   const pendingApproval = approvalState.pendingApproval;
+  const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
   const delegations = runtime.linkedThreadRef
     ? (snapshot?.delegations.filter(
@@ -291,15 +293,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 ),
               )
             )}
-            {pendingApproval ? (
-              <BotApprovalPrompt
-                approval={pendingApproval}
-                pendingCount={approvalState.pendingCount}
-                responding={approvalState.responding}
-                error={approvalState.responseError}
-                onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
-              />
-            ) : null}
             {delegations.map((delegation) => (
               <DelegationCard
                 key={delegation.delegationId}
@@ -326,8 +319,32 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
           <BotPromptComposer
             botName={bot.name}
             draftKey={bot.id}
+            pendingActionSlot={
+              pendingApproval ? (
+                <BotApprovalPrompt
+                  approval={pendingApproval}
+                  pendingCount={approvalState.pendingCount}
+                  responding={approvalState.responding}
+                  error={approvalState.responseError}
+                  onRespond={(decision) =>
+                    approvalState.respond(pendingApproval.requestId, decision)
+                  }
+                />
+              ) : pendingUserInput ? (
+                <BotUserInputPrompt
+                  pendingUserInputs={runtime.pendingUserInputs}
+                  respondingRequestIds={runtime.respondingRequestIds}
+                  answers={runtime.pendingUserInputAnswers}
+                  questionIndex={runtime.pendingUserInputQuestionIndex}
+                  onToggleOption={runtime.selectPendingUserInputOption}
+                  onAdvance={runtime.advancePendingUserInput}
+                />
+              ) : null
+            }
+            {...(pendingUserInput ? { placeholder: "Write a custom answer..." } : {})}
             disabled={
               pendingApproval !== null ||
+              runtime.respondingRequestIds.length > 0 ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||
               modelUpdatePending ||
@@ -337,7 +354,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               runtime.defaultProject === null
             }
             modelPicker={
-              environmentId && activeEntry && activeModel
+              pendingUserInput === null && environmentId && activeEntry && activeModel
                 ? {
                     activeInstanceId: activeEntry.instanceId,
                     model: activeModel,

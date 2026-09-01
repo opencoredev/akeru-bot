@@ -17,7 +17,7 @@ Each settled bot reply shows its engine, step tokens, and estimated USD cost whe
 
 Settings controls whether bots share their workspace and browser. **Separate** is the default and gives each bot its own workspace identity and browser profile. **Shared** lets bots share files and cookies. Bots can use Local, E2B, Daytona, Vercel Sandbox, or Upstash Box workspaces. Connect remote providers in **Settings > Sandbox**. Remote workspaces use the provider credentials available to the environment and fail if those credentials are missing. A bot's explicit sandbox overrides the default.
 
-Local bots ask before file changes and shell commands by default. Select **Settings > General > Local execution > Full access** to skip those local prompts. Actions that send, pay, delete, change production, or use secrets still ask. Bots that run in a cloud sandbox do not show the local computer prompt.
+Local bots use **Auto review** by default. Safe actions continue without a prompt. Actions that send, pay, delete, change production, use secrets, or have unclear intent still ask. Select **Settings > General > Local execution** to ask before each local change or grant full access. Bots that run in a cloud sandbox do not show the local computer prompt.
 
 ## Run a routine
 

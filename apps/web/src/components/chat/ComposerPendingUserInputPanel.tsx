@@ -8,6 +8,7 @@ import {
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { Button } from "../ui/button";
+import { Kbd } from "../ui/kbd";
 import { cn } from "~/lib/utils";
 
 interface PendingUserInputPanelProps {
@@ -174,7 +175,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
 
   return (
     <Collapsible
-      className="py-2"
+      className="pt-2 pb-2.5"
       open={!isCollapsed}
       onOpenChange={(open) => {
         setCollapsedQuestionId(open ? null : activeQuestion.id);
@@ -186,15 +187,15 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           header label and the chevron still line up with the left and right
           edges of the question text below. The negative block margin keeps the
           taller hit area from pushing the panel down. */}
-      <div className="flex items-center gap-1 px-1 sm:px-2">
+      <div className="flex items-center px-3 sm:px-4">
         <CollapsibleTrigger
           title={
             isCollapsed ? "Show the question and its options" : "Hide the question and its options"
           }
           data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
-          className="group -my-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-primary/25"
+          className="group -mx-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/25"
         >
-          <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground/85">
+          <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground/85">
             {activeQuestion.header}
           </span>
           {prompt.questions.length > 1 ? (
@@ -225,12 +226,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           while the height animates, so the option buttons have to sit inside
           that padding or their focus rings get shaved off at the edges. */}
       <CollapsiblePanel className="px-3 sm:px-4">
-        <div className="pt-2 pb-0.5">
-          <p className="text-sm text-foreground/85">{activeQuestion.question}</p>
+        <div className="pt-1.5">
+          <p className="text-[15px] font-medium leading-5 text-foreground">
+            {activeQuestion.question}
+          </p>
           {activeQuestion.multiSelect ? (
             <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
           ) : null}
-          <div className="mt-2 space-y-0.5">
+          <div className="mt-3 space-y-1.5">
             {activeQuestion.options.map((option, index) => {
               const isOptimisticallySelected =
                 optimisticSingleSelect?.questionId === activeQuestion.id &&
@@ -240,32 +243,34 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                 (!customAnswerActive && progress.selectedOptionLabels.includes(option.label));
               const shortcutKey = index < 9 ? index + 1 : null;
               const className = cn(
-                "group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-primary/25",
+                "group flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left outline-none transition-[background-color,border-color,color] duration-150 focus-visible:ring-2 focus-visible:ring-primary/25",
                 isSelected
-                  ? "bg-muted/55 text-foreground"
-                  : "bg-transparent text-foreground/85 hover:bg-muted/30",
+                  ? "border-primary/35 bg-primary/[0.08] text-foreground"
+                  : "border-border/55 bg-background/25 text-foreground/85 hover:border-border/80 hover:bg-muted/30",
                 isResponding && "opacity-50 cursor-not-allowed",
                 !isResponding && "cursor-pointer",
               );
               const content = (
                 <>
-                  <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">{option.label}</span>
-                    {option.description && option.description !== option.label ? (
-                      <span className="text-secondary-label text-[11px]">{option.description}</span>
-                    ) : null}
-                  </div>
-                  {isSelected ? (
-                    <CheckIcon className="size-3.5 shrink-0 text-primary" />
-                  ) : shortcutKey !== null ? (
-                    <kbd
+                  {shortcutKey !== null ? (
+                    <Kbd
                       className={cn(
-                        "flex size-5 shrink-0 items-center justify-center text-[10px] font-medium text-muted-foreground tabular-nums",
+                        "size-5 shrink-0 rounded-md bg-foreground/[0.06] px-0 text-[10px]",
+                        isSelected && "bg-primary/15 text-primary",
                       )}
                     >
                       {shortcutKey}
-                    </kbd>
+                    </Kbd>
                   ) : null}
+                  <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                    <span className="text-[13px] font-medium leading-4">{option.label}</span>
+                    {option.description && option.description !== option.label ? (
+                      <span className="text-secondary-label text-[11px] leading-4">
+                        {option.description}
+                      </span>
+                    ) : null}
+                  </div>
+                  {isSelected ? <CheckIcon className="size-3.5 shrink-0 text-primary" /> : null}
                 </>
               );
               return (

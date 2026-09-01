@@ -134,6 +134,7 @@ const PLAN_MODE_ID = "plan";
 const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
   Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
 );
+const APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user"]);
 type MastraSession = AkeruMastraSession;
 
 interface ResolvedEngine {
@@ -356,14 +357,11 @@ function permissionPolicy(
 }
 
 function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string): boolean {
-  if (BUILTIN_MASTRA_TOOL_NAMES.has(toolName)) return false;
-  if (!manager) return true;
-  const tools = manager.getTools();
-  if (!tools || !Object.hasOwn(tools, toolName)) return true;
-  const tool = tools[toolName] as {
-    readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } };
-  };
-  return tool.mcp?.annotations?.readOnlyHint !== true;
+  const tool = manager?.getTools()?.[toolName] as
+    | { readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } } }
+    | undefined;
+  if (tool) return tool.mcp?.annotations?.readOnlyHint !== true;
+  return !BUILTIN_MASTRA_TOOL_NAMES.has(toolName);
 }
 
 function approvalDetail(toolName: string, action: string | null, oneUse: boolean): string {
@@ -1256,10 +1254,22 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
+          const mcpManager = sessionResources.getMcpManager(String(threadId));
+          const connectorTools = mcpManager?.getTools();
+          if (
+            APPROVAL_FREE_MASTRA_TOOL_NAMES.has(event.toolName) &&
+            (!connectorTools || !Object.hasOwn(connectorTools, event.toolName))
+          ) {
+            active.session.respondToToolApproval({
+              toolCallId: event.toolCallId,
+              decision: "approve",
+            });
+            return;
+          }
           const action = criticalAkeruAction(event.toolName, event.args);
           const oneUseApproval =
             akeruActionNeedsApproval(event.toolName, event.args) ||
-            mcpToolNeedsApproval(sessionResources.getMcpManager(String(threadId)), event.toolName);
+            mcpToolNeedsApproval(mcpManager, event.toolName);
           if (
             event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
             !oneUseApproval &&

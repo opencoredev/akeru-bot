@@ -4,8 +4,8 @@ A permission mode controls how much the agent does on its own and when it stops 
 
 The mode is set per thread, from the mode control in the message composer. Changing it in one
 thread does not change any other thread. A thread created from inside another thread keeps that
-thread's mode. Otherwise, new threads use **Settings > General > Local execution** and ask before
-local file changes and shell commands by default.
+thread's mode. Otherwise, new threads use **Settings > General > Local execution** and use
+**Auto review** by default.
 
 ## The Modes
 
@@ -28,6 +28,9 @@ Approvals appear inline in the conversation. Approve or reject one and the agent
 there. The Codex runtime still asks before every MCP tool call and actions that send, pay, delete,
 deploy, publish, expose secrets, sign, refund, or change an account. This applies in every mode.
 Each approval applies only to the pending action.
+
+Questions never need approval. A question with choices shows those choices inline. A free-text
+question uses the message composer for the answer.
 
 ## Choosing a Mode
 

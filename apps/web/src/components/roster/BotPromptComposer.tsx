@@ -1,7 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon } from "lucide-react";
-import { type ComponentProps, useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   hydrateImagesFromPersisted,
@@ -115,6 +123,8 @@ export function BotPromptComposer({
   disabled,
   mentionBots = EMPTY_MENTION_BOTS,
   modelPicker,
+  pendingActionSlot = null,
+  placeholder,
   onSubmit,
 }: {
   botName: string;
@@ -122,8 +132,12 @@ export function BotPromptComposer({
   disabled: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
   modelPicker: BotModelPickerProps | null;
+  /** Rendered above the prompt box so a pending decision reads as part of the composer. */
+  pendingActionSlot?: ReactNode;
+  placeholder?: string;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
@@ -519,12 +533,27 @@ export function BotPromptComposer({
           onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
         />
       </ComposerBanner.Dock>
+      <AnimatePresence initial={false}>
+        {pendingActionSlot ? (
+          <motion.div
+            key="pending-action"
+            data-testid="bot-pending-action-motion"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.16, ease: "easeOut" }}
+          >
+            {pendingActionSlot}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <div
         data-testid="bot-prompt-composer"
         data-expanded={expanded || undefined}
         className={cn(
           "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
           expanded && "min-h-28",
+          pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
         )}
       >
         <BotPromptAttachments
@@ -541,7 +570,7 @@ export function BotPromptComposer({
           ref={promptInputRef}
           aria-label={`Message ${botName}`}
           data-testid="bot-prompt-input"
-          placeholder={`Message ${botName}`}
+          placeholder={placeholder ?? `Message ${botName}`}
           rows={1}
           value={draft}
           className={cn(

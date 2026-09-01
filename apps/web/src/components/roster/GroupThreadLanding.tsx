@@ -180,15 +180,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               );
             })
           )}
-          {pendingApproval ? (
-            <BotApprovalPrompt
-              approval={pendingApproval}
-              pendingCount={approvalState.pendingCount}
-              responding={approvalState.responding}
-              error={approvalState.responseError}
-              onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
-            />
-          ) : null}
           {delegations.map((delegation) => (
             <DelegationCard
               key={delegation.delegationId}
@@ -222,6 +213,17 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         <BotPromptComposer
           botName={group.name}
           draftKey={`group:${group.id}`}
+          pendingActionSlot={
+            pendingApproval ? (
+              <BotApprovalPrompt
+                approval={pendingApproval}
+                pendingCount={approvalState.pendingCount}
+                responding={approvalState.responding}
+                error={approvalState.responseError}
+                onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
+              />
+            ) : null
+          }
           disabled={
             runtime.sending ||
             pendingApproval !== null ||
