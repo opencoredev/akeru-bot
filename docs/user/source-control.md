@@ -5,12 +5,12 @@ beside the thread that owns the work.
 
 ## Supported hosts
 
-| Host | Authentication | Change request name |
-| --- | --- | --- |
-| GitHub | GitHub CLI | Pull request |
-| GitLab | GitLab CLI | Merge request |
-| Bitbucket | Access token or account API token | Pull request |
-| Azure DevOps | Azure CLI with the DevOps extension | Pull request |
+| Host         | Authentication                      | Change request name |
+| ------------ | ----------------------------------- | ------------------- |
+| GitHub       | GitHub CLI                          | Pull request        |
+| GitLab       | GitLab CLI                          | Merge request       |
+| Bitbucket    | Access token or account API token   | Pull request        |
+| Azure DevOps | Azure CLI with the DevOps extension | Pull request        |
 
 Git is required on the environment server for every local repository operation.
 

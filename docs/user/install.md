@@ -38,12 +38,12 @@ close the terminal.
 
 Open **Settings > Providers** on any connected client. The **Subscriptions** section supports:
 
-| Account | Supported access |
-| --- | --- |
-| ChatGPT | Plus, Pro, Business, Enterprise, or Edu |
-| Claude | Pro or Max |
-| Grok | Shared xAI login |
-| Kimi For Coding | Kimi For Coding plan |
+| Account         | Supported access                        |
+| --------------- | --------------------------------------- |
+| ChatGPT         | Plus, Pro, Business, Enterprise, or Edu |
+| Claude          | Pro or Max                              |
+| Grok            | Shared xAI login                        |
+| Kimi For Coding | Kimi For Coding plan                    |
 
 Select **Connect** and finish the provider's sign-in flow. ChatGPT, Grok, and Kimi use a device code.
 Claude asks you to paste the returned authorization code into Akeru.
