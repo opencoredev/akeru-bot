@@ -154,6 +154,70 @@ export function resolveLatestRosterMessage(
   return latest.at >= fallback.at ? latest : fallback;
 }
 
+export interface RosterSection {
+  id: "pinned" | "unpinned";
+  name: "Pinned" | "Bots";
+  bots: Bot[];
+}
+
+function lastMessageSortValue(
+  bot: Bot,
+  lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
+): number | null {
+  const at = lastMessageByBotId[bot.id]?.at;
+  if (at === undefined) return null;
+  return parseTimestampDate(at)?.getTime() ?? null;
+}
+
+export function compareRosterBots(
+  a: Bot,
+  b: Bot,
+  lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
+): number {
+  const aAt = lastMessageSortValue(a, lastMessageByBotId);
+  const bAt = lastMessageSortValue(b, lastMessageByBotId);
+  if (aAt !== null && bAt !== null && aAt !== bAt) return bAt - aAt;
+  if (aAt !== null && bAt === null) return -1;
+  if (aAt === null && bAt !== null) return 1;
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
+type RosterSectionsInput = readonly Bot[] | { bots: readonly Bot[] };
+
+function isPreviousRosterSectionsInput(
+  input: RosterSectionsInput,
+): input is { bots: readonly Bot[] } {
+  return !Array.isArray(input);
+}
+
+export function buildRosterSections(input: RosterSectionsInput): RosterSection[] {
+  const bots = isPreviousRosterSectionsInput(input) ? input.bots : input;
+  const visibleBots = bots.filter((bot) => bot.archivedAt === null);
+  const pinned = visibleBots.filter((bot) => bot.pinned);
+  const unpinned = visibleBots.filter((bot) => !bot.pinned);
+  return [
+    ...(pinned.length > 0 ? [{ id: "pinned", name: "Pinned", bots: pinned } as const] : []),
+    ...(unpinned.length > 0 ? [{ id: "unpinned", name: "Bots", bots: unpinned } as const] : []),
+  ];
+}
+
+export const ROSTER_TILE_LIMIT = 5;
+
+export function buildRosterStrip(
+  bots: readonly Bot[],
+  _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
+): Bot[] {
+  const visible = bots.filter((bot) => bot.archivedAt === null);
+  return [...visible.filter((bot) => bot.pinned), ...visible.filter((bot) => !bot.pinned)];
+}
+
+export function buildRosterTiles(
+  bots: readonly Bot[],
+  _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
+): Bot[] {
+  return bots.filter((bot) => bot.archivedAt === null && bot.pinned).slice(0, ROSTER_TILE_LIMIT);
+}
+
 export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return [...bots];
@@ -163,6 +227,37 @@ export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
       (bot.label?.toLowerCase().includes(needle) ?? false) ||
       (bot.description?.toLowerCase().includes(needle) ?? false),
   );
+}
+
+export function isCurrentGroupPerson(
+  authorPersonId: string | null | undefined,
+  currentPersonId: string | null | undefined,
+  hostPersonId: string | null | undefined,
+): boolean {
+  const resolvedAuthorPersonId = authorPersonId ?? hostPersonId;
+  return resolvedAuthorPersonId != null && resolvedAuthorPersonId === currentPersonId;
+}
+
+export function groupContainsBot(group: Group, botId: string): boolean {
+  return group.members.some((member) => isGroupBotMember(member) && member.botId === botId);
+}
+
+export function groupBotMembers(group: Group, bots: ReadonlyArray<Bot>): ReadonlyArray<Bot> {
+  const memberIds = new Set<string>(
+    group.members.filter(isGroupBotMember).map((member) => member.botId),
+  );
+  return bots.filter((bot) => memberIds.has(bot.id));
+}
+
+export function groupPersonMembers(group: Group): ReadonlyArray<GroupPersonMembership> {
+  return group.members.filter(isGroupPersonMember);
+}
+
+export interface RosterGroupSection {
+  readonly id: string;
+  readonly name: string;
+  readonly group?: Group | null;
+  readonly bots: ReadonlyArray<Bot>;
 }
 
 export function filterRosterGroups(
@@ -177,6 +272,25 @@ export function filterRosterGroups(
       group.name.toLowerCase().includes(needle) ||
       groupBotMembers(group, bots).some((bot) => bot.name.toLowerCase().includes(needle)),
   );
+}
+
+const BOT_DRAG_PREFIX = "bot:";
+const GROUP_DROP_PREFIX = "group:";
+
+export function rosterBotDragId(botId: string): string {
+  return `${BOT_DRAG_PREFIX}${botId}`;
+}
+
+export function rosterGroupDropId(groupId: string): string {
+  return `${GROUP_DROP_PREFIX}${groupId}`;
+}
+
+export function parseRosterBotDragId(id: string): string | null {
+  return id.startsWith(BOT_DRAG_PREFIX) ? id.slice(BOT_DRAG_PREFIX.length) || null : null;
+}
+
+export function parseRosterGroupDropId(id: string): string | null {
+  return id.startsWith(GROUP_DROP_PREFIX) ? id.slice(GROUP_DROP_PREFIX.length) || null : null;
 }
 
 /**

@@ -6,7 +6,7 @@ We are not actively accepting contributions right now.
 
 You can still report a bug or open a PR, but please do so knowing there is a high chance we close it, defer it forever, or never look at it.
 
-Feature requests and proposals belong in [Ideas discussions](https://github.com/pingdotgg/t3code/discussions/categories/ideas), not issues. Plugin and provider contributions are the exception. Start with the [plugin proposal](https://github.com/opencoredev/akeru-bot/issues/new?template=plugin_proposal.yml) or [provider proposal](https://github.com/opencoredev/akeru-bot/issues/new?template=provider_proposal.yml). Read the [plugin directory admission rules](plugins/README.md) before you submit a plugin.
+Feature requests and proposals belong in [Akeru Bot Ideas discussions](https://github.com/opencoredev/akeru-bot/discussions/categories/ideas), not issues. Plugin and provider contributions are the exception. Start with the [plugin proposal](https://github.com/opencoredev/akeru-bot/issues/new?template=plugin_proposal.yml) or [provider proposal](https://github.com/opencoredev/akeru-bot/issues/new?template=provider_proposal.yml). Read the [plugin directory admission rules](plugins/README.md) before you submit a plugin.
 
 If that sounds annoying, that is because it is. This project is still early and we are trying to keep scope, quality, and direction under control.
 

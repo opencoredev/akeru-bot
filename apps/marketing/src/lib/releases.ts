@@ -28,7 +28,7 @@ const TARGETS = {
     os: "mac",
     label: "Download for macOS",
     assetSuffix: "arm64.dmg",
-    unsigned: false,
+    unsigned: true,
   },
   win: {
     os: "win",
@@ -60,7 +60,9 @@ export function selectReleaseAsset(release: Release, assetSuffix: string): Relea
 }
 
 export function requiresUnsignedInstall(assetSuffix: string): boolean {
-  return assetSuffix === TARGETS.win.assetSuffix || assetSuffix === TARGETS.linux.assetSuffix;
+  return Object.values(TARGETS).some(
+    (target) => target.assetSuffix === assetSuffix && target.unsigned,
+  );
 }
 
 type DownloadLink = EventTarget & {

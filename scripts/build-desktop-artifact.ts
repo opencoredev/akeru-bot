@@ -27,9 +27,10 @@ import {
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
-  selectCliRuntimeExternalDependencies,
+  selectCliPackagedRuntimeDependencies,
 } from "./lib/cli-external-packages.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
+import { stageReleaseLegalFiles } from "./lib/release-legal.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -756,6 +757,7 @@ interface StagePackageJson {
   readonly packageManager: string;
   readonly description: string;
   readonly author: string;
+  readonly license: string;
   readonly main: string;
   readonly build: Record<string, unknown>;
   readonly dependencies: Record<string, unknown>;
@@ -790,6 +792,7 @@ export const MAC_FILE_EXCLUSIONS = [
 // runtime; the WSL backend cannot read asar archives, so enabling WSL lazily
 // extracts the sidecar to a version-keyed directory (see DesktopWslServerTree).
 export const WINDOWS_SERVER_ASAR_RESOURCE = "server.asar";
+export const DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR = "apps/desktop/prod-resources/plugins";
 // dlopen/spawn need real files, so native modules, shared libraries, and
 // helper executables live in the server.asar.unpacked sibling (the standard
 // asar redirect convention). Everything else stays packed.
@@ -837,6 +840,10 @@ export const DESKTOP_EXTRA_RESOURCES = [
   {
     from: "apps/desktop/prod-resources/resource-monitor",
     to: "resource-monitor",
+  },
+  {
+    from: DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
+    to: "plugins",
   },
 ] as const;
 
@@ -891,7 +898,7 @@ export function resolveMacStageDependencies(input: {
   readonly fffNodeVersion: string;
 }) {
   return {
-    ...selectCliRuntimeExternalDependencies(input.serverDependencies),
+    ...selectCliPackagedRuntimeDependencies(input.serverDependencies),
     ...input.desktopDependencies,
     ...resolveFffNativeDependencies("mac", input.arch, input.fffNodeVersion),
   };
@@ -1302,7 +1309,11 @@ export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservin
 );
 
 const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSelfContained")(
-  function* (input: { readonly asarPath: string; readonly verbose: boolean }) {
+  function* (input: {
+    readonly asarPath: string;
+    readonly pluginCatalogPath: string;
+    readonly verbose: boolean;
+  }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
@@ -1323,6 +1334,10 @@ const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSel
     // is hoisted and should be physical. A future package-manager layout change
     // must not let the probe resolve through the build tree.
     yield* copyDirectoryPreservingSymlinks(extractedApp, probeApp);
+    yield* copyDirectoryPreservingSymlinks(
+      input.pluginCatalogPath,
+      path.join(probeRoot, "plugins"),
+    );
 
     // Guard the guard: if anything above the probe provides a node_modules, a
     // missing dependency would resolve there and the check would pass while the
@@ -1780,7 +1795,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "Akeru-Bot-${version}-${arch}.${ext}",
+    artifactName:
+      platform === "linux"
+        ? "Akeru-Bot-${version}-x64.${ext}"
+        : "Akeru-Bot-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
     directories: {
@@ -2139,10 +2157,14 @@ function collectUnpackedAsarFiles(
   return output;
 }
 
-const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (root: string) {
+const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (input: {
+  readonly root: string;
+  readonly excludedDirectories?: ReadonlyArray<string>;
+}) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const pendingDirectories = [root];
+  const excludedDirectories = new Set(input.excludedDirectories ?? []);
+  const pendingDirectories = [input.root];
   let count = 0;
 
   while (pendingDirectories.length > 0) {
@@ -2153,7 +2175,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
       const entryPath = path.join(directory, entry);
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
-        pendingDirectories.push(entryPath);
+        if (!excludedDirectories.has(entryPath)) pendingDirectories.push(entryPath);
       } else if (stat.type === "File") {
         count += 1;
       }
@@ -2352,7 +2374,10 @@ export const validateWindowsPackagedPayload = Effect.fn(
     });
   }
 
-  const fileCount = yield* countPayloadFiles(packagedAppDir);
+  const fileCount = yield* countPayloadFiles({
+    root: packagedAppDir,
+    excludedDirectories: [path.join(resourcesDir, "plugins")],
+  });
   if (fileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
@@ -2372,6 +2397,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
 
   yield* verifyPackagedBundleIsSelfContained({
     asarPath,
+    pluginCatalogPath: path.join(resourcesDir, "plugins"),
     verbose: input.verbose ?? false,
   });
 
@@ -2429,7 +2455,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         cause,
       }),
   });
-  const resolvedServerRuntimeExternalDependencies = selectCliRuntimeExternalDependencies(
+  const resolvedServerPackagedRuntimeDependencies = selectCliPackagedRuntimeDependencies(
     resolvedServerDependencies,
   );
   const resolvedDesktopRuntimeDependencies = yield* Effect.try({
@@ -2568,6 +2594,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* Effect.log("[desktop-artifact] Staging release app...");
   yield* fs.copy(distDirs.desktopDist, path.join(stageAppDir, "apps/desktop/dist-electron"));
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
+  yield* stageReleaseLegalFiles({
+    repoRoot,
+    destination: path.join(stageAppDir, "legal"),
+  });
   if (options.platform === "mac" && options.target === "dmg") {
     yield* stageDesktopDmgBackground(stageResourcesDir, options.verbose);
   }
@@ -2598,6 +2628,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
+  yield* fs.copy(
+    path.join(repoRoot, "plugins/entries"),
+    path.join(stageProdResourcesDir, "plugins/entries"),
+  );
 
   const macEntitlementsPath =
     options.platform === "mac" && options.signed
@@ -2647,7 +2681,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     private: true,
     packageManager: rootPackageJson.packageManager,
     description: "Akeru Bot desktop build",
-    author: "T3 Tools",
+    author: "Akeru Bot maintainers",
+    license: "MIT",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
       options.platform,
@@ -2703,7 +2738,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       serverDistDir: distDirs.serverDist,
       arch: options.arch,
       appVersion,
-      runtimeExternalDependencies: resolvedServerRuntimeExternalDependencies,
+      runtimeExternalDependencies: resolvedServerPackagedRuntimeDependencies,
       fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
       allowBuilds: workspaceAllowBuilds,
       patchedDependencies: workspacePatchedDependencies,

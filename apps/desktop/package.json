@@ -1,6 +1,6 @@
 {
   "name": "@t3tools/desktop",
-  "version": "0.0.34",
+  "version": "0.0.37",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -9,7 +9,8 @@
     "start": "node scripts/start-electron.mjs",
     "typecheck": "tsgo --noEmit",
     "test": "vp test run --passWithNoTests",
-    "smoke-test": "node scripts/smoke-test.mjs"
+    "smoke-test": "node scripts/smoke-test.mjs",
+    "smoke-test:packaged-mac": "node scripts/smoke-packaged-macos.mjs"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",

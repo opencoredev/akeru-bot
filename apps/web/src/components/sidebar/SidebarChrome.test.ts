@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { loadCatalog } from "../../../../../plugins";
 import {
   findActiveComputerUseControl,
+  formatEnabledPluginBadge,
   formatEnabledPluginStatus,
   summarizeEnabledPlugins,
 } from "./SidebarChrome";
@@ -31,6 +32,15 @@ describe("sidebar footer", () => {
     expect(formatEnabledPluginStatus(0)).toBe("No plugins enabled");
     expect(formatEnabledPluginStatus(1)).toBe("1 plugin enabled");
     expect(formatEnabledPluginStatus(3)).toBe("3 plugins enabled");
+  });
+
+  it("shows a compact plugin count without overflowing the icon", () => {
+    expect(formatEnabledPluginBadge(0)).toBeNull();
+    expect(formatEnabledPluginBadge(3)).toBe("3");
+    expect(formatEnabledPluginBadge(100)).toBe("99+");
+
+    const source = NodeFS.readFileSync(new URL("./SidebarChrome.tsx", import.meta.url), "utf8");
+    expect(source).toContain('className="relative overflow-visible!"');
   });
 
   it("counts removed builtins and custom MCP servers without inventing catalog logos", () => {
@@ -59,6 +69,7 @@ describe("sidebar footer", () => {
           runtimeMode: "approval-required",
           usageCap: null,
           voiceEnabled: false,
+          channelBindings: [],
           groupId: null,
           disabledMcpServerIds: [],
           avatar: { kind: "blob", shape: "circle", color: "#5B7FD4" },

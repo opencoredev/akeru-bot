@@ -1,5 +1,6 @@
 import { registerRootComponent } from "expo";
 import "react-native-gesture-handler";
+import "./src/legalAssets";
 import { LogBox } from "react-native";
 import { featureFlags } from "react-native-screens";
 

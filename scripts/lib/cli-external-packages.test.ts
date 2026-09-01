@@ -12,6 +12,7 @@ import serverPackageJson from "../../apps/server/package.json" with { type: "jso
 import {
   CLI_RUNTIME_EXTERNAL_PREFIXES,
   findInlinedExternalPackages,
+  selectCliPackagedRuntimeDependencies,
   selectCliRuntimeExternalDependencies,
   shouldBundleCliDependency,
 } from "./cli-external-packages.ts";
@@ -41,8 +42,9 @@ describe("shouldBundleCliDependency", () => {
     assert.strictEqual(shouldBundleCliDependency("node:fs"), false);
   });
 
-  it("leaves native addons and their dlopen wrappers external", () => {
+  it("leaves non-bundle-safe packages external", () => {
     for (const id of [
+      "playwright-core",
       "node-pty",
       "ffi-rs",
       "@yuuang/ffi-rs-win32-x64-msvc",
@@ -75,10 +77,12 @@ describe("selectCliRuntimeExternalDependencies", () => {
         "@ff-labs/fff-node": "2.0.0",
         effect: "3.0.0",
         "node-pty": "4.0.0",
+        "playwright-core": "1.60.0",
       }),
       {
         "@ff-labs/fff-node": "2.0.0",
         "node-pty": "4.0.0",
+        "playwright-core": "1.60.0",
       },
     );
   });
@@ -86,7 +90,30 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("selects every external root declared by the server", () => {
     assert.deepStrictEqual(
       Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies)).sort(),
-      ["@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
+      ["@ff-labs/fff-node", "msgpackr-extract", "node-pty", "playwright-core"],
+    );
+  });
+});
+
+describe("selectCliPackagedRuntimeDependencies", () => {
+  it("stages bundled packages that load platform-native bindings", () => {
+    assert.deepStrictEqual(
+      selectCliPackagedRuntimeDependencies({
+        effect: "4.0.0",
+        libsql: "0.5.29",
+        "node-pty": "1.1.0",
+      }),
+      {
+        libsql: "0.5.29",
+        "node-pty": "1.1.0",
+      },
+    );
+  });
+
+  it("stages libsql from the server manifest", () => {
+    assert.strictEqual(
+      selectCliPackagedRuntimeDependencies(serverPackageJson.dependencies).libsql,
+      serverPackageJson.dependencies.libsql,
     );
   });
 });

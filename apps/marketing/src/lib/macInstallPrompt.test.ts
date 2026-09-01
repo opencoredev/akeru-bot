@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  MAC_INSTALL_PROMPT,
   MAC_INSTALL_SUCCESS,
   checksumForAsset,
   macInstallSuccess,
@@ -12,6 +13,11 @@ const assets = [
 ];
 
 describe("macOS install prompt", () => {
+  it("uses the exact app name shipped in the DMG", () => {
+    expect(MAC_INSTALL_PROMPT).toContain("/Applications/Akeru Bot (Alpha).app");
+    expect(MAC_INSTALL_PROMPT).not.toContain("/Applications/Akeru Bot.app");
+  });
+
   it("selects the matching release asset and refuses unavailable architectures", () => {
     expect(selectMacInstallAsset("arm64", assets)).toBe(assets[0]);
     expect(selectMacInstallAsset("x86_64", assets)).toBeNull();

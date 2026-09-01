@@ -11,6 +11,7 @@ import {
   type OrchestrationCommand,
   type OrchestrationReadModel,
   type OrchestrationThread,
+  isGroupBotMember,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
@@ -83,7 +84,7 @@ export function createAkeruChannelRuntime(options: AkeruChannelRuntimeOptions) {
       (thread.groupId != null &&
         snapshot.groups
           .find((group) => group.id === thread.groupId)
-          ?.members.some((member) => member.botId === botId));
+          ?.members.some((member) => isGroupBotMember(member) && member.botId === botId));
     if (!isVisible) throw new Error("The target message is not visible to this bot.");
     if (options.supportsReactions?.(thread) === false) {
       return {

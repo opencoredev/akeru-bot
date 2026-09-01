@@ -55,6 +55,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const snapshots = yield* ProjectionSnapshotQuery;
       const sql = yield* SqlClient.SqlClient;
       const botId = BotId.make("bot-1");
+      const specialistBotId = BotId.make("bot-2");
       const groupId = GroupId.make("group-1");
       const routineId = RoutineId.make("routine-1");
       const createdAt = "2026-01-01T00:00:00.000Z";
@@ -140,11 +141,26 @@ it.layer(TestLayer)("bot persistence", (it) => {
         botId,
       });
       yield* engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-specialist-create"),
+        botId: specialistBotId,
+        name: "Verifier",
+        title: "QA engineer",
+        avatar: { kind: "dither", seed: "verifier" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "full-access",
+        usageCap: null,
+        groupId: null,
+        createdAt,
+      });
+      yield* engine.dispatch({
         type: "group.create",
         commandId: CommandId.make("cmd-group-create"),
         groupId,
         name: "Product",
         bossBotId: botId,
+        specialistBotIds: [specialistBotId],
         createdAt,
       });
       yield* engine.dispatch({
@@ -157,33 +173,36 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const restored = yield* snapshots.getShellSnapshot();
       assert.equal(restored.routines?.[0]?.lifecycle, "paused");
       assert.equal(restored.routines?.[0]?.enabled, false);
-      assert.deepEqual(restored.bots, [
-        {
-          id: botId,
-          name: "Pathfinder",
-          title: "Staff researcher",
-          label: "Discovery",
-          description: "Investigates the highest-risk assumptions.",
-          disabledMcpServerIds: [McpServerId.make("mcp-github")],
-          avatar: { kind: "dither", seed: "pathfinder" },
-          engine: null,
-          sandbox: null,
-          runtimeMode: "approval-required",
-          usageCap: { unit: "tokens", limit: 50_000 },
-          voiceEnabled: true,
-          channelBindings: [],
-          groupId: null,
-          archivedAt: null,
-          createdAt,
-          updatedAt: restored.bots[0]!.updatedAt,
-        },
-      ]);
+      assert.equal(restored.bots.length, 2);
+      const restoredBot = restored.bots.find((bot) => bot.id === botId);
+      assert.deepEqual(restoredBot, {
+        id: botId,
+        name: "Pathfinder",
+        title: "Staff researcher",
+        label: "Discovery",
+        description: "Investigates the highest-risk assumptions.",
+        disabledMcpServerIds: [McpServerId.make("mcp-github")],
+        avatar: { kind: "dither", seed: "pathfinder" },
+        engine: null,
+        sandbox: null,
+        runtimeMode: "approval-required",
+        usageCap: { unit: "tokens", limit: 50_000 },
+        voiceEnabled: true,
+        channelBindings: [],
+        groupId: null,
+        archivedAt: null,
+        createdAt,
+        updatedAt: restoredBot!.updatedAt,
+      });
       assert.deepEqual(restored.groups, [
         {
           id: groupId,
           name: "Discovery",
           bossBotId: botId,
-          members: [{ kind: "bot", botId, role: "boss" }],
+          members: [
+            { kind: "bot", botId, role: "boss" },
+            { kind: "bot", botId: specialistBotId, role: "specialist" },
+          ],
           createdAt,
           updatedAt: restored.groups[0]!.updatedAt,
         },
@@ -205,12 +224,12 @@ it.layer(TestLayer)("bot persistence", (it) => {
       yield* projectionPipeline.bootstrap;
 
       const rebuilt = yield* snapshots.getSnapshot();
-      assert.equal(rebuilt.bots.length, 1);
-      assert.equal(rebuilt.bots[0]?.id, botId);
-      assert.equal(rebuilt.bots[0]?.name, "Pathfinder");
-      assert.equal(rebuilt.bots[0]?.voiceEnabled, true);
-      assert.equal(rebuilt.bots[0]?.groupId, null);
-      assert.equal(rebuilt.bots[0]?.archivedAt, null);
+      assert.equal(rebuilt.bots.length, 2);
+      const rebuiltBot = rebuilt.bots.find((bot) => bot.id === botId);
+      assert.equal(rebuiltBot?.name, "Pathfinder");
+      assert.equal(rebuiltBot?.voiceEnabled, true);
+      assert.equal(rebuiltBot?.groupId, null);
+      assert.equal(rebuiltBot?.archivedAt, null);
       assert.deepEqual(rebuilt.groups, []);
     }),
   );
@@ -436,6 +455,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const sql = yield* SqlClient.SqlClient;
       const projectId = ProjectId.make("project-ownership");
       const botId = BotId.make("bot-owner");
+      const specialistBotId = BotId.make("bot-owner-specialist");
       const groupId = GroupId.make("group-owner");
       const createdAt = "2026-01-02T00:00:00.000Z";
       const modelSelection = {
@@ -467,11 +487,26 @@ it.layer(TestLayer)("bot persistence", (it) => {
         createdAt,
       });
       yield* engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-owner-specialist"),
+        botId: specialistBotId,
+        name: "Verifier",
+        title: "QA engineer",
+        avatar: { kind: "dither", seed: "owner-verifier" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "full-access",
+        usageCap: null,
+        groupId: null,
+        createdAt,
+      });
+      yield* engine.dispatch({
         type: "group.create",
         commandId: CommandId.make("cmd-owner-group"),
         groupId,
         name: "Owners",
         bossBotId: botId,
+        specialistBotIds: [specialistBotId],
         createdAt,
       });
 

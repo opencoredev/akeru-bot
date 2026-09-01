@@ -217,6 +217,10 @@ jobs:
           xcrun stapler validate "${apps[0]}"
           spctl --assess --type execute --verbose=2 "${apps[0]}"
 
+      - name: Launch macOS DMG
+        if: matrix.platform == 'mac'
+        run: vp run test:desktop-packaged-mac -- "release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
+
       - name: Upload smoke artifact
         uses: actions/upload-artifact@v7
         with:
@@ -251,6 +255,9 @@ jobs:
         run: |
           node scripts/update-release-package-versions.ts "$RELEASE_VERSION"
           vp run --filter akeru-bot build
+          test -f apps/server/dist/legal/LICENSE
+          test -f apps/server/dist/legal/THIRD_PARTY_NOTICES.md
+          test -f apps/server/dist/legal/licenses/Apache-2.0.txt
 
       - name: Dry-run CLI package
         run: node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose

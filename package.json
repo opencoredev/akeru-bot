@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/monorepo",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "prepare": "node scripts/clean-tsgo-backups.mjs && effect-tsgo patch && vp config --no-agent",
@@ -31,6 +32,7 @@
     "test": "vp run -r test",
     "test:resource-monitor": "cargo test --locked --manifest-path native/resource-monitor/Cargo.toml",
     "test:desktop-smoke": "vp run --filter @t3tools/desktop smoke-test",
+    "test:desktop-packaged-mac": "vp run --filter @t3tools/desktop smoke-test:packaged-mac",
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
     "build:contracts": "vp run --filter @t3tools/contracts build",
@@ -43,6 +45,7 @@
     "dist:desktop:win:arm64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch arm64",
     "dist:desktop:win:x64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64",
     "release:smoke": "node scripts/release-smoke.ts",
+    "release:changelog": "node scripts/generate-release-changelog.ts",
     "tegami": "node scripts/tegami.ts",
     "release:verify": "node scripts/verify-release-candidate.ts",
     "release:verify-assets": "node scripts/verify-release-assets.ts",

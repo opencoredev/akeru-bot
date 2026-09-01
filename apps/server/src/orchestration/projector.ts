@@ -9,6 +9,7 @@ import type {
 import {
   DelegationCreatedPayload,
   DelegationUpdatedPayload,
+  isGroupBotMember,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationSession,

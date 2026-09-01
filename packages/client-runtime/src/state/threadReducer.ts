@@ -305,6 +305,7 @@ export function applyThreadDetailEvent(
         turnId: event.payload.turnId,
         authorPersonId: event.payload.authorPersonId ?? null,
         authorDisplayName: event.payload.authorDisplayName ?? null,
+        channelOrigin: event.payload.channelOrigin ?? null,
         streaming: event.payload.streaming,
         createdAt: event.payload.createdAt,
         updatedAt: event.payload.updatedAt,

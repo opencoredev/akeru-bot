@@ -18,7 +18,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
-import { describe, expect, it } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import { describe, expect } from "vite-plus/test";
 
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import {
@@ -49,6 +50,7 @@ function bot(id: BotId): OrchestrationBot {
     runtimeMode: "full-access",
     usageCap: null,
     voiceEnabled: false,
+    channelBindings: [],
     groupId: null,
     archivedAt: null,
     createdAt: now,
@@ -192,28 +194,26 @@ function deleteHarness(input: {
 }
 
 describe("RoutineDraftDispatcher.deleteForThread", () => {
-  it("validates the full batch before dispatching scoped delete commands", async () => {
+  it.effect("validates the full batch before dispatching scoped delete commands", () => {
     const test = deleteHarness({
       routines: [routine("owned"), routine("other", { botId: otherBotId })],
     });
 
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const dispatcher = yield* RoutineDraftDispatcher;
-        const error = yield* dispatcher
-          .deleteForThread(ThreadId.make("thread-1"), [
-            RoutineId.make("owned"),
-            RoutineId.make("other"),
-          ])
-          .pipe(Effect.flip);
+    return Effect.gen(function* () {
+      const dispatcher = yield* RoutineDraftDispatcher;
+      const error = yield* dispatcher
+        .deleteForThread(ThreadId.make("thread-1"), [
+          RoutineId.make("owned"),
+          RoutineId.make("other"),
+        ])
+        .pipe(Effect.flip);
 
-        expect(error.message).toBe("One or more routines are unavailable.");
-        expect(test.commands).toEqual([]);
-      }).pipe(Effect.provide(test.layer)),
-    );
+      expect(error.message).toBe("One or more routines are unavailable.");
+      expect(test.commands).toEqual([]);
+    }).pipe(Effect.provide(test.layer));
   });
 
-  it("deletes each unique routine owned by the responding bot", async () => {
+  it.effect("deletes each unique routine owned by the responding bot", () => {
     const test = deleteHarness({
       respondingBotId: otherBotId,
       routines: [
@@ -223,33 +223,31 @@ describe("RoutineDraftDispatcher.deleteForThread", () => {
       ],
     });
 
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const dispatcher = yield* RoutineDraftDispatcher;
-        const result = yield* dispatcher.deleteForThread(ThreadId.make("thread-1"), [
-          RoutineId.make("first"),
-          RoutineId.make("second"),
-          RoutineId.make("first"),
-        ]);
+    return Effect.gen(function* () {
+      const dispatcher = yield* RoutineDraftDispatcher;
+      const result = yield* dispatcher.deleteForThread(ThreadId.make("thread-1"), [
+        RoutineId.make("first"),
+        RoutineId.make("second"),
+        RoutineId.make("first"),
+      ]);
 
-        expect(result).toEqual({
-          routineIds: ["first", "second"],
-          sequences: [1, 2],
-          status: "deleted",
-        });
-        expect(test.commands).toHaveLength(2);
-        expect(test.commands.map(({ type }) => type)).toEqual(["routine.delete", "routine.delete"]);
-        expect(
-          test.commands.map((command) => command.type === "routine.delete" && command.routineId),
-        ).toEqual(["first", "second"]);
-        expect(
-          test.commands.every(
-            (command) =>
-              command.type === "routine.delete" &&
-              command.commandId.startsWith("agent:routine.delete:"),
-          ),
-        ).toBe(true);
-      }).pipe(Effect.provide(test.layer)),
-    );
+      expect(result).toEqual({
+        routineIds: ["first", "second"],
+        sequences: [1, 2],
+        status: "deleted",
+      });
+      expect(test.commands).toHaveLength(2);
+      expect(test.commands.map(({ type }) => type)).toEqual(["routine.delete", "routine.delete"]);
+      expect(
+        test.commands.map((command) => command.type === "routine.delete" && command.routineId),
+      ).toEqual(["first", "second"]);
+      expect(
+        test.commands.every(
+          (command) =>
+            command.type === "routine.delete" &&
+            command.commandId.startsWith("agent:routine.delete:"),
+        ),
+      ).toBe(true);
+    }).pipe(Effect.provide(test.layer));
   });
 });

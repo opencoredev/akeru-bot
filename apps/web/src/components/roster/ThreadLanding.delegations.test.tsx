@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import {
   AkeruDelegationRecord,
+  BotId,
   EnvironmentId,
   ThreadId,
   type OrchestrationShellSnapshot,
@@ -15,6 +16,7 @@ import type { Bot, Group } from "./types";
 const mocks = vi.hoisted(() => ({
   providersAtom: Symbol("providers"),
   snapshotAtom: Symbol("snapshot"),
+  peopleAtom: Symbol("people"),
   snapshot: null as OrchestrationShellSnapshot | null,
   bots: [] as Bot[],
   groups: [] as Group[],
@@ -37,7 +39,12 @@ vi.mock("react/compiler-runtime", async () => {
   return { c: reactHookHarness.useMemoCache };
 });
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) => (atom === mocks.snapshotAtom ? mocks.snapshot : []),
+  useAtomValue: (atom: unknown) =>
+    atom === mocks.snapshotAtom
+      ? mocks.snapshot
+      : atom === mocks.peopleAtom
+        ? { current: null, host: null }
+        : [],
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
@@ -50,7 +57,10 @@ vi.mock("../../providerInstances", () => ({
   deriveProviderInstanceEntries: () => [],
   sortProviderInstanceEntries: () => [],
 }));
-vi.mock("../../state/bots", () => ({ botEnvironment: { update: Symbol("update") } }));
+vi.mock("../../state/bots", () => ({
+  botEnvironment: { update: Symbol("update"), channels: { send: Symbol("send") } },
+  environmentPeopleAtom: () => mocks.peopleAtom,
+}));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
@@ -58,6 +68,9 @@ vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbo
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: mocks.providersAtom,
   serverEnvironment: { subscriptionAuth: () => null },
+}));
+vi.mock("../../state/session", () => ({
+  useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => mocks.snapshotAtom }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
@@ -80,6 +93,7 @@ vi.mock("./rosterStore", () => {
 vi.mock("./useBotThreadRuntime", () => ({
   useBotThreadRuntime: () => ({
     sending: false,
+    respondingRequestIds: [],
     messages: [],
     error: null,
     latestTurn: null,
@@ -140,8 +154,8 @@ const group: Group = {
   name: "Research",
   bossBotId: parentBot.id,
   members: [
-    { botId: parentBot.id, role: "boss" },
-    { botId: childBot.id, role: "specialist" },
+    { kind: "bot", botId: BotId.make(parentBot.id), role: "boss" },
+    { kind: "bot", botId: BotId.make(childBot.id), role: "specialist" },
   ],
   createdAt: "2026-08-31T00:00:00.000Z",
   updatedAt: "2026-08-31T00:00:00.000Z",
@@ -151,13 +165,13 @@ function delegation(id: string, parentThreadId: string) {
   return decodeDelegation({
     delegationId: id,
     parentDelegationId: null,
-    parentBotId: parentBot.id,
-    childBotId: childBot.id,
+    parentBotId: BotId.make(parentBot.id),
+    childBotId: BotId.make(childBot.id),
     parentThreadId,
     childThreadId: null,
     parentTurnId: "turn-parent",
     childTurnId: null,
-    ancestorBotIds: [parentBot.id],
+    ancestorBotIds: [BotId.make(parentBot.id)],
     depth: 1,
     task: "Compare the release options.",
     expectedResult: "A short comparison.",
@@ -173,7 +187,7 @@ function delegation(id: string, parentThreadId: string) {
       approvalCeiling: "none",
     },
     state: "queued",
-    billedBotId: childBot.id,
+    billedBotId: BotId.make(childBot.id),
     result: null,
     failure: null,
     keep: false,

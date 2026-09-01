@@ -9,6 +9,7 @@ import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
   BUNDLED_MODEL_MANIFEST,
+  MODEL_MANIFEST_URL,
   classifyModels,
   isLegacyModel,
   make,
@@ -18,6 +19,13 @@ import {
 const CODEX = ProviderDriverKind.make("codex");
 const CLAUDE = ProviderDriverKind.make("claudeAgent");
 const CURSOR = ProviderDriverKind.make("cursor");
+
+it("refreshes the manifest from the Akeru repository", () => {
+  assert.strictEqual(
+    MODEL_MANIFEST_URL,
+    "https://raw.githubusercontent.com/opencoredev/akeru-bot/main/apps/server/src/provider/model-manifest.json",
+  );
+});
 
 describe("isLegacyModel (bundled manifest)", () => {
   it("keeps current Codex models out of legacy models", () => {

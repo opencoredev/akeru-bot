@@ -1,5 +1,7 @@
 # Third-Party Notices
 
+The complete license texts are in the repository-root `THIRD_PARTY_NOTICES.md` and `legal/licenses`. Metro bundles that legal directory into mobile releases.
+
 ## Ghostty / libghostty
 
 The iOS terminal renderer vendors `GhosttyKit.xcframework`, a libghostty build produced from T3's

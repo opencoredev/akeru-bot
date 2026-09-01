@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import {
   BotId,
@@ -23,7 +23,8 @@ import { Message as ChatMessage, parseMarkdown, type Adapter, type ChatInstance 
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import { afterEach, describe, expect, vi } from "vite-plus/test";
 
 const photon = vi.hoisted(() => ({
   adapter: null as iMessageAdapter | null,
@@ -338,7 +339,7 @@ const signedWhatsAppRequest = (body: string) =>
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-hub-signature-256": `sha256=${createHmac("sha256", "app-secret").update(body).digest("hex")}`,
+      "x-hub-signature-256": `sha256=${NodeCrypto.createHmac("sha256", "app-secret").update(body).digest("hex")}`,
     },
     body,
   });
@@ -779,45 +780,43 @@ describe("channel runtime", () => {
     expect(starts).toBe(0);
   });
 
-  it("stops every live transport on bot archive events without stopping restored bots", async () => {
-    let stops = 0;
-    const harness = makeHarness({ shutdown: async () => void (stops += 1) });
-    await connectChannel(harness.dependencies, telegramConnect(BOT_ID));
-    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
-    const eventBase = {
-      sequence: 13,
-      eventId: EventId.make("event-bot-lifecycle"),
-      aggregateKind: "bot" as const,
-      aggregateId: BOT_ID,
-      occurredAt: NOW,
-      commandId: CommandId.make("command-bot-lifecycle"),
-      causationEventId: null,
-      correlationId: CommandId.make("command-bot-lifecycle"),
-      metadata: {},
-    };
+  it.effect("stops every live transport on bot archive events without stopping restored bots", () =>
+    Effect.gen(function* () {
+      let stops = 0;
+      const harness = makeHarness({ shutdown: async () => void (stops += 1) });
+      yield* Effect.promise(() => connectChannel(harness.dependencies, telegramConnect(BOT_ID)));
+      yield* Effect.promise(() => connectChannel(harness.dependencies, imessageConnect(BOT_ID)));
+      const eventBase = {
+        sequence: 13,
+        eventId: EventId.make("event-bot-lifecycle"),
+        aggregateKind: "bot" as const,
+        aggregateId: BOT_ID,
+        occurredAt: NOW,
+        commandId: CommandId.make("command-bot-lifecycle"),
+        causationEventId: null,
+        correlationId: CommandId.make("command-bot-lifecycle"),
+        metadata: {},
+      };
 
-    await Effect.runPromise(
-      stopArchivedBotChannels(
+      yield* stopArchivedBotChannels(
         Stream.make({
           ...eventBase,
           type: "bot.restored",
           payload: { botId: BOT_ID, updatedAt: NOW },
         }),
-      ),
-    );
-    expect(stops).toBe(0);
+      );
+      expect(stops).toBe(0);
 
-    await Effect.runPromise(
-      stopArchivedBotChannels(
+      yield* stopArchivedBotChannels(
         Stream.make({
           ...eventBase,
           type: "bot.archived",
           payload: { botId: BOT_ID, archivedAt: NOW, updatedAt: NOW },
         }),
-      ),
-    );
-    expect(stops).toBe(2);
-  });
+      );
+      expect(stops).toBe(2);
+    }),
+  );
 
   it("connects, disconnects, reconnects, restores, and stops a bot runtime", async () => {
     let starts = 0;

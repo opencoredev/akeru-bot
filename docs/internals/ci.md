@@ -27,10 +27,10 @@ The workflow also builds and dry-runs the CLI package and checks the marketing s
 desktop artifacts for seven days. It does not create a GitHub release, publish a package, or deploy
 a site.
 
-Merging a stable version change to `main` starts [the stable Depot workflow](../../.depot/workflows/release.yml).
-Depot builds the advertised desktop targets and CLI package before it creates the `vX.Y.Z` tag and
-GitHub Release. The final job verifies the exact asset names and `SHA256SUMS`. Missing signing
-credentials produce unsigned macOS and Windows artifacts. Complete credentials use the existing
-Developer ID, notarization, and Azure Trusted Signing paths.
+Merging a stable version change to `main` starts [the native stable workflow](../../.github/workflows/release.yml).
+GitHub-hosted macOS, Windows, and Linux runners build the advertised desktop targets before the
+workflow creates the `vX.Y.Z` tag and GitHub Release. The final job verifies the exact asset names
+and `SHA256SUMS`. Missing signing credentials produce unsigned macOS and Windows artifacts.
+Complete credentials use the existing Developer ID, notarization, and Azure Trusted Signing paths.
 
 See the [release smoke runbook](../operations/release.md) for the exact validation path.

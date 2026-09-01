@@ -24,7 +24,8 @@ function assertOmits(haystack: string, needle: string, message: string): void {
   if (haystack.toLowerCase().includes(needle.toLowerCase())) throw new Error(message);
 }
 
-const releaseWorkflow = read(".depot/workflows/release.yml");
+const releaseWorkflow = read(".github/workflows/release.yml");
+const versionPackagesWorkflow = read(".depot/workflows/version-packages.yml");
 const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
 const ciWorkflow = read(".depot/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
@@ -39,7 +40,7 @@ for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
   }
 }
 
-for (const relativePath of [".github/workflows/ci.yml", ".github/workflows/release.yml"] as const) {
+for (const relativePath of [".github/workflows/ci.yml"] as const) {
   if (NodeFS.existsSync(NodePath.join(repoRoot, relativePath))) {
     throw new Error(`GitHub Actions still owns ${relativePath}; move it to .depot/workflows.`);
   }
@@ -47,10 +48,25 @@ for (const relativePath of [".github/workflows/ci.yml", ".github/workflows/relea
 
 assertContains(
   desktopArtifactBuilder,
-  'artifactName: "Akeru-Bot-${version}-${arch}.${ext}"',
+  '"Akeru-Bot-${version}-${arch}.${ext}"',
   "Desktop artifacts do not use the Akeru Bot release name.",
 );
+assertContains(
+  desktopArtifactBuilder,
+  '"Akeru-Bot-${version}-x64.${ext}"',
+  "Linux desktop artifacts do not use the advertised x64 release name.",
+);
 assertContains(serverCli, '"akeru-bot",', "CLI publishing does not select the Akeru package.");
+assertContains(
+  serverCli,
+  "license: serverPackageJson.license",
+  "CLI publishing drops MIT metadata.",
+);
+assertContains(
+  desktopArtifactBuilder,
+  "stageReleaseLegalFiles",
+  "Desktop artifacts do not stage the release legal bundle.",
+);
 
 for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
@@ -70,6 +86,9 @@ for (const [needle, label] of [
   ["spctl --assess", "Gatekeeper verification"],
   ["vp run --filter akeru-bot build", "CLI and web build"],
   ["--dry-run", "CLI package dry-run"],
+  ["test -f apps/server/dist/legal/LICENSE", "CLI project license"],
+  ["test -f apps/server/dist/legal/THIRD_PARTY_NOTICES.md", "CLI third-party notice"],
+  ["test -f apps/server/dist/legal/licenses/Apache-2.0.txt", "CLI license bundle"],
   ["vp run --filter @t3tools/marketing typecheck", "marketing typecheck"],
   ["vp run --filter @t3tools/marketing build", "marketing build"],
 ] as const) {
@@ -91,19 +110,16 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["needs: [preflight, desktop, cli]", "build gates"],
+  ["needs: [preflight, desktop]", "build gates"],
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: depot-macos-15", "Depot macOS runner"],
-  ["runner: depot-windows-2025-8", "Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-8", "Depot Linux runner"],
+  ["runner: macos-15", "GitHub-hosted macOS runner"],
+  ["runner: windows-2025", "GitHub-hosted Windows runner"],
+  ["runner: ubuntu-24.04", "GitHub-hosted Linux runner"],
   ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
-  ["vp run --filter akeru-bot build", "CLI build"],
-  ["--dry-run", "CLI package check"],
-  ['test -f "release/akeru-bot-$RELEASE_VERSION.tgz"', "exact CLI package asset check"],
   ["verify-release-assets.ts", "asset name and hash verification"],
   ["gh release create", "stable GitHub Release"],
 ] as const) {
@@ -111,10 +127,29 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
+for (const [needle, label] of [
+  ["branches: [main]", "main branch trigger"],
+  ["vp run release:changelog", "merged pull request changelog"],
+  ["vp run tegami version --no-checks", "Tegami version command"],
+  ["contents: write", "version branch permission"],
+  ["pull-requests: write", "version pull request permission"],
+] as const) {
+  assertContains(versionPackagesWorkflow, needle, `Version packages workflow is missing ${label}.`);
+}
+assertOmits(
+  versionPackagesWorkflow,
+  "gh release create",
+  "Version packages workflow publishes before its pull request merges",
+);
 assertContains(
   releaseWorkflow,
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",
   "Signed macOS verification cannot access the App Store Connect key.",
+);
+assertContains(
+  releaseWorkflow,
+  "!release/builder-debug.yml",
+  "Stable release uploads electron-builder debug metadata.",
 );
 const desktopJobHeader = /\n  desktop:\n([\s\S]*?)\n    strategy:/u.exec(releaseWorkflow)?.[1];
 if (!desktopJobHeader) throw new Error("Stable release workflow is missing the desktop job.");
@@ -131,9 +166,9 @@ for (const [needle, label] of [
 
 assertContains(ciWorkflow, "runs-on: depot-ubuntu-24.04-8", "CI does not use Depot runners.");
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
-assertOmits(releaseWorkflow, "runner: macos-15", "GitHub-hosted macOS runner");
-assertOmits(releaseWorkflow, "runner: windows-2025", "GitHub-hosted Windows runner");
-assertOmits(releaseWorkflow, "runner: ubuntu-24.04", "GitHub-hosted Linux runner");
+assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
+assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");
+assertOmits(releaseWorkflow, "runner: depot-ubuntu-24.04-8", "Depot Linux runner");
 assertOmits(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',
@@ -146,6 +181,7 @@ assertContains(
 );
 
 for (const relativePath of [
+  ".depot/workflows/release.yml",
   ".github/workflows/deploy-relay.yml",
   ".github/workflows/desktop-macos-preview.yml",
   ".github/workflows/mobile-eas-preview.yml",

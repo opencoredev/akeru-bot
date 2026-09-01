@@ -20,6 +20,7 @@ import {
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
+  DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
   MAC_FILE_EXCLUSIONS,
   InvalidMockUpdateServerPortError,
   UnsupportedDesktopBuildArchitectureError,
@@ -112,7 +113,11 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
   const nativePath = path.join(sourceDir, "node_modules/native/addon.node");
   yield* fs.makeDirectory(path.dirname(serverEntryPath), { recursive: true });
   yield* fs.makeDirectory(path.dirname(nativePath), { recursive: true });
-  yield* fs.writeFileString(serverEntryPath, input.serverEntrySource ?? "console.log('server');\n");
+  yield* fs.writeFileString(
+    serverEntryPath,
+    input.serverEntrySource ??
+      'import { readdirSync } from "node:fs";\nreaddirSync(new URL("../../../../plugins/entries/", import.meta.url));\nconsole.log("server");\n',
+  );
   yield* fs.writeFileString(nativePath, "native-binary");
 
   const generatedAsarPath = path.join(tempDir, WINDOWS_SERVER_ASAR_RESOURCE);
@@ -122,6 +127,9 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
   const packagedAppDir = path.join(stageDistDir, "win-unpacked");
   const resourcesDir = path.join(packagedAppDir, "resources");
   yield* fs.makeDirectory(path.join(resourcesDir, "resource-monitor"), { recursive: true });
+  yield* fs.makeDirectory(path.join(resourcesDir, "plugins/entries/example"), {
+    recursive: true,
+  });
   yield* fs.copyFile(generatedAsarPath, path.join(resourcesDir, WINDOWS_SERVER_ASAR_RESOURCE));
   if (input.copyUnpackedNatives) {
     yield* fs.copy(
@@ -133,6 +141,7 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
     path.join(resourcesDir, "resource-monitor/t3-resource-monitor.exe"),
     "monitor",
   );
+  yield* fs.writeFileString(path.join(resourcesDir, "plugins/entries/example/plugin.json"), "{}");
   const appExecutableName = "t3code.exe";
   yield* fs.writeFileString(path.join(packagedAppDir, appExecutableName), "electron");
   yield* fs.writeFileString(path.join(packagedAppDir, "chrome_crashpad_handler.exe"), "crashpad");
@@ -453,10 +462,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(mac, "asarUnpack");
       assert.notProperty(linux, "asarUnpack");
       assert.notProperty(win, "asarUnpack");
+      assert.equal(linux.artifactName, "Akeru-Bot-${version}-x64.${ext}");
       assert.deepStrictEqual(win.extraResources, [
         {
           from: "apps/desktop/prod-resources/resource-monitor",
           to: "resource-monitor",
+        },
+        {
+          from: DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
+          to: "plugins",
         },
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
       ]);
@@ -518,8 +532,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@ff-labs/fff-node": "0.9.4",
           "@opencode-ai/sdk": "^1.3.15",
           "@pierre/diffs": "1.3.0",
+          libsql: "0.5.29",
           "msgpackr-extract": "3.0.4",
           "node-pty": "1.1.0",
+          "playwright-core": "1.60.0",
         },
         desktopDependencies: {
           "@example/desktop-runtime": "1.0.0",
@@ -530,8 +546,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       }),
       {
         "@ff-labs/fff-node": "0.9.4",
+        libsql: "0.5.29",
         "msgpackr-extract": "3.0.4",
         "node-pty": "1.1.0",
+        "playwright-core": "1.60.0",
         "@example/desktop-runtime": "1.0.0",
         effect: "4.0.0-beta.103",
         "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
@@ -681,6 +699,37 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.deepStrictEqual(result.unpackedFiles, ["node_modules/native/addon.node"]);
         assert.isBelow(result.fileCount, WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT);
         assert.deepStrictEqual(secondAsar, firstAsar);
+      }),
+    ),
+  );
+
+  it.effect("excludes the plugin catalog from the Windows loose-file budget", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const baseline = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+        });
+        const pluginDir = path.join(fixture.packagedAppDir, "resources/plugins/entries/example");
+        yield* fs.makeDirectory(pluginDir, { recursive: true });
+        yield* Effect.forEach(
+          Array.from({ length: 100 }, (_, index) => index),
+          (index) => fs.writeFileString(path.join(pluginDir, `${String(index)}.json`), "{}"),
+          { concurrency: "unbounded" },
+        );
+
+        const withCatalog = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          fileLimit: baseline.fileCount,
+        });
+
+        assert.equal(withCatalog.fileCount, baseline.fileCount);
       }),
     ),
   );
@@ -1053,11 +1102,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
-  it("stages the resource monitor as an external executable resource", () => {
+  it("stages runtime resources outside app.asar", () => {
     assert.deepStrictEqual(DESKTOP_EXTRA_RESOURCES, [
       {
         from: "apps/desktop/prod-resources/resource-monitor",
         to: "resource-monitor",
+      },
+      {
+        from: DESKTOP_PLUGIN_CATALOG_RESOURCE_SOURCE_DIR,
+        to: "plugins",
       },
     ]);
     assert.deepStrictEqual(resolveResourceMonitorRustTargets("mac", "universal"), [

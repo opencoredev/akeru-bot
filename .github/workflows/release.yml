@@ -1,8 +1,9 @@
-# Depot builds every stable asset before the final job creates the tag and release.
+# Native GitHub runners build every stable asset before the final job creates the tag and release.
 
-name: Stable release
+name: Stable release native
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -21,7 +22,7 @@ concurrency:
 jobs:
   preflight:
     name: Release preflight
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -74,24 +75,25 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      T3CODE_DESKTOP_UPDATE_REPOSITORY: opencoredev/akeru-bot
     strategy:
       fail-fast: false
       matrix:
         include:
           - label: macOS arm64 DMG
-            runner: depot-macos-15
+            runner: macos-15
             platform: mac
             target: dmg
             arch: arm64
             rust_target: aarch64-apple-darwin
           - label: Windows x64 NSIS
-            runner: depot-windows-2025-8
+            runner: windows-2025
             platform: win
             target: nsis
             arch: x64
             rust_target: x86_64-pc-windows-msvc
           - label: Linux x64 AppImage
-            runner: depot-ubuntu-24.04-8
+            runner: ubuntu-24.04
             platform: linux
             target: AppImage
             arch: x64
@@ -193,7 +195,7 @@ jobs:
         run: |
           args=(--platform "${{ matrix.platform }}" --target "${{ matrix.target }}" --arch "${{ matrix.arch }}" --build-version "$RELEASE_VERSION" --verbose)
           if test "$SIGNED" = true; then args+=(--signed); fi
-          vp run dist:desktop:artifact -- "${args[@]}"
+          vp run dist:desktop:artifact "${args[@]}"
 
       - name: Notarize and verify macOS DMG
         if: matrix.platform == 'mac' && env.SIGNED == 'true'
@@ -218,46 +220,24 @@ jobs:
           xcrun stapler validate "${apps[0]}"
           spctl --assess --type execute --verbose=2 "${apps[0]}"
 
+      - name: Launch macOS DMG
+        if: matrix.platform == 'mac'
+        run: vp run test:desktop-packaged-mac -- "release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
+
       - name: Upload desktop assets
         uses: actions/upload-artifact@v7
         with:
           name: stable-${{ matrix.platform }}-${{ matrix.arch }}
-          path: release/*
-          if-no-files-found: error
-          retention-days: 7
-
-  cli:
-    name: Akeru CLI package
-    needs: preflight
-    runs-on: depot-ubuntu-24.04-8
-    timeout-minutes: 20
-    env:
-      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-      - name: Build and check CLI
-        run: |
-          vp run --filter akeru-bot build
-          node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose
-          mkdir -p release
-          vp pm pack --filter akeru-bot --pack-destination release
-          test -f "release/akeru-bot-$RELEASE_VERSION.tgz"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: stable-cli
-          path: release/akeru-bot-${{ env.RELEASE_VERSION }}.tgz
+          path: |
+            release/*
+            !release/builder-debug.yml
           if-no-files-found: error
           retention-days: 7
 
   release:
     name: Publish stable release
-    needs: [preflight, desktop, cli]
-    runs-on: depot-ubuntu-24.04-8
+    needs: [preflight, desktop]
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}

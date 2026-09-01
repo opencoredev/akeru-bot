@@ -39,6 +39,7 @@ import {
   type OrchestrationShellStreamEvent,
   type OrchestrationShellStreamItem,
   type OrchestrationThreadStreamItem,
+  isGroupBotMember,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetSnapshotError,
   OrchestrationSearchThreadsError,
@@ -651,7 +652,9 @@ const makeWsRpcLayer = (
                           memoryOperationError(operation, "The thread group does not exist."),
                         ),
                       onSome: (group) =>
-                        Effect.succeed(group.members.map((member) => member.botId)),
+                        Effect.succeed(
+                          group.members.filter(isGroupBotMember).map((member) => member.botId),
+                        ),
                     }),
                   ),
                   Effect.mapError((cause) => memoryOperationError(operation, cause)),

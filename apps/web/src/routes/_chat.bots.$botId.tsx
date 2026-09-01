@@ -20,6 +20,7 @@ import { toRoutinePanelItem, toRoutineSchedule } from "../components/roster/rout
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
 import { randomUUID } from "../lib/utils";
+import { botRoutePanelKeys } from "./botRoutePanelKeys";
 import { botEnvironment } from "../state/bots";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { routineEnvironment } from "../state/routines";
@@ -31,6 +32,7 @@ const NO_ENVIRONMENT = "" as EnvironmentId;
 
 function BotThreadRouteView() {
   const { botId } = Route.useParams();
+  const panelKeys = botRoutePanelKeys(botId);
   const environmentId = usePrimaryEnvironmentId();
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const draftRoutine = useAtomCommand(routineEnvironment.draft, { reportFailure: false });
@@ -148,10 +150,10 @@ function BotThreadRouteView() {
 
   return (
     <>
-      <BotThreadLanding key={botId} botId={botId} />
+      <BotThreadLanding key={panelKeys.thread} botId={botId} />
       {bot ? (
         <BotDetailsPanel
-          key={bot.id}
+          key={panelKeys.details}
           bot={bot}
           threadRef={threadRef}
           routinePanel={{

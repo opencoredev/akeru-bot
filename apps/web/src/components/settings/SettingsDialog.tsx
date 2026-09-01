@@ -31,6 +31,9 @@ const InboxPanel = lazy(async () => ({
 const ProvidersPanel = lazy(async () => ({
   default: (await import("./ProvidersPanel")).ProvidersPanel,
 }));
+const BrowserSettingsPanel = lazy(async () => ({
+  default: (await import("./BrowserSettings")).BrowserSettingsPanel,
+}));
 const BotChannelsSettingsPanel = lazy(async () => ({
   default: (await import("./BotChannelsSettings")).BotChannelsSettingsPanel,
 }));
@@ -62,6 +65,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
   browser: BrowserSettingsPanel,
+  channels: BotChannelsSettingsPanel,
   sandbox: SandboxSettingsPanel,
   voice: VoiceSettingsPanel,
   privacy: PrivacySettingsPanel,

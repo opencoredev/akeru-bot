@@ -1,0 +1,174 @@
+---
+import {
+  MAC_DOWNLOAD_DIALOG_BODY,
+  MAC_DOWNLOAD_DIALOG_TITLE,
+} from "../lib/downloadInstallPrompt";
+---
+
+<dialog
+  id="install-prompt-dialog"
+  class="install-dialog"
+  aria-labelledby="install-prompt-title"
+  aria-describedby="install-prompt-description"
+>
+  <div class="install-dialog-panel">
+    <form method="dialog" class="install-dialog-close-row">
+      <button class="install-dialog-close" type="submit">Close</button>
+    </form>
+    <div class="install-dialog-copy">
+      <h2 id="install-prompt-title">{MAC_DOWNLOAD_DIALOG_TITLE}</h2>
+      <p id="install-prompt-description">{MAC_DOWNLOAD_DIALOG_BODY}</p>
+    </div>
+    <button class="install-dialog-action" type="button" data-copy-install-prompt>
+      Copy prompt
+    </button>
+  </div>
+</dialog>
+
+<script>
+  import { installPromptForPlatform } from "../lib/installPrompt";
+
+  const dialog = document.getElementById("install-prompt-dialog") as HTMLDialogElement | null;
+  const copyButton = dialog?.querySelector<HTMLButtonElement>("[data-copy-install-prompt]");
+  let platform: string | null = null;
+  let trigger: HTMLAnchorElement | null = null;
+
+  document.addEventListener("click", (event) => {
+    const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
+      "a[data-install-prompt]",
+    );
+    if (!link || !dialog || event.defaultPrevented) return;
+
+    platform = link.dataset.installPrompt ?? null;
+    trigger = link;
+    if (copyButton) copyButton.textContent = "Copy prompt";
+    dialog.showModal();
+  });
+
+  copyButton?.addEventListener("click", async () => {
+    const prompt = platform ? installPromptForPlatform(platform) : null;
+    if (!prompt) return;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      copyButton.textContent = "Copied";
+    } catch {
+      copyButton.textContent = "Copy prompt";
+    }
+  });
+
+  dialog?.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+
+  dialog?.addEventListener("close", () => {
+    platform = null;
+    if (copyButton) copyButton.textContent = "Copy prompt";
+    trigger?.focus();
+    trigger = null;
+  });
+</script>
+
+<style>
+  .install-dialog {
+    width: min(460px, calc(100vw - 32px));
+    max-width: none;
+    margin: auto;
+    padding: 0;
+    color: var(--color-foreground);
+    background: transparent;
+    border: 0;
+  }
+
+  .install-dialog::backdrop {
+    background: rgba(9, 9, 11, 0.72);
+    backdrop-filter: blur(8px);
+  }
+
+  .install-dialog-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 18px;
+    background: var(--color-popover);
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  }
+
+  .install-dialog-close-row {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .install-dialog-close {
+    min-height: 36px;
+    padding: 0 12px;
+    color: var(--color-muted-foreground);
+    font: inherit;
+    font-size: 13px;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .install-dialog-close:hover {
+    color: var(--color-foreground);
+    background: var(--color-muted);
+  }
+
+  .install-dialog-copy {
+    padding: 0 14px;
+  }
+
+  .install-dialog h2 {
+    margin: 0;
+    font-size: 25px;
+    font-weight: 560;
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+  }
+
+  .install-dialog-copy > p:last-child {
+    margin: 14px 0 0;
+    color: var(--color-muted-foreground);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .install-dialog-action {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 18px;
+    color: var(--color-primary-foreground);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: 11px;
+    cursor: pointer;
+  }
+
+  .install-dialog-action:hover {
+    opacity: 0.9;
+  }
+
+  .install-dialog-close:focus-visible,
+  .install-dialog-action:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 520px) {
+    .install-dialog-panel {
+      gap: 22px;
+      padding: 14px;
+      border-radius: 15px;
+    }
+
+    .install-dialog-copy {
+      padding: 0 8px;
+    }
+  }
+</style>

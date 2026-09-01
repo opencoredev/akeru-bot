@@ -1,5 +1,5 @@
 ---
-import { GITHUB_REPOSITORY_URL, UPSTREAM_REPOSITORY_URL, DOCS_URL, docsUrl } from "../lib/site";
+import { GITHUB_REPOSITORY_URL, T3_CODE_WEBSITE_URL, DOCS_URL, docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
 import PostHog from "../components/PostHog.astro";
 
@@ -26,28 +26,6 @@ const year = new Date().getFullYear();
 const structuredData = [
   {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    "@id": `${siteOrigin.href}#organization`,
-    name: "T3 Tools, Inc.",
-    url: siteOrigin.href,
-    logo: new URL("/icon.png", siteOrigin).href,
-    sameAs: [GITHUB_REPOSITORY_URL],
-    contactPoint: {
-      "@type": "ContactPoint",
-      email: "legal@t3.tools",
-      contactType: "customer support",
-    },
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: "2261 Market Street #5309",
-      addressLocality: "San Francisco",
-      addressRegion: "CA",
-      postalCode: "94114",
-      addressCountry: "US",
-    },
-  },
-  {
-    "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "@id": `${siteOrigin.href}#akeru-bot`,
     name: "Akeru Bot",
@@ -56,7 +34,11 @@ const structuredData = [
     applicationCategory: "DeveloperApplication",
     operatingSystem: "macOS, Windows, Linux",
     isAccessibleForFree: true,
-    author: { "@id": `${siteOrigin.href}#organization` },
+    author: {
+      "@type": "Organization",
+      name: "Akeru Bot maintainers",
+      url: GITHUB_REPOSITORY_URL,
+    },
     sameAs: [GITHUB_REPOSITORY_URL],
     offers: {
       "@type": "Offer",
@@ -179,12 +161,16 @@ const structuredData = [
               <a href={`${GITHUB_REPOSITORY_URL}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener noreferrer">
                 Contributing
               </a>
-              <a href={UPSTREAM_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">T3 Code upstream</a>
             </div>
           </div>
         </div>
         <div class="footer-bottom">
-          <span>&copy; {year} Akeru. MIT licensed.</span>
+          <div class="footer-attribution">
+            <span>&copy; {year} Akeru. MIT licensed.</span>
+            <a href={T3_CODE_WEBSITE_URL} target="_blank" rel="noopener noreferrer">
+              Thank you to the T3 Code team.
+            </a>
+          </div>
           <span class="footer-legal">
             <a href="/terms-of-service">Terms of Use</a>
             <a href="/privacy-policy">Privacy</a>
@@ -457,6 +443,21 @@ const structuredData = [
   .footer-legal {
     display: flex;
     gap: 20px;
+  }
+
+  .footer-attribution {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .footer-attribution a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .footer-attribution a:hover {
+    color: var(--color-foreground);
   }
 
   .footer-legal a:hover {

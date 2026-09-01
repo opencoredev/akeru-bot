@@ -26,6 +26,9 @@
  * enforced by a test, not by inspection.
  */
 export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
+  // Playwright ships a prebuilt CommonJS core bundle that reads __dirname.
+  // Inlining it into the ESM server bundle removes that CommonJS binding.
+  "playwright-core",
   "node-pty",
   "ffi-rs",
   "@yuuang/",
@@ -62,6 +65,11 @@ export const CLI_BUILD_ONLY_EXTERNAL_PREFIXES = [
   "@effect/sql-sqlite-bun",
 ] as const;
 
+// These packages stay bundled, but load target-specific native bindings with a
+// computed require. Ship their package roots so the staged install also brings
+// the correct optional binding for the target OS and architecture.
+export const CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES = ["libsql"] as const;
+
 export const CLI_EXTERNAL_PACKAGE_PREFIXES = [
   ...CLI_RUNTIME_EXTERNAL_PREFIXES,
   ...CLI_BUILD_ONLY_EXTERNAL_PREFIXES,
@@ -97,6 +105,19 @@ export function selectCliRuntimeExternalDependencies(
 ): Record<string, string> {
   return Object.fromEntries(
     Object.entries(dependencies).filter(([name]) => isRuntimeExternalCliDependency(name)),
+  );
+}
+
+/** Select every dependency root the packaged server needs beside its bundle. */
+export function selectCliPackagedRuntimeDependencies(
+  dependencies: Readonly<Record<string, string>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(dependencies).filter(
+      ([name]) =>
+        isRuntimeExternalCliDependency(name) ||
+        CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES.some((packageName) => name === packageName),
+    ),
   );
 }
 

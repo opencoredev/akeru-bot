@@ -21,7 +21,7 @@ describe("Tegami release packages", () => {
       desktopPackage.version,
       webPackage.version,
     ];
-    expect(new Set(versions)).toEqual(new Set(["0.0.34"]));
+    expect(new Set(versions).size).toBe(1);
     expect(versions.every((version) => /^\d+\.\d+\.\d+$/.test(version))).toBe(true);
   });
 });

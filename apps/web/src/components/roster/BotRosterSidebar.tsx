@@ -217,7 +217,6 @@ const BotRosterRow = memo(function BotRosterRow({
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage);
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
   return (
     <Draggable
       draggableId={rosterBotDragId(bot.id)}
@@ -475,21 +474,27 @@ function PinnedRosterItem({
         menuTriggerRef.current?.click();
       }}
     >
-      <button
-        type="button"
-        title={label}
-        onClick={() => (bot ? onSelectBot(bot) : onSelectGroup(group!))}
-        className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-sidebar-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {bot ? (
-          <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-12" />
-        ) : (
-          <span className="flex size-14 items-center justify-center">
-            <GroupMemberStack group={group!} bots={bots} sizeClassName="size-14" />
-          </span>
-        )}
-        <span className="w-full truncate text-[11px] font-medium">{label}</span>
-      </button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={() => (bot ? onSelectBot(bot) : onSelectGroup(group!))}
+              className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-sidebar-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {bot ? (
+                <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-12" />
+              ) : (
+                <span className="flex size-14 items-center justify-center">
+                  <GroupMemberStack group={group!} bots={bots} sizeClassName="size-14" />
+                </span>
+              )}
+              <span className="w-full truncate text-[11px] font-medium">{label}</span>
+            </button>
+          }
+        />
+        <TooltipPopup>{label}</TooltipPopup>
+      </Tooltip>
       <Menu>
         <MenuTrigger
           render={
@@ -539,11 +544,9 @@ export default function BotRosterSidebar() {
     () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
     [bots, query],
   );
-  const pinnedBots = visibleBots.filter((bot) => bot.pinned);
-  const unpinnedBots = visibleBots.filter((bot) => !bot.pinned);
-  const groupSections = useMemo(
-    () => buildGroupedRosterSections(dragLayout ?? bots, groups, query),
-    [bots, dragLayout, groups, query],
+  const visibleGroups = useMemo(
+    () => filterRosterGroups(groups, bots, query),
+    [bots, groups, query],
   );
   const groupRouteActive = pathname.startsWith("/groups/");
   const pinnedBotIds = useMemo(

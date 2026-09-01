@@ -16,6 +16,7 @@ import {
   resolveWebIconOverrides,
 } from "../../../scripts/lib/brand-assets.ts";
 import { resolveCatalogDependencies } from "../../../scripts/lib/resolve-catalog.ts";
+import { stageReleaseLegalFiles } from "../../../scripts/lib/release-legal.ts";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { fromYaml } from "@t3tools/shared/schemaYaml";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -31,6 +32,7 @@ import {
 
 interface PackageJson {
   name: string;
+  license: string;
   repository: {
     type: string;
     url: string;
@@ -172,6 +174,12 @@ const buildCmd = Command.make(
       } else {
         yield* Effect.logWarning("[cli] Web dist not found — skipping client bundle.");
       }
+
+      yield* stageReleaseLegalFiles({
+        repoRoot,
+        destination: path.join(serverDir, "dist/legal"),
+      });
+      yield* Effect.log("[cli] Bundled project and third-party licenses into dist/legal");
     }),
 ).pipe(Command.withDescription("Build the server package (tsdown + bundle web client)."));
 
@@ -243,6 +251,7 @@ const publishCmd = Command.make(
           const workspaceOverrides = workspaceConfig.overrides ?? {};
           const pkg: PackageJson = {
             name: serverPackageJson.name,
+            license: serverPackageJson.license,
             repository: serverPackageJson.repository,
             bin: serverPackageJson.bin,
             type: serverPackageJson.type,
