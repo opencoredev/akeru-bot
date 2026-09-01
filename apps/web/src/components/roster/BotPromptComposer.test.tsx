@@ -12,9 +12,11 @@ import {
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
 import {
+  appendBotMention,
   BotPromptComposer,
   canSubmitBotPrompt,
   findMentionedBotId,
+  isBotPromptSubmissionCurrent,
   isBotPromptExpanded,
   restoreBotStashPrompt,
   shouldFocusBotPromptForKey,
@@ -33,6 +35,16 @@ describe("bot prompt composer", () => {
     expect(canSubmitBotPrompt(true, "Send this", 0)).toBe(false);
     expect(canSubmitBotPrompt(false, "Send this", 0)).toBe(true);
     expect(canSubmitBotPrompt(false, "", 1)).toBe(true);
+  });
+
+  it("restores a failed submission only while the composer remains unchanged", () => {
+    expect(isBotPromptSubmissionCurrent(3, 3)).toBe(true);
+    expect(isBotPromptSubmissionCurrent(3, 4)).toBe(false);
+  });
+
+  it("preserves new draft text when inserting a mention", () => {
+    expect(appendBotMention("new draft", "Mori")).toBe("new draft @Mori ");
+    expect(appendBotMention("", "Mori")).toBe("@Mori ");
   });
 
   it("expands for long or multiline prompts", () => {

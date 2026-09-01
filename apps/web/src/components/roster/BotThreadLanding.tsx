@@ -237,7 +237,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             botName={bot.name}
             draftKey={bot.id}
             disabled={
-              runtime.sending ||
               pendingApproval !== null ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||

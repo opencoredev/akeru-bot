@@ -21,7 +21,7 @@ function BotThreadRouteView() {
 
   return (
     <>
-      <BotThreadLanding botId={botId} />
+      <BotThreadLanding key={botId} botId={botId} />
       {bot ? (
         <BotDetailsPanel
           key={bot.id}

@@ -47,6 +47,17 @@ export function canSubmitBotPrompt(disabled: boolean, prompt: string, fileCount:
   return !disabled && (prompt.trim().length > 0 || fileCount > 0);
 }
 
+export function isBotPromptSubmissionCurrent(
+  submissionRevision: number,
+  currentRevision: number,
+): boolean {
+  return submissionRevision === currentRevision;
+}
+
+export function appendBotMention(draft: string, botName: string): string {
+  return `${draft}${draft && !/\s$/.test(draft) ? " " : ""}@${botName} `;
+}
+
 export function shouldFocusBotPromptForKey(input: {
   readonly altKey: boolean;
   readonly ctrlKey: boolean;
@@ -126,6 +137,7 @@ export function BotPromptComposer({
   const releasedPreviewUrlsRef = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
+  const revisionRef = useRef(0);
   const stashPulseTimeoutRef = useRef<number | null>(null);
   const stashInFlightRef = useRef<Set<string>>(new Set());
   const stashQueue = usePromptStashStore((state) => state.entries);
@@ -147,6 +159,7 @@ export function BotPromptComposer({
   }, []);
   const persistDraft = useCallback(
     (next: string) => {
+      revisionRef.current += 1;
       setDraft(next);
       setIsStashMenuOpen(false);
       if (draftKey) writeBotDraft(draftKey, next);
@@ -157,6 +170,7 @@ export function BotPromptComposer({
   persistDraftRef.current = persistDraft;
 
   useEffect(() => {
+    revisionRef.current += 1;
     setDraft(draftKey ? readBotDraft(draftKey) : "");
   }, [draftKey]);
   useEffect(
@@ -172,6 +186,7 @@ export function BotPromptComposer({
 
   const expanded = modelPicker !== null || attachments.length > 0 || isBotPromptExpanded(draft);
   const addFiles = (next: FileList | readonly File[]) => {
+    revisionRef.current += 1;
     const added = createBotPromptAttachments(Array.from(next));
     const updated = [...attachmentsRef.current, ...added];
     attachmentsRef.current = updated;
@@ -180,6 +195,7 @@ export function BotPromptComposer({
   const removeAttachment = (attachmentId: string) => {
     const removed = attachmentsRef.current.find((attachment) => attachment.id === attachmentId);
     if (!removed) return;
+    revisionRef.current += 1;
     const updated = attachmentsRef.current.filter((attachment) => attachment.id !== attachmentId);
     attachmentsRef.current = updated;
     setAttachments(updated);
@@ -449,29 +465,35 @@ export function BotPromptComposer({
         const prompt = draft.trim();
         const submittedAttachments = [...attachmentsRef.current];
         if (!canSubmitBotPrompt(disabled, prompt, submittedAttachments.length)) return;
-        const submittedIds = new Set(submittedAttachments.map((attachment) => attachment.id));
+        const submittedFailedIds = new Set(failedAttachmentIds);
+        persistDraft("");
+        if (draftKey) clearBotDraft(draftKey);
+        attachmentsRef.current = [];
+        setAttachments([]);
+        setFailedAttachmentIds(new Set());
+        setExpandedAttachmentId(null);
+        const submissionRevision = revisionRef.current;
         void onSubmit(
           prompt,
           submittedAttachments.map((attachment) => attachment.file),
           findMentionedBotId(prompt, mentionBots),
         ).then(
           (sent) => {
-            if (!sent) return;
-            persistDraft("");
-            if (draftKey) clearBotDraft(draftKey);
-            const remaining = attachmentsRef.current.filter(
-              (attachment) => !submittedIds.has(attachment.id),
-            );
-            attachmentsRef.current = remaining;
-            setAttachments(remaining);
-            setFailedAttachmentIds(
-              (current) => new Set([...current].filter((id) => !submittedIds.has(id))),
-            );
-            if (expandedAttachmentId && submittedIds.has(expandedAttachmentId)) {
-              setExpandedAttachmentId(null);
+            if (sent) {
+              releaseAttachments(submittedAttachments);
+              setIsStashMenuOpen(false);
+              return;
             }
-            releaseAttachments(submittedAttachments);
-            setIsStashMenuOpen(false);
+            if (!isBotPromptSubmissionCurrent(submissionRevision, revisionRef.current)) {
+              releaseAttachments(submittedAttachments);
+              return;
+            }
+            revisionRef.current += 1;
+            setDraft(prompt);
+            if (draftKey) writeBotDraft(draftKey, prompt);
+            attachmentsRef.current = submittedAttachments;
+            setAttachments(submittedAttachments);
+            setFailedAttachmentIds(submittedFailedIds);
           },
           () => undefined,
         );
@@ -565,12 +587,7 @@ export function BotPromptComposer({
                 {mentionBots.map((bot) => (
                   <MenuItem
                     key={bot.id}
-                    onClick={() =>
-                      setDraft(
-                        (current) =>
-                          `${current}${current && !/\s$/.test(current) ? " " : ""}@${bot.name} `,
-                      )
-                    }
+                    onClick={() => persistDraft(appendBotMention(draft, bot.name))}
                   >
                     <AtSignIcon />
                     Mention {bot.name}

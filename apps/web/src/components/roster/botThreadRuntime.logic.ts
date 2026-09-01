@@ -7,71 +7,23 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
   ThreadId,
-  OrchestrationLatestTurn,
-  OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 
 import { parseChatPath } from "./roster.logic";
 
-const botTurnSubmissions = new Map<
-  string,
-  {
-    readonly requestMessageId: string | null;
-    readonly token: symbol;
-  }
->();
+export function createBotTurnSubmissionQueue() {
+  let tail: Promise<void> = Promise.resolve();
 
-export function reserveBotTurnSubmission(key: string): (() => void) | null {
-  if (botTurnSubmissions.has(key)) return null;
-  const token = Symbol(key);
-  botTurnSubmissions.set(key, { requestMessageId: null, token });
-  return () => {
-    if (botTurnSubmissions.get(key)?.token === token) botTurnSubmissions.delete(key);
+  return {
+    enqueue<T>(submission: () => Promise<T>): Promise<T> {
+      const result = tail.then(submission, submission);
+      tail = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
+    },
   };
-}
-
-export function acceptBotTurnSubmission(key: string, requestMessageId: string): void {
-  const submission = botTurnSubmissions.get(key);
-  if (submission) botTurnSubmissions.set(key, { ...submission, requestMessageId });
-}
-
-export function releaseBotTurnSubmissionAfterObservation(
-  key: string,
-  latestTurn: Pick<OrchestrationLatestTurn, "requestMessageId" | "state"> | null | undefined,
-  activities: readonly Pick<OrchestrationThreadActivity, "kind" | "payload">[],
-): boolean {
-  const submission = botTurnSubmissions.get(key);
-  if (!submission?.requestMessageId) return false;
-
-  const matchingTurn = latestTurn?.requestMessageId === submission.requestMessageId;
-  if (matchingTurn && latestTurn.state === "running") return false;
-
-  const matchingTurnSettled = matchingTurn;
-  const providerStartFailed = activities.some((activity) => {
-    if (
-      activity.kind !== "provider.turn.start.failed" ||
-      typeof activity.payload !== "object" ||
-      activity.payload === null ||
-      !("requestId" in activity.payload) ||
-      typeof activity.payload.requestId !== "string"
-    ) {
-      return false;
-    }
-    return activity.payload.requestId === submission.requestMessageId;
-  });
-  if (!matchingTurnSettled && !providerStartFailed) return false;
-
-  botTurnSubmissions.delete(key);
-  return true;
-}
-
-export function reserveBotTurnSubmissionAfterObservation(
-  key: string,
-  latestTurn: Pick<OrchestrationLatestTurn, "requestMessageId" | "state"> | null | undefined,
-  activities: readonly Pick<OrchestrationThreadActivity, "kind" | "payload">[],
-): (() => void) | null {
-  releaseBotTurnSubmissionAfterObservation(key, latestTurn, activities);
-  return reserveBotTurnSubmission(key);
 }
 
 export async function joinOrStartThreadCreate<T>(input: {
