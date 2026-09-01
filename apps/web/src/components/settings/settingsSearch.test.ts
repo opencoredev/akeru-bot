@@ -86,6 +86,13 @@ describe("searchSettings", () => {
     });
   });
 
+  it("routes sandbox provider settings to Sandbox settings", () => {
+    expect(searchSettings("default sandbox")[0]).toMatchObject({
+      id: "default-sandbox",
+      to: "/settings/sandbox",
+    });
+  });
+
   it("routes analytics to General settings", () => {
     expect(searchSettings("analytics")[0]).toMatchObject({
       id: "analytics",

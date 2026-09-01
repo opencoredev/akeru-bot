@@ -68,12 +68,22 @@ describe("createBotWorkspace", () => {
       threadId: "thread-vercel",
       sandbox: "vercel",
       workspaceId: "akeru-vercel",
+      environment: {
+        VERCEL_TOKEN: "token",
+        VERCEL_TEAM_ID: "team",
+        VERCEL_PROJECT_ID: "project",
+      },
       makeRemoteWorkspace,
     });
     expect(makeRemoteWorkspace).toHaveBeenCalledWith({
       threadId: "thread-vercel",
       sandbox: "vercel",
       workspaceId: "akeru-vercel",
+      environment: {
+        VERCEL_TOKEN: "token",
+        VERCEL_TEAM_ID: "team",
+        VERCEL_PROJECT_ID: "project",
+      },
     });
     await remote.destroy();
   });

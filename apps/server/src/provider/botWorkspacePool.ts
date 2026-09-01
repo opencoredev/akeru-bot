@@ -18,11 +18,24 @@ export function botWorkspaceResourceKey(input: {
   readonly resourceScope: string;
   readonly cwd?: string;
   readonly sandbox?: BotSandbox | null;
+  readonly credentialFingerprint?: string;
 }): string {
   const sandbox = input.sandbox ?? "local";
   return sandbox === "local"
     ? `${sandbox}:${input.cwd ?? "no-workspace"}:${input.resourceScope}`
-    : `${sandbox}:${input.resourceScope}`;
+    : `${sandbox}:${input.credentialFingerprint ?? "no-credentials"}:${input.resourceScope}`;
+}
+
+export function botWorkspaceCredentialFingerprint(
+  environment: Readonly<Record<string, string>>,
+): string {
+  return NodeCrypto.createHash("sha256")
+    .update(
+      JSON.stringify(
+        Object.entries(environment).toSorted(([left], [right]) => left.localeCompare(right)),
+      ),
+    )
+    .digest("hex");
 }
 
 export function botWorkspaceIdentity(resourceKey: string): string {

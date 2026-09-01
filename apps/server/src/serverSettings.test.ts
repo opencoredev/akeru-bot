@@ -1065,4 +1065,106 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       );
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
+
+  it.effect("rejects plaintext sandbox secrets loaded from settings.json", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"sandbox":{"providers":{"e2b":{"environment":[{"name":"E2B_API_KEY","value":"plaintext-key","sensitive":true}]}}}}',
+      );
+
+      const error = yield* Effect.flip(serverSettings.getSettings);
+      assert.deepInclude(error, {
+        operation: "validate-sandbox",
+        providerInstanceId: "sandbox:e2b",
+        environmentVariable: "E2B_API_KEY",
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("rejects incomplete sandbox connections", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const error = yield* Effect.flip(
+        serverSettings.updateSettings({
+          sandbox: {
+            providers: {
+              vercel: {
+                environment: [
+                  { name: "VERCEL_TOKEN", value: "secret", sensitive: true },
+                  { name: "VERCEL_TEAM_ID", value: "team", sensitive: false },
+                ],
+              },
+            },
+          },
+        }),
+      );
+      assert.deepInclude(error, {
+        operation: "validate-sandbox",
+        providerInstanceId: "sandbox:vercel",
+        environmentVariable: "VERCEL_PROJECT_ID",
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("rejects a sandbox secret marker without a stored secret", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const error = yield* Effect.flip(
+        serverSettings.updateSettings({
+          sandbox: {
+            providers: {
+              e2b: {
+                environment: [
+                  { name: "E2B_API_KEY", value: "", sensitive: true, valueRedacted: true },
+                ],
+              },
+            },
+          },
+        }),
+      );
+      assert.deepInclude(error, {
+        operation: "validate-sandbox",
+        providerInstanceId: "sandbox:e2b",
+        environmentVariable: "E2B_API_KEY",
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("stores sandbox secrets outside settings.json and redacts client settings", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+
+      const next = yield* serverSettings.updateSettings({
+        sandbox: {
+          defaultProvider: "e2b",
+          providers: {
+            e2b: {
+              environment: [{ name: "E2B_API_KEY", value: "e2b-secret", sensitive: true }],
+            },
+          },
+        },
+      });
+
+      assert.equal(next.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.notInclude(raw, "e2b-secret");
+
+      const clientSettings = ServerSettingsModule.redactServerSettingsForClient(next);
+      assert.deepInclude(clientSettings.sandbox.providers.e2b.environment[0], {
+        value: "",
+        valueRedacted: true,
+      });
+
+      const roundTripped = yield* serverSettings.updateSettings({
+        sandbox: clientSettings.sandbox,
+      });
+      assert.equal(roundTripped.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
 });

@@ -661,7 +661,7 @@ describe("ProviderCommandReactor", () => {
         respondingBotId: null,
         groupMemberBotIds: [],
       },
-      botSandbox: null,
+      botSandbox: "local",
       runtimeMode: "approval-required",
     });
 

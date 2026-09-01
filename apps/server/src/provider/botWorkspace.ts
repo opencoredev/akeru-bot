@@ -48,6 +48,7 @@ export interface CreateRemoteBotWorkspaceInput {
   readonly sandbox: RemoteBotSandbox;
   readonly identityFile?: string;
   readonly workspaceId?: string;
+  readonly environment?: Readonly<Record<string, string>>;
   readonly openSession?: (providerId?: string) => Promise<AkeruRemoteSession>;
 }
 
@@ -58,6 +59,7 @@ export interface CreateBotWorkspaceInput {
   readonly localRoot?: string;
   readonly sandbox?: BotSandbox | null;
   readonly workspaceId?: string;
+  readonly environment?: Readonly<Record<string, string>>;
   readonly makeRemoteWorkspace?: (
     input: CreateRemoteBotWorkspaceInput,
   ) => Promise<AkeruBotWorkspace | Workspace>;
@@ -78,6 +80,7 @@ export async function createBotWorkspace(
       sandbox: input.sandbox,
       ...(input.identityFile ? { identityFile: input.identityFile } : {}),
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      ...(input.environment ? { environment: input.environment } : {}),
     });
     return remote instanceof Workspace ? wrap(remote, input.sandbox) : remote;
   }
@@ -110,8 +113,8 @@ export async function createRemoteBotWorkspace(
     session = input.openSession
       ? await input.openSession(persisted?.providerId)
       : persisted
-        ? await open(input.sandbox, persisted.providerId)
-        : await create(input.sandbox, input.workspaceId);
+        ? await open(input.sandbox, persisted.providerId, input.environment)
+        : await create(input.sandbox, input.workspaceId, input.environment);
   } catch (cause) {
     if (!persisted) throw cause;
     throw new Error(
@@ -251,50 +254,90 @@ const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 const commandLine = (command: string, args: readonly string[]) =>
   [command, ...args].map(quote).join(" ");
 
-async function create(provider: RemoteBotSandbox, id: string): Promise<AkeruRemoteSession> {
+function credential(environment: Readonly<Record<string, string>>, name: string): string {
+  const value = environment[name]?.trim();
+  if (!value) throw new Error(`Remote sandbox credential '${name}' is missing.`);
+  return value;
+}
+
+async function create(
+  provider: RemoteBotSandbox,
+  id: string,
+  environment: Readonly<Record<string, string>> = {},
+): Promise<AkeruRemoteSession> {
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
-    return e2b(await Sandbox.create({ lifecycle: { onTimeout: "pause" } }));
+    const apiKey = credential(environment, "E2B_API_KEY");
+    return e2b(
+      await Sandbox.create({
+        apiKey,
+        lifecycle: { onTimeout: "pause" },
+      }),
+      apiKey,
+    );
   }
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
-    const client = new Daytona();
+    const client = new Daytona({ apiKey: credential(environment, "DAYTONA_API_KEY") });
     return daytona(client, await client.create({ name: id }));
   }
   if (provider === "vercel") {
     const { Sandbox } = await import("@vercel/sandbox");
-    return vercel(await Sandbox.create({ name: id, persistent: true }));
+    return vercel(
+      await Sandbox.create({
+        name: id,
+        persistent: true,
+        token: credential(environment, "VERCEL_TOKEN"),
+        teamId: credential(environment, "VERCEL_TEAM_ID"),
+        projectId: credential(environment, "VERCEL_PROJECT_ID"),
+      }),
+      environment,
+    );
   }
   const { Box } = await import("@upstash/box");
-  return upstash(await Box.create());
+  return upstash(await Box.create({ apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
 
-async function open(provider: RemoteBotSandbox, id: string): Promise<AkeruRemoteSession> {
+async function open(
+  provider: RemoteBotSandbox,
+  id: string,
+  environment: Readonly<Record<string, string>> = {},
+): Promise<AkeruRemoteSession> {
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
-    return e2b(await Sandbox.connect(id));
+    const apiKey = credential(environment, "E2B_API_KEY");
+    return e2b(await Sandbox.connect(id, { apiKey }), apiKey);
   }
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
-    const client = new Daytona();
+    const client = new Daytona({ apiKey: credential(environment, "DAYTONA_API_KEY") });
     return daytona(client, await client.get(id));
   }
   if (provider === "vercel") {
     const { Sandbox } = await import("@vercel/sandbox");
-    return vercel(await Sandbox.get({ name: id, resume: true }));
+    return vercel(
+      await Sandbox.get({
+        name: id,
+        resume: true,
+        token: credential(environment, "VERCEL_TOKEN"),
+        teamId: credential(environment, "VERCEL_TEAM_ID"),
+        projectId: credential(environment, "VERCEL_PROJECT_ID"),
+      }),
+      environment,
+    );
   }
   const { Box } = await import("@upstash/box");
-  return upstash(await Box.get(id));
+  return upstash(await Box.get(id, { apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
 
-function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
+function e2b(initial: import("e2b").Sandbox, apiKey: string): AkeruRemoteSession {
   let sandbox = initial;
   const providerId = sandbox.sandboxId;
   return {
     providerId,
     inspect: async () => {
       const { Sandbox } = await import("e2b");
-      const info = await Sandbox.getInfo(providerId);
+      const info = await Sandbox.getInfo(providerId, { apiKey });
       return info.state === "paused" ? "sleeping" : "running";
     },
     run: async (command, args, options) => {
@@ -307,7 +350,7 @@ function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
     },
     wake: async () => {
       const { Sandbox } = await import("e2b");
-      sandbox = await Sandbox.connect(providerId);
+      sandbox = await Sandbox.connect(providerId, { apiKey });
     },
     sleep: async () => {
       await sandbox.pause();
@@ -359,13 +402,22 @@ export function vercelWorkspaceState(
   return "sleeping";
 }
 
-function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession {
+function vercel(
+  initial: import("@vercel/sandbox").Sandbox,
+  environment: Readonly<Record<string, string>>,
+): AkeruRemoteSession {
   let sandbox = initial;
   return {
     providerId: sandbox.name,
     inspect: async () => {
       const { Sandbox } = await import("@vercel/sandbox");
-      sandbox = await Sandbox.get({ name: sandbox.name, resume: false });
+      sandbox = await Sandbox.get({
+        name: sandbox.name,
+        resume: false,
+        token: credential(environment, "VERCEL_TOKEN"),
+        teamId: credential(environment, "VERCEL_TEAM_ID"),
+        projectId: credential(environment, "VERCEL_PROJECT_ID"),
+      });
       return vercelWorkspaceState(sandbox.status);
     },
     run: async (command, args, options) => {
@@ -384,7 +436,13 @@ function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession 
     },
     wake: async () => {
       const { Sandbox } = await import("@vercel/sandbox");
-      sandbox = await Sandbox.get({ name: sandbox.name, resume: true });
+      sandbox = await Sandbox.get({
+        name: sandbox.name,
+        resume: true,
+        token: credential(environment, "VERCEL_TOKEN"),
+        teamId: credential(environment, "VERCEL_TEAM_ID"),
+        projectId: credential(environment, "VERCEL_PROJECT_ID"),
+      });
     },
     sleep: async () => {
       await sandbox.stop();

@@ -77,6 +77,7 @@ import { AkeruSessionResources } from "../AkeruSessionResources.ts";
 import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
+  botWorkspaceCredentialFingerprint,
   botWorkspaceIdentity,
   botWorkspaceResourceKey,
 } from "../botWorkspacePool.ts";
@@ -814,6 +815,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       const workspaceResourceKey = botWorkspaceResourceKey({
         resourceScope,
         ...(input.botSandbox !== undefined ? { sandbox: input.botSandbox } : {}),
+        ...(input.botSandboxEnvironment
+          ? {
+              credentialFingerprint: botWorkspaceCredentialFingerprint(input.botSandboxEnvironment),
+            }
+          : {}),
       });
       const workspaceId = botWorkspaceIdentity(workspaceResourceKey);
       const existing = sessions.get(key);
@@ -881,6 +887,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           workspaceResourceKey,
           workspaceId,
           ...(input.botSandbox !== undefined ? { botSandbox: input.botSandbox } : {}),
+          ...(input.botSandboxEnvironment
+            ? { sandboxEnvironment: input.botSandboxEnvironment }
+            : {}),
           ...(input.cwd ? { userComputerCwd: input.cwd } : {}),
           mcpServers,
         }),

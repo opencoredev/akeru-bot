@@ -69,6 +69,7 @@ export const ProviderSessionStartInput = Schema.Struct({
   botId: Schema.optional(BotId),
   botName: Schema.optional(TrimmedNonEmptyString),
   botSandbox: Schema.optional(Schema.NullOr(BotSandbox)),
+  botSandboxEnvironment: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   botSandboxBrowserSharing: Schema.optional(BotSandboxBrowserSharing),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
   runtimeMode: RuntimeMode,

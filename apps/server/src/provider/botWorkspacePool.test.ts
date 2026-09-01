@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import {
   botRuntimeResourceScope,
   BotWorkspacePool,
+  botWorkspaceCredentialFingerprint,
   botWorkspaceIdentity,
+  botWorkspaceResourceKey,
 } from "./botWorkspacePool.ts";
 
 function localWorkspace() {
@@ -32,6 +34,21 @@ describe("BotWorkspacePool", () => {
       }),
     ).toBe("bot-bot-one");
     expect(botWorkspaceIdentity("local:/private:bot-one")).not.toContain("private");
+    const firstCredential = botWorkspaceCredentialFingerprint({ E2B_API_KEY: "first" });
+    const secondCredential = botWorkspaceCredentialFingerprint({ E2B_API_KEY: "second" });
+    expect(
+      botWorkspaceResourceKey({
+        resourceScope: "bot-one",
+        sandbox: "e2b",
+        credentialFingerprint: firstCredential,
+      }),
+    ).not.toBe(
+      botWorkspaceResourceKey({
+        resourceScope: "bot-one",
+        sandbox: "e2b",
+        credentialFingerprint: secondCredential,
+      }),
+    );
   });
 
   it("sleeps after final release and wakes once on reuse", async () => {
