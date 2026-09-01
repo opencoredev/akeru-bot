@@ -7,6 +7,8 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import {
+  DelegationCompletedPayload,
+  DelegationCreatedPayload,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationSession,
@@ -227,6 +229,7 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     projects: [],
     bots: [],
     groups: [],
+    delegations: [],
     mcpServers: [],
     threads: [],
     updatedAt: nowIso,
@@ -244,6 +247,26 @@ export function projectEvent(
   };
 
   switch (event.type) {
+    case "delegation.created":
+    case "delegation.completed":
+      return decodeForEvent(
+        event.type === "delegation.created" ? DelegationCreatedPayload : DelegationCompletedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          delegations: nextBase.delegations.some(
+            (entry) => entry.delegationId === payload.delegation.delegationId,
+          )
+            ? nextBase.delegations.map((entry) =>
+                entry.delegationId === payload.delegation.delegationId ? payload.delegation : entry,
+              )
+            : [...nextBase.delegations, payload.delegation],
+        })),
+      );
+
     case "project.created":
       return decodeForEvent(ProjectCreatedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
