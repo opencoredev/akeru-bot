@@ -43,6 +43,7 @@ import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
+export const AKERU_RECENT_MESSAGE_LIMIT = 10;
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
@@ -213,6 +214,10 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
     if (args.stepNumber !== 0) return args.messageList;
     const context = this.engine.getThreadContext(args.requestContext, args.messageList);
     if (!context) return args.messageList;
+    const recent = await this.memory.recall({ threadId: context.threadId });
+    for (const message of recent.messages) {
+      if (message.role !== "system") args.messageList.add(message, "memory");
+    }
     const record = await this.engine.getOrCreateRecord(context.threadId, context.resourceId);
     const chunks = await this.engine.buildContextSystemMessages({ ...context, record });
     args.messageList.clearSystemMessages("observational-memory");
@@ -255,7 +260,7 @@ export async function createAkeruMastraMemory(
   const memory = new Memory({
     storage,
     options: {
-      lastMessages: 10,
+      lastMessages: AKERU_RECENT_MESSAGE_LIMIT,
       semanticRecall: false,
       workingMemory: { enabled: false },
       observationalMemory: false,
