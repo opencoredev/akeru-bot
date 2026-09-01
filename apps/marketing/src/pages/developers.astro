@@ -1,0 +1,34 @@
+---
+import TrustPage from "../components/TrustPage.astro";
+---
+
+<TrustPage
+  title="Akeru Bot developer guide"
+  description="Install the Akeru Bot CLI and inspect the public project-file schema and OpenAPI contract."
+  heading="Akeru Bot for developers"
+>
+  <p>
+    Akeru Bot is open-source software that runs coding agents on a user's machine or in a sandbox
+    that the user controls. Install the official CLI package with <code>npx akeru-bot@latest</code>.
+    The CLI starts the local server, opens the web client, and manages project threads. The desktop
+    app bundles the same server. Source code, releases, user guides, and contribution rules are in
+    the <a href="https://github.com/opencoredev/akeru-bot">Akeru Bot GitHub repository</a>.
+  </p>
+  <h2>Public metadata API</h2>
+  <p>
+    The production website exposes one unauthenticated, read-only metadata endpoint. Send
+    <code>GET /schema/t3.json</code> to retrieve the JSON Schema for <code>t3.json</code> project
+    files. The endpoint does not read user data, run a bot, or change any state. Read the
+    <a href="/openapi.json">Akeru Bot OpenAPI document</a> for its operation identifier, response
+    shape, and structured error model. Unsupported <code>/api</code> paths return an RFC 9457 JSON
+    problem with a stable code and a resolution link.
+  </p>
+  <h2>Local integrations</h2>
+  <p>
+    Akeru Bot connects to provider CLIs and user-selected tool servers from the local environment.
+    It does not provide a hosted automation API or a public MCP server. To configure bot profiles,
+    plugins, memory, or remote access, use the
+    <a href="https://github.com/opencoredev/akeru-bot/tree/main/docs/user">Akeru Bot user guides</a>.
+    Agents should not send project data, credentials, or provider tokens to this marketing domain.
+  </p>
+</TrustPage>
