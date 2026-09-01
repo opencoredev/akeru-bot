@@ -408,7 +408,7 @@ function stripDefaultServerSettings(current: unknown, defaults: unknown): unknow
 }
 
 const make = Effect.gen(function* () {
-  const { settingsPath } = yield* ServerConfig.ServerConfig;
+  const { analyticsStatePath, anonymousIdPath, settingsPath } = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -1103,6 +1103,23 @@ const make = Effect.gen(function* () {
           );
           yield* Cache.set(settingsCache, cacheKey, next);
           yield* emitChange(next);
+          if (patch.analyticsEnabled === false) {
+            yield* Effect.all(
+              [analyticsStatePath, anonymousIdPath].map((filePath) =>
+                fs.remove(filePath, { force: true }).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ServerSettingsError({
+                        settingsPath: filePath,
+                        operation: "remove-analytics-state",
+                        cause,
+                      }),
+                  ),
+                ),
+              ),
+              { concurrency: "unbounded", discard: true },
+            );
+          }
           const materialized = yield* materializeAllSecrets(next);
           return resolveTextGenerationProvider(materialized);
         }),

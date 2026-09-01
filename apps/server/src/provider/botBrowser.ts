@@ -9,11 +9,13 @@ import type { ProcessHandle, Workspace, WorkspaceSandbox } from "@mastra/core/wo
 import { z } from "zod";
 
 import { redactSensitiveText } from "../mcp/SensitiveDataRedaction.ts";
+import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
 
 const LIGHTPANDA_VERSION = "0.3.7";
 const MAX_SNAPSHOT_LENGTH = 50 * 1_024;
 const MCP_PROTOCOL_VERSION = "2024-11-05";
 const BROWSER_REQUEST_TIMEOUT_MS = 30_000;
+const REMOTE_BROWSER_PORT = 9_223;
 
 interface LightpandaRelease {
   readonly url: string;
@@ -63,17 +65,15 @@ export interface BotBrowserRpc {
   readonly close: () => Promise<void>;
 }
 
-export interface CreateBotBrowserInput {
-  readonly threadId: string;
-  readonly workspace: Workspace;
-  readonly cacheDir: string;
-  readonly makeRpc?: (input: BotBrowserProcessInput) => BotBrowserRpc;
-}
-
 export interface BotBrowserProcessInput {
   readonly threadId: string;
   readonly workspace: Workspace;
   readonly cacheDir: string;
+  readonly browserEndpoint?: (port: number) => Promise<AkeruBrowserEndpoint>;
+}
+
+export interface CreateBotBrowserInput extends BotBrowserProcessInput {
+  readonly makeRpc?: (input: BotBrowserProcessInput) => BotBrowserRpc;
 }
 
 interface JsonRpcResponse {
@@ -206,13 +206,17 @@ function availableLocalPort(): Promise<number> {
   });
 }
 
-function browserRequestTransport(url: string): BrowserRequestTransport {
+function browserRequestTransport(
+  url: string,
+  requestHeaders: Readonly<Record<string, string>> = {},
+): BrowserRequestTransport {
   return async (request) => {
     // This runtime is owned by Mastra's promise-based workspace API, not an Effect layer.
     // @effect-diagnostics-next-line globalFetch:off
     const response = await fetch(url, {
       method: request.method,
       headers: {
+        ...requestHeaders,
         accept: "application/json, text/event-stream",
         ...(request.method === "POST" ? { "content-type": "application/json" } : {}),
         ...(request.sessionId ? { "mcp-session-id": request.sessionId } : {}),
@@ -226,6 +230,28 @@ function browserRequestTransport(url: string): BrowserRequestTransport {
       body: await response.text(),
       ...(sessionId ? { sessionId } : {}),
     };
+  };
+}
+
+type BrowserProcess = Pick<ProcessHandle, "kill">;
+
+async function spawnRemoteBrowser(
+  sandbox: WorkspaceSandbox,
+  binaryPath: string,
+  port: number,
+): Promise<BrowserProcess> {
+  const command = lightpandaMcpCommand(binaryPath, port);
+  const output = await execute(sandbox, "sh", [
+    "-lc",
+    `nohup ${command} >${shellQuote(`/tmp/akeru-browser-${port}.log`)} 2>&1 </dev/null & echo $!`,
+  ]);
+  const pid = output.trim();
+  if (!/^[1-9]\d*$/.test(pid)) {
+    throw new Error(`Sandbox '${sandbox.provider}' did not return a browser process id.`);
+  }
+  return {
+    kill: async () =>
+      (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false,
   };
 }
 
@@ -246,7 +272,7 @@ function rpcResultText(value: unknown): string {
 class LightpandaRpc implements BotBrowserRpc {
   private readonly input: BotBrowserProcessInput;
   private nextId = 1;
-  private processes: ProcessHandle[] = [];
+  private processes: BrowserProcess[] = [];
   private startPromise: Promise<void> | undefined;
   private requestTransport: BrowserRequestTransport | undefined;
   private attachmentValue: BotBrowserAttachment | undefined;
@@ -293,40 +319,47 @@ class LightpandaRpc implements BotBrowserRpc {
 
   private async start(): Promise<void> {
     const sandbox = this.input.workspace.sandbox;
-    if (!sandbox?.processes) {
+    if (!sandbox?.executeCommand) {
       throw new Error(`Workspace '${this.input.workspace.id}' cannot host a sandbox browser.`);
     }
-    if (sandbox.provider !== "local") {
+    const local = sandbox.provider === "local";
+    if (local && !sandbox.processes) {
+      throw new Error(`Workspace '${this.input.workspace.id}' cannot host a sandbox browser.`);
+    }
+    if (!local && !this.input.browserEndpoint) {
       throw new Error(`Sandbox '${sandbox.provider}' has no Akeru browser adapter.`);
     }
     const binaryPath = await installLightpanda(sandbox, this.input.cacheDir);
     if (this.closed) throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
-    const browserPort = await availableLocalPort();
-    const browserHandle = await sandbox.processes.spawn(
-      lightpandaMcpCommand(binaryPath, browserPort, "127.0.0.1"),
-      { maxRetainedBytes: 64 * 1_024 },
-    );
+    const browserPort = local ? await availableLocalPort() : REMOTE_BROWSER_PORT;
+    const endpoint = local
+      ? { url: `http://127.0.0.1:${browserPort}`, requestHeaders: {} }
+      : await this.input.browserEndpoint!(browserPort);
+    const browserHandle = local
+      ? await sandbox.processes!.spawn(lightpandaMcpCommand(binaryPath, browserPort, "127.0.0.1"), {
+          maxRetainedBytes: 64 * 1_024,
+        })
+      : await spawnRemoteBrowser(sandbox, binaryPath, browserPort);
     const processes = [browserHandle];
     if (this.closed) {
       await Promise.all(processes.map((process) => process.kill().catch(() => false)));
       throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
     }
     this.processes = processes;
-    for (const process of processes) {
-      void process.wait().then(() => this.processStopped(process));
+    if (local) {
+      void (browserHandle as ProcessHandle).wait().then(() => this.processStopped(browserHandle));
     }
 
     try {
-      const browserUrl = `http://127.0.0.1:${browserPort}`;
-      this.requestTransport = browserRequestTransport(browserUrl);
+      this.requestTransport = browserRequestTransport(endpoint.url, endpoint.requestHeaders);
       await this.initialize();
       await this.restoreCurrentUrl();
       this.attachmentValue = {
-        browserUrl,
+        browserUrl: endpoint.url,
         mcpSessionId: this.sessionId!,
-        requestHeaders: {},
-        localRequestHeaders: {},
-        availableToHostedPlugins: false,
+        requestHeaders: endpoint.requestHeaders,
+        localRequestHeaders: endpoint.requestHeaders,
+        availableToHostedPlugins: !local,
       };
     } catch (cause) {
       this.processes = [];
@@ -338,7 +371,7 @@ class LightpandaRpc implements BotBrowserRpc {
     }
   }
 
-  private processStopped(process: ProcessHandle): void {
+  private processStopped(process: BrowserProcess): void {
     if (this.closed || !this.processes.includes(process)) return;
     const remaining = this.processes.filter((candidate) => candidate !== process);
     this.processes = [];

@@ -150,42 +150,42 @@ export class AkeruSessionResources {
         this.userComputerWorkspaceLeases.set(key, userComputerWorkspaceLease);
       }
 
-      let browser: BotBrowser | undefined;
-      if (workspaceLease.workspace.provider === "local") {
-        const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
-        browser =
-          existingBrowser ??
-          (this.options.makeBotBrowser ?? createBotBrowser)({
-            threadId: input.resourceScope,
-            workspace: workspaceLease.workspace.workspace,
-            cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
-          });
+      const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
+      const browser =
+        existingBrowser ??
+        (this.options.makeBotBrowser ?? createBotBrowser)({
+          threadId: input.resourceScope,
+          workspace: workspaceLease.workspace.workspace,
+          cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
+          ...(workspaceLease.workspace.browserEndpoint
+            ? { browserEndpoint: workspaceLease.workspace.browserEndpoint }
+            : {}),
+        });
 
-        this.resourceBrowsers.set(input.workspaceResourceKey, browser);
-        this.threadBrowsers.set(key, browser);
-        this.browserResourceKeys.set(key, input.workspaceResourceKey);
-        this.browserReferences.set(
-          input.workspaceResourceKey,
-          (this.browserReferences.get(input.workspaceResourceKey) ?? 0) + 1,
-        );
+      this.resourceBrowsers.set(input.workspaceResourceKey, browser);
+      this.threadBrowsers.set(key, browser);
+      this.browserResourceKeys.set(key, input.workspaceResourceKey);
+      this.browserReferences.set(
+        input.workspaceResourceKey,
+        (this.browserReferences.get(input.workspaceResourceKey) ?? 0) + 1,
+      );
 
-        let reconnect = this.browserReconnects.get(input.workspaceResourceKey);
-        if (existingBrowser && workspaceLease.wokeFromSleep && !reconnect) {
-          reconnect = browser.reconnect().finally(() => {
-            this.browserReconnects.delete(input.workspaceResourceKey);
-          });
-          this.browserReconnects.set(input.workspaceResourceKey, reconnect);
-        }
-        try {
-          await reconnect;
-        } catch (cause) {
-          await this.invalidateBrowser(input.workspaceResourceKey, browser);
-          throw cause;
-        }
+      let reconnect = this.browserReconnects.get(input.workspaceResourceKey);
+      if (existingBrowser && workspaceLease.wokeFromSleep && !reconnect) {
+        reconnect = browser.reconnect().finally(() => {
+          this.browserReconnects.delete(input.workspaceResourceKey);
+        });
+        this.browserReconnects.set(input.workspaceResourceKey, reconnect);
+      }
+      try {
+        await reconnect;
+      } catch (cause) {
+        await this.invalidateBrowser(input.workspaceResourceKey, browser);
+        throw cause;
       }
 
       if (input.mcpServers.length > 0) {
-        const attachment = await browser?.attachment();
+        const attachment = await browser.attachment();
         const manager = (this.options.makeMcpManager ?? createMcpManager)(
           NodePath.join(this.options.stateDir, "bot-mcp-runtime"),
           ".akeru-runtime",

@@ -237,20 +237,34 @@ export interface RosterGroupSection {
   readonly bots: ReadonlyArray<Bot>;
 }
 
-/** Assigned groups first, then every bot without a group under Unassigned. */
+/**
+ * Assigned groups first, then every bot without a group under Unassigned.
+ * A matching group keeps every member so stacked avatars stay visible.
+ */
 export function buildGroupedRosterSections(
   bots: ReadonlyArray<Bot>,
   groups: ReadonlyArray<Group>,
+  query = "",
 ): ReadonlyArray<RosterGroupSection> {
+  const needle = query.trim().toLowerCase();
   const active = bots.filter((bot) => bot.archivedAt === null && bot.pinned === false);
   const assigned = groups.flatMap((group) => {
     const groupBots = active.filter((bot) => bot.groupId === group.id);
-    return groupBots.length > 0 ? [{ id: group.id, name: group.name, bots: groupBots }] : [];
+    const matchesQuery =
+      needle.length === 0 ||
+      group.name.toLowerCase().includes(needle) ||
+      filterRosterBots(groupBots, query).length > 0;
+    return groupBots.length > 0 && matchesQuery
+      ? [{ id: group.id, name: group.name, bots: groupBots }]
+      : [];
   });
   const unassigned = active.filter((bot) => bot.groupId === null);
+  const visibleUnassigned = needle.length === 0 ? unassigned : filterRosterBots(unassigned, query);
   return [
     ...assigned,
-    ...(unassigned.length > 0 ? [{ id: "unassigned", name: "Unassigned", bots: unassigned }] : []),
+    ...(visibleUnassigned.length > 0
+      ? [{ id: "unassigned", name: "Unassigned", bots: visibleUnassigned }]
+      : []),
   ];
 }
 

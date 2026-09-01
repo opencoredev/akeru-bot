@@ -1369,7 +1369,7 @@ describe("AgentControllerLive", () => {
         }),
       );
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
-      expect(makeBotBrowser).not.toHaveBeenCalled();
+      expect(makeBotBrowser).toHaveBeenCalledOnce();
       yield* controller.stopSession({ threadId: codexThreadId });
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
@@ -1475,7 +1475,12 @@ describe("AgentControllerLive", () => {
     });
     const destroy = vi.spyOn(remote, "destroy");
     const makeRemoteWorkspace = vi.fn(async () => remote);
-    const makeBotBrowser = vi.fn();
+    const makeBotBrowser = vi.fn(() => ({
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    }));
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
@@ -1507,7 +1512,7 @@ describe("AgentControllerLive", () => {
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(destroy).not.toHaveBeenCalled();
-      expect(makeBotBrowser).not.toHaveBeenCalled();
+      expect(makeBotBrowser).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
