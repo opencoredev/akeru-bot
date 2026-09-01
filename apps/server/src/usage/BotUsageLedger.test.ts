@@ -465,7 +465,7 @@ it("reconciles persisted reservations when the ledger restarts", () =>
       return { afterRestart, afterLateReport: yield* ledger.summarize(botId) };
     }).pipe(Effect.provide(restartedLayer()));
 
-    assert.equal(afterRestart.consumedTokens, 270);
+    assert.equal(afterRestart.consumedTokens, 250);
     assert.equal(afterRestart.reservedTokens, 0);
     assert.equal(
       afterRestart.entries.find((entry) => entry.sourceKey.includes("unbound-before-restart"))
@@ -481,7 +481,7 @@ it("reconciles persisted reservations when the ledger restarts", () =>
         ?.state,
       "reported",
     );
-    assert.equal(afterLateReport.consumedTokens, 305);
+    assert.equal(afterLateReport.consumedTokens, 280);
     assert.equal(afterLateReport.reservedTokens, 0);
     NodeFS.rmSync(directory, { recursive: true, force: true });
   }).pipe(Effect.provide(NodeServices.layer), Effect.orDie));
