@@ -1,4 +1,5 @@
 import {
+  AKERU_DELEGATION_MAX_DEPTH,
   BotId,
   DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -9,6 +10,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
+import { isDeepStrictEqual } from "node:util";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -23,6 +25,8 @@ import {
   requireBotAbsent,
   requireBotArchived,
   requireBotNotArchived,
+  requireDelegation,
+  requireDelegationAbsent,
   requireGroup,
   requireGroupAbsent,
   requireMcpServer,
@@ -983,6 +987,143 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             updatedAt: occurredAt,
           },
         },
+      };
+    }
+
+    case "delegation.create": {
+      const delegation = command.delegation;
+      yield* requireDelegationAbsent({
+        readModel,
+        command,
+        delegationId: delegation.delegationId,
+      });
+      const sourceThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: delegation.sourceThreadId,
+      });
+      const childThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: delegation.childThreadId,
+      });
+      yield* requireBotNotArchived({
+        readModel,
+        command,
+        botId: delegation.targetBotId,
+      });
+
+      if (
+        sourceThread.botId !== delegation.sourceBotId ||
+        sourceThread.latestTurn?.turnId !== delegation.sourceTurnId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' does not match its source thread, turn, and bot.`,
+        });
+      }
+      if (delegation.sourceBotId === delegation.targetBotId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${delegation.sourceBotId}' cannot delegate to itself.`,
+        });
+      }
+      if (sourceThread.projectId !== childThread.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' cannot cross projects.`,
+        });
+      }
+      if (
+        childThread.botId !== delegation.targetBotId ||
+        (delegation.childTurnId !== null &&
+          childThread.latestTurn?.turnId !== delegation.childTurnId)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' child thread and turn must belong to target bot '${delegation.targetBotId}'.`,
+        });
+      }
+      if (delegation.depth < 1 || delegation.depth > AKERU_DELEGATION_MAX_DEPTH) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' exceeds the maximum depth of ${AKERU_DELEGATION_MAX_DEPTH}.`,
+        });
+      }
+      if (delegation.billedBotId !== delegation.targetBotId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' must bill target bot '${delegation.targetBotId}'.`,
+        });
+      }
+      if (delegation.outcome !== null || delegation.completedAt !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' cannot be completed when created.`,
+        });
+      }
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: delegation.delegationId,
+          occurredAt: delegation.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.created",
+        payload: { delegation },
+      };
+    }
+
+    case "delegation.complete": {
+      const delegation = command.delegation;
+      const current = yield* requireDelegation({
+        readModel,
+        command,
+        delegationId: delegation.delegationId,
+      });
+      if (
+        !isDeepStrictEqual(current, {
+          ...delegation,
+          childTurnId: current.childTurnId,
+          outcome: current.outcome,
+          completedAt: current.completedAt,
+        }) ||
+        (current.childTurnId !== null && current.childTurnId !== delegation.childTurnId)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' ownership fields are immutable.`,
+        });
+      }
+      if (delegation.outcome === null || delegation.completedAt === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' requires an outcome and completion time.`,
+        });
+      }
+      if (delegation.outcome.status === "succeeded" && delegation.childTurnId === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Successful delegation '${delegation.delegationId}' requires a child turn.`,
+        });
+      }
+      if (Date.parse(delegation.completedAt) < Date.parse(delegation.createdAt)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' cannot complete before it was created.`,
+        });
+      }
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: delegation.delegationId,
+          occurredAt: delegation.completedAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.completed",
+        payload: { delegation },
       };
     }
 
