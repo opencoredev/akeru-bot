@@ -15,6 +15,8 @@ import type {
   ProviderTurnStartResult,
   ProviderUploadFeedbackInput,
   ProviderUploadFeedbackResult,
+  OrchestrationCommand,
+  OrchestrationReadModel,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -36,6 +38,11 @@ export interface AgentControllerEngineSelection extends AgentControllerAvailable
 }
 
 export interface AgentControllerShape {
+  readonly configureDelegation?: (input: {
+    readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+    readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  }) => Effect.Effect<void>;
+
   readonly readConversationMemory?: (
     threadId: ThreadId,
   ) => Effect.Effect<AkeruConversationMemorySnapshot, AgentControllerError>;

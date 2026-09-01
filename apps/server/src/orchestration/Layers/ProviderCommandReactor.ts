@@ -340,6 +340,12 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
+  if (agentController.configureDelegation) {
+    yield* agentController.configureDelegation({
+      readSnapshot: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+      dispatch: (command) => Effect.runPromise(orchestrationEngine.dispatch(command)),
+    });
+  }
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));

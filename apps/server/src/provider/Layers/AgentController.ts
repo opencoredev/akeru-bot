@@ -63,6 +63,11 @@ import {
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
 import {
+  createAkeruDelegationRuntime,
+  type AkeruDelegationChildOutcome,
+  type AkeruDelegationRuntime,
+} from "../AkeruDelegationRuntime.ts";
+import {
   createAkeruToolRuntime,
   isMemoryToolId,
   type AkeruToolSession,
@@ -105,6 +110,9 @@ interface ActiveTurn {
   waiting: boolean;
   finished: boolean;
   memoryQueued: boolean;
+  assistantText: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 interface ActiveSession {
@@ -304,6 +312,11 @@ const make = (options?: AgentControllerLiveOptions) =>
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const sessions = new Map<string, ActiveSession>();
+    let delegationRuntime: AkeruDelegationRuntime | undefined;
+    const childWaiters = new Map<
+      string,
+      { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
+    >();
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -472,6 +485,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(errorMessage ? { errorMessage } : {}),
         },
       });
+      childWaiters.get(String(threadId))?.resolve({
+        turnId: turn.turnId,
+        ...(state === "completed" && turn.assistantText.trim()
+          ? { result: turn.assistantText.trim() }
+          : { error: errorMessage ?? `The delegated turn ${state}.` }),
+        usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
+      });
+      childWaiters.delete(String(threadId));
       active.approvalRequests.clear();
       toolRuntime.clearApprovals(String(threadId));
       active.activeTurn = null;
@@ -488,6 +509,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       const turn = active.activeTurn;
       if (!turn) return;
       const text = messageText(message);
+      turn.assistantText = text;
       const messageKey = String(message.id);
       let activeMessage = turn.assistantMessages.get(messageKey);
       if (!activeMessage) {
@@ -666,6 +688,8 @@ const make = (options?: AgentControllerLiveOptions) =>
           return;
         case "usage_update":
           if (!turn) return;
+          turn.inputTokens = Math.max(0, event.usage.promptTokens ?? 0);
+          turn.outputTokens = Math.max(0, event.usage.completionTokens ?? 0);
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             type: "thread.token-usage.updated",
@@ -883,6 +907,31 @@ const make = (options?: AgentControllerLiveOptions) =>
           ? { userComputerWorkspace: resources.userComputerWorkspace }
           : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
+        ...(input.botId && delegationRuntime
+          ? {
+              delegation: {
+                send: async (request) => {
+                  const active = sessions.get(key);
+                  const turnId = active?.activeTurn?.turnId;
+                  if (!turnId) throw new Error("Delegation requires an active parent turn.");
+                  const snapshot = await delegationRuntime!.readSnapshot();
+                  const parentDelegation = snapshot.delegations.find(
+                    (delegation) =>
+                      delegation.childThreadId === threadId && delegation.outcome === null,
+                  );
+                  return delegationRuntime!.send(
+                    {
+                      threadId,
+                      turnId,
+                      botId: input.botId!,
+                      depth: parentDelegation?.depth ?? 0,
+                    },
+                    request,
+                  );
+                },
+              },
+            }
+          : {}),
       };
       toolRuntime.registerSession(key, toolSession);
       const session = yield* runMastra("createSession", () =>
@@ -1046,6 +1095,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           waiting: false,
           finished: false,
           memoryQueued: false,
+          assistantText: "",
+          inputTokens: 0,
+          outputTokens: 0,
         };
         active.status = "running";
         publish({
@@ -1253,6 +1305,21 @@ const make = (options?: AgentControllerLiveOptions) =>
     );
 
     return AgentController.of({
+      configureDelegation: (input) =>
+        Effect.sync(() => {
+          delegationRuntime = createAkeruDelegationRuntime({
+            ...input,
+            awaitChild: (threadId) =>
+              new Promise((resolve, reject) => {
+                const key = String(threadId);
+                if (childWaiters.has(key)) {
+                  reject(new Error(`Delegation waiter already exists for '${threadId}'.`));
+                  return;
+                }
+                childWaiters.set(key, { resolve });
+              }),
+          });
+        }),
       readConversationMemory: (threadId) =>
         bundle.readObservationalMemory
           ? runMastra("memory.read", () =>
