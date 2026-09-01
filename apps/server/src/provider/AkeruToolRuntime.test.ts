@@ -366,6 +366,46 @@ describe("AkeruToolRuntime", () => {
     ).rejects.toThrow();
   });
 
+  it("keeps plugin inspection read-only and requires one-shot grants for install and removal", async () => {
+    const search = vi.fn(async () => ({ plugins: [] }));
+    const install = vi.fn(async () => ({ installed: true }));
+    const uninstall = vi.fn(async () => ({ removed: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-plugins", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: {
+        SearchPlugins: search,
+        InstallPlugin: install,
+        UninstallPlugin: uninstall,
+      },
+    });
+
+    await expect(
+      runtime.execute({
+        threadId: "thread-plugins",
+        toolId: "SearchPlugins",
+        toolCallId: "tool-search",
+        input: { query: "web" },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ plugins: [] });
+
+    for (const toolId of ["InstallPlugin", "UninstallPlugin"] as const) {
+      const execution = {
+        threadId: "thread-plugins",
+        toolId,
+        toolCallId: `tool-${toolId}`,
+        input: { pluginId: "exa" },
+        approvalMode: "require-grant" as const,
+      };
+      await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+      runtime.grantApproval(execution);
+      await expect(runtime.execute(execution)).resolves.toBeDefined();
+      await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    }
+  });
+
   it("copies files only when both boundaries are registered", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("copy-bot");

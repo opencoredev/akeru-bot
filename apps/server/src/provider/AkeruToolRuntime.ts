@@ -130,7 +130,10 @@ const BACKEND_NAMES: Record<
     | "UpdateChannel"
     | "SendToUser"
     | "UpdateBotProfile"
+    | "SearchPlugins"
+    | "GetPlugin"
     | "InstallPlugin"
+    | "UninstallPlugin"
     | "AuthenticateMcpServer"
     | "RestartMcpServers"
   >,

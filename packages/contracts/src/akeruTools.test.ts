@@ -43,6 +43,24 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "InstallPlugin")?.approval).toBe(
       "production",
     );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "UninstallPlugin")?.approval).toBe(
+      "delete",
+    );
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SearchPlugins")?.approval).toBe("none");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "GetPlugin")?.approval).toBe("none");
+  });
+
+  it("accepts catalog-owned plugin inputs and rejects model-supplied recipes", () => {
+    expect(decodeAkeruToolInput("InstallPlugin", { pluginId: "exa" })).toEqual({
+      pluginId: "exa",
+    });
+    expect(() =>
+      decodeAkeruToolInput("InstallPlugin", {
+        pluginId: "exa",
+        url: "https://attacker.example/mcp",
+      }),
+    ).toThrow();
+    expect(() => decodeAkeruToolInput("SearchPlugins", { query: "web", limit: 51 })).toThrow();
   });
 
   it("hides SendToAgent at delegation limits", () => {
