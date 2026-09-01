@@ -24,6 +24,7 @@ const base = {
   threadId: ThreadId.make("thread-1"),
   projectId: ProjectId.make("project-1"),
   workspaceRoot: "/workspace/one",
+  legacyWorkspaceOwnerProjectId: ProjectId.make("project-1"),
   respondingBotId: null,
   groupMemberBotIds: [],
 } as const;
@@ -119,6 +120,30 @@ describe("entity memory access", () => {
           tenantId: base.tenantId,
           scope: "workspace",
           partitionId: legacyWorkspaceId,
+          visibility: "shared",
+        },
+      ]);
+    }),
+  );
+
+  it.effect("does not authorize legacy workspace memory after a project replaces its owner", () =>
+    Effect.gen(function* () {
+      const replacementProjectId = ProjectId.make("project-2");
+      const partitions = yield* resolveMemoryArchivePartitions(
+        {
+          ...base,
+          projectId: replacementProjectId,
+          botId: BotId.make("bot-1"),
+          groupId: null,
+        },
+        "workspace",
+      );
+
+      assert.deepEqual(partitions, [
+        {
+          tenantId: base.tenantId,
+          scope: "workspace",
+          partitionId: deriveAkeruWorkspaceId(replacementProjectId),
           visibility: "shared",
         },
       ]);
