@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - Release automation runs before an Effect runtime exists.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 
@@ -24,14 +25,16 @@ export function parseReleaseChanges(log: string): ReleaseChange[] {
     .flatMap((subject) => {
       const match = subject.match(pullRequestCommit);
       if (!match?.groups) return [];
-      const number = Number(match.groups.number);
+      const { number: rawNumber, title } = match.groups;
+      if (!rawNumber || !title) return [];
+      const number = Number(rawNumber);
       if (seen.has(number)) return [];
       seen.add(number);
 
       return [
         {
           number,
-          title: match.groups.title,
+          title,
         },
       ];
     });

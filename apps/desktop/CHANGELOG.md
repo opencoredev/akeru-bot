@@ -2,27 +2,34 @@
 
 ### Changes
 
+- [#11](https://github.com/opencoredev/akeru-bot/pull/11) feat(voice): add local desktop bot calls
+- [#14](https://github.com/opencoredev/akeru-bot/pull/14) feat(brand): add lowercase Akeru icon
+- [#15](https://github.com/opencoredev/akeru-bot/pull/15) fix(usage): stabilize provider logos and labels
+- [#13](https://github.com/opencoredev/akeru-bot/pull/13) ci: run Akeru checks on Depot
+- [#12](https://github.com/opencoredev/akeru-bot/pull/12) fix(voice): make local calls realtime
+- [#16](https://github.com/opencoredev/akeru-bot/pull/16) perf(runtime): adopt provider-neutral upstream fixes
+- [#18](https://github.com/opencoredev/akeru-bot/pull/18) feat(feedback): add the product feedback workflow
 - [#17](https://github.com/opencoredev/akeru-bot/pull/17) feat(bots): add connector health and error inbox
 - [#19](https://github.com/opencoredev/akeru-bot/pull/19) feat(plugins): load declarative catalog entries
 - [#20](https://github.com/opencoredev/akeru-bot/pull/20) feat(plugins): ship the curated plugin directory
 - [#28](https://github.com/opencoredev/akeru-bot/pull/28) test(mobile): cover bot inbox empty and error states
 - [#21](https://github.com/opencoredev/akeru-bot/pull/21) fix(server): persist Kimi device identity
-- [#23](https://github.com/opencoredev/akeru-bot/pull/23) feat(settings): add bot workspace sharing mode
+- [#23](https://github.com/opencoredev/akeru-bot/pull/23) feat(settings): add bot workspace and browser sharing
 - [#22](https://github.com/opencoredev/akeru-bot/pull/22) feat(contracts): define Akeru memory and usage records
 - [#25](https://github.com/opencoredev/akeru-bot/pull/25) fix(server): redact browser snapshot data
 - [#24](https://github.com/opencoredev/akeru-bot/pull/24) feat(server): add durable bot memory storage
 - [#27](https://github.com/opencoredev/akeru-bot/pull/27) feat(contracts): define approved Akeru workspace tools
-- [#32](https://github.com/opencoredev/akeru-bot/pull/32) feat(server): add local sandbox browser runtime
+- [#32](https://github.com/opencoredev/akeru-bot/pull/32) feat(server): add sandbox browser runtime
 - [#29](https://github.com/opencoredev/akeru-bot/pull/29) feat(providers): add Kimi For Coding runtime
 - [#31](https://github.com/opencoredev/akeru-bot/pull/31) feat(server): add bot inbox controls
 - [#33](https://github.com/opencoredev/akeru-bot/pull/33) feat(web): resolve bot inbox incidents
 - [#38](https://github.com/opencoredev/akeru-bot/pull/38) feat(mobile): resolve bot inbox incidents
 - [#36](https://github.com/opencoredev/akeru-bot/pull/36) feat(server): isolate and pool bot workspaces
+- [#37](https://github.com/opencoredev/akeru-bot/pull/37) fix(memory): preserve storage correctness
 - [#39](https://github.com/opencoredev/akeru-bot/pull/39) feat(server): run approved Akeru tools
-- [#41](https://github.com/opencoredev/akeru-bot/pull/41) feat(server): add memory tool handlers
+- [#41](https://github.com/opencoredev/akeru-bot/pull/41) feat(server): add governed memory tool handlers
 - [#40](https://github.com/opencoredev/akeru-bot/pull/40) feat(server): record human handoff incidents
 - [#35](https://github.com/opencoredev/akeru-bot/pull/35) feat(server): enforce per-bot token usage caps
-- [#42](https://github.com/opencoredev/akeru-bot/pull/42) fix(server): preserve replacement usage reservations
 - [#44](https://github.com/opencoredev/akeru-bot/pull/44) fix(memory): preserve pending update governance
 - [#45](https://github.com/opencoredev/akeru-bot/pull/45) feat(memory): add RPC and shared client state
 - [#48](https://github.com/opencoredev/akeru-bot/pull/48) feat(server): expose per-bot usage over RPC
