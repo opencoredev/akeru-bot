@@ -45,7 +45,7 @@ function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
     throw new Error("Unredacted screenshot data is not provider-safe.");
   }
   if (Array.isArray(value)) {
-    for (const item of value) rejectScreenshotPayload(item);
+    for (const item of value) rejectScreenshotPayload(item, fieldName);
     return;
   }
   if (typeof value !== "object" || value === null) return;

@@ -219,5 +219,10 @@ describe("preview snapshot redaction", () => {
     expect(() =>
       redactProviderVisiblePreviewResult("status", { image: { data: "raw-base64-data" } }),
     ).toThrow("Unredacted screenshot data is not provider-safe.");
+    expect(() =>
+      redactProviderVisiblePreviewResult("status", {
+        screenshot: [{ data: "raw-base64-data" }],
+      }),
+    ).toThrow("Unredacted screenshot data is not provider-safe.");
   });
 });
