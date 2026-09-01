@@ -5,20 +5,11 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { describe, it } from "vite-plus/test";
 
+import { expectedReleaseAssetNames } from "./verify-release-assets.ts";
 import { verifyReleaseCandidate, writeReleaseChecksums } from "./verify-release-candidate.ts";
 
 const version = "1.2.3";
-const assets = [
-  `Akeru-Bot-${version}-arm64.dmg`,
-  `Akeru-Bot-${version}-arm64-mac.zip`,
-  `Akeru-Bot-${version}-x64.exe`,
-  `Akeru-Bot-${version}-x64.exe.blockmap`,
-  `Akeru-Bot-${version}-x86_64.AppImage`,
-  `Akeru-Bot-${version}-x86_64.AppImage.blockmap`,
-  "latest-mac.yml",
-  "latest.yml",
-  "latest-linux.yml",
-] as const;
+const assets = expectedReleaseAssetNames(version);
 
 function fixture(): string {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-release-verify-"));
@@ -40,7 +31,7 @@ describe("verifyReleaseCandidate", () => {
   it("rejects a checksum mismatch", () => {
     const directory = fixture();
     try {
-      NodeFS.appendFileSync(NodePath.join(directory, assets[0]), "tampered");
+      NodeFS.appendFileSync(NodePath.join(directory, assets[0]!), "tampered");
       NodeAssert.throws(() => verifyReleaseCandidate(directory, version), /SHA256 mismatch/);
     } finally {
       NodeFS.rmSync(directory, { recursive: true });

@@ -116,6 +116,9 @@ assertContains(
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",
   "Signed macOS verification cannot access the App Store Connect key.",
 );
+const desktopJobHeader = /\n  desktop:\n([\s\S]*?)\n    strategy:/u.exec(releaseWorkflow)?.[1];
+if (!desktopJobHeader) throw new Error("Stable release workflow is missing the desktop job.");
+assertOmits(desktopJobHeader, "secrets.", "Desktop signing secrets are scoped at the job level");
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
 for (const [needle, label] of [

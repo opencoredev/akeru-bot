@@ -4,18 +4,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-const stableAssets = (version: string) =>
-  [
-    `Akeru-Bot-${version}-arm64.dmg`,
-    `Akeru-Bot-${version}-arm64-mac.zip`,
-    `Akeru-Bot-${version}-x64.exe`,
-    `Akeru-Bot-${version}-x64.exe.blockmap`,
-    `Akeru-Bot-${version}-x86_64.AppImage`,
-    `Akeru-Bot-${version}-x86_64.AppImage.blockmap`,
-    "latest-mac.yml",
-    "latest.yml",
-    "latest-linux.yml",
-  ] as const;
+import { expectedReleaseAssetNames } from "./verify-release-assets.ts";
 
 const sha256 = (path: string) =>
   NodeCrypto.createHash("sha256").update(NodeFS.readFileSync(path)).digest("hex");
@@ -25,7 +14,8 @@ export function verifyReleaseCandidate(directory: string, version: string): void
     throw new Error(`Stable release version must be plain semver, received '${version}'.`);
   }
 
-  const expected = [...stableAssets(version), "SHA256SUMS"].sort();
+  const stableAssets = expectedReleaseAssetNames(version);
+  const expected = [...stableAssets, "SHA256SUMS"].sort();
   const actual = NodeFS.readdirSync(directory).sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
@@ -44,19 +34,19 @@ export function verifyReleaseCandidate(directory: string, version: string): void
       }),
   );
 
-  for (const asset of stableAssets(version)) {
+  for (const asset of stableAssets) {
     const digest = sha256(NodePath.join(directory, asset));
     if (checksums.get(asset) !== digest) {
       throw new Error(`SHA256 mismatch for '${asset}'.`);
     }
   }
-  if (checksums.size !== stableAssets(version).length) {
+  if (checksums.size !== stableAssets.length) {
     throw new Error("SHA256SUMS does not contain exactly one entry for every release asset.");
   }
 }
 
 export function writeReleaseChecksums(directory: string, version: string): void {
-  const contents = stableAssets(version)
+  const contents = expectedReleaseAssetNames(version)
     .map((asset) => `${sha256(NodePath.join(directory, asset))}  ${asset}`)
     .join("\n");
   NodeFS.writeFileSync(NodePath.join(directory, "SHA256SUMS"), `${contents}\n`);

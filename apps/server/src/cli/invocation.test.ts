@@ -54,8 +54,8 @@ it("treats stable installs as direct invocations", () => {
   assert.isNull(detectCliRunner(""));
 });
 
-it("re-suggests the nightly channel only for nightly builds", () => {
-  assert.equal(suggestedPackageSpec("0.0.31-nightly.20260729"), "akeru-bot@nightly");
+it("suggests the stable package for every installed version", () => {
+  assert.equal(suggestedPackageSpec("0.0.31-nightly.20260729"), "akeru-bot");
   assert.equal(suggestedPackageSpec("0.0.31"), "akeru-bot");
 });
 
@@ -66,7 +66,7 @@ it("formats serve suggestions to match the launching command", () => {
       entryPath: "/home/leo/.npm/_npx/abc/node_modules/akeru-bot/dist/bin.mjs",
       version: "0.0.31-nightly.20260729",
     }),
-    "npx akeru-bot@nightly serve",
+    "npx akeru-bot serve",
   );
   assert.equal(
     formatCliCommand({
