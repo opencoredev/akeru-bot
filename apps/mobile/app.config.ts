@@ -58,7 +58,10 @@ const DEVELOPMENT_ASSETS = {
 
 const RELEASE_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  iosIcon: {
+    light: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+    dark: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  },
   splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
   androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
   androidAdaptiveBackgroundColor: "#F4F1EA",
