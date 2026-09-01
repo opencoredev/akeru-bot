@@ -764,6 +764,65 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("publishes a same-id rewrite after a tool boundary", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.takeUntil((event) => event.type === "turn.completed"),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("draft", "same"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "view-1",
+          toolName: "view",
+          args: { path: "package.json" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "view-1",
+          result: "{}",
+          isError: false,
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("final revised", "same"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        assert.deepEqual(
+          events
+            .filter((event) => event.type === "content.delta")
+            .map((event) => event.payload.delta),
+          ["draft", "final revised"],
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("keeps replies and status beats as separate completed messages", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
