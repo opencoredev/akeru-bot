@@ -56,6 +56,9 @@ export const AkeruToolInputSchemas = {
     channelId: GroupId,
     name: TrimmedNonEmptyString,
   }),
+  SendToUser: Schema.Struct({
+    message: TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_COMMAND_MAX_CHARS)),
+  }),
 } as const;
 export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
 
@@ -189,6 +192,9 @@ export const AKERU_TOOL_CATALOG = [
   }),
   define("CreateChannel", "bot-workspace", "Create a bot channel."),
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
+  define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
+    approval: "send",
+  }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {
