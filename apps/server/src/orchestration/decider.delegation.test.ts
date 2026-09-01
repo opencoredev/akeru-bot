@@ -91,9 +91,7 @@ function makeThread(input: {
   };
 }
 
-function makeDelegation(
-  overrides: Partial<AkeruDelegationRecord> = {},
-): AkeruDelegationRecord {
+function makeDelegation(overrides: Partial<AkeruDelegationRecord> = {}): AkeruDelegationRecord {
   return {
     delegationId: DelegationId.make("delegation-1"),
     sourceThreadId: SOURCE_THREAD_ID,
@@ -113,12 +111,14 @@ function makeDelegation(
   };
 }
 
-function makeReadModel(input: {
-  childBotId?: BotId;
-  childProjectId?: ProjectId;
-  targetArchived?: boolean;
-  delegations?: ReadonlyArray<AkeruDelegationRecord>;
-} = {}): OrchestrationReadModel {
+function makeReadModel(
+  input: {
+    childBotId?: BotId;
+    childProjectId?: ProjectId;
+    targetArchived?: boolean;
+    delegations?: ReadonlyArray<AkeruDelegationRecord>;
+  } = {},
+): OrchestrationReadModel {
   return {
     snapshotSequence: 0,
     projects: [],
@@ -192,7 +192,10 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         commandId: CommandId.make("command-failed"),
         delegation: failed,
       });
-      expect(event).toMatchObject({ type: "delegation.completed", payload: { delegation: failed } });
+      expect(event).toMatchObject({
+        type: "delegation.completed",
+        payload: { delegation: failed },
+      });
     }),
   );
 
