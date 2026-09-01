@@ -44,12 +44,6 @@ export const PROVIDER_OPTIONS: Array<{
     pickerSidebarBadge: "new",
   },
   {
-    value: ProviderDriverKind.make("cursor"),
-    label: "Cursor",
-    available: true,
-    pickerSidebarBadge: "new",
-  },
-  {
     value: ProviderDriverKind.make("grok"),
     label: "Grok",
     available: true,

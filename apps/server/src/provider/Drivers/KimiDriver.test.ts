@@ -15,6 +15,7 @@ import { KimiDriver } from "./KimiDriver.ts";
 describe("KimiDriver", () => {
   it.effect("registers one Mastra-native Kimi provider with offline model metadata", () => {
     expect(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind))).toContain("kimi");
+    expect(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind))).not.toContain("cursor");
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* KimiDriver.create({

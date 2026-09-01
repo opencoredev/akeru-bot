@@ -2,7 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BotId, type ProviderAccessStatus } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ProviderAccessSection, selectVisibleProviderAccess } from "./ProvidersPanel";
+import {
+  ProviderAccessSection,
+  selectVisibleProviderAccess,
+  SUBSCRIPTION_PROVIDERS,
+} from "./ProvidersPanel";
 
 function access(overrides: Partial<ProviderAccessStatus>): ProviderAccessStatus {
   return {
@@ -19,6 +23,12 @@ function access(overrides: Partial<ProviderAccessStatus>): ProviderAccessStatus 
 }
 
 describe("provider access rows", () => {
+  it("offers Kimi subscription login without Cursor", () => {
+    const providers = SUBSCRIPTION_PROVIDERS.map((provider) => provider.id);
+    expect(providers).toContain("kimi-for-coding");
+    expect(providers).not.toContain("cursor");
+  });
+
   it("keeps non-subscription access and unsupported plan rows", () => {
     const visible = selectVisibleProviderAccess([
       access({ id: "chatgpt", accessMethod: "subscription-oauth" }),

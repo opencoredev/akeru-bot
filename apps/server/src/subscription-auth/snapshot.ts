@@ -143,10 +143,7 @@ export function buildProviderAccessCapabilities(
     };
   });
 
-  const acpRows = [
-    { id: "cursor-acp", label: "Cursor ACP CLI", driver: "cursor" },
-    { id: "grok-acp", label: "Grok ACP CLI", driver: "grok" },
-  ].map((entry) => {
+  const acpRows = [{ id: "grok-acp", label: "Grok ACP CLI", driver: "grok" }].map((entry) => {
     const provider = providers.find((candidate) => candidate.driver === entry.driver);
     const requestHealth = provider ? providerRequestHealth(provider.instanceId) : undefined;
     const health = providerAccessHealth(provider, requestHealthState(requestHealth));

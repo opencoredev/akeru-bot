@@ -54,6 +54,7 @@ describe("ProviderSettingsForm helpers", () => {
 
     expect(kimi).toMatchObject({ label: "Kimi For Coding" });
     expect(deriveProviderSettingsFields(kimi!)).toEqual([]);
+    expect(DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("cursor")]).toBeUndefined();
   });
 
   it("preserves unknown config keys while omitting empty configurable fields", () => {

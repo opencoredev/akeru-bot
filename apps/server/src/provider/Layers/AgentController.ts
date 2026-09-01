@@ -101,10 +101,10 @@ interface ResolvedEngine {
 }
 
 interface ActiveAssistantMessage {
-  readonly itemId: RuntimeItemId;
-  length: number;
-  started: boolean;
-  completed: boolean;
+  readonly messageId: string;
+  text: string;
+  publishedText: string;
+  revision: number;
 }
 
 interface ActiveTurn {
@@ -415,6 +415,15 @@ const make = (options?: AgentControllerLiveOptions) =>
             access,
           )
         : undefined;
+    const legacyResourceIdentity = new Map<
+      string,
+      {
+        readonly workspaceResourceKey: string;
+        readonly cwd: string | undefined;
+        readonly provider: ProviderDriverKind;
+        readonly providerInstanceId: ProviderInstanceId;
+      }
+    >();
     const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
     const bundle = yield* runMastra("construct", () =>
       makeMastraHarness({
@@ -549,20 +558,48 @@ const make = (options?: AgentControllerLiveOptions) =>
       });
     };
 
+    const completeAssistantMessage = (
+      threadId: ThreadId,
+      active: ActiveSession,
+      turn: ActiveTurn,
+      message: ActiveAssistantMessage,
+    ) => {
+      const text = message.text.startsWith(message.publishedText)
+        ? message.text.slice(message.publishedText.length)
+        : message.text;
+      if (text.length === 0) return;
+      const itemId = RuntimeItemId.make(
+        `mastra-answer-${message.messageId}${message.revision === 0 ? "" : `-${message.revision}`}`,
+      );
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId,
+        type: "item.started",
+        payload: { itemType: "assistant_message", status: "inProgress" },
+      });
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId,
+        type: "content.delta",
+        payload: { streamKind: "assistant_text", delta: text },
+      });
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId,
+        type: "item.completed",
+        payload: { itemType: "assistant_message", status: "completed" },
+      });
+      message.publishedText = message.text;
+      message.revision += 1;
+    };
+
     const completeAssistantMessages = (
       threadId: ThreadId,
       active: ActiveSession,
       turn: ActiveTurn,
     ) => {
       for (const message of turn.assistantMessages.values()) {
-        if (!message.started || message.completed) continue;
-        message.completed = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: message.itemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
+        completeAssistantMessage(threadId, active, turn, message);
       }
     };
 
@@ -612,43 +649,17 @@ const make = (options?: AgentControllerLiveOptions) =>
       const messageKey = String(message.id);
       let activeMessage = turn.assistantMessages.get(messageKey);
       if (!activeMessage) {
+        completeAssistantMessages(threadId, active, turn);
         activeMessage = {
-          itemId: RuntimeItemId.make(`mastra-answer-${messageKey}`),
-          length: 0,
-          started: false,
-          completed: false,
+          messageId: messageKey,
+          text: "",
+          publishedText: "",
+          revision: 0,
         };
         turn.assistantMessages.set(messageKey, activeMessage);
       }
-      if (activeMessage.completed) return;
-      if (!activeMessage.started && text.length > 0) {
-        activeMessage.started = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "item.started",
-          payload: { itemType: "assistant_message", status: "inProgress" },
-        });
-      }
-      if (text.length > activeMessage.length) {
-        const delta = text.slice(activeMessage.length);
-        activeMessage.length = text.length;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "content.delta",
-          payload: { streamKind: "assistant_text", delta },
-        });
-      }
-      if (complete && activeMessage.started && !activeMessage.completed) {
-        activeMessage.completed = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
-      }
+      activeMessage.text = text;
+      if (complete) completeAssistantMessage(threadId, active, turn, activeMessage);
     };
 
     const handleControllerEvent = (
@@ -851,9 +862,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       const routing = yield* legacyProviderBridge
         .getInstanceInfo(modelSelection.instanceId)
         .pipe(Effect.mapError(unavailable));
-      const capabilities = yield* legacyProviderBridge
-        .getCapabilities(modelSelection.instanceId)
-        .pipe(Effect.mapError(unavailable));
+      const capabilities = usesMastraCode(routing.driverKind)
+        ? { sessionModelSwitch: "in-session" as const }
+        : yield* legacyProviderBridge
+            .getCapabilities(modelSelection.instanceId)
+            .pipe(Effect.mapError(unavailable));
       return { modelSelection, routing, capabilities };
     });
 
@@ -939,10 +952,30 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return toProviderSession(threadId, existing);
       }
-      if (existing) {
+      const existingLegacy = legacyResourceIdentity.get(key);
+      if (
+        !existing &&
+        resolved &&
+        existingLegacy?.workspaceResourceKey === workspaceResourceKey &&
+        existingLegacy.cwd === input.cwd &&
+        existingLegacy.provider === resolved.provider &&
+        existingLegacy.providerInstanceId === resolved.providerInstanceId
+      ) {
+        const live = (yield* legacyProviderBridge.listSessions()).find(
+          (session) => session.threadId === threadId,
+        );
+        if (live) return live;
+        yield* runMastra("resources.release", () => sessionResources.release(key)).pipe(
+          Effect.ignoreCause({ log: true }),
+        );
+        legacyResourceIdentity.delete(key);
+      }
+      if (existing || existingLegacy) {
+        const previousWorkspaceResourceKey =
+          existing?.workspaceResourceKey ?? existingLegacy?.workspaceResourceKey;
         yield* stopSessionWithResources(
           { threadId },
-          existing.workspaceResourceKey !== workspaceResourceKey,
+          previousWorkspaceResourceKey !== workspaceResourceKey,
         );
       }
       if (!resolved) {
@@ -950,9 +983,6 @@ const make = (options?: AgentControllerLiveOptions) =>
           operation: "startSession",
           detail: `Thread '${threadId}' has no resolved engine.`,
         });
-      }
-      if (!usesMastraCode(resolved.provider)) {
-        return yield* legacyProviderBridge.startSession(threadId, input);
       }
       const mcpServers = input.mcpServers ?? [];
       const resources = yield* runMastra("resources.acquire", () =>
@@ -966,6 +996,26 @@ const make = (options?: AgentControllerLiveOptions) =>
           mcpServers,
         }),
       );
+      if (!usesMastraCode(resolved.provider)) {
+        return yield* legacyProviderBridge.startSession(threadId, input).pipe(
+          Effect.tap((session) =>
+            Effect.sync(() => {
+              legacyResourceIdentity.set(key, {
+                workspaceResourceKey,
+                cwd: input.cwd,
+                provider: resolved.provider,
+                providerInstanceId: resolved.providerInstanceId,
+              });
+              return session;
+            }),
+          ),
+          Effect.tapError(() =>
+            runMastra("resources.release", () =>
+              sessionResources.release(key, { destroy: true }),
+            ).pipe(Effect.ignoreCause({ log: true })),
+          ),
+        );
+      }
       const workspaceType: "cloud" | "local" =
         input.botSandbox && input.botSandbox !== "local" ? "cloud" : "local";
       const userComputerWorkspace =
@@ -1090,7 +1140,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         const key = String(input.threadId);
         const active = sessions.get(key);
         if (!active) {
-          if (resolvedByThread.get(key)?.provider === ProviderDriverKind.make("codex")) {
+          if (
+            usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
+          ) {
             return yield* new AgentControllerRuntimeError({
               operation: "sendTurn",
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
@@ -1307,6 +1359,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* runMastra("resources.release", () =>
             sessionResources.release(key, { destroy: destroyResources }),
           ).pipe(Effect.ignoreCause({ log: true }));
+          legacyResourceIdentity.delete(key);
           return;
         }
         if (
@@ -1357,6 +1410,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ).pipe(Effect.ignoreCause({ log: true }));
           toolRuntime.unregisterSession(threadId);
         }
+        legacyResourceIdentity.clear();
         sessions.clear();
         yield* runMastra("resources.shutdown", () => sessionResources.shutdown()).pipe(
           Effect.ignoreCause({ log: true }),
