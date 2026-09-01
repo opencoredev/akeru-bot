@@ -253,15 +253,6 @@ function assistantMessage(text: string, id = "assistant-message"): MastraDBMessa
   } as MastraDBMessage;
 }
 
-function makeBotBrowser() {
-  return {
-    tools: {},
-    attachment: vi.fn(async () => undefined),
-    reconnect: vi.fn(async () => undefined),
-    close: vi.fn(async () => undefined),
-  };
-}
-
 function makeLayer(
   bridge: ProviderServiceShape,
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
@@ -272,9 +263,15 @@ function makeLayer(
 ) {
   return makeAgentControllerLive({
     makeMastraHarness: factory,
-    makeBotBrowser,
     ...(makeMcpManager ? { makeMcpManager } : {}),
     ...memory,
+    makeBotBrowser: () =>
+      ({
+        tools: {},
+        attachment: async () => undefined,
+        reconnect: async () => undefined,
+        close: async () => undefined,
+      }) as never,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -662,7 +659,7 @@ describe("AgentControllerLive", () => {
 
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
-    const layer = makeAgentControllerLive({ makeBotBrowser }).pipe(
+    const layer = makeAgentControllerLive().pipe(
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
@@ -917,7 +914,7 @@ describe("AgentControllerLive", () => {
     );
   });
 
-  it.effect("keeps replies and status beats as separate completed messages", () => {
+  it.effect("adds every Mastra step usage update", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -928,51 +925,37 @@ describe("AgentControllerLive", () => {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
           providerInstanceId: codexInstanceId,
-          cwd: process.cwd(),
           modelSelection: codexSelection,
           runtimeMode: "full-access",
         });
-
         const events: ProviderRuntimeEvent[] = [];
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
         yield* Effect.yieldNow;
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Use two steps." });
         mastra.emit({
-          type: "message_update",
-          message: assistantMessage("I'll check first.", "opening"),
+          type: "usage_update",
+          usage: { promptTokens: 10, completionTokens: 4, reasoningTokens: 2, totalTokens: 14 },
         } as AgentControllerEvent);
         mastra.emit({
-          type: "tool_start",
-          toolCallId: "view-1",
-          toolName: "view",
-          args: { path: "package.json" },
+          type: "usage_update",
+          usage: { promptTokens: 7, completionTokens: 3, reasoningTokens: 1, totalTokens: 10 },
         } as AgentControllerEvent);
-        mastra.emit({
-          type: "tool_end",
-          toolCallId: "view-1",
-          result: "{}",
-          isError: false,
-        } as AgentControllerEvent);
-        mastra.emit({
-          type: "message_end",
-          message: assistantMessage("I found the configuration.", "status"),
-        } as AgentControllerEvent);
-        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
-        mastra.finishSend();
         yield* Effect.yieldNow;
         yield* Fiber.interrupt(eventsFiber);
 
         assert.deepEqual(
-          events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
+          events
+            .filter((event) => event.type === "thread.token-usage.updated")
+            .map((event) => event.payload.usage),
           [
-            RuntimeItemId.make("mastra-answer-opening"),
-            RuntimeItemId.make("view-1"),
-            RuntimeItemId.make("mastra-answer-status"),
+            { usedTokens: 14, inputTokens: 10, outputTokens: 4, reasoningOutputTokens: 2 },
+            { usedTokens: 24, inputTokens: 17, outputTokens: 7, reasoningOutputTokens: 3 },
           ],
         );
+        mastra.finishSend();
       }),
       bridge.service,
       mastra.factory,
@@ -1057,6 +1040,68 @@ describe("AgentControllerLive", () => {
       undefined,
       undefined,
       usageLedger.service,
+    );
+  });
+
+  it.effect("keeps replies and status beats as separate completed messages", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("I'll check first.", "opening"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "view-1",
+          toolName: "view",
+          args: { path: "package.json" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "view-1",
+          result: "{}",
+          isError: false,
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("I found the configuration.", "status"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
+          [
+            RuntimeItemId.make("mastra-answer-opening"),
+            RuntimeItemId.make("view-1"),
+            RuntimeItemId.make("mastra-answer-status"),
+          ],
+        );
+      }),
+      bridge.service,
+      mastra.factory,
     );
   });
 
@@ -1704,36 +1749,6 @@ describe("AgentControllerLive", () => {
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).not.toHaveBeenCalled();
     }).pipe(Effect.provide(layer), Effect.orDie);
-  });
-
-  it.effect("releases session resources when setup fails", () => {
-    const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    vi.mocked(mastra.session.state.set).mockRejectedValueOnce(new Error("state failed"));
-
-    return provideController(
-      Effect.gen(function* () {
-        const controller = yield* AgentController;
-        yield* resolveCodex(controller);
-        const input = {
-          threadId: codexThreadId,
-          provider: ProviderDriverKind.make("codex"),
-          providerInstanceId: codexInstanceId,
-          cwd: process.cwd(),
-          modelSelection: codexSelection,
-          runtimeMode: "full-access" as const,
-        };
-
-        yield* controller.startSession(codexThreadId, input).pipe(Effect.flip);
-        const session = yield* controller.startSession(codexThreadId, input);
-
-        expect(session.status).toBe("ready");
-        expect(mastra.createSession).toHaveBeenCalledTimes(2);
-        expect(mastra.deleteSession).toHaveBeenCalledOnce();
-      }),
-      bridge.service,
-      mastra.factory,
-    );
   });
 
   it.effect("keeps Claude on the existing provider adapter", () => {

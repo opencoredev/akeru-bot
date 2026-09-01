@@ -10,7 +10,7 @@ import type {
   MastraDBMessage,
   MastraMessagePart,
 } from "@mastra/core/agent-controller";
-import type { Workspace } from "@mastra/core/workspace";
+import { Workspace } from "@mastra/core/workspace";
 import {
   AkeruUsageReservationId,
   EventId,
@@ -21,8 +21,8 @@ import {
   TurnId,
   AKERU_TOOL_CATALOG,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
-  type McpServer,
   type BotId,
+  type McpServer,
   type ModelSelection,
   type ProviderApprovalDecision,
   type ProviderRuntimeEvent,
@@ -347,32 +347,6 @@ const make = (options?: AgentControllerLiveOptions) =>
             cause,
           }),
       });
-    const setCategoryPermissions = (session: MastraSession, runtimeMode: RuntimeMode) =>
-      Effect.forEach(
-        ["read", "edit", "execute", "mcp", "other"] as const,
-        (category) =>
-          runMastra("permissions.setForCategory", () =>
-            session.permissions.setForCategory({
-              category,
-              policy: permissionPolicy(runtimeMode, category),
-            }),
-          ),
-        { discard: true },
-      );
-    const setAskToolPermissions = (session: MastraSession, threadId: string) =>
-      Effect.forEach(
-        new Set([
-          ...toolRuntime.toolsForThread(threadId).map((tool) => tool.id),
-          ...Object.keys(sessionResources.getConnectorTools(threadId)),
-          AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-          "RestartMcpServers",
-        ]),
-        (toolName) =>
-          runMastra("permissions.setForTool", () =>
-            session.permissions.setForTool({ toolName, policy: "ask" }),
-          ),
-        { discard: true },
-      );
 
     yield* Effect.sync(() => {
       NodeFS.mkdirSync(config.stateDir, { recursive: true, mode: 0o700 });
@@ -932,7 +906,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.provider === resolved.provider &&
         existing.providerInstanceId === resolved.providerInstanceId
       ) {
-        const runtimeModeChanged = existing.runtimeMode !== input.runtimeMode;
         existing.runtimeMode = input.runtimeMode;
         const toolSession = { ...existing.toolSession };
         delete toolSession.botId;
@@ -947,11 +920,6 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
         };
         toolRuntime.registerSession(key, existing.toolSession);
-        yield* setCategoryPermissions(existing.session, input.runtimeMode);
-        if (runtimeModeChanged) {
-          existing.connectorSessionApprovals.clear();
-          yield* setAskToolPermissions(existing.session, key);
-        }
         return toProviderSession(threadId, existing);
       }
       const existingLegacy = legacyResourceIdentity.get(key);
@@ -1066,83 +1034,97 @@ const make = (options?: AgentControllerLiveOptions) =>
           : {}),
       };
       toolRuntime.registerSession(key, toolSession);
-      return yield* Effect.gen(function* () {
-        const session = yield* runMastra("createSession", () =>
-          bundle.controller.createSession({
-            id: key,
-            ownerId: "akeru-desktop",
-            resourceId: key,
-            threadId: key,
-            ...(input.cwd ? { tags: { projectPath: input.cwd } } : {}),
-            workspace: resources.workspace,
-          }),
-        );
-        yield* runMastra("state.set", () =>
-          session.state.set({
-            ...(input.cwd ? { projectPath: input.cwd } : {}),
-            yolo: false,
-            botConversation: resolved.botConversation,
-          }),
-        );
-        yield* runMastra("model.switch", () =>
-          session.model.switch({ modelId: resolved.mastraModelId }),
-        );
-        const modeId = mastraModeId(resolved.mode);
-        if (session.mode.get() !== modeId) {
-          yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
-        }
-        yield* setCategoryPermissions(session, input.runtimeMode);
-        yield* setAskToolPermissions(session, key);
-        const createdAt = nowIso();
-        const activeWithoutUnsubscribe = {
-          session,
-          provider: resolved.provider,
-          providerInstanceId: resolved.providerInstanceId,
-          cwd: input.cwd,
-          createdAt,
-          mcpServerIds: mcpServers.map((server) => server.id),
-          runtimeMode: input.runtimeMode,
-          model: resolved.modelSelection.model,
-          status: "ready" as const,
-          activeTurn: null,
-          toolNames: new Map<string, string>(),
-          approvalRequests: new Map<string, { readonly name: string; readonly input: unknown }>(),
-          connectorSessionApprovals: new Set<string>(),
-          toolSession,
-          workspaceResourceKey,
-        };
-        const unsubscribe = session.subscribe((event) => {
-          const active = sessions.get(key);
-          if (active) handleControllerEvent(threadId, active, event);
-        });
-        const active: ActiveSession = { ...activeWithoutUnsubscribe, unsubscribe };
-        sessions.set(key, active);
-        publish({
-          ...baseEvent(threadId, active),
-          type: "session.started",
-          payload: { message: "Mastra Code session ready" },
-        });
-        publishSessionState(threadId, active, "ready");
-        return toProviderSession(threadId, active);
-      }).pipe(
+      const session = yield* runMastra("createSession", () =>
+        bundle.controller.createSession({
+          id: key,
+          ownerId: "akeru-desktop",
+          resourceId: key,
+          threadId: key,
+          ...(input.cwd ? { tags: { projectPath: input.cwd } } : {}),
+          workspace: resources.workspace,
+        }),
+      ).pipe(
         Effect.tapError(() =>
-          Effect.sync(() => toolRuntime.unregisterSession(key)).pipe(
-            Effect.andThen(
-              Effect.all(
-                [
-                  runMastra("deleteSession", () =>
-                    bundle.controller.deleteSession({ resourceId: key }),
-                  ).pipe(Effect.ignoreCause({ log: true })),
-                  runMastra("resources.release", () =>
-                    sessionResources.release(key, { destroy: true }),
-                  ).pipe(Effect.ignoreCause({ log: true })),
-                ],
-                { discard: true },
-              ),
-            ),
+          Effect.all(
+            [
+              runMastra("resources.release", () =>
+                sessionResources.release(key, { destroy: true }),
+              ).pipe(Effect.ignoreCause({ log: true })),
+              Effect.sync(() => toolRuntime.unregisterSession(key)),
+            ],
+            { discard: true },
           ),
         ),
       );
+      yield* runMastra("state.set", () =>
+        session.state.set({
+          ...(input.cwd ? { projectPath: input.cwd } : {}),
+          yolo: false,
+          botConversation: resolved.botConversation,
+        }),
+      );
+      yield* runMastra("model.switch", () =>
+        session.model.switch({ modelId: resolved.mastraModelId }),
+      );
+      const modeId = mastraModeId(resolved.mode);
+      if (session.mode.get() !== modeId) {
+        yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
+      }
+      yield* Effect.forEach(
+        ["read", "edit", "execute", "mcp", "other"] as const,
+        (category) =>
+          runMastra("permissions.setForCategory", () =>
+            session.permissions.setForCategory({
+              category,
+              policy: permissionPolicy(input.runtimeMode, category),
+            }),
+          ),
+        { discard: true },
+      );
+      yield* Effect.forEach(
+        new Set([
+          ...toolRuntime.toolsForThread(key).map((tool) => tool.id),
+          ...Object.keys(sessionResources.getConnectorTools(key)),
+          AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+          "RestartMcpServers",
+        ]),
+        (toolName) =>
+          runMastra("permissions.setForTool", () =>
+            session.permissions.setForTool({ toolName, policy: "ask" }),
+          ),
+        { discard: true },
+      );
+      const createdAt = nowIso();
+      const activeWithoutUnsubscribe = {
+        session,
+        provider: resolved.provider,
+        providerInstanceId: resolved.providerInstanceId,
+        cwd: input.cwd,
+        createdAt,
+        mcpServerIds: mcpServers.map((server) => server.id),
+        runtimeMode: input.runtimeMode,
+        model: resolved.modelSelection.model,
+        status: "ready" as const,
+        activeTurn: null,
+        toolNames: new Map<string, string>(),
+        approvalRequests: new Map(),
+        connectorSessionApprovals: new Set<string>(),
+        toolSession,
+        workspaceResourceKey,
+      };
+      const unsubscribe = session.subscribe((event) => {
+        const active = sessions.get(key);
+        if (active) handleControllerEvent(threadId, active, event);
+      });
+      const active: ActiveSession = { ...activeWithoutUnsubscribe, unsubscribe };
+      sessions.set(key, active);
+      publish({
+        ...baseEvent(threadId, active),
+        type: "session.started",
+        payload: { message: "Mastra Code session ready" },
+      });
+      publishSessionState(threadId, active, "ready");
+      return toProviderSession(threadId, active);
     });
 
     const sendTurn: AgentControllerShape["sendTurn"] = Effect.fn("AgentController.sendTurn")(
@@ -1383,10 +1365,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.unsubscribe();
       publishSessionState(input.threadId, active, "stopped");
       yield* runMastra("deleteSession", () => bundle.controller.deleteSession({ resourceId: key }));
-      toolRuntime.unregisterSession(key);
       yield* runMastra("resources.release", () =>
         sessionResources.release(key, { destroy: destroyResources }),
       ).pipe(Effect.ignoreCause({ log: true }));
+      toolRuntime.unregisterSession(key);
       sessions.delete(key);
       memoryUsageByThread.delete(key);
     });
