@@ -1,13 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  BotId,
-  GroupId,
-  isGroupBotMember,
-  type AuthClientSession,
-  type AuthSessionId,
-  type EnvironmentId,
-  type OrchestrationGroup,
-} from "@t3tools/contracts";
+import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
 import { Trash2Icon, UserPlusIcon } from "lucide-react";
 import { useEffect, useReducer, useState, type ReactNode } from "react";
@@ -17,7 +9,6 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
 import { botEnvironment } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { primaryServerKeybindingsAtom } from "../../state/server";
-import { GroupPeopleSettings } from "../settings/GroupPeopleSettings";
 import { SettingsRow } from "../settings/settingsLayout";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
@@ -46,15 +37,11 @@ function GroupEditor({
   environmentId,
   group,
   bots,
-  people,
-  currentPersonId,
   onDeleted,
 }: {
   readonly environmentId: EnvironmentId;
   readonly group: Group;
   readonly bots: readonly Bot[];
-  readonly people: readonly AuthClientSession[];
-  readonly currentPersonId: AuthSessionId | null;
   readonly onDeleted: () => void;
 }) {
   const renameGroup = useAtomCommand(botEnvironment.groups.rename, { reportFailure: false });
@@ -238,12 +225,6 @@ function GroupEditor({
         </section>
       </div>
       <div className="mt-6 -mx-2">
-        <GroupPeopleSettings
-          environmentId={environmentId}
-          group={group as OrchestrationGroup}
-          people={people}
-          currentPersonId={currentPersonId}
-        />
         <SettingsRow
           title="Delete group"
           control={
@@ -270,8 +251,6 @@ export function GroupDetailsPanel(props: {
   readonly environmentId: EnvironmentId;
   readonly group: Group;
   readonly bots: readonly Bot[];
-  readonly people: readonly AuthClientSession[];
-  readonly currentPersonId: AuthSessionId | null;
   readonly onDeleted: () => void;
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);

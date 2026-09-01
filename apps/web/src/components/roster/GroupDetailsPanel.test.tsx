@@ -14,6 +14,8 @@ describe("GroupDetailsPanel", () => {
     expect(source).toContain("botEnvironment.groups.setBoss");
     expect(source).toContain("botEnvironment.groups.delete");
     expect(source).toContain("members.length <= 2");
+    expect(source).not.toContain("GroupPeopleSettings");
+    expect(source).not.toContain("Invite people");
   });
 
   it("mounts beside the group conversation", () => {
@@ -24,5 +26,6 @@ describe("GroupDetailsPanel", () => {
     expect(source).toContain("<GroupThreadLanding");
     expect(source).toContain("<GroupDetailsPanel");
     expect(source).toContain("onDeleted=");
+    expect(source).not.toContain("environmentPeopleAtom");
   });
 });
