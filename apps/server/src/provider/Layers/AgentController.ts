@@ -65,6 +65,7 @@ import {
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
+import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
@@ -326,6 +327,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
     >();
     let delegationRuntime: AkeruDelegationRuntime | undefined;
+    let channelRuntime: AkeruChannelRuntime | undefined;
     const childWaiters = new Map<
       string,
       { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
@@ -1054,6 +1056,14 @@ const make = (options?: AgentControllerLiveOptions) =>
               },
             }
           : {}),
+        ...(input.botId && channelRuntime
+          ? {
+              channels: {
+                create: (request) => channelRuntime!.create(input.botId!, request),
+                update: (request) => channelRuntime!.update(input.botId!, request),
+              },
+            }
+          : {}),
       };
       toolRuntime.registerSession(key, toolSession);
       return yield* Effect.gen(function* () {
@@ -1427,6 +1437,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     return AgentController.of({
       configureDelegation: (input) =>
         Effect.sync(() => {
+          channelRuntime = createAkeruChannelRuntime(input);
           delegationRuntime = createAkeruDelegationRuntime({
             ...input,
             failChild: (threadId, error) => resolveChildWaiter(threadId, { turnId: null, error }),

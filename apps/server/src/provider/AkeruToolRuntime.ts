@@ -63,6 +63,14 @@ export interface AkeruToolSession {
       input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
     ) => Promise<AkeruToolReceipt>;
   };
+  readonly channels?: {
+    readonly create: (
+      input: (typeof AkeruToolInputSchemas.CreateChannel)["Type"],
+    ) => Promise<string>;
+    readonly update: (
+      input: (typeof AkeruToolInputSchemas.UpdateChannel)["Type"],
+    ) => Promise<string>;
+  };
 }
 
 export interface AkeruToolRuntimeOptions {
@@ -94,7 +102,15 @@ export interface AkeruToolRuntime {
 }
 
 const BACKEND_NAMES: Record<
-  Exclude<AkeruToolId, "CopyToBox" | "CopyFromBox" | "request_box_help" | "SendToAgent">,
+  Exclude<
+    AkeruToolId,
+    | "CopyToBox"
+    | "CopyFromBox"
+    | "request_box_help"
+    | "SendToAgent"
+    | "CreateChannel"
+    | "UpdateChannel"
+  >,
   ReadonlyArray<string>
 > = {
   Shell: ["execute_command", "mastra_workspace_execute_command"],
@@ -207,6 +223,10 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       tools.add("request_box_help");
     }
     if (session.delegation) tools.add("SendToAgent");
+    if (session.channels) {
+      tools.add("CreateChannel");
+      tools.add("UpdateChannel");
+    }
     return tools;
   };
 
@@ -336,6 +356,44 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               failureCode,
               fatalToThread: false,
               billedBotId: delegationInput.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (input.toolId === "CreateChannel" || input.toolId === "UpdateChannel") {
+          if (!session.channels || !session.botId) {
+            throw new Error("Channel management is not available for this session.");
+          }
+          failureCode = "internal";
+          try {
+            const channelId =
+              input.toolId === "CreateChannel"
+                ? await session.channels.create(decodeAkeruToolInput("CreateChannel", decoded))
+                : await session.channels.update(decodeAkeruToolInput("UpdateChannel", decoded));
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "success",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary: `Channel '${channelId}' saved.`,
+              fatalToThread: false,
+              billedBotId: session.botId,
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
+              billedBotId: session.botId,
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });
