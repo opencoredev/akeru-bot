@@ -1021,10 +1021,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           const action = criticalAkeruAction(event.toolName, event.args);
           const oneUseApproval =
             akeruActionNeedsApproval(event.toolName, event.args) ||
-            mcpToolNeedsApproval(
-              sessionResources.getMcpManager(String(threadId)),
-              event.toolName,
-            );
+            mcpToolNeedsApproval(sessionResources.getMcpManager(String(threadId)), event.toolName);
           if (
             event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
             !oneUseApproval &&
