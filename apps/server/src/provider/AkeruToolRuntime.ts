@@ -23,6 +23,7 @@ import {
   type AkeruMemoryToolHandler,
   type AkeruMemoryToolId,
 } from "../memory/MemoryToolHandlers.ts";
+import type { AkeruCatalogToolHandler } from "./AkeruCatalogToolHandlers.ts";
 
 export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
 
@@ -73,10 +74,17 @@ export interface AkeruToolSession {
   readonly sendToUser?: (
     input: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
   ) => Promise<AkeruToolReceipt>;
+  readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
 }
 
 export interface AkeruToolRuntimeOptions {
   readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
+  readonly onProgress?: (input: {
+    readonly threadId: string;
+    readonly toolId: AkeruToolId;
+    readonly toolCallId: string;
+    readonly summary: string;
+  }) => void | Promise<void>;
   readonly now?: () => string;
 }
 
@@ -112,6 +120,8 @@ const BACKEND_NAMES: Record<
     | "CreateChannel"
     | "UpdateChannel"
     | "SendToUser"
+    | "AuthenticateMcpServer"
+    | "RestartMcpServers"
   >,
   ReadonlyArray<string>
 > = {
@@ -211,6 +221,9 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       tools.add("UpdateChannel");
     }
     if (session.sendToUser) tools.add("SendToUser");
+    for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
+      tools.add(toolId);
+    }
     return tools;
   };
 
@@ -312,6 +325,20 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         const handler = session.memoryHandlers?.[input.toolId];
         if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
         return handler({ ...input, toolId: input.toolId, input: decoded });
+      }
+
+      const catalogHandler = session.catalogHandlers?.[input.toolId];
+      if (catalogHandler) {
+        return catalogHandler({
+          input: decoded,
+          emitProgress: (summary) =>
+            options?.onProgress?.({
+              threadId: input.threadId,
+              toolId: input.toolId as AkeruToolId,
+              toolCallId: input.toolCallId,
+              summary,
+            }),
+        });
       }
 
       if (input.toolId === "SendToAgent") {
@@ -425,7 +452,8 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
 
       const workspace = workspaceForTool(input.toolId, session);
       const backends = await toolsForWorkspace(workspace);
-      const backendName = BACKEND_NAMES[input.toolId].find((name) => executable(backends[name]));
+      const backendNames = BACKEND_NAMES[input.toolId as keyof typeof BACKEND_NAMES] ?? [];
+      const backendName = backendNames.find((name) => executable(backends[name]));
       const backend = backendName ? backends[backendName] : undefined;
       if (!executable(backend)) throw new Error(`Tool '${input.toolId}' has no backend.`);
       const backendInput =
