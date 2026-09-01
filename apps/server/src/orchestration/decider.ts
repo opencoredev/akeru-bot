@@ -8,6 +8,7 @@ import {
   DEFAULT_RUNTIME_MODE,
   EventId,
   GroupId,
+  isGroupBotMember,
   ProviderInstanceId,
   type OrchestrationCommand,
   type OrchestrationEvent,
@@ -20,6 +21,7 @@ import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
+import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
 import {
   listThreadsByProjectId,
   requireActiveGroupMember,
@@ -32,6 +34,8 @@ import {
   requireDelegationAbsent,
   requireGroup,
   requireGroupAbsent,
+  requireGroupThreadCreateAuthorized,
+  requireGroupOwnedThreadMutationAuthorized,
   requireMcpServer,
   requireMcpServerAbsent,
   requireProject,
@@ -236,6 +240,21 @@ function threadHasQueuedTurnStart(
   );
 }
 
+function activeGroupBotIds(
+  readModel: OrchestrationReadModel,
+  group: OrchestrationReadModel["groups"][number],
+): Set<BotId> {
+  const activeBotIds = new Set(
+    readModel.bots.filter((bot) => bot.archivedAt === null).map((bot) => bot.id),
+  );
+  return new Set(
+    group.members
+      .filter(isGroupBotMember)
+      .map((member) => member.botId)
+      .filter((botId) => activeBotIds.has(botId)),
+  );
+}
+
 function botGroupUpdatedEvent(input: {
   readonly botId: BotId;
   readonly groupId: GroupId | null;
@@ -299,9 +318,11 @@ type DecideOrchestrationCommandResult =
 export const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
   commands,
   readModel,
+  actor,
 }: {
   readonly commands: ReadonlyArray<OrchestrationCommand>;
   readonly readModel: OrchestrationReadModel;
+  readonly actor?: OrchestrationDispatchActor;
 }): Effect.fn.Return<
   ReadonlyArray<PlannedOrchestrationEvent>,
   OrchestrationCommandInvariantError | PlatformError.PlatformError,
@@ -315,6 +336,7 @@ export const decideCommandSequence = Effect.fn("decideCommandSequence")(function
     const decided = yield* decideOrchestrationCommand({
       command: nextCommand,
       readModel: nextReadModel,
+      ...(actor !== undefined ? { actor } : {}),
     });
     const nextEvents = Array.isArray(decided) ? decided : [decided];
     for (const nextEvent of nextEvents) {
@@ -333,14 +355,42 @@ export const decideCommandSequence = Effect.fn("decideCommandSequence")(function
 export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand")(function* ({
   command,
   readModel,
+  actor,
 }: {
   readonly command: OrchestrationCommand;
   readonly readModel: OrchestrationReadModel;
+  readonly actor?: OrchestrationDispatchActor;
 }): Effect.fn.Return<
   DecideOrchestrationCommandResult,
   OrchestrationCommandInvariantError | PlatformError.PlatformError,
   Crypto.Crypto
 > {
+  switch (command.type) {
+    case "thread.delete":
+    case "thread.archive":
+    case "thread.unarchive":
+    case "thread.settle":
+    case "thread.unsettle":
+    case "thread.snooze":
+    case "thread.unsnooze":
+    case "thread.pin":
+    case "thread.unpin":
+    case "thread.pin.reorder":
+    case "thread.meta.update":
+    case "thread.runtime-mode.set":
+    case "thread.interaction-mode.set":
+    case "thread.voice-transcript.append":
+    case "thread.turn.interrupt":
+    case "thread.approval.respond":
+    case "thread.user-input.respond":
+    case "thread.checkpoint.revert":
+    case "thread.session.stop": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      yield* requireGroupOwnedThreadMutationAuthorized({ readModel, thread, command, actor });
+      break;
+    }
+  }
+
   switch (command.type) {
     case "project.create": {
       yield* requireProjectAbsent({
@@ -434,6 +484,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       if (activeThreads.length > 0) {
         return yield* decideCommandSequence({
           readModel,
+          ...(actor !== undefined ? { actor } : {}),
           commands: [
             ...activeThreads.map(
               (thread): Extract<OrchestrationCommand, { type: "thread.delete" }> => ({
@@ -498,12 +549,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               : DEFAULT_RUNTIME_MODE),
           usageCap: command.usageCap,
           voiceEnabled: command.voiceEnabled ?? false,
+          channelBindings: [],
           groupId: command.groupId,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
       };
-      if (group === null || group.members.some((member) => member.botId === command.botId)) {
+      if (
+        group === null ||
+        group.members.some((member) => isGroupBotMember(member) && member.botId === command.botId)
+      ) {
         return botCreatedEvent;
       }
       return [
@@ -517,7 +572,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           type: "group.member-assigned",
           payload: {
             groupId: group.id,
-            member: { botId: command.botId, role: "specialist" },
+            member: { kind: "bot", botId: command.botId, role: "specialist" },
             updatedAt: command.createdAt,
           },
         },
@@ -538,7 +593,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command.groupId !== undefined && bot.groupId !== null && bot.groupId !== command.groupId
           ? readModel.groups.find((group) => group.id === bot.groupId)
           : undefined;
-      const sourceMembership = sourceGroup?.members.find((member) => member.botId === bot.id);
+      const sourceMembership = sourceGroup?.members
+        .filter(isGroupBotMember)
+        .find((member) => member.botId === bot.id);
       if (sourceGroup && (sourceMembership?.role === "boss" || sourceGroup.bossBotId === bot.id)) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -546,6 +603,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             detail: `Bot '${bot.id}' is the boss of group '${sourceGroup.id}'. Replace it with 'group.boss.set' before changing its group.`,
           }),
         );
+      }
+      if (sourceGroup && sourceMembership) {
+        const remainingBotIds = activeGroupBotIds(readModel, sourceGroup);
+        remainingBotIds.delete(bot.id);
+        if (remainingBotIds.size < 2) {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `Group '${sourceGroup.id}' requires at least two active bots.`,
+            }),
+          );
+        }
       }
 
       const occurredAt = yield* nowIso;
@@ -566,7 +635,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command.groupId !== undefined &&
         targetGroup !== null &&
         targetGroup.id !== bot.groupId &&
-        !targetGroup.members.some((member) => member.botId === bot.id)
+        !targetGroup.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)
       ) {
         events.push({
           ...(yield* withEventBase({
@@ -578,7 +647,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           type: "group.member-assigned",
           payload: {
             groupId: targetGroup.id,
-            member: { botId: bot.id, role: "specialist" },
+            member: { kind: "bot", botId: bot.id, role: "specialist" },
             updatedAt: occurredAt,
           },
         });
@@ -606,6 +675,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.runtimeMode !== undefined ? { runtimeMode: command.runtimeMode } : {}),
           ...(command.usageCap !== undefined ? { usageCap: command.usageCap } : {}),
           ...(command.voiceEnabled !== undefined ? { voiceEnabled: command.voiceEnabled } : {}),
+          ...(command.channelBindings !== undefined
+            ? { channelBindings: command.channelBindings }
+            : {}),
           ...(command.groupId !== undefined ? { groupId: command.groupId } : {}),
           updatedAt: occurredAt,
         },
@@ -615,6 +687,35 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "bot.archive": {
       yield* requireBotNotArchived({ readModel, command, botId: command.botId });
+      const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
+      if (bossGroup) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before archiving it.`,
+          }),
+        );
+      }
+      const undersizedGroup = readModel.groups.find((group) => {
+        if (
+          !group.members.some(
+            (member) => isGroupBotMember(member) && member.botId === command.botId,
+          )
+        ) {
+          return false;
+        }
+        const remainingBotIds = activeGroupBotIds(readModel, group);
+        remainingBotIds.delete(command.botId);
+        return remainingBotIds.size < 2;
+      });
+      if (undersizedGroup) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Group '${undersizedGroup.id}' requires at least two active bots.`,
+          }),
+        );
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -665,15 +766,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command.bossBotId,
         ...new Set((command.specialistBotIds ?? []).filter((botId) => botId !== command.bossBotId)),
       ];
-      const memberBots = yield* Effect.forEach(memberBotIds, (botId) =>
+      yield* Effect.forEach(memberBotIds, (botId) =>
         requireBotNotArchived({ readModel, command, botId }),
       );
-      const assignedBot = memberBots.find((bot) => bot.groupId !== null);
-      if (assignedBot) {
+      if (memberBotIds.length < 2) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
             commandType: command.type,
-            detail: `Bot '${assignedBot.id}' already belongs to group '${assignedBot.groupId}'.`,
+            detail: `Group '${command.groupId}' requires at least two active bots.`,
           }),
         );
       }
@@ -690,27 +790,23 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           groupId: command.groupId,
           name: command.name,
           bossBotId: command.bossBotId,
-          members: memberBotIds.map((botId) => ({
-            botId,
-            role: botId === command.bossBotId ? ("boss" as const) : ("specialist" as const),
-          })),
+          members: [
+            ...memberBotIds.map((botId) => ({
+              kind: "bot" as const,
+              botId,
+              role: botId === command.bossBotId ? ("boss" as const) : ("specialist" as const),
+            })),
+            ...(command.creator === undefined ? [] : [command.creator]),
+          ],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
       };
-      const botUpdatedEvents = yield* Effect.forEach(memberBotIds, (botId) =>
-        botGroupUpdatedEvent({
-          botId,
-          groupId: command.groupId,
-          occurredAt: command.createdAt,
-          commandId: command.commandId,
-        }),
-      );
-      return [groupCreatedEvent, ...botUpdatedEvents];
+      return groupCreatedEvent;
     }
 
     case "group.rename": {
-      yield* requireGroup({ readModel, command, groupId: command.groupId });
+      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -745,10 +841,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         },
       };
       const botUpdatedEvents = yield* Effect.forEach(
-        group.members.filter(
-          (member) =>
-            readModel.bots.find((bot) => bot.id === member.botId)?.groupId === command.groupId,
-        ),
+        group.members
+          .filter(isGroupBotMember)
+          .filter(
+            (member) =>
+              readModel.bots.find((bot) => bot.id === member.botId)?.groupId === command.groupId,
+          ),
         (member) =>
           botGroupUpdatedEvent({
             botId: member.botId,
@@ -757,20 +855,32 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             commandId: command.commandId,
           }),
       );
-      return [deletedEvent, ...botUpdatedEvents];
+      const threadUpdatedEvents = yield* Effect.forEach(
+        readModel.threads.filter((thread) => thread.groupId === command.groupId),
+        Effect.fn(function* (thread) {
+          return {
+            ...(yield* withEventBase({
+              aggregateKind: "thread",
+              aggregateId: thread.id,
+              occurredAt,
+              commandId: command.commandId,
+            })),
+            type: "thread.ownership-updated" as const,
+            payload: {
+              threadId: thread.id,
+              botId: null,
+              groupId: null,
+              updatedAt: occurredAt,
+            },
+          };
+        }),
+      );
+      return [...botUpdatedEvents, ...threadUpdatedEvents, deletedEvent];
     }
 
     case "group.member.assign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
       const bot = yield* requireBotNotArchived({ readModel, command, botId: command.botId });
-      if (bot.groupId !== null && bot.groupId !== command.groupId) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${bot.id}' already belongs to group '${bot.groupId}'.`,
-          }),
-        );
-      }
       if (command.role === "boss" && group.bossBotId !== null && group.bossBotId !== bot.id) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -798,25 +908,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "group.member-assigned",
         payload: {
           groupId: group.id,
-          member: { botId: bot.id, role: command.role },
+          member: { kind: "bot", botId: bot.id, role: command.role },
           updatedAt: occurredAt,
         },
       };
-      if (bot.groupId === group.id) return assignedEvent;
-      return [
-        assignedEvent,
-        yield* botGroupUpdatedEvent({
-          botId: bot.id,
-          groupId: group.id,
-          occurredAt,
-          commandId: command.commandId,
-        }),
-      ];
+      return assignedEvent;
     }
 
     case "group.member.unassign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
-      const member = group.members.find((entry) => entry.botId === command.botId);
+      const member = group.members
+        .filter(isGroupBotMember)
+        .find((entry) => entry.botId === command.botId);
       if (!member) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -830,6 +933,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           new OrchestrationCommandInvariantError({
             commandType: command.type,
             detail: `Bot '${command.botId}' is the last boss of group '${group.id}'. Set a new boss and unassign the previous boss with one 'group.boss.set' command.`,
+          }),
+        );
+      }
+      const remainingBotIds = activeGroupBotIds(readModel, group);
+      remainingBotIds.delete(command.botId);
+      if (remainingBotIds.size < 2) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Group '${group.id}' requires at least two active bots.`,
           }),
         );
       }
@@ -848,17 +961,57 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: occurredAt,
         },
       };
-      const bot = yield* requireBot({ readModel, command, botId: command.botId });
-      if (bot.groupId !== group.id) return unassignedEvent;
-      return [
-        unassignedEvent,
-        yield* botGroupUpdatedEvent({
-          botId: bot.id,
-          groupId: null,
+      return unassignedEvent;
+    }
+
+    case "group.person.assign": {
+      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "group",
+          aggregateId: group.id,
           occurredAt,
           commandId: command.commandId,
-        }),
-      ];
+        })),
+        type: "group.person-assigned",
+        payload: {
+          groupId: group.id,
+          person: command.person,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "group.person.unassign":
+    case "group.leave": {
+      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+      const person = group.members.find(
+        (member) => member.kind === "person" && member.personId === command.personId,
+      );
+      if (!person) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Person '${command.personId}' is not a member of group '${group.id}'.`,
+          }),
+        );
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "group",
+          aggregateId: group.id,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "group.person-unassigned",
+        payload: {
+          groupId: group.id,
+          personId: command.personId,
+          updatedAt: occurredAt,
+        },
+      };
     }
 
     case "group.boss.set": {
@@ -868,14 +1021,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         botId: command.bossBotId,
       });
-      if (nextBoss.groupId !== null && nextBoss.groupId !== group.id) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${nextBoss.id}' already belongs to group '${nextBoss.groupId}'.`,
-          }),
-        );
-      }
       if (group.bossBotId === nextBoss.id && command.unassignPreviousBoss === true) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -883,6 +1028,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             detail: `Bot '${nextBoss.id}' is already the boss and cannot replace and unassign itself.`,
           }),
         );
+      }
+      if (command.unassignPreviousBoss === true) {
+        const remainingBotIds = activeGroupBotIds(readModel, group);
+        if (group.bossBotId !== null) remainingBotIds.delete(group.bossBotId);
+        remainingBotIds.add(nextBoss.id);
+        if (remainingBotIds.size < 2) {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `Group '${group.id}' requires at least two active bots.`,
+            }),
+          );
+        }
       }
 
       const occurredAt = yield* nowIso;
@@ -909,31 +1067,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: occurredAt,
         },
       };
-      const events: PlannedOrchestrationEvent[] = [bossSetEvent];
-      if (nextBoss.groupId !== group.id) {
-        events.push(
-          yield* botGroupUpdatedEvent({
-            botId: nextBoss.id,
-            groupId: group.id,
-            occurredAt,
-            commandId: command.commandId,
-          }),
-        );
-      }
-      if (previousBossRole === "unassigned" && previousBossBotId !== null) {
-        const previousBoss = readModel.bots.find((bot) => bot.id === previousBossBotId);
-        if (previousBoss?.groupId === group.id) {
-          events.push(
-            yield* botGroupUpdatedEvent({
-              botId: previousBoss.id,
-              groupId: null,
-              occurredAt,
-              commandId: command.commandId,
-            }),
-          );
-        }
-      }
-      return events;
+      return bossSetEvent;
     }
 
     case "mcp-server.create": {
@@ -1287,7 +1421,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         yield* requireBotNotArchived({ readModel, command, botId: command.botId });
       }
       if (command.groupId != null) {
-        yield* requireGroup({ readModel, command, groupId: command.groupId });
+        const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+        yield* requireGroupThreadCreateAuthorized({ group, command, actor });
       }
       yield* requireThreadAbsent({
         readModel,
@@ -1931,6 +2066,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         respondingBotId === null
           ? null
           : yield* requireBot({ readModel, command, botId: respondingBotId });
+      let personAssignedEvent: Omit<OrchestrationEvent, "sequence"> | null = null;
       if (targetThread.groupId !== null && targetThread.groupId !== undefined) {
         const group = yield* requireGroup({
           readModel,
@@ -1953,6 +2089,47 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           botId: selectedBotId,
         });
         respondingBotId = selectedBotId;
+        const personMembers = group.members.filter((member) => member.kind === "person");
+        const senderIsMember = personMembers.some(
+          (member) => member.personId === command.senderPersonId,
+        );
+        if (command.senderPersonId === undefined) {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `A person member must send turns to group '${group.id}'.`,
+            }),
+          );
+        }
+        if (!senderIsMember) {
+          if (personMembers.length === 0 && command.senderCanManageGroups === true) {
+            personAssignedEvent = {
+              ...(yield* withEventBase({
+                aggregateKind: "group",
+                aggregateId: group.id,
+                occurredAt: command.createdAt,
+                commandId: command.commandId,
+              })),
+              type: "group.person-assigned",
+              payload: {
+                groupId: group.id,
+                person: {
+                  kind: "person",
+                  personId: command.senderPersonId,
+                  displayName: command.senderDisplayName ?? "Host",
+                },
+                updatedAt: command.createdAt,
+              },
+            };
+          } else {
+            return yield* Effect.fail(
+              new OrchestrationCommandInvariantError({
+                commandType: command.type,
+                detail: `Person '${command.senderPersonId}' is not a member of group '${group.id}'.`,
+              }),
+            );
+          }
+        }
       } else if (command.respondingBotId !== undefined) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -1976,7 +2153,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.message.channelOrigin !== undefined
+            ? { channelOrigin: command.message.channelOrigin }
+            : {}),
           turnId: null,
+          authorPersonId: command.senderPersonId ?? null,
+          authorDisplayName: command.senderDisplayName ?? null,
           streaming: false,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -2050,7 +2232,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      return [...lifecycleResetEvents, userMessageEvent, turnStartRequestedEvent];
+      return [
+        ...(personAssignedEvent === null ? [] : [personAssignedEvent]),
+        ...lifecycleResetEvents,
+        userMessageEvent,
+        turnStartRequestedEvent,
+      ];
     }
 
     case "thread.turn.interrupt": {

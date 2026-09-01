@@ -26,6 +26,7 @@ import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -54,6 +55,13 @@ import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import { resolveControllerBotId } from "./ProviderCommandReactor.ts";
+import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
+import * as ChannelDeliveryStore from "../../channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
+
+type AutomaticChannelReplyTarget = NonNullable<
+  Awaited<ReturnType<typeof ChannelRuntime.resolveCompletedChannelReply>>
+>;
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -925,6 +933,46 @@ const make = Effect.gen(function* () {
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const botUsageLedger = yield* BotUsageLedger;
   const serverSettingsService = yield* ServerSettingsService;
+  const channelSecretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
+  const channelDeliveryStore = yield* Effect.serviceOption(
+    ChannelDeliveryStore.ChannelDeliveryStore,
+  );
+  const channelRuntimeDependencies =
+    Option.isSome(channelSecretStore) && Option.isSome(channelDeliveryStore)
+      ? {
+          engine: orchestrationEngine,
+          secretStore: channelSecretStore.value,
+          settings: serverSettingsService,
+          deliveryStore: channelDeliveryStore.value,
+          readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+          readThread: (threadId: ThreadId) =>
+            Effect.runPromise(
+              projectionSnapshotQuery
+                .getThreadDetailById(threadId)
+                .pipe(Effect.map(Option.getOrNull)),
+            ),
+          nowIso: () => Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
+          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
+        }
+      : null;
+  const automaticChannelReplyWorker = yield* makeDrainableWorker(
+    (input: AutomaticChannelReplyTarget) => {
+      if (!channelRuntimeDependencies) {
+        return Effect.void;
+      }
+      return Effect.promise(() =>
+        ChannelRuntime.sendChannelMessage(channelRuntimeDependencies, input),
+      ).pipe(
+        Effect.asVoid,
+        Effect.catchCause((cause) =>
+          Effect.logWarning("failed to send automatic channel reply", {
+            threadId: input.threadId,
+            cause: Cause.pretty(cause),
+          }),
+        ),
+      );
+    },
+  );
   const serverConfig = yield* ServerConfig;
   const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
@@ -2171,6 +2219,23 @@ const make = Effect.gen(function* () {
           ),
         ),
       ).pipe(Effect.asVoid);
+
+      if (
+        event.type === "turn.completed" &&
+        event.payload.state === "completed" &&
+        shouldApplyThreadLifecycle &&
+        eventTurnId &&
+        channelRuntimeDependencies
+      ) {
+        const target = yield* Effect.promise(() =>
+          ChannelRuntime.resolveCompletedChannelReply(
+            channelRuntimeDependencies,
+            thread.id,
+            eventTurnId,
+          ),
+        );
+        if (target) yield* automaticChannelReplyWorker.enqueue(target);
+      }
     });
 
   const processDomainEvent = (_event: TurnStartRequestedDomainEvent) => Effect.void;
@@ -2214,7 +2279,7 @@ const make = Effect.gen(function* () {
 
   return {
     start,
-    drain: worker.drain,
+    drain: worker.drain.pipe(Effect.andThen(automaticChannelReplyWorker.drain)),
   } satisfies ProviderRuntimeIngestionShape;
 });
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
+import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -20,8 +21,10 @@ import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentQuery } from "../../state/query";
+import { useEnvironmentSessionState } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { openSettings } from "../../settingsDialogStore";
+import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import ChatMarkdown from "../ChatMarkdown";
@@ -47,9 +50,61 @@ import { useRosterPendingApproval } from "./useRosterPendingApproval";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
+function ChannelSendApproval({
+  environmentId,
+  botId,
+  origin,
+  threadId,
+  messageId,
+  sent,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly botId: BotId;
+  readonly origin: ChannelMessageOrigin;
+  readonly threadId: ThreadId;
+  readonly messageId: MessageId;
+  readonly sent: boolean;
+}) {
+  const send = useAtomCommand(botEnvironment.channels.send, { reportFailure: false });
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const delivered = sent || submitted;
+  const label = channelProviderLabel(origin.provider);
+  return (
+    <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+      <span className="min-w-0 flex-1 text-muted-foreground">
+        {delivered ? `Sent to ${label}` : `Send this reply to ${label}?`}
+      </span>
+      {!delivered ? (
+        <Button
+          size="xs"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void send({
+              environmentId,
+              input: { botId, threadId, messageId },
+            }).then((result) => {
+              setBusy(false);
+              if (result._tag === "Failure") {
+                toastManager.add({ type: "error", title: `Could not send to ${label}` });
+              } else {
+                setSubmitted(true);
+              }
+            });
+          }}
+        >
+          {busy ? "Sending" : "Send"}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
@@ -159,7 +214,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 <h1 className="text-lg font-medium">Message {bot.name}</h1>
               </div>
             ) : (
-              messages.map((message) =>
+              messages.map((message, messageIndex) =>
                 message.role === "assistant" ? (
                   <div
                     key={message.id}
@@ -182,6 +237,24 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      {canManageChannelBindings && environmentId && runtime.linkedThreadRef
+                        ? (() => {
+                            const origin = channelOriginForAssistantMessage(messages, messageIndex);
+                            const binding = origin
+                              ? connectedChannelBinding(bot.channelBindings, origin.provider)
+                              : undefined;
+                            return origin && binding ? (
+                              <ChannelSendApproval
+                                environmentId={environmentId}
+                                botId={BotId.make(bot.id)}
+                                origin={origin}
+                                threadId={runtime.linkedThreadRef.threadId}
+                                messageId={message.id}
+                                sent={binding.sentMessageIds.includes(message.id)}
+                              />
+                            ) : null;
+                          })()
+                        : null}
                     </div>
                   </div>
                 ) : (

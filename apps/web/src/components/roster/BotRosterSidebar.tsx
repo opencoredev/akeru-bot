@@ -1,28 +1,19 @@
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  closestCenter,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import { restrictToFirstScrollableAncestor, snapCenterToCursor } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  rectSortingStrategy,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { PlusIcon, SearchIcon } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  BotIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FolderInputIcon,
+  PinIcon,
+  PlusIcon,
+  SearchIcon,
+  Trash2Icon,
+  UsersIcon,
+} from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
@@ -34,6 +25,15 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { Button } from "../ui/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "../ui/menu";
 import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -43,20 +43,25 @@ import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
 import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
+import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
+import { GroupMemberStack } from "./GroupMemberStack";
 import {
-  buildGroupedRosterSections,
-  buildRosterStrip,
   filterRosterBots,
+  filterRosterGroups,
   formatRosterTimestamp,
   isRecordableChatPath,
   parseChatPath,
   resolveLatestRosterMessage,
   resolveRosterIndicator,
+  parseRosterBotDragId,
+  parseRosterGroupDropId,
+  rosterBotDragId,
+  rosterGroupDropId,
   type RosterLastMessage,
   type RosterPresence,
 } from "./roster.logic";
-import { moveRosterBot, useRosterStore } from "./rosterStore";
-import type { Bot, BotAvatar } from "./types";
+import { useRosterStore, type RosterItemRef, type RosterSection } from "./rosterStore";
+import type { Bot, BotAvatar, Group } from "./types";
 import { useServerRosterSync } from "./useServerRoster";
 
 /** Avatar with a yellow needs-you light and a green working light. */
@@ -99,8 +104,12 @@ function RosterAvatar({
  */
 const RosterSidebarHeader = memo(function RosterSidebarHeader({
   onNewBot,
+  onNewGroup,
+  onNewSection,
 }: {
   onNewBot: () => void;
+  onNewGroup: () => void;
+  onNewSection: () => void;
 }) {
   return (
     <SidebarHeader
@@ -122,14 +131,13 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
           </span>
         </Link>
         <div className="flex items-center justify-end">
-          <Tooltip>
-            <TooltipTrigger
+          <Menu>
+            <MenuTrigger
               render={
                 <Button
-                  aria-label="New bot"
+                  aria-label="Create"
                   data-testid="roster-new-bot"
                   className="size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]"
-                  onClick={onNewBot}
                   size="icon"
                   variant="ghost"
                 >
@@ -137,49 +145,24 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
                 </Button>
               }
             />
-            <TooltipPopup side="bottom">New bot</TooltipPopup>
-          </Tooltip>
+            <MenuPopup align="end">
+              <MenuItem onClick={onNewBot}>
+                <BotIcon />
+                New bot
+              </MenuItem>
+              <MenuItem onClick={onNewGroup}>
+                <UsersIcon />
+                New group
+              </MenuItem>
+              <MenuItem onClick={onNewSection}>
+                <FolderInputIcon />
+                New section
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
         </div>
       </div>
     </SidebarHeader>
-  );
-});
-
-const BotStripTile = memo(function BotStripTile({
-  bot,
-  isActive,
-  onSelect,
-}: {
-  bot: Bot;
-  isActive: boolean;
-  onSelect: (bot: Bot) => void;
-}) {
-  const presence = useBotPresence(bot.id);
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
-  return (
-    <li
-      ref={setNodeRef}
-      className={cn("list-none touch-pan-y", isDragging && "opacity-0")}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...listeners}
-    >
-      <button
-        type="button"
-        data-testid="roster-strip-tile"
-        data-bot-hover
-        aria-current={isActive || undefined}
-        onClick={() => onSelect(bot)}
-        className={cn(
-          "flex w-20 cursor-grab flex-col items-center gap-2 rounded-xl px-1 pb-2 pt-3 outline-none select-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
-          isActive ? "bg-sidebar-row-active" : "bg-transparent hover:bg-sidebar-row-hover",
-        )}
-      >
-        <RosterAvatar bot={bot} presence={presence} className="size-14" />
-        <span className="w-full truncate text-center text-xs text-sidebar-foreground">
-          {bot.name}
-        </span>
-      </button>
-    </li>
   );
 });
 
@@ -212,58 +195,119 @@ const BotRosterRow = memo(function BotRosterRow({
   lastMessage,
   isActive,
   onSelect,
+  index,
+  pinned,
+  sections,
+  onPin,
+  onMove,
+  dragDisabled,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
   onSelect: (bot: Bot) => void;
+  index: number;
+  pinned: boolean;
+  sections: readonly RosterSection[];
+  onPin: (pinned: boolean) => void;
+  onMove: (sectionId: string | null) => void;
+  dragDisabled: boolean;
 }) {
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage);
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bot.id });
   return (
-    <li
-      ref={setNodeRef}
-      className={cn("list-none touch-pan-y", isDragging && "opacity-0")}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...listeners}
+    <Draggable
+      draggableId={rosterBotDragId(bot.id)}
+      index={index}
+      isDragDisabled={dragDisabled}
+      disableInteractiveElementBlocking
     >
-      <div
-        data-testid="roster-bot-row"
-        data-bot-hover
-        className={cn(
-          "flex w-full items-center rounded-lg outline-none select-none",
-          isActive
-            ? "bg-sidebar-row-active text-sidebar-foreground"
-            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
-        )}
-      >
-        <button
-          type="button"
-          aria-current={isActive || undefined}
-          onClick={() => onSelect(bot)}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          role="listitem"
+          className={cn("list-none touch-pan-y", snapshot.isDragging && "z-50")}
+          {...provided.draggableProps}
         >
-          <RosterAvatar bot={bot} presence={presence} className="size-10" />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="flex items-baseline gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
-              {latestMessage ? (
-                <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-                  {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+          <div
+            data-testid="roster-bot-row"
+            data-bot-hover
+            onContextMenu={(event) => {
+              event.preventDefault();
+              menuTriggerRef.current?.click();
+            }}
+            className={cn(
+              "relative flex w-full items-center rounded-lg outline-none select-none",
+              snapshot.isDragging
+                ? "bg-sidebar-row-active text-sidebar-foreground shadow-xl"
+                : isActive
+                  ? "bg-sidebar-row-active text-sidebar-foreground"
+                  : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+            )}
+          >
+            <button
+              type="button"
+              aria-current={isActive || undefined}
+              onClick={() => onSelect(bot)}
+              className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+              {...provided.dragHandleProps}
+            >
+              <RosterAvatar bot={bot} presence={presence} className="size-10" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="flex items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+                  {latestMessage ? (
+                    <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+                      {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </span>
-            {latestMessage ? (
-              <span className="truncate text-[13px] text-sidebar-muted-foreground">
-                {latestMessage.text}
+                {latestMessage ? (
+                  <span className="truncate text-[13px] text-sidebar-muted-foreground">
+                    {latestMessage.text}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-          </span>
-        </button>
-      </div>
-    </li>
+            </button>
+            <Menu>
+              <MenuTrigger
+                render={
+                  <button
+                    ref={menuTriggerRef}
+                    type="button"
+                    aria-label={`Actions for ${bot.name}`}
+                    className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                }
+              />
+              <MenuPopup align="end">
+                <MenuItem onClick={() => onPin(!pinned)}>
+                  <PinIcon />
+                  {pinned ? "Unpin" : "Pin"}
+                </MenuItem>
+                <MenuSub>
+                  <MenuSubTrigger>
+                    <FolderInputIcon />
+                    Move to
+                  </MenuSubTrigger>
+                  <MenuSubPopup>
+                    {sections.map((section) => (
+                      <MenuItem key={section.id} onClick={() => onMove(section.id)}>
+                        {section.name}
+                      </MenuItem>
+                    ))}
+                    <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
+                  </MenuSubPopup>
+                </MenuSub>
+              </MenuPopup>
+            </Menu>
+          </div>
+        </div>
+      )}
+    </Draggable>
   );
 });
 
@@ -306,34 +350,164 @@ function RailBotButton({
   );
 }
 
-function RosterDropZone({
-  id,
-  className,
-  children,
+function GroupRosterRow({
+  group,
+  bots,
+  isActive,
+  onSelect,
+  pinned,
+  onPin,
+  index,
+  sections,
+  onMove,
+  dragDisabled,
 }: {
-  id: "pinned-zone" | "unpinned-zone";
-  className?: string;
-  children: ReactNode;
+  group: Group;
+  bots: readonly Bot[];
+  isActive: boolean;
+  onSelect: () => void;
+  pinned: boolean;
+  onPin: (pinned: boolean) => void;
+  index: number;
+  sections: readonly RosterSection[];
+  onMove: (sectionId: string | null) => void;
+  dragDisabled: boolean;
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id });
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const members = group.members.filter(
+    (member) =>
+      member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
+  ).length;
   return (
-    <div
-      ref={setNodeRef}
-      data-drop-zone={id}
-      data-drag-over={isOver || undefined}
-      className={className}
+    <Draggable
+      draggableId={rosterGroupDropId(group.id)}
+      index={index}
+      isDragDisabled={dragDisabled}
     >
-      {children}
-    </div>
+      {(dragProvided, dragSnapshot) => (
+        <div
+          ref={dragProvided.innerRef}
+          {...dragProvided.draggableProps}
+          role="listitem"
+          data-testid="roster-group-card"
+          onContextMenu={(event) => {
+            event.preventDefault();
+            menuTriggerRef.current?.click();
+          }}
+          className={cn(
+            "relative flex touch-pan-y items-center rounded-lg",
+            dragSnapshot.isDragging && "z-50 bg-sidebar shadow-xl",
+            isActive && "bg-sidebar-row-active",
+          )}
+        >
+          <button
+            type="button"
+            aria-current={isActive || undefined}
+            onClick={onSelect}
+            {...dragProvided.dragHandleProps}
+            className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+          >
+            <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
+            <span className="text-xs text-sidebar-muted-foreground">{members}</span>
+          </button>
+          <Menu>
+            <MenuTrigger
+              render={
+                <button
+                  ref={menuTriggerRef}
+                  type="button"
+                  aria-label={`Actions for ${group.name}`}
+                  className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              }
+            />
+            <MenuPopup align="end">
+              <MenuItem onClick={() => onPin(!pinned)}>
+                <PinIcon />
+                {pinned ? "Unpin" : "Pin"}
+              </MenuItem>
+              <MenuSub>
+                <MenuSubTrigger>
+                  <FolderInputIcon />
+                  Move to
+                </MenuSubTrigger>
+                <MenuSubPopup>
+                  {sections.map((section) => (
+                    <MenuItem key={section.id} onClick={() => onMove(section.id)}>
+                      {section.name}
+                    </MenuItem>
+                  ))}
+                  <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
+                </MenuSubPopup>
+              </MenuSub>
+            </MenuPopup>
+          </Menu>
+        </div>
+      )}
+    </Draggable>
   );
 }
 
-function BotDragOverlay({ bot }: { bot: Bot }) {
-  const presence = useBotPresence(bot.id);
+function PinnedRosterItem({
+  item,
+  bots,
+  groups,
+  onSelectBot,
+  onSelectGroup,
+}: {
+  item: RosterItemRef;
+  bots: readonly Bot[];
+  groups: readonly Group[];
+  onSelectBot: (bot: Bot) => void;
+  onSelectGroup: (group: Group) => void;
+}) {
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const bot = item.kind === "bot" ? bots.find((candidate) => candidate.id === item.id) : null;
+  const group = item.kind === "group" ? groups.find((candidate) => candidate.id === item.id) : null;
+  if (!bot && !group) return null;
+  const label = bot?.name ?? group!.name;
   return (
-    <div className="flex w-20 cursor-grabbing flex-col items-center gap-2 rounded-xl bg-sidebar-row-hover px-1 pb-2 pt-3 text-sidebar-foreground shadow-xl select-none">
-      <RosterAvatar bot={bot} presence={presence} className="size-14" />
-      <span className="w-full truncate text-center text-xs">{bot.name}</span>
+    <div
+      className="relative w-20 shrink-0"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        menuTriggerRef.current?.click();
+      }}
+    >
+      <button
+        type="button"
+        title={label}
+        onClick={() => (bot ? onSelectBot(bot) : onSelectGroup(group!))}
+        className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-sidebar-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {bot ? (
+          <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-12" />
+        ) : (
+          <span className="flex size-14 items-center justify-center">
+            <GroupMemberStack group={group!} bots={bots} sizeClassName="size-14" />
+          </span>
+        )}
+        <span className="w-full truncate text-[11px] font-medium">{label}</span>
+      </button>
+      <Menu>
+        <MenuTrigger
+          render={
+            <button
+              ref={menuTriggerRef}
+              type="button"
+              aria-label={`Actions for pinned ${label}`}
+              className="absolute right-2 top-2 size-px overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          }
+        />
+        <MenuPopup align="center">
+          <MenuItem onClick={() => useRosterStore.getState().setItemPinned(item, false)}>
+            <PinIcon />
+            Unpin
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
     </div>
   );
 }
@@ -342,29 +516,28 @@ export default function BotRosterSidebar() {
   useServerRosterSync();
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
-  const createBotCommand = useAtomCommand(botEnvironment.create, { reportFailure: false });
+  const createBotCommand = useAtomCommand(botEnvironment.create, {
+    reportFailure: false,
+  });
+  const createGroupCommand = useAtomCommand(botEnvironment.groups.create, {
+    reportFailure: false,
+  });
   const pathname = useLocation({ select: (location) => location.pathname });
-  const { bots, groups, lastMessageByBotId, selectedBotId } = useRosterStore(
+  const { bots, groups, lastMessageByBotId, selectedBotId, sections, pinnedItems } = useRosterStore(
     useShallow((state) => ({
       bots: state.bots,
       groups: state.groups,
       lastMessageByBotId: state.lastMessageByBotId,
       selectedBotId: state.selectedBotId,
+      sections: state.sections,
+      pinnedItems: state.pinnedItems,
     })),
   );
   const [query, setQuery] = useState("");
-  const [dragLayout, setDragLayout] = useState<Bot[] | null>(null);
-  const dragLayoutRef = useRef<Bot[] | null>(null);
-  const [activeBotId, setActiveBotId] = useState<string | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const strip = useMemo(
-    () => buildRosterStrip(bots, lastMessageByBotId),
-    [bots, lastMessageByBotId],
-  );
   const visibleBots = useMemo(
-    () => filterRosterBots(dragLayout ?? bots, query).filter((bot) => bot.archivedAt === null),
-    [bots, dragLayout, query],
+    () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
+    [bots, query],
   );
   const pinnedBots = visibleBots.filter((bot) => bot.pinned);
   const unpinnedBots = visibleBots.filter((bot) => !bot.pinned);
@@ -372,43 +545,94 @@ export default function BotRosterSidebar() {
     () => buildGroupedRosterSections(dragLayout ?? bots, groups, query),
     [bots, dragLayout, groups, query],
   );
-  const activeBot =
-    activeBotId === null
-      ? null
-      : ((dragLayout ?? bots).find((bot) => bot.id === activeBotId) ?? null);
-
-  const resolveDrop = (layout: readonly Bot[], overId: string) => {
-    if (overId === "pinned-zone") return { overBotId: null, pinned: true } as const;
-    if (overId === "unpinned-zone") return { overBotId: null, pinned: false } as const;
-    const overBot = layout.find((bot) => bot.id === overId);
-    return overBot ? { overBotId: overBot.id, pinned: overBot.pinned } : null;
-  };
-  const handleDragStart = ({ active }: DragStartEvent) => {
-    dragLayoutRef.current = bots;
-    setActiveBotId(String(active.id));
-    setDragLayout(bots);
-  };
-  const handleDragOver = ({ active, over }: DragOverEvent) => {
-    if (!over) return;
-    setDragLayout((current) => {
-      const layout = current ?? bots;
-      const drop = resolveDrop(layout, String(over.id));
-      if (!drop) return layout;
-      const next = moveRosterBot(layout, String(active.id), drop.overBotId, drop.pinned) ?? layout;
-      dragLayoutRef.current = next;
-      return next;
-    });
-  };
-  const finishDrag = () => {
-    dragLayoutRef.current = null;
-    setActiveBotId(null);
-    setDragLayout(null);
-  };
-  const handleDragEnd = ({ over }: DragEndEvent) => {
-    if (over && dragLayoutRef.current) {
-      useRosterStore.getState().commitBotLayout(dragLayoutRef.current);
+  const groupRouteActive = pathname.startsWith("/groups/");
+  const pinnedBotIds = useMemo(
+    () => new Set(pinnedItems.filter((item) => item.kind === "bot").map((item) => item.id)),
+    [pinnedItems],
+  );
+  const assignedBotIds = useMemo(
+    () => new Set(sections.flatMap((section) => section.botIds)),
+    [sections],
+  );
+  const botsBySection = useMemo(
+    () =>
+      new Map(
+        sections.map((section) => [
+          section.id,
+          section.botIds
+            .map((id) => visibleBots.find((bot) => bot.id === id))
+            .filter((bot): bot is Bot => bot !== undefined && !pinnedBotIds.has(bot.id)),
+        ]),
+      ),
+    [pinnedBotIds, sections, visibleBots],
+  );
+  const unassignedBots = useMemo(
+    () => visibleBots.filter((bot) => !assignedBotIds.has(bot.id) && !pinnedBotIds.has(bot.id)),
+    [assignedBotIds, pinnedBotIds, visibleBots],
+  );
+  const pinnedGroupIds = useMemo(
+    () => new Set(pinnedItems.filter((item) => item.kind === "group").map((item) => item.id)),
+    [pinnedItems],
+  );
+  const assignedGroupIds = useMemo(
+    () => new Set(sections.flatMap((section) => section.groupIds ?? [])),
+    [sections],
+  );
+  const groupsBySection = useMemo(
+    () =>
+      new Map(
+        sections.map((section) => [
+          section.id,
+          (section.groupIds ?? [])
+            .map((id) => visibleGroups.find((group) => group.id === id))
+            .filter(
+              (group): group is Group => group !== undefined && !pinnedGroupIds.has(group.id),
+            ),
+        ]),
+      ),
+    [pinnedGroupIds, sections, visibleGroups],
+  );
+  const unassignedGroups = useMemo(
+    () =>
+      visibleGroups.filter(
+        (group) => !assignedGroupIds.has(group.id) && !pinnedGroupIds.has(group.id),
+      ),
+    [assignedGroupIds, pinnedGroupIds, visibleGroups],
+  );
+  const handleDragEnd = ({ draggableId, source, destination, type }: DropResult) => {
+    if (!destination) return;
+    if (type === "roster-section") {
+      useRosterStore.getState().reorderSections(source.index, destination.index);
+      return;
     }
-    finishDrag();
+    if (type === "roster-group") {
+      const groupId = parseRosterGroupDropId(draggableId);
+      if (!groupId) return;
+      if (destination.droppableId.startsWith("section-groups:")) {
+        useRosterStore
+          .getState()
+          .moveGroupToSection(
+            groupId,
+            destination.droppableId.slice("section-groups:".length),
+            destination.index,
+          );
+      } else if (destination.droppableId === "roster-unassigned-groups") {
+        useRosterStore.getState().moveGroupToSection(groupId, null, destination.index);
+      }
+      return;
+    }
+    const botId = parseRosterBotDragId(draggableId);
+    if (botId && destination.droppableId.startsWith("section:")) {
+      useRosterStore
+        .getState()
+        .moveBotToSection(
+          botId,
+          destination.droppableId.slice("section:".length),
+          destination.index,
+        );
+    } else if (botId && destination.droppableId === "roster-unassigned") {
+      useRosterStore.getState().moveBotToSection(botId, null, destination.index);
+    }
   };
 
   // Remember the chat route the selected bot lands on, so re-selecting the
@@ -433,11 +657,16 @@ export default function BotRosterSidebar() {
   };
 
   const [newBotOpen, setNewBotOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [pendingCreatedBotId, setPendingCreatedBotId] = useState<string | null>(null);
   const handleNewBot = () => setNewBotOpen(true);
+  const handleNewGroup = () => setNewGroupOpen(true);
   const handleCreateBot = async ({ name, avatar }: { name: string; avatar: BotAvatar }) => {
     if (environmentId === null) {
-      toastManager.add({ type: "error", title: "Connect an environment first" });
+      toastManager.add({
+        type: "error",
+        title: "Connect an environment first",
+      });
       return;
     }
     const botId = BotId.make(`bot-${randomUUID()}`);
@@ -465,6 +694,44 @@ export default function BotRosterSidebar() {
     setPendingCreatedBotId(botId);
   };
 
+  const handleCreateGroup = async (input: NewGroupInput) => {
+    if (environmentId === null) {
+      toastManager.add({
+        type: "error",
+        title: "Connect an environment first",
+      });
+      return;
+    }
+    const groupId = GroupId.make(`group-${randomUUID()}`);
+    const result = await createGroupCommand({
+      environmentId,
+      input: {
+        groupId,
+        name: input.name,
+        bossBotId: BotId.make(input.bossBotId),
+        specialistBotIds: input.specialistBotIds.map((botId) => BotId.make(botId)),
+      },
+    });
+    if (result._tag === "Failure") {
+      toastManager.add({ type: "error", title: "Could not create group" });
+      return;
+    }
+    setNewGroupOpen(false);
+    void navigate({ to: "/groups/$groupId", params: { groupId } });
+  };
+
+  const handleNewSection = () => {
+    const name = window.prompt("Section name");
+    if (name) useRosterStore.getState().createSection(name);
+  };
+
+  const handleSelectGroup = (group: Group) => {
+    void navigate({ to: "/groups/$groupId", params: { groupId: group.id } });
+  };
+
+  const isPinned = (item: RosterItemRef) =>
+    pinnedItems.some((candidate) => candidate.kind === item.kind && candidate.id === item.id);
+
   useEffect(() => {
     if (pendingCreatedBotId === null) return;
     const bot = bots.find((candidate) => candidate.id === pendingCreatedBotId);
@@ -477,7 +744,11 @@ export default function BotRosterSidebar() {
 
   return (
     <>
-      <RosterSidebarHeader onNewBot={handleNewBot} />
+      <RosterSidebarHeader
+        onNewBot={handleNewBot}
+        onNewGroup={handleNewGroup}
+        onNewSection={handleNewSection}
+      />
       <SidebarContent
         className="gap-0"
         fixedHeader={
@@ -508,144 +779,384 @@ export default function BotRosterSidebar() {
           </div>
         ) : (
           <>
-            {/* Icon-collapsed rail: every visible bot, recency order. */}
+            {/* Icon-collapsed rail: groups first, then every visible bot. */}
             <SidebarGroup className="hidden items-center gap-1 px-0 pt-1 group-data-[collapsible=icon]:flex">
               <ul data-testid="roster-rail" className="flex flex-col items-center gap-1">
-                {strip.map((bot) => (
+                {visibleGroups.map((group) => (
+                  <li key={group.id} className="list-none">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-current={pathname === `/groups/${group.id}` || undefined}
+                            onClick={() =>
+                              void navigate({
+                                to: "/groups/$groupId",
+                                params: { groupId: group.id },
+                              })
+                            }
+                            className={cn(
+                              "flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              pathname === `/groups/${group.id}`
+                                ? "bg-sidebar-row-active"
+                                : "hover:bg-sidebar-row-hover",
+                            )}
+                          >
+                            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
+                          </button>
+                        }
+                      />
+                      <TooltipPopup side="right">{group.name}</TooltipPopup>
+                    </Tooltip>
+                  </li>
+                ))}
+                {visibleBots.map((bot) => (
                   <li key={bot.id} className="list-none">
                     <RailBotButton
                       bot={bot}
-                      isActive={selectedBotId === bot.id}
+                      isActive={!groupRouteActive && selectedBotId === bot.id}
                       onSelect={handleSelect}
                     />
                   </li>
                 ))}
               </ul>
             </SidebarGroup>
-            <DndContext
-              collisionDetection={closestCenter}
-              sensors={sensors}
-              modifiers={[restrictToFirstScrollableAncestor]}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragCancel={finishDrag}
-              onDragEnd={handleDragEnd}
-            >
-              {pinnedBots.length > 0 || activeBotId !== null ? (
-                <SidebarGroup className="px-4 pb-3 pt-2 group-data-[collapsible=icon]:hidden">
-                  <RosterDropZone
-                    id="pinned-zone"
-                    className="min-h-24 rounded-xl transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
+            <DragDropContext onDragEnd={handleDragEnd}>
+              {pinnedItems.length > 0 ? (
+                <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-3 pt-3 group-data-[collapsible=icon]:hidden">
+                  <div
+                    className="flex justify-center gap-2 overflow-x-auto px-2 py-1"
+                    role="list"
+                    aria-label="Pinned bots and groups"
                   >
-                    <SortableContext
-                      items={pinnedBots.map((bot) => bot.id)}
-                      strategy={rectSortingStrategy}
-                    >
-                      <ul
-                        data-testid="roster-strip"
-                        className={cn(
-                          "grid min-h-24 place-items-center gap-x-1 gap-y-2",
-                          pinnedBots.length === 1 ? "grid-cols-1" : "grid-cols-3",
-                        )}
-                      >
-                        {pinnedBots.map((bot) => (
-                          <BotStripTile
-                            key={bot.id}
-                            bot={bot}
-                            isActive={selectedBotId === bot.id}
-                            onSelect={handleSelect}
-                          />
-                        ))}
-                      </ul>
-                    </SortableContext>
-                  </RosterDropZone>
+                    {pinnedItems.map((item) => (
+                      <PinnedRosterItem
+                        key={`${item.kind}:${item.id}`}
+                        item={item}
+                        bots={bots}
+                        groups={groups}
+                        onSelectBot={handleSelect}
+                        onSelectGroup={handleSelectGroup}
+                      />
+                    ))}
+                  </div>
                 </SidebarGroup>
               ) : null}
               <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
-                <RosterDropZone
-                  id="unpinned-zone"
-                  className="min-h-12 rounded-lg transition-colors data-[drag-over=true]:bg-sidebar-row-hover"
-                >
-                  <SortableContext
-                    items={unpinnedBots.map((bot) => bot.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="flex flex-col gap-2">
-                      {groupSections.map((section) => (
-                        <section key={section.id} aria-label={section.name}>
-                          <div className="mb-0.5 flex items-baseline gap-2 px-2 py-0.5">
-                            {section.id === "unassigned" ? (
-                              <span className="text-[13px] font-medium text-sidebar-muted-foreground">
-                                {section.name}
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                aria-current={pathname === `/groups/${section.id}` || undefined}
-                                className="rounded text-[13px] font-medium text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                                onClick={() =>
-                                  void navigate({
-                                    to: "/groups/$groupId",
-                                    params: { groupId: section.id },
-                                  })
-                                }
+                <Droppable droppableId="roster-sections" type="roster-section">
+                  {(sectionsProvided) => (
+                    <div ref={sectionsProvided.innerRef} {...sectionsProvided.droppableProps}>
+                      {sections.map((section, sectionIndex) => {
+                        const sectionBots = botsBySection.get(section.id) ?? [];
+                        const sectionGroups = groupsBySection.get(section.id) ?? [];
+                        const collapsed = query.length === 0 && section.collapsed;
+                        return (
+                          <Draggable
+                            key={section.id}
+                            draggableId={`section:${section.id}`}
+                            index={sectionIndex}
+                            isDragDisabled={query.length > 0}
+                          >
+                            {(sectionProvided, sectionSnapshot) => (
+                              <section
+                                ref={sectionProvided.innerRef}
+                                className={cn(
+                                  "mb-1 rounded-lg",
+                                  sectionSnapshot.isDragging && "bg-sidebar shadow-xl",
+                                )}
+                                {...sectionProvided.draggableProps}
                               >
-                                {section.name}
-                              </button>
+                                <div
+                                  className="relative flex h-8 items-center rounded-md hover:bg-sidebar-row-hover"
+                                  onContextMenu={(event) => {
+                                    event.preventDefault();
+                                    event.currentTarget
+                                      .querySelector<HTMLButtonElement>("[data-section-actions]")
+                                      ?.click();
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    aria-expanded={!collapsed}
+                                    onClick={() =>
+                                      useRosterStore.getState().toggleSection(section.id)
+                                    }
+                                    className="flex min-w-0 flex-1 cursor-grab items-center gap-1.5 px-2 text-left text-xs font-medium text-sidebar-muted-foreground active:cursor-grabbing"
+                                    {...sectionProvided.dragHandleProps}
+                                  >
+                                    {collapsed ? (
+                                      <ChevronRightIcon className="size-3.5" />
+                                    ) : (
+                                      <ChevronDownIcon className="size-3.5" />
+                                    )}
+                                    <span className="truncate">{section.name}</span>
+                                    <span className="tabular-nums">
+                                      {sectionBots.length + sectionGroups.length}
+                                    </span>
+                                  </button>
+                                  <Menu>
+                                    <MenuTrigger
+                                      render={
+                                        <button
+                                          type="button"
+                                          data-section-actions
+                                          aria-label={`Actions for ${section.name}`}
+                                          className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+                                        />
+                                      }
+                                    />
+                                    <MenuPopup align="end">
+                                      <MenuItem
+                                        variant="destructive"
+                                        onClick={() =>
+                                          useRosterStore.getState().deleteSection(section.id)
+                                        }
+                                      >
+                                        <Trash2Icon />
+                                        Delete section
+                                      </MenuItem>
+                                    </MenuPopup>
+                                  </Menu>
+                                </div>
+                                <Droppable
+                                  droppableId={`section-groups:${section.id}`}
+                                  type="roster-group"
+                                >
+                                  {(provided, snapshot) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      role="list"
+                                      aria-label={`${section.name} groups`}
+                                      data-drag-over={snapshot.isDraggingOver || undefined}
+                                      className={cn(
+                                        "rounded-lg data-[drag-over=true]:bg-sidebar-row-hover",
+                                        collapsed
+                                          ? "min-h-2"
+                                          : sectionGroups.length > 0
+                                            ? "min-h-10"
+                                            : "min-h-1",
+                                      )}
+                                      {...provided.droppableProps}
+                                    >
+                                      {!collapsed
+                                        ? sectionGroups.map((group, index) => (
+                                            <GroupRosterRow
+                                              key={group.id}
+                                              group={group}
+                                              bots={bots}
+                                              index={index}
+                                              sections={sections}
+                                              dragDisabled={query.length > 0}
+                                              isActive={pathname === `/groups/${group.id}`}
+                                              onSelect={() => handleSelectGroup(group)}
+                                              pinned={false}
+                                              onPin={(pinned) =>
+                                                useRosterStore.getState().setItemPinned(
+                                                  {
+                                                    kind: "group",
+                                                    id: group.id,
+                                                  },
+                                                  pinned,
+                                                )
+                                              }
+                                              onMove={(sectionId) =>
+                                                useRosterStore
+                                                  .getState()
+                                                  .moveGroupToSection(group.id, sectionId)
+                                              }
+                                            />
+                                          ))
+                                        : null}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+                                <Droppable droppableId={`section:${section.id}`} type="roster-bot">
+                                  {(provided, snapshot) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      role="list"
+                                      aria-label={section.name}
+                                      data-drag-over={snapshot.isDraggingOver || undefined}
+                                      className={cn(
+                                        "rounded-lg data-[drag-over=true]:bg-sidebar-row-hover",
+                                        collapsed ? "min-h-2" : "min-h-10",
+                                      )}
+                                      {...provided.droppableProps}
+                                    >
+                                      {!collapsed
+                                        ? sectionBots.map((bot, index) => (
+                                            <BotRosterRow
+                                              key={bot.id}
+                                              bot={bot}
+                                              index={index}
+                                              lastMessage={lastMessageByBotId[bot.id] ?? null}
+                                              isActive={
+                                                !groupRouteActive && selectedBotId === bot.id
+                                              }
+                                              onSelect={handleSelect}
+                                              pinned={isPinned({
+                                                kind: "bot",
+                                                id: bot.id,
+                                              })}
+                                              sections={sections}
+                                              onPin={(pinned) =>
+                                                useRosterStore
+                                                  .getState()
+                                                  .setItemPinned(
+                                                    { kind: "bot", id: bot.id },
+                                                    pinned,
+                                                  )
+                                              }
+                                              onMove={(sectionId) =>
+                                                useRosterStore
+                                                  .getState()
+                                                  .moveBotToSection(bot.id, sectionId)
+                                              }
+                                              dragDisabled={query.length > 0}
+                                            />
+                                          ))
+                                        : null}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+                              </section>
                             )}
-                          </div>
-                          <ul className="flex min-h-12 flex-col gap-px">
-                            {section.bots.map((bot) => (
-                              <BotRosterRow
-                                key={bot.id}
-                                bot={bot}
-                                lastMessage={lastMessageByBotId[bot.id] ?? null}
-                                isActive={selectedBotId === bot.id}
-                                onSelect={handleSelect}
-                              />
-                            ))}
-                          </ul>
-                        </section>
+                          </Draggable>
+                        );
+                      })}
+                      {sectionsProvided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+                <div className="flex h-8 items-center gap-1.5 px-2 text-xs font-medium text-sidebar-muted-foreground">
+                  <ChevronDownIcon className="size-3.5" />
+                  <span>Unassigned</span>
+                  <span className="tabular-nums">
+                    {unassignedBots.length + unassignedGroups.length}
+                  </span>
+                </div>
+                <Droppable droppableId="roster-unassigned-groups" type="roster-group">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      role="list"
+                      aria-label="Unassigned groups"
+                      data-drag-over={snapshot.isDraggingOver || undefined}
+                      className="min-h-1 rounded-lg data-[drag-over=true]:bg-sidebar-row-hover"
+                      {...provided.droppableProps}
+                    >
+                      {unassignedGroups.map((group, index) => (
+                        <GroupRosterRow
+                          key={group.id}
+                          group={group}
+                          bots={bots}
+                          index={index}
+                          sections={sections}
+                          dragDisabled={query.length > 0}
+                          isActive={pathname === `/groups/${group.id}`}
+                          onSelect={() => handleSelectGroup(group)}
+                          pinned={false}
+                          onPin={(pinned) =>
+                            useRosterStore
+                              .getState()
+                              .setItemPinned({ kind: "group", id: group.id }, pinned)
+                          }
+                          onMove={(sectionId) =>
+                            useRosterStore.getState().moveGroupToSection(group.id, sectionId)
+                          }
+                        />
                       ))}
+                      {provided.placeholder}
                     </div>
-                  </SortableContext>
-                  {unpinnedBots.length === 0 && pinnedBots.length === 0 ? (
-                    <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-                      No bots match
+                  )}
+                </Droppable>
+                <Droppable droppableId="roster-unassigned" type="roster-bot">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      role="list"
+                      aria-label="Unassigned"
+                      data-drag-over={snapshot.isDraggingOver || undefined}
+                      className="min-h-10 rounded-lg data-[drag-over=true]:bg-sidebar-row-hover"
+                      {...provided.droppableProps}
+                    >
+                      {unassignedBots.map((bot, index) => (
+                        <BotRosterRow
+                          key={bot.id}
+                          bot={bot}
+                          index={index}
+                          lastMessage={lastMessageByBotId[bot.id] ?? null}
+                          isActive={!groupRouteActive && selectedBotId === bot.id}
+                          onSelect={handleSelect}
+                          pinned={isPinned({ kind: "bot", id: bot.id })}
+                          sections={sections}
+                          onPin={(pinned) =>
+                            useRosterStore
+                              .getState()
+                              .setItemPinned({ kind: "bot", id: bot.id }, pinned)
+                          }
+                          onMove={(sectionId) =>
+                            useRosterStore.getState().moveBotToSection(bot.id, sectionId)
+                          }
+                          dragDisabled={query.length > 0}
+                        />
+                      ))}
+                      {provided.placeholder}
                     </div>
-                  ) : null}
-                </RosterDropZone>
+                  )}
+                </Droppable>
+                {visibleBots.length === 0 && visibleGroups.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
+                    No bots match
+                  </div>
+                ) : null}
               </SidebarGroup>
-              <DragOverlay modifiers={[snapCenterToCursor]}>
-                {activeBot ? <BotDragOverlay bot={activeBot} /> : null}
-              </DragOverlay>
-            </DndContext>
+            </DragDropContext>
           </>
         )}
       </SidebarContent>
-      {/* Rail new-bot sits above the footer, like the expanded header's plus. */}
+      {/* Rail create menu sits above the footer, like the expanded header's plus. */}
       <div className="hidden shrink-0 flex-col items-center pb-1 group-data-[collapsible=icon]:flex">
-        <Tooltip>
-          <TooltipTrigger
+        <Menu>
+          <MenuTrigger
             render={
               <button
                 type="button"
-                aria-label="New bot"
-                onClick={handleNewBot}
+                aria-label="Create"
                 className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none select-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PlusIcon className="size-4" />
               </button>
             }
           />
-          <TooltipPopup side="right">New bot</TooltipPopup>
-        </Tooltip>
+          <MenuPopup align="end" side="right">
+            <MenuItem onClick={handleNewBot}>
+              <BotIcon />
+              New bot
+            </MenuItem>
+            <MenuItem onClick={handleNewGroup}>
+              <UsersIcon />
+              New group
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </div>
       {newBotOpen ? (
         <NewBotDialog
           open
           onOpenChange={setNewBotOpen}
           onCreate={(input) => void handleCreateBot(input)}
+        />
+      ) : null}
+      {newGroupOpen ? (
+        <NewGroupDialog
+          open
+          bots={bots}
+          onOpenChange={setNewGroupOpen}
+          onCreate={(input) => void handleCreateGroup(input)}
         />
       ) : null}
       <SidebarChromeFooter />

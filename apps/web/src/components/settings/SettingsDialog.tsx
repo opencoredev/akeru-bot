@@ -30,6 +30,9 @@ const InboxPanel = lazy(async () => ({
 const ProvidersPanel = lazy(async () => ({
   default: (await import("./ProvidersPanel")).ProvidersPanel,
 }));
+const BotChannelsSettingsPanel = lazy(async () => ({
+  default: (await import("./BotChannelsSettings")).BotChannelsSettingsPanel,
+}));
 const VoiceSettingsPanel = lazy(async () => ({
   default: (await import("./VoiceSettings")).VoiceSettingsPanel,
 }));

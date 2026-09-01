@@ -1,5 +1,6 @@
 import {
   ApprovalRequestId,
+  isGroupBotMember,
   type ChatAttachment,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
@@ -605,6 +606,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               runtimeMode: event.payload.runtimeMode,
               usageCap: event.payload.usageCap,
               voiceEnabled: event.payload.voiceEnabled,
+              channelBindings: event.payload.channelBindings,
               groupId: event.payload.groupId,
               archivedAt: null,
               createdAt: event.payload.createdAt,
@@ -634,6 +636,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               ...(event.payload.usageCap !== undefined ? { usageCap: event.payload.usageCap } : {}),
               ...(event.payload.voiceEnabled !== undefined
                 ? { voiceEnabled: event.payload.voiceEnabled }
+                : {}),
+              ...(event.payload.channelBindings !== undefined
+                ? { channelBindings: event.payload.channelBindings }
                 : {}),
               ...(event.payload.groupId !== undefined ? { groupId: event.payload.groupId } : {}),
               updatedAt: event.payload.updatedAt,
@@ -697,10 +702,12 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             });
             if (Option.isNone(existing)) return;
             const members = existing.value.members.some(
-              (member) => member.botId === event.payload.member.botId,
+              (member) => isGroupBotMember(member) && member.botId === event.payload.member.botId,
             )
               ? existing.value.members.map((member) =>
-                  member.botId === event.payload.member.botId ? event.payload.member : member,
+                  isGroupBotMember(member) && member.botId === event.payload.member.botId
+                    ? event.payload.member
+                    : member,
                 )
               : [...existing.value.members, event.payload.member];
             yield* projectionGroupRepository.upsert({
@@ -722,7 +729,43 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             yield* projectionGroupRepository.upsert({
               ...existing.value,
               members: existing.value.members.filter(
-                (member) => member.botId !== event.payload.botId,
+                (member) => !isGroupBotMember(member) || member.botId !== event.payload.botId,
+              ),
+              updatedAt: event.payload.updatedAt,
+            });
+            return;
+          }
+          case "group.person-assigned": {
+            const existing = yield* projectionGroupRepository.getById({
+              groupId: event.payload.groupId,
+            });
+            if (Option.isNone(existing)) return;
+            const members = existing.value.members.some(
+              (member) =>
+                member.kind === "person" && member.personId === event.payload.person.personId,
+            )
+              ? existing.value.members.map((member) =>
+                  member.kind === "person" && member.personId === event.payload.person.personId
+                    ? event.payload.person
+                    : member,
+                )
+              : [...existing.value.members, event.payload.person];
+            yield* projectionGroupRepository.upsert({
+              ...existing.value,
+              members,
+              updatedAt: event.payload.updatedAt,
+            });
+            return;
+          }
+          case "group.person-unassigned": {
+            const existing = yield* projectionGroupRepository.getById({
+              groupId: event.payload.groupId,
+            });
+            if (Option.isNone(existing)) return;
+            yield* projectionGroupRepository.upsert({
+              ...existing.value,
+              members: existing.value.members.filter(
+                (member) => member.kind !== "person" || member.personId !== event.payload.personId,
               ),
               updatedAt: event.payload.updatedAt,
             });
@@ -734,23 +777,28 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             });
             if (Option.isNone(existing)) return;
             let members = existing.value.members.filter(
-              (member) => member.botId !== event.payload.bossBotId,
+              (member) => !isGroupBotMember(member) || member.botId !== event.payload.bossBotId,
             );
             if (event.payload.previousBossBotId !== null) {
               members = members.filter(
-                (member) => member.botId !== event.payload.previousBossBotId,
+                (member) =>
+                  !isGroupBotMember(member) || member.botId !== event.payload.previousBossBotId,
               );
               if (event.payload.previousBossRole === "specialist") {
                 members = [
                   ...members,
-                  { botId: event.payload.previousBossBotId, role: "specialist" },
+                  {
+                    kind: "bot",
+                    botId: event.payload.previousBossBotId,
+                    role: "specialist",
+                  },
                 ];
               }
             }
             yield* projectionGroupRepository.upsert({
               ...existing.value,
               bossBotId: event.payload.bossBotId,
-              members: [...members, { botId: event.payload.bossBotId, role: "boss" }],
+              members: [...members, { kind: "bot", botId: event.payload.bossBotId, role: "boss" }],
               updatedAt: event.payload.updatedAt,
             });
             return;
@@ -887,6 +935,20 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             deletedAt: null,
           });
           return;
+
+        case "thread.ownership-updated": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            botId: event.payload.botId,
+            groupId: event.payload.groupId,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
 
         case "thread.archived": {
           const existingRow = yield* projectionThreadRepository.getById({
@@ -1261,6 +1323,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             turnId: event.payload.turnId,
             respondingBotId:
               event.payload.respondingBotId ?? previousMessage?.respondingBotId ?? null,
+            authorPersonId: event.payload.authorPersonId ?? previousMessage?.authorPersonId ?? null,
+            authorDisplayName:
+              event.payload.authorDisplayName ?? previousMessage?.authorDisplayName ?? null,
+            channelOrigin: event.payload.channelOrigin ?? previousMessage?.channelOrigin ?? null,
             role: event.payload.role,
             text: nextText,
             ...(nextAttachments !== undefined ? { attachments: [...nextAttachments] } : {}),

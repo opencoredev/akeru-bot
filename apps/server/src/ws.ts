@@ -16,6 +16,7 @@ import {
   AkeruMemoryUserId,
   type AkeruMemoryThreadAccess,
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  AuthAccessWriteScope,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
   type AuthEnvironmentScope,
@@ -85,6 +86,9 @@ import { syncAccessIncidents, syncConnectorIncidents } from "./bot-inbox/connect
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
+import * as ChannelCommand from "./channels/ChannelCommand.ts";
+import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -93,6 +97,11 @@ import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
+import {
+  applyAuthenticatedCommandActor,
+  applyKnownGroupPerson,
+  canManageGroupPeople,
+} from "./orchestration/AuthenticatedCommand.ts";
 import {
   cleanupFailedUploadedAttachments,
   normalizeDispatchCommand,
@@ -136,6 +145,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -488,6 +498,10 @@ const makeWsRpcLayer = (
       // the client's request caused them.
       const hasClientOrigin =
         clientOrigin.surface !== undefined || clientOrigin.appVersion !== undefined;
+      const dispatchActor = {
+        personId: currentSessionId,
+        canManageGroups: currentSession.scopes.includes(AuthAccessWriteScope),
+      };
       const dispatchFromClient: OrchestrationEngine.OrchestrationEngineShape["dispatch"] = (
         command,
       ) =>
@@ -541,6 +555,10 @@ const makeWsRpcLayer = (
         ),
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const secretStore = yield* ServerSecretStore.ServerSecretStore;
+      const channelDeliveryStore = yield* Effect.serviceOption(
+        ChannelDeliveryStore.ChannelDeliveryStore,
+      );
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map(
@@ -760,6 +778,33 @@ const makeWsRpcLayer = (
       const serverCommandId = (tag: string) =>
         randomUUID.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
 
+      const loadEnvironmentPeople = () =>
+        serverAuth.listClientSessions(currentSessionId).pipe(
+          Effect.map((clientSessions) => {
+            const currentClient = clientSessions.find(
+              (session) => session.sessionId === currentSessionId,
+            );
+            const hostClient = clientSessions.find((session) =>
+              session.scopes.includes(AuthAccessWriteScope),
+            );
+            return {
+              current: {
+                personId: currentSessionId,
+                displayName:
+                  currentClient?.client.label ??
+                  (currentSession.scopes.includes(AuthAccessWriteScope) ? "Host" : "Paired person"),
+              },
+              host:
+                hostClient === undefined
+                  ? undefined
+                  : {
+                      personId: hostClient.sessionId,
+                      displayName: hostClient.client.label ?? "Host",
+                    },
+            };
+          }),
+        );
+
       const loadAuthAccessSnapshot = () =>
         Effect.all({
           pairingLinks: serverAuth.listPairingLinks(),
@@ -973,6 +1018,9 @@ const makeWsRpcLayer = (
                     runtimeMode: nextBot.runtimeMode,
                     usageCap: nextBot.usageCap,
                     voiceEnabled: nextBot.voiceEnabled,
+                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                      nextBot.channelBindings ?? [],
+                    ),
                     groupId: nextBot.groupId,
                     archivedAt: nextBot.archivedAt,
                     createdAt: nextBot.createdAt,
@@ -1463,7 +1511,78 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
-              const normalizedCommand = yield* normalizeDispatchCommand(command);
+              if (ChannelCommand.isChannelCommand(command)) {
+                if (!currentSession.scopes.includes(AuthAccessWriteScope)) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Only the environment host can manage external channels.",
+                  });
+                }
+                if (Option.isNone(channelDeliveryStore)) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Channel delivery storage is unavailable.",
+                  });
+                }
+                return yield* startup.enqueueCommand(
+                  Effect.tryPromise({
+                    try: () =>
+                      ChannelCommand.executeChannelCommand(
+                        {
+                          engine: orchestrationEngine,
+                          secretStore,
+                          settings: serverSettings,
+                          deliveryStore: channelDeliveryStore.value,
+                          readModel: () =>
+                            Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
+                          readThread: (threadId) =>
+                            Effect.runPromise(
+                              projectionSnapshotQuery
+                                .getThreadDetailById(threadId)
+                                .pipe(Effect.map(Option.getOrNull)),
+                            ),
+                          nowIso: () => Effect.runPromise(nowIso),
+                          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
+                        },
+                        command,
+                      ),
+                    catch: (cause) =>
+                      new OrchestrationDispatchCommandError({
+                        message: cause instanceof Error ? cause.message : "Channel command failed.",
+                        cause,
+                      }),
+                  }),
+                );
+              }
+              const decodedCommand = yield* normalizeDispatchCommand(command);
+              const currentPerson =
+                decodedCommand.type === "group.create" ||
+                decodedCommand.type === "group.leave" ||
+                decodedCommand.type === "thread.turn.start"
+                  ? yield* loadEnvironmentPeople().pipe(Effect.map((people) => people.current))
+                  : undefined;
+              const actorCommand = applyAuthenticatedCommandActor(decodedCommand, {
+                personId: currentSessionId,
+                displayName: currentPerson?.displayName ?? "Paired person",
+                canManageGroups: currentSession.scopes.includes(AuthAccessWriteScope),
+              });
+              let normalizedCommand = actorCommand;
+              if (
+                actorCommand.type === "group.person.assign" ||
+                actorCommand.type === "group.person.unassign"
+              ) {
+                if (!canManageGroupPeople(actorCommand, currentSession.scopes)) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Managing group people requires access:write.",
+                  });
+                }
+                const clientSessions = yield* serverAuth.listClientSessions(currentSessionId);
+                const knownPersonCommand = applyKnownGroupPerson(actorCommand, clientSessions);
+                if (!knownPersonCommand) {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: "Only a paired person can be changed in a group.",
+                  });
+                }
+                normalizedCommand = knownPersonCommand;
+              }
               // Archive and settle both mean "done with this thread", so a
               // live provider session must not keep running background work
               // (PR monitors, dev servers, subagent fleets) after either
@@ -1631,7 +1750,27 @@ const makeWsRpcLayer = (
               );
               const bufferedLiveStream = coalesceShellLiveStream(Stream.fromQueue(liveBuffer));
 
-              const loadSnapshot = projectionSnapshotQuery.getShellSnapshot().pipe(
+              const loadSnapshot = Effect.all({
+                snapshot: projectionSnapshotQuery.getShellSnapshot(),
+                people: loadEnvironmentPeople(),
+              }).pipe(
+                Effect.map(({ snapshot, people }) => ({
+                  ...snapshot,
+                  currentPersonId: people.current.personId,
+                  currentPersonDisplayName: people.current.displayName,
+                  ...(people.host === undefined
+                    ? {}
+                    : {
+                        environmentHostPersonId: people.host.personId,
+                        environmentHostDisplayName: people.host.displayName,
+                      }),
+                  bots: snapshot.bots.map((bot) => ({
+                    ...bot,
+                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                      bot.channelBindings ?? [],
+                    ),
+                  })),
+                })),
                 Effect.tapError((cause) =>
                   Effect.logError("orchestration shell snapshot load failed", { cause }),
                 ),
@@ -1716,6 +1855,15 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot,
             projectionSnapshotQuery.getArchivedShellSnapshot().pipe(
+              Effect.map((snapshot) => ({
+                ...snapshot,
+                bots: snapshot.bots.map((bot) => ({
+                  ...bot,
+                  channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                    bot.channelBindings ?? [],
+                  ),
+                })),
+              })),
               Effect.tapError((cause) =>
                 Effect.logError("orchestration archived shell snapshot load failed", { cause }),
               ),

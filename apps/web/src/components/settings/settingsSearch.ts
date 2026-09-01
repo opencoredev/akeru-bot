@@ -18,6 +18,7 @@ export interface SettingsSearchItem {
   readonly title: string;
   readonly to: SettingsPath;
   readonly targetId?: string;
+  readonly keywords?: ReadonlyArray<string>;
   // Its row only renders in the desktop app, so a browser result would land on
   // an anchor that isn't there.
   readonly desktopOnly?: boolean;
@@ -374,6 +375,8 @@ export function searchSettings(
   return items.filter(
     (item) =>
       (isElectron || item.desktopOnly !== true) &&
-      normalizeSearchText(item.title).includes(normalizedQuery),
+      [item.title, ...(item.keywords ?? [])].some((value) =>
+        normalizeSearchText(value).includes(normalizedQuery),
+      ),
   );
 }

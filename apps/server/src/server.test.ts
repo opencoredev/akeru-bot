@@ -144,6 +144,7 @@ import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -248,6 +249,26 @@ const makeDefaultOrchestrationReadModel = () => {
     ],
   };
 };
+
+const makeChannelTestBot = () => ({
+  id: BotId.make("bot-channel-test"),
+  name: "Channel bot",
+  title: "Agent",
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "dither" as const, seed: "channel-bot" },
+  engine: null,
+  sandbox: "local" as const,
+  runtimeMode: "full-access" as const,
+  usageCap: null,
+  voiceEnabled: false,
+  channelBindings: [],
+  groupId: null,
+  archivedAt: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 const makeDefaultOrchestrationThreadShell = (
   overrides: Partial<OrchestrationThreadShell> = {},
@@ -417,6 +438,7 @@ const buildAppUnderTest = (options?: {
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
     serverRuntimeStartup?: Partial<ServerRuntimeStartup.ServerRuntimeStartup["Service"]>;
+    channelDeliveryStore?: ChannelDeliveryStore.ChannelDeliveryStoreShape | null;
     serverEnvironment?: Partial<ServerEnvironment.ServerEnvironment["Service"]>;
     repositoryIdentityResolver?: Partial<
       RepositoryIdentityResolver.RepositoryIdentityResolver["Service"]
@@ -975,6 +997,15 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provideMerge(makeAuthTestLayer()),
       Layer.provideMerge(ServerSecretStore.layer),
+      Layer.provideMerge(
+        options?.layers?.channelDeliveryStore === null
+          ? Layer.empty
+          : Layer.succeed(
+              ChannelDeliveryStore.ChannelDeliveryStore,
+              options?.layers?.channelDeliveryStore ??
+                ChannelDeliveryStore.makeMemoryChannelDeliveryStore(),
+            ),
+      ),
       Layer.provide(workspaceAndProjectServicesLayer),
       Layer.provideMerge(FetchHttpClient.layer),
       Layer.provide(layerConfig),

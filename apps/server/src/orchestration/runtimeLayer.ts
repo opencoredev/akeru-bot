@@ -1,5 +1,6 @@
 import * as Layer from "effect/Layer";
 
+import { ChannelDeliveryStoreLive } from "../channels/ChannelDeliveryStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
 import { ProjectionBotRepositoryLive } from "../persistence/Layers/ProjectionBots.ts";

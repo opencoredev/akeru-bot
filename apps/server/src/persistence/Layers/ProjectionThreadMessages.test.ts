@@ -28,6 +28,11 @@ layer("ProjectionThreadMessageRepository", (it) => {
           sizeBytes: 5,
         },
       ];
+      const channelOrigin = {
+        provider: "telegram" as const,
+        externalThreadId: "telegram-chat-1",
+        externalSenderId: "telegram-user-7",
+      };
 
       yield* repository.upsert({
         messageId,
@@ -36,6 +41,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         role: "user",
         text: "initial",
         attachments: persistedAttachments,
+        channelOrigin,
         isStreaming: false,
         createdAt,
         updatedAt,
@@ -56,12 +62,14 @@ layer("ProjectionThreadMessageRepository", (it) => {
       assert.equal(rows.length, 1);
       assert.equal(rows[0]?.text, "updated");
       assert.deepEqual(rows[0]?.attachments, persistedAttachments);
+      assert.deepEqual(rows[0]?.channelOrigin, channelOrigin);
 
       const rowById = yield* repository.getByMessageId({ messageId });
       assert.equal(rowById._tag, "Some");
       if (rowById._tag === "Some") {
         assert.equal(rowById.value.text, "updated");
         assert.deepEqual(rowById.value.attachments, persistedAttachments);
+        assert.deepEqual(rowById.value.channelOrigin, channelOrigin);
       }
     }),
   );
@@ -79,6 +87,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         turnId: null,
         role: "assistant",
         text: "with attachment",
+        channelOrigin: null,
         attachments: [
           {
             type: "image",
@@ -109,6 +118,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
       assert.equal(rows.length, 1);
       assert.equal(rows[0]?.text, "cleared");
       assert.deepEqual(rows[0]?.attachments, []);
+      assert.equal(rows[0]?.channelOrigin, null);
     }),
   );
 });

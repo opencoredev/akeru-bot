@@ -35,11 +35,21 @@ export type CreateBotInput = CommandInput<"bot.create">;
 export type UpdateBotInput = CommandInput<"bot.update">;
 export type ArchiveBotInput = CommandInput<"bot.archive">;
 export type RestoreBotInput = CommandInput<"bot.restore">;
+export type ConnectChannelInput = CommandInput<"channel.connect">;
+export type SaveChannelConnectionInput = CommandInput<"channel.connection.save">;
+export type DeleteChannelConnectionInput = CommandInput<"channel.connection.delete">;
+export type AttachChannelInput = CommandInput<"channel.attach">;
+export type DisconnectChannelInput = CommandInput<"channel.disconnect">;
+export type ReconnectChannelInput = CommandInput<"channel.reconnect">;
+export type SendChannelMessageInput = CommandInput<"channel.send">;
 export type CreateGroupInput = CommandInput<"group.create">;
 export type RenameGroupInput = CommandInput<"group.rename">;
 export type DeleteGroupInput = CommandInput<"group.delete">;
 export type AssignGroupMemberInput = CommandInput<"group.member.assign">;
 export type UnassignGroupMemberInput = CommandInput<"group.member.unassign">;
+export type AssignGroupPersonInput = CommandInput<"group.person.assign">;
+export type UnassignGroupPersonInput = CommandInput<"group.person.unassign">;
+export type LeaveGroupInput = CommandInput<"group.leave">;
 export type SetGroupBossInput = CommandInput<"group.boss.set">;
 export type CreateMcpServerInput = CommandInput<"mcp-server.create">;
 export type UpdateMcpServerInput = CommandInput<"mcp-server.update">;
@@ -287,12 +297,106 @@ export const unassignGroupMember: (input: UnassignGroupMemberInput) => CommandEf
   });
 });
 
+export const assignGroupPerson: (input: AssignGroupPersonInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.assignGroupPerson",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.person.assign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const unassignGroupPerson: (input: UnassignGroupPersonInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.unassignGroupPerson",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.person.unassign",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const leaveGroup: (input: LeaveGroupInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.leaveGroup",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "group.leave",
+    commandId: yield* commandId(input),
+  });
+});
+
 export const setGroupBoss: (input: SetGroupBossInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.setGroupBoss",
 )(function* (input) {
   return yield* dispatch({
     ...input,
     type: "group.boss.set",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const connectChannel: (input: ConnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.connectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.connect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const saveChannelConnection: (input: SaveChannelConnectionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.saveChannelConnection")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "channel.connection.save",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const deleteChannelConnection: (input: DeleteChannelConnectionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.deleteChannelConnection")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "channel.connection.delete",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const attachChannel: (input: AttachChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.attachChannel",
+)(function* (input) {
+  return yield* dispatch({ ...input, type: "channel.attach", commandId: yield* commandId(input) });
+});
+
+export const disconnectChannel: (input: DisconnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.disconnectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.disconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const reconnectChannel: (input: ReconnectChannelInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.reconnectChannel",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.reconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const sendChannelMessage: (input: SendChannelMessageInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.sendChannelMessage",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.send",
     commandId: yield* commandId(input),
   });
 });

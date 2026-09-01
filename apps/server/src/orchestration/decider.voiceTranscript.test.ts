@@ -34,6 +34,7 @@ function makeBot(): OrchestrationBot {
     runtimeMode: "full-access",
     usageCap: null,
     voiceEnabled: true,
+    channelBindings: [],
     groupId: null,
     archivedAt: null,
     createdAt: NOW,

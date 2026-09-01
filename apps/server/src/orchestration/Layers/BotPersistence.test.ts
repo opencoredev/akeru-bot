@@ -1,4 +1,5 @@
 import {
+  AuthSessionId,
   BotId,
   CommandId,
   GroupId,
@@ -73,14 +74,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         createdAt,
       });
       yield* engine.dispatch({
-        type: "group.create",
-        commandId: CommandId.make("cmd-group-create"),
-        groupId,
-        name: "Product",
-        bossBotId: botId,
-        createdAt,
-      });
-      yield* engine.dispatch({
         type: "bot.update",
         commandId: CommandId.make("cmd-bot-update"),
         botId,
@@ -112,6 +105,14 @@ it.layer(TestLayer)("bot persistence", (it) => {
         botId,
       });
       yield* engine.dispatch({
+        type: "group.create",
+        commandId: CommandId.make("cmd-group-create"),
+        groupId,
+        name: "Product",
+        bossBotId: botId,
+        createdAt,
+      });
+      yield* engine.dispatch({
         type: "group.rename",
         commandId: CommandId.make("cmd-group-rename"),
         groupId,
@@ -133,7 +134,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
           runtimeMode: "approval-required",
           usageCap: { unit: "tokens", limit: 50_000 },
           voiceEnabled: true,
-          groupId,
+          channelBindings: [],
+          groupId: null,
           archivedAt: null,
           createdAt,
           updatedAt: restored.bots[0]!.updatedAt,
@@ -144,7 +146,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           id: groupId,
           name: "Discovery",
           bossBotId: botId,
-          members: [{ botId, role: "boss" }],
+          members: [{ kind: "bot", botId, role: "boss" }],
           createdAt,
           updatedAt: restored.groups[0]!.updatedAt,
         },
@@ -296,6 +298,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const bossBotId = BotId.make("bot-routing-boss");
       const specialistBotId = BotId.make("bot-routing-specialist");
       const threadId = ThreadId.make("thread-group-routing");
+      const personId = AuthSessionId.make("person-routing");
       const createdAt = "2026-01-04T00:00:00.000Z";
       const modelSelection = {
         instanceId: ProviderInstanceId.make("codex"),
@@ -334,6 +337,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         name: "Routing group",
         bossBotId,
         specialistBotIds: [specialistBotId],
+        creator: { kind: "person", personId, displayName: "Routing person" },
         createdAt,
       });
       yield* engine.dispatch({
@@ -363,6 +367,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
         },
         runtimeMode: "full-access",
         interactionMode: "default",
+        senderPersonId: personId,
+        senderDisplayName: "Routing person",
         createdAt,
       });
 

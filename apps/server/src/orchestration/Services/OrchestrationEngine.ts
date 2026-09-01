@@ -11,6 +11,7 @@
  * @module OrchestrationEngineService
  */
 import type {
+  AuthSessionId,
   OrchestrationClientOrigin,
   OrchestrationCommand,
   OrchestrationEvent,
@@ -21,6 +22,11 @@ import type * as Stream from "effect/Stream";
 
 import type { OrchestrationDispatchError } from "../Errors.ts";
 import type { OrchestrationEventStoreError } from "../../persistence/Errors.ts";
+
+export interface OrchestrationDispatchActor {
+  readonly personId: AuthSessionId;
+  readonly canManageGroups: boolean;
+}
 
 /**
  * OrchestrationEngineShape - Service API for orchestration command and event flow.
@@ -45,8 +51,8 @@ export interface OrchestrationEngineShape {
    * Dispatch a validated orchestration command.
    *
    * @param command - Valid orchestration command.
-   * @param options - Optional client origin (surface/app version) stamped into
-   *   the metadata of every event the command produces.
+   * @param options - Optional client identity and origin. Trusted internal
+   *   dispatches omit the actor.
    * @returns Effect containing the sequence of the persisted event.
    *
    * Dispatch is serialized through an internal queue and deduplicated via
@@ -54,7 +60,10 @@ export interface OrchestrationEngineShape {
    */
   readonly dispatch: (
     command: OrchestrationCommand,
-    options?: { readonly origin?: OrchestrationClientOrigin },
+    options?: {
+      readonly actor?: OrchestrationDispatchActor;
+      readonly origin?: OrchestrationClientOrigin;
+    },
   ) => Effect.Effect<{ sequence: number }, OrchestrationDispatchError, never>;
 
   /**

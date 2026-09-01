@@ -1,7 +1,12 @@
 import { MessageId, TurnId, type OrchestrationMessage } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { visibleBotChatMessages } from "./botConversationPresentation";
+import {
+  channelOriginLabel,
+  channelOriginForAssistantMessage,
+  channelProviderLabel,
+  visibleBotChatMessages,
+} from "./botConversationPresentation";
 
 const message = (
   id: string,
@@ -20,6 +25,35 @@ const message = (
   }) as const;
 
 describe("bot conversation presentation", () => {
+  it("shows the iMessage sender and maps every channel provider", () => {
+    expect(
+      channelOriginLabel({
+        provider: "imessage",
+        externalThreadId: "group-1",
+        externalSenderId: "+15551234567",
+      }),
+    ).toBe("iMessage · +15551234567");
+    expect(channelProviderLabel("telegram")).toBe("Telegram");
+    expect(channelProviderLabel("whatsapp")).toBe("WhatsApp");
+  });
+
+  it("pairs an assistant message with the nearest inbound channel message", () => {
+    const messages = [
+      message("web-user", "user", false),
+      {
+        ...message("telegram-user", "user", false),
+        channelOrigin: { provider: "telegram" as const, externalThreadId: "chat-1" },
+      },
+      message("answer", "assistant", false),
+    ];
+
+    expect(channelOriginForAssistantMessage(messages, 2)).toEqual({
+      provider: "telegram",
+      externalThreadId: "chat-1",
+    });
+    expect(channelOriginForAssistantMessage(messages, 0)).toBeNull();
+  });
+
   it("keeps user messages and settled answers only", () => {
     const messages = [
       message("user", "user", false),
