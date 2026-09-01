@@ -88,6 +88,9 @@ export function BotPromptComposer({
 }) {
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
+  const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [expandedAttachmentId, setExpandedAttachmentId] = useState<string | null>(null);
   const attachmentsRef = useRef<BotPromptAttachment[]>([]);
   const releasedPreviewUrlsRef = useRef(new Set<string>());
@@ -137,6 +140,12 @@ export function BotPromptComposer({
     const updated = attachmentsRef.current.filter((attachment) => attachment.id !== attachmentId);
     attachmentsRef.current = updated;
     setAttachments(updated);
+    setFailedAttachmentIds((current) => {
+      if (!current.has(attachmentId)) return current;
+      const next = new Set(current);
+      next.delete(attachmentId);
+      return next;
+    });
     if (expandedAttachmentId === attachmentId) {
       setExpandedAttachmentId(null);
     }
@@ -145,7 +154,7 @@ export function BotPromptComposer({
   const expandedPreview =
     expandedAttachmentId === null
       ? null
-      : buildBotPromptAttachmentPreview(attachments, expandedAttachmentId);
+      : buildBotPromptAttachmentPreview(attachments, expandedAttachmentId, failedAttachmentIds);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -202,6 +211,9 @@ export function BotPromptComposer({
             );
             attachmentsRef.current = remaining;
             setAttachments(remaining);
+            setFailedAttachmentIds(
+              (current) => new Set([...current].filter((id) => !submittedIds.has(id))),
+            );
             if (expandedAttachmentId && submittedIds.has(expandedAttachmentId)) {
               setExpandedAttachmentId(null);
             }
@@ -223,6 +235,10 @@ export function BotPromptComposer({
           attachments={attachments}
           className="px-3 pt-3"
           onExpand={setExpandedAttachmentId}
+          onPreviewError={(attachmentId) => {
+            setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
+            if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
+          }}
           onRemove={removeAttachment}
         />
         <textarea

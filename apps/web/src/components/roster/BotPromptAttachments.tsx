@@ -40,12 +40,15 @@ export function releaseBotPromptAttachments(attachments: readonly BotPromptAttac
 export function buildBotPromptAttachmentPreview(
   attachments: readonly BotPromptAttachment[],
   attachmentId: string,
+  failedAttachmentIds: ReadonlySet<string> = new Set(),
 ): ExpandedImagePreview | null {
   return buildExpandedImagePreview(
     attachments.map((attachment) => ({
       id: attachment.id,
       name: attachment.file.name,
-      ...(attachment.previewUrl !== null ? { previewUrl: attachment.previewUrl } : {}),
+      ...(attachment.previewUrl !== null && !failedAttachmentIds.has(attachment.id)
+        ? { previewUrl: attachment.previewUrl }
+        : {}),
     })),
     attachmentId,
   );
@@ -54,11 +57,13 @@ export function buildBotPromptAttachmentPreview(
 export function BotPromptAttachments({
   attachments,
   onExpand,
+  onPreviewError,
   onRemove,
   className,
 }: {
   attachments: ReadonlyArray<BotPromptAttachment>;
   onExpand: (attachmentId: string) => void;
+  onPreviewError: (attachmentId: string) => void;
   onRemove: (attachmentId: string) => void;
   className?: string;
 }) {
@@ -85,6 +90,7 @@ export function BotPromptAttachments({
                 className="size-full object-cover"
                 draggable={false}
                 onError={(event) => {
+                  onPreviewError(attachment.id);
                   event.currentTarget.hidden = true;
                   event.currentTarget.nextElementSibling?.removeAttribute("hidden");
                   event.currentTarget.closest("button")?.setAttribute("disabled", "");

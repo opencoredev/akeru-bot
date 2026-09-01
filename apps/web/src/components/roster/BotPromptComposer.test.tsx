@@ -127,6 +127,16 @@ describe("bot prompt composer", () => {
       ],
       index: 1,
     });
+    expect(
+      buildBotPromptAttachmentPreview(
+        attachments,
+        attachments[1]!.id,
+        new Set([attachments[0]!.id]),
+      ),
+    ).toEqual({
+      images: [{ src: "blob:second", name: "same-name.png" }],
+      index: 0,
+    });
 
     releaseBotPromptAttachments(attachments);
     expect(revokeObjectURL.mock.calls).toEqual([["blob:first"], ["blob:second"]]);
@@ -134,13 +144,19 @@ describe("bot prompt composer", () => {
 
   it("renders a live thumbnail with independent preview and remove controls", () => {
     const onExpand = vi.fn();
+    const onPreviewError = vi.fn();
     const onRemove = vi.fn();
     const attachment: BotPromptAttachment = {
       id: "attachment-1",
       file: imageFile("preview.png"),
       previewUrl: "blob:preview",
     };
-    const tree = BotPromptAttachments({ attachments: [attachment], onExpand, onRemove });
+    const tree = BotPromptAttachments({
+      attachments: [attachment],
+      onExpand,
+      onPreviewError,
+      onRemove,
+    });
     const markup = renderToStaticMarkup(tree);
     const preview = visitElements(
       tree,
@@ -177,6 +193,7 @@ describe("bot prompt composer", () => {
       image?.props.onError as ((event: { currentTarget: typeof currentTarget }) => void) | undefined
     )?.({ currentTarget });
     expect(currentTarget.hidden).toBe(true);
+    expect(onPreviewError).toHaveBeenCalledWith("attachment-1");
     expect(removeAttribute).toHaveBeenCalledWith("hidden");
     expect(setAttribute).toHaveBeenCalledWith("disabled", "");
   });
