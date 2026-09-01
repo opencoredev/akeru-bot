@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 import { INSTALL_SUCCESS_MESSAGE, installPromptForPlatform } from "./installPrompt";
+import { MAC_INSTALL_PROMPT } from "./macInstallPrompt";
+import { windowsInstallPrompt } from "./installPrompts";
 
 describe("installPromptForPlatform", () => {
+  it("selects the verified prompt for every shipped platform", () => {
+    expect(installPromptForPlatform("mac")).toBe(MAC_INSTALL_PROMPT);
+    expect(installPromptForPlatform("win")).toBe(windowsInstallPrompt);
+    expect(installPromptForPlatform("linux")).toMatch(/x86_64 or amd64/);
+  });
+
   it("selects the verified Linux x64 AppImage prompt", () => {
     const prompt = installPromptForPlatform("linux");
 
@@ -18,11 +26,13 @@ describe("installPromptForPlatform", () => {
   });
 
   it("gates the exact success sentence on launch verification", () => {
-    const prompt = installPromptForPlatform("linux")!;
-    const successGate = `Only after launch verification, output exactly: ${INSTALL_SUCCESS_MESSAGE}`;
-
-    expect(prompt.endsWith(successGate)).toBe(true);
-    expect(prompt.split(INSTALL_SUCCESS_MESSAGE)).toHaveLength(2);
-    expect(prompt).toMatch(/If any step fails, report the failure and do not claim success/);
+    for (const platform of ["mac", "win", "linux"]) {
+      const prompt = installPromptForPlatform(platform)!;
+      expect(prompt.split(INSTALL_SUCCESS_MESSAGE)).toHaveLength(2);
+      expect(prompt).toMatch(/only after|Only after/);
+      expect(prompt).toMatch(/checksum/i);
+      expect(prompt).toMatch(/launch/i);
+      expect(prompt).toMatch(/process|window/i);
+    }
   });
 });

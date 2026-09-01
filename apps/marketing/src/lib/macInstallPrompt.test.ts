@@ -9,14 +9,12 @@ import {
 
 const assets = [
   { name: "Akeru-Bot-1.0.0-arm64.dmg", browser_download_url: "https://example.test/arm" },
-  { name: "Akeru-Bot-1.0.0-x64.dmg", browser_download_url: "https://example.test/intel" },
 ];
 
 describe("macOS install prompt", () => {
   it("selects the matching release asset and refuses unavailable architectures", () => {
     expect(selectMacInstallAsset("arm64", assets)).toBe(assets[0]);
-    expect(selectMacInstallAsset("x86_64", assets)).toBe(assets[1]);
-    expect(selectMacInstallAsset("x86_64", assets.slice(0, 1))).toBeNull();
+    expect(selectMacInstallAsset("x86_64", assets)).toBeNull();
     expect(selectMacInstallAsset("powerpc", assets)).toBeNull();
   });
 

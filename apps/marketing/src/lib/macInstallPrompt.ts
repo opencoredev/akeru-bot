@@ -2,15 +2,14 @@ import type { ReleaseAsset } from "./releases";
 
 export const MAC_INSTALL_SUCCESS = "You can open the app now with no issues.";
 
-export const MAC_INSTALL_PROMPT = `Install the latest unsigned macOS release of Akeru Bot from opencoredev/akeru-bot. Use no other repository or download source. Detect the Mac architecture with uname -m before downloading. For arm64, use the release asset ending in arm64.dmg. For x86_64, use an x64.dmg only if that asset exists in the release; otherwise stop and explain that no Intel build is available. Download the matching DMG and SHA256SUMS from the same GitHub release. Require an exact checksum entry for the DMG, verify it with shasum -a 256, and stop on a missing or mismatched checksum. Mount the verified DMG and install Akeru Bot.app in /Applications. Ask only for the native macOS administrator confirmation if /Applications requires it. Remove com.apple.quarantine only from the installed /Applications/Akeru Bot.app. Never disable Gatekeeper or change any system-wide security setting. Launch /Applications/Akeru Bot.app and verify that its process or window exists. Say exactly "${MAC_INSTALL_SUCCESS}" only after the checksum, install, launch, and process or window checks all succeed.`;
+export const MAC_INSTALL_PROMPT = `Install the latest unsigned macOS release of Akeru Bot from opencoredev/akeru-bot. Use no other repository or download source. Detect the Mac architecture with uname -m before downloading. Continue only for arm64 and stop for x86_64 or every other architecture because the official release supports Apple silicon only. Download the exact Akeru-Bot-<version>-arm64.dmg asset and SHA256SUMS from the same latest stable vX.Y.Z GitHub release. Require an exact checksum entry for the DMG, verify it with shasum -a 256, and stop on a missing or mismatched checksum. Mount the verified DMG and install Akeru Bot.app in /Applications. Ask only for the native macOS administrator confirmation if /Applications requires it. Remove com.apple.quarantine only from the installed /Applications/Akeru Bot.app. Never disable Gatekeeper or change any system-wide security setting. Launch /Applications/Akeru Bot.app and verify that its process or window exists. Say exactly "${MAC_INSTALL_SUCCESS}" only after the checksum, install, launch, and process or window checks all succeed.`;
 
 export function selectMacInstallAsset(
   architecture: string,
   assets: ReadonlyArray<ReleaseAsset>,
 ): ReleaseAsset | null {
-  const suffix = architecture === "arm64" ? "arm64.dmg" : architecture === "x86_64" ? "x64.dmg" : null;
-  if (!suffix) return null;
-  return assets.find((asset) => asset.name.endsWith(`-${suffix}`)) ?? null;
+  if (architecture !== "arm64") return null;
+  return assets.find((asset) => asset.name.endsWith("-arm64.dmg")) ?? null;
 }
 
 export function checksumForAsset(checksums: string, assetName: string): string | null {

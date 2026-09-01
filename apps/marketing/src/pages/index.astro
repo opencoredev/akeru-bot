@@ -188,13 +188,11 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 <script>
   import { installPromptForPlatform } from "../lib/installPrompt";
   import {
-    blockDownloadUntilResolved,
     detectDownloadTarget,
     fetchLatestRelease,
     RELEASES_URL,
     requiresUnsignedInstall,
-    resolveDownloadUrl,
-    selectReleaseAsset,
+    resolveAssetDownload,
   } from "../lib/releases";
 
   const UNSIGNED_PROMPT =
@@ -202,7 +200,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 
   async function init() {
     const button = document.getElementById("download-btn") as HTMLAnchorElement | null;
-    const resolveButton = button ? blockDownloadUntilResolved(button) : null;
     const label = document.getElementById("download-label");
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
     const installNotice = document.getElementById("install-notice");
@@ -214,7 +211,10 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     const platform = detectDownloadTarget(navigator.userAgent);
     if (platform) {
       if (label) label.textContent = platform.label;
-      if (button) button.dataset.os = platform.os;
+      if (button) {
+        button.dataset.os = platform.os;
+        button.dataset.asset = platform.assetSuffix;
+      }
       const prompt = installPromptForPlatform(platform.os);
       installNotice?.toggleAttribute("hidden", !prompt);
       copyPrompt?.addEventListener("click", async () => {
@@ -224,39 +224,25 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       });
     } else if (button && label) {
       label.textContent = "All downloads";
-      resolveButton?.(RELEASES_URL);
+      button.href = RELEASES_URL;
+      button.removeAttribute("aria-disabled");
     }
 
-    try {
-      const releasePromise = fetchLatestRelease();
-      if (button && platform) {
-        resolveButton?.(await resolveDownloadUrl(platform, releasePromise));
-      }
-      const release = await releasePromise;
-      const assets = release.assets ?? [];
+    const release = fetchLatestRelease();
+    const cardDownloads = Array.from(cards, async (card) => {
+      const suffix = card.dataset.asset;
+      if (!suffix || card === button) return;
+      const asset = await resolveAssetDownload(card, suffix, release);
+      card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
+    });
 
-      if (button && platform) {
-        const asset = selectReleaseAsset(assets, platform.assetSuffix);
-        button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
-        if (!asset && label) label.textContent = "All downloads";
-      }
-
-      cards.forEach((card) => {
-        const suffix = card.dataset.asset;
-        const asset = suffix ? selectReleaseAsset(assets, suffix) : null;
-        card.href = asset?.browser_download_url ?? RELEASES_URL;
-        card.dataset.unsigned = asset && suffix && requiresUnsignedInstall(suffix) ? "true" : "";
-      });
-    } catch {
-      if (button) {
-        resolveButton?.(RELEASES_URL);
-      }
-      if (label) label.textContent = "All downloads";
-      cards.forEach((card) => {
-        card.href = RELEASES_URL;
-        card.dataset.unsigned = "";
-      });
+    if (button && platform) {
+      const asset = await resolveAssetDownload(button, platform.assetSuffix, release);
+      button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
+      if (!asset && label) label.textContent = "All downloads";
+      if (!asset) installNotice?.setAttribute("hidden", "");
     }
+    await Promise.all(cardDownloads);
 
     document.querySelectorAll<HTMLAnchorElement>("a[data-unsigned='true']").forEach((link) => {
       link.addEventListener("click", (event) => {

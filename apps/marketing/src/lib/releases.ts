@@ -51,16 +51,12 @@ export function detectDownloadTarget(userAgent: string): DownloadTarget | null {
   return null;
 }
 
-export function selectReleaseAsset(
-  assets: readonly ReleaseAsset[],
-  assetSuffix: string,
-): ReleaseAsset | null {
-  return (
-    assets.find(
-      (asset) =>
-        asset.name.startsWith("Akeru-Bot-") && asset.name.endsWith(`-${assetSuffix}`),
-    ) ?? null
-  );
+export function selectReleaseAsset(release: Release, assetSuffix: string): ReleaseAsset | null {
+  const version = /^v(\d+\.\d+\.\d+)$/.exec(release.tag_name)?.[1];
+  if (!version) return null;
+
+  const assetName = `Akeru-Bot-${version}-${assetSuffix}`;
+  return release.assets.find((asset) => asset.name === assetName) ?? null;
 }
 
 export function requiresUnsignedInstall(assetSuffix: string): boolean {
@@ -86,17 +82,20 @@ export function blockDownloadUntilResolved(link: DownloadLink): (url: string) =>
   };
 }
 
-export async function resolveDownloadUrl(
-  target: DownloadTarget,
+export async function resolveAssetDownload(
+  link: DownloadLink,
+  assetSuffix: string,
   release: Promise<Release> = fetchLatestRelease(),
-): Promise<string> {
+): Promise<ReleaseAsset | null> {
+  const resolve = blockDownloadUntilResolved(link);
+
   try {
-    return (
-      selectReleaseAsset((await release).assets, target.assetSuffix)?.browser_download_url ??
-      RELEASES_URL
-    );
+    const asset = selectReleaseAsset(await release, assetSuffix);
+    resolve(asset?.browser_download_url ?? RELEASES_URL);
+    return asset;
   } catch {
-    return RELEASES_URL;
+    resolve(RELEASES_URL);
+    return null;
   }
 }
 
@@ -104,7 +103,9 @@ export async function fetchLatestRelease(): Promise<Release> {
   const cached = sessionStorage.getItem(CACHE_KEY);
   if (cached) {
     try {
-      return JSON.parse(cached);
+      const data: unknown = JSON.parse(cached);
+      if (isRelease(data)) return data;
+      sessionStorage.removeItem(CACHE_KEY);
     } catch {
       sessionStorage.removeItem(CACHE_KEY);
     }
@@ -126,6 +127,7 @@ function isRelease(value: unknown): value is Release {
   const release = value as Record<string, unknown>;
   return (
     typeof release.tag_name === "string" &&
+    /^v\d+\.\d+\.\d+$/.test(release.tag_name) &&
     typeof release.html_url === "string" &&
     Array.isArray(release.assets) &&
     release.assets.every(

@@ -68,9 +68,8 @@ import { RELEASES_URL } from "../lib/releases";
 <script>
   import {
     fetchLatestRelease,
-    RELEASES_URL,
     requiresUnsignedInstall,
-    selectReleaseAsset,
+    resolveAssetDownload,
   } from "../lib/releases";
 
   const UNSIGNED_PROMPT =
@@ -80,9 +79,16 @@ import { RELEASES_URL } from "../lib/releases";
     const versionLabel = document.getElementById("version-label");
     // Only release-asset links; mobile store cards have no data-asset and keep their href.
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
+    const releasePromise = fetchLatestRelease();
+    const cardDownloads = Array.from(cards, async (card) => {
+      const suffix = card.dataset.asset;
+      if (!suffix) return;
+      const asset = await resolveAssetDownload(card, suffix, releasePromise);
+      card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
+    });
 
     try {
-      const release = await fetchLatestRelease();
+      const release = await releasePromise;
 
       if (versionLabel && release.tag_name) {
         versionLabel.textContent = `Latest (${release.tag_name})`;
@@ -94,28 +100,12 @@ import { RELEASES_URL } from "../lib/releases";
         changelogLink.style.display = "";
       }
 
-      cards.forEach((card) => {
-        const suffix = card.dataset.asset;
-        if (!suffix) return;
-
-        const match = selectReleaseAsset(release.assets, suffix);
-        if (match) {
-          card.href = match.browser_download_url;
-          card.dataset.unsigned = requiresUnsignedInstall(suffix) ? "true" : "";
-        } else {
-          card.href = RELEASES_URL;
-          card.dataset.unsigned = "";
-        }
-      });
     } catch {
       if (versionLabel) {
         versionLabel.textContent = "Could not load release info.";
       }
-      cards.forEach((card) => {
-        card.href = RELEASES_URL;
-        card.dataset.unsigned = "";
-      });
     }
+    await Promise.all(cardDownloads);
 
     document.querySelectorAll<HTMLAnchorElement>("a[data-unsigned='true']").forEach((link) => {
       link.addEventListener("click", (event) => {

@@ -1,19 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  installPromptForPlatform,
   VERIFIED_INSTALL_SUCCESS,
   verifiedInstallSuccess,
   windowsInstallPrompt,
 } from "./installPrompts";
 
 describe("Windows install prompt", () => {
-  it("selects only the Windows prompt", () => {
-    expect(installPromptForPlatform("win")).toBe(windowsInstallPrompt);
-    expect(installPromptForPlatform("mac")).toBeNull();
-    expect(installPromptForPlatform("linux")).toBeNull();
-  });
-
   it("reports success only after every verification passes", () => {
     expect(verifiedInstallSuccess({ checksum: true, install: true, launch: true })).toBe(
       VERIFIED_INSTALL_SUCCESS,
