@@ -9,6 +9,21 @@ import { expectedReleaseAssetNames, verifyReleaseAssets } from "./verify-release
 import { verifyReleaseCandidate } from "./verify-release-candidate.ts";
 
 describe("verify-release-assets", () => {
+  it("matches the native desktop artifact names", () => {
+    NodeAssert.deepEqual(expectedReleaseAssetNames("1.2.3"), [
+      "Akeru-Bot-1.2.3-arm64.dmg",
+      "Akeru-Bot-1.2.3-arm64.dmg.blockmap",
+      "Akeru-Bot-1.2.3-arm64.zip",
+      "Akeru-Bot-1.2.3-arm64.zip.blockmap",
+      "Akeru-Bot-1.2.3-x64.exe",
+      "Akeru-Bot-1.2.3-x64.exe.blockmap",
+      "Akeru-Bot-1.2.3-x64.AppImage",
+      "latest-mac.yml",
+      "latest.yml",
+      "latest-linux.yml",
+    ]);
+  });
+
   it("rejects missing assets and writes verified SHA256SUMS for the exact release set", async () => {
     const directory = await NodeFSP.mkdtemp(
       NodePath.join(NodeOS.tmpdir(), "akeru-release-assets-"),

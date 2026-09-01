@@ -48,8 +48,13 @@ for (const relativePath of [".github/workflows/ci.yml"] as const) {
 
 assertContains(
   desktopArtifactBuilder,
-  'artifactName: "Akeru-Bot-${version}-${arch}.${ext}"',
+  '"Akeru-Bot-${version}-${arch}.${ext}"',
   "Desktop artifacts do not use the Akeru Bot release name.",
+);
+assertContains(
+  desktopArtifactBuilder,
+  '"Akeru-Bot-${version}-x64.${ext}"',
+  "Linux desktop artifacts do not use the advertised x64 release name.",
 );
 assertContains(serverCli, '"akeru-bot",', "CLI publishing does not select the Akeru package.");
 assertContains(
@@ -140,6 +145,11 @@ assertContains(
   releaseWorkflow,
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",
   "Signed macOS verification cannot access the App Store Connect key.",
+);
+assertContains(
+  releaseWorkflow,
+  "!release/builder-debug.yml",
+  "Stable release uploads electron-builder debug metadata.",
 );
 const desktopJobHeader = /\n  desktop:\n([\s\S]*?)\n    strategy:/u.exec(releaseWorkflow)?.[1];
 if (!desktopJobHeader) throw new Error("Stable release workflow is missing the desktop job.");

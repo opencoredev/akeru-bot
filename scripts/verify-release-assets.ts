@@ -8,7 +8,9 @@ import * as NodePath from "node:path";
 export function expectedReleaseAssetNames(version: string): readonly string[] {
   return [
     `Akeru-Bot-${version}-arm64.dmg`,
+    `Akeru-Bot-${version}-arm64.dmg.blockmap`,
     `Akeru-Bot-${version}-arm64.zip`,
+    `Akeru-Bot-${version}-arm64.zip.blockmap`,
     `Akeru-Bot-${version}-x64.exe`,
     `Akeru-Bot-${version}-x64.exe.blockmap`,
     `Akeru-Bot-${version}-x64.AppImage`,
