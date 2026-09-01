@@ -38,19 +38,17 @@ export function detectCliRunner(entryPath: string): CliRunner | null {
 
 /**
  * The `akeru-bot` package spec to suggest. The literal spec the user typed
- * (for example, `akeru-bot@nightly`) is resolved away before our process
- * starts, so re-derive it from the running version. Nightly builds re-suggest
- * the nightly channel. Anything else suggests the bare package.
+ * is resolved away before our process starts, so re-derive it from the
+ * running version.
  */
 export function suggestedPackageSpec(version: string): string {
-  return version.includes("-nightly.") ? "akeru-bot@nightly" : "akeru-bot";
+  return "akeru-bot";
 }
 
 /**
  * Render an `akeru <subcommand>` suggestion that matches how this process was
  * launched, so copy/pasting it works. An `npx akeru-bot connect` launch suggests
- * `npx akeru-bot serve`, a global install suggests `akeru serve`, and a nightly
- * build keeps the `@nightly` tag.
+ * `npx akeru-bot serve`, and a global install suggests `akeru serve`.
  */
 export function formatCliCommand(input: {
   readonly subcommand: string;

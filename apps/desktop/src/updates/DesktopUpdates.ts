@@ -335,16 +335,15 @@ export const make = Effect.gen(function* () {
     channel: DesktopUpdateChannel,
   ) {
     yield* Effect.annotateCurrentSpan({ channel });
-    const allowsPrerelease = channel === "nightly";
     yield* electronUpdater.setChannel(channel);
-    yield* electronUpdater.setAllowPrerelease(allowsPrerelease);
-    yield* electronUpdater.setAllowDowngrade(allowsPrerelease);
-    yield* electronUpdater.setFullChangelog(allowsPrerelease);
+    yield* electronUpdater.setAllowPrerelease(false);
+    yield* electronUpdater.setAllowDowngrade(false);
+    yield* electronUpdater.setFullChangelog(false);
     yield* logUpdaterInfo("using update channel", {
       channel,
-      allowPrerelease: allowsPrerelease,
-      allowDowngrade: allowsPrerelease,
-      fullChangelog: allowsPrerelease,
+      allowPrerelease: false,
+      allowDowngrade: false,
+      fullChangelog: false,
     });
   });
 

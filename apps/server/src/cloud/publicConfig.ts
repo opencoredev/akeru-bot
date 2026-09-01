@@ -106,8 +106,8 @@ export const relayUrlConfig = makeRelayUrlConfig();
 
 /**
  * Hosted app origin used for out-of-band OAuth on headless
- * machines. Overridable so staging/nightly builds can point their CLIs at a
- * matching hosted deployment.
+ * machines. Overridable so local builds can point their CLIs at a matching
+ * hosted deployment.
  */
 export const hostedAppUrlConfig = makePublicValueConfig(
   "T3CODE_HOSTED_APP_URL",

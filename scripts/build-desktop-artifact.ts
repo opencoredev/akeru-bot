@@ -339,7 +339,7 @@ export class DesktopIconSourceMissingError extends Schema.TaggedErrorClass<Deskt
 export class DesktopDmgBackgroundSourceMissingError extends Schema.TaggedErrorClass<DesktopDmgBackgroundSourceMissingError>()(
   "DesktopDmgBackgroundSourceMissingError",
   {
-    channel: Schema.Literals(["latest", "nightly"]),
+    channel: Schema.Literal("latest"),
     sourcePath: Schema.String,
   },
 ) {
@@ -1850,14 +1850,13 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
 
 export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(function* (
   stageResourcesDir: string,
-  channel: "latest" | "nightly",
   verbose: boolean,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const sourcePath = path.join(stageResourcesDir, "dmg", `dmg-background-${channel}.svg`);
+  const sourcePath = path.join(stageResourcesDir, "dmg", "dmg-background-latest.svg");
   if (!(yield* fs.exists(sourcePath))) {
-    return yield* new DesktopDmgBackgroundSourceMissingError({ channel, sourcePath });
+    return yield* new DesktopDmgBackgroundSourceMissingError({ channel: "latest", sourcePath });
   }
 
   for (const output of [
@@ -1867,14 +1866,14 @@ export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(
     const targetPath = path.join(
       stageResourcesDir,
       "dmg",
-      `dmg-background-${channel}${output.suffix}.png`,
+      `dmg-background-latest${output.suffix}.png`,
     );
     yield* runCommand(
       ChildProcess.make(
         {},
       )`sips -s format png -z ${output.height} ${output.width} ${sourcePath} --out ${targetPath}`,
       {
-        label: `sips ${channel} DMG background${output.suffix || "@1x"}`,
+        label: `sips latest DMG background${output.suffix || "@1x"}`,
         verbose,
       },
     );
@@ -2013,7 +2012,7 @@ export function resolveDesktopRuntimeDependencies(
 }
 
 export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig")(function* (
-  updateChannel: "latest" | "nightly",
+  _updateChannel: "latest",
 ) {
   const env = yield* Config.all({
     updateRepository: Config.string("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
@@ -2033,13 +2032,12 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
     provider: "github",
     owner,
     repo,
-    releaseType: updateChannel === "nightly" ? "prerelease" : "release",
-    ...(updateChannel === "nightly" ? { channel: "nightly" as const } : {}),
+    releaseType: "release",
   };
 });
 
-export function resolveDesktopUpdateChannel(version: string): "latest" | "nightly" {
-  return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
+export function resolveDesktopUpdateChannel(_version: string): "latest" {
+  return "latest";
 }
 
 function isDesktopPreviewVersion(version: string): boolean {
@@ -2050,15 +2048,7 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
-export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
-  if (resolveDesktopUpdateChannel(version) === "nightly") {
-    return {
-      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
-    };
-  }
-
+export function resolveDesktopBuildIconAssets(_version: string): DesktopBuildIconAssets {
   return {
     macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
     linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
@@ -2083,10 +2073,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
-export function resolveDesktopProductName(version: string): string {
-  return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "Akeru Bot (Nightly)"
-    : (desktopPackageJson.productName ?? "Akeru Bot");
+export function resolveDesktopProductName(_version: string): string {
+  return desktopPackageJson.productName ?? "Akeru Bot";
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2897,7 +2885,6 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   if (options.platform === "mac" && options.target === "dmg") {
     yield* stageDesktopDmgBackground(
       stageResourcesDir,
-      resolveDesktopUpdateChannel(appVersion),
       options.verbose,
     );
   }
