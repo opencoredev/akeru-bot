@@ -60,6 +60,8 @@ import { ProjectionCheckpoint } from "../../persistence/Services/ProjectionCheck
 import { ProjectionGroup } from "../../persistence/Services/ProjectionGroups.ts";
 import { ProjectionMcpServerRepository } from "../../persistence/Services/ProjectionMcpServers.ts";
 import { ProjectionMcpServerRepositoryLive } from "../../persistence/Layers/ProjectionMcpServers.ts";
+import { RoutineRepository } from "../../routines/Repository.ts";
+import { RoutineRepositoryLive } from "../../routines/RepositoryLive.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
@@ -238,6 +240,7 @@ const REQUIRED_SNAPSHOT_PROJECTORS = [
   ORCHESTRATION_PROJECTOR_NAMES.groups,
   ORCHESTRATION_PROJECTOR_NAMES.delegations,
   ORCHESTRATION_PROJECTOR_NAMES.mcpServers,
+  ORCHESTRATION_PROJECTOR_NAMES.routines,
   ORCHESTRATION_PROJECTOR_NAMES.threads,
   ORCHESTRATION_PROJECTOR_NAMES.threadMessages,
   ORCHESTRATION_PROJECTOR_NAMES.threadProposedPlans,
@@ -433,6 +436,7 @@ function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: st
 
 const makeProjectionSnapshotQuery = Effect.gen(function* () {
   const projectionMcpServerRepository = yield* ProjectionMcpServerRepository;
+  const routineRepository = yield* RoutineRepository;
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
   const sql = yield* SqlClient.SqlClient;
@@ -1658,6 +1662,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ),
           ),
           projectionMcpServerRepository.listAll(),
+          routineRepository.listAll,
+          routineRepository.listAllRuns,
+          routineRepository.listSkillAssignments,
           listThreadRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -1732,6 +1739,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             groupRows,
             delegationRows,
             mcpServers,
+            routines,
+            routineRuns,
+            skillAssignments,
             threadRows,
             messageRows,
             proposedPlanRows,
@@ -1917,6 +1927,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 groups: groupRows.map(mapGroupRow),
                 delegations: delegationRows.map((row) => row.delegation),
                 mcpServers,
+                routines,
+                routineRuns,
+                skillAssignments,
                 threads,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               };
@@ -1973,6 +1986,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ),
           ),
           projectionMcpServerRepository.listAll(),
+          routineRepository.listAll,
+          routineRepository.listAllRuns,
+          routineRepository.listSkillAssignments,
           listThreadRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2023,6 +2039,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             groupRows,
             delegationRows,
             mcpServers,
+            routines,
+            routineRuns,
+            skillAssignments,
             threadRows,
             proposedPlanRows,
             sessionRows,
@@ -2184,6 +2203,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 groups: groupRows.map(mapGroupRow),
                 delegations: delegationRows.map((row) => row.delegation),
                 mcpServers,
+                routines,
+                routineRuns,
+                skillAssignments,
                 threads,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               } satisfies OrchestrationReadModel;
@@ -2234,6 +2256,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ),
           ),
           projectionMcpServerRepository.listAll(),
+          routineRepository.listAll,
+          routineRepository.listAllRuns,
+          routineRepository.listSkillAssignments,
           listActiveThreadRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2276,6 +2301,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             groupRows,
             delegationRows,
             mcpServers,
+            routines,
+            routineRuns,
+            skillAssignments,
             threadRows,
             sessionRows,
             latestTurnRows,
@@ -2339,6 +2367,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 groups: groupRows.map(mapGroupRow),
                 delegations: delegationRows.map((row) => row.delegation),
                 mcpServers,
+                routines: routines.filter((routine) => routine.deletedAt === null),
+                routineRuns,
+                skillAssignments,
                 threads: Arr.filterMap(threadRows, (row) =>
                   row.deletedAt === null
                     ? Result.succeed({
@@ -3214,4 +3245,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 export const OrchestrationProjectionSnapshotQueryLive = Layer.effect(
   ProjectionSnapshotQuery,
   makeProjectionSnapshotQuery,
-).pipe(Layer.provideMerge(ProjectionMcpServerRepositoryLive));
+).pipe(
+  Layer.provideMerge(ProjectionMcpServerRepositoryLive),
+  Layer.provideMerge(RoutineRepositoryLive),
+);

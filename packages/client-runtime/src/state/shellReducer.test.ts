@@ -7,6 +7,10 @@ import {
   McpServerId,
   ProjectId,
   ProviderInstanceId,
+  RoutineId,
+  RoutineRunId,
+  SkillAssignmentId,
+  SkillId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -132,6 +136,59 @@ const stubThread = {
   session: null,
 } as const;
 
+const stubAssignment = {
+  id: SkillAssignmentId.make("assignment-1"),
+  botId: stubBot.id,
+  skillId: SkillId.make("research"),
+  name: "Research",
+  description: null,
+  createdAt: "2026-04-01T00:00:00.000Z",
+  updatedAt: "2026-04-01T00:00:00.000Z",
+};
+
+const stubRoutine = {
+  id: RoutineId.make("routine-1"),
+  botId: stubBot.id,
+  targetThreadId: stubThread.id,
+  job: "Morning brief",
+  procedure: "Prepare the morning brief.",
+  schedule: { kind: "daily" as const, time: "09:00" },
+  timezone: "UTC",
+  skillAssignmentIds: [stubAssignment.id],
+  connectorDependencies: [stubMcpServer.id],
+  projectId: stubProject.id,
+  sandbox: "local" as const,
+  approvalPolicy: "approval-required" as const,
+  procedureVersion: 1,
+  approvalVersion: 1,
+  enabled: true,
+  lifecycle: "enabled" as const,
+  nextRunAt: "2026-04-02T09:00:00.000Z",
+  lastRunAt: null,
+  latestResult: null,
+  latestFailure: null,
+  createdAt: "2026-04-01T00:00:00.000Z",
+  updatedAt: "2026-04-01T00:00:00.000Z",
+  deletedAt: null,
+};
+
+const stubRoutineRun = {
+  id: RoutineRunId.make("run-1"),
+  routineId: stubRoutine.id,
+  procedureVersion: 1,
+  trigger: "scheduled" as const,
+  scheduledFor: "2026-04-02T09:00:00.000Z",
+  status: "completed" as const,
+  result: { summary: "Prepared the brief." },
+  failure: null,
+  usageRef: null,
+  threadRef: null,
+  startedAt: "2026-04-02T09:00:00.000Z",
+  completedAt: "2026-04-02T09:01:00.000Z",
+  createdAt: "2026-04-02T09:00:00.000Z",
+  updatedAt: "2026-04-02T09:01:00.000Z",
+};
+
 describe("applyShellStreamEvent", () => {
   it("ignores stale project upserts without mutating the snapshot", () => {
     const snapshotWithProject: OrchestrationShellSnapshot = {
@@ -240,6 +297,37 @@ describe("applyShellStreamEvent", () => {
 
       expect(next.mcpServers).toEqual([]);
       expect(next.snapshotSequence).toBe(6);
+    });
+  });
+
+  describe("routine events", () => {
+    it("updates routines, run history, and skill assignments", () => {
+      const assigned = applyShellStreamEvent(baseSnapshot, {
+        kind: "skill-assignment-upserted",
+        sequence: 1,
+        assignment: stubAssignment,
+      });
+      const updated = applyShellStreamEvent(assigned, {
+        kind: "routine-upserted",
+        sequence: 2,
+        routine: stubRoutine,
+        run: stubRoutineRun,
+      });
+
+      expect(updated.skillAssignments).toEqual([stubAssignment]);
+      expect(updated.routines).toEqual([stubRoutine]);
+      expect(updated.routineRuns).toEqual([stubRoutineRun]);
+      expect(updated.snapshotSequence).toBe(2);
+    });
+
+    it("removes a routine with its run history", () => {
+      const next = applyShellStreamEvent(
+        { ...baseSnapshot, routines: [stubRoutine], routineRuns: [stubRoutineRun] },
+        { kind: "routine-removed", sequence: 3, routineId: stubRoutine.id },
+      );
+
+      expect(next.routines).toEqual([]);
+      expect(next.routineRuns).toEqual([]);
     });
   });
 

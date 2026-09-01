@@ -26,15 +26,19 @@ import {
 } from "@mastra/memory/processors";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
+  AkeruCreateRoutineInput,
   ProductFeedbackToolDraft,
   classifyAkeruExternalCommand,
   classifyAkeruSensitivePath,
   type AkeruConversationMemorySnapshot,
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
+  type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
 } from "@t3tools/contracts";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
+import { z } from "zod";
 
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
@@ -83,6 +87,27 @@ const productFeedbackTool = createTool({
   execute: async () => ({ status: "draft-opened" as const }),
 });
 
+const routineTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+export const routineToolInputSchema = z.object({
+  name: z.string().trim().min(1),
+  instructions: z.string().trim().min(1),
+  schedule: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("daily"), time: routineTime }),
+    z.object({ kind: z.literal("weekdays"), time: routineTime }),
+    z.object({
+      kind: z.literal("weekly"),
+      weekdays: z
+        .array(
+          z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]),
+        )
+        .min(1),
+      time: routineTime,
+    }),
+  ]),
+  skillNames: z.array(z.string().trim().min(1)).nullish(),
+  connectorNames: z.array(z.string().trim().min(1)).nullish(),
+});
+
 export interface AkeruMastraState {
   readonly projectPath?: string;
   readonly yolo?: boolean;
@@ -116,6 +141,10 @@ export interface AkeruMastraHarnessOptions {
     protectedAction: boolean,
   ) => Promise<void>;
   readonly toolRuntime: AkeruToolRuntime;
+  readonly createRoutine?: (
+    threadId: string,
+    input: AkeruCreateRoutineInputValue,
+  ) => Promise<unknown>;
 }
 
 export interface AkeruMastraHarness {
@@ -349,10 +378,34 @@ export async function resolveAkeruTools(
 ): Promise<ToolsInput> {
   const threadId = controllerResourceId(requestContext);
   if (!threadId) return {};
+  const routineTool = options.createRoutine
+    ? createTool({
+        id: AKERU_CREATE_ROUTINE_TOOL_NAME,
+        description:
+          "Create a disabled routine draft for recurring work in this chat. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
+        inputSchema: routineToolInputSchema,
+        requireApproval: false,
+        execute: async ({ skillNames, connectorNames, ...input }) =>
+          options.createRoutine!(
+            threadId,
+            await Schema.decodeUnknownPromise(AkeruCreateRoutineInput)(
+              {
+                ...input,
+                ...(skillNames ? { skillNames } : {}),
+                ...(connectorNames ? { connectorNames } : {}),
+              },
+              {
+                onExcessProperty: "error",
+              },
+            ),
+          ),
+      })
+    : undefined;
   return {
     ...approvalAwareTools(threadId, options.getThreadTools(threadId), options),
     ...createAkeruMastraTools(threadId, options.toolRuntime),
     [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]: productFeedbackTool,
+    ...(routineTool ? { [AKERU_CREATE_ROUTINE_TOOL_NAME]: routineTool } : {}),
   };
 }
 
@@ -557,6 +610,10 @@ export function akeruToolCategory(toolName: string): AkeruToolCategory {
   return "other";
 }
 
+export function routineToolNeedsGlobalApproval(toolName: string): boolean {
+  return toolName !== AKERU_CREATE_ROUTINE_TOOL_NAME;
+}
+
 export async function createAkeruMastraHarness(
   options: AkeruMastraHarnessOptions,
 ): Promise<AkeruMastraHarness> {
@@ -607,6 +664,21 @@ export async function createAkeruMastraHarness(
     toolCategoryResolver: akeruToolCategory,
     intervalHandlers: [],
   });
+  const controllerWithRunOptions = controller as unknown as {
+    buildSharedRunOptions: (session: unknown) => {
+      readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
+      readonly [key: string]: unknown;
+    };
+  };
+  const buildSharedRunOptions = controllerWithRunOptions.buildSharedRunOptions.bind(controller);
+  controllerWithRunOptions.buildSharedRunOptions = (session) => {
+    const runOptions = buildSharedRunOptions(session);
+    if (runOptions.requireToolApproval !== true) return runOptions;
+    return {
+      ...runOptions,
+      requireToolApproval: ({ toolName }) => routineToolNeedsGlobalApproval(toolName),
+    };
+  };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
     if (closing) return Promise.reject(new Error("Akeru observational memory is closing."));

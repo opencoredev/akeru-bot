@@ -29,6 +29,7 @@ import {
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   type BotId,
   type McpServer,
+  type AkeruCreateRoutineInput,
   type ModelSelection,
   type ProviderApprovalDecision,
   type ProviderRuntimeEvent,
@@ -41,6 +42,7 @@ import {
   type AkeruMemoryThreadAccess,
   type OrchestrationCommand,
   type OrchestrationReadModel,
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
@@ -124,6 +126,7 @@ import {
   type AgentControllerShape,
 } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
+import { RoutineDraftDispatcher } from "../../routines/RoutineDraftDispatcher.ts";
 
 const DEFAULT_MODE_ID = "build";
 const PLAN_MODE_ID = "plan";
@@ -216,8 +219,18 @@ export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
   return new AuthStorage(NodePath.join(secretsDir, "subscription-auth.json"));
 }
 
+const MISSING_SUSPENDED_RUN = "AGENT_SEND_STREAM_RESUME_NO_SUSPENDED_THREAD_RUN";
+const RESUME_FAILED_MESSAGE = "This response could not resume. Send your reply again.";
+
+function isMissingSuspendedRun(detail: string): boolean {
+  return (
+    detail.includes(MISSING_SUSPENDED_RUN) || detail.includes("could not find a suspended run")
+  );
+}
+
 function failureDetail(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  return isMissingSuspendedRun(detail) ? RESUME_FAILED_MESSAGE : detail;
 }
 
 function sessionFailureDetail(active: Pick<ActiveSession, "mcpServerIds">, cause: unknown): string {
@@ -438,6 +451,8 @@ const make = (options?: AgentControllerLiveOptions) =>
     const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
     const runtimeContext = yield* Effect.context<never>();
     const runPromise = Effect.runPromiseWith(runtimeContext);
+    const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
+    const routineDispatcher = Option.getOrUndefined(routineDraftDispatcher);
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
     const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
@@ -662,6 +677,19 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
+        ...(routineDispatcher
+          ? {
+              createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
+                const timezone = sessions.get(threadId)?.toolSession.timezone;
+                if (!timezone) {
+                  return Promise.reject(new Error("Send a message before creating a routine."));
+                }
+                return Effect.runPromise(
+                  routineDispatcher.draftForThread(ThreadIdBrand(threadId), timezone, input),
+                );
+              },
+            }
+          : {}),
         toolRuntime,
         startMemoryCall: async ({ threadId, category }) => {
           const context = memoryUsageByThread.get(threadId);
@@ -1798,6 +1826,10 @@ const make = (options?: AgentControllerLiveOptions) =>
               : providerInput,
           );
         }
+        if (input.timezone !== undefined) {
+          active.toolSession = { ...active.toolSession, timezone: input.timezone };
+          toolRuntime.registerSession(key, active.toolSession);
+        }
         const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
           const path = resolveAttachmentPath({
             attachmentsDir: config.attachmentsDir,
@@ -1952,9 +1984,24 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
       const toolCallId = String(input.requestId);
       if (active.activeTurn) active.activeTurn.waiting = false;
+      let resumeFailure: string | undefined;
+      const unsubscribe = active.session.subscribe((event) => {
+        if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
+          resumeFailure = event.reason;
+        } else if (event.type === "error") {
+          resumeFailure ??= event.error.message;
+        }
+      });
       yield* runMastra("respondToToolSuspension", () =>
         active.session.respondToToolSuspension({ toolCallId, resumeData: input.answers }),
-      );
+      ).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
+      if (resumeFailure !== undefined) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToToolSuspension",
+          detail: `Unknown pending user-input request: ${toolCallId}. ${resumeFailure}`,
+          cause: new Error(resumeFailure),
+        });
+      }
       publish({
         ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
         requestId: RuntimeRequestId.make(toolCallId),

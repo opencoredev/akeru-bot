@@ -9,6 +9,7 @@ import { RequestContext } from "@mastra/core/request-context";
 import { Memory } from "@mastra/memory";
 import { ObservationalMemory } from "@mastra/memory/processors";
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   AKERU_TOOL_CATALOG,
   ProviderDriverKind,
@@ -29,6 +30,8 @@ import {
   resolveAkeruInstructions,
   resolveAkeruMastraModel,
   resolveAkeruTools,
+  routineToolInputSchema,
+  routineToolNeedsGlobalApproval,
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -523,5 +526,73 @@ describe("AkeruMastraHarness", () => {
     }
     assert.instanceOf(blockedError, Error);
     assert.equal(blockedError.message, "Hook rejected");
+  });
+
+  it("creates a routine draft for the current chat", async () => {
+    assert.isFalse(routineToolNeedsGlobalApproval(AKERU_CREATE_ROUTINE_TOOL_NAME));
+    assert.isTrue(routineToolNeedsGlobalApproval("execute_command"));
+    assert.isTrue(
+      routineToolInputSchema.safeParse({
+        name: "Morning brief",
+        instructions: "Prepare the morning brief.",
+        schedule: { kind: "weekdays", time: "09:00" },
+      }).success,
+    );
+    assert.isTrue(
+      routineToolInputSchema.safeParse({
+        name: "Morning brief",
+        instructions: "Prepare the morning brief.",
+        schedule: { kind: "weekdays", time: "09:00" },
+        connectorNames: null,
+      }).success,
+    );
+    assert.isFalse(
+      routineToolInputSchema.safeParse({
+        name: "Morning brief",
+        instructions: "Prepare the morning brief.",
+        schedule: { kind: "weekdays", time: {} },
+      }).success,
+    );
+    const calls: unknown[] = [];
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      createRoutine: async (threadId, input) => {
+        calls.push({ threadId, input });
+        return { status: "drafted" };
+      },
+    });
+    const tool = tools[AKERU_CREATE_ROUTINE_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+
+    assert.isFalse(tool.requireApproval);
+    assert.deepEqual(
+      await tool.execute?.(
+        {
+          name: "Morning brief",
+          instructions: "Prepare the morning brief.",
+          schedule: { kind: "weekdays", time: "09:00" },
+          skillNames: null,
+          connectorNames: null,
+        },
+        {},
+      ),
+      { status: "drafted" },
+    );
+    assert.deepEqual(calls, [
+      {
+        threadId: "thread-1",
+        input: {
+          name: "Morning brief",
+          instructions: "Prepare the morning brief.",
+          schedule: { kind: "weekdays", time: "09:00" },
+        },
+      },
+    ]);
   });
 });

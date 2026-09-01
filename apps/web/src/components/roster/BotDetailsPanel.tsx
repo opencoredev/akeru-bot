@@ -54,6 +54,7 @@ import {
   type BotSandboxChoice,
 } from "./botSandbox";
 import { BotToolsSheet, buildBotToolItems } from "./BotToolsSheet";
+import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
 import type { Bot } from "./types";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
@@ -122,11 +123,13 @@ function BotProfileEditor({
   onSave,
   threadRef,
   active,
+  routinePanel,
 }: {
   readonly bot: Bot;
   readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
   readonly threadRef: ScopedThreadRef | null;
   readonly active: boolean;
+  readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
 }) {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -439,6 +442,8 @@ function BotProfileEditor({
         </Button>
       </div>
 
+      <RoutinePanel botName={bot.name} {...(routinePanel ?? { status: "unavailable" as const })} />
+
       <AvatarPickerDialog bot={bot} open={avatarOpen} onOpenChange={setAvatarOpen} />
       <BotToolsSheet
         open={toolsOpen}
@@ -459,10 +464,12 @@ export function BotDetailsPanel({
   bot,
   onSaveBot,
   threadRef = null,
+  routinePanel,
 }: {
   readonly bot: Bot;
   readonly onSaveBot?: (input: BotProfileUpdate) => Promise<boolean>;
   readonly threadRef?: ScopedThreadRef | null;
+  readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
@@ -517,6 +524,7 @@ export function BotDetailsPanel({
             threadRef={threadRef}
             active={active}
             {...(onSaveBot ? { onSave: onSaveBot } : {})}
+            {...(routinePanel ? { routinePanel } : {})}
           />
         </>
       ) : null}

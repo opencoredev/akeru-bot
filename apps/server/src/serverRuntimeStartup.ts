@@ -47,6 +47,7 @@ import {
   isWildcardHost,
   issueHeadlessServeAccessInfo,
 } from "./startupAccess.ts";
+import { RoutineRuntime } from "./routines/Runtime.ts";
 
 export class ServerRuntimeStartupError extends Schema.TaggedErrorClass<ServerRuntimeStartupError>()(
   "ServerRuntimeStartupError",
@@ -430,6 +431,10 @@ export const make = (options?: StartupOptions) =>
           yield* forkParked(
             ChannelRuntime.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
           ).pipe(Scope.provide(reactorScope));
+          const routineRuntime = yield* Effect.serviceOption(RoutineRuntime);
+          if (Option.isSome(routineRuntime)) {
+            yield* routineRuntime.value.start.pipe(Scope.provide(reactorScope));
+          }
         }),
       );
 

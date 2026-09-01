@@ -2,9 +2,9 @@
 
 The `akeru.archive` format mirrors data that Akeru owns and can restore without credentials or local paths.
 
-`packages/contracts/src/orchestration.ts` defines the durable read model. It contains projects, bots, groups, MCP servers, and threads. Thread records carry messages, proposed plans, approval activities, avatars, lifecycle state, and workspace or sandbox references. The portability layer restores approval activities as inert `approval.history` rows so an import cannot reopen a provider request.
+`packages/contracts/src/orchestration.ts` defines the durable read model. It contains projects, bots, groups, MCP servers, routines, routine runs, skill assignments, and threads. Thread records carry messages, proposed plans, approval activities, avatars, lifecycle state, and workspace or sandbox references. The portability layer restores approval activities as inert `approval.history` rows so an import cannot reopen a provider request.
 
-The same read model has no jobs or routines collection. Durable memory has a separate SQLite repository and a version 2 memory archive with preview and apply support. The main portability archive does not include these separate domains. `ServerProvider.skills` in `packages/contracts/src/server.ts` reports discovered provider skills, but Akeru has no persisted skill-assignment model.
+The main archive does not export or restore routines, routine runs, or skill assignments yet. Durable memory has a separate SQLite repository and a version 2 memory archive with preview and apply support.
 
 `packages/contracts/src/usage.ts` defines a read result, not an Akeru repository. `apps/server/src/usage/UsageService.ts` scans provider-owned Claude and Codex transcript files. It has no write or import operation, so the main portability archive does not include usage history.
 

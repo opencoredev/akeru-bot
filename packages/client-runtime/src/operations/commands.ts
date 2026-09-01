@@ -56,6 +56,14 @@ export type UpdateMcpServerInput = CommandInput<"mcp-server.update">;
 export type DeleteMcpServerInput = CommandInput<"mcp-server.delete">;
 export type EnableMcpServerInput = CommandInput<"mcp-server.enable">;
 export type DisableMcpServerInput = CommandInput<"mcp-server.disable">;
+export type DraftRoutineInput = CommandInput<"routine.draft">;
+export type ApproveRoutineInput = CommandInput<"routine.approve">;
+export type EnableRoutineInput = CommandInput<"routine.enable">;
+export type PauseRoutineInput = CommandInput<"routine.pause">;
+export type RunRoutineInput = CommandInput<"routine.run">;
+export type DeleteRoutineInput = CommandInput<"routine.delete">;
+export type AssignRoutineSkillInput = CommandInput<"routine.skill.assign">;
+export type UnassignRoutineSkillInput = CommandInput<"routine.skill.unassign">;
 export type CreateThreadInput = CommandInput<"thread.create">;
 export type DeleteThreadInput = CommandInput<"thread.delete">;
 export type ArchiveThreadInput = CommandInput<"thread.archive">;
@@ -411,6 +419,102 @@ export const disableMcpServer: (input: DisableMcpServerInput) => CommandEffect =
   });
 });
 
+export const draftRoutine: (input: DraftRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.draftRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.draft",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const approveRoutine: (input: ApproveRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.approveRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.approve",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const enableRoutine: (input: EnableRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.enableRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.enable",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const pauseRoutine: (input: PauseRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.pauseRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.pause",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const runRoutine: (input: RunRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.runRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.run",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const deleteRoutine: (input: DeleteRoutineInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.deleteRoutine",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.delete",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const assignRoutineSkill: (input: AssignRoutineSkillInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.assignRoutineSkill",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.skill.assign",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const unassignRoutineSkill: (input: UnassignRoutineSkillInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.unassignRoutineSkill",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "routine.skill.unassign",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
 export const createThread: (input: CreateThreadInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.createThread",
 )(function* (input) {
@@ -562,6 +666,7 @@ export const startThreadTurn: (input: StartThreadTurnInput) => CommandEffect = E
   const metadata = yield* timestampedCommandMetadata(input);
   return yield* dispatch({
     ...input,
+    timezone: input.timezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"),
     type: "thread.turn.start",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,

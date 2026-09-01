@@ -13,6 +13,18 @@ import {
   OrchestrationMessage,
   OrchestrationSession,
   OrchestrationThread,
+  RoutineApprovedPayload,
+  RoutineBlockedPayload,
+  RoutineCompletedPayload,
+  RoutineDeletedPayload,
+  RoutineDraftedPayload,
+  RoutineEnabledPayload,
+  RoutineFailedPayload,
+  RoutinePausedPayload,
+  RoutineRunCanceledPayload,
+  RoutineRunningPayload,
+  RoutineSkillAssignedPayload,
+  RoutineSkillUnassignedPayload,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -235,6 +247,9 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     groups: [],
     delegations: [],
     mcpServers: [],
+    routines: [],
+    routineRuns: [],
+    skillAssignments: [],
     threads: [],
     updatedAt: nowIso,
   };
@@ -602,6 +617,100 @@ export function projectEvent(
           ...nextBase,
           mcpServers: (nextBase.mcpServers ?? []).filter(
             (entry) => entry.id !== payload.mcpServerId,
+          ),
+        })),
+      );
+
+    case "routine.drafted":
+    case "routine.approved":
+    case "routine.enabled":
+    case "routine.paused":
+    case "routine.deleted": {
+      const schema =
+        event.type === "routine.drafted"
+          ? RoutineDraftedPayload
+          : event.type === "routine.approved"
+            ? RoutineApprovedPayload
+            : event.type === "routine.enabled"
+              ? RoutineEnabledPayload
+              : event.type === "routine.paused"
+                ? RoutinePausedPayload
+                : RoutineDeletedPayload;
+      return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const routines = nextBase.routines ?? [];
+          return {
+            ...nextBase,
+            routines: routines.some((routine) => routine.id === payload.routine.id)
+              ? routines.map((routine) =>
+                  routine.id === payload.routine.id ? payload.routine : routine,
+                )
+              : [...routines, payload.routine],
+          };
+        }),
+      );
+    }
+
+    case "routine.running":
+    case "routine.blocked":
+    case "routine.failed":
+    case "routine.completed":
+    case "routine.run-canceled": {
+      const schema =
+        event.type === "routine.running"
+          ? RoutineRunningPayload
+          : event.type === "routine.blocked"
+            ? RoutineBlockedPayload
+            : event.type === "routine.failed"
+              ? RoutineFailedPayload
+              : event.type === "routine.completed"
+                ? RoutineCompletedPayload
+                : RoutineRunCanceledPayload;
+      return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const routines = nextBase.routines ?? [];
+          const runs = nextBase.routineRuns ?? [];
+          return {
+            ...nextBase,
+            routines: routines.some((routine) => routine.id === payload.routine.id)
+              ? routines.map((routine) =>
+                  routine.id === payload.routine.id ? payload.routine : routine,
+                )
+              : [...routines, payload.routine],
+            routineRuns: runs.some((run) => run.id === payload.run.id)
+              ? runs.map((run) => (run.id === payload.run.id ? payload.run : run))
+              : [...runs, payload.run],
+          };
+        }),
+      );
+    }
+
+    case "skill-assignment.assigned":
+      return decodeForEvent(RoutineSkillAssignedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const assignments = nextBase.skillAssignments ?? [];
+          return {
+            ...nextBase,
+            skillAssignments: assignments.some((entry) => entry.id === payload.assignment.id)
+              ? assignments.map((entry) =>
+                  entry.id === payload.assignment.id ? payload.assignment : entry,
+                )
+              : [...assignments, payload.assignment],
+          };
+        }),
+      );
+
+    case "skill-assignment.unassigned":
+      return decodeForEvent(
+        RoutineSkillUnassignedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          skillAssignments: (nextBase.skillAssignments ?? []).filter(
+            (entry) => entry.id !== payload.assignmentId,
           ),
         })),
       );

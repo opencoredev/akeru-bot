@@ -109,6 +109,8 @@ import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import * as NetService from "@t3tools/shared/Net";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
 import { ServerActivation } from "./serverActivation.ts";
+import { RoutineLayerLive } from "./routines/layer.ts";
+import { RoutineDraftDispatcherLive } from "./routines/RoutineDraftDispatcher.ts";
 
 // Effect's default preemptive shutdown waits 20s before finalizing request scopes.
 // T3's primary transport is long-lived WebSocket RPC, whose Effect scope finalizer
@@ -273,6 +275,7 @@ const RuntimeMemoryRepositoriesWithPersistenceLive = RuntimeMemoryRepositoriesLi
 const ProviderLayerLive = AgentControllerLive.pipe(
   Layer.provide(LegacyProviderLayerLive),
   Layer.provide(RuntimeMemoryRepositoriesWithPersistenceLive),
+  Layer.provide(RoutineDraftDispatcherLive.pipe(Layer.provide(OrchestrationLayerLive))),
 );
 
 const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
@@ -412,7 +415,12 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ServerSecretStore.layer),
 );
 
-const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
+const RuntimeCoreWithRoutinesLive = Layer.merge(
+  RuntimeCoreDependenciesLive,
+  RoutineLayerLive.pipe(Layer.provide(RuntimeCoreDependenciesLive)),
+);
+
+const RuntimeDependenciesLive = RuntimeCoreWithRoutinesLive.pipe(
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),

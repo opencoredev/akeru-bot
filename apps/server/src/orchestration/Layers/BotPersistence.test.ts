@@ -7,6 +7,7 @@ import {
   MessageId,
   ProjectId,
   ProviderInstanceId,
+  RoutineId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -55,6 +56,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const sql = yield* SqlClient.SqlClient;
       const botId = BotId.make("bot-1");
       const groupId = GroupId.make("group-1");
+      const routineId = RoutineId.make("routine-1");
       const createdAt = "2026-01-01T00:00:00.000Z";
 
       yield* engine.dispatch({
@@ -71,6 +73,36 @@ it.layer(TestLayer)("bot persistence", (it) => {
         runtimeMode: "full-access",
         usageCap: null,
         groupId: null,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "routine.draft",
+        commandId: CommandId.make("cmd-routine-draft"),
+        routineId,
+        botId,
+        targetThreadId: ThreadId.make("thread-routine"),
+        projectId: ProjectId.make("project-1"),
+        job: "Morning research",
+        procedure: "Prepare the morning research brief.",
+        schedule: { kind: "daily", time: "09:00" },
+        timezone: "America/New_York",
+        skillAssignmentIds: [],
+        connectorDependencies: [],
+        sandbox: "local",
+        approvalPolicy: "approval-required",
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "routine.approve",
+        commandId: CommandId.make("cmd-routine-approve"),
+        routineId,
+        procedureVersion: 1,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "routine.enable",
+        commandId: CommandId.make("cmd-routine-enable"),
+        routineId,
         createdAt,
       });
       yield* engine.dispatch({
@@ -98,6 +130,9 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const archived = yield* snapshots.getShellSnapshot();
       assert.equal(archived.bots.length, 1);
       assert.notEqual(archived.bots[0]?.archivedAt, null);
+      assert.equal(archived.routines?.[0]?.lifecycle, "paused");
+      assert.equal(archived.routines?.[0]?.enabled, false);
+      assert.equal(archived.routines?.[0]?.nextRunAt, null);
 
       yield* engine.dispatch({
         type: "bot.restore",
@@ -120,6 +155,8 @@ it.layer(TestLayer)("bot persistence", (it) => {
       });
 
       const restored = yield* snapshots.getShellSnapshot();
+      assert.equal(restored.routines?.[0]?.lifecycle, "paused");
+      assert.equal(restored.routines?.[0]?.enabled, false);
       assert.deepEqual(restored.bots, [
         {
           id: botId,

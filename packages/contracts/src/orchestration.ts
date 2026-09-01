@@ -29,6 +29,28 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
 import { AkeruDelegationRecord, DelegationId } from "./akeruDelegation.ts";
+import {
+  ClientRoutineCommand,
+  InternalRoutineCommand,
+  Routine,
+  RoutineApprovedPayload,
+  RoutineBlockedPayload,
+  RoutineCompletedPayload,
+  RoutineDeletedPayload,
+  RoutineDraftedPayload,
+  RoutineEnabledPayload,
+  RoutineFailedPayload,
+  RoutineId,
+  RoutinePausedPayload,
+  RoutineRun,
+  RoutineRunCanceledPayload,
+  RoutineRunId,
+  RoutineRunningPayload,
+  RoutineSkillAssignedPayload,
+  RoutineSkillAssignment,
+  RoutineSkillUnassignedPayload,
+  SkillAssignmentId,
+} from "./routines.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -635,6 +657,9 @@ export const OrchestrationReadModel = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
+  routines: Schema.optional(Schema.Array(Routine)),
+  routineRuns: Schema.optional(Schema.Array(RoutineRun)),
+  skillAssignments: Schema.optional(Schema.Array(RoutineSkillAssignment)),
   threads: Schema.Array(OrchestrationThread),
   updatedAt: IsoDateTime,
 });
@@ -726,6 +751,9 @@ export const OrchestrationShellSnapshot = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
+  routines: Schema.optional(Schema.Array(Routine)),
+  routineRuns: Schema.optional(Schema.Array(RoutineRun)),
+  skillAssignments: Schema.optional(Schema.Array(RoutineSkillAssignment)),
   threads: Schema.Array(OrchestrationThreadShell),
   updatedAt: IsoDateTime,
 });
@@ -771,6 +799,27 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("delegation-upserted"),
     sequence: NonNegativeInt,
     delegation: Schema.suspend(() => AkeruDelegationRecord),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("routine-upserted"),
+    sequence: NonNegativeInt,
+    routine: Routine,
+    run: Schema.optional(RoutineRun),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("routine-removed"),
+    sequence: NonNegativeInt,
+    routineId: RoutineId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("skill-assignment-upserted"),
+    sequence: NonNegativeInt,
+    assignment: RoutineSkillAssignment,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("skill-assignment-removed"),
+    sequence: NonNegativeInt,
+    assignmentId: SkillAssignmentId,
   }),
   Schema.Struct({
     kind: Schema.Literal("thread-upserted"),
@@ -1438,6 +1487,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
   senderPersonId: Schema.optional(AuthSessionId),
   senderDisplayName: Schema.optional(TrimmedNonEmptyString),
   senderCanManageGroups: Schema.optional(Schema.Boolean),
+  timezone: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 
@@ -1458,6 +1508,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(BotId),
+  timezone: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 
@@ -1549,6 +1600,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
+  ClientRoutineCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1604,6 +1656,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
+  ClientRoutineCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1744,6 +1797,7 @@ export const DelegationStateSetCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  InternalRoutineCommand,
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
@@ -1786,6 +1840,18 @@ export const OrchestrationEventType = Schema.Literals([
   "mcp-server.deleted",
   "mcp-server.enabled",
   "mcp-server.disabled",
+  "routine.drafted",
+  "routine.approved",
+  "routine.enabled",
+  "routine.running",
+  "routine.paused",
+  "routine.blocked",
+  "routine.failed",
+  "routine.completed",
+  "routine.run-canceled",
+  "routine.deleted",
+  "skill-assignment.assigned",
+  "skill-assignment.unassigned",
   "thread.created",
   "thread.ownership-updated",
   "thread.deleted",
@@ -1824,6 +1890,9 @@ export const OrchestrationAggregateKind = Schema.Literals([
   "bot",
   "group",
   "mcp-server",
+  "routine",
+  "routine-run",
+  "skill-assignment",
   "thread",
   "delegation",
 ]);
@@ -2144,6 +2213,7 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   ),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
+  timezone: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 
@@ -2246,8 +2316,11 @@ const EventBaseFields = {
     BotId,
     GroupId,
     McpServerId,
-    ThreadId,
     Schema.suspend(() => DelegationId),
+    RoutineId,
+    RoutineRunId,
+    SkillAssignmentId,
+    ThreadId,
   ]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
@@ -2356,6 +2429,66 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("mcp-server.disabled"),
     payload: McpServerDisabledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.drafted"),
+    payload: RoutineDraftedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.approved"),
+    payload: RoutineApprovedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.enabled"),
+    payload: RoutineEnabledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.running"),
+    payload: RoutineRunningPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.paused"),
+    payload: RoutinePausedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.blocked"),
+    payload: RoutineBlockedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.failed"),
+    payload: RoutineFailedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.completed"),
+    payload: RoutineCompletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.run-canceled"),
+    payload: RoutineRunCanceledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("routine.deleted"),
+    payload: RoutineDeletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("skill-assignment.assigned"),
+    payload: RoutineSkillAssignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("skill-assignment.unassigned"),
+    payload: RoutineSkillUnassignedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

@@ -69,6 +69,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.portabilityExport]: AuthOrchestrationReadScope,
   [WS_METHODS.portabilityPreviewImport]: AuthOrchestrationReadScope,
   [WS_METHODS.portabilityApplyImport]: AuthOrchestrationOperateScope,
+  [WS_METHODS.routinesListRuns]: AuthOrchestrationReadScope,
   [WS_METHODS.sourceControlLookupRepository]: AuthOrchestrationReadScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthOrchestrationOperateScope,

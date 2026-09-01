@@ -1314,6 +1314,22 @@ function itemForCommand(
         return `delegation:${command.delegation.delegationId}`;
       case "delegation.cancel":
         return `delegation:${command.delegationId}`;
+      case "routine.draft":
+      case "routine.approve":
+      case "routine.enable":
+      case "routine.pause":
+      case "routine.run":
+      case "routine.run.scheduled":
+      case "routine.run.start":
+      case "routine.run.block":
+      case "routine.run.fail":
+      case "routine.run.complete":
+      case "routine.run.cancel":
+      case "routine.delete":
+        return `routine:${command.routineId}`;
+      case "routine.skill.assign":
+      case "routine.skill.unassign":
+        return `skill-assignment:${command.assignmentId}`;
       default:
         return `thread:${command.threadId}`;
     }

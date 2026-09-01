@@ -37,6 +37,7 @@ import {
   sendChannelMessage,
   settleThread,
   setGroupBoss,
+  startThreadTurn,
   stopThreadSession,
   unassignGroupMember,
   unsettleThread,
@@ -265,6 +266,33 @@ describe("environment commands", () => {
           createdAt: "2026-08-31T00:01:00.000Z",
         },
       ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("stamps turn starts with the client timezone", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* startThreadTurn({
+        commandId: CommandId.make("start-turn"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: MessageId.make("message-1"),
+          role: "user",
+          text: "Create a morning routine.",
+          attachments: [],
+        },
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        createdAt: "2026-06-06T00:01:00.000Z",
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toHaveLength(1);
+      expect(dispatched[0]).toMatchObject({
+        type: "thread.turn.start",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      });
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 

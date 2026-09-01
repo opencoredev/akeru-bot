@@ -62,10 +62,11 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain(">Manage</span>");
     expect(markup).toContain('aria-label="Collapse Akeru bot sidebar"');
     expect(markup).toContain('aria-label="Open Akeru bot sidebar"');
-    expect(markup).not.toContain("Routines");
+    expect(markup).toContain("Routines");
+    expect(markup).toContain("Routines are not available for this environment.");
     expect(markup).not.toContain("mock data");
     expect(markup).not.toContain("border-b border-border");
-    expect(markup).not.toContain("border-t border-border");
+    expect(markup).toContain("border-t border-border");
   });
 
   it("sets, clears, and rejects invalid hard stops", () => {

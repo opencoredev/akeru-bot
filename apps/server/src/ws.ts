@@ -57,6 +57,7 @@ import {
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   ProviderUploadFeedbackError,
+  RoutineReadError,
   type ServerSelfUpdateError,
   type ServerSelfUpdateProgressEvent,
   type ServerProvider,
@@ -126,6 +127,8 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import { RoutineRepository } from "./routines/Repository.ts";
+import { RoutineRuntime } from "./routines/Runtime.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
@@ -492,6 +495,8 @@ const makeWsRpcLayer = (
       const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
       const entityMemoryRepository = yield* Effect.serviceOption(EntityMemoryRepository);
       const memoryCandidates = yield* Effect.serviceOption(MemoryCandidateRepository);
+      const routineRepository = yield* RoutineRepository;
+      const routineRuntime = yield* RoutineRuntime;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
       // Every command dispatched on this connection carries the connecting
       // client's origin, including server-generated bootstrap sub-commands:
@@ -920,6 +925,47 @@ const makeWsRpcLayer = (
                 kind: "delegation-upserted" as const,
                 sequence: event.sequence,
                 delegation: event.payload.delegation,
+              }),
+            );
+          case "routine.drafted":
+          case "routine.approved":
+          case "routine.enabled":
+          case "routine.running":
+          case "routine.paused":
+          case "routine.blocked":
+          case "routine.failed":
+          case "routine.completed":
+          case "routine.run-canceled":
+            return Effect.succeed(
+              Option.some({
+                kind: "routine-upserted" as const,
+                sequence: event.sequence,
+                routine: event.payload.routine,
+                ...("run" in event.payload ? { run: event.payload.run } : {}),
+              }),
+            );
+          case "routine.deleted":
+            return Effect.succeed(
+              Option.some({
+                kind: "routine-removed" as const,
+                sequence: event.sequence,
+                routineId: event.payload.routine.id,
+              }),
+            );
+          case "skill-assignment.assigned":
+            return Effect.succeed(
+              Option.some({
+                kind: "skill-assignment-upserted" as const,
+                sequence: event.sequence,
+                assignment: event.payload.assignment,
+              }),
+            );
+          case "skill-assignment.unassigned":
+            return Effect.succeed(
+              Option.some({
+                kind: "skill-assignment-removed" as const,
+                sequence: event.sequence,
+                assignmentId: event.payload.assignmentId,
               }),
             );
           case "thread.deleted":
@@ -1429,7 +1475,7 @@ const makeWsRpcLayer = (
       const dispatchNormalizedCommand = (
         normalizedCommand: OrchestrationCommand,
       ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> => {
-        const dispatchEffect =
+        const baseDispatchEffect =
           normalizedCommand.type === "thread.turn.start" && normalizedCommand.bootstrap
             ? dispatchBootstrapTurnStart(normalizedCommand)
             : dispatchFromClient(normalizedCommand).pipe(
@@ -1437,6 +1483,39 @@ const makeWsRpcLayer = (
                   toDispatchCommandError(cause, "Failed to dispatch orchestration command"),
                 ),
               );
+
+        const dispatchEffect =
+          normalizedCommand.type === "routine.run"
+            ? baseDispatchEffect.pipe(
+                Effect.flatMap((result) =>
+                  routineRuntime
+                    .runNow(
+                      normalizedCommand.routineId,
+                      normalizedCommand.runId,
+                      normalizedCommand.trigger,
+                    )
+                    .pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.fail(
+                          toDispatchCommandError(
+                            Cause.squash(cause),
+                            "Failed to start the routine run.",
+                          ),
+                        ),
+                      ),
+                      Effect.flatMap((run) =>
+                        run === null
+                          ? Effect.fail(
+                              new OrchestrationDispatchCommandError({
+                                message: `Routine run '${normalizedCommand.runId}' did not start.`,
+                              }),
+                            )
+                          : Effect.succeed(result),
+                      ),
+                    ),
+                ),
+              )
+            : baseDispatchEffect;
 
         return startup
           .enqueueCommand(dispatchEffect)
@@ -2259,6 +2338,21 @@ const makeWsRpcLayer = (
               return Portability.summarizePortabilityApply(outcomes, plan.skipped);
             }).pipe(Effect.mapError((cause) => portabilityError("apply", cause))),
             { "rpc.aggregate": "portability" },
+          ),
+        [WS_METHODS.routinesListRuns]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.routinesListRuns,
+            routineRepository.listRuns(input.routineId).pipe(
+              Effect.map((runs) => ({ runs })),
+              Effect.mapError(
+                (cause) =>
+                  new RoutineReadError({
+                    routineId: input.routineId,
+                    message: cause.message,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "routines" },
           ),
         [WS_METHODS.subscriptionAuthList]: (_input) =>
           observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {
