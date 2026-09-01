@@ -2,7 +2,9 @@ import { MessageId, TurnId, type OrchestrationMessage } from "@t3tools/contracts
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  channelOriginLabel,
   channelOriginForAssistantMessage,
+  channelProviderLabel,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 
@@ -23,6 +25,18 @@ const message = (
   }) as const;
 
 describe("bot conversation presentation", () => {
+  it("shows the iMessage sender and maps every channel provider", () => {
+    expect(
+      channelOriginLabel({
+        provider: "imessage",
+        externalThreadId: "group-1",
+        externalSenderId: "+15551234567",
+      }),
+    ).toBe("iMessage · +15551234567");
+    expect(channelProviderLabel("telegram")).toBe("Telegram");
+    expect(channelProviderLabel("whatsapp")).toBe("WhatsApp");
+  });
+
   it("pairs an assistant message with the nearest inbound channel message", () => {
     const messages = [
       message("web-user", "user", false),

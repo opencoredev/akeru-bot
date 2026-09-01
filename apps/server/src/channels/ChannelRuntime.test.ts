@@ -398,6 +398,112 @@ describe("channel runtime", () => {
       externalThreadId: "imessage:opaque-family-chat",
       externalSenderId: "+15557654321",
     });
+    expect(turns[1]?.message.text).toBe(
+      [
+        "+15557654321: Build Bot should ignore this",
+        "+15557654321: @Build Botany should also be ignored",
+        "+15557654321: @build bot check the build",
+      ].join("\n"),
+    );
+
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:opaque-family-chat",
+      externalSenderId: "+15557654321",
+      text: "@build bot check again",
+    });
+
+    const turnsAfterSecondMention = harness.commands.filter(
+      (command) => command.type === "thread.turn.start",
+    );
+    expect(turnsAfterSecondMention.map((turn) => turn.message.text)).toEqual([
+      "DM without a mention",
+      turns[1]?.message.text,
+      "@build bot check again",
+    ]);
+  });
+
+  it("keeps recent iMessage context separate by group", async () => {
+    let transportContext:
+      | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[2]
+      | undefined;
+    const harness = makeHarness({
+      bots: [makeBot(BOT_ID, { name: "Build Bot" })],
+      startTransport: async (_input, _onDirectMessage, context) => {
+        transportContext = context;
+        return {
+          externalIdentity: "Photon hosted",
+          runtime: { post: async () => undefined, shutdown: async () => undefined },
+        };
+      },
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:group-a",
+      externalSenderId: "alice",
+      text: "A context",
+    });
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:group-b",
+      externalSenderId: "bob",
+      text: "B context",
+    });
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:group-a",
+      externalSenderId: "carol",
+      text: "@build bot answer A",
+    });
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:group-b",
+      externalSenderId: "dave",
+      text: "@build bot answer B",
+    });
+
+    const turns = harness.commands.filter((command) => command.type === "thread.turn.start");
+    expect(turns.map((turn) => turn.message.text)).toEqual([
+      "alice: A context\ncarol: @build bot answer A",
+      "bob: B context\ndave: @build bot answer B",
+    ]);
+    expect(turns.map((turn) => turn.message.channelOrigin?.externalThreadId)).toEqual([
+      "imessage:group-a",
+      "imessage:group-b",
+    ]);
+  });
+
+  it("bounds buffered iMessage group chatter", async () => {
+    let transportContext:
+      | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[2]
+      | undefined;
+    const harness = makeHarness({
+      bots: [makeBot(BOT_ID, { name: "Build Bot" })],
+      startTransport: async (_input, _onDirectMessage, context) => {
+        transportContext = context;
+        return {
+          externalIdentity: "Photon hosted",
+          runtime: { post: async () => undefined, shutdown: async () => undefined },
+        };
+      },
+    });
+    await connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
+    for (let index = 0; index < 21; index += 1) {
+      await transportContext?.onIMessageGroupMessage({
+        externalThreadId: "imessage:busy-group",
+        externalSenderId: "alice",
+        text: `context ${index}`,
+      });
+    }
+    await transportContext?.onIMessageGroupMessage({
+      externalThreadId: "imessage:busy-group",
+      externalSenderId: "bob",
+      text: "@build bot summarize",
+    });
+
+    const turn = harness.commands.find((command) => command.type === "thread.turn.start");
+    expect(turn?.type).toBe("thread.turn.start");
+    if (turn?.type !== "thread.turn.start") throw new Error("Expected a turn command.");
+    expect(turn.message.text).not.toContain("context 0\n");
+    expect(turn.message.text.split("\n")).toHaveLength(21);
   });
 
   it("routes initial and subscribed iMessage group mentions through Chat SDK", async () => {
@@ -430,7 +536,7 @@ describe("channel runtime", () => {
     expect(photon.subscriptionAttempts).toEqual([groupId]);
     expect(turns.map((turn) => turn.message.text)).toEqual([
       "@build bot status",
-      "@BUILD BOT continue",
+      "+15552220000: background chatter\n+15552220000: @BUILD BOT continue",
     ]);
   });
 

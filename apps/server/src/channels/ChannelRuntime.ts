@@ -73,6 +73,7 @@ const runtimes = new Map<string, ChannelRuntimeEntry>();
 const inboundQueues = new Map<string, Promise<void>>();
 const bindingQueues = new Map<string, Promise<void>>();
 const operationQueues = new Map<string, Promise<void>>();
+const iMessageGroupContextLimit = 20;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -496,23 +497,40 @@ async function startChannel(
       botId: bot.id,
       provider: input.provider,
     });
+  let iMessageGroupContext: ReadonlyArray<InboundChannelMessage> = [];
   const context: ChannelTransportContext = {
     botName: bot.name,
     subscribedIMessageGroupIds:
       input.provider === "imessage" ? subscribedIMessageGroupIds(model, bot.id) : [],
     onIMessageGroupMessage: async (message) => {
-      if (
-        input.provider !== "imessage" ||
-        isIMessageDirectThread(message.externalThreadId) ||
-        !iMessageGroupTrigger(bot.name).test(message.text)
-      ) {
+      if (input.provider !== "imessage" || isIMessageDirectThread(message.externalThreadId)) {
         return;
       }
+      if (!iMessageGroupTrigger(bot.name).test(message.text)) {
+        iMessageGroupContext = [...iMessageGroupContext, message].slice(-iMessageGroupContextLimit);
+        return;
+      }
+      const recentMessages = iMessageGroupContext.filter(
+        (candidate) => candidate.externalThreadId === message.externalThreadId,
+      );
       await dispatchInboundChannelMessage(dependencies, {
         ...message,
         botId: bot.id,
         provider: "imessage",
+        text:
+          recentMessages.length === 0
+            ? message.text
+            : [...recentMessages, message]
+                .map(
+                  (candidate) =>
+                    `${candidate.externalSenderId ?? "Unknown sender"}: ${candidate.text}`,
+                )
+                .join("\n"),
       });
+      const consumedMessages = new Set(recentMessages);
+      iMessageGroupContext = iMessageGroupContext.filter(
+        (candidate) => !consumedMessages.has(candidate),
+      );
     },
   };
   const started = dependencies.startTransport

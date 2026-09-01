@@ -39,7 +39,9 @@ import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import {
+  channelOriginLabel,
   channelOriginForAssistantMessage,
+  channelProviderLabel,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
@@ -69,7 +71,7 @@ function ChannelSendApproval({
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const delivered = sent || submitted;
-  const label = origin.provider === "imessage" ? "iMessage" : "Telegram";
+  const label = channelProviderLabel(origin.provider);
   return (
     <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
       <span className="min-w-0 flex-1 text-muted-foreground">
@@ -249,7 +251,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
                       {message.channelOrigin ? (
                         <span className="mb-1 inline-flex rounded-full bg-background/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          {message.channelOrigin.provider === "imessage" ? "iMessage" : "Telegram"}
+                          {channelOriginLabel(message.channelOrigin)}
                         </span>
                       ) : null}
                       <p className="whitespace-pre-wrap">{message.text}</p>
