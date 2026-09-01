@@ -95,6 +95,9 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           <span>Read the docs</span>
         </a>
       </div>
+      <aside id="install-notice" class="install-notice" hidden>
+        <button id="copy-install-prompt" type="button">Copy verified install prompt</button>
+      </aside>
     </div>
     <div class="hero-shot">
       <img
@@ -183,6 +186,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 </Layout>
 
 <script>
+  import { installPromptForPlatform } from "../lib/installPrompt";
   import {
     blockDownloadUntilResolved,
     detectDownloadTarget,
@@ -201,6 +205,8 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     const resolveButton = button ? blockDownloadUntilResolved(button) : null;
     const label = document.getElementById("download-label");
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
+    const installNotice = document.getElementById("install-notice");
+    const copyPrompt = document.getElementById("copy-install-prompt") as HTMLButtonElement | null;
 
     // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
     // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
@@ -209,6 +215,13 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     if (platform) {
       if (label) label.textContent = platform.label;
       if (button) button.dataset.os = platform.os;
+      const prompt = installPromptForPlatform(platform.os);
+      installNotice?.toggleAttribute("hidden", !prompt);
+      copyPrompt?.addEventListener("click", async () => {
+        if (!prompt) return;
+        await navigator.clipboard.writeText(prompt);
+        copyPrompt.textContent = "Copied";
+      });
     } else if (button && label) {
       label.textContent = "All downloads";
       resolveButton?.(RELEASES_URL);

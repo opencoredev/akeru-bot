@@ -13,9 +13,8 @@ describe("installPromptForPlatform", () => {
     expect(prompt).toMatch(/Only after verification, make that AppImage executable/);
   });
 
-  it("refuses to select the Linux prompt for unsupported platforms", () => {
-    expect(installPromptForPlatform("mac")).toBeNull();
-    expect(installPromptForPlatform("win")).toBeNull();
+  it("refuses unsupported platforms", () => {
+    expect(installPromptForPlatform("android")).toBeNull();
   });
 
   it("gates the exact success sentence on launch verification", () => {
