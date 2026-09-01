@@ -46,7 +46,9 @@ describe("Akeru tool contracts", () => {
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "GetMcpServerStatus")?.approval).toBe(
       "none",
     );
-    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "TestMcpServer")?.approval).toBe("none");
+    expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "TestMcpServer")?.approval).toBe(
+      "production",
+    );
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "ReconnectMcpServer")?.approval).toBe(
       "production",
     );

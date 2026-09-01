@@ -298,6 +298,30 @@ describe("AkeruToolRuntime", () => {
     });
   });
 
+  it("requires a production grant before an MCP connection test can reconnect", async () => {
+    const testConnection = vi.fn(async () => ({ connected: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-mcp-test", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: { TestMcpServer: testConnection },
+    });
+    const execution = {
+      threadId: "thread-mcp-test",
+      toolId: "TestMcpServer" as const,
+      toolCallId: "tool-test-mcp",
+      input: { serverId: "search" },
+      approvalMode: "require-grant" as const,
+    };
+
+    await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+    expect(testConnection).not.toHaveBeenCalled();
+
+    runtime.grantApproval(execution);
+    await expect(runtime.execute(execution)).resolves.toEqual({ connected: true });
+    expect(testConnection).toHaveBeenCalledOnce();
+  });
+
   it("rejects shell working directories outside both workspace boundaries", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("cwd-bot");

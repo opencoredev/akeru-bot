@@ -269,7 +269,9 @@ export const AKERU_TOOL_CATALOG = [
     approval: "production",
   }),
   define("GetMcpServerStatus", "bot-workspace", "Inspect an MCP server connection."),
-  define("TestMcpServer", "bot-workspace", "Run a real MCP server connection test."),
+  define("TestMcpServer", "bot-workspace", "Run a real MCP server connection test.", {
+    approval: "production",
+  }),
   define("ReconnectMcpServer", "bot-workspace", "Reconnect one MCP server.", {
     approval: "production",
   }),
