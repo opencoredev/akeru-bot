@@ -30,22 +30,24 @@ const bots = [
   },
 ];
 
-// `video` stays null until the recordings land, and the slot renders a frame.
-const demos: { title: string; body: string; video: string | null }[] = [
+const demos = [
   {
-    title: "Drop it in an iMessage group",
-    body: "You and your friends talk to it in the same thread. It keeps working while the chat goes on.",
-    video: null,
+    title: "Text it on iMessage",
+    body: "Add Akeru to a group chat and have your bot send you messages.",
+    video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0pjOXsCaF9MvsGzD4u1Sr2o8A07X3mnNBZOfE",
+    label: "Akeru Bot responding in an iMessage conversation",
   },
   {
-    title: "Hand a task to a cloud browser",
-    body: "It drives a browser in the cloud and finishes the work you handed off.",
-    video: null,
+    title: "Hand off a browser task",
+    body: "It can manage a cloud browser and finish tasks you want to hand off.",
+    video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0gmR7JKHqJZ0fozh9cC7SvGNsk42WyFE5TDeI",
+    label: "An Akeru Bot using a managed browser to finish a task",
   },
   {
-    title: "Talk to it out loud",
-    body: "Voice one to one, for when you do not want to type.",
-    video: null,
+    title: "Talk instead of typing",
+    body: "Voice 1:1 with it when you don't want to type.",
+    video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0NaYbDRPrp1SNGyXcrB2LHODWvh0g5fREJQIm",
+    label: "Starting a one-to-one voice call with an Akeru Bot",
   },
 ];
 
@@ -138,17 +140,15 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
             <p>{demo.body}</p>
           </div>
           <div class="demo-media">
-            {demo.video ? (
-              <video src={demo.video} autoplay muted loop playsinline preload="metadata" />
-            ) : (
-              <div class="demo-placeholder">
-                <svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M9.5 15.5V8.5L16.5 12L9.5 15.5Z" fill="none" stroke="currentColor" stroke-width="1.5" />
-                </svg>
-                <span>Demo coming soon</span>
-              </div>
-            )}
+            <video
+              data-demo-video
+              data-src={demo.video}
+              aria-label={demo.label}
+              muted
+              loop
+              playsinline
+              preload="none"
+            />
           </div>
         </div>
       ))
@@ -186,6 +186,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 </Layout>
 
 <script>
+  import { pickMostVisibleDemo } from "../lib/demoPlayback";
   import { installPromptForPlatform } from "../lib/installPrompt";
   import {
     detectDownloadTarget,
@@ -251,7 +252,50 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     });
   }
 
+  function initDemoVideos() {
+    const videos = Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-demo-video]"));
+    if (videos.length === 0) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const visibility = new Map<HTMLVideoElement, number>();
+
+    const updatePlayback = () => {
+      if (document.hidden || reduceMotion) {
+        videos.forEach((video) => video.pause());
+        return;
+      }
+
+      const activeIndex = pickMostVisibleDemo(
+        videos.map((video) => visibility.get(video) ?? 0),
+      );
+
+      videos.forEach((video, index) => {
+        if (index === activeIndex) void video.play().catch(() => undefined);
+        else video.pause();
+      });
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const video = entry.target as HTMLVideoElement;
+          visibility.set(video, entry.intersectionRatio);
+          if (entry.isIntersecting && !video.src) {
+            const source = video.dataset.src;
+            if (source) video.src = source;
+          }
+        });
+        updatePlayback();
+      },
+      { rootMargin: "320px 0px", threshold: [0, 0.25, 0.5, 0.75, 1] },
+    );
+
+    videos.forEach((video) => observer.observe(video));
+    document.addEventListener("visibilitychange", updatePlayback);
+  }
+
   init();
+  initDemoVideos();
 </script>
 
 <style>
@@ -482,26 +526,10 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   }
 
   .demo-media video {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
-  }
-
-  .demo-placeholder {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: var(--color-input);
-  }
-
-  .demo-placeholder span {
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 16px;
-    color: var(--color-muted-foreground);
   }
 
   /* ── Download band ── */
