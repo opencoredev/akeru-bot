@@ -385,12 +385,17 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it("does not create or attach a browser for remote workspaces", async () => {
+  it("creates and attaches a browser for remote workspaces", async () => {
+    const browserEndpoint = vi.fn(async () => ({
+      url: "https://browser.example",
+      requestHeaders: { authorization: "Bearer token" },
+    }));
     const remote: AkeruBotWorkspace = {
       id: "akeru-shared",
       provider: "vercel",
       providerId: "vercel-native-id",
       workspace: workspace(),
+      browserEndpoint,
       inspect: async () => "running",
       wake: vi.fn(async () => undefined),
       sleep: vi.fn(async () => undefined),
@@ -402,7 +407,8 @@ describe("AkeruSessionResources", () => {
       getTools: vi.fn(() => ({ exa_search: {} })),
       getServerStatuses: vi.fn(() => []),
     };
-    const makeBotBrowser = vi.fn(() => browser());
+    const remoteBrowser = browser();
+    const makeBotBrowser = vi.fn(() => remoteBrowser);
     const toMcpServerConfigs = vi.fn(() => ({}));
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
@@ -428,7 +434,10 @@ describe("AkeruSessionResources", () => {
       ],
     });
 
-    expect(makeBotBrowser).not.toHaveBeenCalled();
+    expect(makeBotBrowser).toHaveBeenCalledWith(
+      expect.objectContaining({ browserEndpoint, workspace: remote.workspace }),
+    );
+    expect(remoteBrowser.attachment).toHaveBeenCalledOnce();
     expect(toMcpServerConfigs).toHaveBeenCalledWith(expect.any(Array), undefined);
     expect(resources.getConnectorTools("remote-mcp")).toEqual({ exa_search: {} });
     await resources.shutdown();

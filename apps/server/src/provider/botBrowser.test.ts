@@ -1,4 +1,9 @@
-import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
+import {
+  LocalFilesystem,
+  LocalSandbox,
+  Workspace,
+  type WorkspaceSandbox,
+} from "@mastra/core/workspace";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -129,5 +134,111 @@ describe("sandbox bot browser", () => {
     expect(browserRpc.reconnect).toHaveBeenCalledOnce();
     expect(browserRpc.close).toHaveBeenCalledOnce();
     await workspace.destroy();
+  });
+
+  it("creates and reconnects one remote browser while preserving its current URL", async () => {
+    const executeCommand = vi.fn(async (command: string, args: string[] = []) => ({
+      exitCode: 0,
+      stdout:
+        command === "uname"
+          ? args[0] === "-s"
+            ? "Linux\n"
+            : "x86_64\n"
+          : command === "sh"
+            ? "4242\n"
+            : "",
+      stderr: "",
+      success: true,
+      executionTimeMs: 1,
+    }));
+    const workspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: {
+        id: "remote-workspace",
+        provider: "e2b",
+        executeCommand,
+      } as unknown as WorkspaceSandbox,
+    });
+    const browserEndpoint = vi.fn(async () => ({
+      url: "https://9223-e2b.example",
+      requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
+    }));
+    const messages: Array<{ method?: string; params?: { name?: string } }> = [];
+    let session = 0;
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === "DELETE") return new Response("", { status: 204 });
+      const message = JSON.parse(String(init?.body)) as {
+        method?: string;
+        params?: { name?: string };
+      };
+      messages.push(message);
+      const sessionId =
+        message.method === "initialize" ? `browser-session-${++session}` : undefined;
+      const text =
+        message.params?.name === "session_list"
+          ? JSON.stringify([{ url: "https://example.com/bottom-edge" }])
+          : "ok";
+      return new Response(JSON.stringify({ result: { content: [{ text }] } }), {
+        status: 200,
+        headers: sessionId ? { "mcp-session-id": sessionId } : {},
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const browser = createBotBrowser({
+      threadId: "remote-browser",
+      workspace,
+      cacheDir: "/tmp/unused-remote-browser-cache",
+      browserEndpoint,
+    });
+
+    try {
+      await expect(browser.attachment()).resolves.toMatchObject({
+        browserUrl: "https://9223-e2b.example",
+        requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
+        localRequestHeaders: { "e2b-traffic-access-token": "traffic-token" },
+        availableToHostedPlugins: true,
+      });
+      await executeTool(browser.tools.browser_click, { selector: "#bottom-target" });
+      await browser.reconnect();
+      await expect(browser.attachment()).resolves.toMatchObject({
+        mcpSessionId: "browser-session-2",
+      });
+
+      expect(browserEndpoint).toHaveBeenNthCalledWith(1, 9223);
+      expect(browserEndpoint).toHaveBeenNthCalledWith(2, 9223);
+      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          method: "tools/call",
+          params: expect.objectContaining({ name: "goto" }),
+        }),
+      );
+      for (const [, init] of fetchMock.mock.calls) {
+        expect(init?.headers).toMatchObject({
+          "e2b-traffic-access-token": "traffic-token",
+        });
+      }
+    } finally {
+      await browser.close();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("fails closed when a remote workspace has no browser endpoint", async () => {
+    const browser = createBotBrowser({
+      threadId: "unsupported-remote-browser",
+      workspace: new Workspace({
+        filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+        sandbox: {
+          id: "unsupported-remote-workspace",
+          provider: "remote",
+          executeCommand: vi.fn(),
+        } as unknown as WorkspaceSandbox,
+      }),
+      cacheDir: "/tmp/unused-remote-browser-cache",
+    });
+
+    await expect(browser.attachment()).rejects.toThrow("has no Akeru browser adapter");
+    await browser.close();
   });
 });
