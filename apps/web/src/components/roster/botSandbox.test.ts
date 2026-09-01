@@ -22,7 +22,7 @@ describe("botSandbox", () => {
   });
 
   it("runs cloud sandbox tools without a local approval prompt", () => {
-    for (const sandbox of ["e2b", "daytona", "vercel", "upstash"] as const) {
+    for (const { value: sandbox } of BOT_SANDBOX_OPTIONS.slice(1)) {
       expect(resolveBotRuntimeMode(sandbox, "approval-required")).toBe("full-access");
     }
   });

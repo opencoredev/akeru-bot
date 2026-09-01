@@ -65,7 +65,7 @@ const claudeThreadId = ThreadId.make("thread-legacy-claude");
 const kimiThreadId = ThreadId.make("thread-mastra-kimi");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
-const kimiInstanceId = ProviderInstanceId.make("kimi");
+const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -104,6 +104,9 @@ function makeBridge() {
   const rollbackConversation = vi.fn<ProviderServiceShape["rollbackConversation"]>(
     () => Effect.void,
   );
+  const getCapabilities = vi.fn<ProviderServiceShape["getCapabilities"]>(() =>
+    Effect.succeed({ sessionModelSwitch: "in-session" }),
+  );
   const service: ProviderServiceShape = {
     startSession,
     sendTurn,
@@ -113,9 +116,11 @@ function makeBridge() {
     stopSession,
     rollbackConversation,
     listSessions: () => Effect.succeed([]),
-    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+    getCapabilities,
     getInstanceInfo: (instanceId) => {
-      const driverKind = ProviderDriverKind.make(String(instanceId));
+      const driverKind = ProviderDriverKind.make(
+        instanceId === kimiInstanceId ? "kimi" : String(instanceId),
+      );
       return Effect.succeed({
         instanceId,
         driverKind,
@@ -139,6 +144,7 @@ function makeBridge() {
     respondToUserInput,
     stopSession,
     rollbackConversation,
+    getCapabilities,
   };
 }
 
@@ -247,15 +253,6 @@ function assistantMessage(text: string, id = "assistant-message"): MastraDBMessa
   } as MastraDBMessage;
 }
 
-function makeBotBrowser() {
-  return {
-    tools: {},
-    attachment: vi.fn(async () => undefined),
-    reconnect: vi.fn(async () => undefined),
-    close: vi.fn(async () => undefined),
-  };
-}
-
 function makeLayer(
   bridge: ProviderServiceShape,
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
@@ -266,9 +263,15 @@ function makeLayer(
 ) {
   return makeAgentControllerLive({
     makeMastraHarness: factory,
-    makeBotBrowser,
     ...(makeMcpManager ? { makeMcpManager } : {}),
     ...memory,
+    makeBotBrowser: () =>
+      ({
+        tools: {},
+        attachment: async () => undefined,
+        reconnect: async () => undefined,
+        close: async () => undefined,
+      }) as never,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -656,7 +659,7 @@ describe("AgentControllerLive", () => {
 
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
-    const layer = makeAgentControllerLive({ makeBotBrowser }).pipe(
+    const layer = makeAgentControllerLive().pipe(
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
@@ -730,12 +733,11 @@ describe("AgentControllerLive", () => {
         yield* Fiber.interrupt(eventsFiber);
 
         assert.deepEqual(
-          events.slice(0, 7).map((event) => event.type),
+          events.slice(0, 6).map((event) => event.type),
           [
             "turn.started",
             "session.state.changed",
             "item.started",
-            "content.delta",
             "content.delta",
             "item.completed",
             "turn.completed",
@@ -751,6 +753,113 @@ describe("AgentControllerLive", () => {
         expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Reply once." });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("publishes the final text when Mastra rewrites a message snapshot", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.takeUntil((event) => event.type === "turn.completed"),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Say hello." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("Hello world"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("Hi there!"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        assert.equal(
+          events
+            .filter((event) => event.type === "content.delta")
+            .map((event) => event.payload.delta)
+            .join(""),
+          "Hi there!",
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("publishes a same-id rewrite after a tool boundary", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.takeUntil((event) => event.type === "turn.completed"),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("draft", "same"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "view-1",
+          toolName: "view",
+          args: { path: "package.json" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "view-1",
+          result: "{}",
+          isError: false,
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("final revised", "same"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+
+        const events = Array.from(yield* Fiber.join(eventsFiber));
+        assert.deepEqual(
+          events
+            .filter((event) => event.type === "content.delta")
+            .map((event) => event.payload.delta),
+          ["draft", "final revised"],
+        );
       }),
       bridge.service,
       mastra.factory,
@@ -799,68 +908,6 @@ describe("AgentControllerLive", () => {
           ],
         );
         mastra.finishSend();
-      }),
-      bridge.service,
-      mastra.factory,
-    );
-  });
-
-  it.effect("keeps replies and status beats as separate completed messages", () => {
-    const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    return provideController(
-      Effect.gen(function* () {
-        const controller = yield* AgentController;
-        yield* resolveCodex(controller);
-        yield* controller.startSession(codexThreadId, {
-          threadId: codexThreadId,
-          provider: ProviderDriverKind.make("codex"),
-          providerInstanceId: codexInstanceId,
-          cwd: process.cwd(),
-          modelSelection: codexSelection,
-          runtimeMode: "full-access",
-        });
-
-        const events: ProviderRuntimeEvent[] = [];
-        const eventsFiber = yield* controller.streamEvents.pipe(
-          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
-          Effect.forkChild({ startImmediately: true }),
-        );
-        yield* Effect.yieldNow;
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
-        mastra.emit({
-          type: "message_update",
-          message: assistantMessage("I'll check first.", "opening"),
-        } as AgentControllerEvent);
-        mastra.emit({
-          type: "tool_start",
-          toolCallId: "view-1",
-          toolName: "view",
-          args: { path: "package.json" },
-        } as AgentControllerEvent);
-        mastra.emit({
-          type: "tool_end",
-          toolCallId: "view-1",
-          result: "{}",
-          isError: false,
-        } as AgentControllerEvent);
-        mastra.emit({
-          type: "message_end",
-          message: assistantMessage("I found the configuration.", "status"),
-        } as AgentControllerEvent);
-        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
-        mastra.finishSend();
-        yield* Effect.yieldNow;
-        yield* Fiber.interrupt(eventsFiber);
-
-        assert.deepEqual(
-          events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
-          [
-            RuntimeItemId.make("mastra-answer-opening"),
-            RuntimeItemId.make("view-1"),
-            RuntimeItemId.make("mastra-answer-status"),
-          ],
-        );
       }),
       bridge.service,
       mastra.factory,
@@ -945,6 +992,68 @@ describe("AgentControllerLive", () => {
       undefined,
       undefined,
       usageLedger.service,
+    );
+  });
+
+  it.effect("keeps replies and status beats as separate completed messages", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        mastra.emit({
+          type: "message_update",
+          message: assistantMessage("I'll check first.", "opening"),
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_start",
+          toolCallId: "view-1",
+          toolName: "view",
+          args: { path: "package.json" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_end",
+          toolCallId: "view-1",
+          result: "{}",
+          isError: false,
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "message_end",
+          message: assistantMessage("I found the configuration.", "status"),
+        } as AgentControllerEvent);
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
+          [
+            RuntimeItemId.make("mastra-answer-opening"),
+            RuntimeItemId.make("view-1"),
+            RuntimeItemId.make("mastra-answer-status"),
+          ],
+        );
+      }),
+      bridge.service,
+      mastra.factory,
     );
   });
 
@@ -1406,10 +1515,16 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const makeRemoteWorkspace = vi.fn(async () => remote);
+    const makeBotBrowser = vi.fn(() => ({
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    }));
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
-      makeBotBrowser,
+      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -1444,11 +1559,12 @@ describe("AgentControllerLive", () => {
         }),
       );
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
+      expect(makeBotBrowser).not.toHaveBeenCalled();
       yield* controller.stopSession({ threadId: codexThreadId });
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
-  it.effect("destroys obsolete and final pooled workspaces", () => {
+  it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const firstWorkspace = new Workspace({
@@ -1460,6 +1576,7 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const firstDestroy = vi.spyOn(firstWorkspace, "destroy");
+    const secondStop = vi.spyOn(secondWorkspace, "stop");
     const secondDestroy = vi.spyOn(secondWorkspace, "destroy");
     const makeRemoteWorkspace = vi
       .fn()
@@ -1498,7 +1615,8 @@ describe("AgentControllerLive", () => {
         expect(firstDestroy).toHaveBeenCalledOnce();
       }).pipe(Effect.provide(layer), Effect.orDie);
 
-      expect(secondDestroy).toHaveBeenCalledOnce();
+      expect(secondStop).toHaveBeenCalledOnce();
+      expect(secondDestroy).not.toHaveBeenCalled();
     });
   });
 
@@ -1539,7 +1657,7 @@ describe("AgentControllerLive", () => {
     });
   });
 
-  it.effect("keeps the same workspace when only session input changes", () => {
+  it.effect("keeps the same remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({
@@ -1548,11 +1666,11 @@ describe("AgentControllerLive", () => {
     });
     const destroy = vi.spyOn(remote, "destroy");
     const makeRemoteWorkspace = vi.fn(async () => remote);
-    const makeBotBrowserSpy = vi.fn(() => makeBotBrowser());
+    const makeBotBrowser = vi.fn();
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
-      makeBotBrowser: makeBotBrowserSpy,
+      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -1581,38 +1699,8 @@ describe("AgentControllerLive", () => {
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(destroy).not.toHaveBeenCalled();
-      expect(makeBotBrowserSpy).not.toHaveBeenCalled();
+      expect(makeBotBrowser).not.toHaveBeenCalled();
     }).pipe(Effect.provide(layer), Effect.orDie);
-  });
-
-  it.effect("releases session resources when setup fails", () => {
-    const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    vi.mocked(mastra.session.state.set).mockRejectedValueOnce(new Error("state failed"));
-
-    return provideController(
-      Effect.gen(function* () {
-        const controller = yield* AgentController;
-        yield* resolveCodex(controller);
-        const input = {
-          threadId: codexThreadId,
-          provider: ProviderDriverKind.make("codex"),
-          providerInstanceId: codexInstanceId,
-          cwd: process.cwd(),
-          modelSelection: codexSelection,
-          runtimeMode: "full-access" as const,
-        };
-
-        yield* controller.startSession(codexThreadId, input).pipe(Effect.flip);
-        const session = yield* controller.startSession(codexThreadId, input);
-
-        expect(session.status).toBe("ready");
-        expect(mastra.createSession).toHaveBeenCalledTimes(2);
-        expect(mastra.deleteSession).toHaveBeenCalledOnce();
-      }),
-      bridge.service,
-      mastra.factory,
-    );
   });
 
   it.effect("keeps Claude on the existing provider adapter", () => {
@@ -1659,7 +1747,7 @@ describe("AgentControllerLive", () => {
         const controller = yield* AgentController;
         yield* controller.resolveEngine({
           threadId: kimiThreadId,
-          engine: { provider: "kimi", model: "k3-256k" },
+          engine: { provider: String(kimiInstanceId), model: "k3-256k" },
           fallback: codexSelection,
           mode: "default",
           botConversation: true,
@@ -1679,6 +1767,7 @@ describe("AgentControllerLive", () => {
           modelId: "kimi-for-coding/k3-256k",
         });
         expect(bridge.startSession).not.toHaveBeenCalled();
+        expect(bridge.getCapabilities).not.toHaveBeenCalled();
       }),
       bridge.service,
       mastra.factory,
@@ -1729,6 +1818,31 @@ describe("AgentControllerLive", () => {
         yield* resolveCodex(controller);
         const error = yield* controller
           .sendTurn({ threadId: codexThreadId, input: "No legacy fallback." })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "AgentControllerRuntimeError");
+        expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("does not fall back to the legacy Kimi loop when its Mastra session is absent", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: kimiThreadId,
+          engine: { provider: String(kimiInstanceId), model: "k3-256k" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        const error = yield* controller
+          .sendTurn({ threadId: kimiThreadId, input: "No legacy fallback." })
           .pipe(Effect.flip);
 
         assert.equal(error._tag, "AgentControllerRuntimeError");

@@ -2666,6 +2666,17 @@ export function GeneralSettingsPanel() {
           />
         )}
         <SettingsRow
+          {...searchableSetting("analytics")}
+          description="Share anonymous usage data to help improve Akeru Bot."
+          control={
+            <Switch
+              aria-label="Analytics"
+              checked={settings.analyticsEnabled}
+              onCheckedChange={(analyticsEnabled) => updateSettings({ analyticsEnabled })}
+            />
+          }
+        />
+        <SettingsRow
           title="Product feedback"
           control={
             <Switch

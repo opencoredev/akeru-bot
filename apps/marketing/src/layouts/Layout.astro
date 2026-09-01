@@ -1,18 +1,27 @@
 ---
-import { GITHUB_REPOSITORY_URL, UPSTREAM_REPOSITORY_URL } from "../lib/site";
+import { GITHUB_REPOSITORY_URL, UPSTREAM_REPOSITORY_URL, DOCS_URL, docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
 
 interface Props {
   title?: string;
   description?: string;
+  socialTitle?: string;
   pageClass?: string;
 }
 
 const {
   title = "Akeru Bot",
-  description = "Akeru Bot — the open-source Grok Bot alternative. Hand real work to AI teammates. Always free.",
+  description = "Each bot keeps its own tools and its own memory. Runs on your Claude, Codex, or Grok subscription, on your machine or a cloud sandbox.",
+  socialTitle,
   pageClass,
 } = Astro.props;
+
+// Astro.site comes from astro.config.mjs. Falling back to the request URL keeps
+// preview deployments and `astro dev` from emitting a broken absolute image URL.
+const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+const canonicalUrl = new URL(Astro.url.pathname, siteOrigin);
+const socialImageUrl = new URL("/og.png", siteOrigin);
+const year = new Date().getFullYear();
 ---
 
 <html lang="en">
@@ -20,6 +29,28 @@ const {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="canonical" href={canonicalUrl.href} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Akeru Bot" />
+    <meta property="og:url" content={canonicalUrl.href} />
+    <meta property="og:title" content={socialTitle ?? title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={socialImageUrl.href} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta
+      property="og:image:alt"
+      content="Meet Akeru Bot. Each bot keeps its own tools and its own memory."
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={socialTitle ?? title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImageUrl.href} />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -35,13 +66,33 @@ const {
   <body>
     <div class:list={["page", pageClass]}>
       <nav class="nav">
-        <a href="/" class="nav-brand" aria-label="Akeru Bot home">akeru</a>
-        <div class="nav-right">
-          <a class="nav-link" href="/#features">Features</a>
-          <a class="nav-link" href="/#pricing">Pricing</a>
-          <a class="nav-link" href={RELEASES_URL} target="_blank" rel="noopener noreferrer">Changelog</a>
-          <a class="nav-link" href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a class="nav-cta" href="/download">Download</a>
+        <div class="nav-side">
+          <a href="/" class="nav-brand" aria-label="Akeru Bot home">akeru</a>
+        </div>
+        <div class="nav-links">
+          <a class="nav-link" href="/#bots">Bots</a>
+          <a class="nav-link" href="/#demos">Demos</a>
+          <a class="nav-link" href={DOCS_URL} target="_blank" rel="noopener noreferrer">Docs</a>
+        </div>
+        <div class="nav-side nav-side--end">
+          <a
+            class="nav-link nav-link--github"
+            href={GITHUB_REPOSITORY_URL}
+            target="_blank"
+            rel="noopener noreferrer">GitHub</a
+          >
+          <a class="nav-cta" href="/download">
+            Download
+            <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path
+                d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="square"></path>
+              <path d="M5 21H19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"></path>
+            </svg>
+          </a>
         </div>
       </nav>
 
@@ -50,43 +101,47 @@ const {
       </main>
 
       <footer class="footer">
-        <div class="footer-divider"></div>
-        <div class="footer-content">
-          <div class="footer-left">
+        <div class="footer-top">
+          <div class="footer-brand-block">
             <a href="/" class="footer-brand">akeru</a>
             <p class="footer-desc">
-              An open-source Grok Bot alternative, built on a fork of T3 Code.
-              Bring your own subscription and keep your own data.
+              Open source AI teammates. Bring your own Claude, Codex, or Grok subscription.
             </p>
           </div>
           <div class="footer-cols">
             <div class="footer-col">
               <span class="footer-col-title">PRODUCT</span>
-              <a href="/#features">Features</a>
-              <a href="/#pricing">Pricing</a>
+              <a href="/#bots">Bots</a>
+              <a href="/#demos">Demos</a>
+              <a href="/download">Download</a>
               <a href={RELEASES_URL} target="_blank" rel="noopener noreferrer">Changelog</a>
             </div>
             <div class="footer-col">
-              <span class="footer-col-title">OPEN SOURCE</span>
-              <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
-              <a href={UPSTREAM_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">T3 Code upstream</a>
-              <a href={`${GITHUB_REPOSITORY_URL}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener noreferrer">Contributing</a>
+              <span class="footer-col-title">DOCS</span>
+              <a href={docsUrl("install")} target="_blank" rel="noopener noreferrer">Get started</a>
+              <a href={docsUrl("bots")} target="_blank" rel="noopener noreferrer">Bot profiles</a>
+              <a href={docsUrl("plugins")} target="_blank" rel="noopener noreferrer">Plugins</a>
+              <a href={docsUrl("remote-access")} target="_blank" rel="noopener noreferrer">Remote access</a>
             </div>
             <div class="footer-col">
-              <span class="footer-col-title">LEGAL</span>
-              <a href="/terms-of-service">Terms</a>
-              <a href="/privacy-policy">Privacy</a>
-              <a href="/security-policy">Security</a>
+              <span class="footer-col-title">PROJECT</span>
+              <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a href={`${GITHUB_REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">License</a>
+              <a href={`${GITHUB_REPOSITORY_URL}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener noreferrer">
+                Contributing
+              </a>
+              <a href={UPSTREAM_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">T3 Code upstream</a>
             </div>
           </div>
         </div>
         <div class="footer-bottom">
-          <span>&copy; {new Date().getFullYear()} Akeru. MIT licensed.</span>
-          <span class="footer-fork">
-            Forked from
-            <a href={UPSTREAM_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">T3 Code</a>
-            with love <span class="footer-heart">♥</span>
+          <span>&copy; {year} Akeru. MIT licensed.</span>
+          <span class="footer-legal">
+            <a href="/terms-of-service">Terms</a>
+            <a href="/privacy-policy">Privacy</a>
+            <a href="/security-policy">Security</a>
           </span>
+          <span class="footer-platforms">macOS &middot; Windows &middot; Linux</span>
         </div>
       </footer>
     </div>
@@ -95,30 +150,39 @@ const {
 
 <style is:global>
   :root {
-    /* Akeru design tokens (Paper: "Akeru Bot" file) */
-    --color-background: #050505;
-    --color-foreground: #f4f4f5;
-    --color-card: #181818;
-    --color-muted: #1b1b1b;
-    --color-muted-foreground: #a1a1aa;
-    --color-primary: #8b6fc9;
-    --color-primary-foreground: #0a0712;
-    --color-border: #2b2b2b;
-    --color-destructive: #e2574a;
-    --font-sans: "Geist", system-ui, sans-serif;
-    --font-serif: "EB Garamond", system-ui, sans-serif;
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    /* Akeru design tokens (Paper file "Akeru Bot") */
+    --color-background: #0a0a0a;
+    --color-foreground: #f5f5f5;
+    --color-card: #111111;
+    --color-popover: #191919;
+    --color-primary: #346bf1;
+    --color-primary-foreground: #ffffff;
+    --color-primary-surface: #121f3d;
+    --color-secondary: #141414;
+    --color-muted: #141414;
+    --color-muted-foreground: #8a8a8a;
+    --color-border: #232323;
+    --color-input: #2c2c2c;
+    --color-destructive: #f26d6d;
+    --color-success: #34d399;
 
-    /* Legacy aliases used by the legal and download pages */
+    /* Panel background used by the section bands. */
+    --color-band: #0c0c0c;
+
+    --font-sans: "Geist", system-ui, sans-serif;
+    --font-serif: "EB Garamond", Georgia, serif;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    /* Legacy aliases used by the download and legal pages */
     --bg: var(--color-background);
     --fg: var(--color-foreground);
     --fg-muted: var(--color-muted-foreground);
-    --fg-dim: #71717a;
-    --fg-faint: #52525b;
+    --fg-dim: #6f6f6f;
+    --fg-faint: #545454;
     --border: var(--color-border);
-    --border-strong: #3f3f3f;
+    --border-strong: var(--color-input);
     --accent: var(--color-primary);
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   }
@@ -138,6 +202,7 @@ const {
     background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-synthesis: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
@@ -159,7 +224,8 @@ const {
   }
 
   img,
-  svg {
+  svg,
+  video {
     display: block;
     max-width: 100%;
   }
@@ -168,17 +234,6 @@ const {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
     border-radius: 4px;
-  }
-
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 </style>
 
@@ -204,28 +259,42 @@ const {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 26px 48px;
+    padding: 20px 64px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .nav-side {
+    flex: 1 0 0;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .nav-side--end {
+    justify-content: flex-end;
   }
 
   .nav-brand {
     font-family: var(--font-serif);
     font-size: 24px;
-    line-height: 30px;
-    font-weight: 500;
+    line-height: 24px;
+    letter-spacing: -0.005em;
     color: var(--color-foreground);
   }
 
-  .nav-right {
+  .nav-links {
     display: flex;
     align-items: center;
-    gap: 28px;
+    gap: 34px;
+    flex-shrink: 0;
   }
 
   .nav-link {
     font-size: 14px;
     line-height: 18px;
+    font-weight: 500;
     color: var(--color-muted-foreground);
-    transition: color 0.18s ease;
+    transition: color 0.15s ease;
   }
 
   .nav-link:hover {
@@ -235,19 +304,19 @@ const {
   .nav-cta {
     display: flex;
     align-items: center;
-    height: 34px;
-    padding: 0 16px;
-    border-radius: 7px;
-    border: 1px solid var(--color-border);
-    font-size: 13.5px;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: var(--radius-md);
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    font-size: 14px;
     line-height: 18px;
-    font-weight: 500;
-    color: var(--color-foreground);
-    transition: border-color 0.18s ease;
+    font-weight: 600;
+    transition: background-color 0.15s ease;
   }
 
   .nav-cta:hover {
-    border-color: var(--color-primary);
+    background: #2a5ad6;
   }
 
   /* ── Footer ── */
@@ -255,75 +324,72 @@ const {
   .footer {
     display: flex;
     flex-direction: column;
-    margin-top: 96px;
-    padding: 0 48px 40px;
+    background: var(--color-band);
+    border-top: 1px solid var(--color-border);
+    padding: 56px 64px 44px;
   }
 
-  .footer-divider {
-    height: 1px;
-    width: 100%;
-    background: var(--color-border);
-  }
-
-  .footer-content {
+  .footer-top {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 48px;
+    gap: 64px;
     flex-wrap: wrap;
-    padding-top: 32px;
+    padding-bottom: 44px;
   }
 
-  .footer-left {
+  .footer-brand-block {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 14px;
+    width: 320px;
   }
 
   .footer-brand {
     font-family: var(--font-serif);
-    font-size: 20px;
-    line-height: 24px;
-    font-weight: 500;
+    font-size: 22px;
+    line-height: 22px;
+    letter-spacing: -0.005em;
     color: var(--color-foreground);
   }
 
   .footer-desc {
-    font-size: 13px;
-    line-height: 20px;
-    max-width: 340px;
+    font-size: 14px;
+    line-height: 22px;
     color: var(--color-muted-foreground);
   }
 
   .footer-cols {
     display: flex;
     align-items: flex-start;
-    gap: 56px;
+    gap: 88px;
+    flex-wrap: wrap;
   }
 
   .footer-col {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 14px;
+    width: 132px;
   }
 
   .footer-col-title {
     font-size: 12px;
     line-height: 16px;
-    letter-spacing: 0.06em;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.08em;
     color: var(--color-muted-foreground);
   }
 
   .footer-col a {
-    font-size: 13.5px;
+    font-size: 14px;
     line-height: 18px;
-    color: var(--color-muted-foreground);
-    transition: color 0.18s ease;
+    color: var(--color-foreground);
+    transition: color 0.15s ease;
   }
 
   .footer-col a:hover {
-    color: var(--color-foreground);
+    color: var(--color-muted-foreground);
   }
 
   .footer-bottom {
@@ -332,40 +398,60 @@ const {
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
-    padding-top: 36px;
-    font-size: 12px;
+    border-top: 1px solid var(--color-border);
+    padding-top: 28px;
+    font-size: 13px;
     line-height: 16px;
     color: var(--color-muted-foreground);
   }
 
-  .footer-fork a {
-    color: var(--color-primary);
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-position: from-font;
+  .footer-legal {
+    display: flex;
+    gap: 20px;
   }
 
-  .footer-heart {
-    color: var(--color-destructive);
+  .footer-legal a:hover {
+    color: var(--color-foreground);
   }
 
-  /* ── Mobile ── */
+  /* ── Small screens ── */
 
-  @media (max-width: 720px) {
+  @media (max-width: 900px) {
     .nav {
-      padding: 20px 24px;
+      padding: 16px 24px;
     }
 
-    .nav-right {
-      gap: 16px;
+    .nav-links {
+      display: none;
     }
 
-    .nav-link {
+    .nav-link--github {
       display: none;
     }
 
     .footer {
-      padding: 0 24px 32px;
+      padding: 40px 24px 32px;
+    }
+
+    .footer-top {
+      gap: 36px;
+      padding-bottom: 32px;
+    }
+
+    .footer-brand-block {
+      width: 100%;
+    }
+
+    .footer-cols {
+      gap: 36px;
+    }
+
+    .footer-col {
+      width: 128px;
+    }
+
+    .footer-platforms {
+      display: none;
     }
   }
 </style>

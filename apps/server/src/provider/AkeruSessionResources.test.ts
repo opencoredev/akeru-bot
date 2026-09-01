@@ -8,7 +8,11 @@ import { McpServerId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
-import type { AkeruBotWorkspace } from "./botWorkspace.ts";
+import {
+  type AkeruBotWorkspace,
+  type AkeruRemoteSession,
+  createRemoteBotWorkspace,
+} from "./botWorkspace.ts";
 
 const directories = new Set<string>();
 
@@ -286,7 +290,7 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it("destroys pooled workspaces and browsers during shutdown", async () => {
+  it("stops pooled workspaces and browsers during shutdown", async () => {
     const remote = workspace();
     const stop = vi.spyOn(remote, "stop");
     const destroy = vi.spyOn(remote, "destroy");
@@ -302,11 +306,54 @@ describe("AkeruSessionResources", () => {
     expect(stop).toHaveBeenCalledOnce();
 
     await resources.shutdown();
-    expect(destroy).toHaveBeenCalledOnce();
+    expect(destroy).not.toHaveBeenCalled();
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
     await expect(resources.acquire({ ...remoteInput, threadId: "late" })).rejects.toThrow(
       "shutting down",
     );
+  });
+
+  it("reattaches a durable remote workspace after shutdown", async () => {
+    const directory = stateDir();
+    const sleep = vi.fn(async () => undefined);
+    const destroy = vi.fn(async () => undefined);
+    const openSession = vi.fn(
+      async (providerId?: string): Promise<AkeruRemoteSession> => ({
+        providerId: providerId ?? "provider-1",
+        inspect: async () => "running",
+        run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+        wake: async () => undefined,
+        sleep,
+        destroy,
+      }),
+    );
+    const options = {
+      stateDir: directory,
+      makeRemoteWorkspace: (input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
+        createRemoteBotWorkspace({ ...input, openSession }),
+      toMcpServerConfigs: () => ({}),
+    };
+
+    const first = new AkeruSessionResources(options);
+    await first.acquire({ ...remoteInput, threadId: "before-restart" });
+    await first.shutdown();
+
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(destroy).not.toHaveBeenCalled();
+    const identityFile = NodePath.join(
+      directory,
+      "bot-workspaces",
+      remoteInput.workspaceId,
+      "provider.json",
+    );
+    expect(NodeFS.existsSync(identityFile)).toBe(true);
+
+    const second = new AkeruSessionResources(options);
+    await second.acquire({ ...remoteInput, threadId: "after-restart" });
+    expect(openSession).toHaveBeenNthCalledWith(2, "provider-1");
+    await second.release("after-restart", { destroy: true });
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(NodeFS.existsSync(identityFile)).toBe(false);
   });
 
   it("keeps the bot workspace separate from the user computer workspace", async () => {

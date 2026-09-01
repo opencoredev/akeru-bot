@@ -67,6 +67,19 @@ describe("ServerSettings product feedback", () => {
   });
 });
 
+describe("ServerSettings analytics", () => {
+  it("defaults analytics on and accepts an opt-out patch", () => {
+    expect(decodeServerSettings({}).analyticsEnabled).toBe(true);
+    expect(decodeServerSettingsPatch({ analyticsEnabled: false })).toEqual({
+      analyticsEnabled: false,
+    });
+  });
+
+  it("rejects a non-boolean analytics patch", () => {
+    expect(() => decodeServerSettingsPatch({ analyticsEnabled: "false" })).toThrow();
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");

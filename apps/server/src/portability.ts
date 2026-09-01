@@ -1308,6 +1308,9 @@ function itemForCommand(
       case "mcp-server.enable":
       case "mcp-server.disable":
         return `mcp-server:${command.mcpServerId}`;
+      case "delegation.create":
+      case "delegation.complete":
+        return `thread:${command.delegation.sourceThreadId}`;
       default:
         return `thread:${command.threadId}`;
     }

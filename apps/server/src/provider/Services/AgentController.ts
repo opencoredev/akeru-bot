@@ -16,6 +16,8 @@ import type {
   ProviderTurnStartResult,
   ProviderUploadFeedbackInput,
   ProviderUploadFeedbackResult,
+  OrchestrationCommand,
+  OrchestrationReadModel,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -44,6 +46,15 @@ export type AgentControllerSendTurnInput = ProviderSendTurnInput & {
 };
 
 export interface AgentControllerShape {
+  readonly configureDelegation?: (input: {
+    readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+    readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  }) => Effect.Effect<void>;
+  readonly failDelegation?: (input: {
+    readonly threadId: ThreadId;
+    readonly error: string;
+  }) => Effect.Effect<void>;
+
   readonly readConversationMemory?: (
     threadId: ThreadId,
   ) => Effect.Effect<AkeruConversationMemorySnapshot, AgentControllerError>;

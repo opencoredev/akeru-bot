@@ -1,12 +1,7 @@
 import type {
-  BotId,
-  GroupId,
-  McpServerId,
   OrchestrationClientOrigin,
   OrchestrationEvent,
   OrchestrationReadModel,
-  ProjectId,
-  ThreadId,
 } from "@t3tools/contracts";
 import { OrchestrationCommand } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -64,8 +59,8 @@ interface CommandEnvelope {
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: "project" | "bot" | "group" | "mcp-server" | "thread";
-  readonly aggregateId: ProjectId | BotId | GroupId | McpServerId | ThreadId;
+  readonly aggregateKind: OrchestrationEvent["aggregateKind"];
+  readonly aggregateId: OrchestrationEvent["aggregateId"];
 } {
   switch (command.type) {
     case "project.create":
@@ -101,6 +96,12 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       return {
         aggregateKind: "mcp-server",
         aggregateId: command.mcpServerId,
+      };
+    case "delegation.create":
+    case "delegation.complete":
+      return {
+        aggregateKind: "delegation",
+        aggregateId: command.delegation.delegationId,
       };
     default:
       return {

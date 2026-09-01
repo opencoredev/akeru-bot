@@ -248,6 +248,39 @@ describe("AkeruToolRuntime", () => {
       },
     ]);
   });
+  it("isolates delegation failures from the parent thread", async () => {
+    const runtime = createAkeruToolRuntime();
+    const execution = {
+      threadId: "thread-1",
+      toolId: "SendToAgent" as const,
+      toolCallId: "tool-delegate",
+      input: {
+        botId: BotId.make("reviewer"),
+        task: "Review the patch",
+        expectedResult: "A verdict",
+      },
+      approvalMode: "require-grant" as const,
+    };
+    runtime.registerSession("thread-1", {
+      botId: BotId.make("parent"),
+      runtimeMode: "full-access",
+      workspaceType: "local",
+      delegation: {
+        send: async () => {
+          throw new Error("Provider unavailable");
+        },
+      },
+    });
+    runtime.grantApproval(execution);
+
+    await expect(runtime.execute(execution)).resolves.toMatchObject({
+      phase: "failure",
+      failureCode: "internal",
+      fatalToThread: false,
+      billedBotId: "reviewer",
+      summary: "Provider unavailable",
+    });
+  });
   it("translates await handles to workspace process ids", async () => {
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-1", {

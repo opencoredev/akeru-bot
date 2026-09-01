@@ -432,9 +432,14 @@ function AdaptiveWorkspaceLayoutContent(
   const handleOpenSettings = useCallback(() => {
     navigation.navigate("SettingsSheet", {
       screen: "SettingsContent",
-      params: { screen: "Settings" },
+      params: {
+        screen: "Settings",
+        params: {
+          environmentId: environmentId === null ? null : EnvironmentId.make(environmentId),
+        },
+      },
     });
-  }, [navigation]);
+  }, [environmentId, navigation]);
 
   const handleStartNewTask = useCallback(() => {
     navigation.navigate("NewTaskSheet", { screen: "NewTask" });
