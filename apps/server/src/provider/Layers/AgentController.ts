@@ -63,6 +63,7 @@ import {
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
+import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
@@ -80,7 +81,7 @@ import {
   isCodexComputerUseTool,
   resolveCodexComputerUseServer,
 } from "../CodexComputerUse.ts";
-import type { CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
+import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
   botWorkspaceIdentity,
@@ -104,10 +105,10 @@ interface ResolvedEngine {
 }
 
 interface ActiveAssistantMessage {
-  readonly itemId: RuntimeItemId;
-  length: number;
-  started: boolean;
-  completed: boolean;
+  readonly messageId: string;
+  text: string;
+  publishedText: string;
+  revision: number;
 }
 
 interface ActiveTurn {
@@ -143,7 +144,9 @@ interface ActiveSession {
 export interface AgentControllerLiveOptions {
   readonly makeMastraHarness?: (options: AkeruMastraHarnessOptions) => Promise<AkeruMastraHarness>;
   readonly makeMcpManager?: typeof createMcpManager;
-  readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
+  readonly makeRemoteWorkspace?: (
+    input: CreateRemoteBotWorkspaceInput,
+  ) => Promise<AkeruBotWorkspace | Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
   readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
@@ -327,6 +330,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const sessions = new Map<string, ActiveSession>();
     let delegationRuntime: AkeruDelegationRuntime | undefined;
+    let channelRuntime: AkeruChannelRuntime | undefined;
     const childWaiters = new Map<
       string,
       { readonly resolve: (outcome: AkeruDelegationChildOutcome) => void }
@@ -471,20 +475,48 @@ const make = (options?: AgentControllerLiveOptions) =>
       });
     };
 
+    const completeAssistantMessage = (
+      threadId: ThreadId,
+      active: ActiveSession,
+      turn: ActiveTurn,
+      message: ActiveAssistantMessage,
+    ) => {
+      const text = message.text.startsWith(message.publishedText)
+        ? message.text.slice(message.publishedText.length)
+        : message.text;
+      if (text.length === 0) return;
+      const itemId = RuntimeItemId.make(
+        `mastra-answer-${message.messageId}${message.revision === 0 ? "" : `-${message.revision}`}`,
+      );
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId,
+        type: "item.started",
+        payload: { itemType: "assistant_message", status: "inProgress" },
+      });
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId,
+        type: "content.delta",
+        payload: { streamKind: "assistant_text", delta: text },
+      });
+      publish({
+        ...baseEvent(threadId, active, turn.turnId),
+        itemId,
+        type: "item.completed",
+        payload: { itemType: "assistant_message", status: "completed" },
+      });
+      message.publishedText = message.text;
+      message.revision += 1;
+    };
+
     const completeAssistantMessages = (
       threadId: ThreadId,
       active: ActiveSession,
       turn: ActiveTurn,
     ) => {
       for (const message of turn.assistantMessages.values()) {
-        if (!message.started || message.completed) continue;
-        message.completed = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: message.itemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
+        completeAssistantMessage(threadId, active, turn, message);
       }
     };
 
@@ -534,43 +566,17 @@ const make = (options?: AgentControllerLiveOptions) =>
       const messageKey = String(message.id);
       let activeMessage = turn.assistantMessages.get(messageKey);
       if (!activeMessage) {
+        completeAssistantMessages(threadId, active, turn);
         activeMessage = {
-          itemId: RuntimeItemId.make(`mastra-answer-${messageKey}`),
-          length: 0,
-          started: false,
-          completed: false,
+          messageId: messageKey,
+          text: "",
+          publishedText: "",
+          revision: 0,
         };
         turn.assistantMessages.set(messageKey, activeMessage);
       }
-      if (activeMessage.completed) return;
-      if (!activeMessage.started && text.length > 0) {
-        activeMessage.started = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "item.started",
-          payload: { itemType: "assistant_message", status: "inProgress" },
-        });
-      }
-      if (text.length > activeMessage.length) {
-        const delta = text.slice(activeMessage.length);
-        activeMessage.length = text.length;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "content.delta",
-          payload: { streamKind: "assistant_text", delta },
-        });
-      }
-      if (complete && activeMessage.started && !activeMessage.completed) {
-        activeMessage.completed = true;
-        publish({
-          ...baseEvent(threadId, active, turn.turnId),
-          itemId: activeMessage.itemId,
-          type: "item.completed",
-          payload: { itemType: "assistant_message", status: "completed" },
-        });
-      }
+      activeMessage.text = text;
+      if (complete) completeAssistantMessage(threadId, active, turn, activeMessage);
     };
 
     const handleControllerEvent = (
@@ -784,9 +790,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       const routing = yield* legacyProviderBridge
         .getInstanceInfo(modelSelection.instanceId)
         .pipe(Effect.mapError(unavailable));
-      const capabilities = yield* legacyProviderBridge
-        .getCapabilities(modelSelection.instanceId)
-        .pipe(Effect.mapError(unavailable));
+      const capabilities = usesMastraCode(routing.driverKind)
+        ? { sessionModelSwitch: "in-session" as const }
+        : yield* legacyProviderBridge
+            .getCapabilities(modelSelection.instanceId)
+            .pipe(Effect.mapError(unavailable));
       return { modelSelection, routing, capabilities };
     });
 
@@ -942,15 +950,17 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
       }
       const registeredMemoryHandlers = memoryHandlers(input.memoryAccess);
+      const workspaceType: "cloud" | "local" =
+        input.botSandbox && input.botSandbox !== "local" ? "cloud" : "local";
+      const userComputerWorkspace =
+        workspaceType === "local" && input.cwd ? resources.workspace : undefined;
       const toolSession: AkeruToolSession = {
         ...(input.botId ? { botId: input.botId } : {}),
         ...(input.botName ? { botName: input.botName } : {}),
         runtimeMode: input.runtimeMode,
-        workspaceType: resources.workspaceType,
-        workspace: resources.workspace,
-        ...(resources.userComputerWorkspace
-          ? { userComputerWorkspace: resources.userComputerWorkspace }
-          : {}),
+        workspaceType,
+        workspace: resources.botWorkspace,
+        ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && delegationRuntime
           ? {
@@ -974,6 +984,14 @@ const make = (options?: AgentControllerLiveOptions) =>
                     request,
                   );
                 },
+              },
+            }
+          : {}),
+        ...(input.botId && channelRuntime
+          ? {
+              channels: {
+                create: (request) => channelRuntime!.create(input.botId!, request),
+                update: (request) => channelRuntime!.update(input.botId!, request),
               },
             }
           : {}),
@@ -1087,7 +1105,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         const key = String(input.threadId);
         const active = sessions.get(key);
         if (!active) {
-          if (resolvedByThread.get(key)?.provider === ProviderDriverKind.make("codex")) {
+          if (
+            usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
+          ) {
             return yield* new AgentControllerRuntimeError({
               operation: "sendTurn",
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
@@ -1379,6 +1399,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     return AgentController.of({
       configureDelegation: (input) =>
         Effect.sync(() => {
+          channelRuntime = createAkeruChannelRuntime(input);
           delegationRuntime = createAkeruDelegationRuntime({
             ...input,
             failChild: (threadId, error) => resolveChildWaiter(threadId, { turnId: null, error }),

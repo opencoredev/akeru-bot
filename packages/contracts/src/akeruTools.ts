@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 
 import {
   BotId,
+  GroupId,
   IsoDateTime,
   NonNegativeInt,
   ThreadId,
@@ -46,6 +47,14 @@ export const AkeruToolInputSchemas = {
     botId: BotId,
     task: TrimmedNonEmptyString,
     expectedResult: TrimmedNonEmptyString,
+  }),
+  CreateChannel: Schema.Struct({
+    name: TrimmedNonEmptyString,
+    specialistBotIds: Schema.optional(Schema.Array(BotId)),
+  }),
+  UpdateChannel: Schema.Struct({
+    channelId: GroupId,
+    name: TrimmedNonEmptyString,
   }),
 } as const;
 export type AkeruToolId = keyof typeof AkeruToolInputSchemas;
@@ -178,6 +187,8 @@ export const AKERU_TOOL_CATALOG = [
   define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
     approval: "send",
   }),
+  define("CreateChannel", "bot-workspace", "Create a bot channel."),
+  define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {

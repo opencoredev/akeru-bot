@@ -27,7 +27,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { ClaudeAI, CursorIcon, type Icon } from "../Icons";
+import { ClaudeAI, type Icon } from "../Icons";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 interface SubscriptionProviderDefinition {
@@ -38,7 +38,7 @@ interface SubscriptionProviderDefinition {
   readonly icon: Icon | string;
 }
 
-const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] = [
+export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] = [
   {
     id: "openai-codex",
     label: "ChatGPT",
@@ -52,13 +52,6 @@ const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] = [
     subscription: "Pro or Max",
     description: "Use your Claude subscription with Claude Code models.",
     icon: ClaudeAI,
-  },
-  {
-    id: "cursor",
-    label: "Cursor",
-    subscription: "Pro, Pro+, Ultra, Teams, or Enterprise",
-    description: "Use the models included with your Cursor subscription.",
-    icon: CursorIcon,
   },
   {
     id: "xai",

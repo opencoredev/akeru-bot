@@ -22,7 +22,7 @@ describe("botSandbox", () => {
   });
 
   it("runs cloud sandbox tools without a local approval prompt", () => {
-    for (const sandbox of ["vercel", "akeru-cloud", "upstash"] as const) {
+    for (const { value: sandbox } of BOT_SANDBOX_OPTIONS.slice(1)) {
       expect(resolveBotRuntimeMode(sandbox, "approval-required")).toBe("full-access");
     }
   });
@@ -30,10 +30,11 @@ describe("botSandbox", () => {
   it("lists the first sandbox providers", () => {
     expect(BOT_SANDBOX_OPTIONS.map((option) => option.value)).toEqual([
       "local",
+      "e2b",
+      "daytona",
       "vercel",
-      "akeru-cloud",
       "upstash",
     ]);
-    expect(botSandboxLabel("akeru-cloud")).toBe("Akeru Cloud");
+    expect(botSandboxLabel("vercel")).toBe("Vercel Sandbox");
   });
 });

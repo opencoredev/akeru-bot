@@ -10,9 +10,10 @@ export const DEFAULT_BOT_RUNTIME_MODE: RuntimeMode = DEFAULT_LOCAL_EXECUTION_MOD
 
 export const BOT_SANDBOX_OPTIONS = [
   { value: "local", label: "Local" },
-  { value: "vercel", label: "Vercel" },
-  { value: "akeru-cloud", label: "Akeru Cloud" },
-  { value: "upstash", label: "Upstash" },
+  { value: "e2b", label: "E2B" },
+  { value: "daytona", label: "Daytona" },
+  { value: "vercel", label: "Vercel Sandbox" },
+  { value: "upstash", label: "Upstash Box" },
 ] as const;
 
 export type BotSandboxChoice = (typeof BOT_SANDBOX_OPTIONS)[number]["value"];

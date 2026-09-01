@@ -1,223 +1,235 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { GITHUB_REPOSITORY_URL } from "../lib/site";
+import { GITHUB_REPOSITORY_URL, docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
 
-const features = [
+// Stroke icons are Hugeicons outlines drawn on a 24x24 grid.
+const bots = [
   {
-    title: "Message them like teammates",
-    body: "Give tasks in plain language. They take projects start to end and come back when your approval is needed.",
-    icon: '<path d="M3 6.5C3 4.6 4.6 3 6.5 3H13.5C15.4 3 17 4.6 17 6.5V10.5C17 12.4 15.4 14 13.5 14H8L4.5 17V14H6.5C4.6 14 3 12.4 3 10.5V6.5Z" fill="none" stroke="#A5A099" stroke-width="1.4" stroke-linejoin="round" />',
+    title: "One tool list per bot",
+    body: "Pick the plugins and MCP servers each bot can reach.",
+    icon: `<path d="M19.5 4.5L21.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" />
+      <path d="M2.5 21.5L4.5 19.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" />
+      <path d="M12.761 17L7 11.24L4.121 14.12L3.761 18.08L5.921 20.24L9.881 19.88L12.761 17Z" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path d="M11.24 7L17 12.76L19.88 9.88L20.24 5.92L18.08 3.76L14.12 4.12L11.24 7Z" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path d="M8.5 12.5L10.5 10.5M11.5 15.5L13.5 13.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" />`,
   },
   {
-    title: "Run many at once",
-    body: "One on a project, one on outbound, one on systems. They work in parallel and keep going 24/7.",
-    icon: '<circle cx="7" cy="7" r="3" fill="none" stroke="#A5A099" stroke-width="1.4" /><circle cx="14" cy="12" r="3" fill="none" stroke="#A5A099" stroke-width="1.4" /><path d="M4 16.5C4 14.8 5.3 13.5 7 13.5" fill="none" stroke="#A5A099" stroke-width="1.4" stroke-linecap="round" />',
+    title: "Memory that outlives the thread",
+    body: "A bot carries what it learned into the next conversation.",
+    icon: `<ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      <path d="M20 12C20 13.657 16.418 15 12 15C7.582 15 4 13.657 4 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      <path d="M20 5V19C20 20.657 16.418 22 12 22C7.582 22 4 20.657 4 19V5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />`,
   },
   {
-    title: "They get smarter",
-    body: "Show a workflow once and it becomes a routine. Teammates keep context and learn from each other.",
-    icon: '<path d="M10 3V6M10 14V17M3 10H6M14 10H17M5.5 5.5L7.5 7.5M12.5 12.5L14.5 14.5M14.5 5.5L12.5 7.5M7.5 12.5L5.5 14.5" fill="none" stroke="#A5A099" stroke-width="1.4" stroke-linecap="round" />',
+    title: "Open it from any browser",
+    body: "The desktop app or a browser on your own network. Same threads either way.",
+    icon: `<path d="M20.5 3H2.5V21H20.5V3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
+      <path d="M2.5 9H20.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
+      <path d="M5.5 6H6.5M8 6H9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`,
   },
 ];
 
-const useCases = [
-  "Triage product feedback",
-  "Keep the CRM clean",
-  "File expenses automatically",
-  "Draft the weekly report",
-  "Watch competitors for changes",
-  "Screen and schedule candidates",
+// `video` stays null until the recordings land, and the slot renders a frame.
+const demos: { title: string; body: string; video: string | null }[] = [
+  {
+    title: "Drop it in an iMessage group",
+    body: "You and your friends talk to it in the same thread. It keeps working while the chat goes on.",
+    video: null,
+  },
+  {
+    title: "Hand a task to a cloud browser",
+    body: "It drives a browser in the cloud and finishes the work you handed off.",
+    video: null,
+  },
+  {
+    title: "Talk to it out loud",
+    body: "Voice one to one, for when you do not want to type.",
+    video: null,
+  },
 ];
 
-const freeFeatures = [
-  "The whole app, every teammate",
-  "Runs on subscriptions you already pay for",
-  "Your data stays on your machine",
-  "MIT licensed, fork it any time",
+// Brand marks are filled silhouettes so they hold up at 17px.
+const APPLE_MARK = `<path d="M12 5.75C12 3.75 13.5 1.75 15.5 1.75C15.5 3.75 14 5.75 12 5.75Z" fill="currentColor" />
+  <path d="M12.5 8.09C11.985 8.09 11.587 7.926 11.141 7.744C10.578 7.512 9.939 7.25 8.893 7.25C7.022 7.25 4 8.749 4 12.749C4 17.402 7.105 22.25 9.105 22.25C9.774 22.25 10.377 21.987 10.954 21.736C11.482 21.506 11.987 21.286 12.5 21.286C13.013 21.286 13.518 21.506 14.046 21.736C14.623 21.987 15.226 22.25 15.895 22.25C17.288 22.25 18.957 19.899 20 16.901C18.379 16.22 17.338 14.618 17.338 12.75C17.338 11.121 18.204 10.04 19.5 9.25C18.5 7.75 17.013 7.25 15.945 7.25C14.899 7.25 14.26 7.512 13.697 7.744C13.251 7.926 13.015 8.09 12.5 8.09Z" fill="currentColor" />`;
+
+const WINDOWS_MARK = `<path d="M3 3.9L11.1 2.75V11.2H3V3.9Z" fill="currentColor" />
+  <path d="M12.4 2.56L21 1.35V11.2H12.4V2.56Z" fill="currentColor" />
+  <path d="M3 12.5H11.1V20.95L3 19.8V12.5Z" fill="currentColor" />
+  <path d="M12.4 12.5H21V22.35L12.4 21.14V12.5Z" fill="currentColor" />`;
+
+const LINUX_MARK = `<path fill-rule="evenodd" clip-rule="evenodd" d="M9.8 18.2C8.4 19.4 5.6 20.2 4.8 21.0C4.1 21.7 5.0 22.3 6.5 22.3C8.4 22.3 10.0 21.5 10.6 20.4L9.8 18.2ZM14.2 18.2C15.6 19.4 18.4 20.2 19.2 21.0C19.9 21.7 19.0 22.3 17.5 22.3C15.6 22.3 14.0 21.5 13.4 20.4L14.2 18.2ZM6.2 10.6C4.8 12.0 3.9 14.5 4.2 16.5C4.4 17.9 5.5 18.2 6.0 17.1C6.5 16.0 6.4 13.4 6.9 12.0L6.2 10.6ZM17.8 10.6C19.2 12.0 20.1 14.5 19.8 16.5C19.6 17.9 18.5 18.2 18.0 17.1C17.5 16.0 17.6 13.4 17.1 12.0L17.8 10.6ZM12 5.4C15.5 5.4 18.4 10.1 18.4 15.0C18.4 19.0 15.5 21.3 12 21.3C8.5 21.3 5.6 19.0 5.6 15.0C5.6 10.1 8.5 5.4 12 5.4ZM12 1.5C14.2 1.5 15.9 3.4 15.9 5.9C15.9 8.4 14.2 10.1 12 10.1C9.8 10.1 8.1 8.4 8.1 5.9C8.1 3.4 9.8 1.5 12 1.5ZM10.5 3.9C9.9 3.9 9.5 4.6 9.5 5.4C9.5 6.2 9.9 6.9 10.5 6.9C11.1 6.9 11.5 6.2 11.5 5.4C11.5 4.6 11.1 3.9 10.5 3.9ZM13.5 3.9C12.9 3.9 12.5 4.6 12.5 5.4C12.5 6.2 12.9 6.9 13.5 6.9C14.1 6.9 14.5 6.2 14.5 5.4C14.5 4.6 14.1 3.9 13.5 3.9ZM12 6.6C10.9 6.6 10.0 7.2 10.0 8.0C10.0 8.8 10.9 9.4 12 9.4C13.1 9.4 14.0 8.8 14.0 8.0C14.0 7.2 13.1 6.6 12 6.6Z" fill="currentColor" />`;
+
+// `asset` is the release-asset suffix the client script resolves to a real URL.
+const platforms = [
+  { os: "mac", name: "macOS", detail: "Apple silicon · DMG", mark: APPLE_MARK, asset: "arm64.dmg" },
+  { os: "win", name: "Windows", detail: "x64 · Installer", mark: WINDOWS_MARK, asset: "x64.exe" },
+  { os: "linux", name: "Linux", detail: "x64 · AppImage", mark: LINUX_MARK, asset: "x86_64.AppImage" },
 ];
 
-const cloudFeatures = [
-  "Hosted sandboxes for your teammates",
-  "Remote browser sessions",
-  "Sync across your devices",
-];
+const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
+  <path d="M5 21H19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`;
 ---
 
-<Layout>
-  <!-- ── Hero ──────────────────────────────────────────────────── -->
+<Layout socialTitle="Meet Akeru Bot">
+  <!-- ── Hero ─────────────────────────────────────────────────── -->
   <section class="hero">
-    <img class="hero-stamps" src="/stamps.png" alt="" width="300" height="169" loading="eager" decoding="async" />
-    <p class="hero-eyebrow">THE OPEN-SOURCE GROK BOT ALTERNATIVE</p>
-    <h1 class="hero-title">Busywork,<br />handed off.</h1>
-    <p class="hero-sub">Hand real work to AI teammates. It comes back finished.</p>
-    <div class="cta-row">
-      <a id="download-btn" class="btn-download" href={RELEASES_URL}>
-        <span id="download-label">Download for macOS</span>
-        <svg width="13" height="13" viewBox="0 0 13 13" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M6.5 1.5V9M6.5 9L3.5 6M6.5 9L9.5 6" fill="none" stroke="var(--color-primary-foreground)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M2 11.5H11" fill="none" stroke="var(--color-primary-foreground)" stroke-width="1.4" stroke-linecap="round" />
-        </svg>
-      </a>
-      <a class="btn-other" href="/download">
-        <span>Other systems</span>
-        <svg width="13" height="13" viewBox="0 0 13 13" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M6.5 1.5V9M6.5 9L3.5 6M6.5 9L9.5 6" fill="none" stroke="var(--color-primary)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M2 11.5H11" fill="none" stroke="var(--color-primary)" stroke-width="1.4" stroke-linecap="round" />
-        </svg>
-      </a>
-      <span class="cta-aside">Always free</span>
+    <div class="hero-copy">
+      <h1 class="hero-title">Meet Akeru Bot</h1>
+      <p class="hero-sub">
+        Each bot keeps its own tools and its own memory. Runs on your Claude, Codex, or Grok
+        subscription, on your machine or a cloud sandbox.
+      </p>
+      <div class="hero-actions">
+        <a id="download-btn" class="btn-primary" data-os="mac" href={RELEASES_URL}>
+          <svg class="os-mark" data-os="mac" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={APPLE_MARK} />
+          <svg class="os-mark" data-os="win" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={WINDOWS_MARK} />
+          <svg class="os-mark" data-os="linux" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={LINUX_MARK} />
+          <span id="download-label">Download for macOS</span>
+        </a>
+        <a class="btn-ghost" href={docsUrl("install")} target="_blank" rel="noopener noreferrer">
+          <svg width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M15.5 7H8.5M12.499 11H8.499" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"></path>
+            <path d="M20 22H6C4.895 22 4 21.105 4 20M4 20C4 18.895 4.895 18 6 18H20V2H6C4.895 2 4 2.895 4 4V20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"></path>
+          </svg>
+          <span>Read the docs</span>
+        </a>
+      </div>
+    </div>
+    <div class="hero-shot">
+      <img
+        src="/app-screenshot.webp"
+        width="1440"
+        height="900"
+        alt="The Akeru Bot desktop app with three bots working in one shared workspace"
+        loading="eager"
+        decoding="async"
+      />
     </div>
   </section>
 
-  <!-- ── Features ─────────────────────────────────────────────── -->
-  <section id="features" class="sec">
-    <h2 class="sec-title">What your teammates can do</h2>
-    <div class="feature-cards">
+  <!-- ── Bots ─────────────────────────────────────────────────── -->
+  <section id="bots" class="bots">
+    <h2 class="section-title">Every bot has its own setup</h2>
+    <div class="triad">
       {
-        features.map((feature) => (
-          <div class="feature">
-            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={feature.icon} />
-            <h3>{feature.title}</h3>
-            <p>{feature.body}</p>
+        bots.map((bot) => (
+          <div class="triad-cell">
+            <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={bot.icon} />
+            <h3>{bot.title}</h3>
+            <p>{bot.body}</p>
           </div>
         ))
       }
     </div>
   </section>
 
-  <!-- ── Use cases ────────────────────────────────────────────── -->
-  <section id="use-cases" class="sec">
-    <h2 class="sec-title">See what Akeru can do</h2>
-    <div class="use-case-grid">
-      {
-        useCases.map((useCase) => (
-          <div class="use-case">
-            <span class="use-case-label">{useCase}</span>
-            <span class="use-case-arrow">→</span>
+  <!-- ── Demos ────────────────────────────────────────────────── -->
+  <section id="demos" class="demos">
+    <h2 class="section-title">See it work</h2>
+    {
+      demos.map((demo) => (
+        <div class="demo-row">
+          <div class="demo-copy">
+            <h3>{demo.title}</h3>
+            <p>{demo.body}</p>
           </div>
-        ))
-      }
-    </div>
-  </section>
-
-  <!-- ── Pricing ──────────────────────────────────────────────── -->
-  <section id="pricing" class="sec sec-pricing">
-    <h2 class="sec-title">Free. Forever.</h2>
-    <p class="pricing-sub">
-      The app costs nothing and never will. We only charge for optional cloud extras.
-    </p>
-    <div class="pricing-cards">
-      <div class="price-card">
-        <div class="price-head">
-          <span class="price-name">Akeru Bot</span>
-          <div class="price-line">
-            <span class="price-big">$0</span>
-            <span class="price-small">forever</span>
+          <div class="demo-media">
+            {demo.video ? (
+              <video src={demo.video} autoplay muted loop playsinline preload="metadata" />
+            ) : (
+              <div class="demo-placeholder">
+                <svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M9.5 15.5V8.5L16.5 12L9.5 15.5Z" fill="none" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+                <span>Demo coming soon</span>
+              </div>
+            )}
           </div>
         </div>
-        <ul class="price-features">
-          {
-            freeFeatures.map((feature) => (
-              <li>
-                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5L4.5 9L10 3.5" fill="none" stroke="var(--color-primary)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                {feature}
-              </li>
-            ))
-          }
-        </ul>
-      </div>
-      <div class="price-card price-card--cloud">
-        <div class="price-head">
-          <div class="price-name-row">
-            <span class="price-name">Akeru Cloud</span>
-            <span class="price-badge">COMING SOON</span>
-          </div>
-          <div class="price-line">
-            <span class="price-big">Paid</span>
-            <span class="price-small">for the cloud stuff only</span>
-          </div>
-        </div>
-        <ul class="price-features">
-          {
-            cloudFeatures.map((feature) => (
-              <li>
-                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5L4.5 9L10 3.5" fill="none" stroke="var(--color-primary)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                {feature}
-              </li>
-            ))
-          }
-        </ul>
-        <p class="price-note">The app never moves behind it.</p>
-      </div>
-    </div>
+      ))
+    }
   </section>
 
-  <!-- ── Final CTA ────────────────────────────────────────────── -->
-  <section id="download" class="final-cta">
-    <h2 class="final-title">Hand it off today.</h2>
-    <div class="final-actions">
-      <a id="cta-download-btn" class="btn-download btn-download--lg" href={RELEASES_URL}>
-        <span id="cta-download-label">Download for macOS</span>
+  <!-- ── Download ─────────────────────────────────────────────── -->
+  <section class="download">
+    <div class="download-band">
+      <div class="download-head">
+        <h2>Download Akeru Bot</h2>
+        <p>Free and MIT licensed. Bring your own subscription.</p>
+      </div>
+      <div class="platform-cards">
+        {
+          platforms.map((platform) => (
+            <a class="platform-card" data-asset={platform.asset} href={RELEASES_URL}>
+              <span class="platform-card-top">
+                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={platform.mark} />
+                <svg class="platform-card-glyph" width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={DOWNLOAD_GLYPH} />
+              </span>
+              <span class="platform-card-text">
+                <span class="platform-card-name">{platform.name}</span>
+                <span class="platform-card-detail">{platform.detail}</span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+      <a class="btn-outline" href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">
+        View on GitHub
       </a>
-      <a class="btn-ghost" href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">Star on GitHub</a>
     </div>
-    <p class="closing-quote">“We shape our tools, and thereafter our tools shape us.”</p>
-    <p class="closing-author">Marshall McLuhan</p>
   </section>
 </Layout>
 
 <script>
   import { fetchLatestRelease, RELEASES_URL, type ReleaseAsset } from "../lib/releases";
 
-  type Platform = { os: "mac" | "win" | "linux"; label: string };
+  type Platform = { os: "mac" | "win" | "linux"; label: string; asset: string };
 
   function detectPlatform(): Platform | null {
     const ua = navigator.userAgent;
-    if (/Win/i.test(ua)) return { os: "win", label: "Download for Windows" };
-    if (/Mac/i.test(ua)) return { os: "mac", label: "Download for macOS" };
-    if (/Linux/i.test(ua)) return { os: "linux", label: "Download for Linux" };
+    if (/Win/i.test(ua)) return { os: "win", label: "Download for Windows", asset: "x64.exe" };
+    if (/Mac/i.test(ua)) return { os: "mac", label: "Download for macOS", asset: "arm64.dmg" };
+    if (/Linux/i.test(ua)) return { os: "linux", label: "Download for Linux", asset: "x86_64.AppImage" };
     return null;
   }
 
-  // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
-  // from Intel (the UA lies, GPU strings lie), and a wrong guess hands an Apple
-  // Silicon user a broken app. Intel users pick their build on /download.
-  // Do NOT add arch detection back here.
-  function pickAsset(assets: ReleaseAsset[], platform: Platform): string | null {
-    if (platform.os === "win") {
-      return assets.find((a) => a.name.endsWith("-x64.exe"))?.browser_download_url ?? null;
-    }
-    if (platform.os === "mac") {
-      return assets.find((a) => a.name.endsWith("-arm64.dmg"))?.browser_download_url ?? null;
-    }
-    if (platform.os === "linux") {
-      return assets.find((a) => a.name.endsWith(".AppImage"))?.browser_download_url ?? null;
-    }
-    return null;
+  function assetUrl(assets: ReleaseAsset[], suffix: string): string | null {
+    return assets.find((a) => a.name.endsWith(`-${suffix}`))?.browser_download_url ?? null;
   }
 
   async function init() {
-    const btn = document.getElementById("download-btn") as HTMLAnchorElement | null;
+    const button = document.getElementById("download-btn") as HTMLAnchorElement | null;
     const label = document.getElementById("download-label");
-    const ctaBtn = document.getElementById("cta-download-btn") as HTMLAnchorElement | null;
-    const ctaLabel = document.getElementById("cta-download-label");
+    const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
 
+    // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
+    // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
+    // Intel build. Do NOT add arch detection here.
     const platform = detectPlatform();
-    if (!platform) return;
-    if (label) label.textContent = platform.label;
-    if (ctaLabel) ctaLabel.textContent = platform.label;
+    if (platform) {
+      if (label) label.textContent = platform.label;
+      if (button) button.dataset.os = platform.os;
+    }
 
     try {
       const release = await fetchLatestRelease();
-      const url = pickAsset(release.assets ?? [], platform);
-      if (url) {
-        if (btn) btn.href = url;
-        if (ctaBtn) ctaBtn.href = url;
+      const assets = release.assets ?? [];
+
+      if (button && platform) {
+        button.href = assetUrl(assets, platform.asset) ?? RELEASES_URL;
       }
+
+      cards.forEach((card) => {
+        const suffix = card.dataset.asset;
+        card.href = (suffix && assetUrl(assets, suffix)) || RELEASES_URL;
+      });
     } catch {
-      if (btn) btn.href = RELEASES_URL;
-      if (ctaBtn) ctaBtn.href = RELEASES_URL;
+      if (button) button.href = RELEASES_URL;
+      cards.forEach((card) => {
+        card.href = RELEASES_URL;
+      });
     }
   }
 
@@ -231,410 +243,442 @@ const cloudFeatures = [
     display: flex;
     flex-direction: column;
     align-items: center;
-    text-align: center;
+    gap: 44px;
+    padding: 116px 64px 104px;
+    overflow: clip;
   }
 
-  .hero-stamps {
-    margin-top: 58px;
-    width: 300px;
-    height: 169px;
-    object-fit: cover;
-    mix-blend-mode: screen;
-  }
-
-  .hero-eyebrow {
-    margin-top: 44px;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.12em;
-    font-weight: 500;
-    color: var(--color-muted-foreground);
+  .hero-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 26px;
+    width: 100%;
   }
 
   .hero-title {
-    margin-top: 18px;
-    font-size: 62px;
-    line-height: 64px;
-    letter-spacing: 0.005em;
-    font-weight: 500;
-    color: var(--color-foreground);
+    font-size: 84px;
+    font-weight: 600;
+    letter-spacing: -0.042em;
+    line-height: 88px;
+    text-align: center;
   }
 
   .hero-sub {
-    margin-top: 24px;
-    font-size: 15px;
-    line-height: 23px;
-    max-width: 420px;
+    max-width: 760px;
+    font-size: 19px;
+    line-height: 30px;
+    text-align: center;
     color: var(--color-muted-foreground);
   }
 
-  .cta-row {
-    margin-top: 32px;
+  .hero-actions {
     display: flex;
     align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
     justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+  }
+
+  .hero-shot {
+    width: 100%;
+    aspect-ratio: 8 / 5;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-card);
+    overflow: hidden;
+  }
+
+  .hero-shot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
   }
 
   /* ── Buttons ── */
 
-  .btn-download {
+  .btn-primary,
+  .btn-ghost,
+  .btn-outline {
     display: flex;
     align-items: center;
-    height: 44px;
-    padding: 0 22px;
-    border-radius: var(--radius-md);
     gap: 9px;
-    background-color: var(--color-primary);
-    box-shadow: #1e1a141f 0px 1px 2px;
-    font-size: 14px;
+    padding: 14px 22px;
+    border-radius: var(--radius-md);
+    font-size: 15px;
     line-height: 18px;
-    font-weight: 500;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
     color: var(--color-primary-foreground);
-    transition: transform 0.18s ease, filter 0.18s ease;
+    font-weight: 600;
+    transition: background-color 0.15s ease;
   }
 
-  .btn-download:hover {
-    transform: translateY(-1px);
-    filter: brightness(1.08);
-  }
-
-  .btn-download:active {
-    transform: translateY(0);
-  }
-
-  .btn-download--lg {
-    height: 46px;
-    padding: 0 24px;
-    font-size: 14.5px;
-  }
-
-  .btn-other {
-    display: flex;
-    align-items: center;
-    height: 44px;
-    padding: 0 22px;
-    border-radius: var(--radius-md);
-    gap: 9px;
-    border: 1px solid var(--color-primary);
-    font-size: 14px;
-    line-height: 18px;
-    font-weight: 500;
-    color: var(--color-primary);
-    transition: background 0.18s ease;
-  }
-
-  .btn-other:hover {
-    background: rgba(139, 111, 201, 0.1);
+  .btn-primary:hover {
+    background: #2a5ad6;
   }
 
   .btn-ghost {
-    display: flex;
-    align-items: center;
-    height: 46px;
-    padding: 0 24px;
-    border-radius: var(--radius-md);
+    background: var(--color-card);
     border: 1px solid var(--color-border);
-    font-size: 14.5px;
-    line-height: 18px;
     font-weight: 500;
-    color: var(--color-foreground);
-    transition: border-color 0.18s ease;
+    transition: border-color 0.15s ease;
   }
 
   .btn-ghost:hover {
-    border-color: var(--color-primary);
+    border-color: var(--color-input);
   }
 
-  .cta-aside {
-    font-size: 13px;
-    line-height: 16px;
-    color: var(--color-muted-foreground);
-  }
-
-  /* ── Sections ── */
-
-  .sec {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    padding: 96px 48px 0;
-  }
-
-  .sec-title {
-    font-size: 38px;
-    line-height: 44px;
+  .btn-outline {
+    border: 1px solid var(--color-border);
     font-weight: 500;
-    text-align: center;
-    color: var(--color-foreground);
+    transition: border-color 0.15s ease;
   }
 
-  /* ── Features ── */
-
-  .feature-cards {
-    display: flex;
-    margin-top: 44px;
-    width: 1000px;
-    max-width: 100%;
-    gap: 64px;
+  .btn-outline:hover {
+    border-color: var(--color-input);
   }
 
-  .feature {
-    display: flex;
-    flex-direction: column;
-    width: 33.33%;
-    gap: 10px;
-    padding: 0 26px;
+  /* Only the mark for the detected system shows. */
+  .os-mark {
+    display: none;
   }
 
-  .feature svg {
-    flex-shrink: 0;
-    margin-bottom: 6px;
+  .btn-primary[data-os="mac"] .os-mark[data-os="mac"],
+  .btn-primary[data-os="win"] .os-mark[data-os="win"],
+  .btn-primary[data-os="linux"] .os-mark[data-os="linux"] {
+    display: block;
   }
 
-  .feature h3 {
-    font-size: 15px;
-    line-height: 18px;
+  /* ── Section shells ── */
+
+  .section-title {
+    font-size: 46px;
     font-weight: 600;
-    color: var(--color-foreground);
-  }
-
-  .feature p {
-    font-size: 13.5px;
-    line-height: 21px;
-    color: var(--color-muted-foreground);
-  }
-
-  /* ── Use cases ── */
-
-  .use-case-grid {
-    display: flex;
-    flex-wrap: wrap;
-    margin-top: 40px;
-    width: 900px;
-    max-width: 100%;
-    justify-content: center;
-    gap: 14px;
-  }
-
-  .use-case {
-    display: flex;
-    align-items: center;
-    height: 52px;
-    padding: 0 22px;
-    border-radius: 26px;
-    gap: 10px;
-    border: 1px solid var(--color-border);
-  }
-
-  .use-case-label {
-    font-size: 14.5px;
-    line-height: 18px;
-    font-weight: 500;
-    color: var(--color-foreground);
-  }
-
-  .use-case-arrow {
-    font-size: 14.5px;
-    line-height: 18px;
-    color: var(--color-muted-foreground);
-  }
-
-  /* ── Pricing ── */
-
-  .pricing-sub {
-    margin-top: 14px;
-    font-size: 15px;
-    line-height: 23px;
+    letter-spacing: -0.03em;
+    line-height: 52px;
     text-align: center;
-    max-width: 460px;
-    color: var(--color-muted-foreground);
   }
 
-  .pricing-cards {
-    display: flex;
-    align-items: stretch;
-    margin-top: 44px;
-    width: 760px;
-    max-width: 100%;
-    gap: 20px;
-  }
-
-  .price-card {
+  .bots {
     display: flex;
     flex-direction: column;
-    width: 50%;
-    padding: 28px;
-    border-radius: var(--radius-lg);
-    background-color: var(--color-card);
-    border: 1px solid var(--color-border);
-    gap: 22px;
+    background: var(--color-band);
+    border-top: 1px solid var(--color-border);
+    padding: 112px 64px 0;
   }
 
-  .price-card--cloud {
-    border-color: var(--color-primary);
+  .triad {
+    display: flex;
+    padding-top: 44px;
   }
 
-  .price-head {
+  .triad-cell {
+    flex: 1 0 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 14px;
+    padding: 52px 44px 56px;
   }
 
-  .price-name-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .triad-cell:first-child {
+    padding-left: 0;
   }
 
-  .price-name {
+  .triad-cell:last-child {
+    padding-right: 0;
+  }
+
+  .triad-cell + .triad-cell {
+    border-left: 1px solid var(--color-border);
+  }
+
+  .triad-cell h3 {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 24px;
+  }
+
+  .triad-cell p {
     font-size: 14px;
-    line-height: 18px;
-    font-weight: 600;
-    color: var(--color-foreground);
-  }
-
-  .price-badge {
-    font-size: 11px;
-    line-height: 14px;
-    letter-spacing: 0.06em;
-    font-weight: 500;
-    color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    border-radius: 999px;
-    padding: 2px 8px;
-  }
-
-  .price-line {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-  }
-
-  .price-big {
-    font-size: 34px;
-    line-height: 38px;
-    font-weight: 500;
-    color: var(--color-foreground);
-  }
-
-  .price-small {
-    font-size: 13px;
-    line-height: 16px;
+    line-height: 23px;
     color: var(--color-muted-foreground);
   }
 
-  .price-features {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+  /* ── Demos ── */
 
-  .price-features li {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 13.5px;
-    line-height: 18px;
-    color: var(--color-muted-foreground);
-  }
-
-  .price-features svg {
-    flex-shrink: 0;
-  }
-
-  .price-note {
-    padding-top: 4px;
-    font-size: 12.5px;
-    line-height: 17px;
-    color: var(--color-muted-foreground);
-  }
-
-  /* ── Final CTA ── */
-
-  .final-cta {
+  .demos {
     display: flex;
     flex-direction: column;
     align-items: center;
+    border-top: 1px solid var(--color-border);
+    padding: 104px 64px;
+  }
+
+  .demo-row {
+    display: flex;
+    align-items: center;
+    gap: 88px;
     width: 100%;
-    padding-top: 110px;
+    margin-top: 96px;
   }
 
-  .final-title {
-    font-size: 52px;
-    line-height: 58px;
-    font-weight: 500;
-    text-align: center;
-    color: var(--color-foreground);
+  /* The middle row mirrors, so the media side alternates down the page. */
+  .demo-row:nth-of-type(even) {
+    flex-direction: row-reverse;
   }
 
-  .final-actions {
-    margin-top: 30px;
+  .demo-copy {
+    flex-shrink: 0;
     display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    gap: 18px;
+    width: 432px;
   }
 
-  .closing-quote {
-    margin-top: 100px;
-    margin-bottom: 8px;
-    font-size: 21px;
-    line-height: 30px;
-    text-align: center;
-    max-width: 480px;
-    font-weight: 500;
+  .demo-copy h3 {
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 40px;
+  }
+
+  .demo-copy p {
+    font-size: 15px;
+    line-height: 25px;
     color: var(--color-muted-foreground);
   }
 
-  .closing-author {
-    font-size: 12.5px;
+  .demo-media {
+    flex: 1 0 0;
+    aspect-ratio: 8 / 5;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-card);
+    overflow: hidden;
+  }
+
+  .demo-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .demo-placeholder {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--color-input);
+  }
+
+  .demo-placeholder span {
+    font-size: 13px;
+    font-weight: 500;
     line-height: 16px;
     color: var(--color-muted-foreground);
   }
 
-  /* ── Mobile ── */
+  /* ── Download band ── */
 
-  @media (max-width: 860px) {
-    .hero-title {
-      font-size: 44px;
-      line-height: 48px;
-    }
+  .download {
+    display: flex;
+    padding: 0 64px 104px;
+  }
 
-    .sec {
-      padding: 64px 24px 0;
-    }
+  .download-band {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+    width: 100%;
+    padding: 64px 56px;
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    background:
+      linear-gradient(rgba(10, 10, 10, 0.78), rgba(10, 10, 10, 0.78)),
+      url("/download-glow.webp") center / cover no-repeat,
+      var(--color-background);
+  }
 
-    .feature-cards {
+  .download-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .download-head h2 {
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 42px;
+  }
+
+  .download-head p {
+    font-size: 16px;
+    line-height: 26px;
+    color: rgba(245, 245, 245, 0.72);
+  }
+
+  .platform-cards {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .platform-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 264px;
+    padding: 20px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: rgba(15, 15, 15, 0.8);
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .platform-card:hover {
+    border-color: var(--color-input);
+    background: rgba(20, 20, 20, 0.92);
+  }
+
+  .platform-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .platform-card-glyph {
+    color: var(--color-muted-foreground);
+  }
+
+  .platform-card:hover .platform-card-glyph {
+    color: var(--color-foreground);
+  }
+
+  .platform-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .platform-card-name {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 22px;
+  }
+
+  .platform-card-detail {
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ── Small screens ── */
+
+  @media (max-width: 1100px) {
+    .demo-row,
+    .demo-row:nth-of-type(even) {
       flex-direction: column;
+      align-items: stretch;
+      gap: 28px;
+      margin-top: 64px;
+    }
+
+    .demo-copy {
       width: 100%;
+    }
+
+    .demo-media {
+      width: 100%;
+      flex: 0 0 auto;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .hero {
+      padding: 64px 24px 72px;
       gap: 32px;
     }
 
-    .feature {
-      width: 100%;
-      padding: 0;
+    .hero-title {
+      font-size: 46px;
+      line-height: 50px;
     }
 
-    .pricing-cards {
+    .hero-sub {
+      font-size: 16px;
+      line-height: 26px;
+    }
+
+    .hero-shot {
+      border-radius: 12px;
+    }
+
+    .section-title {
+      font-size: 32px;
+      line-height: 38px;
+    }
+
+    .bots {
+      padding: 64px 24px 0;
+    }
+
+    .triad {
       flex-direction: column;
+      padding-top: 24px;
     }
 
-    .price-card {
+    .triad-cell,
+    .triad-cell:first-child,
+    .triad-cell:last-child {
+      padding: 28px 0;
+    }
+
+    .triad-cell + .triad-cell {
+      border-left: 0;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .demos {
+      padding: 64px 24px;
+    }
+
+    .demo-copy h3 {
+      font-size: 26px;
+      line-height: 32px;
+    }
+
+    .download {
+      padding: 0 24px 64px;
+    }
+
+    .download-band {
+      padding: 40px 24px;
+      gap: 28px;
+    }
+
+    .download-head h2 {
+      font-size: 28px;
+      line-height: 34px;
+    }
+
+    .platform-card {
       width: 100%;
-    }
-
-    .final-cta {
-      padding-top: 72px;
-    }
-
-    .final-title {
-      font-size: 38px;
-      line-height: 44px;
     }
   }
 </style>

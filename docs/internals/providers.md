@@ -13,8 +13,8 @@ orchestration layer does not know which one is behind a thread.
 | ------------- | --------------------------------------- |
 | `codex`       | [`Drivers/CodexDriver.ts`][codex]       |
 | `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]     |
-| `cursor`      | [`Drivers/CursorDriver.ts`][cursor]     |
 | `grok`        | [`Drivers/GrokDriver.ts`][grok]         |
+| `kimi`        | [`Drivers/KimiDriver.ts`][kimi]         |
 | `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode] |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
@@ -37,10 +37,10 @@ Two registries separate configuration from live processes:
 directory to route session and turn operations for a thread, so callers name a thread, not an agent.
 
 Desktop chat does not call `ProviderService` directly from orchestration. The command reactor calls
-Akeru's [`AgentController`][controller]. Codex threads run through Akeru's custom Mastra Core
+Akeru's [`AgentController`][controller]. Codex and Kimi threads run through Akeru's custom Mastra Core
 controller and call `Session.sendMessage()`. The backing agent is a general-purpose Akeru assistant
 with no Mastra memory or task signals. Akeru builds workspace and enabled plugin tools per thread, and
-resolves the selected Codex model through an explicit subscription `AuthStorage`. AgentController
+resolves the selected subscription model through explicit server-owned auth. AgentController
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
@@ -51,7 +51,7 @@ an account. Unknown mutating intent also asks. The pending approval map binds th
 exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
 as one-use approval.
 
-Claude, Cursor, Grok, and OpenCode keep their existing adapters. [`LegacyProviderBridge`][bridge]
+Claude, Grok, and OpenCode keep their existing adapters. [`LegacyProviderBridge`][bridge]
 routes those providers through `ProviderService` and forwards their canonical runtime events. Claude
 receives the same general-purpose Akeru instructions and enabled MCP servers. A provider change stops
 the active runtime and starts the selected provider without reusing an incompatible resume cursor. The
@@ -116,8 +116,8 @@ when a request opens (approval) or user input is requested, via
 [drivers]: ../../apps/server/src/provider/builtInDrivers.ts
 [codex]: ../../apps/server/src/provider/Drivers/CodexDriver.ts
 [claude]: ../../apps/server/src/provider/Drivers/ClaudeDriver.ts
-[cursor]: ../../apps/server/src/provider/Drivers/CursorDriver.ts
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
+[kimi]: ../../apps/server/src/provider/Drivers/KimiDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
 [adapter]: ../../apps/server/src/provider/Services/ProviderAdapter.ts
 [instances]: ../../apps/server/src/provider/Services/ProviderInstanceRegistry.ts

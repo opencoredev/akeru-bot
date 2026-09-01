@@ -6,11 +6,10 @@ Supported account flows:
 
 - ChatGPT subscription through OpenAI Codex device authorization
 - Claude Pro or Max through Anthropic paste-code PKCE
-- Cursor subscription through Cursor browser PKCE and polling
 - Grok subscription through xAI device authorization
 - Kimi For Coding through Moonshot device authorization
 
-The flow implementations are ported from Mastra Code under Apache-2.0. The Kimi and Cursor flows follow `mastra-ai/mastra` pull requests 22428 and 22427.
+The flow implementations are ported from Mastra Code under Apache-2.0. The Kimi flow follows `mastra-ai/mastra` pull request 22428.
 
 ## Storage boundary
 

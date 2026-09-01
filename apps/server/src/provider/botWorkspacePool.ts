@@ -1,8 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 
-import type { Workspace } from "@mastra/core/workspace";
+import { Workspace } from "@mastra/core/workspace";
 import type { BotId, BotSandbox, BotSandboxBrowserSharing } from "@t3tools/contracts";
+import type { AkeruBotWorkspace } from "./botWorkspace.ts";
 
 export function botRuntimeResourceScope(input: {
   readonly sharing: BotSandboxBrowserSharing;
@@ -29,13 +30,13 @@ export function botWorkspaceIdentity(resourceKey: string): string {
 }
 
 export interface BotWorkspaceLease {
-  readonly workspace: Workspace;
+  readonly workspace: AkeruBotWorkspace;
   readonly wokeFromSleep: boolean;
   readonly release: (options?: { readonly destroy?: boolean }) => Promise<void>;
 }
 
 interface BotWorkspacePoolEntry {
-  readonly workspace: Promise<Workspace>;
+  readonly workspace: Promise<AkeruBotWorkspace>;
   references: number;
   sleeping?: Promise<void>;
   waking?: Promise<void>;
@@ -47,7 +48,10 @@ interface BotWorkspacePoolEntry {
 export class BotWorkspacePool {
   private readonly entries = new Map<string, BotWorkspacePoolEntry>();
 
-  async acquire(key: string, create: () => Promise<Workspace>): Promise<BotWorkspaceLease> {
+  async acquire(
+    key: string,
+    create: () => Promise<AkeruBotWorkspace | Workspace>,
+  ): Promise<BotWorkspaceLease> {
     const current = this.entries.get(key);
     if (current?.destroying) {
       await current.destroying;
@@ -57,9 +61,10 @@ export class BotWorkspacePool {
     const entry =
       current ??
       ({
-        workspace: create().then(async (workspace) => {
+        workspace: create().then(async (created) => {
+          const workspace = created instanceof Workspace ? wrapMastraWorkspace(created) : created;
           try {
-            await workspace.init();
+            await workspace.wake();
           } catch (error) {
             await workspace.destroy().catch(() => undefined);
             throw error;
@@ -73,14 +78,14 @@ export class BotWorkspacePool {
     const wake = current !== undefined && (entry.references === 0 || entry.waking !== undefined);
     entry.references += 1;
 
-    let workspace: Workspace;
+    let workspace: AkeruBotWorkspace;
     try {
       workspace = await entry.workspace;
       if (wake && !entry.waking) {
         entry.waking = (async () => {
           await entry.sleeping;
           delete entry.sleeping;
-          await workspace.init();
+          await workspace.wake();
         })().finally(() => {
           delete entry.waking;
         });
@@ -117,10 +122,12 @@ export class BotWorkspacePool {
 
         entry.sleeping = (async () => {
           await entry.waking;
-          await workspace.stop();
+          await workspace.sleep();
         })().catch(async (error: unknown) => {
-          if (this.entries.get(key) === entry) this.entries.delete(key);
-          await workspace.destroy().catch(() => undefined);
+          entry.destroying ??= workspace.destroy().finally(() => {
+            if (this.entries.get(key) === entry) this.entries.delete(key);
+          });
+          await entry.destroying.catch(() => undefined);
           throw error;
         });
         await entry.sleeping;
@@ -151,4 +158,16 @@ export class BotWorkspacePool {
       });
     await entry.destroying;
   }
+}
+
+function wrapMastraWorkspace(workspace: Workspace): AkeruBotWorkspace {
+  return {
+    id: workspace.id,
+    provider: "local",
+    workspace,
+    inspect: async () => "running",
+    wake: () => workspace.init(),
+    sleep: () => workspace.stop(),
+    destroy: () => workspace.destroy(),
+  };
 }
