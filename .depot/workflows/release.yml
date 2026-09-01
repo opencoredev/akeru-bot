@@ -74,6 +74,7 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      T3CODE_DESKTOP_UPDATE_REPOSITORY: opencoredev/akeru-bot
     strategy:
       fail-fast: false
       matrix:
