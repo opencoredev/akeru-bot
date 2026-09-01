@@ -1004,10 +1004,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     Result: ProjectionProjectIdLookupRowSchema,
     execute: ({ workspaceRoot }) =>
       sql`
-        SELECT project_id AS "projectId"
-        FROM projection_projects
-        WHERE workspace_root = ${workspaceRoot}
-        ORDER BY created_at ASC, project_id ASC
+        SELECT stream_id AS "projectId"
+        FROM orchestration_events
+        WHERE aggregate_kind = 'project'
+          AND event_type IN ('project.created', 'project.meta-updated')
+          AND json_extract(payload_json, '$.workspaceRoot') = ${workspaceRoot}
+        ORDER BY sequence ASC
         LIMIT 1
       `,
   });

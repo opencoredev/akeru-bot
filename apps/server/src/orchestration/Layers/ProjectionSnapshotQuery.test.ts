@@ -739,6 +739,55 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         yield* sql`DELETE FROM projection_projects`;
         yield* sql`DELETE FROM projection_threads`;
         yield* sql`DELETE FROM projection_turns`;
+        yield* sql`DELETE FROM orchestration_events`;
+
+        yield* sql`
+        INSERT INTO orchestration_events (
+          event_id,
+          aggregate_kind,
+          stream_id,
+          stream_version,
+          event_type,
+          occurred_at,
+          actor_kind,
+          payload_json,
+          metadata_json
+        )
+        VALUES
+          (
+            'event-project-deleted-created',
+            'project',
+            'project-deleted',
+            1,
+            'project.created',
+            '2026-02-28T00:00:00.000Z',
+            'user',
+            '{"projectId":"project-deleted","workspaceRoot":"/tmp/workspace"}',
+            '{}'
+          ),
+          (
+            'event-project-deleted-moved',
+            'project',
+            'project-deleted',
+            2,
+            'project.meta-updated',
+            '2026-02-28T00:00:01.000Z',
+            'user',
+            '{"projectId":"project-deleted","workspaceRoot":"/tmp/moved"}',
+            '{}'
+          ),
+          (
+            'event-project-active-created',
+            'project',
+            'project-active',
+            1,
+            'project.created',
+            '2026-03-01T00:00:00.000Z',
+            'user',
+            '{"projectId":"project-active","workspaceRoot":"/tmp/workspace"}',
+            '{}'
+          )
+      `;
 
         yield* sql`
         INSERT INTO projection_projects (
@@ -765,7 +814,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'project-deleted',
             'Deleted Project',
-            '/tmp/workspace',
+            '/tmp/moved',
             NULL,
             '[]',
             '2026-02-28T00:00:00.000Z',
