@@ -114,7 +114,11 @@ import {
   botWorkspaceResourceKey,
 } from "../botWorkspacePool.ts";
 import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
-import { AgentController, type AgentControllerShape } from "../Services/AgentController.ts";
+import {
+  AgentController,
+  type AgentControllerSendTurnInput,
+  type AgentControllerShape,
+} from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 
 const DEFAULT_MODE_ID = "build";
@@ -152,6 +156,13 @@ interface ActiveTurn {
   assistantText: string;
 }
 
+interface PendingTurn {
+  readonly threadId: ThreadId;
+  readonly turnId: TurnId;
+  readonly message: Parameters<MastraSession["sendMessage"]>[0];
+  readonly botUsage: AgentControllerSendTurnInput["botUsage"];
+}
+
 interface ActiveSession {
   readonly session: MastraSession;
   readonly provider: ProviderDriverKind;
@@ -163,6 +174,7 @@ interface ActiveSession {
   model: string;
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
+  readonly pendingTurns: PendingTurn[];
   readonly toolNames: Map<string, string>;
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
   readonly connectorSessionApprovals: Set<string>;
@@ -840,6 +852,54 @@ const make = (options?: AgentControllerLiveOptions) =>
       toolRuntime.clearApprovals(String(threadId));
     };
 
+    const startPendingTurn = (
+      active: ActiveSession,
+      { threadId, turnId, message, botUsage }: PendingTurn,
+    ) => {
+      const key = String(threadId);
+      if (botUsage) {
+        memoryUsageByThread.set(key, { ...botUsage, turnId });
+      } else {
+        memoryUsageByThread.delete(key);
+      }
+      active.activeTurn = {
+        turnId,
+        assistantMessages: new Map(),
+        waiting: false,
+        finished: false,
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        memoryQueued: false,
+        assistantText: "",
+      };
+      active.status = "running";
+      publish({
+        ...baseEvent(threadId, active, turnId),
+        type: "turn.started",
+        payload: { model: active.model },
+      });
+      publishSessionState(threadId, active, "running");
+      void active.session
+        .sendMessage(message)
+        .then(() => {
+          const turn = active.activeTurn;
+          if (turn?.turnId === turnId && !turn.waiting) {
+            finishTurn(threadId, active, "completed");
+          }
+        })
+        .catch((cause: unknown) => {
+          if (active.activeTurn?.turnId !== turnId) return;
+          const detail = sessionFailureDetail(active, cause);
+          publish({
+            ...baseEvent(threadId, active, turnId),
+            type: "runtime.error",
+            payload: { message: detail, class: "provider_error" },
+          });
+          finishTurn(threadId, active, "failed", detail);
+        });
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -880,7 +940,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
       }
       active.activeTurn = null;
-      publishSessionState(threadId, active, "ready");
+      const nextTurn = active.pendingTurns.shift();
+      if (nextTurn) {
+        startPendingTurn(active, nextTurn);
+      } else {
+        publishSessionState(threadId, active, "ready");
+      }
     };
 
     const publishAssistantText = (
@@ -1619,6 +1684,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           model: resolved.modelSelection.model,
           status: "ready" as const,
           activeTurn: null,
+          pendingTurns: [],
           toolNames: new Map<string, string>(),
           approvalRequests: new Map(),
           connectorSessionApprovals: new Set<string>(),
@@ -1664,12 +1730,6 @@ const make = (options?: AgentControllerLiveOptions) =>
               : providerInput,
           );
         }
-        if (active.activeTurn) {
-          return yield* new AgentControllerRuntimeError({
-            operation: "sendTurn",
-            detail: `Mastra session for thread '${input.threadId}' already has an active turn.`,
-          });
-        }
         const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
           const path = resolveAttachmentPath({
             attachmentsDir: config.attachmentsDir,
@@ -1705,45 +1765,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           .join("\n\n");
         const files = attachmentFiles.map(({ file }) => file);
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
-        if (input.botUsage) {
-          memoryUsageByThread.set(key, { ...input.botUsage, turnId });
-        } else {
-          memoryUsageByThread.delete(key);
-        }
-        active.activeTurn = {
+        active.pendingTurns.push({
+          threadId: input.threadId,
           turnId,
-          assistantMessages: new Map(),
-          waiting: false,
-          finished: false,
-          inputTokens: 0,
-          outputTokens: 0,
-          reasoningTokens: 0,
-          memoryQueued: false,
-          assistantText: "",
-        };
-        active.status = "running";
-        publish({
-          ...baseEvent(input.threadId, active, turnId),
-          type: "turn.started",
-          payload: { model: active.model },
+          message: { content, ...(files.length > 0 ? { files } : {}) },
+          botUsage: input.botUsage,
         });
-        publishSessionState(input.threadId, active, "running");
-        void active.session
-          .sendMessage({ content, ...(files.length > 0 ? { files } : {}) })
-          .then(() => {
-            if (!active.activeTurn?.waiting) {
-              finishTurn(input.threadId, active, "completed");
-            }
-          })
-          .catch((cause: unknown) => {
-            const detail = sessionFailureDetail(active, cause);
-            publish({
-              ...baseEvent(input.threadId, active, turnId),
-              type: "runtime.error",
-              payload: { message: detail, class: "provider_error" },
-            });
-            finishTurn(input.threadId, active, "failed", detail);
-          });
+        if (!active.activeTurn) {
+          const nextTurn = active.pendingTurns.shift();
+          if (nextTurn) startPendingTurn(active, nextTurn);
+        }
         return { threadId: input.threadId, turnId };
       },
     );
@@ -1761,6 +1792,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.interruptTurn(input);
       }
+      active.pendingTurns.length = 0;
       active.session.abort();
       finishTurn(input.threadId, active, "interrupted");
     });
@@ -1896,6 +1928,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      active.pendingTurns.length = 0;
       active.session.abort();
       if (active.activeTurn) {
         finishTurn(input.threadId, active, "interrupted");
@@ -1942,6 +1975,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
+          active.pendingTurns.length = 0;
           active.session.abort();
           if (active.activeTurn) {
             finishTurn(ThreadId.make(threadId), active, "interrupted");

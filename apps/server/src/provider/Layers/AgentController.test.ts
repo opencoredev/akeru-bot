@@ -209,10 +209,12 @@ function makeMastraHarness() {
   let modeId = "build";
   let modelId = "openai/gpt-5.6-sol";
   let resolveSend: (() => void) | undefined;
+  const rejectSends: Array<(cause: unknown) => void> = [];
   const sendMessage = vi.fn(
     () =>
-      new Promise<void>((resolve) => {
+      new Promise<void>((resolve, reject) => {
         resolveSend = resolve;
+        rejectSends.push(reject);
       }),
   );
   const session = {
@@ -270,6 +272,7 @@ function makeMastraHarness() {
     sendMessage,
     emit,
     finishSend: () => resolveSend?.(),
+    rejectSend: (index: number, cause: unknown) => rejectSends[index]?.(cause),
   };
 }
 
@@ -867,6 +870,102 @@ describe("AgentControllerLive", () => {
         expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Reply once." });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.sendTurn).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("queues Mastra follow-ups while the current turn is active", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+
+        const first = yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "First message",
+        });
+        const second = yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Queued follow-up",
+        });
+
+        expect(second.turnId).not.toBe(first.turnId);
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+        expect(mastra.sendMessage).toHaveBeenNthCalledWith(2, { content: "Queued follow-up" });
+        expect(
+          events.filter((event) => event.type === "turn.started").map((event) => event.turnId),
+        ).toEqual([first.turnId, second.turnId]);
+        expect(
+          events
+            .filter((event) => event.type === "session.state.changed")
+            .map((event) => event.payload.state),
+        ).toEqual(["running", "running"]);
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("ignores a stale Mastra send failure after the next turn starts", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "First message" });
+        const second = yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Queued follow-up",
+        });
+        mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(2);
+
+        mastra.rejectSend(0, new Error("late failure"));
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+
+        expect(events.some((event) => event.type === "runtime.error")).toBe(false);
+        expect(
+          events.find((event) => event.type === "turn.started" && event.turnId === second.turnId),
+        ).toBeDefined();
+        yield* Fiber.interrupt(eventsFiber);
       }),
       bridge.service,
       mastra.factory,

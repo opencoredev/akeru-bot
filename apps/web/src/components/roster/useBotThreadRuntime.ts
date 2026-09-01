@@ -8,7 +8,7 @@ import {
   type ModelSelection,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
@@ -17,7 +17,6 @@ import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   useAllEnvironmentShellsBootstrapped,
   useProjects,
-  useThreadActivities,
   useThreadMessages,
   useThreadShell,
   useThreadShells,
@@ -30,12 +29,10 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { resolveBotRuntimeMode } from "./botSandbox";
 import {
-  acceptBotTurnSubmission,
   buildBotTurnStartInput,
+  createBotTurnSubmissionQueue,
   joinOrStartThreadCreate,
-  releaseBotTurnSubmissionAfterObservation,
   resolveBotThreadTarget,
-  reserveBotTurnSubmissionAfterObservation,
 } from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -110,7 +107,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     retainedThreadRef.current.threadRef = linkedThreadRef;
   }
   const messages = useThreadMessages(linkedThreadRef);
-  const activities = useThreadActivities(linkedThreadRef);
   const defaultProject = useMemo(
     () =>
       bootstrapped && primaryEnvironmentId
@@ -142,18 +138,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
   const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
-  const sendInFlightRef = useRef(false);
+  const sendQueueRef = useRef(createBotTurnSubmissionQueue());
+  const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!primaryEnvironmentId) return;
-    const submissionKey = `${primaryEnvironmentId}:${botId}`;
-    releaseBotTurnSubmissionAfterObservation(
-      submissionKey,
-      rememberedThread?.latestTurn,
-      activities,
-    );
-  }, [activities, botId, primaryEnvironmentId, rememberedThread?.latestTurn]);
 
   const ensureTranscriptThread = useCallback(
     async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
@@ -204,133 +192,117 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   );
 
   const send = useCallback(
-    async (prompt: string, files: readonly File[]): Promise<boolean> => {
-      if (sendInFlightRef.current) return false;
+    (prompt: string, files: readonly File[]): Promise<boolean> => {
       if (!botReady) {
         setError("The bot is still connecting.");
-        return false;
+        return Promise.resolve(false);
       }
       if (!activeProject) {
         setError("Add a project before you message a bot.");
-        return false;
-      }
-      if (rememberedThread?.latestTurn?.state === "running") {
-        setError("Wait for the current reply to finish.");
-        return false;
+        return Promise.resolve(false);
       }
       const unsupported = files.find((file) => !file.type.startsWith("image/"));
       if (unsupported) {
         setError("Bot attachments must be images.");
-        return false;
-      }
-      const submissionKey = `${activeProject.environmentId}:${botId}`;
-      const releaseSubmission = reserveBotTurnSubmissionAfterObservation(
-        submissionKey,
-        rememberedThread?.latestTurn,
-        activities,
-      );
-      if (!releaseSubmission) {
-        setError("Wait for the current reply to start.");
-        return false;
+        return Promise.resolve(false);
       }
 
-      sendInFlightRef.current = true;
+      queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
-      const createdAt = new Date().toISOString();
-      const modelSelection: ModelSelection =
-        effectiveModelSelection ?? activeProject.defaultModelSelection ?? appDefaultModelSelection;
-      const runtimeMode = resolveBotRuntimeMode(bot?.sandbox ?? null, settings.localExecutionMode);
-      const title = threadTitle(prompt, files);
-      const messageId = newMessageId();
-      let accepted = false;
-
-      try {
-        const attachments = await Promise.all(
-          files.map(async (file) => ({
-            type: "image" as const,
-            name: file.name,
-            mimeType: file.type,
-            sizeBytes: file.size,
-            dataUrl: await readFileAsDataUrl(file),
-          })),
+      return sendQueueRef.current.enqueue(async () => {
+        setError(null);
+        const createdAt = new Date().toISOString();
+        const modelSelection: ModelSelection =
+          effectiveModelSelection ??
+          activeProject.defaultModelSelection ??
+          appDefaultModelSelection;
+        const runtimeMode = resolveBotRuntimeMode(
+          bot?.sandbox ?? null,
+          settings.localExecutionMode,
         );
-        const currentThreadRef =
-          retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
-        if (!currentThreadRef) {
-          setError("Could not send the message.");
-          return false;
-        }
-        if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {
-          const modeResult = await setRuntimeMode({
-            environmentId: currentThreadRef.environmentId,
-            input: { threadId: currentThreadRef.threadId, runtimeMode },
-          });
-          if (modeResult._tag === "Failure") {
-            setError(errorMessage(modeResult));
+        const title = threadTitle(prompt, files);
+
+        try {
+          const attachments = await Promise.all(
+            files.map(async (file) => ({
+              type: "image" as const,
+              name: file.name,
+              mimeType: file.type,
+              sizeBytes: file.size,
+              dataUrl: await readFileAsDataUrl(file),
+            })),
+          );
+          const currentThreadRef =
+            retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
+          if (!currentThreadRef) {
+            setError("Could not send the message.");
             return false;
           }
-        }
-        const startResult = await startTurn({
-          environmentId: currentThreadRef.environmentId,
-          input: buildBotTurnStartInput({
-            botId: BotId.make(botId),
-            threadId: currentThreadRef.threadId,
-            projectId: activeProject.id,
-            title,
-            message: {
-              messageId,
-              role: "user",
-              text: prompt,
-              attachments,
-            },
-            modelSelection,
-            runtimeMode,
-            interactionMode: DEFAULT_INTERACTION_MODE,
-            createdAt,
-            createThread: false,
-          }),
-        });
-        if (startResult._tag === "Failure") {
-          setError(errorMessage(startResult));
-          return false;
-        }
+          if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {
+            const modeResult = await setRuntimeMode({
+              environmentId: currentThreadRef.environmentId,
+              input: { threadId: currentThreadRef.threadId, runtimeMode },
+            });
+            if (modeResult._tag === "Failure") {
+              setError(errorMessage(modeResult));
+              return false;
+            }
+          }
+          const startResult = await startTurn({
+            environmentId: currentThreadRef.environmentId,
+            input: buildBotTurnStartInput({
+              botId: BotId.make(botId),
+              threadId: currentThreadRef.threadId,
+              projectId: activeProject.id,
+              title,
+              message: {
+                messageId: newMessageId(),
+                role: "user",
+                text: prompt,
+                attachments,
+              },
+              modelSelection,
+              runtimeMode,
+              interactionMode: DEFAULT_INTERACTION_MODE,
+              createdAt,
+              createThread: false,
+            }),
+          });
+          if (startResult._tag === "Failure") {
+            setError(errorMessage(startResult));
+            return false;
+          }
 
-        accepted = true;
-        acceptBotTurnSubmission(submissionKey, messageId);
-        releaseBotTurnSubmissionAfterObservation(
-          submissionKey,
-          rememberedThread?.latestTurn,
-          activities,
-        );
-        retainedThreadRef.current.threadRef = currentThreadRef;
-        useRosterStore
-          .getState()
-          .recordChatPath(botId, `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`);
-        useRosterStore.getState().recordLastMessage(botId, {
-          text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
-          at: createdAt,
-        });
-        return true;
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not send the message.");
-        return false;
-      } finally {
-        if (!accepted) releaseSubmission();
-        sendInFlightRef.current = false;
-        setSending(false);
-      }
+          retainedThreadRef.current.threadRef = currentThreadRef;
+          useRosterStore
+            .getState()
+            .recordChatPath(
+              botId,
+              `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`,
+            );
+          useRosterStore.getState().recordLastMessage(botId, {
+            text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
+            at: createdAt,
+          });
+          return true;
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not send the message.");
+          return false;
+        } finally {
+          queuedSendCountRef.current -= 1;
+          if (queuedSendCountRef.current === 0) setSending(false);
+        }
+      });
     },
     [
       activeProject,
-      activities,
       appDefaultModelSelection,
       bot,
       botId,
       effectiveModelSelection,
       botReady,
       ensureTranscriptThread,
-      rememberedThread?.latestTurn,
       rememberedThread?.runtimeMode,
       settings.localExecutionMode,
       setRuntimeMode,
