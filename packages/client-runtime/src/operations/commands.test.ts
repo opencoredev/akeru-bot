@@ -30,6 +30,7 @@ import {
   archiveThread,
   assignGroupMember,
   cancelDelegation,
+  connectChannel,
   createMcpServer,
   createProject,
   disconnectChannel,

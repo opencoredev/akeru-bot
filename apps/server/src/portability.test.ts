@@ -40,6 +40,7 @@ const LATER = "2026-08-30T13:00:00.000Z";
 const PROJECT_ID = ProjectId.make("project-portable");
 const THREAD_ID = ThreadId.make("thread-portable");
 const BOT_ID = BotId.make("bot-portable");
+const SPECIALIST_BOT_ID = BotId.make("bot-portable-specialist");
 const GROUP_ID = GroupId.make("group-portable");
 const URL_MCP_ID = McpServerId.make("builtin-search");
 const STDIO_MCP_ID = McpServerId.make("local-tool");
@@ -243,6 +244,34 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
       },
     ],
     ...overrides,
+  };
+}
+
+function makePreflightSnapshot(): OrchestrationReadModel {
+  const snapshot = makeSnapshot();
+  const boss = snapshot.bots[0]!;
+
+  return {
+    ...snapshot,
+    bots: [
+      boss,
+      {
+        ...boss,
+        id: SPECIALIST_BOT_ID,
+        name: "Verifier",
+        title: "QA engineer",
+        avatar: { kind: "dither", seed: SPECIALIST_BOT_ID },
+      },
+    ],
+    groups: [
+      {
+        ...snapshot.groups[0]!,
+        members: [
+          { kind: "bot", botId: BOT_ID, role: "boss" },
+          { kind: "bot", botId: SPECIALIST_BOT_ID, role: "specialist" },
+        ],
+      },
+    ],
   };
 }
 
@@ -1172,7 +1201,7 @@ describe("portability import", () => {
   });
 
   effectIt.effect("preflights new project restores through the decider", () => {
-    const source = makeSnapshot();
+    const source = makePreflightSnapshot();
     const target = makeSnapshot({
       projects: [],
       bots: [],
@@ -1348,7 +1377,7 @@ describe("portability import", () => {
   });
 
   effectIt.effect("preflights the complete restore plan through the decider", () => {
-    const source = makeSnapshot();
+    const source = makePreflightSnapshot();
     const target = makeSnapshot({ bots: [], groups: [], mcpServers: [], threads: [] });
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
