@@ -2,10 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { EnvironmentId } from "@t3tools/contracts";
 
-import {
-  privacyControlPatch,
-  resolveSettingsEnvironmentId,
-} from "./SettingsRouteScreen.logic";
+import { privacyControlPatch, resolveSettingsEnvironmentId } from "./SettingsRouteScreen.logic";
 
 describe("privacyControlPatch", () => {
   it.each([
