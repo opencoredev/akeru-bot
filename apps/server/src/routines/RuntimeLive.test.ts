@@ -201,10 +201,19 @@ it("finds open connector and browser incidents for the routine bot", () => {
     occurrenceCount: 1,
   };
 
-  assert.strictEqual(findBlockingDependencyIncident([item], BotId.make("bot-1")), item);
-  assert.strictEqual(findBlockingDependencyIncident([item], BotId.make("bot-2")), undefined);
+  assert.strictEqual(findBlockingDependencyIncident([item], BotId.make("bot-1"), ["gmail"]), item);
   assert.strictEqual(
-    findBlockingDependencyIncident([{ ...item, status: "resolved" }], BotId.make("bot-1")),
+    findBlockingDependencyIncident([item], BotId.make("bot-1"), ["slack"]),
+    undefined,
+  );
+  assert.strictEqual(
+    findBlockingDependencyIncident([item], BotId.make("bot-2"), ["gmail"]),
+    undefined,
+  );
+  assert.strictEqual(
+    findBlockingDependencyIncident([{ ...item, status: "resolved" }], BotId.make("bot-1"), [
+      "gmail",
+    ]),
     undefined,
   );
 });
@@ -276,6 +285,30 @@ it.effect("leaves an in-flight dispatched run attached after restart", () => {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
     assert.deepEqual(test.events, []);
+  }).pipe(Effect.provide(test.layer));
+});
+
+it.effect("blocks a dispatched run whose session stopped before a turn", () => {
+  const value = routine();
+  const test = harness(value, [
+    {
+      runId: RoutineRunId.make("run-stopped"),
+      routineId: value.id,
+      trigger: "manual",
+      scheduledFor: null,
+      claimedAt: "2026-08-31T13:00:00.000Z",
+      status: "dispatched",
+      threadRef: "thread-1",
+      terminalState: null,
+      terminalAt: null,
+      sessionState: "stopped",
+      sessionUpdatedAt: "2026-08-31T13:01:00.000Z",
+    },
+  ]);
+  return Effect.gen(function* () {
+    const runtime = yield* RoutineRuntime;
+    yield* runtime.recover;
+    assert.deepEqual(test.events, ["incident", "claim-blocked"]);
   }).pipe(Effect.provide(test.layer));
 });
 

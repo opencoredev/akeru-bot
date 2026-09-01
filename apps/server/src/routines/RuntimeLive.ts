@@ -125,11 +125,20 @@ const make = Effect.gen(function* () {
     Effect.catchCause((cause) => Effect.logError("routine scheduler tick failed", { cause })),
   );
 
+  const canRunNow: RoutineRuntimeShape["canRunNow"] = (routineId) =>
+    Effect.gen(function* () {
+      const routine = yield* repository.getById(routineId);
+      return (
+        routine !== null &&
+        routine.lifecycle !== "deleted" &&
+        !(yield* adapter.isTargetBusy(routine))
+      );
+    });
+
   const runNow: RoutineRuntimeShape["runNow"] = (routineId, runId, trigger) =>
     Effect.gen(function* () {
       const routine = yield* repository.getById(routineId);
       if (routine === null || routine.lifecycle === "deleted") return null;
-      if (yield* adapter.isTargetBusy(routine)) return null;
       const now = DateTime.formatIso(yield* DateTime.now);
       const claim = {
         runId,
@@ -165,7 +174,7 @@ const make = Effect.gen(function* () {
     );
     if (run === null) return;
     const routine = yield* repository.getById(run.routineId);
-    if (routine === null) return;
+    if (routine === null || routine.lifecycle === "deleted") return;
     const completedAt =
       event.type === "thread.turn-diff-completed"
         ? event.payload.completedAt
@@ -265,6 +274,30 @@ const make = Effect.gen(function* () {
           continue;
         }
       }
+      if (
+        claim.status === "dispatched" &&
+        claim.sessionState !== undefined &&
+        claim.sessionState !== null &&
+        claim.sessionState !== "ready" &&
+        claim.sessionState !== "starting" &&
+        claim.sessionState !== "running"
+      ) {
+        const completedAt = claim.sessionUpdatedAt ?? DateTime.formatIso(yield* DateTime.now);
+        const run = (yield* repository.listRuns(claim.routineId)).find(
+          (candidate) => candidate.id === claim.runId,
+        );
+        if (run !== undefined) {
+          const failure = {
+            kind: "execution",
+            reason: `Routine session ended with state '${claim.sessionState}'.`,
+            nextAction: "Review the routine thread, then resume the routine.",
+          } satisfies RoutineDependencyFailure;
+          yield* adapter.recordFailed(run, failure, completedAt);
+          yield* adapter.openFailureIncident(routine, failure);
+          yield* repository.markBlocked(run.id, failure.reason, completedAt);
+        }
+        continue;
+      }
       if (claim.status === "dispatched") continue;
       yield* execute(routine, claim);
     }
@@ -293,7 +326,7 @@ const make = Effect.gen(function* () {
     );
   });
 
-  return { runDue, runNow, recover, start } satisfies RoutineRuntimeShape;
+  return { runDue, canRunNow, runNow, recover, start } satisfies RoutineRuntimeShape;
 });
 
 export const RoutineRuntimeLive = Layer.effect(RoutineRuntime, make);

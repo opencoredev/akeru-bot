@@ -7,6 +7,7 @@ import type { RoutineId, RoutineRun, RoutineRunId, RoutineRunTrigger } from "./t
 
 export interface RoutineRuntimeShape {
   readonly runDue: Effect.Effect<void, never>;
+  readonly canRunNow: (routineId: RoutineId) => Effect.Effect<boolean, PersistenceSqlError>;
   readonly runNow: (
     routineId: RoutineId,
     runId: RoutineRunId,

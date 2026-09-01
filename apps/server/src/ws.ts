@@ -1486,7 +1486,16 @@ const makeWsRpcLayer = (
 
         const dispatchEffect =
           normalizedCommand.type === "routine.run"
-            ? baseDispatchEffect.pipe(
+            ? routineRuntime.canRunNow(normalizedCommand.routineId).pipe(
+                Effect.flatMap((canRun) =>
+                  canRun
+                    ? baseDispatchEffect
+                    : Effect.fail(
+                        new OrchestrationDispatchCommandError({
+                          message: `Routine run '${normalizedCommand.runId}' did not start.`,
+                        }),
+                      ),
+                ),
                 Effect.flatMap((result) =>
                   routineRuntime
                     .runNow(

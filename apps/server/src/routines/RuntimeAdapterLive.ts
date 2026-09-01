@@ -22,15 +22,24 @@ import {
 export const findBlockingDependencyIncident = (
   incidents: ReadonlyArray<BotInboxItem>,
   botId: BotInboxItem["botId"],
+  connectorDependencies: ReadonlyArray<string>,
 ) =>
-  incidents.find(
-    (incident) =>
-      incident.botId === botId &&
-      incident.status === "open" &&
-      (incident.kind === "oauth-expired" ||
-        incident.kind === "connector-failure" ||
-        incident.kind === "browser-dead"),
-  );
+  incidents.find((incident) => {
+    if (
+      incident.botId !== botId ||
+      incident.status !== "open" ||
+      (incident.kind !== "oauth-expired" &&
+        incident.kind !== "connector-failure" &&
+        incident.kind !== "browser-dead")
+    ) {
+      return false;
+    }
+    const [, dependencyId] = incident.incidentKey.split(":");
+    if (!dependencyId) return false;
+    return connectorDependencies.some(
+      (id) => id === dependencyId || `mcp-${id}` === dependencyId || id === `mcp-${dependencyId}`,
+    );
+  });
 
 const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
@@ -85,7 +94,11 @@ const make = Effect.gen(function* () {
       }
 
       inbox.reload();
-      const dependencyIncident = findBlockingDependencyIncident(inbox.list(), routine.botId);
+      const dependencyIncident = findBlockingDependencyIncident(
+        inbox.list(),
+        routine.botId,
+        routine.connectorDependencies,
+      );
       if (dependencyIncident !== undefined) {
         return {
           kind: dependencyIncident.kind === "browser-dead" ? "browser" : "connector",

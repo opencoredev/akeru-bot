@@ -846,6 +846,7 @@ const buildAppUnderTest = (options?: {
             RoutineRuntime,
             RoutineRuntime.of({
               runDue: Effect.void,
+              canRunNow: () => Effect.succeed(true),
               runNow: () => Effect.succeed(null),
               recover: Effect.void,
               start: Effect.void,
@@ -3830,13 +3831,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
   it.effect("reports a manual routine run that does not start", () =>
     Effect.gen(function* () {
+      let dispatchCount = 0;
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            dispatch: () => Effect.succeed({ sequence: 7 }),
+            dispatch: () =>
+              Effect.sync(() => {
+                dispatchCount += 1;
+                return { sequence: 7 };
+              }),
           },
           routineRuntime: {
-            runNow: () => Effect.succeed(null),
+            canRunNow: () => Effect.succeed(false),
+            runNow: () => Effect.die("busy routine must not run"),
           },
         },
       });
@@ -3859,6 +3866,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       if (result._tag === "Failure") {
         assert.include(result.failure.message, "did not start");
       }
+      assert.equal(dispatchCount, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
   it.effect("routes websocket rpc projects.writeFile errors", () =>

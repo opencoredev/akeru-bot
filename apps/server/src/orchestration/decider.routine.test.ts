@@ -1,4 +1,12 @@
-import { BotId, CommandId, EventId, ProjectId, RoutineId, ThreadId } from "@t3tools/contracts";
+import {
+  BotId,
+  CommandId,
+  EventId,
+  ProjectId,
+  RoutineId,
+  RoutineRunId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -75,6 +83,23 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
         sequence: 1,
         eventId: EventId.make("event-routine-created-for-delete"),
       });
+      const started = yield* decideOrchestrationCommand({
+        command: {
+          type: "routine.run",
+          commandId: CommandId.make("command-routine-run-before-delete"),
+          routineId: RoutineId.make("routine-delete"),
+          runId: RoutineRunId.make("run-before-delete"),
+          trigger: "manual",
+          createdAt: NOW,
+        },
+        readModel: withRoutine,
+      });
+      const startedEvent = Array.isArray(started) ? started[0] : started;
+      const withRun = yield* projectEvent(withRoutine, {
+        ...startedEvent,
+        sequence: 2,
+        eventId: EventId.make("event-routine-run-before-delete"),
+      });
       const deletedAt = "2026-08-31T14:00:00.000Z";
 
       const deleted = yield* decideOrchestrationCommand({
@@ -84,7 +109,7 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
           routineId: RoutineId.make("routine-delete"),
           createdAt: deletedAt,
         },
-        readModel: withRoutine,
+        readModel: withRun,
       });
       const deletedEvent = Array.isArray(deleted) ? deleted[0] : deleted;
 
@@ -99,6 +124,27 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
           deletedAt,
         });
       }
+      const afterDelete = yield* projectEvent(withRun, {
+        ...deletedEvent,
+        sequence: 3,
+        eventId: EventId.make("event-routine-deleted"),
+      });
+      const completionError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "routine.run.complete",
+            commandId: CommandId.make("command-routine-complete-after-delete"),
+            routineId: RoutineId.make("routine-delete"),
+            runId: RoutineRunId.make("run-before-delete"),
+            result: { summary: "Late completion" },
+            usageRef: null,
+            nextRunAt: null,
+            createdAt: "2026-08-31T14:01:00.000Z",
+          },
+          readModel: afterDelete,
+        }),
+      );
+      expect(completionError.message).toContain("does not exist");
     }),
   );
 

@@ -1734,7 +1734,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         (routine) => routine.id === command.routineId,
       );
       const existingRun = (readModel.routineRuns ?? []).find((run) => run.id === command.runId);
-      if (existing === undefined || existingRun === undefined) {
+      if (existing === undefined || existing.lifecycle === "deleted" || existingRun === undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine run '${command.runId}' does not exist.`,

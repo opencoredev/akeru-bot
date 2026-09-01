@@ -32,7 +32,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("063_RoutineTargetThrea
           updated_at TEXT NOT NULL, UNIQUE (routine_id, scheduled_for)
         )
       `;
-      yield* runMigrations({ toMigrationInclusive: 62 });
+      yield* runMigrations({ toMigrationInclusive: 63 });
 
       const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_routines)`;
       assert.isTrue(columns.some((column) => column.name === "target_thread_id"));

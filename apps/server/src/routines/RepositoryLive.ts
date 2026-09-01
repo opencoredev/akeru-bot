@@ -287,11 +287,21 @@ const make = Effect.gen(function* () {
     readonly threadRef: string | null;
     readonly terminalState: "completed" | "error" | "interrupted" | null;
     readonly terminalAt: string | null;
+    readonly sessionState:
+      | "ready"
+      | "starting"
+      | "running"
+      | "error"
+      | "interrupted"
+      | "stopped"
+      | null;
+    readonly sessionUpdatedAt: string | null;
   }>`
     SELECT run_id AS "runId", routine_id AS "routineId", trigger,
       scheduled_for AS "scheduledFor", claimed_at AS "claimedAt", claims.status,
       claims.thread_id AS "threadRef", turns.state AS "terminalState",
-      turns.completed_at AS "terminalAt"
+      turns.completed_at AS "terminalAt", sessions.status AS "sessionState",
+      sessions.updated_at AS "sessionUpdatedAt"
     FROM routine_run_claims AS claims
     LEFT JOIN projection_turns AS turns ON turns.row_id = (
       SELECT MAX(candidate.row_id) FROM projection_turns AS candidate
@@ -299,6 +309,7 @@ const make = Effect.gen(function* () {
         AND candidate.pending_message_id = 'routine:' || claims.run_id || ':message'
         AND candidate.state IN ('completed', 'error', 'interrupted')
     )
+    LEFT JOIN projection_thread_sessions AS sessions ON sessions.thread_id = claims.thread_id
     WHERE claims.status IN ('claimed', 'dispatched')
     ORDER BY claimed_at, run_id
   `.pipe(

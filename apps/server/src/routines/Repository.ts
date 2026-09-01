@@ -13,6 +13,15 @@ interface RoutineClaimBase {
   readonly threadRef?: string | null;
   readonly terminalState?: "completed" | "error" | "interrupted" | null;
   readonly terminalAt?: string | null;
+  readonly sessionState?:
+    | "ready"
+    | "starting"
+    | "running"
+    | "error"
+    | "interrupted"
+    | "stopped"
+    | null;
+  readonly sessionUpdatedAt?: string | null;
 }
 
 export type RoutineClaim = RoutineClaimBase &
