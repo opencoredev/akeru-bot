@@ -55,4 +55,24 @@ describe("ComposerPendingApprovalActions", () => {
     expect(markup).toContain('class="max-w-40 truncate"');
     expect(markup).toContain(label);
   });
+
+  it("uses the three clear command permission choices", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalActions
+        requestId={ApprovalRequestId.make("approval-shell")}
+        requestKind="command"
+        isResponding={false}
+        options={[
+          { decision: "decline", label: "Decline" },
+          { decision: "accept", label: "Allow" },
+        ]}
+        onRespondToApproval={async () => undefined}
+      />,
+    );
+
+    expect(markup).toContain("Always allow");
+    expect(markup).toContain("Allow once");
+    expect(markup).toContain("Never");
+    expect(markup).not.toContain(">Decline<");
+  });
 });

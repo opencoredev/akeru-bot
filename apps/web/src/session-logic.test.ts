@@ -71,6 +71,28 @@ function makeActivity(overrides: {
 }
 
 describe("derivePendingApprovals", () => {
+  it("carries command arguments from the matching tool activity", () => {
+    const args = { command: 'printf "hi\\n"', cwd: null };
+    const approvals = derivePendingApprovals([
+      makeActivity({
+        kind: "tool.started",
+        payload: { toolCallId: "shell-1", data: { args } },
+      }),
+      makeActivity({
+        kind: "approval.requested",
+        tone: "approval",
+        payload: {
+          requestId: "shell-1",
+          requestType: "dynamic_tool_call",
+          toolName: "Shell",
+          detail: "Allow Shell?",
+        },
+      }),
+    ]);
+
+    expect(approvals[0]).toMatchObject({ requestId: "shell-1", args });
+  });
+
   it("keeps feedback tool arguments for the editable draft", () => {
     const args = { feedback: "The button is unresponsive." };
     const approvals = derivePendingApprovals([

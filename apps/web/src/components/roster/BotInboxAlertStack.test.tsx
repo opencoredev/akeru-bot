@@ -52,4 +52,21 @@ describe("bot inbox alerts", () => {
     expect(markup).toContain("Next: Reconnect Claude in Settings.");
     expect(markup).toContain("View details");
   });
+
+  it("leaves approval requests to the inline approval card", () => {
+    const markup = renderToStaticMarkup(
+      <BotInboxAlertStack
+        items={[
+          incident({
+            kind: "approval-request",
+            lastFailure: "Allow Shell?",
+            nextAction: "Open the thread and approve or decline the request.",
+          }),
+        ]}
+        onOpenDetails={() => {}}
+      />,
+    );
+
+    expect(markup).toBe("");
+  });
 });

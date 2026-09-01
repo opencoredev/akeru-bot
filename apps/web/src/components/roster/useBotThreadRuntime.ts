@@ -6,6 +6,7 @@ import {
   EnvironmentId,
   ThreadId,
   type ModelSelection,
+  type ProviderApprovalDecision,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   useAllEnvironmentShellsBootstrapped,
   useProjects,
+  useThreadActivities,
   useThreadMessages,
   useThreadShell,
   useThreadShells,
@@ -26,6 +28,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { derivePendingApprovals } from "../../session-logic";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { resolveBotRuntimeMode } from "./botSandbox";
 import {
@@ -107,6 +110,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     retainedThreadRef.current.threadRef = linkedThreadRef;
   }
   const messages = useThreadMessages(linkedThreadRef);
+  const activities = useThreadActivities(linkedThreadRef);
+  const pendingApprovals = useMemo(() => derivePendingApprovals(activities), [activities]);
   const defaultProject = useMemo(
     () =>
       bootstrapped && primaryEnvironmentId
@@ -132,6 +137,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const respondToApprovalCommand = useAtomCommand(threadEnvironment.respondToApproval, {
+    reportFailure: false,
+  });
   const appendVoiceTranscript = useAtomCommand(threadEnvironment.appendVoiceTranscript, {
     reportFailure: false,
   });
@@ -141,6 +149,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
+  const [respondingToApproval, setRespondingToApproval] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const ensureTranscriptThread = useCallback(
@@ -330,6 +339,23 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     [appendVoiceTranscript, botId, ensureTranscriptThread],
   );
 
+  const respondToApproval = useCallback(
+    async (
+      requestId: (typeof pendingApprovals)[number]["requestId"],
+      decision: ProviderApprovalDecision,
+    ) => {
+      if (!linkedThreadRef || respondingToApproval) return;
+      setRespondingToApproval(true);
+      const result = await respondToApprovalCommand({
+        environmentId: linkedThreadRef.environmentId,
+        input: { threadId: linkedThreadRef.threadId, requestId, decision },
+      });
+      setRespondingToApproval(false);
+      if (result._tag === "Failure") setError(errorMessage(result));
+    },
+    [linkedThreadRef, pendingApprovals, respondToApprovalCommand, respondingToApproval],
+  );
+
   return {
     appendTranscript,
     bootstrapped,
@@ -339,6 +365,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
+    pendingApprovals,
+    respondToApproval,
+    respondingToApproval,
     send,
     sending,
   };

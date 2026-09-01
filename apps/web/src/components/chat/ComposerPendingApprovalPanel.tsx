@@ -33,31 +33,56 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         : approval.requestKind === "file-read"
           ? "File to read"
           : "File change";
+  const command =
+    approval.requestKind === "command" &&
+    approval.args &&
+    typeof approval.args === "object" &&
+    "command" in approval.args &&
+    typeof approval.args.command === "string"
+      ? approval.args.command
+      : null;
+  const detail = command ?? approval.detail ?? fallbackLabel;
 
   return (
     <div
       aria-label={fallbackLabel}
-      className={cn("flex min-w-0 flex-1 items-center gap-2", className)}
+      className={cn("flex min-w-0 flex-1 flex-col gap-1.5", className)}
       role="group"
     >
-      {approval.appName ? (
-        <span className="max-w-32 shrink truncate text-[11px] font-medium text-foreground">
-          {approval.appName}
-        </span>
-      ) : null}
-      <code
-        aria-label={detailAriaLabel}
-        className="block max-h-20 min-w-0 flex-1 overflow-auto whitespace-pre font-mono text-[11px] text-foreground/85 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
-        data-approval-detail="complete"
-        tabIndex={0}
-      >
-        {approval.detail || fallbackLabel}
-      </code>
-      {pendingCount > 1 ? (
-        <span className="shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
-          1/{pendingCount}
-        </span>
-      ) : null}
+      <div className="flex w-full min-w-0 items-center gap-2">
+        <span className="text-xs font-medium text-foreground">{fallbackLabel}</span>
+        {approval.appName ? (
+          <span className="max-w-32 shrink truncate text-[11px] text-muted-foreground">
+            {approval.appName}
+          </span>
+        ) : null}
+        {pendingCount > 1 ? (
+          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
+            1/{pendingCount}
+          </span>
+        ) : null}
+      </div>
+      <details className="group w-full min-w-0">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md bg-foreground/[0.04] px-2.5 py-2 marker:content-none">
+          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/85">
+            {detail.split("\n", 1)[0]}
+          </code>
+          <span className="shrink-0 text-[10px] text-muted-foreground group-open:hidden">
+            Expand
+          </span>
+          <span className="hidden shrink-0 text-[10px] text-muted-foreground group-open:inline">
+            Collapse
+          </span>
+        </summary>
+        <code
+          aria-label={detailAriaLabel}
+          className="mt-1.5 block max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-foreground/[0.04] px-2.5 py-2 font-mono text-[11px] text-foreground/85 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+          data-approval-detail="complete"
+          tabIndex={0}
+        >
+          {detail}
+        </code>
+      </details>
     </div>
   );
 });

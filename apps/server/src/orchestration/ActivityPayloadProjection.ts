@@ -130,6 +130,11 @@ function projectCommandValue(data: Record<string, unknown>): unknown {
     return data.command;
   }
 
+  const args = asRecord(data.args);
+  if (args?.command !== undefined) {
+    return args.command;
+  }
+
   const input = asRecord(data.input);
   if (input?.command !== undefined) {
     return input.command;

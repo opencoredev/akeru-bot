@@ -138,7 +138,9 @@ describe("ChatComposer launch-control removal", () => {
     );
 
     expect(markup).toContain("rm -rf node_modules");
-    expect(markup).toContain("Approve");
+    expect(markup).toContain("Allow once");
+    expect(markup).toContain("Always allow");
+    expect(markup).toContain("Never");
     expectNoLaunchControls(markup);
   });
 

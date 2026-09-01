@@ -408,9 +408,13 @@ describe("AkeruMastraHarness", () => {
       resourceId: "thread-1",
       session: { modelId: "openai/gpt-5.6-sol" },
     });
+    const approvalInputs: unknown[] = [];
     const runtime = {
       toolsForThread: () => AKERU_TOOL_CATALOG.filter((tool) => tool.id === "Shell"),
-      requiresApproval: async () => true,
+      requiresApproval: async (_threadId: string, _toolId: string, input: unknown) => {
+        approvalInputs.push(input);
+        return true;
+      },
       execute: async () => undefined,
     } as unknown as AkeruToolRuntime;
     const pluginTool = { id: "plugin", execute: async () => undefined, requireApproval: false };
@@ -437,6 +441,9 @@ describe("AkeruMastraHarness", () => {
     ]);
     assert.notProperty(tools, "Read");
     assert.notProperty(tools, "execute_command");
+    const shell = tools.Shell as unknown as {
+      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
+    };
     const restart = tools.RestartMcpServers as unknown as {
       readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
     };
@@ -448,6 +455,10 @@ describe("AkeruMastraHarness", () => {
     assert.isTrue(await search.needsApprovalFn({ command: "git push origin main" }));
     assert.isTrue(await search.needsApprovalFn({ path: ".env" }));
     assert.isFalse(await search.needsApprovalFn({ operation: "read" }));
+    assert.isTrue(
+      await shell.needsApprovalFn({ command: 'printf "hi\\n"', cwd: null, background: null }),
+    );
+    assert.deepEqual(approvalInputs, [{ command: 'printf "hi\\n"' }]);
     assert.deepEqual(approvalPolicies, [true, true, true, true, false]);
     assert.equal(criticalAkeruAction("RestartMcpServers"), "production");
   });
