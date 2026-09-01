@@ -1,3 +1,9 @@
+## @t3tools/desktop@0.0.37
+
+### Changes
+
+- [#124](https://github.com/opencoredev/akeru-bot/pull/124) fix(web): prevent duplicate bot panes
+
 ## @t3tools/desktop@0.0.36
 
 ### Changes
