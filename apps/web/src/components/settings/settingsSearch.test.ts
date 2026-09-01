@@ -86,10 +86,10 @@ describe("searchSettings", () => {
     });
   });
 
-  it("routes analytics to General settings", () => {
+  it("routes analytics to Privacy settings", () => {
     expect(searchSettings("analytics")[0]).toMatchObject({
-      id: "analytics",
-      to: "/settings/general",
+      id: "anonymous-analytics",
+      to: "/settings/privacy",
     });
   });
 

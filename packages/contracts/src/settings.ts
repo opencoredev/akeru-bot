@@ -917,7 +917,6 @@ export const ServerSettingsPatch = Schema.Struct({
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   analyticsEnabled: Schema.optionalKey(Schema.Boolean),
   localExecutionMode: Schema.optionalKey(LocalExecutionMode),
-  analyticsEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
