@@ -28,6 +28,7 @@ export function createAkeruMastraTools(threadId: string, runtime: AkeruToolRunti
         description: definition.description,
         inputSchema: z.fromJSONSchema(
           standardSchema["~standard"].jsonSchema.input({ target: "draft-07" }),
+          { defaultTarget: "draft-7" },
         ),
         requireApproval: approval,
         execute: (input, context) => {

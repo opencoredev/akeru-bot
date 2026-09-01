@@ -1,16 +1,8 @@
-import {
-  CheckIcon,
-  CopyIcon,
-  ExternalLinkIcon,
-  LoaderIcon,
-  LogOutIcon,
-  RefreshCwIcon,
-} from "lucide-react";
+import { CopyIcon, ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
-  ProviderAccessStatus,
   SubscriptionProviderId,
   SubscriptionProviderStatus,
 } from "@t3tools/contracts";
@@ -88,9 +80,7 @@ const healthLabels: Readonly<Record<NonNullable<SubscriptionProviderStatus["heal
   recovered: "Recovered",
 };
 
-function healthBadgeVariant(
-  health: SubscriptionProviderStatus["health"] | ProviderAccessStatus["health"] | undefined,
-) {
+function healthBadgeVariant(health: SubscriptionProviderStatus["health"] | undefined) {
   if (health === "healthy" || health === "recovered") return "success" as const;
   if (
     health === "expired" ||
@@ -104,89 +94,13 @@ function healthBadgeVariant(
   return "secondary" as const;
 }
 
-const accessMethodLabels: Readonly<Record<ProviderAccessStatus["accessMethod"], string>> = {
-  "subscription-oauth": "Subscription plan",
-  "api-key": "API key",
-  "acp-cli": "CLI",
-  browser: "Browser",
-  mcp: "MCP",
-};
-
-export function selectVisibleProviderAccess(
-  access: ReadonlyArray<ProviderAccessStatus>,
-): ReadonlyArray<ProviderAccessStatus> {
-  return access.filter(
-    (item) => item.accessMethod !== "subscription-oauth" || item.health === "unsupported",
-  );
-}
-
-export function ProviderAccessSection({
-  access,
-}: {
-  readonly access: ReadonlyArray<ProviderAccessStatus>;
-}) {
-  const rows = selectVisibleProviderAccess(access);
-  if (rows.length === 0) return null;
-
-  return (
-    <SettingsSection title="Provider access">
-      {rows.map((item) => (
-        <SettingsRow
-          key={item.id}
-          title={
-            <span className="flex items-center gap-2">
-              {item.label}
-              <Badge variant={healthBadgeVariant(item.health)} className="h-4 px-1.5 text-[10px]">
-                {healthLabels[item.health]}
-              </Badge>
-            </span>
-          }
-          description={item.nextAction}
-          status={accessMethodLabels[item.accessMethod]}
-        >
-          {item.repairAction || item.lastFailedRequest || item.dependentBots.length > 0 ? (
-            <dl className="grid gap-x-6 gap-y-2 border-t border-border/50 py-3 text-xs sm:grid-cols-2">
-              {item.repairAction ? (
-                <div>
-                  <dt className="text-muted-foreground">Repair</dt>
-                  <dd>{item.repairAction}</dd>
-                </div>
-              ) : null}
-              {item.lastFailedRequest ? (
-                <div>
-                  <dt className="text-muted-foreground">Last failed request</dt>
-                  <dd>
-                    {formatTimestamp(item.lastFailedRequest.at)} · {item.lastFailedRequest.message}
-                  </dd>
-                </div>
-              ) : null}
-              {item.dependentBots.length > 0 ? (
-                <div>
-                  <dt className="text-muted-foreground">Dependent bots</dt>
-                  <dd>{item.dependentBots.map((bot) => bot.name).join(", ")}</dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
-        </SettingsRow>
-      ))}
-    </SettingsSection>
-  );
-}
-
-function formatTimestamp(value: string | number | undefined): string {
-  if (value === undefined) return "Never";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Never" : date.toLocaleString();
-}
-
 function commandError(result: AtomCommandResult<unknown, unknown>): string {
   if (result._tag !== "Failure") return "The request failed.";
   const error = squashAtomCommandFailure(result);
   return error instanceof Error ? error.message : "The request failed.";
 }
 
-function ProviderLoginCard({
+export function ProviderLoginCard({
   definition,
   status,
   busy,
@@ -256,50 +170,7 @@ function ProviderLoginCard({
           </Button>
         )
       }
-    >
-      {connected ? (
-        <dl className="grid gap-x-6 gap-y-2 border-t border-border/50 py-3 text-xs sm:grid-cols-2">
-          <div>
-            <dt className="text-muted-foreground">Last successful request</dt>
-            <dd>{formatTimestamp(status?.lastSuccessfulRequestAt)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Last failed request</dt>
-            <dd>
-              {status?.lastFailedRequest
-                ? `${formatTimestamp(status.lastFailedRequest.at)} · ${status.lastFailedRequest.message}`
-                : "Never"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">OAuth expiry</dt>
-            <dd>{formatTimestamp(status?.expiresAt)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Next retry</dt>
-            <dd>
-              {status?.nextRetryAt ? formatTimestamp(status.nextRetryAt) : "No automatic retry"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">OAuth check</dt>
-            <dd>
-              {!status?.oauthCheck
-                ? "Not run"
-                : `${status.oauthCheck.status === "passed" ? "Passed" : "Failed"} · ${formatTimestamp(status.oauthCheck.checkedAt)}`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Dependent bots</dt>
-            <dd>{status?.dependentBots.map((bot) => bot.name).join(", ") || "None"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Dependent routines</dt>
-            <dd>{status?.dependentRoutines.join(", ") || "Unavailable until routines ship"}</dd>
-          </div>
-        </dl>
-      ) : null}
-    </SettingsRow>
+    />
   );
 }
 
@@ -418,8 +289,6 @@ export function ProvidersPanel() {
     () => new Map(statusQuery.data?.providers.map((status) => [status.provider, status]) ?? []),
     [statusQuery.data],
   );
-  const providerAccess = statusQuery.data?.access ?? [];
-
   const settleLogin = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
       if (progress.status === "connected") {
@@ -570,20 +439,6 @@ export function ProvidersPanel() {
             onTest={() => void testHealth(definition.id)}
           />
         ))}
-      </SettingsSection>
-
-      <ProviderAccessSection access={providerAccess} />
-
-      <SettingsSection title="How credentials are used">
-        <SettingsRow
-          title={
-            <span className="flex items-center gap-2">
-              <CheckIcon className="size-4 text-success" />
-              Stored on your Akeru server
-            </span>
-          }
-          description="Refresh tokens never enter a project or sandbox. A run receives only the short-lived access token it needs."
-        />
       </SettingsSection>
     </SettingsPageContainer>
   );

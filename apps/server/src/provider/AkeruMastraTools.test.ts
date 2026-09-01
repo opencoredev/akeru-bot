@@ -5,6 +5,18 @@ import { createAkeruToolRuntime, type AkeruToolRuntime } from "./AkeruToolRuntim
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 
 describe("createAkeruMastraTools", () => {
+  it("builds every registered Akeru tool schema", () => {
+    const runtime = {
+      toolsForThread: () => AKERU_TOOL_CATALOG,
+      requiresApproval: vi.fn(async () => false),
+      execute: vi.fn(async () => ({ ok: true })),
+    } as unknown as AkeruToolRuntime;
+
+    const tools = createAkeruMastraTools("thread-all-tools", runtime);
+
+    expect(Object.keys(tools)).toEqual(AKERU_TOOL_CATALOG.map((definition) => definition.id));
+  });
+
   it("passes an exact call identity and approval mode to the runtime", async () => {
     const execute = vi.fn(async () => ({ ok: true }));
     const runtime = {
