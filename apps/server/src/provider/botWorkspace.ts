@@ -115,7 +115,7 @@ export async function createRemoteBotWorkspace(
   } catch (cause) {
     if (!persisted) throw cause;
     throw new Error(
-      `Remote ${input.sandbox} workspace '${persisted.providerId}' is missing or unavailable.`,
+      `Remote ${input.sandbox} workspace '${persisted.providerId}' is missing or unavailable. Remove '${identityFile}' to create a replacement.`,
       { cause },
     );
   }
@@ -289,14 +289,13 @@ async function open(provider: RemoteBotSandbox, id: string): Promise<AkeruRemote
 
 function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
   let sandbox = initial;
-  let state: AkeruWorkspaceState = "running";
   const providerId = sandbox.sandboxId;
   return {
     providerId,
     inspect: async () => {
       const { Sandbox } = await import("e2b");
       const info = await Sandbox.getInfo(providerId);
-      return (state = info.state === "paused" ? "sleeping" : "running");
+      return info.state === "paused" ? "sleeping" : "running";
     },
     run: async (command, args, options) => {
       const result = await sandbox.commands.run(commandLine(command, args), {
@@ -309,15 +308,12 @@ function e2b(initial: import("e2b").Sandbox): AkeruRemoteSession {
     wake: async () => {
       const { Sandbox } = await import("e2b");
       sandbox = await Sandbox.connect(providerId);
-      state = "running";
     },
     sleep: async () => {
       await sandbox.pause();
-      state = "sleeping";
     },
     destroy: async () => {
       await sandbox.kill();
-      state = "missing";
     },
   };
 }
@@ -326,14 +322,12 @@ export function daytona(
   client: import("@daytona/sdk").Daytona,
   sandbox: import("@daytona/sdk").Sandbox,
 ): AkeruRemoteSession {
-  let state: AkeruWorkspaceState = String(sandbox.state) === "started" ? "running" : "sleeping";
   return {
     providerId: sandbox.id,
     inspect: async () => {
       await sandbox.refreshData();
       const current = String(sandbox.state);
-      return (state =
-        current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping");
+      return current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping";
     },
     run: async (command, args, options) => {
       const result = await sandbox.process.executeCommand(
@@ -348,16 +342,11 @@ export function daytona(
       if ((await sandbox.refreshData(), String(sandbox.state)) !== "started") {
         await sandbox.start();
       }
-      state = "running";
     },
-    sleep: async () => {
-      await sandbox.pause();
-      state = "sleeping";
-    },
+    sleep: () => sandbox.pause(),
     destroy: async () => {
       await sandbox.delete(undefined, true);
       await client[Symbol.asyncDispose]();
-      state = "missing";
     },
   };
 }
@@ -372,13 +361,12 @@ export function vercelWorkspaceState(
 
 function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession {
   let sandbox = initial;
-  let state: AkeruWorkspaceState = "running";
   return {
     providerId: sandbox.name,
     inspect: async () => {
       const { Sandbox } = await import("@vercel/sandbox");
       sandbox = await Sandbox.get({ name: sandbox.name, resume: false });
-      return (state = vercelWorkspaceState(sandbox.status));
+      return vercelWorkspaceState(sandbox.status);
     },
     run: async (command, args, options) => {
       const result = await sandbox.runCommand({
@@ -397,24 +385,20 @@ function vercel(initial: import("@vercel/sandbox").Sandbox): AkeruRemoteSession 
     wake: async () => {
       const { Sandbox } = await import("@vercel/sandbox");
       sandbox = await Sandbox.get({ name: sandbox.name, resume: true });
-      state = "running";
     },
     sleep: async () => {
       await sandbox.stop();
-      state = "sleeping";
     },
     destroy: async () => {
       await sandbox.delete();
-      state = "missing";
     },
   };
 }
 
 export function upstash(box: import("@upstash/box").Box): AkeruRemoteSession {
-  let state: AkeruWorkspaceState = "running";
   const inspect = async () => {
     const status = (await box.getStatus()).status;
-    return (state = upstashWorkspaceState(status));
+    return upstashWorkspaceState(status);
   };
   return {
     providerId: box.id,
@@ -442,17 +426,10 @@ export function upstash(box: import("@upstash/box").Box): AkeruRemoteSession {
       }
       if (current === "sleeping") {
         await box.resume();
-        state = "running";
       }
     },
-    sleep: async () => {
-      await box.pause();
-      state = "sleeping";
-    },
-    destroy: async () => {
-      await box.delete();
-      state = "missing";
-    },
+    sleep: () => box.pause(),
+    destroy: () => box.delete(),
   };
 }
 

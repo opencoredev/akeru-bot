@@ -303,14 +303,11 @@ export class AkeruSessionResources {
       ...this.mcpManagers.keys(),
       ...this.threadBrowsers.keys(),
     ]);
-    await Promise.allSettled(
-      [...threadIds].map((threadId) => this.release(threadId, { destroy: true })),
-    );
+    await Promise.allSettled([...threadIds].map((threadId) => this.release(threadId)));
     await Promise.allSettled([...this.resourceBrowsers.values()].map((browser) => browser.close()));
     this.resourceBrowsers.clear();
     this.browserReferences.clear();
     this.browserDestroyRequests.clear();
     this.browserReconnects.clear();
-    await this.workspacePool.destroyAll();
   }
 }

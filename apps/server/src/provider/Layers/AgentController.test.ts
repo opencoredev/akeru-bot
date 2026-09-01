@@ -1518,10 +1518,16 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const makeRemoteWorkspace = vi.fn(async () => remote);
+    const makeBotBrowser = vi.fn(() => ({
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    }));
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
-      makeBotBrowser,
+      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -1556,11 +1562,12 @@ describe("AgentControllerLive", () => {
         }),
       );
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
+      expect(makeBotBrowser).not.toHaveBeenCalled();
       yield* controller.stopSession({ threadId: codexThreadId });
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
-  it.effect("destroys obsolete and final pooled workspaces", () => {
+  it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const firstWorkspace = new Workspace({
@@ -1572,6 +1579,7 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const firstDestroy = vi.spyOn(firstWorkspace, "destroy");
+    const secondStop = vi.spyOn(secondWorkspace, "stop");
     const secondDestroy = vi.spyOn(secondWorkspace, "destroy");
     const makeRemoteWorkspace = vi
       .fn()
@@ -1610,7 +1618,8 @@ describe("AgentControllerLive", () => {
         expect(firstDestroy).toHaveBeenCalledOnce();
       }).pipe(Effect.provide(layer), Effect.orDie);
 
-      expect(secondDestroy).toHaveBeenCalledOnce();
+      expect(secondStop).toHaveBeenCalledOnce();
+      expect(secondDestroy).not.toHaveBeenCalled();
     });
   });
 
@@ -1651,7 +1660,7 @@ describe("AgentControllerLive", () => {
     });
   });
 
-  it.effect("keeps the same workspace when only session input changes", () => {
+  it.effect("keeps the same remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({
@@ -1660,11 +1669,11 @@ describe("AgentControllerLive", () => {
     });
     const destroy = vi.spyOn(remote, "destroy");
     const makeRemoteWorkspace = vi.fn(async () => remote);
-    const makeBotBrowserSpy = vi.fn(() => makeBotBrowser());
+    const makeBotBrowser = vi.fn();
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
-      makeBotBrowser: makeBotBrowserSpy,
+      makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -1693,7 +1702,7 @@ describe("AgentControllerLive", () => {
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(destroy).not.toHaveBeenCalled();
-      expect(makeBotBrowserSpy).not.toHaveBeenCalled();
+      expect(makeBotBrowser).not.toHaveBeenCalled();
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 

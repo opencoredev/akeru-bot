@@ -131,7 +131,8 @@ describe("createBotWorkspace", () => {
         identityFile,
         openSession: async () => Promise.reject(new Error("not found")),
       }),
-    ).rejects.toThrow("Remote vercel workspace 'missing-id' is missing or unavailable");
+    ).rejects.toThrow(`Remove '${identityFile}' to create a replacement`);
+    expect(NodeFS.existsSync(identityFile)).toBe(true);
     NodeFS.rmSync(baseDir, { recursive: true, force: true });
   });
 
