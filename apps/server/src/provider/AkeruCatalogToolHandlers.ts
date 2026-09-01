@@ -1,5 +1,6 @@
 // @effect-diagnostics globalDate:off globalRandom:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
 
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
 import {
@@ -13,10 +14,11 @@ import {
 } from "@t3tools/contracts";
 
 import {
-  isInstallablePlugin,
-  loadDirectoryCatalog,
-  type PluginDirectoryDefinition,
-} from "../../../../plugins/catalog.ts";
+  isInstallableManifest,
+  loadManifestCatalog,
+  type CatalogManifestModules,
+} from "../../../../plugins/manifestCatalog.ts";
+import type { PluginManifest } from "../../../../plugins/schema.ts";
 
 declare global {
   interface ImportMeta {
@@ -26,6 +28,26 @@ declare global {
     ): Record<string, T>;
   }
 }
+
+function loadNodeCatalogModules(): CatalogManifestModules {
+  const entriesUrl = new URL("../../../../plugins/entries/", import.meta.url);
+  return Object.fromEntries(
+    NodeFS.readdirSync(entriesUrl, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => [
+        `./entries/${entry.name}/plugin.json`,
+        JSON.parse(NodeFS.readFileSync(new URL(`${entry.name}/plugin.json`, entriesUrl), "utf8")),
+      ]),
+  );
+}
+
+const catalogManifestModules =
+  typeof import.meta.glob === "function"
+    ? import.meta.glob<unknown>("../../../../plugins/entries/*/plugin.json", {
+        eager: true,
+        import: "default",
+      })
+    : loadNodeCatalogModules();
 
 export interface AkeruCatalogToolHandlerInput {
   readonly input: unknown;
@@ -61,7 +83,7 @@ function pluginConnectionHealth(
 }
 
 function pluginView(
-  plugin: PluginDirectoryDefinition,
+  plugin: PluginManifest,
   snapshot: OrchestrationReadModel,
   statuses: readonly McpRuntimeStatus[],
 ) {
@@ -100,7 +122,7 @@ function pluginView(
   };
 }
 
-function pluginMatches(plugin: PluginDirectoryDefinition, query: string): boolean {
+function pluginMatches(plugin: PluginManifest, query: string): boolean {
   return [
     plugin.id,
     plugin.name,
@@ -115,7 +137,7 @@ function pluginMatches(plugin: PluginDirectoryDefinition, query: string): boolea
     .includes(query.trim().toLocaleLowerCase());
 }
 
-function sameRecipe(server: McpServer, plugin: PluginDirectoryDefinition): boolean {
+function sameRecipe(server: McpServer, plugin: PluginManifest): boolean {
   if (plugin.transport.type === "url") {
     return (
       server.transport === "url" &&
@@ -135,7 +157,7 @@ function sameRecipe(server: McpServer, plugin: PluginDirectoryDefinition): boole
 }
 
 export function createAkeruPluginRuntime(options: AkeruPluginRuntimeOptions) {
-  const catalog = loadDirectoryCatalog();
+  const catalog = loadManifestCatalog(catalogManifestModules);
   const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
   const now = options.now ?? (() => new Date().toISOString());
   const id = options.id ?? (() => NodeCrypto.randomUUID());
@@ -165,7 +187,7 @@ export function createAkeruPluginRuntime(options: AkeruPluginRuntimeOptions) {
   const install = async (pluginId: string) => {
     const plugin = byId.get(pluginId);
     if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
-    if (!isInstallablePlugin(plugin)) {
+    if (!isInstallableManifest(plugin)) {
       const blocker =
         plugin.connection.type === "approval-pending" ||
         plugin.connection.type === "verification-pending"

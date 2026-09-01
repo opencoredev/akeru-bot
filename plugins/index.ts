@@ -11,6 +11,11 @@ export {
   type PluginSkill,
 } from "./catalog";
 export {
+  isInstallableManifest,
+  loadManifestCatalog,
+  type CatalogManifestModules,
+} from "./manifestCatalog";
+export {
   PLUGIN_APPROVAL_CLASSES,
   PLUGIN_CATEGORIES,
   type CatalogCategory,
