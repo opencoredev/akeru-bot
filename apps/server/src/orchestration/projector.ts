@@ -7,8 +7,8 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import {
-  DelegationCompletedPayload,
   DelegationCreatedPayload,
+  DelegationUpdatedPayload,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationSession,
@@ -248,9 +248,9 @@ export function projectEvent(
 
   switch (event.type) {
     case "delegation.created":
-    case "delegation.completed":
+    case "delegation.updated":
       return decodeForEvent(
-        event.type === "delegation.created" ? DelegationCreatedPayload : DelegationCompletedPayload,
+        event.type === "delegation.created" ? DelegationCreatedPayload : DelegationUpdatedPayload,
         event.payload,
         event.type,
         "payload",

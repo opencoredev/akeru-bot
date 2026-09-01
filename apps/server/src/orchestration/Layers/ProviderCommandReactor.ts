@@ -88,7 +88,8 @@ type ProviderIntentEvent = Extract<
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
-      | "thread.session-stop-requested";
+      | "thread.session-stop-requested"
+      | "delegation.updated";
   }
 >;
 
@@ -1680,13 +1681,25 @@ const make = Effect.gen(function* () {
   ) {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
-      "orchestration.thread_id": event.payload.threadId,
+      ...(event.type === "delegation.updated"
+        ? { "orchestration.thread_id": event.payload.delegation.childThreadId ?? "unassigned" }
+        : { "orchestration.thread_id": event.payload.threadId }),
       ...(event.commandId ? { "orchestration.command_id": event.commandId } : {}),
     });
     yield* increment(orchestrationEventsProcessedTotal, {
       eventType: event.type,
     });
     switch (event.type) {
+      case "delegation.updated": {
+        const delegation = event.payload.delegation;
+        if (delegation.state === "canceled" && delegation.childThreadId !== null) {
+          yield* agentController.interruptTurn({
+            threadId: delegation.childThreadId,
+            ...(delegation.childTurnId ? { turnId: delegation.childTurnId } : {}),
+          });
+        }
+        return;
+      }
       case "thread.meta-updated":
         yield* threadTitleRegenerationWorker.enqueue(event);
         return;
@@ -1756,7 +1769,8 @@ const make = Effect.gen(function* () {
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
-        event.type === "thread.session-stop-requested"
+        event.type === "thread.session-stop-requested" ||
+        event.type === "delegation.updated"
       ) {
         return yield* worker.enqueue(event);
       }

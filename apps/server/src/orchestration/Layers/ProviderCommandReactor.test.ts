@@ -16,6 +16,7 @@ import {
   BotId,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  DelegationId,
   EventId,
   MessageId,
   ProjectId,
@@ -2896,6 +2897,140 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.interruptTurn.mock.calls.length === 1);
     expect(harness.interruptTurn.mock.calls[0]?.[0]).toEqual({
       threadId: "thread-1",
+    });
+  });
+
+  it("interrupts canceled delegation children and preserves kept children", async () => {
+    const harness = await createHarness({ botEngine: null });
+    const now = "2026-01-01T00:00:00.000Z";
+    const later = "2026-01-01T00:00:01.000Z";
+    const parentBotId = BotId.make("bot-1");
+    const childBotId = BotId.make("bot-child");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-delegation-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      }),
+    );
+
+    const createDelegation = async (suffix: string) => {
+      const childThreadId = ThreadId.make(`delegation-child-${suffix}`);
+      const childTurnId = TurnId.make(`delegation-turn-${suffix}`);
+      const delegationId = DelegationId.make(`delegation-${suffix}`);
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make(`cmd-delegation-thread-${suffix}`),
+          threadId: childThreadId,
+          projectId: asProjectId("project-1"),
+          botId: childBotId,
+          title: "Delegated work",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+        }),
+      );
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        childThreadId: null,
+        parentTurnId: TurnId.make("turn-parent"),
+        childTurnId: null,
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Research the answer.",
+        expectedResult: "A concise answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        state: "queued" as const,
+        billedBotId: childBotId,
+        result: null,
+        failure: null,
+        keep: false,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: null,
+        completedAt: null,
+      };
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "delegation.create",
+          commandId: CommandId.make(`cmd-delegation-create-${suffix}`),
+          delegation: queued,
+        }),
+      );
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "delegation.state.set",
+          commandId: CommandId.make(`cmd-delegation-running-${suffix}`),
+          delegation: {
+            ...queued,
+            childThreadId,
+            childTurnId,
+            state: "running",
+            startedAt: now,
+          },
+        }),
+      );
+      return { delegationId, childThreadId, childTurnId };
+    };
+
+    const kept = await createDelegation("kept");
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "delegation.cancel",
+        commandId: CommandId.make("cmd-delegation-keep"),
+        delegationId: kept.delegationId,
+        keep: true,
+        createdAt: later,
+      }),
+    );
+    await harness.drain();
+    expect(harness.interruptTurn).not.toHaveBeenCalled();
+
+    const canceled = await createDelegation("canceled");
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "delegation.cancel",
+        commandId: CommandId.make("cmd-delegation-cancel"),
+        delegationId: canceled.delegationId,
+        keep: false,
+        createdAt: later,
+      }),
+    );
+    await waitFor(() => harness.interruptTurn.mock.calls.length === 1);
+    expect(harness.interruptTurn).toHaveBeenCalledWith({
+      threadId: canceled.childThreadId,
+      turnId: canceled.childTurnId,
     });
   });
 
