@@ -35,4 +35,6 @@ jobs:
       - name: Update version PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: vp run tegami version
+        run: |
+          vp run release:changelog
+          vp run tegami version --no-checks

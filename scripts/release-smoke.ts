@@ -25,6 +25,7 @@ function assertOmits(haystack: string, needle: string, message: string): void {
 }
 
 const releaseWorkflow = read(".depot/workflows/release.yml");
+const versionPackagesWorkflow = read(".depot/workflows/version-packages.yml");
 const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
 const ciWorkflow = read(".depot/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
@@ -111,6 +112,20 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
+for (const [needle, label] of [
+  ["branches: [main]", "main branch trigger"],
+  ["vp run release:changelog", "merged pull request changelog"],
+  ["vp run tegami version --no-checks", "Tegami version command"],
+  ["contents: write", "version branch permission"],
+  ["pull-requests: write", "version pull request permission"],
+] as const) {
+  assertContains(versionPackagesWorkflow, needle, `Version packages workflow is missing ${label}.`);
+}
+assertOmits(
+  versionPackagesWorkflow,
+  "gh release create",
+  "Version packages workflow publishes before its pull request merges",
+);
 assertContains(
   releaseWorkflow,
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",
