@@ -475,21 +475,27 @@ function PinnedRosterItem({
         menuTriggerRef.current?.click();
       }}
     >
-      <button
-        type="button"
-        title={label}
-        onClick={() => (bot ? onSelectBot(bot) : onSelectGroup(group!))}
-        className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-sidebar-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {bot ? (
-          <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-12" />
-        ) : (
-          <span className="flex size-14 items-center justify-center">
-            <GroupMemberStack group={group!} bots={bots} sizeClassName="size-14" />
-          </span>
-        )}
-        <span className="w-full truncate text-[11px] font-medium">{label}</span>
-      </button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={() => (bot ? onSelectBot(bot) : onSelectGroup(group!))}
+              className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-sidebar-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {bot ? (
+                <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-12" />
+              ) : (
+                <span className="flex size-14 items-center justify-center">
+                  <GroupMemberStack group={group!} bots={bots} sizeClassName="size-14" />
+                </span>
+              )}
+              <span className="w-full truncate text-[11px] font-medium">{label}</span>
+            </button>
+          }
+        />
+        <TooltipPopup>{label}</TooltipPopup>
+      </Tooltip>
       <Menu>
         <MenuTrigger
           render={

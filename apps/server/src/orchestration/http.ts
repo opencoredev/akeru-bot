@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import {
   AuthAccessWriteScope,
@@ -158,7 +158,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                         ),
                       nowIso: () =>
                         Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
-                      randomUuid: async () => randomUUID(),
+                      randomUuid: async () => NodeCrypto.randomUUID(),
                     },
                     command,
                   ),

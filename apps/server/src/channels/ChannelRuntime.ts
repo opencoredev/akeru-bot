@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
@@ -115,9 +115,9 @@ const decodeStoredChannelSecret = Schema.decodeUnknownEffect(StoredChannelSecret
 const runtimeKey = (botId: string, provider: ChannelProvider) => `${botId}:${provider}`;
 const operationKey = (provider: ChannelProvider) => provider;
 const secretName = (botId: BotId, provider: ChannelProvider) =>
-  `channel-${provider}-${createHash("sha256").update(botId).digest("hex")}`;
+  `channel-${provider}-${NodeCrypto.createHash("sha256").update(botId).digest("hex")}`;
 const connectionSecretName = (connectionId: ChannelConnectionId) =>
-  `channel-connection-${createHash("sha256").update(connectionId).digest("hex")}`;
+  `channel-connection-${NodeCrypto.createHash("sha256").update(connectionId).digest("hex")}`;
 
 export const channelThreadId = (
   botId: BotId,
@@ -125,7 +125,7 @@ export const channelThreadId = (
   externalThreadId: string,
 ): ThreadId =>
   ThreadId.make(
-    `channel-${createHash("sha256").update(`${botId}\0${provider}\0${externalThreadId}`).digest("hex")}`,
+    `channel-${NodeCrypto.createHash("sha256").update(`${botId}\0${provider}\0${externalThreadId}`).digest("hex")}`,
   );
 
 export const WHATSAPP_WEBHOOK_PATH = "/api/channels/whatsapp/:botId/webhook";
