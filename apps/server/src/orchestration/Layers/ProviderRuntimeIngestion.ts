@@ -1774,6 +1774,7 @@ const make = Effect.gen(function* () {
                 ? { providerInstanceId: event.providerInstanceId }
                 : {}),
               runtimeMode: thread.session?.runtimeMode ?? "full-access",
+              mcpServerIds: thread.session?.mcpServerIds ?? [],
               activeTurnId: nextActiveTurnId,
               lastError,
               updatedAt: now,
@@ -2024,6 +2025,7 @@ const make = Effect.gen(function* () {
                 ? { providerInstanceId: event.providerInstanceId }
                 : {}),
               runtimeMode: thread.session?.runtimeMode ?? "full-access",
+              mcpServerIds: thread.session?.mcpServerIds ?? [],
               activeTurnId: eventTurnId ?? null,
               lastError: runtimeErrorMessage,
               updatedAt: now,

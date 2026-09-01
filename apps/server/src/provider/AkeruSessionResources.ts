@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import type { ToolsInput } from "@mastra/core/agent";
@@ -22,6 +23,13 @@ import {
   type CreateRemoteBotWorkspaceInput,
 } from "./botWorkspace.ts";
 import { BotWorkspacePool, type BotWorkspaceLease } from "./botWorkspacePool.ts";
+import {
+  CODEX_COMPUTER_USE_SERVER_ID,
+  isCodexComputerUseServer,
+  isCodexComputerUseTool,
+  resolveCodexComputerUseServer,
+  sanitizeCodexComputerUseResult,
+} from "./CodexComputerUse.ts";
 
 export interface AkeruSessionResourceInput {
   readonly threadId: string;
@@ -44,6 +52,8 @@ export interface AkeruSessionResourcesOptions {
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
+  readonly hostPlatform?: NodeJS.Platform;
+  readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
     browser?: BotBrowserAttachment,
@@ -63,6 +73,8 @@ export class AkeruSessionResources {
   private readonly browserReferences = new Map<string, number>();
   private readonly browserDestroyRequests = new Set<string>();
   private readonly browserReconnects = new Map<string, Promise<void>>();
+  private readonly computerUseTemporaryDirectories = new Map<string, string>();
+  private controllingThreadId: string | undefined;
   private shuttingDown = false;
 
   constructor(options: AkeruSessionResourcesOptions) {
@@ -92,7 +104,18 @@ export class AkeruSessionResources {
 
   private async acquireOnce(input: AkeruSessionResourceInput): Promise<AkeruSessionResourceView> {
     const key = input.threadId;
+    const usesComputer = input.mcpServers.some((server) =>
+      isCodexComputerUseServer(String(server.id)),
+    );
     try {
+      if (usesComputer) {
+        if (this.controllingThreadId && this.controllingThreadId !== key) {
+          throw new Error(
+            `Computer Use is already controlled by thread '${this.controllingThreadId}'. Stop it before starting another controller.`,
+          );
+        }
+        this.controllingThreadId = key;
+      }
       const workspaceLease = await this.workspacePool.acquire(
         input.workspaceResourceKey,
         async () => {
@@ -169,13 +192,38 @@ export class AkeruSessionResources {
 
       if (input.mcpServers.length > 0) {
         const attachment = await browser.attachment();
+        const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
+        if (usesComputer) {
+          if (!this.options.hostPlatform) {
+            throw new Error("Computer Use host platform is unavailable.");
+          }
+          const config = await (
+            this.options.resolveComputerUseServer ?? resolveCodexComputerUseServer
+          )({ platform: this.options.hostPlatform });
+          configs[CODEX_COMPUTER_USE_SERVER_ID] = config;
+          const temporaryDirectory = config.env?.TMPDIR;
+          if (typeof temporaryDirectory === "string") {
+            this.computerUseTemporaryDirectories.set(key, temporaryDirectory);
+          }
+        }
         const manager = (this.options.makeMcpManager ?? createMcpManager)(
           NodePath.join(this.options.stateDir, "bot-mcp-runtime"),
           ".akeru-runtime",
-          this.options.toMcpServerConfigs(input.mcpServers, attachment),
+          configs,
         );
         this.mcpManagers.set(key, manager);
         await manager.init();
+        if (usesComputer) {
+          const status = manager
+            .getServerStatuses()
+            .find((server) => server.name === CODEX_COMPUTER_USE_SERVER_ID);
+          if (!status?.connected || status.toolCount === 0) {
+            if (/screen recording|accessibility/i.test(status?.error ?? "")) {
+              throw new Error("Computer Use needs Screen Recording and Accessibility permissions.");
+            }
+            throw new Error("Computer Use MCP failed to start.");
+          }
+        }
       }
 
       return {
@@ -192,10 +240,31 @@ export class AkeruSessionResources {
   }
 
   getConnectorTools(threadId: string): ToolsInput {
-    return {
+    const tools: ToolsInput = {
       ...this.threadBrowsers.get(threadId)?.tools,
       ...this.mcpManagers.get(threadId)?.getTools(),
     };
+    return Object.fromEntries(
+      Object.entries(tools).map(([name, tool]) => {
+        const execute = Reflect.get(tool, "execute") as unknown;
+        if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
+          return [name, tool];
+        }
+        return [
+          name,
+          {
+            ...tool,
+            execute: async (...args: readonly unknown[]) => {
+              const temporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
+              return sanitizeCodexComputerUseResult(
+                await Reflect.apply(execute, tool, args),
+                temporaryDirectory ? { temporaryDirectory } : undefined,
+              );
+            },
+          },
+        ];
+      }),
+    );
   }
 
   getMcpManager(threadId: string): McpManager | undefined {
@@ -219,6 +288,15 @@ export class AkeruSessionResources {
     const manager = this.mcpManagers.get(threadId);
     this.mcpManagers.delete(threadId);
     if (manager) await manager.disconnect().catch((cause) => failures.push(cause));
+    const computerUseTemporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
+    this.computerUseTemporaryDirectories.delete(threadId);
+    if (computerUseTemporaryDirectory) {
+      try {
+        NodeFS.rmSync(computerUseTemporaryDirectory, { recursive: true, force: true });
+      } catch (cause) {
+        failures.push(cause);
+      }
+    }
 
     const browser = this.threadBrowsers.get(threadId);
     const resourceKey = this.browserResourceKeys.get(threadId);
@@ -254,6 +332,7 @@ export class AkeruSessionResources {
     if (userComputerLease) {
       await userComputerLease.release(options).catch((cause) => failures.push(cause));
     }
+    if (this.controllingThreadId === threadId) this.controllingThreadId = undefined;
     if (failures.length > 0) throw failures[0];
   }
 

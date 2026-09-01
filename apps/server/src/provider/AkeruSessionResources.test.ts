@@ -7,6 +7,7 @@ import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
+import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
 
 const directories = new Set<string>();
 
@@ -29,6 +30,37 @@ function browser(overrides?: { reconnect?: () => Promise<void>; close?: () => Pr
     attachment: vi.fn(async () => undefined),
     reconnect: vi.fn(overrides?.reconnect ?? (async () => undefined)),
     close: vi.fn(overrides?.close ?? (async () => undefined)),
+  };
+}
+
+function computerServer() {
+  return {
+    id: CODEX_COMPUTER_USE_SERVER_ID as never,
+    name: "Computer Use",
+    transport: "stdio" as const,
+    command: "akeru-codex-computer-use",
+    enabled: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function mcpManager(
+  status: { connected: boolean; toolCount: number; error?: string },
+  tools: Record<string, unknown> = {},
+) {
+  return {
+    init: vi.fn(async () => undefined),
+    disconnect: vi.fn(async () => undefined),
+    getTools: vi.fn(() => tools),
+    getServerStatuses: vi.fn(() => [
+      {
+        name: CODEX_COMPUTER_USE_SERVER_ID,
+        transport: "stdio" as const,
+        toolNames: status.toolCount > 0 ? [`${CODEX_COMPUTER_USE_SERVER_ID}_control`] : [],
+        ...status,
+      },
+    ]),
   };
 }
 
@@ -264,6 +296,130 @@ describe("AkeruSessionResources", () => {
     ).toBe(true);
     expect(NodeFS.existsSync(NodePath.join(project, "user.txt"))).toBe(true);
     expect(NodeFS.existsSync(NodePath.join(project, "bot.txt"))).toBe(false);
+    await resources.shutdown();
+  });
+
+  it("allows one Computer Use controller and releases it on stop", async () => {
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      hostPlatform: "darwin",
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      resolveComputerUseServer: async () => ({
+        command: "/local/launcher",
+        args: ["mcp"],
+        env: {},
+      }),
+      toMcpServerConfigs: () => ({
+        [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
+      }),
+    });
+    const input = { ...remoteInput, mcpServers: [computerServer()] };
+
+    await resources.acquire({ ...input, threadId: "controller" });
+    await expect(resources.acquire({ ...input, threadId: "blocked" })).rejects.toThrow(
+      "already controlled",
+    );
+    await resources.release("controller");
+    await resources.acquire({ ...input, threadId: "replacement" });
+    await resources.shutdown();
+  });
+
+  it("redacts Computer Use results at the MCP tool boundary", async () => {
+    const execute = vi.fn(async () => ({ screenshot: { url: "https://example.com/frame.png" } }));
+    const toolName = `${CODEX_COMPUTER_USE_SERVER_ID}_control`;
+    const manager = mcpManager({ connected: true, toolCount: 1 }, { [toolName]: { execute } });
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      hostPlatform: "darwin",
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      resolveComputerUseServer: async () => ({
+        command: "/local/launcher",
+        args: ["mcp"],
+        env: {},
+      }),
+      toMcpServerConfigs: () => ({
+        [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
+      }),
+    });
+
+    await resources.acquire({
+      ...remoteInput,
+      threadId: "controller",
+      mcpServers: [computerServer()],
+    });
+    const tool = Reflect.get(resources.getConnectorTools("controller"), toolName) as {
+      execute: () => Promise<unknown>;
+    };
+    await expect(tool.execute()).rejects.toThrow("unknown screenshot");
+    expect(execute).toHaveBeenCalledOnce();
+    await resources.shutdown();
+  });
+
+  it("releases the Computer Use lock when MCP health fails", async () => {
+    const failed = mcpManager({ connected: false, toolCount: 0, error: "Accessibility denied" });
+    const healthy = mcpManager({ connected: true, toolCount: 1 });
+    const makeMcpManager = vi
+      .fn()
+      .mockReturnValueOnce(failed as never)
+      .mockReturnValueOnce(healthy as never);
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      hostPlatform: "darwin",
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager,
+      resolveComputerUseServer: async () => ({
+        command: "/local/launcher",
+        args: ["mcp"],
+        env: {},
+      }),
+      toMcpServerConfigs: () => ({
+        [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
+      }),
+    });
+    const input = { ...remoteInput, mcpServers: [computerServer()] };
+
+    await expect(resources.acquire({ ...input, threadId: "failed" })).rejects.toThrow(
+      "needs Screen Recording and Accessibility permissions",
+    );
+    await resources.acquire({ ...input, threadId: "replacement" });
+    await resources.shutdown();
+  });
+
+  it("does not expose raw MCP startup errors", async () => {
+    const failed = mcpManager({
+      connected: false,
+      toolCount: 0,
+      error: "Failed at /private/tester/Secret App",
+    });
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      hostPlatform: "darwin",
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => failed as never,
+      resolveComputerUseServer: async () => ({
+        command: "/local/launcher",
+        args: ["mcp"],
+        env: {},
+      }),
+      toMcpServerConfigs: () => ({
+        [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
+      }),
+    });
+
+    await expect(
+      resources.acquire({
+        ...remoteInput,
+        threadId: "failed",
+        mcpServers: [computerServer()],
+      }),
+    ).rejects.toThrow("Computer Use MCP failed to start.");
     await resources.shutdown();
   });
 });

@@ -29,6 +29,7 @@ import {
   type ThreadId,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
 } from "@t3tools/contracts";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
@@ -54,6 +55,11 @@ import {
 import { createAkeruToolRuntime, type AkeruToolSession } from "../AkeruToolRuntime.ts";
 import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
 import { AkeruSessionResources } from "../AkeruSessionResources.ts";
+import {
+  isCodexComputerUseServer,
+  isCodexComputerUseTool,
+  resolveCodexComputerUseServer,
+} from "../CodexComputerUse.ts";
 import type { CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
@@ -110,6 +116,7 @@ export interface AgentControllerLiveOptions {
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (input: CreateRemoteBotWorkspaceInput) => Promise<Workspace>;
   readonly makeBotBrowser?: (input: CreateBotBrowserInput) => BotBrowser;
+  readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -118,6 +125,12 @@ export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
 
 function failureDetail(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+function sessionFailureDetail(active: Pick<ActiveSession, "mcpServerIds">, cause: unknown): string {
+  return active.mcpServerIds.some((id) => isCodexComputerUseServer(String(id)))
+    ? "Computer Use session failed."
+    : failureDetail(cause);
 }
 
 function nowIso(): string {
@@ -267,6 +280,7 @@ function itemType(
 const make = (options?: AgentControllerLiveOptions) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig;
+    const hostPlatform = yield* HostProcessPlatform;
     const legacyProviderBridge = yield* LegacyProviderBridge;
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
@@ -292,10 +306,14 @@ const make = (options?: AgentControllerLiveOptions) =>
     const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
+      hostPlatform,
       toMcpServerConfigs,
       ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
+      ...(options?.resolveComputerUseServer
+        ? { resolveComputerUseServer: options.resolveComputerUseServer }
+        : {}),
     });
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const toolRuntime = createAkeruToolRuntime({
@@ -466,8 +484,10 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               itemType: itemType(event.toolName),
               status: "inProgress",
-              title: event.toolName,
-              data: { args: event.args },
+              title: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
+              data: isCodexComputerUseTool(event.toolName)
+                ? { action: "computer-use" }
+                : { args: event.args },
             },
           });
           return;
@@ -481,7 +501,9 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               itemType: itemType(active.toolNames.get(event.toolCallId) ?? "tool"),
               status: "inProgress",
-              data: { partialResult: event.partialResult },
+              data: isCodexComputerUseTool(active.toolNames.get(event.toolCallId) ?? "")
+                ? { action: "computer-use" }
+                : { partialResult: event.partialResult },
             },
           });
           return;
@@ -496,8 +518,10 @@ const make = (options?: AgentControllerLiveOptions) =>
             payload: {
               itemType: itemType(toolName),
               status: event.isError ? "failed" : event.denied ? "declined" : "completed",
-              title: toolName,
-              data: { result: event.result },
+              title: isCodexComputerUseTool(toolName) ? "Computer Use" : toolName,
+              data: isCodexComputerUseTool(toolName)
+                ? { action: "computer-use" }
+                : { result: event.result },
             },
           });
           return;
@@ -517,14 +541,19 @@ const make = (options?: AgentControllerLiveOptions) =>
             type: "request.opened",
             payload: {
               requestType: "dynamic_tool_call",
-              detail:
-                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+              detail: isCodexComputerUseTool(event.toolName)
+                ? "Allow Computer Use?"
+                : event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
                   ? "Review product feedback"
                   : `Allow ${event.toolName}?`,
-              toolName: event.toolName,
-              args: event.args,
-              options:
-                event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
+              toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
+              args: isCodexComputerUseTool(event.toolName) ? undefined : event.args,
+              options: isCodexComputerUseTool(event.toolName)
+                ? [
+                    { decision: "accept", label: "Allow" },
+                    { decision: "decline", label: "Decline" },
+                  ]
+                : event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
                   ? [
                       { decision: "accept", label: "Add to feedback draft" },
                       { decision: "decline", label: "Cancel" },
@@ -580,17 +609,19 @@ const make = (options?: AgentControllerLiveOptions) =>
             },
           });
           return;
-        case "error":
+        case "error": {
+          const detail = sessionFailureDetail(active, event.error);
           publish({
             ...baseEvent(threadId, active, turn?.turnId),
             type: "runtime.error",
             payload: {
-              message: event.error.message || "Mastra agent failed.",
+              message: detail,
               class: "provider_error",
             },
           });
-          finishTurn(threadId, active, "failed", event.error.message || "Mastra agent failed.");
+          finishTurn(threadId, active, "failed", detail);
           return;
+        }
         case "agent_end":
           if (event.reason === "suspended") {
             if (turn) turn.waiting = true;
@@ -685,12 +716,30 @@ const make = (options?: AgentControllerLiveOptions) =>
       const workspaceId = botWorkspaceIdentity(workspaceResourceKey);
       const existing = sessions.get(key);
       const resolved = resolvedByThread.get(key);
+      const mcpServers = input.mcpServers ?? [];
+      if (!resolved) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "startSession",
+          detail: `Thread '${threadId}' has no resolved engine.`,
+        });
+      }
+      if (
+        mcpServers.some((server) => isCodexComputerUseServer(String(server.id))) &&
+        resolved.provider !== ProviderDriverKind.make("codex")
+      ) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "startSession",
+          detail: "Computer Use requires a Codex bot.",
+        });
+      }
       if (
         existing?.workspaceResourceKey === workspaceResourceKey &&
         existing.cwd === input.cwd &&
         resolved &&
         existing.provider === resolved.provider &&
-        existing.providerInstanceId === resolved.providerInstanceId
+        existing.providerInstanceId === resolved.providerInstanceId &&
+        existing.mcpServerIds.length === (input.mcpServers?.length ?? 0) &&
+        existing.mcpServerIds.every((id) => input.mcpServers?.some((server) => server.id === id))
       ) {
         existing.runtimeMode = input.runtimeMode;
         const toolSession = { ...existing.toolSession };
@@ -731,13 +780,6 @@ const make = (options?: AgentControllerLiveOptions) =>
           previousWorkspaceResourceKey !== workspaceResourceKey,
         );
       }
-      if (!resolved) {
-        return yield* new AgentControllerRuntimeError({
-          operation: "startSession",
-          detail: `Thread '${threadId}' has no resolved engine.`,
-        });
-      }
-      const mcpServers = input.mcpServers ?? [];
       const resources = yield* runMastra("resources.acquire", () =>
         sessionResources.acquire({
           threadId: key,
@@ -802,66 +844,76 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         ),
       );
-      yield* runMastra("state.set", () =>
-        session.state.set({
-          ...(input.cwd ? { projectPath: input.cwd } : {}),
-          yolo: false,
-        }),
-      );
-      yield* runMastra("model.switch", () =>
-        session.model.switch({ modelId: resolved.mastraModelId }),
-      );
-      const modeId = mastraModeId(resolved.mode);
-      if (session.mode.get() !== modeId) {
-        yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
-      }
-      yield* Effect.forEach(
-        ["read", "edit", "execute", "mcp", "other"] as const,
-        (category) =>
-          runMastra("permissions.setForCategory", () =>
-            session.permissions.setForCategory({
-              category,
-              policy: permissionPolicy(input.runtimeMode, category),
-            }),
-          ),
-        { discard: true },
-      );
-      yield* Effect.forEach(
-        new Set([
-          ...toolRuntime.toolsForThread(key).map((tool) => tool.id),
-          ...Object.keys(sessionResources.getConnectorTools(key)),
-          AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-          "RestartMcpServers",
-        ]),
-        (toolName) =>
-          runMastra("permissions.setForTool", () =>
-            session.permissions.setForTool({ toolName, policy: "ask" }),
-          ),
-        { discard: true },
-      );
-      const createdAt = nowIso();
-      const activeWithoutUnsubscribe = {
-        session,
-        provider: resolved.provider,
-        providerInstanceId: resolved.providerInstanceId,
-        cwd: input.cwd,
-        createdAt,
-        mcpServerIds: mcpServers.map((server) => server.id),
-        runtimeMode: input.runtimeMode,
-        model: resolved.modelSelection.model,
-        status: "ready" as const,
-        activeTurn: null,
-        toolNames: new Map<string, string>(),
-        approvalRequests: new Map(),
-        connectorSessionApprovals: new Set<string>(),
-        toolSession,
-        workspaceResourceKey,
-      };
-      const unsubscribe = session.subscribe((event) => {
-        const active = sessions.get(key);
-        if (active) handleControllerEvent(threadId, active, event);
+      const cleanupCreatedSession = Effect.gen(function* () {
+        yield* runMastra("deleteSession", () =>
+          bundle.controller.deleteSession({ resourceId: key }),
+        ).pipe(Effect.ignoreCause({ log: true }));
+        yield* runMastra("resources.release", () =>
+          sessionResources.release(key, { destroy: true }),
+        ).pipe(Effect.ignoreCause({ log: true }));
+        toolRuntime.unregisterSession(key);
       });
-      const active: ActiveSession = { ...activeWithoutUnsubscribe, unsubscribe };
+      const active = yield* Effect.gen(function* () {
+        yield* runMastra("state.set", () =>
+          session.state.set({
+            ...(input.cwd ? { projectPath: input.cwd } : {}),
+            yolo: false,
+          }),
+        );
+        yield* runMastra("model.switch", () =>
+          session.model.switch({ modelId: resolved.mastraModelId }),
+        );
+        const modeId = mastraModeId(resolved.mode);
+        if (session.mode.get() !== modeId) {
+          yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
+        }
+        yield* Effect.forEach(
+          ["read", "edit", "execute", "mcp", "other"] as const,
+          (category) =>
+            runMastra("permissions.setForCategory", () =>
+              session.permissions.setForCategory({
+                category,
+                policy: permissionPolicy(input.runtimeMode, category),
+              }),
+            ),
+          { discard: true },
+        );
+        yield* Effect.forEach(
+          new Set([
+            ...toolRuntime.toolsForThread(key).map((tool) => tool.id),
+            ...Object.keys(sessionResources.getConnectorTools(key)),
+            AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+            "RestartMcpServers",
+          ]),
+          (toolName) =>
+            runMastra("permissions.setForTool", () =>
+              session.permissions.setForTool({ toolName, policy: "ask" }),
+            ),
+          { discard: true },
+        );
+        const unsubscribe = session.subscribe((event) => {
+          const current = sessions.get(key);
+          if (current) handleControllerEvent(threadId, current, event);
+        });
+        return {
+          session,
+          provider: resolved.provider,
+          providerInstanceId: resolved.providerInstanceId,
+          cwd: input.cwd,
+          createdAt: nowIso(),
+          mcpServerIds: mcpServers.map((server) => server.id),
+          runtimeMode: input.runtimeMode,
+          model: resolved.modelSelection.model,
+          status: "ready" as const,
+          activeTurn: null,
+          toolNames: new Map<string, string>(),
+          approvalRequests: new Map(),
+          connectorSessionApprovals: new Set<string>(),
+          toolSession,
+          workspaceResourceKey,
+          unsubscribe,
+        } satisfies ActiveSession;
+      }).pipe(Effect.onError(() => cleanupCreatedSession));
       sessions.set(key, active);
       publish({
         ...baseEvent(threadId, active),
@@ -950,7 +1002,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             }
           })
           .catch((cause: unknown) => {
-            const detail = failureDetail(cause);
+            const detail = sessionFailureDetail(active, cause);
             publish({
               ...baseEvent(input.threadId, active, turnId),
               type: "runtime.error",
@@ -1010,6 +1062,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (
         input.decision === "acceptForSession" &&
         !akeruTool &&
+        !isCodexComputerUseTool(toolName) &&
         !akeruActionNeedsApproval(toolName, toolInput) &&
         toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
       ) {
@@ -1071,16 +1124,25 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (!active) {
         const legacySessions = yield* legacyProviderBridge.listSessions();
         if (legacySessions.some((session) => session.threadId === input.threadId)) {
-          yield* legacyProviderBridge.stopSession(input);
-          yield* runMastra("resources.release", () =>
-            sessionResources.release(key, { destroy: destroyResources }),
-          ).pipe(Effect.ignoreCause({ log: true }));
-          legacyResourceIdentity.delete(key);
+          yield* legacyProviderBridge.stopSession(input).pipe(
+            Effect.ensuring(
+              Effect.gen(function* () {
+                yield* runMastra("resources.release", () =>
+                  sessionResources.release(key, { destroy: destroyResources }),
+                ).pipe(Effect.ignoreCause({ log: true }));
+                legacyResourceIdentity.delete(key);
+              }),
+            ),
+          );
           return;
         }
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
         ) {
+          yield* runMastra("resources.release", () =>
+            sessionResources.release(key, { destroy: destroyResources }),
+          ).pipe(Effect.ignoreCause({ log: true }));
+          toolRuntime.unregisterSession(key);
           return;
         }
         return yield* legacyProviderBridge.stopSession(input);
@@ -1088,12 +1150,19 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.session.abort();
       active.unsubscribe();
       publishSessionState(input.threadId, active, "stopped");
-      yield* runMastra("deleteSession", () => bundle.controller.deleteSession({ resourceId: key }));
-      yield* runMastra("resources.release", () =>
-        sessionResources.release(key, { destroy: destroyResources }),
-      ).pipe(Effect.ignoreCause({ log: true }));
-      toolRuntime.unregisterSession(key);
-      sessions.delete(key);
+      yield* runMastra("deleteSession", () =>
+        bundle.controller.deleteSession({ resourceId: key }),
+      ).pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            yield* runMastra("resources.release", () =>
+              sessionResources.release(key, { destroy: destroyResources }),
+            ).pipe(Effect.ignoreCause({ log: true }));
+            toolRuntime.unregisterSession(key);
+            sessions.delete(key);
+          }),
+        ),
+      );
     });
 
     const stopSession: AgentControllerShape["stopSession"] = (input) =>

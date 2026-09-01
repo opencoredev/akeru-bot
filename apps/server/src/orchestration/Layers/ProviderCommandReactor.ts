@@ -663,6 +663,7 @@ const make = Effect.gen(function* () {
           providerName: activeSession?.provider ?? preferredProvider,
           providerInstanceId: activeSession?.providerInstanceId ?? desiredInstanceId,
           runtimeMode: desiredRuntimeMode,
+          mcpServerIds: activeSession?.mcpServerIds ?? [],
           activeTurnId: null,
           lastError: null,
           updatedAt: createdAt,
@@ -749,6 +750,7 @@ const make = Effect.gen(function* () {
             providerName: session.provider,
             providerInstanceId: session.providerInstanceId,
             runtimeMode: desiredRuntimeMode,
+            mcpServerIds: session.mcpServerIds ?? [],
             // Provider turn ids are not orchestration turn ids.
             activeTurnId: null,
             lastError: session.lastError ?? null,
@@ -1609,6 +1611,7 @@ const make = Effect.gen(function* () {
           ? { providerInstanceId: thread.session.providerInstanceId }
           : {}),
         runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        mcpServerIds: [],
         activeTurnId: null,
         lastError: thread.session?.lastError ?? null,
         updatedAt: now,

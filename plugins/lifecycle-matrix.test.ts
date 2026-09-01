@@ -9,7 +9,7 @@ import {
 } from "./catalog";
 
 const EXPECTED_IDS =
-  "ahrefs apify apollo asana atlassian attio canva cloudflare coda context customer-io datadog docusign dropbox exa executor figma firecrawl framer github help-scout hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
+  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github help-scout hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
 const INSTALLABLE_IDS = ["context", "exa", "executor", "firecrawl", "parallel-search"];
@@ -35,13 +35,13 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     ]);
 
     const pending = directory.filter((plugin) => !INSTALLABLE_IDS.includes(plugin.id));
-    expect(pending).toHaveLength(46);
+    expect(pending).toHaveLength(47);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(30);
+    ).toHaveLength(31);
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
       expect(plugin.connection).toMatchObject({
@@ -59,6 +59,13 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     expect(byId.get("github")).toMatchObject({
       transport: { type: "url", url: "https://api.githubcopilot.com/mcp/" },
       connection: { type: "verification-pending" },
+    });
+    expect(byId.get("computer-use")).toMatchObject({
+      platforms: ["macos"],
+      connection: {
+        type: "verification-pending",
+        blocker: expect.stringContaining("live Akeru Codex tool call"),
+      },
     });
     expect(byId.get("paper")).toMatchObject({
       transport: { type: "url", url: "http://127.0.0.1:29979/mcp" },

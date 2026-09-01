@@ -20,6 +20,7 @@ const EXPECTED_DIRECTORY_IDS = [
   "canva",
   "cloudflare",
   "coda",
+  "computer-use",
   "context",
   "customer-io",
   "datadog",
@@ -171,7 +172,7 @@ describe("plugin catalog loader", () => {
     const directory = loadDirectoryCatalog();
     const catalog = loadCatalog();
     expect(directory.map((plugin) => plugin.id).toSorted()).toEqual(EXPECTED_DIRECTORY_IDS);
-    expect(new Set(directory.map((plugin) => plugin.id)).size).toBe(51);
+    expect(new Set(directory.map((plugin) => plugin.id)).size).toBe(52);
     expect(catalog.map((plugin) => plugin.id)).toEqual(EXPECTED_INSTALLABLE_IDS);
     expect(catalog.map((plugin) => `builtin-${plugin.id}`)).toEqual(
       EXPECTED_INSTALLABLE_IDS.map((id) => `builtin-${id}`),
@@ -228,13 +229,13 @@ describe("plugin catalog loader", () => {
     const pending = loadDirectoryCatalog().filter(
       (plugin) => !EXPECTED_INSTALLABLE_IDS.some((id) => id === plugin.id),
     );
-    expect(pending).toHaveLength(46);
+    expect(pending).toHaveLength(47);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(30);
+    ).toHaveLength(31);
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
       expect(plugin.connection).toMatchObject({

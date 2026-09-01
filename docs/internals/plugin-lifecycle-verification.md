@@ -2,7 +2,7 @@
 
 Milestone 13 keeps catalog discovery separate from connection verification. An entry stays non-installable until its real install, authentication, safe read, approved write, disable, reconnect, and removal lifecycle passes. `verification-pending` means that local lifecycle proof is missing. `approval-pending` means an external vendor, administrator, allowlist, or first-party connector is still required.
 
-`plugins/lifecycle-matrix.test.ts` is the catalog gate. It fixes the directory at 51 IDs, preserves the five existing `builtin-<id>` recipes, and keeps the other 46 entries pending. It also checks Featured order, consequential approval coverage, broker identity, Custom MCP independence, legacy built-in display, and the Typefully, Paper, and PayPal blockers.
+`plugins/lifecycle-matrix.test.ts` is the catalog gate. It fixes the directory at 52 IDs, preserves the five existing `builtin-<id>` recipes, and keeps the other 47 entries pending. It also checks Featured order, consequential approval coverage, broker identity, Custom MCP independence, legacy built-in display, and the Computer Use, Typefully, Paper, and PayPal blockers.
 
 ## Runtime proof
 
