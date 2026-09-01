@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
-import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon } from "lucide-react";
 import { type ComponentProps, useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -19,12 +19,20 @@ import {
 } from "../../promptStashStore";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { ComposerBanner } from "../chat/ComposerBanner";
+import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
 import { BotModelPicker } from "./BotModelPicker";
+import {
+  BotPromptAttachments,
+  buildBotPromptAttachmentPreview,
+  createBotPromptAttachments,
+  releaseBotPromptAttachments,
+  type BotPromptAttachment,
+} from "./BotPromptAttachments";
 
 type BotModelPickerProps = Pick<
   ComponentProps<typeof BotModelPicker>,
@@ -107,9 +115,15 @@ export function BotPromptComposer({
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
-  const [files, setFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
+  const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [expandedAttachmentId, setExpandedAttachmentId] = useState<string | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
   const [stashPulse, setStashPulse] = useState({ key: 0, active: false });
+  const attachmentsRef = useRef<BotPromptAttachment[]>([]);
+  const releasedPreviewUrlsRef = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const stashPulseTimeoutRef = useRef<number | null>(null);
@@ -118,6 +132,19 @@ export function BotPromptComposer({
   const stashEntryToQueue = usePromptStashStore((state) => state.stashEntry);
   const takeStashEntry = usePromptStashStore((state) => state.takeEntry);
   const finalizeStashEntryImages = usePromptStashStore((state) => state.finalizeEntryImages);
+  const releaseAttachments = useCallback((items: readonly BotPromptAttachment[]) => {
+    const unreleased = items.filter((attachment) => {
+      if (
+        attachment.previewUrl === null ||
+        releasedPreviewUrlsRef.current.has(attachment.previewUrl)
+      ) {
+        return false;
+      }
+      releasedPreviewUrlsRef.current.add(attachment.previewUrl);
+      return true;
+    });
+    releaseBotPromptAttachments(unreleased);
+  }, []);
   const persistDraft = useCallback(
     (next: string) => {
       setDraft(next);
@@ -131,22 +158,46 @@ export function BotPromptComposer({
 
   useEffect(() => {
     setDraft(draftKey ? readBotDraft(draftKey) : "");
-    setFiles([]);
-    setIsStashMenuOpen(false);
   }, [draftKey]);
   useEffect(
     () => () => {
       if (stashPulseTimeoutRef.current !== null) {
         window.clearTimeout(stashPulseTimeoutRef.current);
       }
+      releaseAttachments(attachmentsRef.current);
+      attachmentsRef.current = [];
     },
-    [],
+    [releaseAttachments],
   );
-  const expanded = modelPicker !== null || files.length > 0 || isBotPromptExpanded(draft);
-  const addFiles = (next: FileList | readonly File[]) =>
-    setFiles((current) =>
-      [...current, ...Array.from(next)].slice(0, PROVIDER_SEND_TURN_MAX_ATTACHMENTS),
-    );
+
+  const expanded = modelPicker !== null || attachments.length > 0 || isBotPromptExpanded(draft);
+  const addFiles = (next: FileList | readonly File[]) => {
+    const added = createBotPromptAttachments(Array.from(next));
+    const updated = [...attachmentsRef.current, ...added];
+    attachmentsRef.current = updated;
+    setAttachments(updated);
+  };
+  const removeAttachment = (attachmentId: string) => {
+    const removed = attachmentsRef.current.find((attachment) => attachment.id === attachmentId);
+    if (!removed) return;
+    const updated = attachmentsRef.current.filter((attachment) => attachment.id !== attachmentId);
+    attachmentsRef.current = updated;
+    setAttachments(updated);
+    setFailedAttachmentIds((current) => {
+      if (!current.has(attachmentId)) return current;
+      const next = new Set(current);
+      next.delete(attachmentId);
+      return next;
+    });
+    if (expandedAttachmentId === attachmentId) {
+      setExpandedAttachmentId(null);
+    }
+    releaseAttachments([removed]);
+  };
+  const expandedPreview =
+    expandedAttachmentId === null
+      ? null
+      : buildBotPromptAttachmentPreview(attachments, expandedAttachmentId, failedAttachmentIds);
 
   const pulseStashBadge = useCallback(() => {
     if (stashPulseTimeoutRef.current !== null) {
@@ -163,20 +214,28 @@ export function BotPromptComposer({
     (candidate: PromptStashEntry) => {
       const { entry, durable } = takeStashEntry(candidate.id);
       if (!entry) return;
-      const nextDraft = restoreBotStashPrompt(draft, entry.prompt);
-      persistDraft(nextDraft);
+      persistDraft(restoreBotStashPrompt(draft, entry.prompt));
 
       const hydrated = hydrateImagesFromPersisted(entry.attachments).map((image) => image.file);
-      const existingKeys = new Set(files.map((file) => `${file.type}\0${file.size}\0${file.name}`));
+      const currentAttachments = attachmentsRef.current;
+      const existingKeys = new Set(
+        currentAttachments.map(
+          (attachment) =>
+            `${attachment.file.type}\0${attachment.file.size}\0${attachment.file.name}`,
+        ),
+      );
       const unique = hydrated.filter((file) => {
         const key = `${file.type}\0${file.size}\0${file.name}`;
         if (existingKeys.has(key)) return false;
         existingKeys.add(key);
         return true;
       });
-      const capacity = Math.max(0, PROVIDER_SEND_TURN_MAX_ATTACHMENTS - files.length);
-      const restored = unique.slice(0, capacity);
-      setFiles([...files, ...restored]);
+      const capacity = Math.max(0, PROVIDER_SEND_TURN_MAX_ATTACHMENTS - currentAttachments.length);
+      const restoredFiles = unique.slice(0, capacity);
+      const restoredAttachments = createBotPromptAttachments(restoredFiles);
+      const updated = [...currentAttachments, ...restoredAttachments];
+      attachmentsRef.current = updated;
+      setAttachments(updated);
       setIsStashMenuOpen(false);
 
       const missingImageCount =
@@ -184,7 +243,7 @@ export function BotPromptComposer({
         (entry.unreadableImageNames?.length ?? 0) +
         (entry.pendingImageCount ?? 0) +
         (entry.attachments.length - hydrated.length) +
-        (unique.length - restored.length);
+        (unique.length - restoredFiles.length);
       if (missingImageCount > 0) {
         toastManager.add({
           type: "warning",
@@ -201,7 +260,7 @@ export function BotPromptComposer({
       }
       window.requestAnimationFrame(() => promptInputRef.current?.focus());
     },
-    [draft, files, persistDraft, takeStashEntry],
+    [draft, persistDraft, takeStashEntry],
   );
 
   const deleteStashEntry = useCallback(
@@ -220,7 +279,8 @@ export function BotPromptComposer({
 
   const stashCurrentPrompt = useCallback(async () => {
     const prompt = draft.trim();
-    const stashedFiles = [...files];
+    const stashedAttachments = [...attachmentsRef.current];
+    const stashedFiles = stashedAttachments.map((attachment) => attachment.file);
     if (prompt.length === 0 && stashedFiles.length === 0) {
       setIsStashMenuOpen((open) => !open);
       return;
@@ -252,7 +312,19 @@ export function BotPromptComposer({
       }
 
       persistDraft("");
-      setFiles([]);
+      const stashedIds = new Set(stashedAttachments.map((attachment) => attachment.id));
+      const remaining = attachmentsRef.current.filter(
+        (attachment) => !stashedIds.has(attachment.id),
+      );
+      attachmentsRef.current = remaining;
+      setAttachments(remaining);
+      setFailedAttachmentIds(
+        (current) => new Set([...current].filter((id) => !stashedIds.has(id))),
+      );
+      if (expandedAttachmentId && stashedIds.has(expandedAttachmentId)) {
+        setExpandedAttachmentId(null);
+      }
+      releaseAttachments(stashedAttachments);
       setIsStashMenuOpen(false);
       pulseStashBadge();
       if (!durable) {
@@ -270,7 +342,7 @@ export function BotPromptComposer({
         });
       }
 
-      const attachments: PersistedComposerImageAttachment[] = [];
+      const persistedImages: PersistedComposerImageAttachment[] = [];
       const droppedImageNames: string[] = [];
       const unreadableImageNames: string[] = [];
       for (const file of stashedFiles) {
@@ -281,7 +353,7 @@ export function BotPromptComposer({
           );
           continue;
         }
-        attachments.push({
+        persistedImages.push({
           id: randomUUID(),
           name: file.name,
           mimeType: result.image.mimeType,
@@ -289,7 +361,7 @@ export function BotPromptComposer({
           dataUrl: result.image.dataUrl,
         });
       }
-      const { kept, droppedNames } = partitionStashAttachments(attachments);
+      const { kept, droppedNames } = partitionStashAttachments(persistedImages);
       const { attached, durable: imagesDurable } = finalizeStashEntryImages(entryId, {
         attachments: kept,
         droppedImageNames: [...droppedImageNames, ...droppedNames],
@@ -314,17 +386,22 @@ export function BotPromptComposer({
   }, [
     draft,
     draftKey,
-    files,
+    expandedAttachmentId,
     finalizeStashEntryImages,
     persistDraft,
     pulseStashBadge,
+    releaseAttachments,
     stashEntryToQueue,
   ]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcutCommand = resolveShortcutCommand(event, keybindings, {
-        context: { terminalFocus: false },
+        context: {
+          terminalFocus: false,
+          terminalOpen: false,
+          modelPickerOpen: false,
+        },
       });
       if (shortcutCommand === "composer.stash") {
         event.preventDefault();
@@ -332,6 +409,7 @@ export function BotPromptComposer({
         if (!event.repeat && !isCommandPaletteOpen()) void stashCurrentPrompt();
         return;
       }
+
       const target = event.target;
       const editableTarget =
         target instanceof Element &&
@@ -369,15 +447,34 @@ export function BotPromptComposer({
       onSubmit={(event) => {
         event.preventDefault();
         const prompt = draft.trim();
-        if (!canSubmitBotPrompt(disabled, prompt, files.length)) return;
-        void onSubmit(prompt, files, findMentionedBotId(prompt, mentionBots)).then((sent) => {
-          if (sent) {
+        const submittedAttachments = [...attachmentsRef.current];
+        if (!canSubmitBotPrompt(disabled, prompt, submittedAttachments.length)) return;
+        const submittedIds = new Set(submittedAttachments.map((attachment) => attachment.id));
+        void onSubmit(
+          prompt,
+          submittedAttachments.map((attachment) => attachment.file),
+          findMentionedBotId(prompt, mentionBots),
+        ).then(
+          (sent) => {
+            if (!sent) return;
             persistDraft("");
             if (draftKey) clearBotDraft(draftKey);
-            setFiles([]);
+            const remaining = attachmentsRef.current.filter(
+              (attachment) => !submittedIds.has(attachment.id),
+            );
+            attachmentsRef.current = remaining;
+            setAttachments(remaining);
+            setFailedAttachmentIds(
+              (current) => new Set([...current].filter((id) => !submittedIds.has(id))),
+            );
+            if (expandedAttachmentId && submittedIds.has(expandedAttachmentId)) {
+              setExpandedAttachmentId(null);
+            }
+            releaseAttachments(submittedAttachments);
             setIsStashMenuOpen(false);
-          }
-        });
+          },
+          () => undefined,
+        );
       }}
     >
       <ComposerBanner.Dock className="relative z-0">
@@ -400,120 +497,105 @@ export function BotPromptComposer({
           onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
         />
       </ComposerBanner.Dock>
-      <div className="relative">
-        <div
-          data-testid="bot-prompt-composer"
-          data-expanded={expanded || undefined}
+      <div
+        data-testid="bot-prompt-composer"
+        data-expanded={expanded || undefined}
+        className={cn(
+          "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
+          expanded && "min-h-28",
+        )}
+      >
+        <BotPromptAttachments
+          attachments={attachments}
+          className="px-3 pt-3"
+          onExpand={setExpandedAttachmentId}
+          onPreviewError={(attachmentId) => {
+            setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
+            if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
+          }}
+          onRemove={removeAttachment}
+        />
+        <textarea
+          ref={promptInputRef}
+          aria-label={`Message ${botName}`}
+          data-testid="bot-prompt-input"
+          placeholder={`Message ${botName}`}
+          rows={1}
+          value={draft}
           className={cn(
-            "relative z-10 flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
-            expanded && "min-h-28",
+            "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
+            expanded ? "min-h-16 px-4 pb-2 pt-3" : "min-h-13 px-14 py-[0.9rem]",
+          )}
+          onChange={(event) => persistDraft(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          onPaste={(event) => {
+            if (event.clipboardData.files.length > 0) addFiles(event.clipboardData.files);
+          }}
+        />
+        <div
+          data-testid="bot-prompt-controls"
+          className={cn(
+            "pointer-events-none flex items-center justify-between",
+            expanded ? "px-2 pb-2" : "absolute inset-x-2 bottom-2",
           )}
         >
-          {files.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-              {files.map((file, index) => (
-                <span
-                  key={`${file.name}:${file.size}:${file.lastModified}`}
-                  className="flex max-w-48 items-center gap-1.5 rounded-full bg-background/65 py-1 pe-1 ps-2.5 text-xs"
-                >
-                  <PaperclipIcon className="size-3" />
-                  <span className="truncate">{file.name}</span>
+          <div className="pointer-events-auto flex min-w-0 items-center gap-1">
+            <Menu>
+              <MenuTrigger
+                render={
                   <button
                     type="button"
-                    aria-label={`Remove ${file.name}`}
+                    aria-label="Add to prompt"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8"
+                  />
+                }
+              >
+                <PlusIcon className="size-5" />
+              </MenuTrigger>
+              <MenuPopup align="start" side="top" sideOffset={8}>
+                <MenuItem onClick={() => fileInputRef.current?.click()}>
+                  <PaperclipIcon />
+                  Attach image
+                </MenuItem>
+                {mentionBots.map((bot) => (
+                  <MenuItem
+                    key={bot.id}
                     onClick={() =>
-                      setFiles((current) => current.filter((_, item) => item !== index))
+                      setDraft(
+                        (current) =>
+                          `${current}${current && !/\s$/.test(current) ? " " : ""}@${bot.name} `,
+                      )
                     }
-                    className="flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10"
                   >
-                    <XIcon className="size-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-          <textarea
-            ref={promptInputRef}
-            aria-label={`Message ${botName}`}
-            data-testid="bot-prompt-input"
-            placeholder={`Message ${botName}`}
-            rows={1}
-            value={draft}
-            className={cn(
-              "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
-              expanded ? "min-h-16 px-4 pb-2 pt-3" : "min-h-13 px-14 py-[0.9rem]",
-            )}
-            onChange={(event) => persistDraft(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            onPaste={(event) => {
-              if (event.clipboardData.files.length > 0) addFiles(event.clipboardData.files);
-            }}
-          />
-          <div
-            data-testid="bot-prompt-controls"
-            className={cn(
-              "pointer-events-none flex items-center justify-between",
-              expanded ? "px-2 pb-2" : "absolute inset-x-2 bottom-2",
-            )}
-          >
-            <div className="pointer-events-auto flex min-w-0 items-center gap-1">
-              <Menu>
-                <MenuTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="Add to prompt"
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8"
-                    />
-                  }
-                >
-                  <PlusIcon className="size-5" />
-                </MenuTrigger>
-                <MenuPopup align="start" side="top" sideOffset={8}>
-                  <MenuItem onClick={() => fileInputRef.current?.click()}>
-                    <PaperclipIcon />
-                    Attach image
+                    <AtSignIcon />
+                    Mention {bot.name}
                   </MenuItem>
-                  {mentionBots.map((bot) => (
-                    <MenuItem
-                      key={bot.id}
-                      onClick={() =>
-                        setDraft(
-                          (current) =>
-                            `${current}${current && !/\s$/.test(current) ? " " : ""}@${bot.name} `,
-                        )
-                      }
-                    >
-                      <AtSignIcon />
-                      Mention {bot.name}
-                    </MenuItem>
-                  ))}
-                </MenuPopup>
-              </Menu>
-              {modelPicker ? (
-                <BotModelPicker
-                  activeInstanceId={modelPicker.activeInstanceId}
-                  model={modelPicker.model}
-                  instanceEntries={modelPicker.instanceEntries}
-                  modelOptionsByInstance={modelPicker.modelOptionsByInstance}
-                  onChange={modelPicker.onChange}
-                />
-              ) : null}
-            </div>
-            <button
-              type="submit"
-              aria-label="Send message"
-              disabled={!canSubmitBotPrompt(disabled, draft, files.length)}
-              className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-25"
-            >
-              <ArrowUpIcon className="size-5" />
-            </button>
+                ))}
+              </MenuPopup>
+            </Menu>
+            {modelPicker ? (
+              <BotModelPicker
+                activeInstanceId={modelPicker.activeInstanceId}
+                model={modelPicker.model}
+                instanceEntries={modelPicker.instanceEntries}
+                modelOptionsByInstance={modelPicker.modelOptionsByInstance}
+                onChange={modelPicker.onChange}
+              />
+            ) : null}
           </div>
+          <button
+            type="submit"
+            aria-label="Send message"
+            disabled={!canSubmitBotPrompt(disabled, draft, attachments.length)}
+            className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-25"
+          >
+            <ArrowUpIcon className="size-5" />
+          </button>
         </div>
       </div>
       <input
@@ -527,6 +609,13 @@ export function BotPromptComposer({
           event.currentTarget.value = "";
         }}
       />
+      {expandedPreview ? (
+        <ExpandedImageDialog
+          key={`${expandedAttachmentId}:${attachments.map((attachment) => attachment.id).join(":")}`}
+          preview={expandedPreview}
+          onClose={() => setExpandedAttachmentId(null)}
+        />
+      ) : null}
     </form>
   );
 }
