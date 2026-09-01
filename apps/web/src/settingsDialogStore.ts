@@ -17,6 +17,7 @@ export const SETTINGS_SECTIONS = [
   "inbox",
   "appearance",
   "providers",
+  "browser",
   "sandbox",
   "voice",
   "privacy",

@@ -1,6 +1,7 @@
 import {
   AlertCircleIcon,
   BotIcon,
+  BrowserIcon,
   CallIcon,
   HardDriveIcon,
   KeyboardIcon,
@@ -30,6 +31,9 @@ const InboxPanel = lazy(async () => ({
 const ProvidersPanel = lazy(async () => ({
   default: (await import("./ProvidersPanel")).ProvidersPanel,
 }));
+const BrowserSettingsPanel = lazy(async () => ({
+  default: (await import("./BrowserSettings")).BrowserSettingsPanel,
+}));
 const VoiceSettingsPanel = lazy(async () => ({
   default: (await import("./VoiceSettings")).VoiceSettingsPanel,
 }));
@@ -57,6 +61,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   inbox: InboxPanel,
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
+  browser: BrowserSettingsPanel,
   sandbox: SandboxSettingsPanel,
   voice: VoiceSettingsPanel,
   privacy: PrivacySettingsPanel,
@@ -75,6 +80,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { section: "general", label: "General", icon: Settings02Icon },
   { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
   { section: "providers", label: "Providers", icon: BotIcon },
+  { section: "browser", label: "Browser", icon: BrowserIcon },
   { section: "sandbox", label: "Sandbox", icon: HardDriveIcon },
   { section: "voice", label: "Voice", icon: CallIcon },
   { section: "privacy", label: "Privacy", icon: SecurityCheckIcon },

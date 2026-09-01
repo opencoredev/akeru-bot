@@ -182,6 +182,14 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      {message.attachments?.length ? (
+                        <div className="mt-2">
+                          <BotMessageAttachments
+                            attachments={message.attachments}
+                            environmentId={environmentId ?? NO_ENVIRONMENT}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : (

@@ -13,6 +13,7 @@ import {
   type PreviewCloseInput,
   type PreviewEvent,
   type PreviewError,
+  type PreviewFrame,
   PreviewInvalidUrlError,
   type PreviewListInput,
   type PreviewListResult,
@@ -49,6 +50,11 @@ export class PreviewManager extends Context.Service<
       input: PreviewNavigateInput,
     ) => Effect.Effect<PreviewSessionSnapshot, PreviewError>;
     readonly reportStatus: (input: PreviewReportStatusInput) => Effect.Effect<void, PreviewError>;
+    readonly reportFrame: (input: {
+      readonly threadId: string;
+      readonly tabId: string;
+      readonly frame: PreviewFrame;
+    }) => Effect.Effect<void, PreviewError>;
     readonly resize: (
       input: PreviewResizeInput,
     ) => Effect.Effect<PreviewSessionSnapshot, PreviewError>;
@@ -338,6 +344,26 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     );
   });
 
+  const reportFrame: PreviewManager["Service"]["reportFrame"] = Effect.fn(
+    "PreviewManager.reportFrame",
+  )(function* (input) {
+    yield* mutateExistingSession(input.threadId, input.tabId, (session) =>
+      currentIsoTimestamp.pipe(
+        Effect.map((createdAt) => ({
+          next: session,
+          emit: {
+            type: "frame" as const,
+            threadId: session.threadId,
+            tabId: session.tabId,
+            createdAt,
+            frame: input.frame,
+          },
+          result: undefined as void,
+        })),
+      ),
+    );
+  });
+
   const resize: PreviewManager["Service"]["resize"] = Effect.fn("PreviewManager.resize")(
     function* (input) {
       return yield* mutateExistingSession(
@@ -433,6 +459,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     open,
     navigate,
     reportStatus,
+    reportFrame,
     resize,
     refresh,
     close,

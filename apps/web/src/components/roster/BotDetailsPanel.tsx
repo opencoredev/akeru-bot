@@ -42,6 +42,7 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
+import { BotBrowserPreview } from "./BotBrowserPreview";
 import { BotModelPicker } from "./BotModelPicker";
 import { BotUsageSection } from "./BotUsageSection";
 import { BotMemorySheet } from "./BotMemorySheet";
@@ -447,6 +448,7 @@ export function BotDetailsPanel({
     desktopOpen: true,
     mobileOpen: false,
   });
+  const [browserExpanded, setBrowserExpanded] = useState(false);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
 
   useEffect(() => {
@@ -473,18 +475,30 @@ export function BotDetailsPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings]);
 
-  const content = (active: boolean, closeButton?: ReactNode) => (
+  const content = (active: boolean, closeButton?: ReactNode, canExpandBrowser = false) => (
     <>
-      <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-        <h2 className="text-sm font-medium">Settings</h2>
-        <div className="absolute right-3 flex items-center">{closeButton}</div>
-      </header>
-      <BotProfileEditor
-        bot={bot}
+      <BotBrowserPreview
+        botName={bot.name}
         threadRef={threadRef}
-        active={active}
-        {...(onSaveBot ? { onSave: onSaveBot } : {})}
+        expanded={canExpandBrowser && browserExpanded}
+        visible={active}
+        onExpandedChange={setBrowserExpanded}
+        trailingAction={browserExpanded && canExpandBrowser ? closeButton : undefined}
       />
+      {!browserExpanded || !canExpandBrowser ? (
+        <>
+          <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
+            <h2 className="text-sm font-medium">Settings</h2>
+            <div className="absolute right-3 flex items-center">{closeButton}</div>
+          </header>
+          <BotProfileEditor
+            bot={bot}
+            threadRef={threadRef}
+            active={active}
+            {...(onSaveBot ? { onSave: onSaveBot } : {})}
+          />
+        </>
+      ) : null}
     </>
   );
 
@@ -496,7 +510,9 @@ export function BotDetailsPanel({
         data-testid="bot-details-panel"
         className={
           panelState.desktopOpen
-            ? "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
+            ? browserExpanded
+              ? "hidden h-full w-[min(48rem,52vw)] shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
+              : "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
             : "hidden"
         }
       >
@@ -520,6 +536,7 @@ export function BotDetailsPanel({
               Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
             </TooltipPopup>
           </Tooltip>,
+          true,
         )}
       </aside>
       {!panelState.desktopOpen ? (

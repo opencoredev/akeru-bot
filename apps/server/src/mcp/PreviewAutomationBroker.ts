@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as McpInvocationContext from "./McpInvocationContext.ts";
+import { stagePreviewSnapshot } from "./PreviewSnapshotCaptureBuffer.ts";
 import { redactProviderVisiblePreviewResult } from "./PreviewSnapshotRedaction.ts";
 
 export interface PreviewAutomationInvokeInput {
@@ -419,7 +420,12 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       }).pipe(
         Effect.matchEffect({
           onFailure: (error) => Deferred.fail(pending.deferred, error),
-          onSuccess: (result) => Deferred.succeed(pending.deferred, result),
+          onSuccess: (result) =>
+            Effect.sync(() => {
+              if (pending.context.operation === "snapshot") {
+                stagePreviewSnapshot(pending.context.threadId, response.result);
+              }
+            }).pipe(Effect.andThen(Deferred.succeed(pending.deferred, result))),
         }),
       );
     } else {

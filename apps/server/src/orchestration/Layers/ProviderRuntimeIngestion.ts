@@ -1,5 +1,6 @@
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  ChatAttachment,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -112,6 +113,15 @@ const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFEC
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
+const decodeRuntimeChatAttachment = Schema.decodeUnknownOption(
+  Schema.Struct({ chatAttachment: ChatAttachment }),
+);
+
+function runtimeChatAttachment(event: ProviderRuntimeEvent) {
+  if (event.type !== "item.completed") return undefined;
+  const data = decodeRuntimeChatAttachment(event.payload.data);
+  return Option.isSome(data) ? data.value.chatAttachment : undefined;
+}
 
 function boundedFeedbackArgs(toolName: string | undefined, args: unknown): unknown {
   if (toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME || args === undefined) return undefined;
@@ -1837,6 +1847,30 @@ const make = Effect.gen(function* () {
             createdAt: now,
           });
         }
+      }
+
+      const chatAttachment = runtimeChatAttachment(event);
+      if (chatAttachment) {
+        const turnId = toTurnId(event.turnId);
+        const messageId = MessageId.make(`provider-attachment-${event.eventId}`);
+        yield* orchestrationEngine.dispatch({
+          type: "thread.message.assistant.delta",
+          commandId: yield* providerCommandId(event, "assistant-attachment"),
+          threadId: thread.id,
+          messageId,
+          delta: "",
+          attachments: [chatAttachment],
+          ...(turnId ? { turnId } : {}),
+          createdAt: now,
+        });
+        yield* orchestrationEngine.dispatch({
+          type: "thread.message.assistant.complete",
+          commandId: yield* providerCommandId(event, "assistant-attachment-complete"),
+          threadId: thread.id,
+          messageId,
+          ...(turnId ? { turnId } : {}),
+          createdAt: now,
+        });
       }
 
       const pauseForUserTurnId =

@@ -183,6 +183,62 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("exposes the authenticated product preview tools without a plugin connection", async () => {
+    const previewStatus = { execute: vi.fn(async () => ({ attached: true })) };
+    const previewSnapshot = { execute: vi.fn(async () => ({ url: "https://example.com" })) };
+    const manager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({
+        "t3-code_preview_status": previewStatus,
+        "t3-code_preview_snapshot": previewSnapshot,
+      })),
+      getServerStatuses: vi.fn(() => [
+        {
+          name: "t3-code",
+          connected: true,
+          toolCount: 2,
+          toolNames: ["t3-code_preview_status", "t3-code_preview_snapshot"],
+        },
+      ]),
+    };
+    const makeMcpManager = vi.fn(
+      (_projectDir: string, _configDirName?: string, _servers?: Record<string, unknown>) =>
+        manager as never,
+    );
+    const getPreviewMcpServerConfig = vi.fn(() => ({
+      url: "http://127.0.0.1:4000/mcp",
+      headers: { Authorization: "Bearer preview-token" },
+    }));
+    const botBrowser = browser();
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => botBrowser,
+      makeMcpManager,
+      getPreviewMcpServerConfig,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "preview-thread" });
+
+    expect(getPreviewMcpServerConfig).toHaveBeenCalledExactlyOnceWith("preview-thread");
+    expect(makeMcpManager).toHaveBeenCalledOnce();
+    expect(makeMcpManager.mock.calls[0]?.[2]).toEqual({
+      "t3-code": {
+        url: "http://127.0.0.1:4000/mcp",
+        headers: { Authorization: "Bearer preview-token" },
+      },
+    });
+    expect(botBrowser.attachment).not.toHaveBeenCalled();
+    expect(resources.getConnectorTools("preview-thread")).toEqual({
+      preview_status: previewStatus,
+      preview_snapshot: previewSnapshot,
+    });
+
+    await resources.shutdown();
+  });
+
   it("reports every configured MCP server when manager initialization fails", async () => {
     const onMcpServerConnectionFailure = vi.fn();
     const manager = {

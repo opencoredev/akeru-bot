@@ -12,6 +12,7 @@ import {
   AkeruMemoryUserId,
   ApprovalRequestId,
   BotId,
+  EnvironmentId,
   EventId,
   McpServerId,
   ProviderDriverKind,
@@ -295,7 +296,11 @@ function makeLayer(
   usageLedger: BotUsageLedgerShape = makeUsageLedger().service,
   overrides?: Pick<
     AgentControllerLiveOptions,
-    "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
+    | "resolveComputerUseServer"
+    | "entityMemoryRepository"
+    | "memoryCandidateRepository"
+    | "issueMcpCredential"
+    | "revokeMcpCredential"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
 ) {
@@ -336,7 +341,11 @@ function provideController<A, E>(
   usageLedger?: BotUsageLedgerShape,
   overrides?: Pick<
     AgentControllerLiveOptions,
-    "resolveComputerUseServer" | "entityMemoryRepository" | "memoryCandidateRepository"
+    | "resolveComputerUseServer"
+    | "entityMemoryRepository"
+    | "memoryCandidateRepository"
+    | "issueMcpCredential"
+    | "revokeMcpCredential"
   >,
 ) {
   return effect.pipe(
@@ -1735,7 +1744,7 @@ describe("AgentControllerLive", () => {
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ "builtin-exa_search": {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {}, "t3-code_preview_status": {} })),
       getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
@@ -1769,11 +1778,19 @@ describe("AgentControllerLive", () => {
         expect(makeMcpManagerMock).toHaveBeenCalledOnce();
         expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
           "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
+          "t3-code": {
+            url: "http://127.0.0.1:15070/mcp",
+            headers: { Authorization: "Bearer preview-test" },
+          },
         });
         expect(mcpManager.init).toHaveBeenCalledOnce();
         assert.property(
           mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
           "builtin-exa_search",
+        );
+        assert.property(
+          mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
+          "preview_status",
         );
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
           toolName: "builtin-exa_search",
@@ -1852,6 +1869,21 @@ describe("AgentControllerLive", () => {
       mastra.factory,
       makeMcpManager,
       baseDir,
+      undefined,
+      {
+        issueMcpCredential: ({ threadId, providerInstanceId }) =>
+          Effect.succeed({
+            config: {
+              environmentId: EnvironmentId.make("environment-preview-test"),
+              threadId,
+              providerSessionId: "provider-session-preview-test",
+              providerInstanceId,
+              endpoint: "http://127.0.0.1:15070/mcp",
+              authorizationHeader: "Bearer preview-test",
+            },
+          }),
+        revokeMcpCredential: () => Effect.void,
+      },
     );
   });
 

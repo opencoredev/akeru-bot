@@ -1241,4 +1241,41 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.equal(roundTripped.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
+
+  it.effect("stores and redacts the Browserbase API key outside settings.json", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+
+      const next = yield* serverSettings.updateSettings({
+        browserProvider: {
+          enabled: true,
+          browserbaseApiKey: "browserbase-secret",
+          browserbaseApiKeyRedacted: false,
+        },
+      });
+
+      assert.deepInclude(next.browserProvider, {
+        enabled: true,
+        browserbaseApiKey: "browserbase-secret",
+        browserbaseApiKeyRedacted: true,
+      });
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.notInclude(raw, "browserbase-secret");
+
+      const redacted = ServerSettingsModule.redactServerSettingsForClient(next);
+      assert.deepInclude(redacted.browserProvider, {
+        enabled: true,
+        browserbaseApiKey: "",
+        browserbaseApiKeyRedacted: true,
+      });
+
+      const preserved = yield* serverSettings.updateSettings({
+        browserProvider: { enabled: false },
+      });
+      assert.equal(preserved.browserProvider.browserbaseApiKey, "browserbase-secret");
+      assert.isFalse(preserved.browserProvider.enabled);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
 });

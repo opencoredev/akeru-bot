@@ -22,6 +22,7 @@ import * as Stream from "effect/Stream";
 import { PNG } from "pngjs";
 
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
+import { takePreviewSnapshot } from "./PreviewSnapshotCaptureBuffer.ts";
 
 const makeBroker = PreviewAutomationBroker.make.pipe(Effect.provide(NodeServices.layer));
 
@@ -143,6 +144,36 @@ it.effect("fails closed when a provider-bound frame cannot be masked", () =>
         .pipe(Effect.flip);
 
       expect(error).toBeInstanceOf(PreviewAutomationMalformedResponseError);
+    }),
+  ),
+);
+
+it.effect("keeps the original screenshot local while returning a masked provider frame", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const localScope = { ...scope, threadId: ThreadId.make("thread-original-screenshot") };
+      const requests = requestsFrom(yield* broker.connect(makeHost()));
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: true,
+          result: snapshotResult,
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+
+      const providerResult = yield* broker.invoke<typeof snapshotResult>({
+        scope: localScope,
+        operation: "snapshot",
+        input: {},
+      });
+      const original = takePreviewSnapshot(localScope.threadId);
+
+      expect(original).toEqual(Buffer.from(snapshotResult.screenshot.data, "base64"));
+      expect(providerResult.screenshot.data).not.toBe(snapshotResult.screenshot.data);
     }),
   ),
 );

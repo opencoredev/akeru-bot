@@ -707,6 +707,13 @@ export const SandboxSettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type SandboxSettings = typeof SandboxSettings.Type;
 
+export const BrowserProviderSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  browserbaseApiKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  browserbaseApiKeyRedacted: Schema.optionalKey(Schema.Boolean),
+}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
+export type BrowserProviderSettings = typeof BrowserProviderSettings.Type;
+
 export const ServerSettings = Schema.Struct({
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
   // `enableAssistantStreaming`): decoding drops the old key, so everyone,
@@ -738,6 +745,7 @@ export const ServerSettings = Schema.Struct({
    * between a desktop window and a phone attached to the same server.
    */
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  browserProvider: BrowserProviderSettings,
   voice: VoiceSettings,
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
@@ -985,6 +993,13 @@ export const ServerSettingsPatch = Schema.Struct({
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
+  browserProvider: Schema.optionalKey(
+    Schema.Struct({
+      enabled: Schema.optionalKey(Schema.Boolean),
+      browserbaseApiKey: Schema.optionalKey(TrimmedString),
+      browserbaseApiKeyRedacted: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
   voice: Schema.optionalKey(
     Schema.Struct({
       enabled: Schema.optionalKey(Schema.Boolean),
