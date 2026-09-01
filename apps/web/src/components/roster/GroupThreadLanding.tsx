@@ -22,6 +22,7 @@ import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
@@ -143,7 +144,15 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               return (
                 <div key={message.id} className="flex justify-end" data-testid="group-user-message">
                   <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                    <p className="whitespace-pre-wrap">{message.text}</p>
+                    {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
+                    {message.attachments?.length ? (
+                      <div className={message.text ? "mt-2" : undefined}>
+                        <BotMessageAttachments
+                          attachments={message.attachments}
+                          environmentId={environmentId ?? NO_ENVIRONMENT}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );

@@ -1,10 +1,18 @@
-import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon } from "lucide-react";
 import { type ComponentProps, useEffect, useRef, useState } from "react";
 
 import { cn } from "../../lib/utils";
+import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
 import { BotModelPicker } from "./BotModelPicker";
+import {
+  BotPromptAttachments,
+  buildBotPromptAttachmentPreview,
+  createBotPromptAttachments,
+  releaseBotPromptAttachments,
+  type BotPromptAttachment,
+} from "./BotPromptAttachments";
 
 type BotModelPickerProps = Pick<
   ComponentProps<typeof BotModelPicker>,
@@ -79,9 +87,25 @@ export function BotPromptComposer({
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
-  const [files, setFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
+  const [expandedAttachmentId, setExpandedAttachmentId] = useState<string | null>(null);
+  const attachmentsRef = useRef<BotPromptAttachment[]>([]);
+  const releasedPreviewUrlsRef = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
+  const releaseAttachments = (items: readonly BotPromptAttachment[]) => {
+    const unreleased = items.filter((attachment) => {
+      if (
+        attachment.previewUrl === null ||
+        releasedPreviewUrlsRef.current.has(attachment.previewUrl)
+      ) {
+        return false;
+      }
+      releasedPreviewUrlsRef.current.add(attachment.previewUrl);
+      return true;
+    });
+    releaseBotPromptAttachments(unreleased);
+  };
   const persistDraft = (next: string) => {
     setDraft(next);
     if (draftKey) writeBotDraft(draftKey, next);
@@ -92,9 +116,36 @@ export function BotPromptComposer({
   useEffect(() => {
     setDraft(draftKey ? readBotDraft(draftKey) : "");
   }, [draftKey]);
-  const expanded = modelPicker !== null || files.length > 0 || isBotPromptExpanded(draft);
-  const addFiles = (next: FileList | readonly File[]) =>
-    setFiles((current) => [...current, ...Array.from(next)]);
+  useEffect(
+    () => () => {
+      releaseAttachments(attachmentsRef.current);
+      attachmentsRef.current = [];
+    },
+    [],
+  );
+
+  const expanded = modelPicker !== null || attachments.length > 0 || isBotPromptExpanded(draft);
+  const addFiles = (next: FileList | readonly File[]) => {
+    const added = createBotPromptAttachments(Array.from(next));
+    const updated = [...attachmentsRef.current, ...added];
+    attachmentsRef.current = updated;
+    setAttachments(updated);
+  };
+  const removeAttachment = (attachmentId: string) => {
+    const removed = attachmentsRef.current.find((attachment) => attachment.id === attachmentId);
+    if (!removed) return;
+    const updated = attachmentsRef.current.filter((attachment) => attachment.id !== attachmentId);
+    attachmentsRef.current = updated;
+    setAttachments(updated);
+    if (expandedAttachmentId === attachmentId) {
+      setExpandedAttachmentId(null);
+    }
+    releaseAttachments([removed]);
+  };
+  const expandedPreview =
+    expandedAttachmentId === null
+      ? null
+      : buildBotPromptAttachmentPreview(attachments, expandedAttachmentId);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -134,14 +185,30 @@ export function BotPromptComposer({
       onSubmit={(event) => {
         event.preventDefault();
         const prompt = draft.trim();
-        if (!canSubmitBotPrompt(disabled, prompt, files.length)) return;
-        void onSubmit(prompt, files, findMentionedBotId(prompt, mentionBots)).then((sent) => {
-          if (sent) {
+        const submittedAttachments = [...attachmentsRef.current];
+        if (!canSubmitBotPrompt(disabled, prompt, submittedAttachments.length)) return;
+        const submittedIds = new Set(submittedAttachments.map((attachment) => attachment.id));
+        void onSubmit(
+          prompt,
+          submittedAttachments.map((attachment) => attachment.file),
+          findMentionedBotId(prompt, mentionBots),
+        ).then(
+          (sent) => {
+            if (!sent) return;
             persistDraft("");
             if (draftKey) clearBotDraft(draftKey);
-            setFiles([]);
-          }
-        });
+            const remaining = attachmentsRef.current.filter(
+              (attachment) => !submittedIds.has(attachment.id),
+            );
+            attachmentsRef.current = remaining;
+            setAttachments(remaining);
+            if (expandedAttachmentId && submittedIds.has(expandedAttachmentId)) {
+              setExpandedAttachmentId(null);
+            }
+            releaseAttachments(submittedAttachments);
+          },
+          () => undefined,
+        );
       }}
     >
       <div
@@ -152,27 +219,12 @@ export function BotPromptComposer({
           expanded && "min-h-28",
         )}
       >
-        {files.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-            {files.map((file, index) => (
-              <span
-                key={`${file.name}:${file.size}:${file.lastModified}`}
-                className="flex max-w-48 items-center gap-1.5 rounded-full bg-background/65 py-1 pe-1 ps-2.5 text-xs"
-              >
-                <PaperclipIcon className="size-3" />
-                <span className="truncate">{file.name}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${file.name}`}
-                  onClick={() => setFiles((current) => current.filter((_, item) => item !== index))}
-                  className="flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10"
-                >
-                  <XIcon className="size-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <BotPromptAttachments
+          attachments={attachments}
+          className="px-3 pt-3"
+          onExpand={setExpandedAttachmentId}
+          onRemove={removeAttachment}
+        />
         <textarea
           ref={promptInputRef}
           aria-label={`Message ${botName}`}
@@ -249,7 +301,7 @@ export function BotPromptComposer({
           <button
             type="submit"
             aria-label="Send message"
-            disabled={!canSubmitBotPrompt(disabled, draft, files.length)}
+            disabled={!canSubmitBotPrompt(disabled, draft, attachments.length)}
             className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-25"
           >
             <ArrowUpIcon className="size-5" />
@@ -267,6 +319,13 @@ export function BotPromptComposer({
           event.currentTarget.value = "";
         }}
       />
+      {expandedPreview ? (
+        <ExpandedImageDialog
+          key={`${expandedAttachmentId}:${attachments.map((attachment) => attachment.id).join(":")}`}
+          preview={expandedPreview}
+          onClose={() => setExpandedAttachmentId(null)}
+        />
+      ) : null}
     </form>
   );
 }
