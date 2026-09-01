@@ -28,6 +28,7 @@ const releaseWorkflow = read(".depot/workflows/release.yml");
 const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
 const ciWorkflow = read(".depot/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
+const serverCli = read("apps/server/scripts/cli.ts");
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
 
 for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
@@ -49,6 +50,7 @@ assertContains(
   'artifactName: "Akeru-Bot-${version}-${arch}.${ext}"',
   "Desktop artifacts do not use the Akeru Bot release name.",
 );
+assertContains(serverCli, '"akeru-bot",', "CLI publishing does not select the Akeru package.");
 
 for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
@@ -101,6 +103,7 @@ for (const [needle, label] of [
   ["xcrun notarytool submit", "macOS notarization"],
   ["vp run --filter akeru-bot build", "CLI build"],
   ["--dry-run", "CLI package check"],
+  ['test -f "release/akeru-bot-$RELEASE_VERSION.tgz"', "exact CLI package asset check"],
   ["verify-release-assets.ts", "asset name and hash verification"],
   ["gh release create", "stable GitHub Release"],
 ] as const) {
@@ -108,6 +111,11 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, 'tag=v%s\\n', "Stable release workflow does not use a vX.Y.Z tag.");
+assertContains(
+  releaseWorkflow,
+  "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",
+  "Signed macOS verification cannot access the App Store Connect key.",
+);
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
 for (const [needle, label] of [

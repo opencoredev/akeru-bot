@@ -187,6 +187,10 @@ jobs:
       - name: Notarize and verify macOS DMG
         if: matrix.platform == 'mac' && env.SIGNED == 'true'
         shell: bash
+        env:
+          APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
+          APPLE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
         run: |
           dmg="release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
           xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
@@ -231,7 +235,7 @@ jobs:
           node apps/server/scripts/cli.ts publish --dry-run --app-version "$RELEASE_VERSION" --verbose
           mkdir -p release
           vp pm pack --filter akeru-bot --pack-destination release
-          mv release/akeru-bot-*.tgz "release/akeru-bot-$RELEASE_VERSION.tgz"
+          test -f "release/akeru-bot-$RELEASE_VERSION.tgz"
       - uses: actions/upload-artifact@v7
         with:
           name: stable-cli
