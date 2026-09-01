@@ -1,6 +1,8 @@
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ChatAttachment,
+  AkeruCreateRoutineInput,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -130,11 +132,21 @@ function runtimeChatAttachment(event: ProviderRuntimeEvent) {
   const data = decodeRuntimeChatAttachment(event.payload.data);
   return Option.isSome(data) ? data.value.chatAttachment : undefined;
 }
+const decodeCreateRoutineInput = Schema.decodeUnknownExit(AkeruCreateRoutineInput, {
+  onExcessProperty: "error",
+});
 
-function boundedFeedbackArgs(toolName: string | undefined, args: unknown): unknown {
-  if (toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME || args === undefined) return undefined;
-  const decoded = decodeProductFeedbackToolDraft(args);
-  return Exit.isSuccess(decoded) ? decoded.value : undefined;
+function boundedApprovalArgs(toolName: string | undefined, args: unknown): unknown {
+  if (args === undefined) return undefined;
+  if (toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME) {
+    const decoded = decodeProductFeedbackToolDraft(args);
+    return Exit.isSuccess(decoded) ? decoded.value : undefined;
+  }
+  if (toolName === AKERU_CREATE_ROUTINE_TOOL_NAME) {
+    const decoded = decodeCreateRoutineInput(args);
+    return Exit.isSuccess(decoded) ? decoded.value : undefined;
+  }
+  return undefined;
 }
 
 type TurnStartRequestedDomainEvent = Extract<
@@ -413,7 +425,7 @@ export function runtimeEventToActivities(
         return [];
       }
       const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
-      const feedbackArgs = boundedFeedbackArgs(event.payload.toolName, event.payload.args);
+      const approvalArgs = boundedApprovalArgs(event.payload.toolName, event.payload.args);
       return [
         {
           id: event.eventId,
@@ -438,7 +450,7 @@ export function runtimeEventToActivities(
             ...(event.payload.target ? { target: event.payload.target } : {}),
             ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
             ...(event.payload.action ? { action: event.payload.action } : {}),
-            ...(feedbackArgs !== undefined ? { args: feedbackArgs } : {}),
+            ...(approvalArgs !== undefined ? { args: approvalArgs } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.appName ? { appName: event.payload.appName } : {}),
             ...(event.payload.options ? { options: event.payload.options } : {}),
@@ -1361,6 +1373,7 @@ const make = Effect.gen(function* () {
         });
       }
       yield* clearAssistantMessageState(input.messageId);
+      return Boolean(input.hasProjectedMessage || hasRenderableText);
     });
 
   const finalizeActiveAssistantSegmentForTurn = (input: {
@@ -2061,7 +2074,7 @@ const make = Effect.gen(function* () {
         const turnId = toTurnId(event.turnId);
         if (turnId) {
           const assistantMessageIds = yield* getAssistantMessageIdsForTurn(thread.id, turnId);
-          yield* Effect.forEach(
+          const finalizedReplyVisibility = yield* Effect.forEach(
             assistantMessageIds,
             (assistantMessageId) =>
               finalizeAssistantMessage({
@@ -2075,7 +2088,7 @@ const make = Effect.gen(function* () {
                 hasProjectedMessage: findMessageById(messages, assistantMessageId) !== undefined,
               }),
             { concurrency: 1 },
-          ).pipe(Effect.asVoid);
+          );
           yield* clearAssistantMessageIdsForTurn(thread.id, turnId);
           yield* clearAssistantSegmentStateForTurn(thread.id, turnId);
 
@@ -2087,6 +2100,27 @@ const make = Effect.gen(function* () {
             turnId,
             updatedAt: now,
           });
+
+          const hasVisibleAssistantReply = messages.some(
+            (message) => message.role === "assistant" && sameId(message.turnId, turnId),
+          );
+          if (!hasVisibleAssistantReply && !finalizedReplyVisibility.some(Boolean)) {
+            const fallbackText =
+              event.payload.state === "failed"
+                ? "I could not complete that request. Check the error details and try again."
+                : "I finished without a text response. Please try again.";
+            yield* finalizeAssistantMessage({
+              event,
+              threadId: thread.id,
+              messageId: MessageId.make(`assistant:${event.eventId}:fallback`),
+              turnId,
+              createdAt: now,
+              commandTag: "assistant-empty-turn-complete",
+              finalDeltaCommandTag: "assistant-empty-turn-delta",
+              hasProjectedMessage: false,
+              fallbackText,
+            });
+          }
         }
       }
 

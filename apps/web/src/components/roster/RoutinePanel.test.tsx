@@ -146,7 +146,7 @@ describe("RoutinePanel", () => {
       latestRun: { ...run, status: "waiting-for-approval", error: null },
     };
     const disabled = { ...routine, id: "disabled", enabled: false };
-    const paused = { ...routine, id: "paused", paused: true };
+    const paused = { ...routine, id: "paused", enabled: false, paused: true };
     const markup = renderToStaticMarkup(
       <RoutinePanel
         botName="Akeru"
@@ -162,5 +162,30 @@ describe("RoutinePanel", () => {
     expect(markup).toContain(">Enable</button>");
     expect(markup).toContain(">Resume</button>");
     expect(markup).toContain(">Delete</button>");
+
+    const needsApprovalMarkup = renderToStaticMarkup(
+      <RoutinePanel
+        botName="Akeru"
+        status="ready"
+        routines={[{ ...needsApproval, enabled: false }]}
+        onApproveProcedure={() => undefined}
+        onSetEnabled={() => undefined}
+        onSetPaused={() => undefined}
+      />,
+    );
+    expect(needsApprovalMarkup).not.toContain(">Enable</button>");
+    expect(needsApprovalMarkup).not.toContain(">Pause</button>");
+
+    const pausedMarkup = renderToStaticMarkup(
+      <RoutinePanel
+        botName="Akeru"
+        status="ready"
+        routines={[paused]}
+        onSetEnabled={() => undefined}
+        onSetPaused={() => undefined}
+      />,
+    );
+    expect(pausedMarkup).toContain(">Resume</button>");
+    expect(pausedMarkup).not.toContain(">Enable</button>");
   });
 });

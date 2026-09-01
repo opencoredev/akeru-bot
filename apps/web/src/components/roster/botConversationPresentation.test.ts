@@ -5,6 +5,7 @@ import {
   channelOriginLabel,
   channelOriginForAssistantMessage,
   channelProviderLabel,
+  isBotConversationWorking,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 
@@ -54,6 +55,23 @@ describe("bot conversation presentation", () => {
     expect(channelOriginForAssistantMessage(messages, 0)).toBeNull();
   });
 
+  it("shows working as soon as a question response starts", () => {
+    expect(
+      isBotConversationWorking({
+        sending: false,
+        respondingToUserInput: true,
+        presence: "needs-you",
+      }),
+    ).toBe(true);
+    expect(
+      isBotConversationWorking({
+        sending: false,
+        respondingToUserInput: false,
+        presence: "needs-you",
+      }),
+    ).toBe(false);
+  });
+
   it("keeps user messages and settled answers only", () => {
     const messages = [
       message("user", "user", false),
@@ -93,5 +111,14 @@ describe("bot conversation presentation", () => {
       "active-user",
       "active-intermediate",
     ]);
+  });
+
+  it("hides internal routine trigger messages", () => {
+    const messages = [
+      message("routine:run-1:message", "user", false),
+      message("answer", "assistant", false, "turn-1"),
+    ];
+
+    expect(visibleBotChatMessages(messages).map((entry) => entry.id)).toEqual(["answer"]);
   });
 });

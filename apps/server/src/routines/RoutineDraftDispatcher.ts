@@ -1,6 +1,7 @@
 import {
   BotId,
   CommandId,
+  type Routine,
   RoutineId,
   RoutineTimeZone,
   ThreadId,
@@ -17,10 +18,39 @@ import * as Schema from "effect/Schema";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 
-export interface RoutineDraftResult {
+export interface RoutineApprovedResult {
   readonly routineId: RoutineId;
   readonly sequence: number;
-  readonly status: "drafted";
+  readonly status: "approved";
+}
+
+export interface RoutinesDeletedResult {
+  readonly routineIds: ReadonlyArray<RoutineId>;
+  readonly sequences: ReadonlyArray<number>;
+  readonly status: "deleted";
+}
+
+export type AkeruRoutineStatus = Pick<Routine, "id" | "enabled"> & {
+  readonly name: string;
+  readonly lifecycle: Exclude<Routine["lifecycle"], "deleted">;
+};
+
+export function routineStatusesForBot(
+  routines: ReadonlyArray<Routine>,
+  botId: BotId,
+): ReadonlyArray<AkeruRoutineStatus> {
+  return routines.flatMap((routine) =>
+    routine.botId === botId && routine.lifecycle !== "deleted" && routine.deletedAt === null
+      ? [
+          {
+            id: routine.id,
+            name: routine.job,
+            enabled: routine.enabled,
+            lifecycle: routine.lifecycle,
+          },
+        ]
+      : [],
+  );
 }
 
 export class RoutineDraftError extends Schema.TaggedErrorClass<RoutineDraftError>()(
@@ -29,11 +59,18 @@ export class RoutineDraftError extends Schema.TaggedErrorClass<RoutineDraftError
 ) {}
 
 export interface RoutineDraftDispatcherShape {
-  readonly draftForThread: (
+  readonly createApprovedForThread: (
     threadId: ThreadId,
     timezone: string,
     input: AkeruCreateRoutineInput,
-  ) => Effect.Effect<RoutineDraftResult, RoutineDraftError>;
+  ) => Effect.Effect<RoutineApprovedResult, RoutineDraftError>;
+  readonly listForThread: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<AkeruRoutineStatus>, RoutineDraftError>;
+  readonly deleteForThread: (
+    threadId: ThreadId,
+    routineIds: ReadonlyArray<RoutineId>,
+  ) => Effect.Effect<RoutinesDeletedResult, RoutineDraftError>;
 }
 
 export class RoutineDraftDispatcher extends Context.Service<
@@ -48,7 +85,7 @@ const make = Effect.gen(function* () {
   const decodeTimezone = Schema.decodeUnknownEffect(RoutineTimeZone);
   const fail = (message: string) => new RoutineDraftError({ message });
 
-  const draftForThread: RoutineDraftDispatcherShape["draftForThread"] = (
+  const createApprovedForThread: RoutineDraftDispatcherShape["createApprovedForThread"] = (
     threadId,
     timezone,
     input,
@@ -96,8 +133,8 @@ const make = Effect.gen(function* () {
       const now = DateTime.formatIso(yield* DateTime.now);
       const routineId = RoutineId.make(uuid);
       const result = yield* engine.dispatch({
-        type: "routine.draft",
-        commandId: CommandId.make(`agent:routine.draft:${uuid}`),
+        type: "routine.create-approved",
+        commandId: CommandId.make(`agent:routine.create-approved:${uuid}`),
         routineId,
         botId,
         targetThreadId: threadId,
@@ -112,7 +149,7 @@ const make = Effect.gen(function* () {
         approvalPolicy: thread.runtimeMode,
         createdAt: now,
       });
-      return { routineId, sequence: result.sequence, status: "drafted" as const };
+      return { routineId, sequence: result.sequence, status: "approved" as const };
     }).pipe(
       Effect.mapError((cause) =>
         Schema.is(RoutineDraftError)(cause)
@@ -121,7 +158,87 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  return { draftForThread } satisfies RoutineDraftDispatcherShape;
+  const listForThread: RoutineDraftDispatcherShape["listForThread"] = (threadId) =>
+    Effect.gen(function* () {
+      const thread = Option.getOrUndefined(yield* snapshots.getThreadDetailById(threadId));
+      if (!thread || thread.archivedAt !== null) {
+        return yield* fail("The current chat is unavailable.");
+      }
+      const botId = thread.respondingBotId ?? thread.botId;
+      if (botId === null || botId === undefined) {
+        return yield* fail("Routines can only be inspected from a bot chat.");
+      }
+      const snapshot = yield* snapshots.getShellSnapshot();
+      const bot = snapshot.bots.find(
+        (candidate) => candidate.id === botId && candidate.archivedAt === null,
+      );
+      if (!bot) return yield* fail("The current bot is unavailable.");
+      return routineStatusesForBot(snapshot.routines ?? [], botId);
+    }).pipe(
+      Effect.mapError((cause) =>
+        Schema.is(RoutineDraftError)(cause)
+          ? cause
+          : fail(cause instanceof Error ? cause.message : String(cause)),
+      ),
+    );
+
+  const deleteForThread: RoutineDraftDispatcherShape["deleteForThread"] = (threadId, routineIds) =>
+    Effect.gen(function* () {
+      const thread = Option.getOrUndefined(yield* snapshots.getThreadDetailById(threadId));
+      if (!thread || thread.archivedAt !== null) {
+        return yield* fail("The current chat is unavailable.");
+      }
+      const botId = thread.respondingBotId ?? thread.botId;
+      if (botId === null || botId === undefined) {
+        return yield* fail("Routines can only be deleted from a bot chat.");
+      }
+      const snapshot = yield* snapshots.getShellSnapshot();
+      const bot = snapshot.bots.find(
+        (candidate) => candidate.id === botId && candidate.archivedAt === null,
+      );
+      if (!bot) return yield* fail("The current bot is unavailable.");
+
+      const uniqueRoutineIds = [...new Set(routineIds)];
+      if (uniqueRoutineIds.length === 0) {
+        return yield* fail("Select at least one routine to delete.");
+      }
+      const availableRoutineIds = new Set(
+        routineStatusesForBot(snapshot.routines ?? [], botId).map((routine) => routine.id),
+      );
+      if (uniqueRoutineIds.some((routineId) => !availableRoutineIds.has(routineId))) {
+        return yield* fail("One or more routines are unavailable.");
+      }
+
+      const createdAt = DateTime.formatIso(yield* DateTime.now);
+      const results = yield* Effect.forEach(uniqueRoutineIds, (routineId) =>
+        Effect.gen(function* () {
+          const uuid = yield* crypto.randomUUIDv4;
+          return yield* engine.dispatch({
+            type: "routine.delete",
+            commandId: CommandId.make(`agent:routine.delete:${uuid}`),
+            routineId,
+            createdAt,
+          });
+        }),
+      );
+      return {
+        routineIds: uniqueRoutineIds,
+        sequences: results.map((result) => result.sequence),
+        status: "deleted" as const,
+      };
+    }).pipe(
+      Effect.mapError((cause) =>
+        Schema.is(RoutineDraftError)(cause)
+          ? cause
+          : fail(cause instanceof Error ? cause.message : String(cause)),
+      ),
+    );
+
+  return {
+    createApprovedForThread,
+    listForThread,
+    deleteForThread,
+  } satisfies RoutineDraftDispatcherShape;
 });
 
 export const RoutineDraftDispatcherLive = Layer.effect(RoutineDraftDispatcher, make);

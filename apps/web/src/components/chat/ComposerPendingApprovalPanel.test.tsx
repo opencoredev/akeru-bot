@@ -1,4 +1,4 @@
-import { ApprovalRequestId } from "@t3tools/contracts";
+import { AKERU_CREATE_ROUTINE_TOOL_NAME, ApprovalRequestId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -93,5 +93,54 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).toContain(appName);
     expect(markup).toContain('data-approval-detail="complete"');
     expect(markup).toContain(detail);
+  });
+
+  it("shows a routine preview instead of a generic command approval", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-routine"),
+          requestKind: "command",
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          createdAt: "2026-08-31T00:00:00.000Z",
+          detail: "Review routine",
+          args: {
+            name: "Daily brief",
+            instructions: "Summarize the work in this chat.",
+            schedule: { kind: "weekdays", time: "09:00" },
+          },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("Review routine");
+    expect(markup).toContain("Daily brief");
+    expect(markup).toContain("Weekdays at 09:00");
+    expect(markup).toContain("Summarize the work in this chat.");
+    expect(markup).not.toContain("Command approval");
+    expect(markup).not.toContain("Allow akeru_create_routine?");
+  });
+
+  it("shows the exact weekday and timezone in a weekly routine preview", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-weekly-routine"),
+          requestKind: "command",
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          createdAt: "2026-08-31T00:00:00.000Z",
+          args: {
+            name: "Friday review",
+            instructions: "Review the week.",
+            schedule: { kind: "weekly", weekdays: ["friday"], time: "14:00" },
+            timezone: "America/New_York",
+          },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("Friday at 14:00 (America/New_York)");
   });
 });

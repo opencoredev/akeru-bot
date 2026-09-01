@@ -113,6 +113,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateKind: "delegation",
         aggregateId: command.delegationId,
       };
+    case "routine.create-approved":
     case "routine.draft":
     case "routine.approve":
     case "routine.enable":

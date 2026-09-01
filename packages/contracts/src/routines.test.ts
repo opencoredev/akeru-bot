@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   ClientRoutineCommand,
+  InternalRoutineCommand,
   Routine,
   RoutineDraftedPayload,
   RoutineRun,
@@ -99,5 +100,21 @@ describe("routine contracts", () => {
     };
     expect(decode({ ...command, trigger: "dry-run" })).toMatchObject({ trigger: "dry-run" });
     expect(() => decode({ ...command, trigger: "scheduled" })).toThrow();
+  });
+
+  it("keeps atomic approved creation internal", () => {
+    const command = {
+      type: "routine.create-approved",
+      commandId: "command-create-approved-1",
+      routineId: routine.id,
+      ...definition,
+      createdAt: now,
+    };
+
+    expect(Schema.decodeUnknownSync(InternalRoutineCommand)(command)).toMatchObject({
+      type: "routine.create-approved",
+      routineId: routine.id,
+    });
+    expect(() => Schema.decodeUnknownSync(ClientRoutineCommand)(command)).toThrow();
   });
 });

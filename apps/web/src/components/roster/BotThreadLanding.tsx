@@ -35,7 +35,7 @@ import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
-import { visibleBotChatMessages } from "./botConversationPresentation";
+import { isBotConversationWorking, visibleBotChatMessages } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { BotMessageAttachments } from "./BotMessageAttachments";
@@ -177,8 +177,12 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   }, [bot, navigate]);
 
   if (!bot || bot.archivedAt !== null) return null;
-  const working = runtime.sending || presence === "working";
-  const messages = visibleBotChatMessages(runtime.messages);
+  const working = isBotConversationWorking({
+    sending: runtime.sending,
+    respondingToUserInput: runtime.respondingToUserInput,
+    presence,
+  });
+  const messages = visibleBotChatMessages(runtime.messages, working);
   const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
   const delegations = runtime.linkedThreadRef

@@ -9,6 +9,7 @@ import {
   EventId,
   GroupId,
   isGroupBotMember,
+  MessageId,
   ProviderInstanceId,
   type OrchestrationCommand,
   type OrchestrationEvent,
@@ -49,6 +50,21 @@ import { projectEvent } from "./projector.ts";
 import { nextScheduledFor } from "../routines/schedule.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
+
+function userInputAnswerText(answers: Record<string, unknown>): string | null {
+  const values = Object.values(answers).flatMap((answer) => {
+    if (typeof answer === "string") return [answer];
+    if (Array.isArray(answer)) {
+      return answer.filter((value): value is string => typeof value === "string");
+    }
+    return [];
+  });
+  const text = values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join("\n");
+  return text.length > 0 ? text : null;
+}
 
 // Session adoption takes seconds; a user message still unadopted after this
 // window is a failed/stale start, not pending work. Mirrors the client's
@@ -1435,6 +1451,53 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "routine.create-approved": {
+      const existing = (readModel.routines ?? []).find(
+        (routine) => routine.id === command.routineId,
+      );
+      if (existing !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Routine '${command.routineId}' already exists.`,
+        });
+      }
+      const routine = {
+        id: command.routineId,
+        botId: command.botId,
+        targetThreadId: command.targetThreadId,
+        job: command.job,
+        procedure: command.procedure,
+        schedule: command.schedule,
+        timezone: command.timezone,
+        skillAssignmentIds: command.skillAssignmentIds,
+        connectorDependencies: command.connectorDependencies,
+        projectId: command.projectId,
+        sandbox: command.sandbox,
+        approvalPolicy: command.approvalPolicy,
+        procedureVersion: 1,
+        approvalVersion: 1,
+        enabled: false as const,
+        lifecycle: "approved" as const,
+        nextRunAt: null,
+        lastRunAt: null,
+        latestResult: null,
+        latestFailure: null,
+        createdAt: command.createdAt,
+        updatedAt: command.createdAt,
+        deletedAt: null,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "routine",
+          aggregateId: command.routineId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "routine.approved",
+        payload: { routine },
+      };
+    }
+
     case "routine.draft": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
@@ -2750,12 +2813,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.user-input.respond": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
-      return {
+      const responseRequestedEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
@@ -2773,6 +2836,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           createdAt: command.createdAt,
         },
       };
+      const answerText = userInputAnswerText(command.answers);
+      if (answerText === null) return responseRequestedEvent;
+
+      const userMessageEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent",
+        payload: {
+          threadId: command.threadId,
+          messageId: MessageId.make(`user-input:${command.threadId}:${command.requestId}`),
+          role: "user",
+          text: answerText,
+          turnId: thread.session?.activeTurnId ?? null,
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+
+      return [
+        userMessageEvent,
+        { ...responseRequestedEvent, causationEventId: userMessageEvent.eventId },
+      ];
     }
 
     case "thread.checkpoint.revert": {

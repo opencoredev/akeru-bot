@@ -20,6 +20,8 @@ import { assert, describe, expect, it, vi } from "vite-plus/test";
 import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
 import {
   AKERU_RECENT_MESSAGE_LIMIT,
+  AKERU_DELETE_ROUTINES_TOOL_NAME,
+  AKERU_LIST_ROUTINES_TOOL_NAME,
   AkeruPassiveObservationalMemoryProcessor,
   akeruActionNeedsApproval,
   createAkeruObserveHooks,
@@ -386,6 +388,7 @@ describe("AkeruMastraHarness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "Prefer preview_* tools over browser_* tools");
+    assert.include(AKERU_AGENT_INSTRUCTIONS, "akeru_list_routines");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
     assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
   });
@@ -539,8 +542,9 @@ describe("AkeruMastraHarness", () => {
     assert.equal(blockedError.message, "Hook rejected");
   });
 
-  it("creates a routine draft for the current chat", async () => {
+  it("creates an approved routine for the current chat after tool approval", async () => {
     assert.isFalse(routineToolNeedsGlobalApproval(AKERU_CREATE_ROUTINE_TOOL_NAME));
+    assert.isFalse(routineToolNeedsGlobalApproval(AKERU_LIST_ROUTINES_TOOL_NAME));
     assert.isTrue(routineToolNeedsGlobalApproval("execute_command"));
     assert.isTrue(
       routineToolInputSchema.safeParse({
@@ -573,7 +577,7 @@ describe("AkeruMastraHarness", () => {
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       createRoutine: async (threadId, input) => {
         calls.push({ threadId, input });
-        return { status: "drafted" };
+        return { status: "approved" };
       },
     });
     const tool = tools[AKERU_CREATE_ROUTINE_TOOL_NAME] as {
@@ -582,6 +586,7 @@ describe("AkeruMastraHarness", () => {
     };
 
     assert.isFalse(tool.requireApproval);
+    assert.deepEqual(calls, []);
     assert.deepEqual(
       await tool.execute?.(
         {
@@ -593,7 +598,7 @@ describe("AkeruMastraHarness", () => {
         },
         {},
       ),
-      { status: "drafted" },
+      { status: "approved" },
     );
     assert.deepEqual(calls, [
       {
@@ -605,5 +610,135 @@ describe("AkeruMastraHarness", () => {
         },
       },
     ]);
+  });
+
+  it("lets the model inspect this bot's routine states without approval", async () => {
+    const calls: string[] = [];
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const result = {
+      routines: [
+        { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" as const },
+        {
+          id: "routine-2",
+          name: "Weekly review",
+          enabled: false,
+          lifecycle: "approved" as const,
+        },
+        {
+          id: "routine-3",
+          name: "Inbox check",
+          enabled: false,
+          lifecycle: "paused" as const,
+        },
+      ],
+    };
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      listRoutines: async (threadId) => {
+        calls.push(threadId);
+        return result;
+      },
+    });
+    const tool = tools[AKERU_LIST_ROUTINES_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+
+    assert.deepEqual(calls, []);
+    assert.isFalse(tool.requireApproval);
+    assert.deepEqual(await tool.execute?.({}, {}), result);
+    assert.deepEqual(calls, ["thread-1"]);
+  });
+
+  it("asks once before deleting one or more routines", async () => {
+    const deleted: Array<{ threadId: string; routineIds: ReadonlyArray<string> }> = [];
+    const suspended: unknown[] = [];
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      listRoutines: async () => ({
+        routines: [
+          { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" },
+          { id: "routine-2", name: "Weekly review", enabled: false, lifecycle: "paused" },
+        ],
+      }),
+      deleteRoutines: async (threadId, routineIds) => {
+        deleted.push({ threadId, routineIds });
+        return { status: "deleted", deletedRoutineIds: [...routineIds] };
+      },
+    });
+    const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
+      requireApproval?: boolean;
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+    const input = { routineIds: ["routine-1", "routine-2"] };
+
+    assert.isFalse(tool.requireApproval);
+    assert.deepEqual(deleted, []);
+    await tool.execute?.(input, {
+      agent: { suspend: async (payload: unknown) => void suspended.push(payload) },
+    });
+    assert.deepEqual(deleted, []);
+    assert.deepEqual(suspended, [
+      {
+        question:
+          'Are you sure you want to delete these routines: "Morning brief", "Weekly review"?',
+        options: [
+          {
+            label: "Delete routines",
+            description: "Stop these schedules and hide them from the routines list.",
+          },
+          { label: "Cancel", description: "Keep every routine." },
+        ],
+        selectionMode: "single_select",
+      },
+    ]);
+
+    assert.deepEqual(await tool.execute?.(input, { agent: { resumeData: "Cancel" } }), {
+      status: "cancelled",
+      deletedRoutineIds: [],
+    });
+    assert.deepEqual(deleted, []);
+    assert.deepEqual(await tool.execute?.(input, { agent: { resumeData: "Delete routines" } }), {
+      status: "deleted",
+      deletedRoutineIds: ["routine-1", "routine-2"],
+    });
+    assert.deepEqual(deleted, [{ threadId: "thread-1", routineIds: ["routine-1", "routine-2"] }]);
+  });
+
+  it("does not ask or delete when any requested routine is unavailable", async () => {
+    let suspended = false;
+    let deleted = false;
+    const requestContext = new RequestContext();
+    requestContext.setRaw("controller", { resourceId: "thread-1" });
+    const tools = await resolveAkeruTools(requestContext, {
+      authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      listRoutines: async () => ({ routines: [] }),
+      deleteRoutines: async () => {
+        deleted = true;
+        return { status: "deleted", deletedRoutineIds: [] };
+      },
+    });
+    const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
+      execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+
+    assert.deepEqual(
+      await tool.execute?.(
+        { routineIds: ["missing-routine"] },
+        { agent: { suspend: async () => void (suspended = true) } },
+      ),
+      { status: "not-found", deletedRoutineIds: [] },
+    );
+    assert.isFalse(suspended);
+    assert.isFalse(deleted);
   });
 });

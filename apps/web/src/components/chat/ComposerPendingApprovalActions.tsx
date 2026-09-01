@@ -1,4 +1,5 @@
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   type ApprovalRequestId,
   type ProviderApprovalDecision,
   type ProviderApprovalOption,
@@ -10,6 +11,7 @@ import { Button } from "../ui/button";
 interface ComposerPendingApprovalActionsProps {
   requestId: ApprovalRequestId;
   requestKind?: ProviderRequestKind | undefined;
+  toolName?: string | undefined;
   isResponding: boolean;
   options?: ReadonlyArray<ProviderApprovalOption> | undefined;
   onRespondToApproval: (
@@ -24,6 +26,10 @@ const DEFAULT_APPROVAL_OPTIONS = [
   { decision: "decline", label: "Decline" },
   { decision: "acceptForSession", label: "Always allow this session" },
   { decision: "accept", label: "Approve" },
+] satisfies ReadonlyArray<ProviderApprovalOption>;
+const ROUTINE_APPROVAL_OPTIONS = [
+  { decision: "accept", label: "Create routine" },
+  { decision: "decline", label: "Cancel" },
 ] satisfies ReadonlyArray<ProviderApprovalOption>;
 
 function commandApprovalOptions(
@@ -51,11 +57,17 @@ function commandApprovalOptions(
 export const ComposerPendingApprovalActions = memo(function ComposerPendingApprovalActions({
   requestId,
   requestKind,
+  toolName,
   isResponding,
   options = DEFAULT_APPROVAL_OPTIONS,
   onRespondToApproval,
 }: ComposerPendingApprovalActionsProps) {
-  const visibleOptions = requestKind === "command" ? commandApprovalOptions(options) : options;
+  const visibleOptions =
+    toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
+      ? ROUTINE_APPROVAL_OPTIONS
+      : requestKind === "command"
+        ? commandApprovalOptions(options)
+        : options;
 
   return (
     <>

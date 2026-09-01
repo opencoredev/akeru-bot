@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -391,7 +391,16 @@ function RoutineCard({
         >
           Run now
         </Button>
-        {!routine.enabled && routine.procedureApproved ? (
+        {routine.paused ? (
+          <Button
+            size="micro"
+            variant="outline"
+            disabled={busy || !actions.onSetPaused}
+            onClick={() => actions.onSetPaused?.(routine.id, false)}
+          >
+            Resume
+          </Button>
+        ) : !routine.enabled && routine.procedureApproved ? (
           <Button
             size="micro"
             variant="outline"
@@ -400,16 +409,16 @@ function RoutineCard({
           >
             Enable
           </Button>
-        ) : (
+        ) : routine.enabled ? (
           <Button
             size="micro"
             variant="outline"
             disabled={busy || !actions.onSetPaused}
-            onClick={() => actions.onSetPaused?.(routine.id, !routine.paused)}
+            onClick={() => actions.onSetPaused?.(routine.id, true)}
           >
-            {routine.paused ? "Resume" : "Pause"}
+            Pause
           </Button>
-        )}
+        ) : null}
         <Button size="micro" variant="ghost" disabled={busy} onClick={onEdit}>
           Edit
         </Button>

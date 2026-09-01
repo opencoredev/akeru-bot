@@ -682,6 +682,48 @@ describe("ProviderRuntimeIngestion", () => {
     });
   });
 
+  it("adds a visible reply when a completed turn emitted only whitespace", async () => {
+    const harness = await createHarness();
+    const turnId = asTurnId("turn-whitespace-only");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-whitespace-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId,
+    });
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-turn-whitespace-delta"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:02.000Z",
+      turnId,
+      itemId: asItemId("item-whitespace-only"),
+      payload: { streamKind: "assistant_text", delta: "   \n" },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-whitespace-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:03.000Z",
+      turnId,
+      payload: { state: "completed" },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message) =>
+          message.turnId === turnId &&
+          message.text === "I finished without a text response. Please try again.",
+      ),
+    );
+    expect(thread.messages.filter((message) => message.turnId === turnId)).toHaveLength(1);
+  });
+
   it("applies provider session.state.changed transitions directly", async () => {
     const harness = await createHarness();
     const waitingAt = "2026-01-01T00:00:00.000Z";

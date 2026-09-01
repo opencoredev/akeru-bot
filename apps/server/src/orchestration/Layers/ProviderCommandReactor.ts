@@ -5,6 +5,7 @@ import {
   type ChatAttachment,
   CommandId,
   EventId,
+  MessageId,
   type ModelSelection,
   type McpServer,
   type OrchestrationEvent,
@@ -424,6 +425,76 @@ const make = Effect.gen(function* () {
         }),
       ),
     );
+
+  const appendUserInputFailureReply = Effect.fn("appendUserInputFailureReply")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly requestId: string;
+    readonly createdAt: string;
+  }) {
+    const thread = yield* resolveThread(input.threadId);
+    if (!thread) return;
+    const messageId = MessageId.make(
+      `assistant:user-input-response-failed:${input.threadId}:${input.requestId}`,
+    );
+    if (thread.messages.some((message) => message.id === messageId)) return;
+    const turnId = thread.session?.activeTurnId ?? undefined;
+    const text =
+      "I could not continue that request because the agent session restarted. Send it again.";
+
+    const deltaCommandId = yield* serverCommandId("user-input-failure-reply-delta");
+    yield* orchestrationEngine.dispatch({
+      type: "thread.message.assistant.delta",
+      commandId: deltaCommandId,
+      threadId: input.threadId,
+      messageId,
+      delta: text,
+      ...(turnId ? { turnId } : {}),
+      createdAt: input.createdAt,
+    });
+    const completeCommandId = yield* serverCommandId("user-input-failure-reply-complete");
+    yield* orchestrationEngine.dispatch({
+      type: "thread.message.assistant.complete",
+      commandId: completeCommandId,
+      threadId: input.threadId,
+      messageId,
+      ...(turnId ? { turnId } : {}),
+      createdAt: input.createdAt,
+    });
+  });
+
+  const appendApprovalFailureReply = Effect.fn("appendApprovalFailureReply")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly requestId: string;
+    readonly createdAt: string;
+  }) {
+    const thread = yield* resolveThread(input.threadId);
+    if (!thread) return;
+    const messageId = MessageId.make(
+      `assistant:approval-response-failed:${input.threadId}:${input.requestId}`,
+    );
+    if (thread.messages.some((message) => message.id === messageId)) return;
+    const turnId = thread.session?.activeTurnId ?? undefined;
+    const text =
+      "I could not continue that approval because the agent session restarted. Send it again.";
+
+    yield* orchestrationEngine.dispatch({
+      type: "thread.message.assistant.delta",
+      commandId: yield* serverCommandId("approval-failure-reply-delta"),
+      threadId: input.threadId,
+      messageId,
+      delta: text,
+      ...(turnId ? { turnId } : {}),
+      createdAt: input.createdAt,
+    });
+    yield* orchestrationEngine.dispatch({
+      type: "thread.message.assistant.complete",
+      commandId: yield* serverCommandId("approval-failure-reply-complete"),
+      threadId: input.threadId,
+      messageId,
+      ...(turnId ? { turnId } : {}),
+      createdAt: input.createdAt,
+    });
+  });
 
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
@@ -1608,16 +1679,21 @@ const make = Effect.gen(function* () {
     if (!thread) {
       return;
     }
-    const hasSession = thread.session && thread.session.status !== "stopped";
-    if (!hasSession) {
-      return yield* appendProviderFailureActivity({
+    const session = thread.session;
+    if (!session || session.status === "stopped") {
+      yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
         kind: "provider.approval.respond.failed",
         summary: "Provider approval response failed",
-        detail: "No active provider session is bound to this thread.",
+        detail: stalePendingRequestDetail("approval", event.payload.requestId),
         turnId: null,
         createdAt: event.payload.createdAt,
         requestId: event.payload.requestId,
+      });
+      return yield* appendApprovalFailureReply({
+        threadId: event.payload.threadId,
+        requestId: event.payload.requestId,
+        createdAt: event.payload.createdAt,
       });
     }
 
@@ -1628,19 +1704,38 @@ const make = Effect.gen(function* () {
         decision: event.payload.decision,
       })
       .pipe(
-        Effect.catchCause((cause) =>
-          appendProviderFailureActivity({
-            threadId: event.payload.threadId,
-            kind: "provider.approval.respond.failed",
-            summary: "Provider approval response failed",
-            detail: isUnknownPendingApprovalRequestError(cause)
-              ? stalePendingRequestDetail("approval", event.payload.requestId)
-              : Cause.pretty(cause),
-            turnId: null,
-            createdAt: event.payload.createdAt,
-            requestId: event.payload.requestId,
-          }),
-        ),
+        Effect.catchCause((cause) => {
+          const detail = isUnknownPendingApprovalRequestError(cause)
+            ? stalePendingRequestDetail("approval", event.payload.requestId)
+            : Cause.pretty(cause);
+          return Effect.gen(function* () {
+            yield* appendProviderFailureActivity({
+              threadId: event.payload.threadId,
+              kind: "provider.approval.respond.failed",
+              summary: "Provider approval response failed",
+              detail,
+              turnId: null,
+              createdAt: event.payload.createdAt,
+              requestId: event.payload.requestId,
+            });
+            yield* appendApprovalFailureReply({
+              threadId: event.payload.threadId,
+              requestId: event.payload.requestId,
+              createdAt: event.payload.createdAt,
+            });
+            yield* setThreadSession({
+              threadId: event.payload.threadId,
+              session: {
+                ...session,
+                status: "error",
+                activeTurnId: null,
+                lastError: detail,
+                updatedAt: event.payload.createdAt,
+              },
+              createdAt: event.payload.createdAt,
+            });
+          });
+        }),
       );
   });
 
@@ -1654,14 +1749,19 @@ const make = Effect.gen(function* () {
       }
       const hasSession = thread.session && thread.session.status !== "stopped";
       if (!hasSession) {
-        return yield* appendProviderFailureActivity({
+        yield* appendProviderFailureActivity({
           threadId: event.payload.threadId,
           kind: "provider.user-input.respond.failed",
           summary: "Provider user input response failed",
-          detail: "No active provider session is bound to this thread.",
+          detail: stalePendingRequestDetail("user-input", event.payload.requestId),
           turnId: null,
           createdAt: event.payload.createdAt,
           requestId: event.payload.requestId,
+        });
+        return yield* appendUserInputFailureReply({
+          threadId: event.payload.threadId,
+          requestId: event.payload.requestId,
+          createdAt: event.payload.createdAt,
         });
       }
 
@@ -1672,19 +1772,40 @@ const make = Effect.gen(function* () {
           answers: event.payload.answers,
         })
         .pipe(
-          Effect.catchCause((cause) =>
-            appendProviderFailureActivity({
-              threadId: event.payload.threadId,
-              kind: "provider.user-input.respond.failed",
-              summary: "Provider user input response failed",
-              detail: isUnknownPendingUserInputRequestError(cause)
-                ? stalePendingRequestDetail("user-input", event.payload.requestId)
-                : Cause.pretty(cause),
-              turnId: null,
-              createdAt: event.payload.createdAt,
-              requestId: event.payload.requestId,
-            }),
-          ),
+          Effect.catchCause((cause) => {
+            const detail = isUnknownPendingUserInputRequestError(cause)
+              ? stalePendingRequestDetail("user-input", event.payload.requestId)
+              : Cause.pretty(cause);
+            return Effect.gen(function* () {
+              yield* appendProviderFailureActivity({
+                threadId: event.payload.threadId,
+                kind: "provider.user-input.respond.failed",
+                summary: "Provider user input response failed",
+                detail,
+                turnId: null,
+                createdAt: event.payload.createdAt,
+                requestId: event.payload.requestId,
+              });
+              yield* appendUserInputFailureReply({
+                threadId: event.payload.threadId,
+                requestId: event.payload.requestId,
+                createdAt: event.payload.createdAt,
+              });
+              if (thread.session) {
+                yield* setThreadSession({
+                  threadId: event.payload.threadId,
+                  session: {
+                    ...thread.session,
+                    status: "error",
+                    activeTurnId: null,
+                    lastError: detail,
+                    updatedAt: event.payload.createdAt,
+                  },
+                  createdAt: event.payload.createdAt,
+                });
+              }
+            });
+          }),
         );
     },
   );

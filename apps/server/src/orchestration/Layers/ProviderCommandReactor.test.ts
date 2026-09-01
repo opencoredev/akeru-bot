@@ -3408,6 +3408,7 @@ describe("ProviderCommandReactor", () => {
   it("reacts to thread.user-input.respond by forwarding structured user input answers", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
+    harness.respondToUserInput.mockImplementation(() => Effect.never);
 
     await Effect.runPromise(
       harness.engine.dispatch({
@@ -3441,6 +3442,14 @@ describe("ProviderCommandReactor", () => {
     );
 
     await waitFor(() => harness.respondToUserInput.mock.calls.length === 1);
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.messages.filter((message) => message.role === "user")).toEqual([
+      expect.objectContaining({
+        id: MessageId.make("user-input:thread-1:user-input-request-1"),
+        text: "workspace-write",
+      }),
+    ]);
     expect(harness.respondToUserInput.mock.calls[0]?.[0]).toEqual({
       threadId: "thread-1",
       requestId: "user-input-request-1",
@@ -3543,6 +3552,16 @@ describe("ProviderCommandReactor", () => {
         (activity.payload as Record<string, unknown>).requestId === "approval-request-1",
     );
     expect(resolvedActivity).toBeUndefined();
+    expect(thread?.messages).toContainEqual(
+      expect.objectContaining({
+        role: "assistant",
+        text: "I could not continue that approval because the agent session restarted. Send it again.",
+      }),
+    );
+    expect(thread?.session).toMatchObject({
+      status: "error",
+      activeTurnId: null,
+    });
   });
 
   it("surfaces non-resumable provider user-input callbacks as stale failures", async () => {
@@ -3652,6 +3671,16 @@ describe("ProviderCommandReactor", () => {
         (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
     );
     expect(resolvedActivity).toBeUndefined();
+    expect(thread?.messages).toContainEqual(
+      expect.objectContaining({
+        role: "assistant",
+        text: "I could not continue that request because the agent session restarted. Send it again.",
+      }),
+    );
+    expect(thread?.session).toMatchObject({
+      status: "error",
+      activeTurnId: null,
+    });
   });
 
   it("reacts to thread.session.stop by stopping provider session and clearing thread session state", async () => {

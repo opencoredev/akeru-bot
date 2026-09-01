@@ -11,6 +11,8 @@ export const AKERU_AGENT_INSTRUCTIONS = [
   "When asked about available tools, describe only tools present in the current turn.",
   "Do not claim that a tool ran unless its result is present in this turn.",
   "Use akeru_create_routine when the user asks for recurring or scheduled work.",
+  "Use akeru_list_routines before answering whether a routine exists or what state it is in, including enabled, disabled, paused, blocked, or failed.",
+  "When the user asks to delete routines, call akeru_list_routines, then call akeru_delete_routines with the selected IDs. The delete tool asks for confirmation, so do not ask for separate confirmation.",
   "Routine output goes to the current chat unless the user names an enabled plugin such as Slack. Use the current device timezone unless the user names another timezone.",
 ].join("\n");
 

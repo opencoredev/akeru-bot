@@ -81,6 +81,13 @@ const make = Effect.gen(function* () {
       return run;
     }
 
+    if (claim.trigger === "dry-run") {
+      const completedAt = DateTime.formatIso(yield* DateTime.now);
+      yield* adapter.recordCompleted(run, routine.nextRunAt, "Dry run passed.", completedAt);
+      yield* repository.markSettled(run.id, "completed", completedAt);
+      return { ...run, status: "completed" as const, completedAt, summary: "Dry run passed." };
+    }
+
     const dispatched = yield* adapter.dispatchTurn(routine, run);
     yield* repository.markDispatched(run.id, dispatched.threadRef);
     return { ...run, status: "running" as const, ...dispatched };
@@ -145,13 +152,17 @@ const make = Effect.gen(function* () {
     if (event.type !== "thread.turn-diff-completed" && event.type !== "thread.session-set") return;
     if (
       event.type === "thread.session-set" &&
+      event.payload.session.status !== "ready" &&
       event.payload.session.status !== "error" &&
       event.payload.session.status !== "interrupted" &&
       event.payload.session.status !== "stopped"
     )
       return;
     const threadRef = event.payload.threadId;
-    const run = yield* repository.getActiveRunByThreadRef(threadRef);
+    const run = yield* repository.getActiveRunByThreadRef(
+      threadRef,
+      event.type === "thread.turn-diff-completed" ? event.payload.turnId : null,
+    );
     if (run === null) return;
     const routine = yield* repository.getById(run.routineId);
     if (routine === null) return;
@@ -159,7 +170,10 @@ const make = Effect.gen(function* () {
       event.type === "thread.turn-diff-completed"
         ? event.payload.completedAt
         : event.payload.session.updatedAt;
-    if (event.type === "thread.turn-diff-completed" && event.payload.status === "ready") {
+    if (
+      (event.type === "thread.turn-diff-completed" && event.payload.status === "ready") ||
+      (event.type === "thread.session-set" && event.payload.session.status === "ready")
+    ) {
       const nextRunAt = routine.enabled
         ? nextScheduledFor(routine.schedule, routine.timezone, Date.parse(completedAt))
         : null;
@@ -192,6 +206,33 @@ const make = Effect.gen(function* () {
           claim.runId,
           "The routine no longer exists.",
           DateTime.formatIso(yield* DateTime.now),
+        );
+        continue;
+      }
+      const projectedRun = (yield* repository.listRuns(claim.routineId)).find(
+        (candidate) => candidate.id === claim.runId,
+      );
+      if (projectedRun?.status === "completed") {
+        yield* repository.markSettled(
+          claim.runId,
+          "completed",
+          projectedRun.completedAt ?? projectedRun.updatedAt,
+        );
+        continue;
+      }
+      if (projectedRun?.status === "blocked") {
+        yield* repository.markBlocked(
+          claim.runId,
+          projectedRun.failure?.message ?? "The routine run was blocked.",
+          projectedRun.completedAt ?? projectedRun.updatedAt,
+        );
+        continue;
+      }
+      if (projectedRun?.status === "failed" || projectedRun?.status === "canceled") {
+        yield* repository.markSettled(
+          claim.runId,
+          "failed",
+          projectedRun.completedAt ?? projectedRun.updatedAt,
         );
         continue;
       }

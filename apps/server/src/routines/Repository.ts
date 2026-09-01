@@ -37,6 +37,7 @@ export interface RoutineRepositoryShape {
   readonly listAllRuns: Effect.Effect<ReadonlyArray<RoutineRun>, PersistenceSqlError>;
   readonly getActiveRunByThreadRef: (
     threadRef: string,
+    turnId?: string | null,
   ) => Effect.Effect<RoutineRun | null, PersistenceSqlError>;
   readonly listSkillAssignments: Effect.Effect<
     ReadonlyArray<RoutineSkillAssignment>,

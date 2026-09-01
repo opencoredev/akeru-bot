@@ -229,17 +229,18 @@ const make = Effect.gen(function* () {
     routine,
     failure,
   ) =>
-    Effect.sync(() => {
+    Effect.gen(function* () {
+      const bot = yield* bots.getById({ botId: routine.botId });
       inbox.ensureOpen({
         incidentKey: `routine:${routine.id}`,
         kind: "routine-failure",
         botId: routine.botId,
-        botName: routine.job,
+        botName: Option.isSome(bot) ? bot.value.name : "Bot",
         taskOrRoutine: routine.job,
         lastFailure: failure.reason,
         nextAction: failure.nextAction,
       });
-    });
+    }).pipe(Effect.orDie);
 
   const resolveFailureIncident: RoutineRuntimeAdapterShape["resolveFailureIncident"] = (
     routineId,

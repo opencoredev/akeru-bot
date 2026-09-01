@@ -2766,6 +2766,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerPendingApprovalActions
                   requestId={activePendingApproval.requestId}
                   requestKind={activePendingApproval.requestKind}
+                  toolName={activePendingApproval.toolName}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
                   options={activePendingApproval.options}
                   onRespondToApproval={respondToApproval}
@@ -2797,6 +2798,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerPendingApprovalActions
                   requestId={activePendingApproval.requestId}
                   requestKind={activePendingApproval.requestKind}
+                  toolName={activePendingApproval.toolName}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
                   options={activePendingApproval.options}
                   onRespondToApproval={respondToApproval}

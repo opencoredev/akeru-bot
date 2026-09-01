@@ -199,7 +199,10 @@ const make = Effect.gen(function* () {
     Effect.mapError(toPersistenceSqlError("RoutineRepository.listAllRuns")),
   );
 
-  const getActiveRunByThreadRef: RoutineRepositoryShape["getActiveRunByThreadRef"] = (threadRef) =>
+  const getActiveRunByThreadRef: RoutineRepositoryShape["getActiveRunByThreadRef"] = (
+    threadRef,
+    turnId = null,
+  ) =>
     sql<Record<string, unknown>>`
         SELECT run_id AS id, routine_id AS "routineId", procedure_version AS "procedureVersion",
           trigger, scheduled_for AS "scheduledFor", status, thread_ref AS "threadRef",
@@ -209,6 +212,13 @@ const make = Effect.gen(function* () {
         FROM projection_routine_runs
         WHERE thread_ref = ${threadRef}
           AND status IN ('queued', 'running', 'waiting-for-approval')
+          AND EXISTS (
+            SELECT 1 FROM projection_turns AS turn
+            WHERE turn.thread_id = ${threadRef}
+              AND turn.pending_message_id = 'routine:' || projection_routine_runs.run_id || ':message'
+              AND (${turnId} IS NULL OR turn.turn_id = ${turnId})
+              AND turn.state IN ('completed', 'error', 'interrupted')
+          )
         ORDER BY updated_at DESC LIMIT 1
       `.pipe(
       Effect.map((rows) => (rows[0] === undefined ? null : (decodeRun(rows[0]) as RoutineRun))),
@@ -286,6 +296,7 @@ const make = Effect.gen(function* () {
     LEFT JOIN projection_turns AS turns ON turns.row_id = (
       SELECT MAX(candidate.row_id) FROM projection_turns AS candidate
       WHERE candidate.thread_id = claims.thread_id
+        AND candidate.pending_message_id = 'routine:' || claims.run_id || ':message'
         AND candidate.state IN ('completed', 'error', 'interrupted')
     )
     WHERE claims.status IN ('claimed', 'dispatched')

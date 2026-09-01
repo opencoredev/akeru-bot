@@ -24,6 +24,7 @@ import {
   ProviderInstanceId,
   RuntimeItemId,
   RuntimeRequestId,
+  RoutineId,
   TurnId,
   AKERU_TOOL_CATALOG,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
@@ -517,6 +518,16 @@ const make = (options?: AgentControllerLiveOptions) =>
       childWaiters.delete(String(threadId));
       waiter.resolve(outcome);
     };
+    const pendingRoutineRequests = new Map<
+      string,
+      {
+        readonly threadId: string;
+        readonly input: AkeruCreateRoutineInput;
+        readonly timezone: string;
+        readonly resolve: (result: unknown) => void;
+        readonly reject: (cause: unknown) => void;
+      }
+    >();
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -679,14 +690,59 @@ const make = (options?: AgentControllerLiveOptions) =>
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
         ...(routineDispatcher
           ? {
+              listRoutines: (threadId: string) =>
+                runPromise(
+                  routineDispatcher
+                    .listForThread(ThreadIdBrand(threadId))
+                    .pipe(Effect.map((routines) => ({ routines: [...routines] }))),
+                ),
+              deleteRoutines: (threadId: string, routineIds: ReadonlyArray<string>) =>
+                runPromise(
+                  routineDispatcher
+                    .deleteForThread(
+                      ThreadIdBrand(threadId),
+                      routineIds.map((routineId) => RoutineId.make(routineId)),
+                    )
+                    .pipe(
+                      Effect.map((result) => ({
+                        status: result.status,
+                        deletedRoutineIds: [...result.routineIds],
+                      })),
+                    ),
+                ),
               createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
-                const timezone = sessions.get(threadId)?.toolSession.timezone;
+                const active = sessions.get(threadId);
+                const timezone = active?.toolSession.timezone;
                 if (!timezone) {
                   return Promise.reject(new Error("Send a message before creating a routine."));
                 }
-                return Effect.runPromise(
-                  routineDispatcher.draftForThread(ThreadIdBrand(threadId), timezone, input),
-                );
+                const requestId = `routine-${NodeCrypto.randomUUID()}`;
+                return new Promise((resolve, reject) => {
+                  pendingRoutineRequests.set(requestId, {
+                    threadId,
+                    input,
+                    timezone,
+                    resolve,
+                    reject,
+                  });
+                  if (active.activeTurn) active.activeTurn.waiting = true;
+                  publishSessionState(ThreadIdBrand(threadId), active, "waiting");
+                  publish({
+                    ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
+                    requestId: RuntimeRequestId.make(requestId),
+                    type: "request.opened",
+                    payload: {
+                      requestType: "dynamic_tool_call",
+                      detail: "Review routine",
+                      toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                      args: { ...input, timezone },
+                      options: [
+                        { decision: "accept", label: "Create routine" },
+                        { decision: "decline", label: "Cancel" },
+                      ],
+                    },
+                  });
+                });
               },
             }
           : {}),
@@ -1019,6 +1075,11 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           });
       }
+      for (const [requestId, request] of pendingRoutineRequests) {
+        if (request.threadId !== String(threadId)) continue;
+        pendingRoutineRequests.delete(requestId);
+        request.reject(new Error("The routine review ended before it received a response."));
+      }
       active.activeTurn = null;
       const nextTurn = active.pendingTurns.shift();
       if (nextTurn) {
@@ -1222,7 +1283,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                 ? "Allow Computer Use?"
                 : event.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
                   ? "Review product feedback"
-                  : approvalDetail(event.toolName, action, oneUseApproval),
+                  : event.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
+                    ? "Review routine"
+                    : approvalDetail(event.toolName, action, oneUseApproval),
               toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
               ...(action ? { action } : {}),
               args: isCodexComputerUseTool(event.toolName) ? undefined : event.args,
@@ -1236,21 +1299,26 @@ const make = (options?: AgentControllerLiveOptions) =>
                       { decision: "accept", label: "Add to feedback draft" },
                       { decision: "decline", label: "Cancel" },
                     ]
-                  : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
-                      isMemoryToolId(event.toolName) ||
-                      oneUseApproval
+                  : event.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
                     ? [
-                        { decision: "decline", label: "Decline" },
-                        {
-                          decision: "accept",
-                          label: oneUseApproval ? "Approve" : "Allow",
-                        },
+                        { decision: "accept", label: "Create routine" },
+                        { decision: "decline", label: "Cancel" },
                       ]
-                    : [
-                        { decision: "accept", label: "Allow" },
-                        { decision: "acceptForSession", label: "Allow for session" },
-                        { decision: "decline", label: "Decline" },
-                      ],
+                    : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
+                        isMemoryToolId(event.toolName) ||
+                        oneUseApproval
+                      ? [
+                          { decision: "decline", label: "Decline" },
+                          {
+                            decision: "accept",
+                            label: oneUseApproval ? "Approve" : "Allow",
+                          },
+                        ]
+                      : [
+                          { decision: "accept", label: "Allow" },
+                          { decision: "acceptForSession", label: "Allow for session" },
+                          { decision: "decline", label: "Decline" },
+                        ],
             },
           });
           return;
@@ -1261,6 +1329,31 @@ const make = (options?: AgentControllerLiveOptions) =>
           active.toolNames.set(event.toolCallId, event.toolName);
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
+          const suspendPayload =
+            event.suspendPayload && typeof event.suspendPayload === "object"
+              ? (event.suspendPayload as Record<string, unknown>)
+              : {};
+          const question =
+            typeof suspendPayload.question === "string" && suspendPayload.question.trim()
+              ? suspendPayload.question.trim()
+              : `Input required for ${event.toolName}`;
+          const options = Array.isArray(suspendPayload.options)
+            ? suspendPayload.options.flatMap((option) => {
+                if (!option || typeof option !== "object") return [];
+                const value = option as Record<string, unknown>;
+                if (typeof value.label !== "string" || !value.label.trim()) return [];
+                const label = value.label.trim();
+                return [
+                  {
+                    label,
+                    description:
+                      typeof value.description === "string" && value.description.trim()
+                        ? value.description.trim()
+                        : label,
+                  },
+                ];
+              })
+            : [];
           publish({
             ...baseEvent(threadId, active, turn.turnId),
             requestId: RuntimeRequestId.make(event.toolCallId),
@@ -1269,10 +1362,10 @@ const make = (options?: AgentControllerLiveOptions) =>
               questions: [
                 {
                   id: event.toolCallId,
-                  header: event.toolName,
-                  question: `Input required for ${event.toolName}`,
-                  options: [],
-                  multiSelect: false,
+                  header: "Question",
+                  question,
+                  options,
+                  multiSelect: suspendPayload.selectionMode === "multi_select",
                 },
               ],
             },
@@ -1906,12 +1999,59 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
         ) {
-          return;
+          return yield* new AgentControllerRuntimeError({
+            operation: "respondToRequest",
+            detail: `Stale pending approval request: ${input.requestId}. The agent session restarted. Send the request again.`,
+          });
         }
         return yield* legacyProviderBridge.respondToRequest(input);
       }
-      if (!active.activeTurn) return;
+      if (!active.activeTurn) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToRequest",
+          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+        });
+      }
       const toolCallId = String(input.requestId);
+      const routineRequest = pendingRoutineRequests.get(toolCallId);
+      if (routineRequest) {
+        pendingRoutineRequests.delete(toolCallId);
+        if (active.activeTurn) active.activeTurn.waiting = false;
+        publish({
+          ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
+          requestId: RuntimeRequestId.make(toolCallId),
+          type: "request.resolved",
+          payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
+        });
+        publishSessionState(input.threadId, active, "running");
+        if (input.decision === "decline" || input.decision === "cancel") {
+          routineRequest.resolve({ status: "cancelled" });
+          return;
+        }
+        const result = yield* routineDispatcher!
+          .createApprovedForThread(
+            ThreadIdBrand(routineRequest.threadId),
+            routineRequest.timezone,
+            routineRequest.input,
+          )
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new AgentControllerRuntimeError({
+                  operation: "respondToRequest.routine",
+                  detail: cause.message,
+                  cause,
+                }),
+            ),
+            Effect.tapError((cause) =>
+              Effect.sync(() => {
+                routineRequest.reject(cause);
+              }),
+            ),
+          );
+        routineRequest.resolve(result);
+        return;
+      }
       const toolRequest = active.approvalRequests.get(toolCallId);
       const pendingApproval = active.pendingApprovals.get(toolCallId);
       if (!toolRequest || !pendingApproval) return;
@@ -1978,11 +2118,21 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (
           usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
         ) {
-          return;
+          return yield* new AgentControllerRuntimeError({
+            operation: "respondToUserInput",
+            detail: `Unknown pending user-input request: ${input.requestId}. The agent session restarted. Send the request again.`,
+          });
         }
         return yield* legacyProviderBridge.respondToUserInput(input);
       }
       const toolCallId = String(input.requestId);
+      const answer = input.answers[toolCallId];
+      if (answer === undefined) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToToolSuspension",
+          detail: `No answer was supplied for pending user-input request '${toolCallId}'.`,
+        });
+      }
       if (active.activeTurn) active.activeTurn.waiting = false;
       let resumeFailure: string | undefined;
       const unsubscribe = active.session.subscribe((event) => {
@@ -1993,7 +2143,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
       });
       yield* runMastra("respondToToolSuspension", () =>
-        active.session.respondToToolSuspension({ toolCallId, resumeData: input.answers }),
+        active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
       ).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
       if (resumeFailure !== undefined) {
         return yield* new AgentControllerRuntimeError({

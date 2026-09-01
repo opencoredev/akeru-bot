@@ -69,4 +69,15 @@ describe("bot inbox alerts", () => {
 
     expect(markup).toBe("");
   });
+
+  it("leaves routine failures in the inbox instead of blocking chat", () => {
+    const markup = renderToStaticMarkup(
+      <BotInboxAlertStack
+        items={[incident({ kind: "routine-failure" })]}
+        onOpenDetails={() => {}}
+      />,
+    );
+
+    expect(markup).toBe("");
+  });
 });

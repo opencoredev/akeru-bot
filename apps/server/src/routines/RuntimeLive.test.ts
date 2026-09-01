@@ -22,6 +22,7 @@ import {
   RoutineRuntimeAdapter,
   type Routine,
   type RoutineDependencyFailure,
+  type RoutineRun,
   type RoutineRuntimeAdapterShape,
 } from "./types.ts";
 
@@ -58,6 +59,7 @@ const harness = (
   dependencyFailure: RoutineDependencyFailure | null = null,
   targetBusy = false,
   domainEvents: Stream.Stream<OrchestrationEvent> = Stream.empty,
+  projectedStatus: RoutineRun["status"] | null = null,
 ) => {
   const claims = new Map<string, RoutineClaim>();
   const events: string[] = [];
@@ -75,7 +77,7 @@ const harness = (
             claim.trigger === "manual" || claim.trigger === "dry-run" ? "manual" : claim.trigger,
           scheduledFor:
             claim.trigger === "manual" || claim.trigger === "dry-run" ? null : claim.scheduledFor,
-          status: "running" as const,
+          status: projectedStatus ?? ("running" as const),
           result: null,
           failure: null,
           usageRef: null,
@@ -143,7 +145,6 @@ it.effect("resolves a routine incident when the routine is deleted", () => {
     eventId: EventId.make("event-routine-deleted"),
     aggregateKind: "routine",
     aggregateId: value.id,
-    aggregateVersion: 1,
     occurredAt: "2026-08-01T00:00:00.000Z",
     commandId: null,
     causationEventId: null,
@@ -278,7 +279,36 @@ it.effect("leaves an in-flight dispatched run attached after restart", () => {
   }).pipe(Effect.provide(test.layer));
 });
 
-it.effect("claims manual and dry runs by run id instead of schedule slot", () => {
+it.effect("does not restart a claim whose projected run is already blocked", () => {
+  const value = routine({ enabled: false, lifecycle: "blocked", nextRunAt: null });
+  const test = harness(
+    value,
+    [
+      {
+        runId: RoutineRunId.make("run-blocked-before-claim-update"),
+        routineId: value.id,
+        trigger: "scheduled",
+        scheduledFor: "2026-08-31T13:00:00.000Z",
+        claimedAt: "2026-08-31T13:00:00.000Z",
+        status: "claimed",
+        threadRef: null,
+        terminalState: null,
+        terminalAt: null,
+      },
+    ],
+    null,
+    false,
+    Stream.empty,
+    "blocked",
+  );
+  return Effect.gen(function* () {
+    const runtime = yield* RoutineRuntime;
+    yield* runtime.recover;
+    assert.deepEqual(test.events, ["claim-blocked"]);
+  }).pipe(Effect.provide(test.layer));
+});
+
+it.effect("validates dry runs without dispatching a provider turn", () => {
   const test = harness(routine());
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
@@ -291,8 +321,8 @@ it.effect("claims manual and dry runs by run id instead of schedule slot", () =>
       "dispatched",
       "claimed:dry-run:null",
       "queued",
-      "turn",
-      "dispatched",
+      "completed",
+      "claim-settled",
     ]);
   }).pipe(Effect.provide(test.layer));
 });

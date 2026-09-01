@@ -102,6 +102,43 @@ export function togglePendingUserInputOptionSelection(
   };
 }
 
+export interface PendingUserInputSingleSelectResult {
+  draftAnswers: Record<string, PendingUserInputDraftAnswer>;
+  questionIndex: number;
+  answers: Record<string, string | string[]> | null;
+}
+
+export function applyPendingUserInputSingleSelect(
+  questions: ReadonlyArray<UserInputQuestion>,
+  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
+  questionIndex: number,
+  questionId: string,
+  optionLabel: string,
+): PendingUserInputSingleSelectResult | null {
+  const question = questions[questionIndex];
+  if (!question || question.id !== questionId || question.multiSelect) return null;
+  if (!question.options.some((option) => option.label === optionLabel)) return null;
+
+  const nextDraftAnswers = {
+    ...draftAnswers,
+    [questionId]: togglePendingUserInputOptionSelection(
+      question,
+      draftAnswers[questionId],
+      optionLabel,
+    ),
+  };
+  const nextQuestionIndex = Math.min(questionIndex + 1, Math.max(questions.length - 1, 0));
+
+  return {
+    draftAnswers: nextDraftAnswers,
+    questionIndex: nextQuestionIndex,
+    answers:
+      questionIndex === questions.length - 1
+        ? buildPendingUserInputAnswers(questions, nextDraftAnswers)
+        : null,
+  };
+}
+
 export function buildPendingUserInputAnswers(
   questions: ReadonlyArray<UserInputQuestion>,
   draftAnswers: Record<string, PendingUserInputDraftAnswer>,

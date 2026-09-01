@@ -30,7 +30,6 @@ function renderPanel() {
       answers={{}}
       questionIndex={0}
       onToggleOption={() => {}}
-      onAdvance={() => {}}
     />,
   );
 }
@@ -57,5 +56,24 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).toContain("Which approach should the migration take?");
     expect(markup).toContain("Incremental");
     expect(markup).toContain("Big bang");
+  });
+
+  it("shows a submit action after a multi-select answer is selected", () => {
+    const multiSelectPrompt: PendingUserInput = {
+      ...prompt,
+      questions: [{ ...prompt.questions[0]!, multiSelect: true }],
+    };
+    const markup = renderToStaticMarkup(
+      <ComposerPendingUserInputPanel
+        pendingUserInputs={[multiSelectPrompt]}
+        respondingRequestIds={[]}
+        answers={{ "question-1": { selectedOptionLabels: ["Incremental"] } }}
+        questionIndex={0}
+        onToggleOption={() => {}}
+        onAdvance={() => {}}
+      />,
+    );
+
+    expect(markup).toContain(">Submit</button>");
   });
 });

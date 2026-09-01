@@ -307,6 +307,13 @@ export const RoutineRunScheduledCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+export const RoutineCreateApprovedCommand = Schema.Struct({
+  type: Schema.Literal("routine.create-approved"),
+  ...RoutineCommandFields,
+  ...RoutineDefinition.fields,
+  createdAt: IsoDateTime,
+});
+
 export const RoutineRunStartCommand = Schema.Struct({
   type: Schema.Literal("routine.run.start"),
   ...RoutineCommandFields,
@@ -350,6 +357,7 @@ export const RoutineRunCancelCommand = Schema.Struct({
 });
 
 export const InternalRoutineCommand = Schema.Union([
+  RoutineCreateApprovedCommand,
   RoutineRunScheduledCommand,
   RoutineRunStartCommand,
   RoutineRunBlockCommand,
