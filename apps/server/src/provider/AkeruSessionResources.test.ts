@@ -322,6 +322,7 @@ describe("AkeruSessionResources", () => {
         providerId: providerId ?? "provider-1",
         inspect: async () => "running",
         run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+        browserEndpoint: async () => ({ url: "https://browser.example", requestHeaders: {} }),
         wake: async () => undefined,
         sleep,
         destroy,
