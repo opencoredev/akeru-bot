@@ -1552,6 +1552,7 @@ describe("AgentControllerLive", () => {
           engine: { provider: String(kimiInstanceId), model: "k3-256k" },
           fallback: codexSelection,
           mode: "default",
+          botConversation: true,
         });
         const error = yield* controller
           .sendTurn({ threadId: kimiThreadId, input: "No legacy fallback." })
