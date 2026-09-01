@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
 const publicFile = (path: string) =>
-  readFileSync(resolve(import.meta.dirname, "../public", path), "utf8");
+  NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, "../public", path), "utf8");
 
 describe("agent readiness files", () => {
   it("publishes agent guidance and crawler policy", () => {
