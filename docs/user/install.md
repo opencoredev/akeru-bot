@@ -44,24 +44,26 @@ Open **Settings > Providers** on any connected client. The **Subscriptions** sec
 | Claude          | Pro or Max                              |
 | Grok            | Shared xAI login                        |
 | Kimi For Coding | Kimi For Coding plan                    |
+| OpenCode Go     | OpenCode Go API key                     |
 
 Select **Connect** and finish the provider's sign-in flow. ChatGPT, Grok, and Kimi use a device code.
-Claude asks you to paste the returned authorization code into Akeru.
+Claude asks you to paste the returned authorization code into Akeru. OpenCode Go asks you to paste an API key.
 
-The environment server owns the connection, so you sign in once per environment. It stores access
-and refresh tokens outside the workspace. Web, desktop, and mobile clients only receive connection
+The environment server owns the connection, so you connect once per environment. It stores provider
+credentials outside the workspace. Web, desktop, and mobile clients only receive connection
 status and sign-in progress.
 
-After sign-in, select **Check OAuth** to test the stored login. Use **Reconnect** after a revoked or
-expired login. Akeru cannot verify whether an xAI login includes SuperGrok or X Premium+.
+After sign-in, select **Check OAuth** to test an OAuth login or **Check key** to test OpenCode Go.
+Use **Reconnect** after a revoked or expired login. Akeru cannot verify whether an xAI login includes
+SuperGrok or X Premium+.
 
 ## What Akeru runs
 
 Codex and Kimi use Akeru's custom Mastra-based runtime. Akeru supplies the workspace, memory,
 plugins, approval rules, and subscription access for each thread.
 
-Claude, Grok, and OpenCode use their provider adapters. These adapters keep provider-specific
-session and permission behavior behind the same Akeru thread interface.
+Claude, Grok, and OpenCode use their provider adapters. OpenCode Go uses Akeru's Mastra-based runtime.
+Both paths keep provider-specific session and permission behavior behind the same Akeru thread interface.
 
 ## Next steps
 
