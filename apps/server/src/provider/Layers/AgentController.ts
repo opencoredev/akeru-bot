@@ -46,6 +46,7 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -54,6 +55,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
@@ -143,6 +145,19 @@ interface ResolvedEngine {
   readonly mastraModelId: string;
   readonly mode: "default" | "plan";
   readonly botConversation: boolean;
+}
+
+function mastraModelOptions(resolved: ResolvedEngine) {
+  if (resolved.provider !== "codex") return undefined;
+  const reasoningEffort = getModelSelectionStringOptionValue(
+    resolved.modelSelection,
+    "reasoningEffort",
+  );
+  const serviceTier = getCodexServiceTierOptionValue(resolved.modelSelection);
+  return {
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(serviceTier ? { serviceTier } : {}),
+  };
 }
 
 interface ActiveAssistantMessage {
@@ -1479,6 +1494,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           resolvedByThread.set(String(input.threadId), resolved);
           const active = sessions.get(String(input.threadId));
           if (active && usesMastraCode(resolved.provider)) {
+            const { modelOptions: _priorModelOptions, ...activeState } = active.session.state.get();
+            const nextModelOptions = mastraModelOptions(resolved);
+            yield* runMastra("state.set", () =>
+              active.session.state.set({
+                ...activeState,
+                ...(nextModelOptions ? { modelOptions: nextModelOptions } : {}),
+              }),
+            );
             yield* runMastra("model.switch", () =>
               active.session.model.switch({ modelId: resolved.mastraModelId }),
             );
@@ -1831,11 +1854,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         toolRuntime.unregisterSession(key);
       });
       const active = yield* Effect.gen(function* () {
+        const modelOptions = mastraModelOptions(resolved);
         yield* runMastra("state.set", () =>
           session.state.set({
             ...(input.cwd ? { projectPath: input.cwd } : {}),
             yolo: false,
             botConversation: resolved.botConversation,
+            ...(modelOptions ? { modelOptions } : {}),
           }),
         );
         yield* runMastra("model.switch", () =>
