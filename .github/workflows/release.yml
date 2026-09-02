@@ -71,7 +71,7 @@ jobs:
   desktop:
     name: ${{ matrix.label }}
     needs: preflight
-    runs-on: tenki-standard-small-2c-4g
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
