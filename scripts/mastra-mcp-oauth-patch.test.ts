@@ -1,9 +1,9 @@
 import * as NodeFS from "node:fs";
-import { createRequire } from "node:module";
+import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
-const packageEntry = createRequire(
+const packageEntry = NodeModule.createRequire(
   new URL("../node_modules/.pnpm/node_modules/resolve.cjs", import.meta.url),
 ).resolve("@mastra/mcp");
 const packageRoot = NodePath.dirname(NodePath.dirname(packageEntry));
