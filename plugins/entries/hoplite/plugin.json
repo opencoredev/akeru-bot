@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "hoplite",
+  "name": "Hoplite",
+  "description": "Start, supervise, and inspect cloud coding-agent work.",
+  "primaryCategory": "Build",
+  "tags": ["coding-agents", "projects", "threads", "automation"],
+  "capabilities": [
+    "list Hoplite projects and threads",
+    "inspect thread timelines and tool calls",
+    "start coding-agent runs",
+    "manage projects and thread actions"
+  ],
+  "featuredRank": 3,
+  "publisher": {
+    "name": "Hoplite",
+    "url": "https://hoplite.sh"
+  },
+  "maintainer": {
+    "name": "Hoplite",
+    "url": "https://hoplite.sh"
+  },
+  "documentationUrl": "https://hoplite.sh/docs/cli/mcp-server",
+  "sourceUrl": "https://hoplite.sh/openapi.json",
+  "license": "Proprietary",
+  "logo": {
+    "provenance": {
+      "sourceUrl": "https://hoplite.sh/logo512.png",
+      "license": "Hoplite brand asset"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": {
+    "type": "url",
+    "url": "https://api.hoplite.sh/mcp"
+  },
+  "connection": { "type": "ready" },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Sign in through the Hoplite OAuth flow."],
+  "permissions": [
+    {
+      "id": "read-hoplite-workspace",
+      "description": "Read projects, threads, models, repositories, timelines, and tool calls.",
+      "approval": "read"
+    },
+    {
+      "id": "start-agent-runs",
+      "description": "Start coding-agent runs that can change project repositories.",
+      "approval": "production"
+    },
+    {
+      "id": "manage-hoplite-projects",
+      "description": "Create or change shared Hoplite projects and thread state.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["production", "account-wide"],
+  "catalogStatus": "available"
+}
