@@ -637,11 +637,11 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const bots = (yield* snapshots.getShellSnapshot()).bots;
       assert.equal(
         bots.find((bot) => bot.id === BotId.make("bot-default-null"))?.runtimeMode,
-        "approval-required",
+        "auto",
       );
       assert.equal(
         bots.find((bot) => bot.id === BotId.make("bot-default-local"))?.runtimeMode,
-        "approval-required",
+        "auto",
       );
       assert.equal(
         bots.find((bot) => bot.id === BotId.make("bot-default-vercel"))?.runtimeMode,
