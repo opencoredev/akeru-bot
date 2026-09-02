@@ -3,8 +3,17 @@ import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import { config } from "../vercel.ts";
+
 const publicFile = (path: string) =>
   NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, "../public", path), "utf8");
+
+const routesWithHeaders = () =>
+  config.routes?.flatMap((route) =>
+    "src" in route && route.headers !== undefined
+      ? [{ src: route.src, headers: route.headers }]
+      : [],
+  ) ?? [];
 
 describe("agent readiness files", () => {
   it("publishes agent guidance and crawler policy", () => {
@@ -16,6 +25,38 @@ describe("agent readiness files", () => {
     expect(robots).toContain("User-agent: GPTBot\nAllow: /");
     expect(robots).toContain("User-agent: CCBot\nDisallow: /");
     expect(robots).toContain("https://www.akeru-bot.com/sitemap.xml");
+  });
+
+  it("publishes feedback channels and links them from the agent guide", () => {
+    const feedback = publicFile("feedback.md");
+    const llms = publicFile("llms.txt");
+
+    expect(feedback).toContain("## Where to send it");
+    expect(feedback).toContain("https://github.com/opencoredev/akeru-bot/issues");
+    expect(llms).toContain("https://www.akeru-bot.com/feedback.md");
+    expect(routesWithHeaders()).toEqual(
+      expect.arrayContaining([
+        {
+          src: "^/feedback\\.md$",
+          headers: { "Content-Type": "text/markdown; charset=utf-8" },
+        },
+      ]),
+    );
+  });
+
+  it("serves rate-limit headers on the metadata API paths", () => {
+    const limited = routesWithHeaders().filter((route) => "RateLimit" in route.headers);
+
+    expect(limited.map((route) => route.src)).toEqual([
+      "^/(?:v\\d+/)?(?:schema/.*|openapi\\.json)$",
+      "^/api(?:/.*)?$",
+    ]);
+    for (const route of limited) {
+      expect(route.headers).toMatchObject({
+        "RateLimit-Policy": '"default";q=600;w=60',
+        RateLimit: '"default";r=600;t=60',
+      });
+    }
   });
 
   it("publishes a current sitemap with the trust pages", () => {
@@ -46,9 +87,22 @@ describe("agent readiness files", () => {
       openapi: "3.1.0",
       info: { title: "Akeru Bot public metadata API" },
     });
-    expect(openapi.paths["/schema/t3.json"].get).toMatchObject({
+    const versioned = openapi.paths["/v1/schema/t3.json"].get;
+
+    expect(versioned).toMatchObject({
       operationId: "getProjectFileSchema",
+      responses: {
+        "200": {
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/ProjectFileSchema" } },
+          },
+        },
+        "429": { $ref: "#/components/responses/TooManyRequests" },
+      },
     });
+    expect(openapi.paths["/schema/t3.json"].get.operationId).toBe("getProjectFileSchemaAlias");
+    expect(openapi.info.description).toContain("Sunset");
+    expect(openapi.components.schemas.ProjectFileSchema).toMatchObject({ type: "object" });
     expect(apiError).toMatchObject({ status: 404, code: "api_resource_not_found" });
   });
 });

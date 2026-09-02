@@ -2,63 +2,171 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Akeru Bot public metadata API",
-    "version": "1.0.0",
-    "description": "Read-only public metadata for Akeru Bot project files. Akeru Bot itself runs on the user's machine and does not expose a hosted automation API."
+    "version": "1.1.0",
+    "summary": "Read-only public metadata for Akeru Bot project files.",
+    "description": "Read-only public metadata for Akeru Bot project files. Akeru Bot itself runs on the user's machine and does not expose a hosted automation API.\n\nVersioning: every operation lives under a major version prefix in the URL path, starting at `/v1`. A breaking change to a response shape ships under a new prefix such as `/v2`; additive fields ship in place. The unversioned `/schema/t3.json` path stays as an alias for `$schema` references in editors and is not part of the version contract.\n\nDeprecation: a deprecated operation returns `Deprecation` and `Sunset` headers (RFC 9745 and RFC 8594), is marked `deprecated: true` in this document, and keeps serving for at least 6 months after the `Deprecation` date. The successor is linked from the response `Link` header with `rel=\"successor-version\"`.\n\nRate limits: responses carry `RateLimit-Policy` and `RateLimit` headers (the IETF RateLimit header fields). The published policy is 600 requests per 60 second window per client. A throttled request returns `429` with `Retry-After` in seconds.",
+    "contact": {
+      "name": "Akeru Bot maintainers",
+      "url": "https://github.com/opencoredev/akeru-bot/issues"
+    },
+    "license": { "name": "MIT", "identifier": "MIT" }
   },
-  "servers": [{ "url": "https://www.akeru-bot.com" }],
+  "externalDocs": {
+    "description": "Akeru Bot developer guide",
+    "url": "https://www.akeru-bot.com/developers"
+  },
+  "servers": [{ "url": "https://www.akeru-bot.com", "description": "Production" }],
   "security": [],
   "paths": {
-    "/schema/t3.json": {
+    "/v1/schema/t3.json": {
       "get": {
         "operationId": "getProjectFileSchema",
         "summary": "Get the Akeru Bot project-file schema",
-        "description": "Returns the JSON Schema used to validate t3.json project configuration files.",
+        "description": "Returns the JSON Schema used to validate t3.json project configuration files. The endpoint is unauthenticated, read-only, and does not touch user data.",
+        "tags": ["metadata"],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "The current project-file JSON Schema.",
+            "headers": {
+              "RateLimit-Policy": { "$ref": "#/components/headers/RateLimitPolicy" },
+              "RateLimit": { "$ref": "#/components/headers/RateLimit" }
+            },
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": ["$schema"],
-                  "properties": {
-                    "$schema": { "type": "string", "format": "uri" },
-                    "$id": { "type": "string", "format": "uri" },
-                    "title": { "type": "string" },
-                    "type": { "type": ["string", "array"] },
-                    "properties": { "type": "object", "additionalProperties": true }
-                  },
-                  "additionalProperties": true
-                }
+                "schema": { "$ref": "#/components/schemas/ProjectFileSchema" }
               }
             }
           },
-          "404": {
-            "description": "The requested API resource does not exist.",
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/schema/t3.json": {
+      "get": {
+        "operationId": "getProjectFileSchemaAlias",
+        "summary": "Get the project-file schema from the unversioned alias",
+        "description": "Same document as GET /v1/schema/t3.json. This path exists so t3.json files can reference the schema from a stable URL in editors. Call the versioned path from code.",
+        "tags": ["metadata"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The current project-file JSON Schema.",
+            "headers": {
+              "RateLimit-Policy": { "$ref": "#/components/headers/RateLimitPolicy" },
+              "RateLimit": { "$ref": "#/components/headers/RateLimit" }
+            },
             "content": {
-              "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/Problem" }
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProjectFileSchema" }
               }
             }
-          }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
         }
       }
     }
   },
   "components": {
-    "schemas": {
-      "Problem": {
-        "type": "object",
-        "required": ["type", "title", "status", "detail", "code", "resolution"],
-        "properties": {
-          "type": { "type": "string", "format": "uri-reference" },
-          "title": { "type": "string" },
-          "status": { "type": "integer" },
-          "detail": { "type": "string" },
-          "code": { "type": "string" },
-          "resolution": { "type": "string" }
+    "headers": {
+      "RateLimitPolicy": {
+        "description": "Published quota for this endpoint, as the IETF RateLimit header fields.",
+        "required": true,
+        "schema": { "type": "string", "examples": ["\"default\";q=600;w=60"] }
+      },
+      "RateLimit": {
+        "description": "Remaining quota and seconds until the window resets.",
+        "required": true,
+        "schema": { "type": "string", "examples": ["\"default\";r=600;t=60"] }
+      },
+      "RetryAfter": {
+        "description": "Seconds to wait before retrying a throttled request.",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1, "examples": [60] }
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "The requested API resource does not exist.",
+        "content": {
+          "application/problem+json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "The client exceeded the published rate limit.",
+        "headers": {
+          "Retry-After": { "$ref": "#/components/headers/RetryAfter" },
+          "RateLimit-Policy": { "$ref": "#/components/headers/RateLimitPolicy" },
+          "RateLimit": { "$ref": "#/components/headers/RateLimit" }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
         }
       }
+    },
+    "schemas": {
+      "ProjectFileSchema": {
+        "type": "object",
+        "title": "Project-file JSON Schema",
+        "description": "JSON Schema document that validates t3.json project files.",
+        "required": ["$schema"],
+        "properties": {
+          "$schema": {
+            "type": "string",
+            "format": "uri",
+            "description": "Dialect the schema document is written against."
+          },
+          "$id": {
+            "type": "string",
+            "format": "uri",
+            "description": "Canonical identifier of the schema document."
+          },
+          "title": { "type": "string", "description": "Human-readable schema name." },
+          "type": { "type": "string", "description": "Root JSON type the schema validates." },
+          "properties": {
+            "type": "object",
+            "description": "Project-file fields, keyed by field name.",
+            "additionalProperties": { "type": "object" }
+          }
+        },
+        "additionalProperties": true
+      },
+      "Problem": {
+        "type": "object",
+        "title": "Problem document",
+        "description": "RFC 9457 problem details for an error response.",
+        "required": ["type", "title", "status", "detail", "code", "resolution"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Problem type identifier."
+          },
+          "title": { "type": "string", "description": "Short summary of the problem type." },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599,
+            "description": "HTTP status code of the response."
+          },
+          "detail": { "type": "string", "description": "What went wrong for this request." },
+          "code": { "type": "string", "description": "Stable machine-readable error code." },
+          "resolution": { "type": "string", "description": "What the client should do next." }
+        },
+        "additionalProperties": false
+      }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "metadata",
+      "description": "Read-only public metadata about Akeru Bot project files."
+    }
+  ]
 }
