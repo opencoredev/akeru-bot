@@ -887,6 +887,38 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("keeps the current bot name in reused Mastra session state", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+          botId: BotId.make("bot-one"),
+        };
+
+        yield* controller.startSession(codexThreadId, { ...input, botName: "Research bot" });
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botConversation: true, botName: "Research bot" }),
+        );
+
+        yield* controller.startSession(codexThreadId, { ...input, botName: "Mina" });
+        expect(mastra.createSession).toHaveBeenCalledOnce();
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botConversation: true, botName: "Mina" }),
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("queues Mastra follow-ups while the current turn is active", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();

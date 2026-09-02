@@ -1584,6 +1584,14 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.mcpServerIds.every((id) => input.mcpServers?.some((server) => server.id === id))
       ) {
         existing.runtimeMode = access.runtimeMode;
+        yield* runMastra("state.set", () =>
+          existing.session.state.set({
+            ...(input.cwd ? { projectPath: input.cwd } : {}),
+            yolo: false,
+            botConversation: resolved.botConversation,
+            ...(input.botName ? { botName: input.botName } : {}),
+          }),
+        );
         const toolSession = { ...existing.toolSession };
         delete toolSession.botId;
         delete toolSession.botName;
@@ -1835,6 +1843,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             ...(input.cwd ? { projectPath: input.cwd } : {}),
             yolo: false,
             botConversation: resolved.botConversation,
+            ...(input.botName ? { botName: input.botName } : {}),
           }),
         );
         yield* runMastra("model.switch", () =>

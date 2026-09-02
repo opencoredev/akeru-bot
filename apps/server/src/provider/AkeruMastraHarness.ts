@@ -36,11 +36,15 @@ import {
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
   type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
 
-import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import {
+  createAkeruAgentInstructions,
+  createAkeruBotInstructions,
+} from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -139,6 +143,7 @@ export interface AkeruMastraState {
   readonly projectPath?: string;
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
+  readonly botName?: string;
 }
 
 export type AkeruMastraSession = Session<AkeruMastraState>;
@@ -401,14 +406,23 @@ export function resolveAkeruMastraModel(
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
 }
 
-export function resolveAkeruInstructions(requestContext: RequestContext): string {
+export function resolveAkeruInstructions(
+  requestContext: RequestContext,
+  now = DateTime.nowUnsafe(),
+): string {
   const state = controllerContext(requestContext)?.state;
-  return typeof state === "object" &&
+  const isBotConversation =
+    typeof state === "object" &&
     state !== null &&
     "botConversation" in state &&
-    state.botConversation === true
-    ? AKERU_BOT_INSTRUCTIONS
-    : AKERU_AGENT_INSTRUCTIONS;
+    state.botConversation === true;
+  const name =
+    isBotConversation && "botName" in state && typeof state.botName === "string"
+      ? state.botName
+      : "Akeru";
+  return isBotConversation
+    ? createAkeruBotInstructions({ name, now })
+    : createAkeruAgentInstructions({ name, now });
 }
 
 export async function resolveAkeruTools(
