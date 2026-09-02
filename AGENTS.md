@@ -122,7 +122,7 @@ An empty database is a bad test. Seed your worktree's `.akeru` with a copy of re
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
-- Merge approved pull requests through GitHub's merge queue. Depot checks the queued merge candidate before GitHub writes it to `main`. See [`docs/internals/ci.md`](docs/internals/ci.md) for CI behavior.
+- Merge pull requests only after Depot's required `Repository checks` job passes. See [`docs/internals/ci.md`](docs/internals/ci.md) for CI behavior.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - UI changes need before/after images. Motion or timing needs a short video.
