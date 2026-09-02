@@ -18,4 +18,14 @@ describe("mobile release ownership", () => {
     expect(config).not.toContain("d763fcb8-d37c-41ea-a773-b54a0ab4a454");
     expect(config).not.toContain('owner: "pingdotgg"');
   });
+
+  it("keeps the release icon unchanged in dark appearance", () => {
+    const config = NodeFS.readFileSync(
+      NodePath.resolve(import.meta.dirname, "../app.config.ts"),
+      "utf8",
+    );
+
+    expect(config).toContain("light: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng)");
+    expect(config).toContain("dark: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng)");
+  });
 });
