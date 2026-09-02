@@ -2057,6 +2057,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.respondToRequest(input);
       }
+      const routing = yield* legacyProviderBridge.getInstanceInfo(active.providerInstanceId);
+      if (!routing.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.respondToRequest",
+          active.providerInstanceId,
+        );
+      }
       if (!active.activeTurn) {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToRequest",
@@ -2175,6 +2182,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
         return yield* legacyProviderBridge.respondToUserInput(input);
+      }
+      const routing = yield* legacyProviderBridge.getInstanceInfo(active.providerInstanceId);
+      if (!routing.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.respondToUserInput",
+          active.providerInstanceId,
+        );
       }
       const toolCallId = String(input.requestId);
       const answer = input.answers[toolCallId];

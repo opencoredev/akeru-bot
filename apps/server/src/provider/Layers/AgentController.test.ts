@@ -2779,6 +2779,101 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("rejects an OpenCode Go approval after the provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "Run a tool." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "disabled-approval",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+
+        bridge.setInstanceEnabled(false);
+        const error = yield* controller
+          .respondToRequest({
+            threadId: openCodeGoThreadId,
+            requestId: ApprovalRequestId.make("disabled-approval"),
+            decision: "accept",
+          })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects OpenCode Go user input after the provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "Ask for input." });
+        mastra.emit({
+          type: "tool_suspended",
+          toolCallId: "disabled-user-input",
+          toolName: "ask_user",
+          args: {},
+          suspendPayload: {},
+        } as AgentControllerEvent);
+
+        bridge.setInstanceEnabled(false);
+        const error = yield* controller
+          .respondToUserInput({
+            threadId: openCodeGoThreadId,
+            requestId: ApprovalRequestId.make("disabled-user-input"),
+            answers: { "disabled-user-input": "Continue" },
+          })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        expect(mastra.session.respondToToolSuspension).not.toHaveBeenCalled();
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("stops a legacy session after resolving the thread to Codex", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
