@@ -11,6 +11,7 @@ type Step = {
 };
 
 type Job = {
+  readonly if?: string;
   readonly "runs-on": string;
   readonly steps: ReadonlyArray<Step>;
 };
@@ -29,19 +30,24 @@ function workflow(path: string): Workflow {
 }
 
 describe("Depot workflow budget", () => {
-  it("validates the queued merge candidate in one 4-vCPU job", () => {
+  it("validates ready pull requests in one 4-vCPU job", () => {
     const ci = workflow(".depot/workflows/ci.yml");
     const commands = Object.values(ci.jobs).flatMap((job) =>
       job.steps.flatMap((step) => (step.run ? [step.run] : [])),
     );
 
-    expect(Object.keys(ci.on)).toEqual(["merge_group", "workflow_dispatch"]);
-    expect(ci.on.merge_group).toEqual({ types: ["checks_requested"] });
+    expect(Object.keys(ci.on)).toEqual(["pull_request", "workflow_dispatch"]);
+    expect(ci.on.pull_request).toEqual({
+      types: ["opened", "synchronize", "reopened", "ready_for_review"],
+    });
     expect(ci.on).not.toHaveProperty("push");
-    expect(ci.on).not.toHaveProperty("pull_request");
-    expect(ci.concurrency?.group).toBe("ci-${{ github.ref }}");
+    expect(ci.on).not.toHaveProperty("merge_group");
+    expect(ci.concurrency?.group).toBe("ci-${{ github.event.pull_request.number || github.ref }}");
     expect(ci.concurrency?.["cancel-in-progress"]).toBe(true);
     expect(Object.keys(ci.jobs)).toEqual(["check"]);
+    expect(ci.jobs.check?.if).toBe(
+      "${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}",
+    );
     expect(ci.jobs.check?.["runs-on"]).toBe("depot-ubuntu-24.04-4");
 
     for (const command of [
