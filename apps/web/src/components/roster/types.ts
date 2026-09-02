@@ -1,4 +1,4 @@
-import type { ChannelBinding, GroupMembership, McpServerId } from "@t3tools/contracts";
+import type { BotEngine, ChannelBinding, GroupMembership, McpServerId } from "@t3tools/contracts";
 
 /**
  * Local mirror of the bot roster wire shape the server-side persistence work
@@ -30,7 +30,7 @@ export interface Bot {
   description: string | null;
   disabledMcpServerIds: readonly McpServerId[];
   avatar: BotAvatar;
-  engine: { provider: string; model: string } | null;
+  engine: BotEngine | null;
   sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   usageCap: { unit: "tokens"; limit: number } | null;

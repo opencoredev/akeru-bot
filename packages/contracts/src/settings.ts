@@ -153,7 +153,7 @@ export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationM
 export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
 
-export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru.bot/v1/feedback";
+export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru-bot.com/v1/feedback";
 export const AKERU_MARKETING_SITE_URL = "https://akeru.bot";
 export const AKERU_PRIVACY_POLICY_VERSION = "2026-08-31";
 export const AKERU_TERMS_VERSION = "2026-08-31";

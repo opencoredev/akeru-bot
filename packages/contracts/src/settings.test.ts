@@ -48,7 +48,7 @@ describe("ServerSettings product feedback", () => {
   it("defaults to the Akeru endpoint and remains server patchable", () => {
     expect(decodeServerSettings({})).toMatchObject({
       productFeedbackEnabled: true,
-      productFeedbackEndpoint: "https://feedback.akeru.bot/v1/feedback",
+      productFeedbackEndpoint: "https://feedback.akeru-bot.com/v1/feedback",
     });
     expect(
       decodeServerSettingsPatch({

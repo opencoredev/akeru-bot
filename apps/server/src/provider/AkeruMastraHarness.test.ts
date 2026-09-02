@@ -34,6 +34,7 @@ import {
   resolveAkeruTools,
   routineToolInputSchema,
   routineToolNeedsGlobalApproval,
+  withAkeruModelRunOptions,
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -403,6 +404,20 @@ describe("AkeruMastraHarness", () => {
       () => resolveAkeruMastraModel("opencode-go/gpt-5.6-luna", authStorage),
       "subscription access is unavailable",
     );
+  });
+
+  it("passes the saved Codex service tier to Mastra provider options", () => {
+    expect(
+      withAkeruModelRunOptions(
+        { providerOptions: { anthropic: { fallback: true }, openai: { store: false } } },
+        { modelOptions: { serviceTier: "priority" } },
+      ),
+    ).toEqual({
+      providerOptions: {
+        anthropic: { fallback: true },
+        openai: { store: false, serviceTier: "priority" },
+      },
+    });
   });
 
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {

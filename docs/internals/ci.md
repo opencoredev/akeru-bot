@@ -2,24 +2,29 @@
 
 > For Akeru Bot maintainers.
 
-[`.depot/workflows/ci.yml`](../../.depot/workflows/ci.yml) runs on pull requests and pushes to `main`.
-All jobs use Depot CI on the 8-vCPU `depot-ubuntu-24.04-8` runner.
+[`.depot/workflows/ci.yml`](../../.depot/workflows/ci.yml) runs when GitHub adds a pull request to the
+merge queue. GitHub creates a temporary merge candidate from the pull request and the latest
+`main`, then Depot validates that exact revision. A failed check removes the pull request from the
+queue. A passing check lets GitHub merge it into `main` automatically. Maintainers can also dispatch
+the workflow manually for diagnostics. The workflow uses one 4-vCPU
+`depot-ubuntu-24.04-4` runner.
 Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04` because they write GitHub issue and pull-request labels.
 
-- **Public dependency install.** The job rejects `file:` and `link:` dependencies that resolve
-  outside the repository, then runs `vp install --frozen-lockfile`.
-- **Lint, types, and builds.** The job checks lint and formatting, runs workspace type checks,
+- **Repository checks.** The job rejects external local dependencies, installs the committed
+  lockfile once, checks lint and formatting, runs workspace type checks,
   validates the plugin directory and contribution policy, builds the desktop pipeline, checks the
-  preload output, and builds the marketing site.
-- **Focused tests.** Separate jobs run the shipped desktop and shared-package tests, the sharded
-  server tests, and the resource-monitor tests. Relay and mobile-production packages are excluded.
-  The server shards exclude `orchestrationEngine.integration.test.ts` until the executor stack
+  preload output, builds the marketing site, tests shipped packages and the resource monitor, and
+  checks release-only configuration. Relay and mobile-production packages are excluded. The same
+  job runs the complete server suite. It excludes
+  `orchestrationEngine.integration.test.ts` until the executor stack
   restores its test adapter and stops the fixture from calling OpenAI with a test credential.
-- **Release smoke.** `scripts/release-smoke.ts` checks the public dependency rule, the supported
-  artifact matrix, Akeru naming, and the absence of retired publishing and deployment paths.
+
+The repository ruleset requires the merge queue and the Depot `Repository checks` result. Direct
+pushes to `main` cannot bypass this gate. Release workflows start after the validated revision lands
+on `main`; version packaging is separate from the merge queue.
 
 [`.depot/workflows/release-smoke.yml`](../../.depot/workflows/release-smoke.yml) is a manual, non-publishing
-artifact smoke workflow. It uses 8-vCPU Depot runners for Linux and Windows, plus Apple Silicon
+artifact smoke workflow. It uses 4-vCPU Depot runners for Linux, 8-vCPU Windows, plus Apple Silicon
 macOS. It builds a Developer ID signed macOS arm64 app. Electron-builder notarizes and staples the
 app before it packages the DMG. The workflow then submits and staples the DMG as a separate object.
 It checks both objects with Apple's verification tools. Windows and Linux artifacts stay unsigned.
