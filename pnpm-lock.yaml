@@ -452,6 +452,12 @@ importers:
       '@ai-sdk/anthropic':
         specifier: 3.0.113
         version: 3.0.113(zod@4.4.3)
+      '@ai-sdk/openai':
+        specifier: 3.0.101
+        version: 3.0.101(zod@4.4.3)
+      '@ai-sdk/openai-compatible':
+        specifier: 2.0.72
+        version: 2.0.72(zod@4.4.3)
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.170
         version: 0.3.170(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)

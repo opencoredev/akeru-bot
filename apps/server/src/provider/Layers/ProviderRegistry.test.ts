@@ -1744,6 +1744,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 "grok",
                 "kimi",
                 "opencode",
+                "opencodeGo",
               ]);
               assert.strictEqual(cursorSpawned, false);
             }).pipe(Effect.provide(runtimeServices));

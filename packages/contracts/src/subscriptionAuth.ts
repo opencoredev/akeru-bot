@@ -16,6 +16,7 @@ export const SubscriptionProviderId = Schema.Literals([
   "cursor",
   "xai",
   "kimi-for-coding",
+  "opencode-go",
 ]);
 export type SubscriptionProviderId = typeof SubscriptionProviderId.Type;
 
@@ -154,7 +155,7 @@ export type SubscriptionAuthStartInput = typeof SubscriptionAuthStartInput.Type;
 
 /**
  * A started login. `completion` says how it finishes: "poll" flows settle by
- * repeated `poll` calls; "paste" flows need the user to paste a code into
+ * repeated `poll` calls; "paste" flows need the user to paste a code or key into
  * `complete`.
  */
 export const SubscriptionAuthStartResult = Schema.Struct({
@@ -174,7 +175,7 @@ export type SubscriptionAuthPollInput = typeof SubscriptionAuthPollInput.Type;
 
 export const SubscriptionAuthCompleteInput = Schema.Struct({
   loginId: Schema.String,
-  /** Pasted authorization input: full URL, `code#state`, or bare code. */
+  /** Pasted authorization input or API key. */
   code: Schema.String,
 });
 export type SubscriptionAuthCompleteInput = typeof SubscriptionAuthCompleteInput.Type;

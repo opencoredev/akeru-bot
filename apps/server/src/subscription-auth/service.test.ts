@@ -67,6 +67,49 @@ describe("subscription auth storage", () => {
     expect(NodeFS.readFileSync(authPath, "utf-8")).toBe(before);
   });
 
+  it("stores an OpenCode Go API key without exposing it in status", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const started = await service.startLogin("opencode-go");
+
+    await expect(service.completeLogin(started.loginId, "  go-secret-key  ")).resolves.toEqual({
+      status: "connected",
+    });
+    await expect(service.getAccessToken("opencode-go")).resolves.toBe("go-secret-key");
+    expect(service.statuses().find((status) => status.provider === "opencode-go")).toMatchObject({
+      connected: true,
+      health: "detected",
+      reconnectAction: "Replace API key",
+    });
+    expect(JSON.stringify(service.statuses())).not.toContain("go-secret-key");
+    expect(NodeFS.statSync(authPath).mode & 0o777).toBe(0o600);
+  });
+
+  it("checks an OpenCode Go key against the entitlement endpoint", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({ "opencode-go": { type: "api-key", access: "go-secret-key" } }),
+    );
+    const request = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer go-secret-key");
+      expect(headers.get("user-agent")).toBe("akeru-bot/0.0.37");
+      return new Response("{}", { status: 200 });
+    });
+    vi.stubGlobal("fetch", request);
+
+    const service = new SubscriptionAuthService(authPath);
+    await service.testHealth("opencode-go");
+
+    expect(request).toHaveBeenCalledWith("https://opencode.ai/zen/go/v1/usage", expect.any(Object));
+    expect(service.statuses().find((status) => status.provider === "opencode-go")).toMatchObject({
+      health: "healthy",
+      healthTest: { status: "passed" },
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("returns Kimi access only with its persisted device identity", async () => {
     const { authPath } = fixture();
     NodeFS.writeFileSync(

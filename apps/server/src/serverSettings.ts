@@ -278,6 +278,9 @@ const PersistedOptionalProviderSettings = Schema.Struct({
       grok: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
       kimi: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
       opencode: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
+      opencodeGo: Schema.optionalKey(
+        Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) }),
+      ),
     }),
   ),
 });
@@ -331,6 +334,10 @@ function restoreUsedProviders(
       opencode: {
         ...settings.providers.opencode,
         enabled: persisted.providers?.opencode?.enabled ?? usedProviders.has("opencode"),
+      },
+      opencodeGo: {
+        ...settings.providers.opencodeGo,
+        enabled: persisted.providers?.opencodeGo?.enabled ?? true,
       },
     },
     providerInstances,

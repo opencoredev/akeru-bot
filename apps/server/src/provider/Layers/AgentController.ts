@@ -373,7 +373,7 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
 }
 
 function usesMastraCode(provider: ProviderDriverKind): boolean {
-  return provider === "codex" || provider === "kimi";
+  return provider === "codex" || provider === "kimi" || provider === "opencodeGo";
 }
 
 function subscriptionProviderForDriver(
@@ -390,6 +390,8 @@ function subscriptionProviderForDriver(
       return "xai";
     case "kimi":
       return "kimi-for-coding";
+    case "opencodeGo":
+      return "opencode-go";
     default:
       return undefined;
   }
@@ -676,6 +678,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
+        getOpenCodeGoApiKey: () => subscriptionAuth.getAccessToken("opencode-go"),
         memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);

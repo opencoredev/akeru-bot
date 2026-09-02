@@ -384,6 +384,27 @@ describe("AkeruMastraHarness", () => {
     );
   });
 
+  it("keeps OpenCode Go model names on the direct subscription transport", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
+    assert.equal(
+      mastraModelId(ProviderDriverKind.make("opencodeGo"), "gpt-5.6-luna"),
+      "opencode-go/gpt-5.6-luna",
+    );
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "opencode-go/gpt-5.6-luna",
+        authStorage,
+        undefined,
+        async () => "go-key",
+      ),
+      { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
+    );
+    assert.throws(
+      () => resolveAkeruMastraModel("opencode-go/gpt-5.6-luna", authStorage),
+      "subscription access is unavailable",
+    );
+  });
+
   it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
     assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
     assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
