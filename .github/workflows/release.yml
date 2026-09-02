@@ -22,7 +22,7 @@ concurrency:
 jobs:
   preflight:
     name: Release preflight
-    runs-on: ubuntu-24.04
+    runs-on: tenki-standard-small-2c-4g
     timeout-minutes: 15
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -237,7 +237,7 @@ jobs:
   release:
     name: Publish stable release
     needs: [preflight, desktop]
-    runs-on: ubuntu-24.04
+    runs-on: tenki-standard-small-2c-4g
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
