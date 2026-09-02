@@ -108,6 +108,7 @@ export function BotPromptComposer({
   botName,
   draftKey,
   disabled,
+  readOnly = false,
   mentionBots = EMPTY_MENTION_BOTS,
   pendingActionSlot = null,
   placeholder,
@@ -116,6 +117,7 @@ export function BotPromptComposer({
   botName: string;
   draftKey?: string;
   disabled: boolean;
+  readOnly?: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
   /** Rendered above the prompt box so a pending decision reads as part of the composer. */
   pendingActionSlot?: ReactNode;
@@ -410,6 +412,7 @@ export function BotPromptComposer({
   ]);
 
   useEffect(() => {
+    if (readOnly) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcutCommand = resolveShortcutCommand(event, keybindings, {
         context: {
@@ -453,11 +456,12 @@ export function BotPromptComposer({
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings, stashCurrentPrompt]);
+  }, [keybindings, readOnly, stashCurrentPrompt]);
 
   return (
     <form
       data-chat-composer-form="true"
+      aria-disabled={readOnly || undefined}
       className="w-full px-4 pb-4 pt-2 sm:px-6 sm:pb-6"
       onSubmit={(event) => {
         event.preventDefault();
@@ -558,6 +562,8 @@ export function BotPromptComposer({
           placeholder={placeholder ?? `Message ${botName}`}
           rows={1}
           value={draft}
+          readOnly={readOnly}
+          tabIndex={readOnly ? -1 : undefined}
           className={cn(
             "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
             expanded ? "min-h-16 px-4 pb-2 pt-3" : "min-h-13 px-14 py-[0.9rem]",
@@ -570,7 +576,9 @@ export function BotPromptComposer({
             }
           }}
           onPaste={(event) => {
-            if (event.clipboardData.files.length > 0) addFiles(event.clipboardData.files);
+            if (!readOnly && event.clipboardData.files.length > 0) {
+              addFiles(event.clipboardData.files);
+            }
           }}
         />
         <div
@@ -587,6 +595,7 @@ export function BotPromptComposer({
                   <button
                     type="button"
                     aria-label="Add to prompt"
+                    disabled={readOnly}
                     className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8"
                   />
                 }
@@ -625,6 +634,7 @@ export function BotPromptComposer({
         type="file"
         accept="image/*"
         multiple
+        disabled={readOnly}
         className="sr-only"
         onChange={(event) => {
           if (event.currentTarget.files) addFiles(event.currentTarget.files);
