@@ -1,5 +1,14 @@
 import { describe, assert, it } from "vite-plus/test";
-import { getLocalFileManagerName, isWindowsPlatform } from "./utils";
+import { cn, getLocalFileManagerName, isWindowsPlatform } from "./utils";
+
+describe("cn", () => {
+  it("joins conditional classes and resolves Tailwind conflicts", () => {
+    const classesForState = (isActive: boolean) =>
+      cn("px-2 text-black", isActive && "px-4", { "text-white": isActive, hidden: false });
+
+    assert.strictEqual(classesForState(true), "px-4 text-white");
+  });
+});
 
 describe("getLocalFileManagerName", () => {
   it.each([

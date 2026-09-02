@@ -129,6 +129,12 @@ describe("ProviderUpdatePrimaryNotification", () => {
     state.notificationVersion += 1;
   });
 
+  it("uses an outline action for routine update notices", () => {
+    renderNotification();
+
+    expect(state.toasts[0]).toMatchObject({ actionVariant: "outline" });
+  });
+
   it("opens repair settings for the environment where the update started", async () => {
     let finishUpdate!: () => void;
     state.updateProvider.mockImplementation(

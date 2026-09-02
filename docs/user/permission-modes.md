@@ -2,9 +2,10 @@
 
 A permission mode controls which actions an agent can take before it must ask you.
 
-Set the mode per thread from the message composer. A child thread keeps its parent thread's mode.
-Other new threads use **Settings > General > Local execution** and ask before local file changes and
-shell commands by default.
+The mode is set per thread, from the mode control in the message composer. Changing it in one
+thread does not change any other thread. A thread created from inside another thread keeps that
+thread's mode. Otherwise, new threads use **Settings > General > Local execution** and use
+**Auto review** by default.
 
 ## The modes
 
@@ -19,6 +20,9 @@ permission system. A provider without an equivalent can fall back to supervised 
 questions and still stops at protected actions.
 
 ## Protected actions
+
+Questions never need approval. A question with choices shows those choices inline. A free-text
+question uses the message composer for the answer.
 
 Akeru's Codex and Kimi runtime always asks before an action that sends data, pays, deletes, changes
 production, publishes, exposes secrets, signs, refunds, or changes an account. Unknown mutating

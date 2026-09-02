@@ -21,6 +21,7 @@ const SUBSCRIPTION_DRIVER: Readonly<Record<SubscriptionProviderId, string>> = {
   cursor: "cursor",
   xai: "grok",
   "kimi-for-coding": "kimi",
+  "opencode-go": "opencodeGo",
 };
 
 export function subscriptionDependentBots(

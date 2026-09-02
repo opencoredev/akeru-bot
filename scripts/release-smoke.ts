@@ -183,6 +183,11 @@ assertContains(
   'const DESKTOP_APP_ID = "dev.leodoes.akeru"',
   "Akeru desktop bundle identifier is missing.",
 );
+assertContains(
+  desktopArtifactBuilder,
+  'identity: "-"',
+  "Unsigned macOS builds do not opt into a sealed ad-hoc signature.",
+);
 
 for (const relativePath of [
   ".depot/workflows/release.yml",

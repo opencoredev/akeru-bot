@@ -257,8 +257,8 @@ function SidebarUpdateControl() {
                 isInteractionDisabled ? "cursor-not-allowed" : "cursor-pointer",
                 showUpdateIconState
                   ? cn(
-                      "bg-update-surface text-update-foreground",
-                      !isInteractionDisabled && "hover:bg-update/12",
+                      "bg-sidebar-control-surface text-sidebar-foreground",
+                      !isInteractionDisabled && "hover:bg-sidebar-row-hover",
                     )
                   : cn(
                       "text-[var(--sidebar-icon-color)]",
@@ -279,20 +279,7 @@ function SidebarUpdateControl() {
             </button>
           }
         />
-        <TooltipPopup
-          align="center"
-          side="top"
-          style={
-            showUpdateDetails
-              ? {
-                  background:
-                    "color-mix(in srgb, var(--update) 18%, color-mix(in srgb, var(--popover) var(--glass-opacity), transparent))",
-                  borderColor: "var(--update-foreground)",
-                }
-              : undefined
-          }
-          variant={showUpdateDetails ? "glass" : "default"}
-        >
+        <TooltipPopup align="center" side="top" variant={showUpdateDetails ? "glass" : "default"}>
           {tooltip}
         </TooltipPopup>
       </Tooltip>

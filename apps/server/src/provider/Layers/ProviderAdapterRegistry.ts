@@ -66,6 +66,11 @@ const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(fun
       ),
     );
 
+  const dispatchIfEnabled: ProviderAdapterRegistryShape["dispatchIfEnabled"] = (
+    instanceId,
+    dispatch,
+  ) => registry.dispatchIfEnabled(instanceId, dispatch);
+
   const listInstances: ProviderAdapterRegistryShape["listInstances"] = () =>
     registry.listInstances.pipe(
       Effect.map((instances) => instances.map((instance) => instance.instanceId)),
@@ -91,6 +96,7 @@ const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(fun
   return {
     getByInstance,
     getInstanceInfo,
+    dispatchIfEnabled,
     listInstances,
     listProviders,
     // Proxy directly — the facade has no state of its own; the instance

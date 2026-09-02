@@ -618,7 +618,7 @@ export function ProviderInstanceCard({
                           "size-5 rounded-sm p-0",
                           versionAdvisory.emphasis === "strong"
                             ? "text-warning hover:text-warning"
-                            : "text-update-foreground hover:text-update-foreground",
+                            : "text-muted-foreground hover:text-foreground",
                         )}
                         aria-label="Update available — view details"
                       >
@@ -651,7 +651,7 @@ export function ProviderInstanceCard({
                         <Button
                           type="button"
                           size="xs"
-                          variant="default"
+                          variant="outline"
                           className="w-full"
                           disabled={isUpdating}
                           onClick={onRunUpdate}
