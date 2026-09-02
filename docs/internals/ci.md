@@ -2,12 +2,10 @@
 
 > For Akeru Bot maintainers.
 
-[`.depot/workflows/ci.yml`](../../.depot/workflows/ci.yml) runs when GitHub adds a pull request to the
-merge queue. GitHub creates a temporary merge candidate from the pull request and the latest
-`main`, then Depot validates that exact revision. A failed check removes the pull request from the
-queue. A passing check lets GitHub merge it into `main` automatically. Maintainers can also dispatch
-the workflow manually for diagnostics. The workflow uses one 4-vCPU
-`depot-ubuntu-24.04-4` runner.
+[`.depot/workflows/ci.yml`](../../.depot/workflows/ci.yml) runs on each ready pull request revision.
+Draft pull requests do not use a Depot runner. A new revision cancels the older run for that pull
+request. Maintainers can also dispatch the workflow manually for diagnostics. The workflow uses one
+4-vCPU `depot-ubuntu-24.04-4` runner.
 Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04` because they write GitHub issue and pull-request labels.
 
 - **Repository checks.** The job rejects external local dependencies, installs the committed
@@ -19,9 +17,9 @@ Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04`
   `orchestrationEngine.integration.test.ts` until the executor stack
   restores its test adapter and stops the fixture from calling OpenAI with a test credential.
 
-The repository ruleset requires the merge queue and the Depot `Repository checks` result. Direct
-pushes to `main` cannot bypass this gate. Release workflows start after the validated revision lands
-on `main`; version packaging is separate from the merge queue.
+The repository ruleset requires the Depot `Repository checks` result before a pull request can
+merge. Direct pushes to `main` cannot bypass this gate. Release workflows start after the validated
+revision lands on `main`; version packaging is separate from pull-request CI.
 
 [`.depot/workflows/release-smoke.yml`](../../.depot/workflows/release-smoke.yml) is a manual, non-publishing
 artifact smoke workflow. It uses 4-vCPU Depot runners for Linux, 8-vCPU Windows, plus Apple Silicon
