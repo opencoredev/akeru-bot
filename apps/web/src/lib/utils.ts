@@ -1,12 +1,8 @@
 import { CommandId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { type CxOptions, cx } from "class-variance-authority";
 import * as Encoding from "effect/Encoding";
-import { twMerge } from "tailwind-merge";
 import { DraftId } from "../composerDraftStore";
 
-export function cn(...inputs: CxOptions) {
-  return twMerge(cx(inputs));
-}
+export { cn } from "cn";
 
 export function isMacPlatform(platform: string): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
