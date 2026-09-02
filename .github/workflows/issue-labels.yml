@@ -10,7 +10,6 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
-
 permissions:
   issues: write
 
@@ -18,7 +17,7 @@ jobs:
   sync:
     if: github.event_name != 'pull_request_target'
     name: Sync issue labels
-    runs-on: ubuntu-24.04
+    runs-on: tenki-standard-small-2c-4g
     steps:
       - name: Ensure managed issue labels exist
         uses: actions/github-script@v7
@@ -110,7 +109,7 @@ jobs:
   label-paths:
     if: github.event_name == 'pull_request_target'
     name: Label changed paths
-    runs-on: ubuntu-24.04
+    runs-on: tenki-standard-small-2c-4g
     permissions:
       contents: read
       pull-requests: write
