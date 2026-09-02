@@ -36,6 +36,7 @@ export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   ProjectionBotRepositoryLive,
   ProjectionGroupRepositoryLive,
   BotUsageLedgerLive,
+  ChannelDeliveryStoreLive,
   MemoryRepositoriesLive,
   // Shared background-liveness and plan-progress registries: written by
   // runtime ingestion, read by the snapshot query. provideMerge feeds the

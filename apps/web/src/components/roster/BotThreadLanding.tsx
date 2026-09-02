@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
-  type BotEngine,
   type ChannelMessageOrigin,
   type EnvironmentId,
   type MessageId,
@@ -13,10 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
-import {
-  getCustomModelOptionsByInstance,
-  resolveAppModelSelectionState,
-} from "../../modelSelection";
+import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -120,12 +116,9 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const canManageChannelBindings = canManageChannels(channelSession.data);
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
-  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const bots = useRosterStore((state) => state.bots);
   const bot = bots.find((candidate) => candidate.id === botId);
-  const [pendingEngine, setPendingEngine] = useState<BotEngine | null>(null);
-  const [modelUpdatePending, setModelUpdatePending] = useState(false);
-  const configuredEngine = pendingEngine ?? bot?.engine ?? null;
+  const configuredEngine = bot?.engine ?? null;
   const instanceEntries = useMemo(
     () =>
       sortProviderInstanceEntries(
@@ -148,17 +141,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       }),
     [configuredEngine, defaultSelection, instanceEntries, providers, settings],
   );
-  const activeEntry = useMemo(
-    () => instanceEntries.find((entry) => entry.instanceId === stickyEngine?.instanceId) ?? null,
-    [instanceEntries, stickyEngine?.instanceId],
-  );
-  const activeModel = stickyEngine?.model ?? null;
-  const modelOptionsByInstance = useMemo(
-    () => getCustomModelOptionsByInstance(settings, providers),
-    [providers, settings],
-  );
-  const effectiveModelSelection = stickyEngine;
-  const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
+  const runtime = useBotThreadRuntime(botId, stickyEngine);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
@@ -170,16 +153,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
-
-  useEffect(() => {
-    if (
-      pendingEngine &&
-      bot?.engine?.provider === pendingEngine.provider &&
-      bot.engine.model === pendingEngine.model
-    ) {
-      setPendingEngine(null);
-    }
-  }, [bot?.engine, pendingEngine]);
 
   useEffect(() => {
     if (!bot || bot.archivedAt !== null) {
@@ -330,48 +303,17 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               pendingApproval !== null ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||
-              modelUpdatePending ||
-              effectiveModelSelection === null ||
+              stickyEngine === null ||
               !runtime.botReady ||
               !runtime.bootstrapped ||
               runtime.defaultProject === null
             }
-            modelPicker={
-              environmentId && activeEntry && activeModel
-                ? {
-                    activeInstanceId: activeEntry.instanceId,
-                    model: activeModel,
-                    instanceEntries,
-                    modelOptionsByInstance,
-                    onChange: (instanceId, model) => {
-                      const nextEngine = { provider: instanceId, model };
-                      setPendingEngine(nextEngine);
-                      setModelUpdatePending(true);
-                      void updateBot({
-                        environmentId,
-                        input: {
-                          botId: BotId.make(bot.id),
-                          engine: nextEngine,
-                        },
-                      }).then((result) => {
-                        setModelUpdatePending(false);
-                        if (result._tag === "Failure") {
-                          setPendingEngine(null);
-                          toastManager.add({ type: "error", title: "Could not change model" });
-                        }
-                      });
-                    },
-                  }
-                : null
-            }
             onSubmit={runtime.send}
           />
-          {effectiveModelSelection === null ? (
+          {stickyEngine === null ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
               Enable a provider before you message this bot.
             </p>
-          ) : modelUpdatePending ? (
-            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">Changing model…</p>
           ) : !runtime.botReady ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">Connecting bot…</p>
           ) : runtime.bootstrapped && runtime.defaultProject === null ? (

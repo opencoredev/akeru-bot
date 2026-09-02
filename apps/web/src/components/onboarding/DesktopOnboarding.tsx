@@ -541,7 +541,6 @@ function FirstMessageComposer({
         botName={botName}
         draftKey={`onboarding:${botId}`}
         disabled={!captureMode && (!runtime.botReady || runtime.defaultProject === null)}
-        modelPicker={null}
         onSubmit={async (prompt, files) => {
           if (captureMode) {
             onComplete(prompt);
@@ -635,7 +634,6 @@ function ConversationPreview({
               botName={draft.name || "your bot"}
               disabled
               readOnly
-              modelPicker={null}
               onSubmit={async () => false}
             />
           )}
