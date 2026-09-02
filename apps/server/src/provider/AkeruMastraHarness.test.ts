@@ -62,6 +62,9 @@ describe("Akeru action classifier", () => {
     ['bash -c "dd if=/dev/zero 1> important-file"', "delete"],
     ["bash -lc 'command shred -u important-file'", "delete"],
     ["printf '%s\\n' important-file | xargs shred -u", "delete"],
+    ["printf '%s\\n' important-file | xargs rm -f", "delete"],
+    ["printf '%s\\n' empty-dir | xargs rmdir", "delete"],
+    ["printf '%s\\n' important-link | xargs unlink", "delete"],
     ["find . -name important-file -exec shred -u {} \\;", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);
