@@ -46,6 +46,7 @@ import {
   type DesktopOnboardingDraft,
   desktopOnboardingModelSelection,
   parseDesktopOnboardingDraft,
+  recoverMissingDesktopOnboardingBot,
   resolveDesktopOnboardingEngine,
   resolveDesktopOnboardingUseCase,
   shouldShowDesktopOnboarding,
@@ -833,6 +834,17 @@ export function DesktopOnboarding() {
   const [finished, setFinished] = useState(false);
   const initialDraftRef = useRef<DesktopOnboardingDraft | null>(draft);
   const captureMode = useCaptureMode();
+  if (rosterLoaded && initialDraftRef.current) {
+    const currentDraft = initialDraftRef.current;
+    const recoveredDraft = recoverMissingDesktopOnboardingBot(
+      currentDraft,
+      serverBots.map((bot) => bot.id),
+    );
+    if (recoveredDraft !== currentDraft) {
+      initialDraftRef.current = recoveredDraft;
+      writeDraft(recoveredDraft);
+    }
+  }
   const shouldStart =
     !finished &&
     environmentId !== null &&

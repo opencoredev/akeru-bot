@@ -221,6 +221,16 @@ export function shouldShowDesktopOnboarding(input: {
   return input.started || input.draft !== null || (!input.completed && input.serverBotCount === 0);
 }
 
+export function recoverMissingDesktopOnboardingBot(
+  draft: DesktopOnboardingDraft,
+  serverBotIds: readonly string[],
+): DesktopOnboardingDraft {
+  if (draft.step !== "message" || draft.botId === null || serverBotIds.includes(draft.botId)) {
+    return draft;
+  }
+  return { ...draft, step: "identity", botId: null };
+}
+
 export function stepNumber(step: DesktopOnboardingStep): number {
   if (step === "subscription") return 1;
   if (step === "use-case") return 2;
