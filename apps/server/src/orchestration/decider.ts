@@ -2704,6 +2704,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
                 modelSelection: {
                   instanceId: ProviderInstanceId.make(respondingBot.engine.provider),
                   model: respondingBot.engine.model,
+                  ...(respondingBot.engine.options
+                    ? { options: respondingBot.engine.options }
+                    : {}),
                 },
               }
             : command.modelSelection !== undefined

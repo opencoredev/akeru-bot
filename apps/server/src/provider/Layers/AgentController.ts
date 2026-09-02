@@ -1465,6 +1465,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               : {
                   instanceId: ProviderInstanceId.make(input.engine.provider),
                   model: input.engine.model,
+                  ...(input.engine.options ? { options: input.engine.options } : {}),
                 };
           const inspected = yield* inspectEngine(modelSelection);
           const resolved: ResolvedEngine = {
