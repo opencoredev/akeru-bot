@@ -1920,6 +1920,18 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
         mastra.emit({
           type: "tool_approval_required",
+          toolCallId: "xargs-shred-risky",
+          toolName: "execute_command",
+          args: { command: "printf '%s\\n' important-file | xargs shred -u" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "find-shred-risky",
+          toolName: "execute_command",
+          args: { command: "find . -name important-file -exec shred -u {} \\;" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
           toolCallId: "dd-risky",
           toolName: "execute_command",
           args: { command: "dd if=/dev/zero of=important-file" },
@@ -1941,6 +1953,8 @@ describe("AgentControllerLive", () => {
           "shred-risky",
           "wrapped-shred-risky",
           "command-shred-risky",
+          "xargs-shred-risky",
+          "find-shred-risky",
           "dd-risky",
           "redirected-dd-risky",
         ]) {

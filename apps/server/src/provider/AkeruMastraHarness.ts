@@ -615,7 +615,11 @@ const CRITICAL_SHELL_ACTIONS: ReadonlyArray<readonly [AkeruCriticalAction, RegEx
     /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*dd\b[^\n;&|]*(?:\sof=(?:"[^"]*"|'[^']*'|[^\s;&|]+)|\s1?>>?\s*[^\s;&|]+)/i,
   ],
   ["delete", /(?:^|[;&|]\s*)git\s+(?:reset\s+--hard|clean\s+-[a-z]*[fdx][a-z]*)\b/i],
-  ["delete", /\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+(?:sudo\s+)?(?:rm|rmdir|unlink)\b/i],
+  [
+    "delete",
+    /\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:rm|rmdir|shred|unlink)\b/i,
+  ],
+  ["delete", /\bxargs\b[^\n;&|]*\s(?:(?:sudo|command|builtin|exec|nohup)\s+)*shred\b/i],
   ["publish", /(?:^|[;&|]\s*)git\s+push\b/i],
   [
     "production",
