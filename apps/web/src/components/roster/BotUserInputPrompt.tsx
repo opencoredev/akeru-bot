@@ -31,6 +31,7 @@ export function BotUserInputPrompt({
         answers={answers}
         questionIndex={questionIndex}
         onToggleOption={onToggleOption}
+        onSelectSingleOption={onToggleOption}
         onAdvance={onAdvance}
       />
     </section>

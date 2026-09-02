@@ -1,4 +1,5 @@
 import { ApprovalRequestId } from "@t3tools/contracts";
+import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -40,5 +41,22 @@ describe("BotUserInputPrompt", () => {
     expect(markup).toContain('data-testid="bot-user-input-prompt"');
     expect(markup).toContain("How should Auto Review handle commands that change files?");
     expect(markup).toContain("Review risky commands");
+  });
+
+  it("uses one callback for single-select answers", () => {
+    const onToggleOption = vi.fn();
+    const element = BotUserInputPrompt({
+      pendingUserInputs: [prompt],
+      respondingRequestIds: [],
+      answers: {},
+      questionIndex: 0,
+      onToggleOption,
+      onAdvance: vi.fn(),
+    });
+    const panel = element.props.children as ReactElement<{
+      onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
+    }>;
+
+    expect(panel.props.onSelectSingleOption).toBe(onToggleOption);
   });
 });
