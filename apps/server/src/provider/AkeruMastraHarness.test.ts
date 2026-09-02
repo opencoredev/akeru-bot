@@ -64,6 +64,7 @@ describe("Akeru action classifier", () => {
     ["bash -lc 'command shred -u important-file'", "delete"],
     ["printf '%s\\n' important-file | xargs shred -u", "delete"],
     ["printf '%s\\n' important-file | xargs rm -f", "delete"],
+    ["printf '%s\\n' important-file | xargs env rm -f", "delete"],
     ["printf '%s\\n' empty-dir | xargs rmdir", "delete"],
     ["printf '%s\\n' important-link | xargs unlink", "delete"],
     ["find . -name important-file -exec shred -u {} \\;", "delete"],

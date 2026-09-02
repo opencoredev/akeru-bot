@@ -1938,6 +1938,12 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
         mastra.emit({
           type: "tool_approval_required",
+          toolCallId: "xargs-env-rm-risky",
+          toolName: "execute_command",
+          args: { command: "printf '%s\\n' important-file | xargs env rm -f" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
           toolCallId: "xargs-shell-rm-risky",
           toolName: "execute_command",
           args: { command: "printf '%s\\n' important-file | xargs sh -c 'rm -f \"$1\"' _" },
@@ -1973,6 +1979,7 @@ describe("AgentControllerLive", () => {
           "command-shred-risky",
           "xargs-shred-risky",
           "xargs-rm-risky",
+          "xargs-env-rm-risky",
           "xargs-shell-rm-risky",
           "find-shred-risky",
           "dd-risky",
