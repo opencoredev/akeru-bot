@@ -3,6 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
+  type ApprovalRequestId,
   EnvironmentId,
   GroupId,
   ProviderInstanceId,
@@ -10,7 +11,7 @@ import {
   type ModelSelection,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { newMessageId, newThreadId } from "../../lib/utils";
@@ -19,6 +20,7 @@ import { environmentGroupsAtom } from "../../state/bots";
 import {
   useAllEnvironmentShellsBootstrapped,
   useProjects,
+  useThreadActivities,
   useThreadMessages,
   useThreadShell,
   useThreadShells,
@@ -27,6 +29,13 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  applyPendingUserInputSingleSelect,
+  buildPendingUserInputAnswers,
+  type PendingUserInputDraftAnswer,
+  togglePendingUserInputOptionSelection,
+} from "../../pendingUserInput";
+import { derivePendingUserInputs } from "../../session-logic";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { resolveBotRuntimeMode } from "./botSandbox";
@@ -109,6 +118,8 @@ export function useGroupThreadRuntime(groupId: string) {
   }
   if (linkedThreadRef) retainedThreadRef.current.threadRef = linkedThreadRef;
   const messages = useThreadMessages(linkedThreadRef);
+  const activities = useThreadActivities(linkedThreadRef);
+  const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(
     () =>
       bootstrapped && primaryEnvironmentId
@@ -134,14 +145,67 @@ export function useGroupThreadRuntime(groupId: string) {
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
+    reportFailure: false,
+  });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
+  const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
+  const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
+  const singleSelectInFlightRef = useRef<string | null>(null);
+  const [pendingUserInputAnswers, setPendingUserInputAnswers] = useState<
+    Record<string, PendingUserInputDraftAnswer>
+  >({});
+  const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  const submitPendingUserInput = useCallback(
+    async (
+      requestId: ApprovalRequestId,
+      answers: Record<string, string | string[]>,
+    ): Promise<boolean> => {
+      if (!linkedThreadRef || respondingRequestIdsRef.current.has(requestId)) return false;
+      respondingRequestIdsRef.current.add(requestId);
+      setRespondingRequestIds((current) =>
+        current.includes(requestId) ? current : [...current, requestId],
+      );
+      const result = await respondToUserInputCommand({
+        environmentId: linkedThreadRef.environmentId,
+        input: { threadId: linkedThreadRef.threadId, requestId, answers },
+      });
+      if (result._tag === "Failure") {
+        respondingRequestIdsRef.current.delete(requestId);
+        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+        setError(errorMessage(result));
+        return false;
+      }
+      return true;
+    },
+    [linkedThreadRef, respondToUserInputCommand],
+  );
 
   const send = useCallback(
     async (prompt: string, files: readonly File[], requestedBotId?: string): Promise<boolean> => {
       if (sendInFlightRef.current) return false;
+      const pendingUserInput = pendingUserInputs[0];
+      if (pendingUserInput && linkedThreadRef && files.length === 0) {
+        if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
+        const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
+        if (!question || !prompt.trim()) return false;
+        const nextAnswers = {
+          ...pendingUserInputAnswers,
+          [question.id]: { customAnswer: prompt.trim() },
+        };
+        setPendingUserInputAnswers(nextAnswers);
+        if (pendingUserInputQuestionIndex < pendingUserInput.questions.length - 1) {
+          setPendingUserInputQuestionIndex((index) => index + 1);
+          return true;
+        }
+        const answers = buildPendingUserInputAnswers(pendingUserInput.questions, nextAnswers);
+        if (!answers) return false;
+        return submitPendingUserInput(pendingUserInput.requestId, answers);
+      }
       if (!groupReady || !group) {
         setError("The group is still connecting.");
         return false;
@@ -243,12 +307,92 @@ export function useGroupThreadRuntime(groupId: string) {
       group,
       groupId,
       groupReady,
+      linkedThreadRef,
+      pendingUserInputAnswers,
+      pendingUserInputQuestionIndex,
+      pendingUserInputs,
       rememberedThread?.runtimeMode,
+      respondingRequestIds,
       settings.localExecutionMode,
       setRuntimeMode,
       startTurn,
+      submitPendingUserInput,
     ],
   );
+
+  useEffect(() => {
+    setPendingUserInputAnswers({});
+    setPendingUserInputQuestionIndex(0);
+    singleSelectInFlightRef.current = null;
+    const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
+    for (const requestId of respondingRequestIdsRef.current) {
+      if (!pendingIds.has(requestId)) respondingRequestIdsRef.current.delete(requestId);
+    }
+    setRespondingRequestIds((current) => current.filter((requestId) => pendingIds.has(requestId)));
+  }, [pendingUserInputs[0]?.requestId]);
+
+  const selectPendingUserInputOption = useCallback(
+    (questionId: string, optionLabel: string) => {
+      const pending = pendingUserInputs[0];
+      const question = pending?.questions.find((entry) => entry.id === questionId);
+      if (!pending || !question) return;
+      if (!question.multiSelect) {
+        const selectionKey = `${pending.requestId}:${questionId}`;
+        if (singleSelectInFlightRef.current === selectionKey) return;
+        const selection = applyPendingUserInputSingleSelect(
+          pending.questions,
+          pendingUserInputAnswers,
+          pendingUserInputQuestionIndex,
+          questionId,
+          optionLabel,
+        );
+        if (!selection) return;
+        singleSelectInFlightRef.current = selectionKey;
+        setPendingUserInputAnswers(selection.draftAnswers);
+        if (!selection.answers) {
+          setPendingUserInputQuestionIndex(selection.questionIndex);
+          return;
+        }
+        void submitPendingUserInput(pending.requestId, selection.answers).then((submitted) => {
+          if (!submitted) singleSelectInFlightRef.current = null;
+        });
+        return;
+      }
+      setPendingUserInputAnswers((current) => ({
+        ...current,
+        [questionId]: togglePendingUserInputOptionSelection(
+          question,
+          current[questionId],
+          optionLabel,
+        ),
+      }));
+    },
+    [
+      pendingUserInputAnswers,
+      pendingUserInputQuestionIndex,
+      pendingUserInputs,
+      submitPendingUserInput,
+    ],
+  );
+
+  const advancePendingUserInput = useCallback(async () => {
+    const pending = pendingUserInputs[0];
+    if (!pending || !linkedThreadRef || respondingRequestIds.includes(pending.requestId)) return;
+    if (pendingUserInputQuestionIndex < pending.questions.length - 1) {
+      setPendingUserInputQuestionIndex((index) => index + 1);
+      return;
+    }
+    const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
+    if (!answers) return;
+    await submitPendingUserInput(pending.requestId, answers);
+  }, [
+    linkedThreadRef,
+    pendingUserInputAnswers,
+    pendingUserInputQuestionIndex,
+    pendingUserInputs,
+    respondingRequestIds,
+    submitPendingUserInput,
+  ]);
 
   return {
     bootstrapped,
@@ -257,7 +401,13 @@ export function useGroupThreadRuntime(groupId: string) {
     groupReady,
     linkedThreadRef,
     messages,
+    pendingUserInputs,
+    pendingUserInputAnswers,
+    pendingUserInputQuestionIndex,
+    respondingRequestIds,
     respondingBotId: rememberedThread?.respondingBotId ?? group?.bossBotId ?? null,
+    selectPendingUserInputOption,
+    advancePendingUserInput,
     send,
     sending,
   };

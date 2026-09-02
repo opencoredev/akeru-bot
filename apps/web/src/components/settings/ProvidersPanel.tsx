@@ -19,47 +19,13 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { ClaudeAI, type Icon } from "../Icons";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  SUBSCRIPTION_PROVIDERS,
+  type SubscriptionProviderDefinition,
+} from "./subscriptionProviders";
 
-interface SubscriptionProviderDefinition {
-  readonly id: SubscriptionProviderId;
-  readonly label: string;
-  readonly subscription: string;
-  readonly description: string;
-  readonly icon: Icon | string;
-}
-
-export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] = [
-  {
-    id: "openai-codex",
-    label: "ChatGPT",
-    subscription: "Plus, Pro, Business, Enterprise, or Edu",
-    description: "Use your ChatGPT subscription with Codex models.",
-    icon: "/provider-icons/openai.svg",
-  },
-  {
-    id: "anthropic",
-    label: "Claude",
-    subscription: "Pro or Max",
-    description: "Use your Claude subscription with Claude Code models.",
-    icon: ClaudeAI,
-  },
-  {
-    id: "xai",
-    label: "Grok",
-    subscription: "Shared xAI login",
-    description: "Connect an xAI login for Grok. Akeru cannot verify SuperGrok or X Premium+.",
-    icon: "/provider-icons/xai.svg",
-  },
-  {
-    id: "kimi-for-coding",
-    label: "Kimi For Coding",
-    subscription: "Kimi For Coding plan",
-    description: "Use Kimi coding models through your Moonshot subscription.",
-    icon: "/provider-icons/kimi-for-coding.svg",
-  },
-];
+export { SUBSCRIPTION_PROVIDERS } from "./subscriptionProviders";
 
 interface ActiveLogin {
   readonly flow: SubscriptionAuthStartResult;
@@ -148,7 +114,7 @@ export function ProviderLoginCard({
               ) : (
                 <RefreshCwIcon className="size-3.5" />
               )}
-              Check OAuth
+              {definition.id === "opencode-go" ? "Check key" : "Check OAuth"}
             </Button>
             <Button size="xs" variant="ghost-muted" disabled={busy} onClick={onConnect}>
               Reconnect
@@ -190,6 +156,7 @@ function ActiveLoginPanel({
   readonly completing: boolean;
 }) {
   const { flow } = login;
+  const isApiKey = flow.provider === "opencode-go";
   return (
     <div className="mx-3 mb-3 space-y-3 rounded-xl border bg-muted/30 p-4 sm:mx-4">
       <div className="flex items-center justify-between gap-3">
@@ -201,7 +168,7 @@ function ActiveLoginPanel({
           variant="outline"
           render={<a href={flow.url} target="_blank" rel="noreferrer" />}
         >
-          Open sign-in
+          {isApiKey ? "Open OpenCode" : "Open sign-in"}
           <ExternalLinkIcon className="size-3.5" />
         </Button>
       </div>
@@ -225,8 +192,8 @@ function ActiveLoginPanel({
           <Input
             value={pastedCode}
             onChange={(event) => onPastedCodeChange(event.currentTarget.value)}
-            placeholder="Paste the authorization code"
-            aria-label="Authorization code"
+            placeholder={isApiKey ? "Paste the API key" : "Paste the authorization code"}
+            aria-label={isApiKey ? "API key" : "Authorization code"}
             className="flex-1"
           />
           <Button

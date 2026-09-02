@@ -1,5 +1,6 @@
 ---
 import {
+  MAC_CURL_INSTALL_COMMAND,
   MAC_DOWNLOAD_DIALOG_BODY,
   MAC_DOWNLOAD_DIALOG_TITLE,
 } from "../lib/downloadInstallPrompt";
@@ -18,18 +19,26 @@ import {
     <div class="install-dialog-copy">
       <h2 id="install-prompt-title">{MAC_DOWNLOAD_DIALOG_TITLE}</h2>
       <p id="install-prompt-description">{MAC_DOWNLOAD_DIALOG_BODY}</p>
+      <pre><code>{MAC_CURL_INSTALL_COMMAND}</code></pre>
     </div>
-    <button class="install-dialog-action" type="button" data-copy-install-prompt>
-      Copy prompt
-    </button>
+    <div class="install-dialog-actions">
+      <button class="install-dialog-action" type="button" data-copy-install-prompt>
+        Copy install command
+      </button>
+      <button class="install-dialog-action secondary" type="button" data-copy-agent-prompt>
+        Copy agent prompt
+      </button>
+    </div>
   </div>
 </dialog>
 
 <script>
+  import { MAC_CURL_INSTALL_COMMAND } from "../lib/downloadInstallPrompt";
   import { installPromptForPlatform } from "../lib/installPrompt";
 
   const dialog = document.getElementById("install-prompt-dialog") as HTMLDialogElement | null;
   const copyButton = dialog?.querySelector<HTMLButtonElement>("[data-copy-install-prompt]");
+  const agentButton = dialog?.querySelector<HTMLButtonElement>("[data-copy-agent-prompt]");
   let platform: string | null = null;
   let trigger: HTMLAnchorElement | null = null;
 
@@ -37,22 +46,33 @@ import {
     const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
       "a[data-install-prompt]",
     );
-    if (!link || !dialog || event.defaultPrevented) return;
+    if (!link || !dialog) return;
 
+    event.preventDefault();
     platform = link.dataset.installPrompt ?? null;
     trigger = link;
-    if (copyButton) copyButton.textContent = "Copy prompt";
+    if (copyButton) copyButton.textContent = "Copy install command";
+    if (agentButton) agentButton.textContent = "Copy agent prompt";
     dialog.showModal();
   });
 
   copyButton?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(MAC_CURL_INSTALL_COMMAND);
+      copyButton.textContent = "Copied";
+    } catch {
+      copyButton.textContent = "Copy install command";
+    }
+  });
+
+  agentButton?.addEventListener("click", async () => {
     const prompt = platform ? installPromptForPlatform(platform) : null;
     if (!prompt) return;
     try {
       await navigator.clipboard.writeText(prompt);
-      copyButton.textContent = "Copied";
+      agentButton.textContent = "Copied";
     } catch {
-      copyButton.textContent = "Copy prompt";
+      agentButton.textContent = "Copy agent prompt";
     }
   });
 
@@ -62,7 +82,8 @@ import {
 
   dialog?.addEventListener("close", () => {
     platform = null;
-    if (copyButton) copyButton.textContent = "Copy prompt";
+    if (copyButton) copyButton.textContent = "Copy install command";
+    if (agentButton) agentButton.textContent = "Copy agent prompt";
     trigger?.focus();
     trigger = null;
   });
@@ -129,11 +150,32 @@ import {
     letter-spacing: -0.035em;
   }
 
-  .install-dialog-copy > p:last-child {
+  .install-dialog-copy > p {
     margin: 14px 0 0;
     color: var(--color-muted-foreground);
     font-size: 14px;
     line-height: 1.6;
+  }
+
+  .install-dialog-copy pre {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    overflow-x: auto;
+    color: var(--color-foreground);
+    font-size: 12px;
+    line-height: 1.5;
+    background: var(--color-muted);
+    border-radius: 10px;
+  }
+
+  .install-dialog-copy code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .install-dialog-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .install-dialog-action {
@@ -152,6 +194,13 @@ import {
 
   .install-dialog-action:hover {
     opacity: 0.9;
+  }
+
+  .install-dialog-action.secondary {
+    color: var(--color-foreground);
+    font-weight: 560;
+    background: transparent;
+    border-color: var(--color-border);
   }
 
   .install-dialog-close:focus-visible,

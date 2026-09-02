@@ -29,6 +29,7 @@ import type * as Stream from "effect/Stream";
 import type { ProviderAdapterError, ProviderUnsupportedError } from "../Errors.ts";
 import type { ProviderAdapterShape } from "./ProviderAdapter.ts";
 import type { ProviderContinuationIdentity } from "../ProviderDriver.ts";
+import type { ProviderInstanceDispatchResult } from "./ProviderInstanceRegistry.ts";
 
 export interface ProviderInstanceRoutingInfo {
   readonly instanceId: ProviderInstanceId;
@@ -57,6 +58,12 @@ export interface ProviderAdapterRegistryShape {
   readonly getInstanceInfo: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderUnsupportedError>;
+
+  /** Atomically check enabled state and invoke a provider method. */
+  readonly dispatchIfEnabled: <A>(
+    instanceId: ProviderInstanceId,
+    dispatch: () => A,
+  ) => Effect.Effect<ProviderInstanceDispatchResult<A>>;
 
   /**
    * List all live instance ids. Excludes unavailable/shadow instances —

@@ -48,7 +48,11 @@ import {
   providerTurnMetricAttributes,
   withMetrics,
 } from "../../observability/Metrics.ts";
-import { type ProviderAdapterError, ProviderValidationError } from "../Errors.ts";
+import {
+  type ProviderAdapterError,
+  ProviderUnsupportedError,
+  ProviderValidationError,
+} from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
@@ -1013,6 +1017,28 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const getInstanceInfo: ProviderServiceMethod<"getInstanceInfo"> = (instanceId) =>
     registry.getInstanceInfo(instanceId);
 
+  const dispatchIfEnabled: ProviderServiceMethod<"dispatchIfEnabled"> = (
+    instanceId,
+    operation,
+    dispatch,
+  ) =>
+    Effect.gen(function* () {
+      const result = yield* registry.dispatchIfEnabled(instanceId, dispatch);
+      switch (result._tag) {
+        case "Dispatched":
+          return result.value;
+        case "Disabled":
+          return yield* toValidationError(
+            operation,
+            `Provider instance '${instanceId}' is disabled in Akeru Bot settings.`,
+          );
+        case "Missing":
+          return yield* new ProviderUnsupportedError({
+            provider: instanceId,
+          });
+      }
+    });
+
   const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(
     "rollbackConversation",
   )(function* (rawInput) {
@@ -1156,6 +1182,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     listSessions,
     getCapabilities,
     getInstanceInfo,
+    dispatchIfEnabled,
     rollbackConversation,
     uploadFeedback,
     // Each access creates a fresh PubSub subscription so that multiple
