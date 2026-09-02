@@ -54,20 +54,28 @@ describe("Akeru action classifier", () => {
     ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
     ["shred important-file", "delete"],
     ["sudo shred -u important-file", "delete"],
+    ["command shred -u important-file", "delete"],
+    ['bash -c "shred -u important-file"', "delete"],
     ["dd if=/dev/zero of=important-file", "delete"],
     ["sudo dd if=image.img of=/dev/disk4 bs=4m", "delete"],
+    ["dd if=/dev/zero > important-file", "delete"],
+    ['bash -c "dd if=/dev/zero 1> important-file"', "delete"],
+    ["bash -lc 'command shred -u important-file'", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);
     expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);
   });
 
-  it.each(["bun test", "git status", "rg -n TODO apps", "cat README.md"])(
-    "leaves ordinary local command %s unclassified",
-    (command) => {
-      expect(criticalAkeruAction("execute_command", { command })).toBeNull();
-      expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
-    },
-  );
+  it.each([
+    "bun test",
+    "git status",
+    "rg -n TODO apps",
+    "cat README.md",
+    'echo "shred important-file"',
+  ])("leaves ordinary local command %s unclassified", (command) => {
+    expect(criticalAkeruAction("execute_command", { command })).toBeNull();
+    expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
+  });
 
   it("requires approval when nested input exceeds the inspection limit", () => {
     let args: unknown = { action: "send" };

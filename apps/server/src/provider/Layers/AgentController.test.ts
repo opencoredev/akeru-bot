@@ -1908,9 +1908,27 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
         mastra.emit({
           type: "tool_approval_required",
+          toolCallId: "wrapped-shred-risky",
+          toolName: "execute_command",
+          args: { command: 'bash -c "shred -u important-file"' },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "command-shred-risky",
+          toolName: "execute_command",
+          args: { command: "command shred -u important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
           toolCallId: "dd-risky",
           toolName: "execute_command",
           args: { command: "dd if=/dev/zero of=important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "redirected-dd-risky",
+          toolName: "execute_command",
+          args: { command: "dd if=/dev/zero > important-file" },
         } as AgentControllerEvent);
         yield* Effect.yieldNow;
 
@@ -1918,7 +1936,14 @@ describe("AgentControllerLive", () => {
           toolCallId: "read-safe",
           decision: "approve",
         });
-        for (const requestId of ["delete-risky", "shred-risky", "dd-risky"]) {
+        for (const requestId of [
+          "delete-risky",
+          "shred-risky",
+          "wrapped-shred-risky",
+          "command-shred-risky",
+          "dd-risky",
+          "redirected-dd-risky",
+        ]) {
           expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
             toolCallId: requestId,
             decision: "approve",
