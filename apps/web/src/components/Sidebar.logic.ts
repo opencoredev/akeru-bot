@@ -649,11 +649,8 @@ type SettledTimestampInput = Pick<
   "settledAt" | "latestUserMessageAt" | "latestTurn" | "updatedAt"
 >;
 
-/** The timestamp a settled row sorts and labels by: settledAt when stamped
-    (explicit settles), otherwise last activity — the same candidates
-    threadLastActivityAt feeds the auto-settle window (user message plus all
-    latestTurn stamps), so a thread whose last activity was a turn completion
-    doesn't sort by an older message time. updatedAt is the final net. */
+/** The timestamp a settled row sorts and labels by: settledAt when stamped,
+    otherwise the latest user or turn activity. updatedAt is the final net. */
 export function resolveSettledTimestamp(thread: SettledTimestampInput): string | null {
   const settledAt = firstValidTimestamp(thread.settledAt);
   if (settledAt !== null) return settledAt;

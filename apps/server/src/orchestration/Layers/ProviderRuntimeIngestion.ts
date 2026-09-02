@@ -53,7 +53,6 @@ import {
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { canReplaceThreadTitle } from "../threadTitles.ts";
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
@@ -2154,17 +2153,6 @@ const make = Effect.gen(function* () {
               updatedAt: now,
             },
             createdAt: now,
-          });
-        }
-      }
-
-      if (event.type === "thread.metadata.updated" && event.payload.name) {
-        if (canReplaceThreadTitle(thread.title)) {
-          yield* orchestrationEngine.dispatch({
-            type: "thread.meta.update",
-            commandId: yield* providerCommandId(event, "thread-meta-update"),
-            threadId: thread.id,
-            title: event.payload.name,
           });
         }
       }

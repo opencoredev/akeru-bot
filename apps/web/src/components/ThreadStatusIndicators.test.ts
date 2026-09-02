@@ -495,7 +495,7 @@ describe("resolveDisplayedThreadPr + nextThreadChangeRequestSnapshot", () => {
     ).toEqual(mergedPr);
   });
 
-  it("keeps effectiveSettled true for a retained merged PR after a main checkout", () => {
+  it("does not settle a thread when its retained pull request merged", () => {
     const matchingStatus = status({
       refName: featureBranch,
       pr: mergedPr,
@@ -544,10 +544,8 @@ describe("resolveDisplayedThreadPr + nextThreadChangeRequestSnapshot", () => {
     expect(
       effectiveSettled(shell, {
         now: "2026-04-10T00:00:00.000Z",
-        autoSettleAfterDays: null,
-        changeRequest: displayed,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

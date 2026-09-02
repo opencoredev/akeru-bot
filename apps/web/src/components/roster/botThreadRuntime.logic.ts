@@ -58,7 +58,6 @@ export function buildBotTurnStartInput(input: {
     threadId: input.threadId,
     message: input.message,
     modelSelection: input.modelSelection,
-    titleSeed: input.title,
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
     ...(input.createThread
@@ -99,7 +98,6 @@ export function buildGroupTurnStartInput(input: {
     threadId: input.threadId,
     message: input.message,
     modelSelection: input.modelSelection,
-    titleSeed: input.title,
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
     ...(input.respondingBotId ? { respondingBotId: input.respondingBotId } : {}),

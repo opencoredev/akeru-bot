@@ -19,7 +19,6 @@ import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import {
   canSnooze,
-  changeRequestAutoSettles,
   effectiveSettled,
   effectiveSnoozed,
   threadWokeAt,
@@ -703,7 +702,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // False on environments whose server predates thread.settle/unsettle:
   // the lifecycle affordances hide entirely rather than fail on click.
   settlementSupported: boolean;
-  autoSettleOnMerge: boolean;
   // Same contract for thread.snooze/unsnooze.
   snoozeSupported: boolean;
   // Pinned threads show the same pin marker in active, settled, and snoozed
@@ -829,13 +827,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // counts as never-visited, so corrupt local data cannot eat the wake signal.
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
-  const isWoke =
-    wokeAtDate !== null &&
-    (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
-    !changeRequestAutoSettles(pr, {
-      autoSettleOnMerge: props.autoSettleOnMerge,
-      thread,
-    });
+  const isWoke = wokeAtDate !== null && (lastVisitedDate === null || lastVisitedDate < wokeAtDate);
   // In-flight rows (working, or waiting on approval/input) fade as a whole:
   // there is nothing for the user to do yet, so prominence is reserved for
   // rows that need a human — done (unread), read-but-unsettled, failed, and
@@ -1738,8 +1730,6 @@ export default function Sidebar() {
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const autoSettleAfterDays = useClientSettings((s) => s.sidebarAutoSettleAfterDays);
-  const autoSettleOnMerge = useClientSettings((s) => s.sidebarAutoSettleOnMerge);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
@@ -1937,8 +1927,8 @@ export default function Sidebar() {
     [projectGroups],
   );
 
-  // now is quantized to the minute so effectiveSettled memoization doesn't
-  // churn on every render; auto-settle thresholds are day-granular anyway.
+  // A minute clock lets a queued turn leave its short adoption grace period
+  // without making the thread partition churn on every render.
   const nowMinute = useNowMinute();
   // Snooze wake times are second-precise, so classifying with the quantized
   // minute would hold a woken thread on the shelf for up to a minute. The
@@ -2055,35 +2045,15 @@ export default function Sidebar() {
     for (const thread of visible) {
       // Threads on servers without the settlement capability (old server,
       // or descriptor not loaded yet) never classify as settled: the user
-      // could neither un-settle nor pin them, so auto-settling them would
-      // strand rows in a tail with no working affordances.
+      // could neither un-settle nor pin them.
       const supportsSettlement =
         serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement === true;
       const supportsSnooze =
         serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true;
-      const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-      const snapshot = changeRequestSnapshotByKey.get(threadKey);
-      const changeRequest =
-        snapshot != null &&
-        (thread.linkedPullRequest == null
-          ? thread.worktreePath === null || snapshot.branch === thread.branch
-          : snapshot.linkedPullRequest?.projectId === thread.linkedPullRequest.projectId &&
-            snapshot.linkedPullRequest.repository === thread.linkedPullRequest.repository &&
-            snapshot.linkedPullRequest.number === thread.linkedPullRequest.number)
-          ? snapshot.pr
-          : null;
       // Snooze outranks settlement and pinning until the thread wakes.
       if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
         snoozed.push(thread);
-      } else if (
-        supportsSettlement &&
-        effectiveSettled(thread, {
-          now,
-          autoSettleAfterDays,
-          autoSettleOnMerge,
-          changeRequest,
-        })
-      ) {
+      } else if (supportsSettlement && effectiveSettled(thread, { now })) {
         settled.push(thread);
       } else if (thread.pinnedAt != null) {
         pinned.push(thread);
@@ -2118,8 +2088,6 @@ export default function Sidebar() {
       snoozeNow: preciseNow,
     };
   }, [
-    autoSettleAfterDays,
-    autoSettleOnMerge,
     changeRequestSnapshotByKey,
     nowMinute,
     scopedProjectKeys,
@@ -3089,10 +3057,8 @@ export default function Sidebar() {
           thread.worktreePath ??
           projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
           null;
-        // Un-settle works on every settled row: for explicit settles it
-        // clears the override, for auto-settled rows it pins the thread
-        // active until real activity clears the pin. Environments without
-        // the settlement capability get no lifecycle items at all.
+        // Environments without the settlement capability get no lifecycle
+        // items at all.
         const supportsSettlement =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
           true;
@@ -3720,8 +3686,7 @@ export default function Sidebar() {
                         thread={thread}
                         variant={rowVariant}
                         // Snoozed rows wake; settled rows un-settle (explicit
-                        // settles clear the override, auto-settled rows get
-                        // pinned active); cards settle.
+                        // settled rows return to the active list; cards settle.
                         variantAction={
                           section === "snoozed"
                             ? "unsnooze"
@@ -3733,7 +3698,6 @@ export default function Sidebar() {
                           serverConfigs.get(thread.environmentId)?.environment.capabilities
                             .threadSettlement === true
                         }
-                        autoSettleOnMerge={autoSettleOnMerge}
                         snoozeSupported={
                           serverConfigs.get(thread.environmentId)?.environment.capabilities
                             .threadSnooze === true

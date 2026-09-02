@@ -41,11 +41,6 @@ function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): s
   return error instanceof Error ? error.message : "Could not send the message.";
 }
 
-function threadTitle(prompt: string, files: readonly File[]): string {
-  const seed = prompt || (files[0] ? `Image: ${files[0].name}` : "New thread");
-  return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
-}
-
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -208,7 +203,7 @@ export function useGroupThreadRuntime(groupId: string) {
             respondingBotId: BotId.make(respondingBot.id),
             threadId,
             projectId: activeProject.id,
-            title: threadTitle(prompt, files),
+            title: group.name,
             message: {
               messageId: newMessageId(),
               role: "user",

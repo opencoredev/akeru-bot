@@ -1040,12 +1040,10 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
-  it("generates a thread title on the first turn", async () => {
+  it("keeps the existing title on the first turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
     const seededTitle = "Please investigate reconnect failures after restar...";
-    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Generated title" }));
-
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.meta.update",
@@ -1066,28 +1064,17 @@ describe("ProviderCommandReactor", () => {
           text: "Please investigate reconnect failures after restarting the session.",
           attachments: [],
         },
-        titleSeed: seededTitle,
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
       }),
     );
 
-    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
-    expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
-      message: "Please investigate reconnect failures after restarting the session.",
-    });
-
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      return (
-        readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
-        "Generated title"
-      );
-    });
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    expect(harness.generateThreadTitle).not.toHaveBeenCalled();
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.title).toBe("Generated title");
+    expect(thread?.title).toBe(seededTitle);
   });
 
   it("regenerates a thread title from the current conversation", async () => {
@@ -1746,7 +1733,6 @@ describe("ProviderCommandReactor", () => {
   it("does not overwrite an existing custom thread title on the first turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
-    const seededTitle = "Please investigate reconnect failures after restar...";
 
     await Effect.runPromise(
       harness.engine.dispatch({
@@ -1768,7 +1754,6 @@ describe("ProviderCommandReactor", () => {
           text: "Please investigate reconnect failures after restarting the session.",
           attachments: [],
         },
-        titleSeed: seededTitle,
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
@@ -1781,57 +1766,6 @@ describe("ProviderCommandReactor", () => {
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.title).toBe("Keep this custom title");
-  });
-
-  it("matches the client-seeded title even when the outgoing prompt is reformatted", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
-    const seededTitle = "Fix reconnect spinner on resume";
-    harness.generateThreadTitle.mockReturnValue(
-      Effect.succeed({
-        title: "Reconnect spinner resume bug",
-      }),
-    );
-
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.meta.update",
-        commandId: CommandId.make("cmd-thread-title-formatted-seed"),
-        threadId: ThreadId.make("thread-1"),
-        title: seededTitle,
-      }),
-    );
-
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-title-formatted"),
-        threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId("user-message-title-formatted"),
-          role: "user",
-          text: "[effort:high]\\n\\nFix reconnect spinner on resume",
-          attachments: [],
-        },
-        titleSeed: seededTitle,
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        createdAt: now,
-      }),
-    );
-
-    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      return (
-        readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
-        "Reconnect spinner resume bug"
-      );
-    });
-
-    const readModel = await harness.readModel();
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.title).toBe("Reconnect spinner resume bug");
   });
 
   it("generates a worktree branch name for the first turn", async () => {
