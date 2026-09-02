@@ -34,7 +34,7 @@ GitHub Actions owns the publishing workflow because Depot does not provide the m
 rejects the Windows runner needed for stable desktop artifacts. All Depot smoke jobs use a Depot
 runner label:
 
-- Linux uses the 8-vCPU `depot-ubuntu-24.04-8` runner.
+- Linux uses the 4-vCPU `depot-ubuntu-24.04-4` runner.
 - Windows uses the 8-vCPU `depot-windows-2025-8` runner.
 - macOS uses the Apple Silicon `depot-macos-15` image.
 

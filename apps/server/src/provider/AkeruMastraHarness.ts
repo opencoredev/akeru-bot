@@ -3,6 +3,7 @@ import * as NodeURL from "node:url";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
+import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
 import type { ToolsInput } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
@@ -36,11 +37,15 @@ import {
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
   type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
 
-import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import {
+  createAkeruAgentInstructions,
+  createAkeruBotInstructions,
+} from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -139,9 +144,44 @@ export interface AkeruMastraState {
   readonly projectPath?: string;
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
+  readonly botName?: string;
+  readonly modelOptions?: {
+    readonly reasoningEffort?: string;
+    readonly serviceTier?: string;
+  };
 }
 
 export type AkeruMastraSession = Session<AkeruMastraState>;
+
+type AkeruRunOptions = {
+  readonly providerOptions?: unknown;
+  readonly [key: string]: unknown;
+};
+
+export function withAkeruModelRunOptions(
+  runOptions: AkeruRunOptions,
+  state: AkeruMastraState,
+): AkeruRunOptions {
+  const serviceTier = state.modelOptions?.serviceTier;
+  if (!serviceTier) return runOptions;
+  const providerOptions =
+    typeof runOptions.providerOptions === "object" && runOptions.providerOptions !== null
+      ? runOptions.providerOptions
+      : {};
+  const openai =
+    "openai" in providerOptions &&
+    typeof providerOptions.openai === "object" &&
+    providerOptions.openai !== null
+      ? providerOptions.openai
+      : {};
+  return {
+    ...runOptions,
+    providerOptions: {
+      ...providerOptions,
+      openai: { ...openai, serviceTier },
+    },
+  };
+}
 
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
@@ -260,6 +300,17 @@ function controllerModelId(requestContext: RequestContext): string {
     return DEFAULT_MODEL_ID;
   }
   return typeof session.modelId === "string" ? session.modelId : DEFAULT_MODEL_ID;
+}
+
+function controllerModelOptions(requestContext: RequestContext): AkeruMastraState["modelOptions"] {
+  const state = controllerContext(requestContext)?.state;
+  if (typeof state !== "object" || state === null || !("modelOptions" in state)) {
+    return undefined;
+  }
+  const modelOptions = state.modelOptions;
+  return typeof modelOptions === "object" && modelOptions !== null
+    ? (modelOptions as AkeruMastraState["modelOptions"])
+    : undefined;
 }
 
 function controllerResourceId(requestContext: RequestContext): string | undefined {
@@ -389,10 +440,15 @@ export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
   getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
+  modelOptions?: AkeruMastraState["modelOptions"],
 ) {
   const trimmed = modelId.trim();
   if (trimmed.startsWith("openai/")) {
-    return openaiCodexProvider(trimmed.slice("openai/".length), { authStorage });
+    const reasoningEffort = modelOptions?.reasoningEffort;
+    return openaiCodexProvider(trimmed.slice("openai/".length), {
+      authStorage,
+      ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
+    });
   }
   if (trimmed.startsWith("kimi-for-coding/")) {
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
@@ -401,14 +457,23 @@ export function resolveAkeruMastraModel(
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
 }
 
-export function resolveAkeruInstructions(requestContext: RequestContext): string {
+export function resolveAkeruInstructions(
+  requestContext: RequestContext,
+  now = DateTime.nowUnsafe(),
+): string {
   const state = controllerContext(requestContext)?.state;
-  return typeof state === "object" &&
+  const isBotConversation =
+    typeof state === "object" &&
     state !== null &&
     "botConversation" in state &&
-    state.botConversation === true
-    ? AKERU_BOT_INSTRUCTIONS
-    : AKERU_AGENT_INSTRUCTIONS;
+    state.botConversation === true;
+  const name =
+    isBotConversation && "botName" in state && typeof state.botName === "string"
+      ? state.botName
+      : "Akeru";
+  return isBotConversation
+    ? createAkeruBotInstructions({ name, now })
+    : createAkeruAgentInstructions({ name, now });
 }
 
 export async function resolveAkeruTools(
@@ -747,6 +812,7 @@ export async function createAkeruMastraHarness(
         controllerModelId(requestContext),
         options.authStorage,
         options.getKimiAccess,
+        controllerModelOptions(requestContext),
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,
@@ -782,7 +848,7 @@ export async function createAkeruMastraHarness(
     intervalHandlers: [],
   });
   const controllerWithRunOptions = controller as unknown as {
-    buildSharedRunOptions: (session: unknown) => {
+    buildSharedRunOptions: (session: AkeruMastraSession) => {
       readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
       readonly [key: string]: unknown;
     };
@@ -790,11 +856,15 @@ export async function createAkeruMastraHarness(
   const buildSharedRunOptions = controllerWithRunOptions.buildSharedRunOptions.bind(controller);
   controllerWithRunOptions.buildSharedRunOptions = (session) => {
     const runOptions = buildSharedRunOptions(session);
-    if (runOptions.requireToolApproval !== true) return runOptions;
-    return {
-      ...runOptions,
-      requireToolApproval: ({ toolName }) => routineToolNeedsGlobalApproval(toolName),
-    };
+    const approvalOptions =
+      runOptions.requireToolApproval === true
+        ? {
+            ...runOptions,
+            requireToolApproval: ({ toolName }: { readonly toolName: string }) =>
+              routineToolNeedsGlobalApproval(toolName),
+          }
+        : runOptions;
+    return withAkeruModelRunOptions(approvalOptions, session.state.get());
   };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
