@@ -17,7 +17,10 @@ import {
 import * as DateTime from "effect/DateTime";
 import { assert, describe, expect, it, vi } from "vite-plus/test";
 
-import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import {
+  createAkeruAgentInstructions,
+  createAkeruBotInstructions,
+} from "./AkeruAgentInstructions.ts";
 import {
   AKERU_RECENT_MESSAGE_LIMIT,
   AKERU_DELETE_ROUTINES_TOOL_NAME,
@@ -408,6 +411,26 @@ describe("AkeruMastraHarness", () => {
     );
   });
 
+  it("builds a compact, human prompt with the bot name and current date", () => {
+    const instructions = createAkeruAgentInstructions({
+      name: "  Research\nBot  ",
+      now: DateTime.makeUnsafe("2026-09-02T12:00:00.000Z"),
+    });
+
+    assert.include(instructions, "You are Research Bot, a sharp, curious general assistant");
+    assert.include(instructions, "Today is Wednesday, September 2, 2026");
+    assert.include(instructions, "Write like a thoughtful human teammate");
+    assert.include(instructions, "Silently reread before sending");
+    assert.include(instructions, "Name every drawback");
+    assert.include(instructions, "Never use em or en dashes");
+    assert.include(instructions, "enabled plugin tools");
+    assert.include(instructions, "Prefer preview_* tools over browser_* tools");
+    assert.include(instructions, "akeru_list_routines");
+    assert.notInclude(instructions, "—");
+    assert.notInclude(instructions, "coding agent");
+    assert.isBelow(createAkeruBotInstructions({ now: DateTime.nowUnsafe() }).length, 3_000);
+  });
+
   it("passes the saved Codex service tier to Mastra provider options", () => {
     expect(
       withAkeruModelRunOptions(
@@ -422,25 +445,21 @@ describe("AkeruMastraHarness", () => {
     });
   });
 
-  it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "Prefer preview_* tools over browser_* tools");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "akeru_list_routines");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
-    assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
-  });
-
   it("adds reply and status rules only to bot conversations", () => {
+    const now = DateTime.makeUnsafe("2026-09-02T12:00:00.000Z");
     const regular = new RequestContext();
     regular.setRaw("controller", { state: { botConversation: false } });
     const bot = new RequestContext();
-    bot.setRaw("controller", { state: { botConversation: true } });
+    bot.setRaw("controller", { state: { botConversation: true, botName: "Mina" } });
 
-    assert.equal(resolveAkeruInstructions(regular), AKERU_AGENT_INSTRUCTIONS);
-    assert.equal(resolveAkeruInstructions(bot), AKERU_BOT_INSTRUCTIONS);
-    assert.include(resolveAkeruInstructions(bot), "Before you use a tool");
-    assert.include(resolveAkeruInstructions(bot), "automatic continuation");
+    assert.equal(resolveAkeruInstructions(regular, now), createAkeruAgentInstructions({ now }));
+    assert.equal(
+      resolveAkeruInstructions(bot, now),
+      createAkeruBotInstructions({ name: "Mina", now }),
+    );
+    assert.include(resolveAkeruInstructions(bot, now), "You are Mina");
+    assert.include(resolveAkeruInstructions(bot, now), "Before you use a tool");
+    assert.include(resolveAkeruInstructions(bot, now), "automatic continuation");
   });
 
   it("selects implemented runtime tools without dropping approval-aware plugins", async () => {
