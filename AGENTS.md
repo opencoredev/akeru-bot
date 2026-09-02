@@ -1,65 +1,75 @@
-# T3 Code
+# Akeru Bot
 
-T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs (Codex, Claude Code, Cursor, Grok, OpenCode) and serves web, desktop, and mobile clients.
+Akeru Bot is an independent fork of [T3 Code](https://t3.codes). It is a desktop app for named teammate bots, with web and mobile clients that connect to the same environment server.
 
-You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
+Akeru Bot is local-first software. It has no hosted account and does not provide model access. Users connect an existing ChatGPT, Claude, Grok, or Kimi For Coding subscription. Five provider drivers ship built in: Codex, Claude, Grok, Kimi For Coding, and OpenCode.
 
-## What makes T3 Code special?
+Threads, settings, secrets, and logs live under `~/.akeru`. Worktree state lives under `.akeru`. Akeru Bot never shares T3 Code's `~/.t3` database or desktop profile.
 
-We have over 200,000 users who love T3 Code. It's important we maintain the things they love as we continue to iterate on the product. Here's a brief list of the things we can never compromise on.
+Akeru Bot is not affiliated with ping.gg.
+
+## Project ownership and upstream
+
+Leo maintains Akeru Bot and sets its product direction.
+
+Akeru Bot began as a fork of T3 Code. The T3 Code team and contributors created the original codebase. Preserve their copyright, the MIT license, and clear credit for their work.
+
+Akeru Bot may port or adapt upstream T3 Code changes when they fit. Treat each one as a reviewed port, not a blind sync. Check it against Akeru's product identity, `.akeru` data boundary, provider architecture, and current tests. Do not describe upstream work as original Akeru work.
+
+## Product principles
+
+Akeru keeps the upstream qualities that made T3 Code useful while it develops its own product and makes its own decisions.
 
 ### 1. Open at the core
 
-T3 Code is truly open. We share our roadmap, we share how we think about things, and of course we share all our code. A large number of our users run forks. We work in the open, and should strive to stay that way.
+Akeru Bot remains open source. Keep changes understandable to users and fork maintainers.
 
 ### 2. Performance without compromise
 
-Lots of apps have gotten bogged down with bad tech decisions and "slop". We have not, and we're proud of the performance of T3 Code. We regularly audit for performance regressions, often caused by sending too much data over websockets, css animations causing gpu spikes, lists being hard to render, and more. Make sure all changes are considerate of performance impact.
+Protect performance. Common regressions come from oversized WebSocket payloads, costly CSS animations, and lists that render too much work.
 
 ### 3. Remote ready
 
-The architecture of T3 Code's websocket layer (npx t3) enables a lot of awesome remote features. These have become core to the product. Whether users connect directly over their local network, through SSH, with Tailscale, or through their own tunnel, we need to make sure new features are properly supported.
+Akeru Bot's WebSocket layer and `npx akeru-bot` server support local networks, SSH, Tailscale, and user-managed tunnels. New features must work when the client and environment server run on different machines.
 
 ### 4. Multi-surface
 
-T3 Code has 3 key app surfaces: **web**, **desktop**, and **mobile**.
+Akeru Bot has three client surfaces: **web**, **desktop**, and **mobile**.
 
-**Web** is kind of two surfaces, as we have the public facing "app.t3.codes" as well as locally hosting the web app through the `npx t3` command. Both need to be supported by all new features where reasonable.
+**Web** is hosted by the environment server and uses the same authenticated RPC connection as the other clients.
 
-**Desktop** is the main surface most users install first. It's a full Electron app that bundles the server runner as well. The desktop app can also be used as the host server, allowing remote connections from app.t3.codes or the mobile app.
+**Desktop** is the main Akeru Bot product. It is an Electron app that bundles the server runner and can host remote client connections.
 
-**Mobile** is a React Native app for both iOS and Android, available on the App Store and Google Play. The mobile app allows for connecting to any T3 Code server to control work remotely.
+**Mobile** is a React Native client for iOS and Android. It connects to an Akeru Bot environment server to control work remotely.
 
-## A note from Theo
+## Engineering direction
 
-I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
+Build ambitious ideas with simple systems. Do not preserve complexity because it already exists or add machinery for its own sake. Find the real constraint, then choose the smallest model that makes correct behavior unsurprising.
 
-Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to honor the dev's intent in both a minimal and realistic fashion.
+Measure twice, cut once. Apply YAGNI. Control scope and follow Leo's intent when a general rule conflicts with the task.
 
-The rest of this document is meant to help you navigate the codebase and make changes effectively. Think of these instructions less as "hard rules", more as "good defaults". The developer's preferences should be able to override anything here.
-
-Of note: Most T3 Code contributions will come from T3 Code itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the T3 Code instance that the contributor is using.
+Most Akeru Bot contributions come from an agent running through the product itself, often under remote control. Be careful with data and dev servers because the contributor may be using the same environment.
 
 ## A small glossary
 
 We need to be on the same page with terminology. When communicating, use this language:
 
-- **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Theo, Julius and the people building T3 Code. These are who you are talking to now.
-- **user** means the person using T3 Code to direct coding agents.
-- **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
-- **provider** means the agent runtime or harness T3 Code talks to, such as Codex, Claude, Cursor, or OpenCode.
+- **you** means the agent reading this file and changing Akeru Bot.
+- **we, us, and maintainers** mean Leo and the people working with him on Akeru Bot. Theo, Julius, and the T3 Code contributors are upstream authors and maintainers.
+- **user** means the person using Akeru Bot to direct coding agents.
+- **agent** means the coding agent a user runs inside Akeru Bot. Depending on context, that may also include you.
+- **provider** means the agent runtime Akeru Bot talks to: Codex, Claude, Grok, Kimi For Coding, or OpenCode.
 - **client** means the web, desktop, or mobile UI.
-- **environment** means one running T3 server and the machine, filesystem, provider credentials, and state it owns.
+- **environment** means one running Akeru Bot server and the machine, filesystem, provider credentials, and state it owns.
 - **project** means an environment-local workspace record rooted at a directory.
 - **thread** means the durable conversation and work history for a project.
 - **turn** means one user-to-agent cycle, including follow-up work such as checkpointing.
-- **T3 home** means the base data directory. Runtime state normally lives below its userdata directory.
+- **Akeru home** means the base data directory. Runtime state normally lives below its userdata directory.
 
 ## The three ways to hurt yourself
 
 1. **Killing by pattern.** Never `pkill -f`, `pgrep | kill`, or `kill` a PID you found by matching a name, path, or worktree string. Your own agent process has this worktree's path in its argv, and this machine runs several other dev servers at once. Kill only a PID you captured at spawn, or the owner of your port from `ss -H -ltnp` after confirming `/proc/<pid>/cwd` is your worktree.
-2. **Writing to the live install.** `~/.t3/userdata` is the developer's real T3 Code database, in use while you work. Reading it and copying from it are fine, and a good way to get real test data (see Test data). Never start a server against it, never open it read-write, never clean it up.
+2. **Writing to the live install.** `~/.akeru/userdata` is the developer's real Akeru Bot database, in use while you work. Reading it and copying from it are fine, and a good way to get real test data (see Test data). Never start a server against it, never open it read-write, never clean it up.
 3. **Baking in origins.** Never set `VITE_HTTP_URL` or `VITE_WS_URL` for dev. Dev is single-origin and Vite proxies `/api`, `/ws`, `/oauth`, and `/.well-known`. Setting them bakes localhost into the bundle and silently breaks every remote browser.
 
 ## Hit every surface
@@ -68,7 +78,7 @@ The most common defect in this repo is a change that works on the path you teste
 
 - **Entry points.** A behavior reachable from the chat view is usually also reachable from Settings, the command palette, and a keybinding. Fixing one is not fixing the feature.
 - **Clients.** Web, desktop (wraps web, adds Electron shell/IPC), and mobile (React Native, separate navigation). Shared logic lives in `packages/client-runtime`
-- **Providers.** Codex, Claude, Cursor, Grok, and OpenCode each have an adapter. Provider-shaped features need a decision per adapter, even if the decision is "not supported here".
+- **Providers.** Codex, Claude, Grok, Kimi For Coding, and OpenCode each need an explicit decision. Codex and Kimi use Akeru's Mastra controller. Claude, Grok, and OpenCode use the legacy adapter bridge.
 - **Contracts.** Anything crossing the wire is typed in `packages/contracts`. Change the schema and the server, web, mobile, and desktop all follow.
 - **Reverse states.** If you added a way in, add the way out and the way to see it. Snooze needs unsnooze. Close needs reopen. A one-way door is a bug.
 - **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
@@ -77,7 +87,7 @@ The most common defect in this repo is a change that works on the path you teste
 ## Dev servers
 
 - `vp i` installs. Worktrees get this from the t3.json setup script; if module resolution looks broken, it probably did not run.
-- `vp run dev` starts server and web. In a worktree, state defaults to that worktree's gitignored `.t3`, which deliberately outranks an ambient `T3CODE_HOME` so you cannot land on shared state by accident. An explicit `--home-dir` still wins.
+- `vp run dev` starts server and web. In a worktree, state defaults to that worktree's gitignored `.akeru`, which deliberately outranks an ambient `T3CODE_HOME` or `AKERU_HOME` so you cannot land on shared state by accident. An explicit `--home-dir` still wins.
 - Ports derive from the worktree path and are stable across restarts, but read the real ones from the `[dev-runner]` line since occupied ports shift.
 - Sharing over the tailnet is three steps: run `vp run dev --share` in the background, wait for the `pairingUrl:` line in its output, paste that full URL (token included) in your reply. Do not wire up `tailscale serve` by hand for this, and do not open the URL yourself.
 - The web app requires pairing. Hand over the pairing URL, not the bare origin. A URL without its token is useless to whoever you gave it to. If the token got consumed, mint a fresh one with `node apps/server/src/bin.ts pair` — note it carries standard scopes, while the startup URL carries admin scopes (needed for Settings → Connections management).
@@ -85,15 +95,15 @@ The most common defect in this repo is a change that works on the path you teste
 
 ## Test data
 
-An empty database is a bad test. Seed your worktree's `.t3` with a copy of real data instead of pointing at live state:
+An empty database is a bad test. Seed your worktree's `.akeru` with a copy of real data instead of pointing at live state:
 
-- Copy from `~/.t3/userdata` (the developer's real data, the most realistic test set) or `~/.t3/dev`. Worktree state lives at `<worktree>/.t3/userdata`.
+- Copy from `~/.akeru/userdata` or `~/.akeru/dev`. Worktree state lives at `<worktree>/.akeru/userdata`.
 - Snapshot the database with `VACUUM INTO`, which is safe even while a server has the source open and yields one consistent file:
 
   ```bash
-  mkdir -p .t3/userdata
-  rm -f .t3/userdata/state.sqlite*  # VACUUM INTO refuses to overwrite
-  bun -e "new (require('bun:sqlite').Database)(process.env.HOME + '/.t3/userdata/state.sqlite', { readonly: true }).run(\"VACUUM INTO '.t3/userdata/state.sqlite'\")"
+  mkdir -p .akeru/userdata
+  rm -f .akeru/userdata/state.sqlite*  # VACUUM INTO refuses to overwrite
+  bun -e "new (require('bun:sqlite').Database)(process.env.HOME + '/.akeru/userdata/state.sqlite', { readonly: true }).run(\"VACUUM INTO '.akeru/userdata/state.sqlite'\")"
   ```
 
   A plain `cp` is only safe when no server has the source open, and must bring the `-wal` and `-shm` siblings along. A live file copy is a corrupt copy.
@@ -112,6 +122,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
+- Merge approved pull requests through GitHub's merge queue. Depot checks the queued merge candidate before GitHub writes it to `main`. See [`docs/internals/ci.md`](docs/internals/ci.md) for CI behavior.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - UI changes need before/after images. Motion or timing needs a short video.

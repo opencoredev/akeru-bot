@@ -210,6 +210,7 @@ function makeMastraHarness() {
   const listeners = new Set<(event: AgentControllerEvent) => void>();
   let modeId = "build";
   let modelId = "openai/gpt-5.6-sol";
+  let state: Record<string, unknown> = {};
   let resolveSend: (() => void) | undefined;
   const rejectSends: Array<(cause: unknown) => void> = [];
   const sendMessage = vi.fn(
@@ -220,7 +221,12 @@ function makeMastraHarness() {
       }),
   );
   const session = {
-    state: { set: vi.fn(async () => undefined) },
+    state: {
+      get: () => state,
+      set: vi.fn(async (next: Record<string, unknown>) => {
+        state = next;
+      }),
+    },
     mode: {
       get: () => modeId,
       switch: vi.fn(async ({ modeId: next }: { readonly modeId: string }) => {
@@ -2795,6 +2801,66 @@ describe("AgentControllerLive", () => {
         });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.getCapabilities).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("applies saved Codex options to initial and active Mastra sessions", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: codexThreadId,
+          engine: {
+            provider: "codex",
+            model: "gpt-5.6-sol",
+            options: [
+              { id: "reasoningEffort", value: "high" },
+              { id: "serviceTier", value: "priority" },
+            ],
+          },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            modelOptions: { reasoningEffort: "high", serviceTier: "priority" },
+          }),
+        );
+
+        yield* controller.resolveEngine({
+          threadId: codexThreadId,
+          engine: {
+            provider: "codex",
+            model: "gpt-5.6-sol",
+            options: [
+              { id: "reasoningEffort", value: "low" },
+              { id: "serviceTier", value: "flex" },
+            ],
+          },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            modelOptions: { reasoningEffort: "low", serviceTier: "flex" },
+          }),
+        );
       }),
       bridge.service,
       mastra.factory,

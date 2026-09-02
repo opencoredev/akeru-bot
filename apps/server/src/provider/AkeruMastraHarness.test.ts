@@ -37,6 +37,7 @@ import {
   resolveAkeruTools,
   routineToolInputSchema,
   routineToolNeedsGlobalApproval,
+  withAkeruModelRunOptions,
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -405,6 +406,20 @@ describe("AkeruMastraHarness", () => {
     assert.notInclude(instructions, "—");
     assert.notInclude(instructions, "coding agent");
     assert.isBelow(createAkeruBotInstructions({ now: DateTime.nowUnsafe() }).length, 3_000);
+  });
+
+  it("passes the saved Codex service tier to Mastra provider options", () => {
+    expect(
+      withAkeruModelRunOptions(
+        { providerOptions: { anthropic: { fallback: true }, openai: { store: false } } },
+        { modelOptions: { serviceTier: "priority" } },
+      ),
+    ).toEqual({
+      providerOptions: {
+        anthropic: { fallback: true },
+        openai: { store: false, serviceTier: "priority" },
+      },
+    });
   });
 
   it("adds reply and status rules only to bot conversations", () => {

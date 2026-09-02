@@ -16,14 +16,22 @@ describe("resolveStickyBotEngine", () => {
     if (!instanceId) throw new Error("missing instance");
 
     const resolved = resolveStickyBotEngine({
-      engine: { provider: instanceId, model: "gpt-5.6-sol" },
+      engine: {
+        provider: instanceId,
+        model: "gpt-5.6-sol",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      },
       instanceEntries,
       settings,
       providers,
       defaultSelection: { instanceId, model: "gpt-5.6-luna" },
     });
 
-    expect(resolved).toEqual({ instanceId, model: "gpt-5.6-sol" });
+    expect(resolved).toEqual({
+      instanceId,
+      model: "gpt-5.6-sol",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    });
   });
 
   it("uses the default instance when the bot has no engine", () => {
@@ -40,5 +48,30 @@ describe("resolveStickyBotEngine", () => {
     });
 
     expect(resolved?.instanceId).toBe(instanceId);
+  });
+
+  it("inherits app options when an older bot engine matches the app model", () => {
+    const providers = [makeComposerTestProvider()];
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const instanceId = instanceEntries[0]?.instanceId;
+    if (!instanceId) throw new Error("missing instance");
+
+    expect(
+      resolveStickyBotEngine({
+        engine: { provider: instanceId, model: "gpt-5.6-sol" },
+        instanceEntries,
+        settings,
+        providers,
+        defaultSelection: {
+          instanceId,
+          model: "gpt-5.6-sol",
+          options: [{ id: "reasoningEffort", value: "medium" }],
+        },
+      }),
+    ).toEqual({
+      instanceId,
+      model: "gpt-5.6-sol",
+      options: [{ id: "reasoningEffort", value: "medium" }],
+    });
   });
 });
