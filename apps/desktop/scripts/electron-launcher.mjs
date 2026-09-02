@@ -21,12 +21,6 @@ export const APP_BUNDLE_ID = isDevelopment
   : "dev.leodoes.akeru";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["akeru-dev", "t3code-dev"] : ["akeru", "t3code"];
 const LAUNCHER_VERSION = 15;
-const developmentMacIconPngPath = NodePath.join(
-  repoRoot,
-  "assets",
-  "dev",
-  "blueprint-macos-1024.png",
-);
 const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "prod", "akeru-macos-1024.png");
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
@@ -167,8 +161,11 @@ function registerMacLauncherBundle(appBundlePath) {
 
 export function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopment) {
   return {
-    sourceIconPath: development ? developmentMacIconPngPath : productionMacIconPngPath,
-    generatedIconPath: NodePath.join(runtimeDir, development ? "icon-dev.icns" : "icon-prod.icns"),
+    sourceIconPath: productionMacIconPngPath,
+    generatedIconPath: NodePath.join(
+      runtimeDir,
+      development ? "icon-akeru-dev.icns" : "icon-prod.icns",
+    ),
   };
 }
 

@@ -9,10 +9,10 @@ import {
 } from "./catalog";
 
 const EXPECTED_IDS =
-  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github help-scout hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
+  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github help-scout hoplite hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
-const INSTALLABLE_IDS = ["context", "exa", "firecrawl", "parallel-search"];
+const INSTALLABLE_IDS = ["context", "hoplite", "exa", "firecrawl", "parallel-search"];
 
 describe("milestone 13 plugin lifecycle matrix", () => {
   it("keeps verified plugins installable and every unverified plugin blocked", () => {
@@ -32,6 +32,7 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     ).toEqual([
       ["context", 1],
       ["zernio", 2],
+      ["hoplite", 3],
     ]);
 
     const pending = directory.filter((plugin) => !INSTALLABLE_IDS.includes(plugin.id));
@@ -65,6 +66,13 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     expect(byId.get("github")).toMatchObject({
       transport: { type: "url", url: "https://api.githubcopilot.com/mcp/" },
       connection: { type: "verification-pending" },
+    });
+    expect(byId.get("hoplite")).toMatchObject({
+      transport: { type: "url", url: "https://api.hoplite.sh/mcp" },
+      authentication: "oauth",
+      featuredRank: 3,
+      connection: { type: "ready" },
+      approvals: ["production", "account-wide"],
     });
     expect(byId.get("computer-use")).toMatchObject({
       platforms: ["macos"],
