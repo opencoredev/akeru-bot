@@ -2261,6 +2261,12 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
         mastra.emit({
           type: "tool_approval_required",
+          toolCallId: "plain-move-risky",
+          toolName: "execute_command",
+          args: { command: "mv replacement important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
           toolCallId: "forced-move-risky",
           toolName: "execute_command",
           args: { command: "mv -f replacement important-file" },
@@ -2284,6 +2290,7 @@ describe("AgentControllerLive", () => {
           "find-env-rm-risky",
           "dd-risky",
           "redirected-dd-risky",
+          "plain-move-risky",
           "forced-move-risky",
         ]) {
           expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
