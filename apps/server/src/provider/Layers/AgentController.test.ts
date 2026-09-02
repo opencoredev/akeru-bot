@@ -128,6 +128,7 @@ function makeProviderSession(
 
 function makeBridge() {
   let instanceEnabled = true;
+  let disableAfterNextEnabledLookup = false;
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
       makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : "claudeAgent"),
@@ -156,21 +157,27 @@ function makeBridge() {
     rollbackConversation,
     listSessions: () => Effect.succeed([]),
     getCapabilities,
-    getInstanceInfo: (instanceId) => {
-      const driverKind = ProviderDriverKind.make(
-        instanceId === kimiInstanceId ? "kimi" : String(instanceId),
-      );
-      return Effect.succeed({
-        instanceId,
-        driverKind,
-        displayName: undefined,
-        enabled: instanceEnabled,
-        continuationIdentity: {
+    getInstanceInfo: (instanceId) =>
+      Effect.sync(() => {
+        const driverKind = ProviderDriverKind.make(
+          instanceId === kimiInstanceId ? "kimi" : String(instanceId),
+        );
+        const enabled = instanceEnabled;
+        if (enabled && disableAfterNextEnabledLookup) {
+          disableAfterNextEnabledLookup = false;
+          instanceEnabled = false;
+        }
+        return {
+          instanceId,
           driverKind,
-          continuationKey: `${driverKind}:instance:${instanceId}`,
-        },
-      });
-    },
+          displayName: undefined,
+          enabled,
+          continuationIdentity: {
+            driverKind,
+            continuationKey: `${driverKind}:instance:${instanceId}`,
+          },
+        };
+      }),
     uploadFeedback: (input) => Effect.succeed({ feedbackId: `feedback-${String(input.threadId)}` }),
     streamEvents: Stream.empty,
   };
@@ -186,6 +193,9 @@ function makeBridge() {
     getCapabilities,
     setInstanceEnabled: (enabled: boolean) => {
       instanceEnabled = enabled;
+    },
+    disableAfterNextEnabledLookup: () => {
+      disableAfterNextEnabledLookup = true;
     },
   };
 }
@@ -1010,6 +1020,55 @@ describe("AgentControllerLive", () => {
             .map((event) => event.payload.state),
         ).toEqual(["running", "running"]);
         yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects a queued Mastra turn when its provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "First message" });
+        const queued = yield* controller.sendTurn({
+          threadId: openCodeGoThreadId,
+          input: "Queued follow-up",
+        });
+        const failedTurn = yield* controller.streamEvents.pipe(
+          Stream.filter(
+            (event) =>
+              event.type === "turn.completed" &&
+              event.turnId === queued.turnId &&
+              event.payload.state === "failed",
+          ),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+
+        bridge.setInstanceEnabled(false);
+        mastra.finishSend();
+        const failure = yield* Fiber.join(failedTurn);
+
+        assert.equal(failure._tag, "Some");
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
       }),
       bridge.service,
       mastra.factory,
@@ -2851,6 +2910,41 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("rejects an OpenCode Go turn disabled during dispatch admission", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+
+        bridge.disableAfterNextEnabledLookup();
+        const error = yield* controller
+          .sendTurn({ threadId: openCodeGoThreadId, input: "Do not dispatch this turn." })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("rejects an OpenCode Go approval after the provider is disabled", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -2880,7 +2974,7 @@ describe("AgentControllerLive", () => {
           args: { command: "pwd" },
         } as AgentControllerEvent);
 
-        bridge.setInstanceEnabled(false);
+        bridge.disableAfterNextEnabledLookup();
         const error = yield* controller
           .respondToRequest({
             threadId: openCodeGoThreadId,
@@ -2928,7 +3022,7 @@ describe("AgentControllerLive", () => {
           suspendPayload: {},
         } as AgentControllerEvent);
 
-        bridge.setInstanceEnabled(false);
+        bridge.disableAfterNextEnabledLookup();
         const error = yield* controller
           .respondToUserInput({
             threadId: openCodeGoThreadId,

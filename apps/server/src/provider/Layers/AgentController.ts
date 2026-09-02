@@ -1023,6 +1023,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const startPendingTurn = (
       active: ActiveSession,
       { threadId, turnId, message, botUsage }: PendingTurn,
+      providerAdmitted = false,
     ) => {
       const key = String(threadId);
       if (botUsage) {
@@ -1048,8 +1049,20 @@ const make = (options?: AgentControllerLiveOptions) =>
         payload: { model: active.model },
       });
       publishSessionState(threadId, active, "running");
-      void active.session
-        .sendMessage(message)
+      const dispatch = providerAdmitted
+        ? active.session.sendMessage(message)
+        : runPromise(legacyProviderBridge.getInstanceInfo(active.providerInstanceId)).then(
+            (routing) => {
+              if (!routing.enabled) {
+                throw disabledProviderError(
+                  "AgentController.startPendingTurn",
+                  active.providerInstanceId,
+                );
+              }
+              return active.session.sendMessage(message);
+            },
+          );
+      void dispatch
         .then(() => {
           const turn = active.activeTurn;
           if (turn?.turnId === turnId && !turn.waiting) {
@@ -2043,6 +2056,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           .filter((part): part is string => typeof part === "string" && part.length > 0)
           .join("\n\n");
         const files = attachmentFiles.map(({ file }) => file);
+        const dispatchRouting = yield* legacyProviderBridge.getInstanceInfo(
+          active.providerInstanceId,
+        );
+        if (!dispatchRouting.enabled) {
+          return yield* disabledProviderError(
+            "AgentController.sendTurn",
+            active.providerInstanceId,
+          );
+        }
         const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
         active.pendingTurns.push({
           threadId: input.threadId,
@@ -2052,7 +2074,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
         if (!active.activeTurn) {
           const nextTurn = active.pendingTurns.shift();
-          if (nextTurn) startPendingTurn(active, nextTurn);
+          if (nextTurn) startPendingTurn(active, nextTurn, true);
         }
         return { threadId: input.threadId, turnId };
       },
@@ -2178,6 +2200,15 @@ const make = (options?: AgentControllerLiveOptions) =>
         input.decision === "acceptForSession" || input.decision === "acceptAlways"
           ? "accept"
           : input.decision;
+      const dispatchRouting = yield* legacyProviderBridge.getInstanceInfo(
+        active.providerInstanceId,
+      );
+      if (!dispatchRouting.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.respondToRequest",
+          active.providerInstanceId,
+        );
+      }
       if (active.activeTurn) active.activeTurn.waiting = false;
       active.session.respondToToolApproval({
         toolCallId,
@@ -2242,6 +2273,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           resumeFailure ??= event.error.message;
         }
       });
+      const dispatchRouting = yield* legacyProviderBridge.getInstanceInfo(
+        active.providerInstanceId,
+      );
+      if (!dispatchRouting.enabled) {
+        unsubscribe();
+        return yield* disabledProviderError(
+          "AgentController.respondToUserInput",
+          active.providerInstanceId,
+        );
+      }
       yield* runMastra("respondToToolSuspension", () =>
         active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
       ).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
