@@ -635,6 +635,11 @@ export const make = Effect.gen(function* () {
     if (Option.isSome(activeAction) && activeAction.value === "install") {
       yield* finishUpdateAction("install");
       yield* Ref.set(desktopState.quitting, false);
+      const instances = yield* pool.list;
+      yield* Effect.forEach(instances, (instance) => instance.start, {
+        concurrency: "unbounded",
+        discard: true,
+      });
       yield* updateState((current) =>
         reduceDesktopUpdateStateOnInstallFailure(current, error.message),
       );
