@@ -1589,7 +1589,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             ...(input.cwd ? { projectPath: input.cwd } : {}),
             yolo: false,
             botConversation: resolved.botConversation,
-            ...(input.botName ? { botName: input.botName } : {}),
+            botName: input.botName || "",
           }),
         );
         const toolSession = { ...existing.toolSession };
