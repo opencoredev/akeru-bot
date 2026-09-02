@@ -41,6 +41,7 @@ import { Sheet, SheetClose, SheetPopup, SheetTitle } from "../ui/sheet";
 import { Textarea } from "../ui/textarea";
 import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { shouldRenderTraitsControls, TraitsPicker } from "../chat/TraitsPicker";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotBrowserPreview } from "./BotBrowserPreview";
@@ -178,6 +179,14 @@ function BotProfileEditor({
         : null) ??
       defaultSelection.model,
   );
+  const [modelOptions, setModelOptions] = useState(
+    () =>
+      bot.engine?.options ??
+      (bot.engine?.provider === defaultSelection.instanceId &&
+      bot.engine.model === defaultSelection.model
+        ? defaultSelection.options
+        : undefined),
+  );
   const modelOptionsByInstance = useMemo(
     () => getCustomModelOptionsByInstance(settings, providers),
     [providers, settings],
@@ -187,11 +196,37 @@ function BotProfileEditor({
     if (engineChanged) return;
     setProvider(bot.engine?.provider ?? defaultSelection.instanceId);
     if (bot.engine?.model) setModel(bot.engine.model);
-  }, [bot.engine, defaultSelection.instanceId, engineChanged]);
+    setModelOptions(
+      bot.engine?.options ??
+        (bot.engine?.provider === defaultSelection.instanceId &&
+        bot.engine.model === defaultSelection.model
+          ? defaultSelection.options
+          : undefined),
+    );
+  }, [bot.engine, defaultSelection, engineChanged]);
 
   const normalizedLabel = label.trim() || null;
   const normalizedDescription = description.trim() || null;
-  const nextEngine: Bot["engine"] = engineChanged && model ? { provider, model } : bot.engine;
+  const nextEngine: Bot["engine"] =
+    engineChanged && model
+      ? {
+          provider,
+          model,
+          ...(modelOptions ? { options: modelOptions } : {}),
+        }
+      : bot.engine;
+  const showModelOptions =
+    activeEntry !== undefined &&
+    model.length > 0 &&
+    shouldRenderTraitsControls({
+      provider: activeEntry.driverKind,
+      models: activeEntry.models,
+      model,
+      prompt: "",
+      modelOptions,
+      allowPromptInjectedEffort: false,
+      planModeEnabled: settings.planModeEnabled,
+    });
   const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
   const usageCapDirty =
     !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
@@ -290,6 +325,12 @@ function BotProfileEditor({
                 onChange={(instanceId, nextModel) => {
                   setProvider(instanceId);
                   setModel(nextModel);
+                  setModelOptions(
+                    defaultSelection.instanceId === instanceId &&
+                      defaultSelection.model === nextModel
+                      ? defaultSelection.options
+                      : undefined,
+                  );
                   setEngineChanged(true);
                   markChanged();
                 }}
@@ -299,6 +340,31 @@ function BotProfileEditor({
             )}
           </div>
         </div>
+
+        {showModelOptions && activeEntry ? (
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Reasoning</div>
+            <div className="flex min-h-10 items-center rounded-lg border border-border bg-muted/20 px-2">
+              <TraitsPicker
+                provider={activeEntry.driverKind}
+                instanceId={activeEntry.instanceId}
+                models={activeEntry.models}
+                model={model}
+                prompt=""
+                onPromptChange={() => {}}
+                modelOptions={modelOptions}
+                allowPromptInjectedEffort={false}
+                planModeEnabled={settings.planModeEnabled}
+                triggerClassName="w-full max-w-none justify-between"
+                onModelOptionsChange={(nextOptions) => {
+                  setModelOptions(nextOptions);
+                  setEngineChanged(true);
+                  markChanged();
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
 

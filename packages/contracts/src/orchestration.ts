@@ -323,6 +323,7 @@ export type BotAvatar = typeof BotAvatar.Type;
 export const BotEngine = Schema.Struct({
   provider: TrimmedNonEmptyString,
   model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(ProviderOptionSelections),
 });
 export type BotEngine = typeof BotEngine.Type;
 

@@ -418,7 +418,7 @@ describe("ClaudeAdapterLive", () => {
           "append" in createInput.options.systemPrompt
             ? (createInput.options.systemPrompt.append ?? "")
             : "";
-        assert.include(appendedInstructions, "general-purpose assistant");
+        assert.include(appendedInstructions, "general assistant");
         assert.notInclude(appendedInstructions, "Before you use a tool");
       }).pipe(
         Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -436,6 +436,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
         botId: "bot-1" as never,
+        botName: "Mina",
       });
 
       const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
@@ -445,6 +446,8 @@ describe("ClaudeAdapterLive", () => {
           : "";
       assert.include(appendedInstructions, "Before you use a tool");
       assert.include(appendedInstructions, "automatic continuation");
+      assert.include(appendedInstructions, "You are Mina");
+      assert.match(appendedInstructions, /Today is [A-Z][a-z]+, [A-Z][a-z]+ \d{1,2}, \d{4}/);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

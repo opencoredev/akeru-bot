@@ -1,6 +1,7 @@
 import {
   ProviderInstanceId,
   type BotEngine,
+  type ModelSelection,
   type ServerProvider,
   type UnifiedSettings,
 } from "@t3tools/contracts";
@@ -16,8 +17,8 @@ export function resolveStickyBotEngine(input: {
   readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   readonly settings: UnifiedSettings;
   readonly providers: ReadonlyArray<ServerProvider>;
-  readonly defaultSelection: { readonly instanceId: ProviderInstanceId; readonly model: string };
-}): { readonly instanceId: ProviderInstanceId; readonly model: string } | null {
+  readonly defaultSelection: ModelSelection;
+}): ModelSelection | null {
   const preferredId = ProviderInstanceId.make(
     input.engine?.provider ?? input.defaultSelection.instanceId,
   );
@@ -27,10 +28,28 @@ export function resolveStickyBotEngine(input: {
     null;
   if (!entry) return null;
   if (input.engine && input.engine.provider === entry.instanceId) {
-    return { instanceId: entry.instanceId, model: input.engine.model };
+    const options =
+      input.engine.options ??
+      (input.defaultSelection.instanceId === entry.instanceId &&
+      input.defaultSelection.model === input.engine.model
+        ? input.defaultSelection.options
+        : undefined);
+    return {
+      instanceId: entry.instanceId,
+      model: input.engine.model,
+      ...(options ? { options } : {}),
+    };
   }
   const model =
     resolveAppModelSelectionForInstance(entry.instanceId, input.settings, input.providers, null) ??
     input.defaultSelection.model;
-  return { instanceId: entry.instanceId, model };
+  return {
+    instanceId: entry.instanceId,
+    model,
+    ...(input.defaultSelection.instanceId === entry.instanceId &&
+    input.defaultSelection.model === model &&
+    input.defaultSelection.options
+      ? { options: input.defaultSelection.options }
+      : {}),
+  };
 }

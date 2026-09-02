@@ -116,7 +116,14 @@ it.layer(TestLayer)("bot persistence", (it) => {
         description: "Investigates the highest-risk assumptions.",
         disabledMcpServerIds: [McpServerId.make("mcp-github")],
         avatar: { kind: "dither", seed: "pathfinder" },
-        engine: null,
+        engine: {
+          provider: "codex",
+          model: "gpt-5.6-sol",
+          options: [
+            { id: "reasoningEffort", value: "high" },
+            { id: "serviceTier", value: "priority" },
+          ],
+        },
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
@@ -183,7 +190,14 @@ it.layer(TestLayer)("bot persistence", (it) => {
         description: "Investigates the highest-risk assumptions.",
         disabledMcpServerIds: [McpServerId.make("mcp-github")],
         avatar: { kind: "dither", seed: "pathfinder" },
-        engine: null,
+        engine: {
+          provider: "codex",
+          model: "gpt-5.6-sol",
+          options: [
+            { id: "reasoningEffort", value: "high" },
+            { id: "serviceTier", value: "priority" },
+          ],
+        },
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
@@ -228,6 +242,14 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const rebuiltBot = rebuilt.bots.find((bot) => bot.id === botId);
       assert.equal(rebuiltBot?.name, "Pathfinder");
       assert.equal(rebuiltBot?.voiceEnabled, true);
+      assert.deepEqual(rebuiltBot?.engine, {
+        provider: "codex",
+        model: "gpt-5.6-sol",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "serviceTier", value: "priority" },
+        ],
+      });
       assert.equal(rebuiltBot?.groupId, null);
       assert.equal(rebuiltBot?.archivedAt, null);
       assert.deepEqual(rebuilt.groups, []);

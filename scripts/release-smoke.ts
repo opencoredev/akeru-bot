@@ -74,7 +74,7 @@ for (const [needle, label] of [
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
   ["runner: depot-macos-15", "Depot macOS runner"],
   ["runner: depot-windows-2025-8", "8-vCPU Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-8", "8-vCPU Depot Linux runner"],
+  ["runner: depot-ubuntu-24.04-4", "4-vCPU Depot Linux runner"],
   [
     "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
     "pinned Developer ID certificate import",
@@ -164,7 +164,11 @@ for (const [needle, label] of [
   assertOmits(ciWorkflow, needle, `CI workflow still contains ${label}.`);
 }
 
-assertContains(ciWorkflow, "runs-on: depot-ubuntu-24.04-8", "CI does not use Depot runners.");
+assertContains(
+  ciWorkflow,
+  "runs-on: depot-ubuntu-24.04-4",
+  "CI does not use 4-vCPU Depot runners.",
+);
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
 assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
 assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");

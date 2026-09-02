@@ -107,6 +107,22 @@ describe("BotDetailsPanel", () => {
     expect(source).toContain("RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY");
   });
 
+  it("owns model and reasoning controls in the bot sidebar", () => {
+    const source = NodeFS.readFileSync(new URL("./BotDetailsPanel.tsx", import.meta.url), "utf8");
+    const composerSource = NodeFS.readFileSync(
+      new URL("./BotPromptComposer.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("<BotModelPicker");
+    expect(source).toContain("<TraitsPicker");
+    expect(source).toContain(">Reasoning</div>");
+    expect(source).toContain("options: modelOptions");
+    expect(composerSource).not.toContain("BotModelPicker");
+    expect(composerSource).not.toContain("TraitsPicker");
+    expect(composerSource).not.toContain("reasoningPicker");
+  });
+
   it("collapses and reopens desktop without changing the mobile sheet", () => {
     const collapsed = reduceBotDetailsPanelState(
       { desktopOpen: true, mobileOpen: false },
