@@ -68,6 +68,19 @@ describe("desktop onboarding", () => {
     ).toBe(true);
   });
 
+  it("waits for roster synchronization before resuming a saved draft", () => {
+    expect(
+      shouldShowDesktopOnboarding({
+        desktop: true,
+        rosterLoaded: false,
+        serverBotCount: 0,
+        draft: { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, step: "message", botId: "bot-1" },
+        completed: false,
+        started: true,
+      }),
+    ).toBe(false);
+  });
+
   it("stays open after creating the first bot", () => {
     expect(
       shouldShowDesktopOnboarding({

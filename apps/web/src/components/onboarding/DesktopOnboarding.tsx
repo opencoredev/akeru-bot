@@ -863,11 +863,7 @@ export function DesktopOnboarding() {
     writeDraft(DEFAULT_DESKTOP_ONBOARDING_DRAFT);
   }
 
-  const show =
-    !finished &&
-    environmentId !== null &&
-    initialDraftRef.current !== null &&
-    (isElectron || captureMode);
+  const show = shouldStart && initialDraftRef.current !== null;
 
   useEffect(() => {
     if (!rosterLoaded || serverBots.length === 0 || initialDraftRef.current !== null) return;
