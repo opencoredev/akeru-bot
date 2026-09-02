@@ -4,6 +4,7 @@ import {
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
   desktopOnboardingModelSelection,
   parseDesktopOnboardingDraft,
+  recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
   resolveDesktopOnboardingEngine,
   resolveDesktopOnboardingUseCase,
@@ -107,6 +108,22 @@ describe("desktop onboarding", () => {
       botId: null,
     });
     expect(recoverMissingDesktopOnboardingBot(draft, ["bot-missing"])).toBe(draft);
+  });
+
+  it("returns a mounted message step to identity only after its bot was ready", () => {
+    const draft = {
+      ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+      step: "message" as const,
+      botId: "bot-1",
+    };
+
+    expect(recoverDisappearedDesktopOnboardingBot(draft, null)).toBe(draft);
+    expect(recoverDisappearedDesktopOnboardingBot(draft, "bot-other")).toBe(draft);
+    expect(recoverDisappearedDesktopOnboardingBot(draft, "bot-1")).toEqual({
+      ...draft,
+      step: "identity",
+      botId: null,
+    });
   });
 
   it("does not restart after the completed user deletes every bot", () => {

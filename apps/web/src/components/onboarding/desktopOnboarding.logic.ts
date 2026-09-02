@@ -231,6 +231,14 @@ export function recoverMissingDesktopOnboardingBot(
   return { ...draft, step: "identity", botId: null };
 }
 
+export function recoverDisappearedDesktopOnboardingBot(
+  draft: DesktopOnboardingDraft,
+  readyBotId: string | null,
+): DesktopOnboardingDraft {
+  if (draft.step !== "message" || draft.botId === null || draft.botId !== readyBotId) return draft;
+  return { ...draft, step: "identity", botId: null };
+}
+
 export function stepNumber(step: DesktopOnboardingStep): number {
   if (step === "subscription") return 1;
   if (step === "use-case") return 2;

@@ -47,6 +47,7 @@ import {
   type DesktopOnboardingDraft,
   desktopOnboardingModelSelection,
   parseDesktopOnboardingDraft,
+  recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
   resolveDesktopOnboardingEngine,
   resolveDesktopOnboardingUseCase,
@@ -663,9 +664,26 @@ function OnboardingSurface({
   const [createError, setCreateError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const readyBotIdRef = useRef<string | null>(null);
   const rosterBot = useRosterStore((state) =>
     draft.botId ? state.bots.find((bot) => bot.id === draft.botId) : undefined,
   );
+
+  useEffect(() => {
+    if (draft.step !== "message" || draft.botId === null) {
+      readyBotIdRef.current = null;
+      return;
+    }
+    if (rosterBot) {
+      readyBotIdRef.current = draft.botId;
+      return;
+    }
+    const recoveredDraft = recoverDisappearedDesktopOnboardingBot(draft, readyBotIdRef.current);
+    if (recoveredDraft === draft) return;
+    readyBotIdRef.current = null;
+    setDraft(recoveredDraft);
+    writeDraft(recoveredDraft);
+  }, [draft, rosterBot]);
 
   const updateDraft = (next: DesktopOnboardingDraft) => {
     setDraft(next);
