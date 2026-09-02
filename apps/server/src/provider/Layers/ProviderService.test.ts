@@ -454,6 +454,16 @@ it.effect(
         new ProviderUnsupportedError({
           provider: driverKind,
         });
+      const instanceInfo = {
+        instanceId,
+        driverKind,
+        displayName: "Codex Personal",
+        enabled: true,
+        continuationIdentity: {
+          driverKind,
+          continuationKey: "codex:/Users/example/.codex",
+        },
+      } as const;
       const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
         getByInstance: (requestedInstanceId) =>
           requestedInstanceId === instanceId
@@ -461,17 +471,14 @@ it.effect(
             : Effect.fail(unsupported()),
         getInstanceInfo: (requestedInstanceId) =>
           requestedInstanceId === instanceId
-            ? Effect.succeed({
-                instanceId,
-                driverKind,
-                displayName: "Codex Personal",
-                enabled: true,
-                continuationIdentity: {
-                  driverKind,
-                  continuationKey: "codex:/Users/example/.codex",
-                },
-              })
+            ? Effect.succeed(instanceInfo)
             : Effect.fail(unsupported()),
+        dispatchIfEnabled: (requestedInstanceId, dispatch) =>
+          Effect.sync(() =>
+            requestedInstanceId === instanceId
+              ? ({ _tag: "Dispatched", value: dispatch() } as const)
+              : ({ _tag: "Missing" } as const),
+          ),
         listInstances: () => Effect.succeed([instanceId]),
         listProviders: () => Effect.succeed([driverKind] as const),
         streamChanges: Stream.empty,
@@ -533,6 +540,16 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
       new ProviderUnsupportedError({
         provider: ProviderDriverKind.make("codex"),
       });
+    const instanceInfo = {
+      instanceId,
+      driverKind,
+      displayName: "Codex Personal",
+      enabled: false,
+      continuationIdentity: {
+        driverKind,
+        continuationKey: "codex:/Users/example/.codex",
+      },
+    } as const;
     const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
       getByInstance: (requestedInstanceId) =>
         requestedInstanceId === instanceId
@@ -540,17 +557,14 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
           : Effect.fail(unsupported()),
       getInstanceInfo: (requestedInstanceId) =>
         requestedInstanceId === instanceId
-          ? Effect.succeed({
-              instanceId,
-              driverKind,
-              displayName: "Codex Personal",
-              enabled: false,
-              continuationIdentity: {
-                driverKind,
-                continuationKey: "codex:/Users/example/.codex",
-              },
-            })
+          ? Effect.succeed(instanceInfo)
           : Effect.fail(unsupported()),
+      dispatchIfEnabled: (requestedInstanceId, dispatch) =>
+        Effect.sync(() =>
+          requestedInstanceId === instanceId
+            ? ({ _tag: "Disabled" } as const)
+            : ({ _tag: "Missing" } as const),
+        ),
       listInstances: () => Effect.succeed([instanceId]),
       listProviders: () => Effect.succeed([CODEX_DRIVER] as const),
       streamChanges: Stream.empty,

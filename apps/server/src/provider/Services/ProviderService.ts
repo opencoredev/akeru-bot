@@ -100,6 +100,17 @@ export interface ProviderServiceShape {
   ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
 
   /**
+   * Check an instance and invoke a synchronous provider method as one
+   * admission step. A disable reconciliation cannot complete between the
+   * enabled check and the method invocation.
+   */
+  readonly dispatchIfEnabled: <A>(
+    instanceId: ProviderInstanceId,
+    operation: string,
+    dispatch: () => A,
+  ) => Effect.Effect<A, ProviderServiceError>;
+
+  /**
    * Roll back provider conversation state by a number of turns.
    */
   readonly rollbackConversation: (input: {

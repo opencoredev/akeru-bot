@@ -46,6 +46,7 @@ import {
   type MemoryCandidateRepositoryShape,
 } from "../../memory/Services/MemoryCandidateRepository.ts";
 import { AgentController } from "../Services/AgentController.ts";
+import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
@@ -128,7 +129,11 @@ function makeProviderSession(
 
 function makeBridge() {
   let instanceEnabled = true;
-  let disableAfterNextEnabledLookup = false;
+  let disableBeforeNextDispatchAdmission = false;
+  let nextDispatchAdmissionWait: Promise<void> | undefined;
+  let releaseNextDispatchAdmission: (() => void) | undefined;
+  let nextDispatchAdmissionReached = Promise.resolve();
+  let markNextDispatchAdmissionReached: (() => void) | undefined;
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
       makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : "claudeAgent"),
@@ -162,22 +167,40 @@ function makeBridge() {
         const driverKind = ProviderDriverKind.make(
           instanceId === kimiInstanceId ? "kimi" : String(instanceId),
         );
-        const enabled = instanceEnabled;
-        if (enabled && disableAfterNextEnabledLookup) {
-          disableAfterNextEnabledLookup = false;
-          instanceEnabled = false;
-        }
         return {
           instanceId,
           driverKind,
           displayName: undefined,
-          enabled,
+          enabled: instanceEnabled,
           continuationIdentity: {
             driverKind,
             continuationKey: `${driverKind}:instance:${instanceId}`,
           },
         };
       }),
+    dispatchIfEnabled: (instanceId, operation, dispatch) => {
+      const dispatchNow = () => {
+        if (disableBeforeNextDispatchAdmission) {
+          disableBeforeNextDispatchAdmission = false;
+          instanceEnabled = false;
+        }
+        return instanceEnabled
+          ? Effect.sync(dispatch)
+          : Effect.fail(
+              new ProviderValidationError({
+                operation,
+                issue: `Provider instance '${instanceId}' is disabled in Akeru Bot settings.`,
+              }),
+            );
+      };
+      return Effect.suspend(() => {
+        const wait = nextDispatchAdmissionWait;
+        nextDispatchAdmissionWait = undefined;
+        markNextDispatchAdmissionReached?.();
+        markNextDispatchAdmissionReached = undefined;
+        return wait ? Effect.promise(() => wait).pipe(Effect.flatMap(dispatchNow)) : dispatchNow();
+      });
+    },
     uploadFeedback: (input) => Effect.succeed({ feedbackId: `feedback-${String(input.threadId)}` }),
     streamEvents: Stream.empty,
   };
@@ -194,8 +217,21 @@ function makeBridge() {
     setInstanceEnabled: (enabled: boolean) => {
       instanceEnabled = enabled;
     },
-    disableAfterNextEnabledLookup: () => {
-      disableAfterNextEnabledLookup = true;
+    disableBeforeNextDispatchAdmission: () => {
+      disableBeforeNextDispatchAdmission = true;
+    },
+    blockNextDispatchAdmission: () => {
+      nextDispatchAdmissionWait = new Promise<void>((resolve) => {
+        releaseNextDispatchAdmission = resolve;
+      });
+      nextDispatchAdmissionReached = new Promise<void>((resolve) => {
+        markNextDispatchAdmissionReached = resolve;
+      });
+    },
+    waitForNextDispatchAdmission: () => nextDispatchAdmissionReached,
+    releaseNextDispatchAdmission: () => {
+      releaseNextDispatchAdmission?.();
+      releaseNextDispatchAdmission = undefined;
     },
   };
 }
@@ -1069,6 +1105,126 @@ describe("AgentControllerLive", () => {
 
         assert.equal(failure._tag, "Some");
         expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("serializes queued turns while dispatch admission is pending", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        bridge.blockNextDispatchAdmission();
+        const firstFiber = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "First message" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+
+        const second = yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Queued while admission is pending",
+        });
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+
+        const secondStarted = yield* controller.streamEvents.pipe(
+          Stream.filter((event) => event.type === "turn.started" && event.turnId === second.turnId),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        bridge.releaseNextDispatchAdmission();
+        yield* Fiber.join(firstFiber);
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+
+        mastra.finishSend();
+        const started = yield* Fiber.join(secondStarted);
+        assert.equal(started._tag, "Some");
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(2);
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("does not revive a turn interrupted during dispatch admission", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+
+        bridge.blockNextDispatchAdmission();
+        const sendFiber = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "Do not revive this turn" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        bridge.setInstanceEnabled(false);
+        bridge.releaseNextDispatchAdmission();
+
+        const exit = yield* Fiber.await(sendFiber);
+        assert.equal(Exit.isFailure(exit), true);
+        yield* Effect.yieldNow;
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+        expect(events.some((event) => event.type === "turn.started")).toBe(false);
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("releases dispatch admission when the caller is interrupted", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        bridge.blockNextDispatchAdmission();
+        const blocked = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "Canceled before admission" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+        yield* Fiber.interrupt(blocked);
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Next message" });
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+        mastra.finishSend();
       }),
       bridge.service,
       mastra.factory,
@@ -2932,7 +3088,7 @@ describe("AgentControllerLive", () => {
           runtimeMode: "approval-required",
         });
 
-        bridge.disableAfterNextEnabledLookup();
+        bridge.disableBeforeNextDispatchAdmission();
         const error = yield* controller
           .sendTurn({ threadId: openCodeGoThreadId, input: "Do not dispatch this turn." })
           .pipe(Effect.flip);
@@ -2974,7 +3130,7 @@ describe("AgentControllerLive", () => {
           args: { command: "pwd" },
         } as AgentControllerEvent);
 
-        bridge.disableAfterNextEnabledLookup();
+        bridge.disableBeforeNextDispatchAdmission();
         const error = yield* controller
           .respondToRequest({
             threadId: openCodeGoThreadId,
@@ -3022,7 +3178,7 @@ describe("AgentControllerLive", () => {
           suspendPayload: {},
         } as AgentControllerEvent);
 
-        bridge.disableAfterNextEnabledLookup();
+        bridge.disableBeforeNextDispatchAdmission();
         const error = yield* controller
           .respondToUserInput({
             threadId: openCodeGoThreadId,
