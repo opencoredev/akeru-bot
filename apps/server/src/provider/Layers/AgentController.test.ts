@@ -67,9 +67,11 @@ import {
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
 const kimiThreadId = ThreadId.make("thread-mastra-kimi");
+const openCodeGoThreadId = ThreadId.make("thread-mastra-opencode-go");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
 const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
+const openCodeGoInstanceId = ProviderInstanceId.make("opencodeGo");
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -125,6 +127,7 @@ function makeProviderSession(
 }
 
 function makeBridge() {
+  let instanceEnabled = true;
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
       makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : "claudeAgent"),
@@ -161,7 +164,7 @@ function makeBridge() {
         instanceId,
         driverKind,
         displayName: undefined,
-        enabled: true,
+        enabled: instanceEnabled,
         continuationIdentity: {
           driverKind,
           continuationKey: `${driverKind}:instance:${instanceId}`,
@@ -181,6 +184,9 @@ function makeBridge() {
     stopSession,
     rollbackConversation,
     getCapabilities,
+    setInstanceEnabled: (enabled: boolean) => {
+      instanceEnabled = enabled;
+    },
   };
 }
 
@@ -2729,6 +2735,44 @@ describe("AgentControllerLive", () => {
         });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.getCapabilities).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects an OpenCode Go turn after the provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+
+        bridge.setInstanceEnabled(false);
+        const error = yield* controller
+          .sendTurn({ threadId: openCodeGoThreadId, input: "Do not run this turn." })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        if (error._tag === "ProviderValidationError") {
+          assert.include(error.issue, "disabled in Akeru Bot settings");
+        }
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
       }),
       bridge.service,
       mastra.factory,

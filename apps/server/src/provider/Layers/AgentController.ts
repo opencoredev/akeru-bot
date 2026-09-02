@@ -120,7 +120,11 @@ import {
   botWorkspaceIdentity,
   botWorkspaceResourceKey,
 } from "../botWorkspacePool.ts";
-import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
+import {
+  AgentControllerRuntimeError,
+  AgentControllerUnsupportedEngineError,
+  ProviderValidationError,
+} from "../Errors.ts";
 import {
   AgentController,
   type AgentControllerSendTurnInput,
@@ -374,6 +378,16 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
 
 function usesMastraCode(provider: ProviderDriverKind): boolean {
   return provider === "codex" || provider === "kimi" || provider === "opencodeGo";
+}
+
+function disabledProviderError(
+  operation: string,
+  providerInstanceId: ProviderInstanceId,
+): ProviderValidationError {
+  return new ProviderValidationError({
+    operation,
+    issue: `Provider instance '${providerInstanceId}' is disabled in Akeru Bot settings.`,
+  });
 }
 
 function subscriptionProviderForDriver(
@@ -1451,6 +1465,12 @@ const make = (options?: AgentControllerLiveOptions) =>
       const routing = yield* legacyProviderBridge
         .getInstanceInfo(modelSelection.instanceId)
         .pipe(Effect.mapError(unavailable));
+      if (usesMastraCode(routing.driverKind) && !routing.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.inspectEngine",
+          modelSelection.instanceId,
+        );
+      }
       const capabilities = usesMastraCode(routing.driverKind)
         ? { sessionModelSwitch: "in-session" as const }
         : yield* legacyProviderBridge
@@ -1564,6 +1584,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           operation: "startSession",
           detail: `Thread '${threadId}' has no resolved engine.`,
         });
+      }
+      if (usesMastraCode(resolved.provider)) {
+        const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
+        if (!routing.enabled) {
+          return yield* disabledProviderError(
+            "AgentController.startSession",
+            resolved.providerInstanceId,
+          );
+        }
       }
       if (
         mcpServers.some((server) => isCodexComputerUseServer(String(server.id))) &&
@@ -1909,6 +1938,16 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sendTurn: AgentControllerShape["sendTurn"] = Effect.fn("AgentController.sendTurn")(
       function* (input) {
         const key = String(input.threadId);
+        const resolved = resolvedByThread.get(key);
+        if (resolved && usesMastraCode(resolved.provider)) {
+          const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
+          if (!routing.enabled) {
+            return yield* disabledProviderError(
+              "AgentController.sendTurn",
+              resolved.providerInstanceId,
+            );
+          }
+        }
         const active = sessions.get(key);
         if (!active) {
           if (
@@ -1919,7 +1958,6 @@ const make = (options?: AgentControllerLiveOptions) =>
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
-          const resolved = resolvedByThread.get(key);
           const { botUsage: _, ...providerInput } = input;
           return yield* legacyProviderBridge.sendTurn(
             resolved?.botConversation === true && String(resolved.provider) !== "claudeAgent"
