@@ -1,0 +1,108 @@
+diff --git a/dist/client/client.d.ts b/dist/client/client.d.ts
+index a0b93c5ad5d7f0d62c2fb2798b28ca2ffa6ead0d..f52cc4235ad06dc247b6b3649db2f47b390b1bb6 100644
+--- a/dist/client/client.d.ts
++++ b/dist/client/client.d.ts
+@@ -187,7 +187,7 @@ export declare class InternalMastraMCPClient extends MastraBase {
+      *
+      * @internal
+      */
+-    finishAuth(authorizationCode: string): Promise<void>;
++    finishAuth(authorizationCode: string, iss?: string): Promise<void>;
+     private isConnected;
+     private reconnectPromise;
+     private lifecycleGeneration;
+diff --git a/dist/client/oauth-callback-server.d.ts b/dist/client/oauth-callback-server.d.ts
+index 1a724587cf4f4ca4383e005423afda2bc178b8bc..cd89f063b6d8953a8411476a4b2f641a53bf1e26 100644
+--- a/dist/client/oauth-callback-server.d.ts
++++ b/dist/client/oauth-callback-server.d.ts
+@@ -44,6 +44,10 @@ export interface OAuthCallbackResult {
+      * The state parameter echoed back by the authorization server.
+      */
+     state: string;
++    /**
++     * The authorization server issuer returned with the authorization response.
++     */
++    iss?: string;
+ }
+ /**
+  * A running loopback OAuth callback server.
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 38a6c5e70d3fb6603ce6c40b443088eaeb8cf695..65821cdff5135c8f7e7dfa0590f52e3fb0da0e39 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -21759,12 +21759,12 @@ var InternalMastraMCPClient = class extends _mastra_core_base.MastraBase {
+ 	*
+ 	* @internal
+ 	*/
+-	async finishAuth(authorizationCode) {
++	async finishAuth(authorizationCode, iss) {
+ 		const pending = this.pendingAuthTransport;
+ 		if (!pending) throw new Error("No OAuth authorization is pending for this server. Call connect() first.");
+ 		this.pendingAuthTransport = void 0;
+ 		try {
+-			await pending.finishAuth(authorizationCode);
++			await pending.finishAuth(authorizationCode, iss);
+ 		} finally {
+ 			pending.close().catch(() => {});
+ 		}
+@@ -22471,7 +22471,8 @@ async function createOAuthCallbackServer(options) {
+ 		respond(200, SUCCESS_HTML);
+ 		settle({ result: {
+ 			code,
+-			state
++			state,
++			iss: url.searchParams.get("iss") ?? void 0
+ 		} });
+ 	});
+ 	const hostname = candidates[0].hostname.replace(/^\[|\]$/g, "");
+@@ -23646,8 +23647,8 @@ onListChanged: async (serverName, handler) => {
+ 			} catch (error) {
+ 				if (!(error instanceof _modelcontextprotocol_client.UnauthorizedError)) throw this.handleConnectError(serverName, error);
+ 			}
+-			const { code } = await callbackServer.waitForCode(options);
+-			await client.finishAuth(code);
++			const { code, iss } = await callbackServer.waitForCode(options);
++			await client.finishAuth(code, iss);
+ 			try {
+ 				await client.connect();
+ 			} catch (error) {
+diff --git a/dist/index.js b/dist/index.js
+index 5d71441f80773dc594cfd49a8d7bf6159629edd7..dde1b30b13d2be892c8c72d05b9bfc43e98d14c0 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -21738,12 +21738,12 @@ var InternalMastraMCPClient = class extends MastraBase {
+ 	*
+ 	* @internal
+ 	*/
+-	async finishAuth(authorizationCode) {
++	async finishAuth(authorizationCode, iss) {
+ 		const pending = this.pendingAuthTransport;
+ 		if (!pending) throw new Error("No OAuth authorization is pending for this server. Call connect() first.");
+ 		this.pendingAuthTransport = void 0;
+ 		try {
+-			await pending.finishAuth(authorizationCode);
++			await pending.finishAuth(authorizationCode, iss);
+ 		} finally {
+ 			pending.close().catch(() => {});
+ 		}
+@@ -22450,7 +22450,8 @@ async function createOAuthCallbackServer(options) {
+ 		respond(200, SUCCESS_HTML);
+ 		settle({ result: {
+ 			code,
+-			state
++			state,
++			iss: url.searchParams.get("iss") ?? void 0
+ 		} });
+ 	});
+ 	const hostname = candidates[0].hostname.replace(/^\[|\]$/g, "");
+@@ -23625,8 +23626,8 @@ onListChanged: async (serverName, handler) => {
+ 			} catch (error) {
+ 				if (!(error instanceof UnauthorizedError)) throw this.handleConnectError(serverName, error);
+ 			}
+-			const { code } = await callbackServer.waitForCode(options);
+-			await client.finishAuth(code);
++			const { code, iss } = await callbackServer.waitForCode(options);
++			await client.finishAuth(code, iss);
+ 			try {
+ 				await client.connect();
+ 			} catch (error) {
