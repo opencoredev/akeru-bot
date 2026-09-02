@@ -637,8 +637,10 @@ const CRITICAL_SHELL_ACTIONS: ReadonlyArray<readonly [AkeruCriticalAction, RegEx
     /(?:^|[;&|]\s*)(?:(?:mail|mailx)\b|curl\b[^\n;&|]*(?:--data(?:-raw|-binary)?|-d\b|--form|-F\b|--request\s+post|-X\s*post))/i,
   ],
 ];
-const SHELL_COMMAND_WRAPPER_PATTERN =
-  /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi;
+const SHELL_COMMAND_WRAPPER_PATTERNS = [
+  /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi,
+  /(?:\bxargs\b[^\n;&|]*?\s+|\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi,
+];
 
 function textTokens(value: string): ReadonlySet<string> {
   return new Set(
@@ -673,11 +675,13 @@ function criticalActionFromShellCommand(
     if (pattern.test(value)) return action;
   }
   if (wrapperDepth < 5) {
-    for (const match of value.matchAll(SHELL_COMMAND_WRAPPER_PATTERN)) {
-      const nestedCommand = match[1] ?? match[2] ?? match[3];
-      if (!nestedCommand) continue;
-      const action = criticalActionFromShellCommand(nestedCommand, wrapperDepth + 1);
-      if (action) return action;
+    for (const wrapperPattern of SHELL_COMMAND_WRAPPER_PATTERNS) {
+      for (const match of value.matchAll(wrapperPattern)) {
+        const nestedCommand = match[1] ?? match[2] ?? match[3];
+        if (!nestedCommand) continue;
+        const action = criticalActionFromShellCommand(nestedCommand, wrapperDepth + 1);
+        if (action) return action;
+      }
     }
   }
   return criticalActionFromText(value);
