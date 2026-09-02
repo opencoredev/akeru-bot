@@ -71,6 +71,7 @@ describe("Akeru action classifier", () => {
     ["printf '%s\\n' empty-dir | xargs rmdir", "delete"],
     ["printf '%s\\n' important-link | xargs unlink", "delete"],
     ["find . -name important-file -exec shred -u {} \\;", "delete"],
+    ["find . -name important-file -exec env rm -f {} \\;", "delete"],
     ["printf '%s\\n' important-file | xargs sh -c 'rm -f \"$1\"' _", "delete"],
     ["find . -name important-file -exec sh -c 'rm -f \"$1\"' _ {} \\;", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {

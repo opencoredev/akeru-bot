@@ -2022,6 +2022,12 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
         mastra.emit({
           type: "tool_approval_required",
+          toolCallId: "find-env-rm-risky",
+          toolName: "execute_command",
+          args: { command: "find . -name important-file -exec env rm -f {} \\;" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
           toolCallId: "dd-risky",
           toolName: "execute_command",
           args: { command: "dd if=/dev/zero of=important-file" },
@@ -2048,6 +2054,7 @@ describe("AgentControllerLive", () => {
           "xargs-env-rm-risky",
           "xargs-shell-rm-risky",
           "find-shred-risky",
+          "find-env-rm-risky",
           "dd-risky",
           "redirected-dd-risky",
         ]) {
