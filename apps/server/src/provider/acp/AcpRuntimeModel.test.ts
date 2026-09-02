@@ -1,3 +1,10 @@
+import { it as effectIt } from "@effect/vitest";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import type * as EffectAcpSchema from "effect-acp/schema";
@@ -11,10 +18,33 @@ import {
   parseSessionUpdateEvent,
   sessionUpdateIsReplay,
   syntheticLoadSessionResponseFromInitialize,
+  waitForSessionLoadReplayIdle,
+  type SessionLoadGate,
   type AcpToolCallState,
 } from "./AcpRuntimeModel.ts";
 
 describe("AcpRuntimeModel", () => {
+  effectIt.effect("finishes session replay at the configured idle deadline", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(0);
+      const gateRef = yield* Ref.make<Option.Option<SessionLoadGate>>(
+        Option.some({
+          active: true,
+          lastActivityAtMillis: 0,
+          idleGap: Duration.millis(101),
+          initializeResult: { protocolVersion: 1 },
+        }),
+      );
+      const result = yield* waitForSessionLoadReplayIdle({ gateRef }).pipe(Effect.forkChild);
+
+      yield* TestClock.adjust(Duration.millis(101));
+
+      expect((yield* Fiber.join(result))._meta).toMatchObject({
+        t3SessionLoadReady: "replay_idle",
+      });
+    }),
+  );
+
   it("parses session mode state from typed ACP session setup responses", () => {
     const modeState = parseSessionModeState({
       sessionId: "session-1",
