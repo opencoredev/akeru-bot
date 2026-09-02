@@ -1,19 +1,20 @@
-# Depot CI validates the exact merge candidate before it reaches main.
+# Depot CI validates pull requests before they reach main.
 
 name: CI
 
 on:
-  merge_group:
-    types: [checks_requested]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
     name: Repository checks
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
     runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 45
     steps:
