@@ -92,7 +92,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "All" }).flatMap((section) =>
         section.plugins.map((plugin) => plugin.id),
       ),
-    ).toHaveLength(52);
+    ).toHaveLength(53);
     expect(
       buildPluginSections({
         plugins: catalog,
@@ -105,7 +105,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "Featured" })[0]?.plugins.map(
         (plugin) => plugin.id,
       ),
-    ).toEqual(["context", "zernio"]);
+    ).toEqual(["context", "zernio", "hoplite"]);
     expect(
       buildPluginSections({ plugins: catalog, query: "", filter: "Web" })[0]?.plugins.map(
         (plugin) => plugin.id,
@@ -133,7 +133,11 @@ describe("plugin presentation", () => {
       ),
     ]);
     expect(sections.every((section) => section.plugins.length > 0)).toBe(true);
-    expect(sections[0]?.plugins.map((plugin) => plugin.id)).toEqual(["context", "zernio"]);
+    expect(sections[0]?.plugins.map((plugin) => plugin.id)).toEqual([
+      "context",
+      "zernio",
+      "hoplite",
+    ]);
     for (const section of sections.slice(1)) {
       expect(
         section.plugins.every((plugin) => !plugin.featured && plugin.category === section.title),
