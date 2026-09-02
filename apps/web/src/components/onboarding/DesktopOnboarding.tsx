@@ -23,10 +23,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { isElectron } from "../../env";
 import { randomUUID } from "../../lib/utils";
-import { botEnvironment, environmentBotsAtom, environmentRosterLoadedAtom } from "../../state/bots";
+import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { environmentShell } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -825,7 +826,7 @@ function OnboardingSurface({
 export function DesktopOnboarding() {
   const environmentId = usePrimaryEnvironmentId();
   const atomKey = environmentId ?? NO_ENVIRONMENT;
-  const rosterLoaded = useAtomValue(environmentRosterLoadedAtom(atomKey));
+  const rosterLoaded = useAtomValue(environmentShell.stateValueAtom(atomKey)).status === "live";
   const serverBots = useAtomValue(environmentBotsAtom(atomKey));
   const [draft] = useState(readDraft);
   const [completed] = useState(
