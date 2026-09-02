@@ -64,6 +64,8 @@ describe("Akeru action classifier", () => {
     ["sudo dd if=image.img of=/dev/disk4 bs=4m", "delete"],
     ["dd if=/dev/zero > important-file", "delete"],
     ['bash -c "dd if=/dev/zero 1> important-file"', "delete"],
+    ["mv -f replacement important-file", "delete"],
+    ["command mv --force replacement important-file", "delete"],
     ["bash -lc 'command shred -u important-file'", "delete"],
     ["printf '%s\\n' important-file | xargs shred -u", "delete"],
     ["printf '%s\\n' important-file | xargs rm -f", "delete"],
