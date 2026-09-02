@@ -57,28 +57,36 @@ export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapt
         );
   };
 
+  const getInstanceInfo: ProviderAdapterRegistryShape["getInstanceInfo"] = (instanceId) => {
+    const adapter = byInstanceId.get(instanceId);
+    if (!adapter) {
+      return Effect.fail(
+        new ProviderUnsupportedError({
+          provider: ProviderDriverKind.make(instanceId),
+        }),
+      );
+    }
+    return Effect.succeed({
+      instanceId,
+      driverKind: ProviderDriverKind.make(adapter.provider),
+      displayName: undefined,
+      enabled: true,
+      continuationIdentity: {
+        driverKind: ProviderDriverKind.make(adapter.provider),
+        continuationKey: `${adapter.provider}:instance:${instanceId}`,
+      },
+    });
+  };
+
   return {
     getByInstance,
-    getInstanceInfo: (instanceId) => {
-      const adapter = byInstanceId.get(instanceId);
-      if (!adapter) {
-        return Effect.fail(
-          new ProviderUnsupportedError({
-            provider: ProviderDriverKind.make(instanceId),
-          }),
-        );
-      }
-      return Effect.succeed({
-        instanceId,
-        driverKind: ProviderDriverKind.make(adapter.provider),
-        displayName: undefined,
-        enabled: true,
-        continuationIdentity: {
-          driverKind: ProviderDriverKind.make(adapter.provider),
-          continuationKey: `${adapter.provider}:instance:${instanceId}`,
-        },
-      });
-    },
+    getInstanceInfo,
+    dispatchIfEnabled: (instanceId, dispatch) =>
+      Effect.sync(() =>
+        byInstanceId.has(instanceId)
+          ? ({ _tag: "Dispatched", value: dispatch() } as const)
+          : ({ _tag: "Missing" } as const),
+      ),
     listInstances: () => Effect.succeed(Array.from(byInstanceId.keys())),
     listProviders: () =>
       Effect.succeed(

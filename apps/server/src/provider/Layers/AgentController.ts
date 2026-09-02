@@ -122,7 +122,11 @@ import {
   botWorkspaceIdentity,
   botWorkspaceResourceKey,
 } from "../botWorkspacePool.ts";
-import { AgentControllerRuntimeError, AgentControllerUnsupportedEngineError } from "../Errors.ts";
+import {
+  AgentControllerRuntimeError,
+  AgentControllerUnsupportedEngineError,
+  ProviderValidationError,
+} from "../Errors.ts";
 import {
   AgentController,
   type AgentControllerSendTurnInput,
@@ -197,6 +201,7 @@ interface ActiveSession {
   model: string;
   status: ProviderSession["status"];
   activeTurn: ActiveTurn | null;
+  admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
   readonly toolNames: Map<string, string>;
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
@@ -388,7 +393,17 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
 }
 
 function usesMastraCode(provider: ProviderDriverKind): boolean {
-  return provider === "codex" || provider === "kimi";
+  return provider === "codex" || provider === "kimi" || provider === "opencodeGo";
+}
+
+function disabledProviderError(
+  operation: string,
+  providerInstanceId: ProviderInstanceId,
+): ProviderValidationError {
+  return new ProviderValidationError({
+    operation,
+    issue: `Provider instance '${providerInstanceId}' is disabled in Akeru Bot settings.`,
+  });
 }
 
 function subscriptionProviderForDriver(
@@ -405,6 +420,8 @@ function subscriptionProviderForDriver(
       return "xai";
     case "kimi":
       return "kimi-for-coding";
+    case "opencodeGo":
+      return "opencode-go";
     default:
       return undefined;
   }
@@ -691,16 +708,32 @@ const make = (options?: AgentControllerLiveOptions) =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
+        getOpenCodeGoApiKey: () => subscriptionAuth.getAccessToken("opencode-go"),
         memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);
-          if (!active || (!protectedAction && !active.connectorSessionApprovals.has(toolName))) {
+          const activeTurn = active?.activeTurn;
+          if (
+            !active ||
+            !activeTurn ||
+            (!protectedAction && !active.connectorSessionApprovals.has(toolName))
+          ) {
             return;
           }
-          await active.session.permissions.setForTool({
-            toolName,
-            policy: protectedAction ? "ask" : "allow",
-          });
+          const update = await runPromise(
+            legacyProviderBridge.dispatchIfEnabled(
+              active.providerInstanceId,
+              "AgentController.syncThreadToolApproval",
+              () => {
+                if (sessions.get(threadId) !== active || active.activeTurn !== activeTurn) return;
+                return active.session.permissions.setForTool({
+                  toolName,
+                  policy: protectedAction ? "ask" : "allow",
+                });
+              },
+            ),
+          );
+          await update;
         },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
         ...(routineDispatcher
@@ -1003,9 +1036,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       toolRuntime.clearApprovals(String(threadId));
     };
 
-    const startPendingTurn = (
+    const beginPendingTurn = (
       active: ActiveSession,
-      { threadId, turnId, message, botUsage }: PendingTurn,
+      { threadId, turnId, botUsage }: PendingTurn,
     ) => {
       const key = String(threadId);
       if (botUsage) {
@@ -1031,35 +1064,88 @@ const make = (options?: AgentControllerLiveOptions) =>
         payload: { model: active.model },
       });
       publishSessionState(threadId, active, "running");
-      void active.session
-        .sendMessage(message)
+    };
+
+    const failActiveTurn = async (
+      active: ActiveSession,
+      threadId: ThreadId,
+      turnId: TurnId,
+      cause: unknown,
+    ) => {
+      if (active.activeTurn?.turnId !== turnId) return;
+      const detail = sessionFailureDetail(active, cause);
+      publish({
+        ...baseEvent(threadId, active, turnId),
+        type: "runtime.error",
+        payload: { message: detail, class: "provider_error" },
+      });
+      finishTurn(threadId, active, "failed", detail);
+      await runPromise(
+        stopSessionWithResources({ threadId }, false).pipe(
+          Effect.catchCause((resetCause) =>
+            Effect.logWarning("provider session reset failed", {
+              threadId,
+              cause: resetCause,
+            }),
+          ),
+        ),
+      );
+    };
+
+    const handlePendingTurnFailure = (
+      active: ActiveSession,
+      pending: PendingTurn,
+      cause: unknown,
+    ) => {
+      const ownsAdmission = active.admittingTurn?.turnId === pending.turnId;
+      const ownsActiveTurn = active.activeTurn?.turnId === pending.turnId;
+      if (!ownsAdmission && !ownsActiveTurn) return Promise.resolve();
+      if (ownsAdmission) {
+        active.admittingTurn = null;
+      }
+      if (!active.activeTurn) beginPendingTurn(active, pending);
+      return failActiveTurn(active, pending.threadId, pending.turnId, cause);
+    };
+
+    const startAdmittedPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
+      const { threadId, turnId, message } = pending;
+      if (active.admittingTurn?.turnId !== turnId) return;
+      active.admittingTurn = null;
+      beginPendingTurn(active, pending);
+      const dispatch = active.session.sendMessage(message);
+      void dispatch
         .then(() => {
           const turn = active.activeTurn;
           if (turn?.turnId === turnId && !turn.waiting) {
             finishTurn(threadId, active, "completed");
           }
         })
-        .catch(async (cause: unknown) => {
-          if (active.activeTurn?.turnId !== turnId) return;
-          const detail = sessionFailureDetail(active, cause);
-          publish({
-            ...baseEvent(threadId, active, turnId),
-            type: "runtime.error",
-            payload: { message: detail, class: "provider_error" },
-          });
-          finishTurn(threadId, active, "failed", detail);
-          await runPromise(
-            stopSessionWithResources({ threadId }, false).pipe(
-              Effect.catchCause((resetCause) =>
-                Effect.logWarning("provider session reset failed", {
-                  threadId,
-                  cause: resetCause,
-                }),
-              ),
-            ),
-          );
-        });
+        .catch((cause: unknown) => handlePendingTurnFailure(active, pending, cause));
     };
+
+    const admitPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
+      active.admittingTurn = pending;
+      return legacyProviderBridge
+        .dispatchIfEnabled(active.providerInstanceId, "AgentController.startPendingTurn", () =>
+          startAdmittedPendingTurn(active, pending),
+        )
+        .pipe(
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              if (active.admittingTurn?.turnId !== pending.turnId) return;
+              active.admittingTurn = null;
+              const nextTurn = active.pendingTurns.shift();
+              if (nextTurn) startPendingTurn(active, nextTurn);
+            }),
+          ),
+        );
+    };
+
+    function startPendingTurn(active: ActiveSession, pending: PendingTurn) {
+      void runPromise(admitPendingTurn(active, pending)).catch((cause: unknown) =>
+        handlePendingTurnFailure(active, pending, cause),
+      );
+    }
 
     const finishTurn = (
       threadId: ThreadId,
@@ -1280,9 +1366,21 @@ const make = (options?: AgentControllerLiveOptions) =>
             !oneUseApproval &&
             permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) === "allow"
           ) {
-            active.session.respondToToolApproval({
-              toolCallId: event.toolCallId,
-              decision: "approve",
+            void runPromise(
+              legacyProviderBridge.dispatchIfEnabled(
+                active.providerInstanceId,
+                "AgentController.handleControllerEvent",
+                () => {
+                  if (active.activeTurn !== turn || turn.finished) return;
+                  active.session.respondToToolApproval({
+                    toolCallId: event.toolCallId,
+                    decision: "approve",
+                  });
+                },
+              ),
+            ).catch((cause: unknown) => {
+              if (active.activeTurn !== turn || turn.finished) return;
+              void failActiveTurn(active, threadId, turn.turnId, cause);
             });
             return;
           }
@@ -1463,6 +1561,12 @@ const make = (options?: AgentControllerLiveOptions) =>
       const routing = yield* legacyProviderBridge
         .getInstanceInfo(modelSelection.instanceId)
         .pipe(Effect.mapError(unavailable));
+      if (usesMastraCode(routing.driverKind) && !routing.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.inspectEngine",
+          modelSelection.instanceId,
+        );
+      }
       const capabilities = usesMastraCode(routing.driverKind)
         ? { sessionModelSwitch: "in-session" as const }
         : yield* legacyProviderBridge
@@ -1585,6 +1689,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           operation: "startSession",
           detail: `Thread '${threadId}' has no resolved engine.`,
         });
+      }
+      if (usesMastraCode(resolved.provider)) {
+        const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
+        if (!routing.enabled) {
+          return yield* disabledProviderError(
+            "AgentController.startSession",
+            resolved.providerInstanceId,
+          );
+        }
       }
       if (
         mcpServers.some((server) => isCodexComputerUseServer(String(server.id))) &&
@@ -1918,6 +2031,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           model: resolved.modelSelection.model,
           status: "ready" as const,
           activeTurn: null,
+          admittingTurn: null,
           pendingTurns: [],
           toolNames: new Map<string, string>(),
           approvalRequests: new Map(),
@@ -1941,6 +2055,16 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sendTurn: AgentControllerShape["sendTurn"] = Effect.fn("AgentController.sendTurn")(
       function* (input) {
         const key = String(input.threadId);
+        const resolved = resolvedByThread.get(key);
+        if (resolved && usesMastraCode(resolved.provider)) {
+          const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
+          if (!routing.enabled) {
+            return yield* disabledProviderError(
+              "AgentController.sendTurn",
+              resolved.providerInstanceId,
+            );
+          }
+        }
         const active = sessions.get(key);
         if (!active) {
           if (
@@ -1951,7 +2075,6 @@ const make = (options?: AgentControllerLiveOptions) =>
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
-          const resolved = resolvedByThread.get(key);
           const { botUsage: _, ...providerInput } = input;
           return yield* legacyProviderBridge.sendTurn(
             resolved?.botConversation === true && String(resolved.provider) !== "claudeAgent"
@@ -2009,9 +2132,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           message: { content, ...(files.length > 0 ? { files } : {}) },
           botUsage: input.botUsage,
         });
-        if (!active.activeTurn) {
+        if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();
-          if (nextTurn) startPendingTurn(active, nextTurn);
+          if (nextTurn) {
+            yield* admitPendingTurn(active, nextTurn).pipe(
+              Effect.tapError((cause) =>
+                Effect.promise(() => handlePendingTurnFailure(active, nextTurn, cause)),
+              ),
+            );
+          }
         }
         return { threadId: input.threadId, turnId };
       },
@@ -2031,6 +2160,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         return yield* legacyProviderBridge.interruptTurn(input);
       }
       active.pendingTurns.length = 0;
+      active.admittingTurn = null;
       active.session.abort();
       finishTurn(input.threadId, active, "interrupted");
     });
@@ -2050,6 +2180,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
         return yield* legacyProviderBridge.respondToRequest(input);
+      }
+      const routing = yield* legacyProviderBridge.getInstanceInfo(active.providerInstanceId);
+      if (!routing.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.respondToRequest",
+          active.providerInstanceId,
+        );
       }
       if (!active.activeTurn) {
         return yield* new AgentControllerRuntimeError({
@@ -2100,44 +2237,62 @@ const make = (options?: AgentControllerLiveOptions) =>
       const toolRequest = active.approvalRequests.get(toolCallId);
       const pendingApproval = active.pendingApprovals.get(toolCallId);
       if (!toolRequest || !pendingApproval) return;
-      active.approvalRequests.delete(toolCallId);
-      active.pendingApprovals.delete(toolCallId);
       const { name: toolName, input: toolInput } = toolRequest;
       const akeruTool = AKERU_TOOL_CATALOG.find((tool) => tool.id === toolName);
       const runtimeToolId = akeruTool?.id ?? (isMemoryToolId(toolName) ? toolName : undefined);
-      if (runtimeToolId && input.decision !== "decline" && input.decision !== "cancel") {
-        toolRuntime.grantApproval({
-          threadId: key,
-          toolCallId,
-          toolId: runtimeToolId,
-          input: toolInput,
-        });
-      }
-      if (
+      const acceptForSession =
         input.decision === "acceptForSession" &&
         !runtimeToolId &&
         !isCodexComputerUseTool(toolName) &&
         !akeruActionNeedsApproval(toolName, toolInput) &&
-        toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME
-      ) {
-        active.connectorSessionApprovals.add(toolName);
-        yield* runMastra("permissions.setForTool", () =>
-          active.session.permissions.setForTool({ toolName, policy: "allow" }),
-        );
-      }
+        toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
       const target = pendingApproval.toolName;
       const decision =
         input.decision === "acceptForSession" || input.decision === "acceptAlways"
           ? "accept"
           : input.decision;
-      if (active.activeTurn) active.activeTurn.waiting = false;
-      active.session.respondToToolApproval({
-        toolCallId,
-        decision:
-          runtimeToolId && input.decision !== "decline" && input.decision !== "cancel"
-            ? "approve"
-            : approvalDecision(decision),
-      });
+      const admitted = yield* legacyProviderBridge.dispatchIfEnabled(
+        active.providerInstanceId,
+        "AgentController.respondToRequest",
+        () => {
+          if (!active.activeTurn || active.approvalRequests.get(toolCallId) !== toolRequest) {
+            return { _tag: "Stale" as const };
+          }
+          active.approvalRequests.delete(toolCallId);
+          active.pendingApprovals.delete(toolCallId);
+          if (runtimeToolId && input.decision !== "decline" && input.decision !== "cancel") {
+            toolRuntime.grantApproval({
+              threadId: key,
+              toolCallId,
+              toolId: runtimeToolId,
+              input: toolInput,
+            });
+          }
+          const update = acceptForSession
+            ? active.session.permissions.setForTool({ toolName, policy: "allow" })
+            : undefined;
+          if (acceptForSession) active.connectorSessionApprovals.add(toolName);
+          if (active.activeTurn) active.activeTurn.waiting = false;
+          active.session.respondToToolApproval({
+            toolCallId,
+            decision:
+              runtimeToolId && input.decision !== "decline" && input.decision !== "cancel"
+                ? "approve"
+                : approvalDecision(decision),
+          });
+          return { _tag: "Dispatched" as const, permissionUpdate: update };
+        },
+      );
+      if (admitted._tag === "Stale") {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToRequest",
+          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+        });
+      }
+      const permissionUpdate = admitted.permissionUpdate;
+      if (permissionUpdate) {
+        yield* runMastra("permissions.setForTool", () => permissionUpdate);
+      }
       publish({
         ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
         requestId: RuntimeRequestId.make(toolCallId),
@@ -2170,6 +2325,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.respondToUserInput(input);
       }
+      const routing = yield* legacyProviderBridge.getInstanceInfo(active.providerInstanceId);
+      if (!routing.enabled) {
+        return yield* disabledProviderError(
+          "AgentController.respondToUserInput",
+          active.providerInstanceId,
+        );
+      }
       const toolCallId = String(input.requestId);
       const answer = input.answers[toolCallId];
       if (answer === undefined) {
@@ -2178,7 +2340,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: `No answer was supplied for pending user-input request '${toolCallId}'.`,
         });
       }
-      if (active.activeTurn) active.activeTurn.waiting = false;
+      const activeTurn = active.activeTurn;
       let resumeFailure: string | undefined;
       const unsubscribe = active.session.subscribe((event) => {
         if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
@@ -2187,9 +2349,29 @@ const make = (options?: AgentControllerLiveOptions) =>
           resumeFailure ??= event.error.message;
         }
       });
-      yield* runMastra("respondToToolSuspension", () =>
-        active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
-      ).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
+      yield* Effect.gen(function* () {
+        const admitted = yield* legacyProviderBridge.dispatchIfEnabled(
+          active.providerInstanceId,
+          "AgentController.respondToUserInput",
+          () => {
+            if (!activeTurn || active.activeTurn !== activeTurn) {
+              return { _tag: "Stale" as const };
+            }
+            if (active.activeTurn) active.activeTurn.waiting = false;
+            return {
+              _tag: "Dispatched" as const,
+              resume: active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
+            };
+          },
+        );
+        if (admitted._tag === "Stale") {
+          return yield* new AgentControllerRuntimeError({
+            operation: "respondToUserInput",
+            detail: `Unknown pending user-input request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+          });
+        }
+        yield* runMastra("respondToToolSuspension", () => admitted.resume);
+      }).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
       if (resumeFailure !== undefined) {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToToolSuspension",
@@ -2240,6 +2422,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         return yield* legacyProviderBridge.stopSession(input);
       }
       active.pendingTurns.length = 0;
+      active.admittingTurn = null;
       active.session.abort();
       if (active.activeTurn) {
         finishTurn(input.threadId, active, "interrupted");
@@ -2288,6 +2471,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
           active.pendingTurns.length = 0;
+          active.admittingTurn = null;
           active.session.abort();
           if (active.activeTurn) {
             finishTurn(ThreadId.make(threadId), active, "interrupted");

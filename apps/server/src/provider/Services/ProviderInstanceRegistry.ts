@@ -26,6 +26,11 @@ import type * as Stream from "effect/Stream";
 
 import type { ProviderInstance } from "../ProviderDriver.ts";
 
+export type ProviderInstanceDispatchResult<A> =
+  | { readonly _tag: "Missing" }
+  | { readonly _tag: "Disabled" }
+  | { readonly _tag: "Dispatched"; readonly value: A };
+
 export interface ProviderInstanceRegistryShape {
   /**
    * Look up one instance by id. Returns `undefined` (not Option) when the
@@ -35,6 +40,11 @@ export interface ProviderInstanceRegistryShape {
   readonly getInstance: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderInstance | undefined>;
+  /** Check enabled state and invoke a provider method while reconciliation is blocked. */
+  readonly dispatchIfEnabled: <A>(
+    instanceId: ProviderInstanceId,
+    dispatch: () => A,
+  ) => Effect.Effect<ProviderInstanceDispatchResult<A>>;
   /**
    * Every available (driver-registered, successfully created) instance,
    * in stable settings-author order.

@@ -869,6 +869,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             {
               getInstance: (instanceId) =>
                 Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
+              dispatchIfEnabled: (instanceId, dispatch) =>
+                Effect.sync(() =>
+                  instanceId === codexInstanceId
+                    ? ({ _tag: "Dispatched", value: dispatch() } as const)
+                    : ({ _tag: "Missing" } as const),
+                ),
               listInstances: Effect.succeed([instance]),
               listUnavailable: Effect.succeed([]),
               streamChanges: Stream.empty,
@@ -958,6 +964,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             {
               getInstance: (instanceId) =>
                 Effect.succeed(instanceId === cursorInstanceId ? instance : undefined),
+              dispatchIfEnabled: (instanceId, dispatch) =>
+                Effect.sync(() =>
+                  instanceId === cursorInstanceId
+                    ? ({ _tag: "Dispatched", value: dispatch() } as const)
+                    : ({ _tag: "Missing" } as const),
+                ),
               listInstances: Effect.succeed([instance]),
               listUnavailable: Effect.succeed([]),
               streamChanges: Stream.empty,
@@ -1087,6 +1099,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               {
                 getInstance: (instanceId) =>
                   Effect.succeed(instanceId === openCodeInstanceId ? instance : undefined),
+                dispatchIfEnabled: (instanceId, dispatch) =>
+                  Effect.sync(() =>
+                    instanceId === openCodeInstanceId
+                      ? ({ _tag: "Dispatched", value: dispatch() } as const)
+                      : ({ _tag: "Missing" } as const),
+                  ),
                 listInstances: Effect.succeed([instance]),
                 listUnavailable: Effect.succeed([]),
                 streamChanges: Stream.empty,
@@ -1194,6 +1212,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             {
               getInstance: (instanceId) =>
                 Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
+              dispatchIfEnabled: (instanceId, dispatch) =>
+                Effect.sync(() =>
+                  instanceId === codexInstanceId
+                    ? ({ _tag: "Dispatched", value: dispatch() } as const)
+                    : ({ _tag: "Missing" } as const),
+                ),
               listInstances: Effect.succeed([instance]),
               listUnavailable: Effect.succeed([]),
               streamChanges: Stream.empty,
@@ -1295,6 +1319,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 Ref.get(instancesRef).pipe(
                   Effect.map((instances) =>
                     instances.find((instance) => instance.instanceId === instanceId),
+                  ),
+                ),
+              dispatchIfEnabled: (instanceId, dispatch) =>
+                Ref.get(instancesRef).pipe(
+                  Effect.map((instances) =>
+                    instances.some((instance) => instance.instanceId === instanceId)
+                      ? ({ _tag: "Dispatched", value: dispatch() } as const)
+                      : ({ _tag: "Missing" } as const),
                   ),
                 ),
               listInstances: Effect.gen(function* () {
@@ -1744,6 +1776,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 "grok",
                 "kimi",
                 "opencode",
+                "opencodeGo",
               ]);
               assert.strictEqual(cursorSpawned, false);
             }).pipe(Effect.provide(runtimeServices));

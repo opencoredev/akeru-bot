@@ -139,6 +139,12 @@ const fakeInstances: ReadonlyArray<ProviderInstance> = [
 const fakeInstanceRegistryLayer = Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
   getInstance: (instanceId) =>
     Effect.succeed(fakeInstances.find((instance) => instance.instanceId === instanceId)),
+  dispatchIfEnabled: (instanceId, dispatch) =>
+    Effect.sync(() =>
+      fakeInstances.some((instance) => instance.instanceId === instanceId)
+        ? ({ _tag: "Dispatched", value: dispatch() } as const)
+        : ({ _tag: "Missing" } as const),
+    ),
   listInstances: Effect.succeed(fakeInstances),
   listUnavailable: Effect.succeed([]),
   streamChanges: Stream.empty,

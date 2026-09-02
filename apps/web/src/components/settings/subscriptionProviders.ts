@@ -1,6 +1,6 @@
 import type { SubscriptionProviderId } from "@t3tools/contracts";
 
-import { ClaudeAI, type Icon } from "../Icons";
+import { ClaudeAI, OpenCodeIcon, type Icon } from "../Icons";
 
 export interface SubscriptionProviderDefinition {
   readonly id: SubscriptionProviderId;
@@ -38,5 +38,12 @@ export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] =
     subscription: "Kimi For Coding plan",
     description: "Use Kimi coding models through your Moonshot subscription.",
     icon: "/provider-icons/kimi-for-coding.svg",
+  },
+  {
+    id: "opencode-go",
+    label: "OpenCode Go",
+    subscription: "OpenCode Go API key",
+    description: "Use OpenCode Go models with an API key from OpenCode.",
+    icon: OpenCodeIcon,
   },
 ];

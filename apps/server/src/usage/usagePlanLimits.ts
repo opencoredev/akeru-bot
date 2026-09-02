@@ -31,6 +31,7 @@ const PLAN_PROVIDER_ORDER: readonly SubscriptionProviderId[] = [
   "cursor",
   "xai",
   "kimi-for-coding",
+  "opencode-go",
 ];
 
 export type GetAccessToken = (provider: SubscriptionProviderId) => Promise<string | undefined>;
@@ -538,6 +539,8 @@ async function fetchProvider(
       return fetchGrok(accessToken);
     case "kimi-for-coding":
       return fetchKimi(accessToken);
+    case "opencode-go":
+      return null;
   }
 }
 

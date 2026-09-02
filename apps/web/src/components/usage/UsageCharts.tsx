@@ -18,7 +18,7 @@ import { Grid } from "../dither-kit/grid";
 import { Tooltip } from "../dither-kit/tooltip";
 import { XAxis } from "../dither-kit/x-axis";
 import { YAxis } from "../dither-kit/y-axis";
-import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI } from "../Icons";
+import { ClaudeAI, CursorIcon, GrokIcon, OpenCodeIcon, type Icon, OpenAI } from "../Icons";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION, providersWithUsage } from "./usageProviders";
 
 export const PLAN_PROVIDER_PRESENTATION: Record<
@@ -38,6 +38,7 @@ export const PLAN_PROVIDER_PRESENTATION: Record<
     icon: "/provider-icons/kimi-for-coding.svg",
     color: "purple",
   },
+  "opencode-go": { label: "OpenCode Go", icon: OpenCodeIcon, color: "grey" },
 };
 
 export const PLAN_PROVIDER_ORDER: readonly SubscriptionProviderId[] = [
@@ -46,6 +47,7 @@ export const PLAN_PROVIDER_ORDER: readonly SubscriptionProviderId[] = [
   "cursor",
   "xai",
   "kimi-for-coding",
+  "opencode-go",
 ];
 
 function formatReset(resetsAt: string | null): string {

@@ -36,6 +36,7 @@ const CUSTOM_MODEL_PLACEHOLDER_BY_KIND: Partial<Record<ProviderDriverKind, strin
   [ProviderDriverKind.make("cursor")]: "claude-sonnet-4-6",
   [ProviderDriverKind.make("kimi")]: "k3-256k",
   [ProviderDriverKind.make("opencode")]: "openai/gpt-5",
+  [ProviderDriverKind.make("opencodeGo")]: "gpt-5.6-luna",
 };
 
 interface ProviderModelsSectionProps {

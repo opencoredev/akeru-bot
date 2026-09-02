@@ -47,6 +47,7 @@ import {
   createAkeruBotInstructions,
 } from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
+import { akeruOpenCodeGoProvider } from "./AkeruOpenCodeGoProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
@@ -186,6 +187,7 @@ export function withAkeruModelRunOptions(
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
   readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
+  readonly getOpenCodeGoApiKey?: () => Promise<string | undefined>;
   readonly memoryDbPath: string;
   readonly startMemoryCall?: (input: {
     readonly threadId: string;
@@ -244,6 +246,7 @@ type AkeruMastraToolOptions = Pick<
   AkeruMastraHarnessOptions,
   | "authStorage"
   | "getKimiAccess"
+  | "getOpenCodeGoApiKey"
   | "getThreadTools"
   | "syncThreadToolApproval"
   | "toolRuntime"
@@ -362,7 +365,10 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
 }
 
 export async function createAkeruMastraMemory(
-  options: Pick<AkeruMastraHarnessOptions, "authStorage" | "getKimiAccess" | "memoryDbPath">,
+  options: Pick<
+    AkeruMastraHarnessOptions,
+    "authStorage" | "getKimiAccess" | "getOpenCodeGoApiKey" | "memoryDbPath"
+  >,
 ) {
   const storage = new LibSQLStore({
     id: "akeru-observational-memory",
@@ -375,6 +381,7 @@ export async function createAkeruMastraMemory(
       controllerModelId(requestContext),
       options.authStorage,
       options.getKimiAccess,
+      options.getOpenCodeGoApiKey,
     );
   const memory = new Memory({
     storage,
@@ -426,6 +433,7 @@ export async function createAkeruMastraMemory(
 const MASTRA_MODEL_PREFIX = {
   codex: "openai",
   kimi: "kimi-for-coding",
+  opencodeGo: "opencode-go",
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
@@ -440,6 +448,7 @@ export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
   getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
+  getOpenCodeGoApiKey?: () => Promise<string | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
 ) {
   const trimmed = modelId.trim();
@@ -453,6 +462,10 @@ export function resolveAkeruMastraModel(
   if (trimmed.startsWith("kimi-for-coding/")) {
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
+  }
+  if (trimmed.startsWith("opencode-go/")) {
+    if (!getOpenCodeGoApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
+    return akeruOpenCodeGoProvider(trimmed.slice("opencode-go/".length), getOpenCodeGoApiKey);
   }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
 }
@@ -812,6 +825,7 @@ export async function createAkeruMastraHarness(
         controllerModelId(requestContext),
         options.authStorage,
         options.getKimiAccess,
+        options.getOpenCodeGoApiKey,
         controllerModelOptions(requestContext),
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),

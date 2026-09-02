@@ -388,6 +388,27 @@ describe("AkeruMastraHarness", () => {
     );
   });
 
+  it("keeps OpenCode Go model names on the direct subscription transport", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
+    assert.equal(
+      mastraModelId(ProviderDriverKind.make("opencodeGo"), "gpt-5.6-luna"),
+      "opencode-go/gpt-5.6-luna",
+    );
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "opencode-go/gpt-5.6-luna",
+        authStorage,
+        undefined,
+        async () => "go-key",
+      ),
+      { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
+    );
+    assert.throws(
+      () => resolveAkeruMastraModel("opencode-go/gpt-5.6-luna", authStorage),
+      "subscription access is unavailable",
+    );
+  });
+
   it("builds a compact, human prompt with the bot name and current date", () => {
     const instructions = createAkeruAgentInstructions({
       name: "  Research\nBot  ",
