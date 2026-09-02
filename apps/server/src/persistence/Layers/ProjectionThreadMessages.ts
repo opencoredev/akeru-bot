@@ -113,7 +113,13 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
             projection_thread_messages.channel_origin_json
           ),
           role = excluded.role,
-          text = excluded.text,
+          text = CASE
+            WHEN projection_thread_messages.is_streaming = 1
+              AND excluded.is_streaming = 0
+              AND excluded.text = ''
+            THEN projection_thread_messages.text
+            ELSE excluded.text
+          END,
           attachments_json = COALESCE(
             excluded.attachments_json,
             projection_thread_messages.attachments_json

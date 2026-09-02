@@ -12,6 +12,98 @@ const layer = it.layer(
 );
 
 layer("ProjectionThreadMessageRepository", (it) => {
+  it.effect("preserves streamed text when an empty message completes the stream", () =>
+    Effect.gen(function* () {
+      const repository = yield* ProjectionThreadMessageRepository;
+      const threadId = ThreadId.make("thread-streaming-completion");
+      const messageId = MessageId.make("message-streaming-completion");
+      const createdAt = "2026-09-01T17:00:00.000Z";
+
+      yield* repository.appendStreaming({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: "one",
+        createdAt,
+        updatedAt: createdAt,
+      });
+      yield* repository.appendStreaming({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: " two",
+        createdAt,
+        updatedAt: "2026-09-01T17:00:01.000Z",
+      });
+      yield* repository.appendStreaming({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: " three",
+        createdAt,
+        updatedAt: "2026-09-01T17:00:02.000Z",
+      });
+
+      yield* repository.upsert({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: "",
+        isStreaming: false,
+        createdAt,
+        updatedAt: "2026-09-01T17:00:03.000Z",
+      });
+
+      const result = yield* repository.getByMessageId({ messageId });
+      assert.equal(result._tag, "Some");
+      if (result._tag === "Some") {
+        assert.equal(result.value.text, "one two three");
+        assert.isFalse(result.value.isStreaming);
+        assert.equal(result.value.updatedAt, "2026-09-01T17:00:03.000Z");
+      }
+    }),
+  );
+
+  it.effect("allows empty text to replace a completed message", () =>
+    Effect.gen(function* () {
+      const repository = yield* ProjectionThreadMessageRepository;
+      const threadId = ThreadId.make("thread-empty-completed-message");
+      const messageId = MessageId.make("message-empty-completed-message");
+      const createdAt = "2026-09-01T17:10:00.000Z";
+
+      yield* repository.upsert({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: "replace me",
+        isStreaming: false,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      yield* repository.upsert({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: "",
+        isStreaming: false,
+        createdAt,
+        updatedAt: "2026-09-01T17:10:01.000Z",
+      });
+
+      const result = yield* repository.getByMessageId({ messageId });
+      assert.equal(result._tag, "Some");
+      if (result._tag === "Some") {
+        assert.equal(result.value.text, "");
+      }
+    }),
+  );
+
   it.effect("appends streaming text without replacing Akeru message metadata", () =>
     Effect.gen(function* () {
       const repository = yield* ProjectionThreadMessageRepository;
