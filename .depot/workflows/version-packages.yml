@@ -12,12 +12,12 @@ permissions:
 
 concurrency:
   group: version-packages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   version:
     name: Update version PR
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 15
     steps:
       - name: Checkout

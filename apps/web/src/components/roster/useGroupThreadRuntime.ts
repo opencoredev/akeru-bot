@@ -232,6 +232,7 @@ export function useGroupThreadRuntime(groupId: string) {
         ? {
             instanceId: ProviderInstanceId.make(respondingBot.engine.provider),
             model: respondingBot.engine.model,
+            ...(respondingBot.engine.options ? { options: respondingBot.engine.options } : {}),
           }
         : (activeProject.defaultModelSelection ?? appDefaultModelSelection);
 

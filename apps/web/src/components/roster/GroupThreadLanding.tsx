@@ -247,7 +247,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             boss === null
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
-          modelPicker={null}
           onSubmit={runtime.send}
         />
       </div>

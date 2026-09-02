@@ -1,8 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { composerTestInstanceId, makeComposerTestProvider } from "../../test/chatComposerProps";
 import { visitElements } from "../../test/reactElementTree";
 import {
   BotPromptAttachments,
@@ -92,12 +90,7 @@ describe("bot prompt composer", () => {
 
   it("uses the available chat width", () => {
     const markup = renderToStaticMarkup(
-      <BotPromptComposer
-        botName="Akeru"
-        disabled={false}
-        modelPicker={null}
-        onSubmit={vi.fn(async () => true)}
-      />,
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
     expect(markup).toContain('class="w-full px-4');
@@ -109,7 +102,6 @@ describe("bot prompt composer", () => {
       <BotPromptComposer
         botName="Akeru"
         disabled={false}
-        modelPicker={null}
         pendingActionSlot={<div data-testid="pending-question">Question</div>}
         placeholder="Write a custom answer..."
         onSubmit={vi.fn(async () => true)}
@@ -124,18 +116,12 @@ describe("bot prompt composer", () => {
 
   it("squares the prompt box against an approval rendered above it", () => {
     const withoutApproval = renderToStaticMarkup(
-      <BotPromptComposer
-        botName="Akeru"
-        disabled={false}
-        modelPicker={null}
-        onSubmit={vi.fn(async () => true)}
-      />,
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
     const withApproval = renderToStaticMarkup(
       <BotPromptComposer
         botName="Akeru"
         disabled={false}
-        modelPicker={null}
         pendingActionSlot={<div data-testid="approval-slot">Run this command?</div>}
         onSubmit={vi.fn(async () => true)}
       />,
@@ -147,28 +133,14 @@ describe("bot prompt composer", () => {
     expect(withApproval).toContain("border-t-transparent");
   });
 
-  it("shows the active model and keeps it changeable", () => {
-    const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+  it("does not render model or reasoning controls", () => {
     const markup = renderToStaticMarkup(
-      <BotPromptComposer
-        botName="Akeru"
-        disabled={false}
-        modelPicker={{
-          activeInstanceId: composerTestInstanceId,
-          model: "gpt-5-codex",
-          instanceEntries,
-          modelOptionsByInstance: new Map([
-            [composerTestInstanceId, [{ slug: "gpt-5-codex", name: "Launchbar Model" }]],
-          ]),
-          onChange: vi.fn(),
-        }}
-        onSubmit={vi.fn(async () => true)}
-      />,
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
-    expect(markup).toContain("Launchbar Model");
-    expect(markup).toContain('aria-label="Change model"');
-    expect(markup).toContain("data-chat-provider-model-picker");
+    expect(markup).not.toContain("Reasoning");
+    expect(markup).not.toContain('aria-label="Change model"');
+    expect(markup).not.toContain("data-chat-provider-model-picker");
   });
 
   it("creates stable previews in file order and releases their object URLs", () => {

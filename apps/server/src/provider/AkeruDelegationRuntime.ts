@@ -394,6 +394,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           : {
               instanceId: ProviderInstanceId.make(bot.engine.provider),
               model: bot.engine.model,
+              ...(bot.engine.options ? { options: bot.engine.options } : {}),
             },
       runtimeMode: grant.runtimeMode,
       interactionMode: "default",

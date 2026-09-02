@@ -2,14 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import {
-  type ComponentProps,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   hydrateImagesFromPersisted,
@@ -33,7 +26,6 @@ import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
-import { BotModelPicker } from "./BotModelPicker";
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -41,11 +33,6 @@ import {
   releaseBotPromptAttachments,
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
-
-type BotModelPickerProps = Pick<
-  ComponentProps<typeof BotModelPicker>,
-  "activeInstanceId" | "model" | "instanceEntries" | "modelOptionsByInstance" | "onChange"
->;
 
 export function isBotPromptExpanded(prompt: string): boolean {
   return prompt.includes("\n") || prompt.length > 80;
@@ -122,7 +109,6 @@ export function BotPromptComposer({
   draftKey,
   disabled,
   mentionBots = EMPTY_MENTION_BOTS,
-  modelPicker,
   pendingActionSlot = null,
   placeholder,
   onSubmit,
@@ -131,7 +117,6 @@ export function BotPromptComposer({
   draftKey?: string;
   disabled: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
-  modelPicker: BotModelPickerProps | null;
   /** Rendered above the prompt box so a pending decision reads as part of the composer. */
   pendingActionSlot?: ReactNode;
   placeholder?: string;
@@ -198,7 +183,7 @@ export function BotPromptComposer({
     [releaseAttachments],
   );
 
-  const expanded = modelPicker !== null || attachments.length > 0 || isBotPromptExpanded(draft);
+  const expanded = attachments.length > 0 || isBotPromptExpanded(draft);
   const addFiles = (next: FileList | readonly File[]) => {
     revisionRef.current += 1;
     const added = createBotPromptAttachments(Array.from(next));
@@ -624,15 +609,6 @@ export function BotPromptComposer({
                 ))}
               </MenuPopup>
             </Menu>
-            {modelPicker ? (
-              <BotModelPicker
-                activeInstanceId={modelPicker.activeInstanceId}
-                model={modelPicker.model}
-                instanceEntries={modelPicker.instanceEntries}
-                modelOptionsByInstance={modelPicker.modelOptionsByInstance}
-                onChange={modelPicker.onChange}
-              />
-            ) : null}
           </div>
           <button
             type="submit"
