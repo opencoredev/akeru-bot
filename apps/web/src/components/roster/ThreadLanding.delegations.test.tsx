@@ -267,5 +267,6 @@ describe("thread landing delegations", () => {
     ) as ReactElement<Parameters<typeof BotUserInputPrompt>[0]> | null;
 
     expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
+    expect(prompt?.props.onSelectSingleOption).toBe(prompt?.props.onToggleOption);
   });
 });

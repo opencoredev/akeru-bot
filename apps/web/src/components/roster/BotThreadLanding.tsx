@@ -310,6 +310,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                   answers={runtime.pendingUserInputAnswers}
                   questionIndex={runtime.pendingUserInputQuestionIndex}
                   onToggleOption={runtime.selectPendingUserInputOption}
+                  onSelectSingleOption={runtime.selectPendingUserInputOption}
                   onAdvance={runtime.advancePendingUserInput}
                 />
               ) : null

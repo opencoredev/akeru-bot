@@ -232,6 +232,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 answers={runtime.pendingUserInputAnswers}
                 questionIndex={runtime.pendingUserInputQuestionIndex}
                 onToggleOption={runtime.selectPendingUserInputOption}
+                onSelectSingleOption={runtime.selectPendingUserInputOption}
                 onAdvance={runtime.advancePendingUserInput}
               />
             ) : null

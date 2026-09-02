@@ -34,6 +34,7 @@ describe("BotUserInputPrompt", () => {
         answers={{}}
         questionIndex={0}
         onToggleOption={vi.fn()}
+        onSelectSingleOption={vi.fn()}
         onAdvance={vi.fn()}
       />,
     );
@@ -45,18 +46,20 @@ describe("BotUserInputPrompt", () => {
 
   it("uses one callback for single-select answers", () => {
     const onToggleOption = vi.fn();
+    const onSelectSingleOption = vi.fn();
     const element = BotUserInputPrompt({
       pendingUserInputs: [prompt],
       respondingRequestIds: [],
       answers: {},
       questionIndex: 0,
       onToggleOption,
+      onSelectSingleOption,
       onAdvance: vi.fn(),
     });
     const panel = element.props.children as ReactElement<{
       onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
     }>;
 
-    expect(panel.props.onSelectSingleOption).toBe(onToggleOption);
+    expect(panel.props.onSelectSingleOption).toBe(onSelectSingleOption);
   });
 });

@@ -10,6 +10,7 @@ export function BotUserInputPrompt({
   answers,
   questionIndex,
   onToggleOption,
+  onSelectSingleOption,
   onAdvance,
 }: {
   readonly pendingUserInputs: PendingUserInput[];
@@ -17,6 +18,7 @@ export function BotUserInputPrompt({
   readonly answers: Record<string, PendingUserInputDraftAnswer>;
   readonly questionIndex: number;
   readonly onToggleOption: (questionId: string, optionLabel: string) => void;
+  readonly onSelectSingleOption: (questionId: string, optionLabel: string) => void;
   readonly onAdvance: () => void;
 }) {
   return (
@@ -31,7 +33,7 @@ export function BotUserInputPrompt({
         answers={answers}
         questionIndex={questionIndex}
         onToggleOption={onToggleOption}
-        onSelectSingleOption={onToggleOption}
+        onSelectSingleOption={onSelectSingleOption}
         onAdvance={onAdvance}
       />
     </section>
