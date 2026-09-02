@@ -1,5 +1,5 @@
 core:changelogs:
-  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Changes\n\n- [#124](https://github.com/opencoredev/akeru-bot/pull/124) fix(web): prevent duplicate bot panes\n"
+  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Changes\n\n- [#126](https://github.com/opencoredev/akeru-bot/pull/126) fix(web): replace sidebar footer labels with icons\n- [#109](https://github.com/opencoredev/akeru-bot/pull/109) docs: update user guides for subscription runtimes\n- [#127](https://github.com/opencoredev/akeru-bot/pull/127) feat(web): switch bots with number shortcuts\n- [#129](https://github.com/opencoredev/akeru-bot/pull/129) fix(web): show Grok models during limited probes\n- [#135](https://github.com/opencoredev/akeru-bot/pull/135) docs: align agent guidance with Akeru Bot\n- [#138](https://github.com/opencoredev/akeru-bot/pull/138) ci: validate merge queue candidates with Depot\n- [#139](https://github.com/opencoredev/akeru-bot/pull/139) feat(bots): move model controls to sidebar\n- [#136](https://github.com/opencoredev/akeru-bot/pull/136) fix(channels): restore settings and delivery\n- [#140](https://github.com/opencoredev/akeru-bot/pull/140) feat(bots): personalize Akeru prompts\n- [#144](https://github.com/opencoredev/akeru-bot/pull/144) ci: run Depot checks on pull requests\n- [#146](https://github.com/opencoredev/akeru-bot/pull/146) ci: migrate workflows to tenki\n- [#142](https://github.com/opencoredev/akeru-bot/pull/142) feat(plugins): add Hoplite MCP integration\n- [#147](https://github.com/opencoredev/akeru-bot/pull/147) fix(brand): use the Akeru icon in development\n- [#143](https://github.com/opencoredev/akeru-bot/pull/143) perf(server): reduce streaming and tool update overhead\n- [#148](https://github.com/opencoredev/akeru-bot/pull/148) perf(ui): replace class merging with cn\n- [#137](https://github.com/opencoredev/akeru-bot/pull/137) feat(providers): add OpenCode Go support\n- [#145](https://github.com/opencoredev/akeru-bot/pull/145) feat(web): add first-install bot onboarding\n- [#123](https://github.com/opencoredev/akeru-bot/pull/123) fix(macos): install unsigned Mac builds from a checksummed GitHub DMG\n- [#133](https://github.com/opencoredev/akeru-bot/pull/133) feat(approvals): add auto review and bot prompts\n"
     filename: stable-release.md
     v: 0.0.0
 core:packages:
@@ -8,8 +8,6 @@ core:packages:
   - id: npm:@t3tools/oxlint-plugin-t3code
     updated: false
   - id: npm:@t3tools/scripts
-    updated: false
-  - id: npm:akeru-feedback
     updated: false
   - changelogIds:
       - stable-release.md
@@ -25,6 +23,8 @@ core:packages:
       - stable-release.md
     id: npm:@t3tools/web
     updated: true
+  - id: npm:akeru-feedback
+    updated: false
   - id: npm:@t3tools/client-runtime
     updated: false
   - changelogIds:
@@ -33,9 +33,9 @@ core:packages:
     updated: true
   - id: npm:effect-acp
     updated: false
-  - id: npm:@t3tools/shared
-    updated: false
   - id: npm:effect-codex-app-server
+    updated: false
+  - id: npm:@t3tools/shared
     updated: false
   - id: npm:@t3tools/tailscale
     updated: false
@@ -45,15 +45,15 @@ npm:packages:
   - id: npm:@t3tools/monorepo
   - id: npm:@t3tools/oxlint-plugin-t3code
   - id: npm:@t3tools/scripts
-  - id: npm:akeru-feedback
   - id: npm:@t3tools/desktop
   - id: npm:@t3tools/marketing
   - id: npm:akeru-bot
   - id: npm:@t3tools/web
+  - id: npm:akeru-feedback
   - id: npm:@t3tools/client-runtime
   - id: npm:@t3tools/contracts
   - id: npm:effect-acp
-  - id: npm:@t3tools/shared
   - id: npm:effect-codex-app-server
+  - id: npm:@t3tools/shared
   - id: npm:@t3tools/tailscale
   - id: npm:@t3tools/ssh
