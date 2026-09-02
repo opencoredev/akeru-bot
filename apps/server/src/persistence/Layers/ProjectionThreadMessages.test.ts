@@ -1,4 +1,4 @@
-import { MessageId, ThreadId } from "@t3tools/contracts";
+import { BotId, MessageId, ThreadId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -12,6 +12,76 @@ const layer = it.layer(
 );
 
 layer("ProjectionThreadMessageRepository", (it) => {
+  it.effect("appends streaming text without replacing Akeru message metadata", () =>
+    Effect.gen(function* () {
+      const repository = yield* ProjectionThreadMessageRepository;
+      const threadId = ThreadId.make("thread-streaming-append");
+      const messageId = MessageId.make("message-streaming-append");
+      const respondingBotId = BotId.make("bot-streaming-append");
+      const createdAt = "2026-09-01T18:00:00.000Z";
+      const channelOrigin = {
+        provider: "telegram" as const,
+        externalThreadId: "telegram-chat-streaming",
+        externalSenderId: "telegram-user-streaming",
+      };
+      const attachments = [
+        {
+          type: "image" as const,
+          id: "streaming-attachment-1",
+          name: "streaming.png",
+          mimeType: "image/png",
+          sizeBytes: 5,
+        },
+      ];
+
+      yield* repository.appendStreaming({
+        messageId,
+        threadId,
+        turnId: null,
+        respondingBotId,
+        channelOrigin,
+        role: "assistant",
+        text: "hello",
+        attachments,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      const initial = yield* repository.getByMessageId({ messageId });
+      assert.equal(initial._tag, "Some");
+      if (initial._tag === "Some") {
+        yield* repository.upsert({
+          ...initial.value,
+          reactions: [{ botId: respondingBotId, emoji: "eyes" }],
+        });
+      }
+
+      const updatedAt = "2026-09-01T18:00:01.000Z";
+      yield* repository.appendStreaming({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: " world",
+        createdAt: updatedAt,
+        updatedAt,
+      });
+
+      const result = yield* repository.getByMessageId({ messageId });
+      assert.equal(result._tag, "Some");
+      if (result._tag === "Some") {
+        assert.equal(result.value.text, "hello world");
+        assert.equal(result.value.respondingBotId, respondingBotId);
+        assert.deepEqual(result.value.channelOrigin, channelOrigin);
+        assert.deepEqual(result.value.attachments, attachments);
+        assert.deepEqual(result.value.reactions, [{ botId: respondingBotId, emoji: "eyes" }]);
+        assert.isTrue(result.value.isStreaming);
+        assert.equal(result.value.createdAt, createdAt);
+        assert.equal(result.value.updatedAt, updatedAt);
+      }
+    }),
+  );
+
   it.effect("preserves existing attachments when upsert omits attachments", () =>
     Effect.gen(function* () {
       const repository = yield* ProjectionThreadMessageRepository;
