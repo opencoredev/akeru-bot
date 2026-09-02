@@ -178,6 +178,9 @@ importers:
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@usenotra/geo':
+        specifier: 0.3.0
+        version: 0.3.0(zod@4.4.3)
       astro:
         specifier: ^7.0.3
         version: 7.0.3(@astrojs/markdown-remark@7.2.0)(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.12.4)(aws4fetch@1.0.20)(idb-keyval@6.2.1)(ioredis@5.11.0)(jiti@2.7.0)(rollup@4.61.0)(terser@5.48.0)(typescript@6.0.3)(unrun@0.2.39)(yaml@2.9.0)
@@ -6288,6 +6291,15 @@ packages:
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
+
+  '@usenotra/geo@0.3.0':
+    resolution: {integrity: sha512-8l4NKUXwtdoAqP8+ZfB95yjpjSpexBgewCsPYpUAUZ2wY/CFvIX8HHHl0GRh51+KsKe0+1deJdmZsTEqi4Qxjg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@vercel/config@0.3.0':
     resolution: {integrity: sha512-Tf5k5y2F478oTiQcU5R8Ntix1UejE6NdduZnI7aa1XXxjCtifX1XdRS/D2uTjiQAwIL3pLa1LSAN80ABbba+TQ==}
@@ -16033,7 +16045,7 @@ snapshots:
       postcss: 8.5.26
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -19761,6 +19773,10 @@ snapshots:
       zod: 4.4.3
       zod-to-json-schema: 3.25.2(zod@4.4.3)
 
+  '@usenotra/geo@0.3.0(zod@4.4.3)':
+    optionalDependencies:
+      zod: 4.4.3
+
   '@vercel/config@0.3.0':
     dependencies:
       '@vercel/routing-utils': 6.2.0
@@ -20689,8 +20705,8 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
-      expo-widgets: 56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      expo-widgets: 56.0.19(32843e0c0883df8bccfa0b8323659df5)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -22586,6 +22602,22 @@ snapshots:
     dependencies:
       expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
       react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
+
+  expo-widgets@56.0.19(32843e0c0883df8bccfa0b8323659df5):
+    dependencies:
+      '@expo/plist': 0.7.0
+      '@expo/ui': 56.0.18(32843e0c0883df8bccfa0b8323659df5)
+      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      react: 19.2.6
+      react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
+      - react-native-reanimated
+      - react-native-worklets
+    optional: true
 
   expo-widgets@56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0):
     dependencies:
