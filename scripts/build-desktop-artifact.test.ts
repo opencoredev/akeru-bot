@@ -428,15 +428,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("applies platform-specific packaging to the build config", () =>
     Effect.gen(function* () {
-      const mac = yield* createBuildConfig(
-        "mac",
-        "dmg",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
+      const mac = yield* createBuildConfig("mac", "dmg", "1.2.3", false, false, undefined, {
+        entitlementsPath: "/tmp/entitlements.mac.plist",
+      });
       const linux = yield* createBuildConfig(
         "linux",
         "AppImage",
@@ -508,7 +502,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
-      assert.notProperty(mac.mac as Record<string, unknown>, "sign");
+      assert.equal((mac.mac as Record<string, unknown>).identity, "-");
+      assert.equal((mac.mac as Record<string, unknown>).notarize, false);
+      assert.equal(
+        (mac.mac as Record<string, unknown>).entitlements,
+        "/tmp/entitlements.mac.plist",
+      );
+      assert.match(String((mac.mac as Record<string, unknown>).sign), /\/scripts\/sign-macos\.ts$/);
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
@@ -1058,6 +1058,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.appId, "dev.leodoes.akeru");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.notarize, true);
+      assert.notProperty(mac, "identity");
       assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
       assert.deepStrictEqual(mac.protocols, [
         {
@@ -1078,6 +1079,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.appId, "dev.leodoes.akeru");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.notProperty(mac, "provisioningProfile");
+      assert.notProperty(mac, "identity");
       assert.equal(mac.notarize, true);
       assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
