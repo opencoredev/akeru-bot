@@ -40,17 +40,7 @@ function withAssetFiles(config) {
   return withDangerousMod(config, [
     "ios",
     (cfg) => {
-      const source =
-        process.env.APP_VARIANT === "development"
-          ? path.join(
-              cfg.modRequest.projectRoot,
-              "..",
-              "..",
-              "assets",
-              "dev",
-              "blueprint-ios-1024.png",
-            )
-          : path.join(cfg.modRequest.projectRoot, "..", "marketing", "public", "icon.png");
+      const source = path.join(cfg.modRequest.projectRoot, "..", "marketing", "public", "icon.png");
       const catalogDir = path.join(cfg.modRequest.platformProjectRoot, TARGET_NAME, CATALOG_NAME);
       const imageSetDir = path.join(catalogDir, IMAGE_SET);
       fs.mkdirSync(imageSetDir, { recursive: true });
