@@ -9,7 +9,7 @@ import {
 } from "./catalog";
 
 const EXPECTED_IDS =
-  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github help-scout hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
+  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github gmail help-scout hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
 const INSTALLABLE_IDS = ["context", "exa", "firecrawl", "parallel-search"];
@@ -31,10 +31,15 @@ describe("milestone 13 plugin lifecycle matrix", () => {
         .map((plugin) => [plugin.id, plugin.featuredRank]),
     ).toEqual([
       ["context", 1],
+      ["gmail", 1],
       ["zernio", 2],
     ]);
 
-    const pending = directory.filter((plugin) => !INSTALLABLE_IDS.includes(plugin.id));
+    const pending = directory.filter(
+      (plugin) =>
+        plugin.catalogStatus === "approval-pending" ||
+        plugin.catalogStatus === "verification-pending",
+    );
     expect(pending).toHaveLength(48);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,

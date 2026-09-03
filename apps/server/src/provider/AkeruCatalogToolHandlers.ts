@@ -4,8 +4,11 @@ import * as NodeFS from "node:fs";
 
 import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
 import {
+  type AkeruPluginRecommendation,
+  type AkeruPluginSearchResult,
   type BotId,
   CommandId,
+  type ComposioToolkit,
   McpServerId,
   type AkeruToolId,
   type AkeruToolInputSchemas,
@@ -88,6 +91,13 @@ type McpRuntimeStatus = ReturnType<McpManager["getServerStatuses"]>[number];
 export interface AkeruPluginRuntimeOptions {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
   readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  readonly searchComposioToolkits?: (input: {
+    readonly query?: string;
+    readonly limit?: number;
+  }) => Promise<{
+    readonly status: "available" | "setup-required" | "unavailable";
+    readonly toolkits: readonly ComposioToolkit[];
+  }>;
   readonly now?: () => string;
   readonly id?: () => string;
 }
@@ -164,6 +174,45 @@ function pluginMatches(plugin: PluginManifest, query: string): boolean {
     .includes(query.trim().toLocaleLowerCase());
 }
 
+function recommendationForPlugin(
+  plugin: PluginManifest,
+  snapshot: OrchestrationReadModel,
+): AkeruPluginRecommendation {
+  const server = snapshot.mcpServers?.find(
+    (candidate) => candidate.id === pluginServerId(plugin.id),
+  );
+  const composio =
+    plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio";
+  const action = server?.enabled
+    ? "open"
+    : composio
+      ? "connect"
+      : isInstallableManifest(plugin)
+        ? "install"
+        : "unavailable";
+  return {
+    id: composio ? `composio:${plugin.id}` : plugin.id,
+    source: composio ? "composio" : "directory",
+    name: plugin.name,
+    description: plugin.description,
+    category: plugin.primaryCategory,
+    ...(plugin.logo.url ? { logoUrl: plugin.logo.url } : {}),
+    action,
+  };
+}
+
+function recommendationForToolkit(toolkit: ComposioToolkit): AkeruPluginRecommendation {
+  return {
+    id: `composio:${toolkit.slug}`,
+    source: "composio",
+    name: toolkit.name,
+    description: toolkit.description ?? `${toolkit.toolsCount} tools through Composio.`,
+    ...(toolkit.categories[0] ? { category: toolkit.categories[0] } : {}),
+    ...(toolkit.logoUrl ? { logoUrl: toolkit.logoUrl } : {}),
+    action: "connect",
+  };
+}
+
 function sameRecipe(server: McpServer, plugin: PluginManifest): boolean {
   if (plugin.transport.type === "url") {
     return (
@@ -204,11 +253,37 @@ export function createAkeruPluginRuntime(options: AkeruPluginRuntimeOptions) {
     const matches = catalog.filter((plugin) => pluginMatches(plugin, query));
     const limit = input.limit ?? 20;
     const snapshot = await options.readSnapshot();
+    let composioSearch: {
+      readonly status: "available" | "setup-required" | "unavailable";
+      readonly toolkits: readonly ComposioToolkit[];
+    } = { status: "unavailable", toolkits: [] };
+    if (options.searchComposioToolkits) {
+      try {
+        composioSearch = await options.searchComposioToolkits({
+          ...(query ? { query } : {}),
+          limit,
+        });
+      } catch {
+        composioSearch = { status: "unavailable", toolkits: [] };
+      }
+    }
+    const recommendations = [
+      ...matches.map((plugin) => recommendationForPlugin(plugin, snapshot)),
+      ...composioSearch.toolkits.map(recommendationForToolkit),
+    ];
+    const uniqueRecommendations = [
+      ...new Map(
+        recommendations.map((recommendation) => [recommendation.id, recommendation]),
+      ).values(),
+    ].slice(0, limit);
     return {
+      kind: "plugin-search-results",
       query,
-      total: matches.length,
+      total: uniqueRecommendations.length,
+      sources: { directory: "available", composio: composioSearch.status },
+      recommendations: uniqueRecommendations,
       plugins: matches.slice(0, limit).map((plugin) => pluginView(plugin, snapshot, statuses)),
-    };
+    } satisfies AkeruPluginSearchResult & { readonly plugins: readonly unknown[] };
   };
 
   const install = async (pluginId: string) => {

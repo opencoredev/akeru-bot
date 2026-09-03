@@ -6,6 +6,7 @@ import {
   type EnvironmentId,
   type MessageId,
   type ThreadId,
+  type TurnId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -54,11 +55,14 @@ import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
+import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
+import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -162,6 +166,23 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const pluginResultsByTurn = useMemo(() => {
+    const results = new Map<
+      TurnId,
+      {
+        readonly id: string;
+        readonly result: NonNullable<ReturnType<typeof pluginSearchResultForWorkEntry>>;
+      }[]
+    >();
+    for (const entry of deriveWorkLogEntries(activities)) {
+      const result = pluginSearchResultForWorkEntry(entry);
+      if (!result || !entry.turnId) continue;
+      const turnResults = results.get(entry.turnId) ?? [];
+      turnResults.push({ id: entry.id, result });
+      results.set(entry.turnId, turnResults);
+    }
+    return results;
+  }, [activities]);
   const voiceCall = useVoiceCall();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
@@ -196,6 +217,14 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  const assistantTurnIds = new Set(
+    messages.flatMap((message) =>
+      message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
+    ),
+  );
+  const pendingPluginResults = [...pluginResultsByTurn.entries()].filter(
+    ([turnId]) => !assistantTurnIds.has(turnId),
+  );
   const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
   const delegations = runtime.linkedThreadRef
@@ -254,6 +283,13 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      {message.turnId === null
+                        ? null
+                        : pluginResultsByTurn
+                            .get(message.turnId)
+                            ?.map(({ id, result }) => (
+                              <PluginSearchResultCard className="mt-3" key={id} result={result} />
+                            ))}
                       {canManageChannelBindings && environmentId && runtime.linkedThreadRef
                         ? (() => {
                             const origin = channelOriginForAssistantMessage(messages, messageIndex);
@@ -291,6 +327,44 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 ),
               )
             )}
+            {pendingPluginResults.map(([turnId, results]) => (
+              <div className="flex items-start gap-3" key={`${turnId}:plugins`}>
+                <BotAvatarView
+                  avatar={bot.avatar}
+                  name={bot.name}
+                  className="mt-0.5 size-7 shrink-0"
+                />
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="text-sm font-medium">{bot.name}</div>
+                  {results.map(({ id, result }) => (
+                    <PluginSearchResultCard key={id} result={result} />
+                  ))}
+                </div>
+              </div>
+            ))}
+            {runtime.pendingUserInputs.length > 0 ? (
+              <div className="flex items-start gap-3">
+                <BotAvatarView
+                  avatar={bot.avatar}
+                  name={bot.name}
+                  className="mt-0.5 size-7 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 text-sm font-medium">{bot.name}</div>
+                  <ComposerPendingUserInputPanel
+                    pendingUserInputs={runtime.pendingUserInputs}
+                    respondingRequestIds={runtime.respondingRequestIds}
+                    answers={runtime.pendingUserInputAnswers}
+                    questionIndex={runtime.pendingUserInputQuestionIndex}
+                    onToggleOption={runtime.selectPendingUserInputOption}
+                    onSelectSingleOption={runtime.selectPendingUserInputOption}
+                    onAdvance={() => {
+                      void runtime.advancePendingUserInput();
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
             {pendingApproval ? (
               <BotApprovalPrompt
                 approval={pendingApproval}

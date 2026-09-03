@@ -1,6 +1,7 @@
 import type {
   AkeruConversationMemorySnapshot,
   AkeruMemoryThreadAccess,
+  ComposioToolkit,
   BotEngine,
   BotId,
   ModelSelection,
@@ -50,6 +51,13 @@ export interface AgentControllerShape {
   readonly configurePluginRuntime?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
     readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+    readonly searchComposioToolkits?: (input: {
+      readonly query?: string;
+      readonly limit?: number;
+    }) => Promise<{
+      readonly status: "available" | "setup-required" | "unavailable";
+      readonly toolkits: readonly ComposioToolkit[];
+    }>;
   }) => Effect.Effect<void>;
   readonly configureDelegation?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;

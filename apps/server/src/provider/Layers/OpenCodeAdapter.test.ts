@@ -16,6 +16,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { beforeEach } from "vite-plus/test";
 
 import {
+  McpServerId,
   OpenCodeSettings,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -26,6 +27,7 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import type { OpenCodeAdapterShape } from "../Services/OpenCodeAdapter.ts";
+import { withMcpRuntimeHeaders } from "../McpServerConfig.ts";
 import {
   OpenCodeRuntime,
   OpenCodeRuntimeError,
@@ -74,6 +76,7 @@ const runtimeMock = {
     sessionDirectoryById: new Map<string, string>(),
     sessionUpdateCalls: [] as Array<{ sessionID: string; permission: unknown }>,
     forkCalls: [] as Array<{ sessionID: string; directory?: string }>,
+    mcpAddCalls: [] as Array<{ name: string; config: unknown }>,
   },
   reset() {
     this.state.startCalls.length = 0;
@@ -94,6 +97,7 @@ const runtimeMock = {
     this.state.sessionDirectoryById.clear();
     this.state.sessionUpdateCalls.length = 0;
     this.state.forkCalls.length = 0;
+    this.state.mcpAddCalls.length = 0;
   },
 };
 
@@ -212,6 +216,12 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           })(),
         }),
       },
+      mcp: {
+        add: async (input: { name: string; config: unknown }) => {
+          runtimeMock.state.mcpAddCalls.push(input);
+          return { data: true };
+        },
+      },
     }) as unknown as ReturnType<OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
   loadOpenCodeInventory: () =>
     Effect.fail(
@@ -320,6 +330,46 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         sessionId: "http://127.0.0.1:9999/session",
       });
 
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("forwards transient headers to remote MCP servers", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const mcpServer = withMcpRuntimeHeaders(
+        {
+          id: McpServerId.make("composio-session"),
+          name: "Composio",
+          transport: "url" as const,
+          url: "https://app.composio.dev/tool_router/v3/session/mcp",
+          enabled: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        { "x-api-key": "project-key" },
+      );
+
+      const threadId = asThreadId("thread-opencode-composio");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+        mcpServers: [mcpServer],
+      });
+
+      NodeAssert.deepEqual(runtimeMock.state.mcpAddCalls, [
+        {
+          name: "composio-session",
+          config: {
+            type: "remote",
+            url: "https://app.composio.dev/tool_router/v3/session/mcp",
+            headers: { "x-api-key": "project-key" },
+            oauth: false,
+          },
+        },
+      ]);
+      NodeAssert.equal("headers" in mcpServer, false);
       yield* adapter.stopSession(threadId);
     }),
   );

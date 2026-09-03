@@ -1,7 +1,12 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { toAcpMcpServers, toClaudeMcpServers } from "./McpServerConfig.ts";
+import {
+  sameMcpServerConfigurations,
+  toAcpMcpServers,
+  toClaudeMcpServers,
+  withMcpRuntimeHeaders,
+} from "./McpServerConfig.ts";
 
 const servers: readonly McpServer[] = [
   {
@@ -38,5 +43,40 @@ describe("provider MCP configuration", () => {
       search: { type: "http", url: "https://mcp.example.com", headers: {} },
       local: { type: "stdio", command: "bunx", args: ["local-mcp"] },
     });
+  });
+
+  it("forwards transient headers without adding them to the server record", () => {
+    const server = withMcpRuntimeHeaders({ ...servers[0]! }, { "x-api-key": "secret" });
+
+    expect(toAcpMcpServers([server])).toEqual([
+      {
+        type: "http",
+        name: "Search",
+        url: "https://mcp.example.com",
+        headers: [{ name: "x-api-key", value: "secret" }],
+      },
+    ]);
+    expect(toClaudeMcpServers([server])).toEqual({
+      search: {
+        type: "http",
+        url: "https://mcp.example.com",
+        headers: { "x-api-key": "secret" },
+      },
+    });
+    expect(JSON.stringify(server)).not.toContain("secret");
+  });
+
+  it("detects a changed transient URL or header for the same server id", () => {
+    const original = withMcpRuntimeHeaders({ ...servers[0]! }, { "x-api-key": "first" });
+    const changedUrl = withMcpRuntimeHeaders(
+      { ...servers[0]!, url: "https://mcp.example.com/new-session" },
+      { "x-api-key": "first" },
+    );
+    const changedHeader = withMcpRuntimeHeaders({ ...servers[0]! }, { "x-api-key": "second" });
+
+    expect(sameMcpServerConfigurations([original], [original])).toBe(true);
+    expect(sameMcpServerConfigurations([original], [{ ...original }])).toBe(false);
+    expect(sameMcpServerConfigurations([original], [changedUrl])).toBe(false);
+    expect(sameMcpServerConfigurations([original], [changedHeader])).toBe(false);
   });
 });

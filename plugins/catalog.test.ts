@@ -32,6 +32,7 @@ const EXPECTED_DIRECTORY_IDS = [
   "firecrawl",
   "framer",
   "github",
+  "gmail",
   "help-scout",
   "hubspot",
   "intercom",
@@ -166,7 +167,7 @@ describe("plugin catalog loader", () => {
     const directory = loadDirectoryCatalog();
     const catalog = loadCatalog();
     expect(directory.map((plugin) => plugin.id).toSorted()).toEqual(EXPECTED_DIRECTORY_IDS);
-    expect(new Set(directory.map((plugin) => plugin.id)).size).toBe(52);
+    expect(new Set(directory.map((plugin) => plugin.id)).size).toBe(53);
     expect(catalog.map((plugin) => plugin.id)).toEqual(EXPECTED_INSTALLABLE_IDS);
     expect(catalog.map((plugin) => `builtin-${plugin.id}`)).toEqual(
       EXPECTED_INSTALLABLE_IDS.map((id) => `builtin-${id}`),
@@ -180,6 +181,7 @@ describe("plugin catalog loader", () => {
         .map((plugin) => ({ id: plugin.id, rank: plugin.featuredRank })),
     ).toEqual([
       { id: "context", rank: 1 },
+      { id: "gmail", rank: 1 },
       { id: "zernio", rank: 2 },
     ]);
     expect(
@@ -216,7 +218,9 @@ describe("plugin catalog loader", () => {
 
   it("keeps every unverified entry pending with complete approval coverage", () => {
     const pending = loadDirectoryCatalog().filter(
-      (plugin) => !EXPECTED_INSTALLABLE_IDS.some((id) => id === plugin.id),
+      (plugin) =>
+        plugin.catalogStatus === "approval-pending" ||
+        plugin.catalogStatus === "verification-pending",
     );
     expect(pending).toHaveLength(48);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(

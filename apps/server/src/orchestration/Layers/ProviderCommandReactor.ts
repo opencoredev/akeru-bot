@@ -71,6 +71,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { ComposioService } from "../../composio/ComposioService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isAgentControllerUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
@@ -346,11 +347,29 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
+  const composio = yield* Effect.serviceOption(ComposioService);
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   if (agentController.configurePluginRuntime) {
     yield* agentController.configurePluginRuntime({
       readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
       dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
+      ...(Option.isSome(composio)
+        ? {
+            searchComposioToolkits: async (input: {
+              readonly query?: string;
+              readonly limit?: number;
+            }) => {
+              const status = await runPromise(composio.value.getStatus);
+              if (!status.configured) {
+                return { status: "setup-required" as const, toolkits: [] };
+              }
+              return {
+                status: "available" as const,
+                toolkits: await runPromise(composio.value.searchToolkits(input)),
+              };
+            },
+          }
+        : {}),
     });
   }
   const failDelegation = (threadId: ThreadId, error: string) =>
@@ -650,7 +669,19 @@ const make = Effect.gen(function* () {
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
     const servers = yield* projectionMcpServerRepository.listAll();
-    return resolveBotMcpServers(servers, bot?.disabledMcpServerIds ?? []);
+    const resolved = resolveBotMcpServers(servers, bot?.disabledMcpServerIds ?? []);
+    const composioServer = Option.isSome(composio)
+      ? yield* composio.value
+          .resolveRuntimeMcpServer(thread.id)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Composio tools are unavailable", { detail: error.message }).pipe(
+                Effect.as(undefined),
+              ),
+            ),
+          )
+      : undefined;
+    return composioServer ? [...resolved, composioServer] : resolved;
   });
 
   const rejectStartedThreadModelChangeIfRequired = Effect.fnUntraced(function* (input: {

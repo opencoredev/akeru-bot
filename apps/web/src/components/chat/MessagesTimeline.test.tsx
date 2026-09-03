@@ -1063,6 +1063,53 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("live-activity-focus");
   });
 
+  it("renders plugin search results as actionable chat cards", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-plugin-search",
+            kind: "work",
+            createdAt: MESSAGE_CREATED_AT,
+            entry: {
+              id: "work-plugin-search",
+              createdAt: MESSAGE_CREATED_AT,
+              label: "SearchPlugins",
+              toolTitle: "SearchPlugins",
+              tone: "tool",
+              itemType: "dynamic_tool_call",
+              toolLifecycleStatus: "completed",
+              sourceActivityKind: "tool.completed",
+              toolData: {
+                kind: "plugin-search-results",
+                query: "email",
+                total: 1,
+                sources: { directory: "available", composio: "available" },
+                recommendations: [
+                  {
+                    id: "composio:gmail",
+                    source: "composio",
+                    name: "Gmail",
+                    description: "Read and send email.",
+                    action: "connect",
+                    logoUrl: "https://logos.composio.dev/api/gmail",
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Gmail");
+    expect(markup).toContain("Composio");
+    expect(markup).toContain("Connect Gmail");
+    expect(markup).toContain("https://logos.composio.dev/api/gmail");
+    expect(markup).not.toContain("SearchPlugins</span>");
+  });
+
   it("scopes a live row failure to the tool named by the row", () => {
     const turnId = TurnId.make("turn-live");
     const markup = renderToStaticMarkup(

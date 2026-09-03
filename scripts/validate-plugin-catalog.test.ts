@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe("plugin catalog validation", () => {
   it("validates the live plugin directory", () => {
-    expect(validatePluginCatalog()).toHaveLength(52);
+    expect(validatePluginCatalog()).toHaveLength(53);
   });
 
   it("validates isolated manifests and official local assets", () => {
@@ -90,5 +90,16 @@ describe("plugin catalog validation", () => {
     const entry = copyEntry("exa", root);
     NodeFS.writeFileSync(new URL("catalog.generated.json", entry), "[]");
     expect(() => validatePluginCatalog(root)).toThrow("has undeclared files");
+  });
+
+  it("accepts a remote logo without local assets and still rejects stray files", () => {
+    const root = fixtureRoot();
+    copyEntry("gmail", root);
+    expect(validatePluginCatalog(root).map((entry) => entry.directory)).toEqual(["gmail"]);
+
+    const strayRoot = fixtureRoot();
+    const stray = copyEntry("gmail", strayRoot);
+    NodeFS.writeFileSync(new URL("logo.svg", stray), "<svg></svg>");
+    expect(() => validatePluginCatalog(strayRoot)).toThrow("has undeclared files");
   });
 });

@@ -217,4 +217,38 @@ describe("projectActivityPayload", () => {
     const projected = projectActivityPayload(source);
     expect(projected.payload).toEqual(source.payload);
   });
+
+  it("keeps bounded plugin recommendations for the chat card", () => {
+    const projected = projectActivityPayload({
+      ...activity({
+        itemType: "dynamic_tool_call",
+        data: {
+          result: {
+            kind: "plugin-search-results",
+            query: "email",
+            total: 1,
+            sources: { directory: "available", composio: "available" },
+            recommendations: [
+              {
+                id: "composio:gmail",
+                source: "composio",
+                name: "Gmail",
+                description: "Read and send email.",
+                action: "connect",
+                logoUrl: "https://logos.composio.dev/api/gmail",
+              },
+            ],
+          },
+        },
+      }),
+      summary: "SearchPlugins",
+    });
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+
+    expect(data.result).toMatchObject({
+      kind: "plugin-search-results",
+      recommendations: [expect.objectContaining({ id: "composio:gmail" })],
+    });
+    expect(JSON.stringify(projected.payload).length).toBeLessThan(2_000);
+  });
 });

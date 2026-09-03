@@ -58,6 +58,25 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+## Composio runtime
+
+Composio is an integration provider. Its toolkits appear as named plugins such as Gmail, but Akeru
+does not create one durable MCP server for every toolkit. `ComposioService` stores the user-provided
+API key in `ServerSecretStore` and creates one transient Composio MCP session for each Akeru thread.
+
+The session includes only toolkits with active connected accounts. It enables Composio's search and
+connection tools, so providers discover tool schemas when they need them. Multi-account mode requires
+an explicit account choice when a toolkit has more than one account.
+
+The MCP session URL and `x-api-key` header never enter orchestration events or MCP registry records.
+`McpServerConfig` keeps headers in a runtime-only sidecar and adds them at each provider adapter
+boundary. A change to the connected-account set invalidates the thread cache. The next turn gets a new
+session URL and restarts the provider session through the existing MCP configuration check.
+
+Akeru's approval middleware still controls tool execution. Composio handles hosted account sign-in,
+but it does not replace Akeru's approval rules for send, delete, account-wide, or unknown mutating
+actions.
+
 `BotEngine.provider` stores the selected provider instance ID. AgentController keeps that instance
 when it creates a runtime session, so selecting a model keeps the subscription and custom instance
 that supplied it. Runtime ingestion reads the merged Mastra and adapter event stream once.
