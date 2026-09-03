@@ -107,6 +107,7 @@ function createAgentControllerHarness() {
 
   const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
   const service: AgentControllerShape = {
+    authenticateMcpServer: () => unsupported(),
     resolveEngine: () => unsupported(),
     inspectEngine: () => unsupported(),
     startSession: () => unsupported(),

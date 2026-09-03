@@ -1,5 +1,6 @@
 import {
   type EnvironmentId,
+  type McpServerId,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
@@ -65,6 +66,12 @@ export interface ServerUpdateTarget {
   readonly input: EnvironmentRpcInput<typeof WS_METHODS.serverUpdateServer>;
 }
 
+export interface McpServerAuthenticationTarget {
+  readonly environmentId: EnvironmentId;
+  readonly mcpServerId: McpServerId;
+  readonly onAuthorizationUrl: (url: string) => void | Promise<void>;
+}
+
 export function voiceCallHangupConcurrencyKey(input: {
   readonly environmentId: EnvironmentId;
   readonly input: EnvironmentRpcInput<typeof WS_METHODS.voiceCallHangup>;
@@ -117,6 +124,11 @@ export class ServerUpdateTerminalError extends Schema.TaggedErrorClass<ServerUpd
     return this.reason ?? `The Akeru Bot ${this.targetVersion} update ${this.status}.`;
   }
 }
+
+export class McpServerAuthenticationClientError extends Schema.TaggedErrorClass<McpServerAuthenticationClientError>()(
+  "McpServerAuthenticationClientError",
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 // Covers the 120-second trial deadline and a final restart of the previous
 // version when the trial rolls back.
@@ -690,6 +702,51 @@ export function createServerEnvironmentAtoms<R, E>(
       );
     },
   });
+  const authenticateMcpServer = createRuntimeCommand(runtime, {
+    label: "environment-data:server:authenticate-mcp-server",
+    concurrency: {
+      mode: "singleFlight",
+      key: (target: McpServerAuthenticationTarget) =>
+        `${target.environmentId}:${target.mcpServerId}`,
+    },
+    execute: (target: McpServerAuthenticationTarget) =>
+      Effect.gen(function* () {
+        const environmentRegistry = yield* EnvironmentRegistry;
+        let toolCount: number | undefined;
+        yield* environmentRegistry
+          .runStream(
+            target.environmentId,
+            runStream(WS_METHODS.mcpServerAuthenticate, {
+              mcpServerId: target.mcpServerId,
+            }),
+          )
+          .pipe(
+            Stream.runForEach((event) =>
+              event.type === "authorization-required"
+                ? Effect.tryPromise({
+                    try: () => Promise.resolve(target.onAuthorizationUrl(event.authorizationUrl)),
+                    catch: (cause) =>
+                      new McpServerAuthenticationClientError({
+                        message:
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not open the authorization URL.",
+                        cause,
+                      }),
+                  })
+                : Effect.sync(() => {
+                    toolCount = event.toolCount;
+                  }),
+            ),
+          );
+        if (toolCount === undefined) {
+          return yield* new McpServerAuthenticationClientError({
+            message: "MCP authentication ended before the server connected.",
+          });
+        }
+        return { toolCount };
+      }),
+  });
   const settingsValueAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => get(configValueAtom(environmentId))?.settings ?? null).pipe(
       Atom.withLabel(`environment-data:server:settings:${environmentId}`),
@@ -769,6 +826,7 @@ export function createServerEnvironmentAtoms<R, E>(
       concurrency: configConcurrency,
     }),
     updateServer,
+    authenticateMcpServer,
     upsertKeybinding: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:upsert-keybinding",
       tag: WS_METHODS.serverUpsertKeybinding,

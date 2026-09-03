@@ -67,6 +67,7 @@ import {
   AssetWorkspaceContextResolutionError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  McpServerAuthenticationError,
   SubscriptionAuthError,
   ThreadId,
   type TerminalAttachStreamEvent,
@@ -174,6 +175,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isMcpServerAuthenticationError = Schema.is(McpServerAuthenticationError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -2372,6 +2374,62 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.mcpServerAuthenticate]: ({ mcpServerId }) =>
+          observeRpcStream(
+            WS_METHODS.mcpServerAuthenticate,
+            Stream.callback((queue) =>
+              Effect.gen(function* () {
+                const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+                const server = snapshot.mcpServers?.find(
+                  (candidate) => candidate.id === mcpServerId,
+                );
+                if (!server) {
+                  return yield* new McpServerAuthenticationError({
+                    mcpServerId,
+                    reason: "The MCP server does not exist.",
+                  });
+                }
+                if (!server.enabled) {
+                  return yield* new McpServerAuthenticationError({
+                    mcpServerId,
+                    reason: "Enable the MCP server before authentication.",
+                  });
+                }
+                if (server.transport === "stdio") {
+                  return yield* new McpServerAuthenticationError({
+                    mcpServerId,
+                    reason: "Local MCP servers do not support OAuth authentication.",
+                  });
+                }
+
+                const result = yield* agentController.authenticateMcpServer({
+                  server,
+                  onAuthorizationUrl: (authorizationUrl) => {
+                    Queue.offerUnsafe(queue, {
+                      type: "authorization-required",
+                      authorizationUrl,
+                    });
+                  },
+                });
+                yield* Queue.offer(queue, { type: "connected", toolCount: result.toolCount });
+              }).pipe(
+                Effect.mapError((cause) =>
+                  isMcpServerAuthenticationError(cause)
+                    ? cause
+                    : new McpServerAuthenticationError({
+                        mcpServerId,
+                        reason: cause instanceof Error ? cause.message : String(cause),
+                      }),
+                ),
+                Effect.catchTag("McpServerAuthenticationError", (error) =>
+                  Queue.fail(queue, error),
+                ),
+                Effect.andThen(Queue.end(queue)),
+                Effect.forkScoped,
+              ),
+            ),
+            { "rpc.aggregate": "provider" },
+          ),
         [WS_METHODS.botInboxList]: (_input) =>
           observeRpcEffect(
             WS_METHODS.botInboxList,

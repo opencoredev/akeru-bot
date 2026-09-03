@@ -18,7 +18,7 @@ connection works. A routine can require an enabled connector.
 - **Connect** starts OAuth.
 - **Add key** stores a required key in the host environment.
 - **Disable** stops the plugin without deleting it.
-- **Reconnect** repairs and enables a disabled plugin.
+- **Reconnect** repairs a failed OAuth connection or enables a disabled plugin.
 - **Remove** deletes the registration.
 
 A plugin waiting for publisher approval stays visible, but **Connect** remains disabled. A plugin

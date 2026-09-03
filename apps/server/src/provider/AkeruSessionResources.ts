@@ -314,6 +314,12 @@ export class AkeruSessionResources {
     return this.mcpManagers.get(threadId);
   }
 
+  getMcpManagersForServer(serverId: string): readonly McpManager[] {
+    return [...this.mcpManagers.values()].filter((manager) =>
+      Object.hasOwn(manager.getConfig().mcpServers ?? {}, serverId),
+    );
+  }
+
   getWorkspace(threadId: string): Workspace | undefined {
     return (
       this.userComputerWorkspaceLeases.get(threadId)?.workspace.workspace ??

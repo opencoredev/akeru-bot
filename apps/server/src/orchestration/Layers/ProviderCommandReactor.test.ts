@@ -388,6 +388,7 @@ describe("ProviderCommandReactor", () => {
       },
     );
     const service: AgentControllerShape = {
+      authenticateMcpServer: () => Effect.die("unused"),
       resolveEngine,
       inspectEngine,
       startSession: startSession as AgentControllerShape["startSession"],

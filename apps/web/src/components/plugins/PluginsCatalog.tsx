@@ -1,4 +1,4 @@
-import type { McpServer } from "@t3tools/contracts";
+import type { McpServer, ProviderAccessStatus } from "@t3tools/contracts";
 import { CheckIcon, ChevronRightIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
 import { Button } from "../ui/button";
@@ -40,25 +40,30 @@ export function PluginLogoImage({
 interface PluginsCatalogProps {
   readonly sections: readonly PluginSection[];
   readonly servers: readonly McpServer[];
+  readonly accessStatuses?: readonly ProviderAccessStatus[];
   readonly pendingServerId: string | null;
   readonly onToggle: (plugin: PluginDirectoryDefinition, enabled: boolean) => void;
   readonly onOpen: (plugin: PluginDirectoryDefinition) => void;
 }
 
+const EMPTY_PROVIDER_ACCESS_STATUSES: readonly ProviderAccessStatus[] = [];
+
 function PluginRow({
   plugin,
   server,
+  accessStatus,
   pending,
   onToggle,
   onOpen,
 }: {
   readonly plugin: PluginDirectoryDefinition;
   readonly server: McpServer | undefined;
+  readonly accessStatus: ProviderAccessStatus | undefined;
   readonly pending: boolean;
   readonly onToggle: (enabled: boolean) => void;
   readonly onOpen: () => void;
 }) {
-  const action = pluginPrimaryAction(plugin, server);
+  const action = pluginPrimaryAction(plugin, server, accessStatus);
   return (
     <article
       className="group flex min-w-0 items-center rounded-xl pe-2.5 transition-colors hover:bg-muted/45"
@@ -107,6 +112,7 @@ function PluginRow({
 export function PluginsCatalog({
   sections,
   servers,
+  accessStatuses = EMPTY_PROVIDER_ACCESS_STATUSES,
   pendingServerId,
   onToggle,
   onOpen,
@@ -132,6 +138,7 @@ export function PluginsCatalog({
                   key={`${section.title}:${plugin.id}`}
                   plugin={plugin}
                   server={server}
+                  accessStatus={accessStatuses.find((status) => status.pluginId === plugin.id)}
                   pending={pendingServerId === pluginMcpServerId(plugin)}
                   onToggle={(enabled) => onToggle(plugin, enabled)}
                   onOpen={() => onOpen(plugin)}

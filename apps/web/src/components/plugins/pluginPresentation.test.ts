@@ -202,6 +202,19 @@ describe("plugin presentation", () => {
       enable: true,
     });
     expect(pluginPrimaryAction(firecrawl, server(true)).label).toBe("Disable");
+    expect(
+      pluginPrimaryAction(firecrawl, server(true), {
+        id: "mcp-builtin-firecrawl",
+        label: "Firecrawl",
+        accessMethod: "mcp",
+        health: "failed-first-request",
+        apiAccess: "not-applicable",
+        nextAction: "Reconnect Firecrawl.",
+        pluginId: "firecrawl",
+        dependentBots: [],
+        dependentRoutines: [],
+      }),
+    ).toEqual({ label: "Reconnect", enable: true });
     expect(pluginPrimaryAction(firecrawl, server(false)).label).toBe("Reconnect");
     expect(pluginConnectionLabel(firecrawl)).toBe("OAuth");
   });

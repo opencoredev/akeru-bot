@@ -110,6 +110,7 @@ import {
 } from "../AkeruToolRuntime.ts";
 import type { BotBrowser, BotBrowserAttachment, CreateBotBrowserInput } from "../botBrowser.ts";
 import { AkeruSessionResources } from "../AkeruSessionResources.ts";
+import { authenticateMcpServer } from "../McpServerAuthentication.ts";
 import {
   isCodexComputerUseServer,
   isCodexComputerUseTool,
@@ -2527,6 +2528,33 @@ const make = (options?: AgentControllerLiveOptions) =>
         }),
       failDelegation: ({ threadId, error }) =>
         Effect.sync(() => resolveChildWaiter(threadId, { state: "failed", turnId: null, error })),
+      authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
+        Effect.tryPromise({
+          try: async (signal) => {
+            const status = await authenticateMcpServer({
+              server,
+              managers: sessionResources.getMcpManagersForServer(String(server.id)),
+              createManager: () =>
+                (options?.makeMcpManager ?? createMcpManager)(
+                  NodePath.join(config.stateDir, "bot-mcp-runtime"),
+                  ".akeru-runtime",
+                  toMcpServerConfigs([server]),
+                ),
+              onAuthorizationUrl,
+              signal,
+              recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
+              recordFailure: (serverId, message) =>
+                subscriptionAuth.recordMcpRequestFailure(serverId, message),
+            });
+            return { toolCount: status.toolCount };
+          },
+          catch: (cause) =>
+            new AgentControllerRuntimeError({
+              operation: "mcp.authenticate",
+              detail: failureDetail(cause),
+              cause,
+            }),
+        }),
       readConversationMemory: (threadId) =>
         bundle.readObservationalMemory
           ? runMastra("memory.read", () =>

@@ -206,6 +206,36 @@ describe("Plugins dialog content", () => {
     expect(markup).not.toContain("secret-access");
   });
 
+  it("offers reconnect when an enabled OAuth plugin failed its first request", () => {
+    const markup = renderToStaticMarkup(
+      <PluginDetailsContent
+        plugin={firecrawl}
+        server={firecrawlServer}
+        accessStatus={{
+          id: "mcp-builtin-firecrawl",
+          label: "Firecrawl",
+          accessMethod: "mcp",
+          health: "failed-first-request",
+          apiAccess: "not-applicable",
+          nextAction: "Reconnect Firecrawl.",
+          serverId: "builtin-firecrawl",
+          pluginId: "firecrawl",
+          dependentBots: [],
+          dependentRoutines: [],
+        }}
+        activeDependentBotNames={[]}
+        pending={false}
+        onToggle={noop}
+        onRemove={noop}
+        onViewDocumentation={noop}
+        onViewSource={noop}
+        onOpenSkill={noop}
+      />,
+    );
+    expect(markup).toContain('aria-label="Reconnect Firecrawl"');
+    expect(markup).not.toContain('aria-label="Disable Firecrawl"');
+  });
+
   it("blocks approval-pending connection and names the blocker in details", () => {
     const markup = renderToStaticMarkup(
       <PluginDetailsContent

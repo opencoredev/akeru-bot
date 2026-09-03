@@ -1,4 +1,4 @@
-import type { McpServer, OrchestrationBot } from "@t3tools/contracts";
+import type { McpServer, OrchestrationBot, ProviderAccessStatus } from "@t3tools/contracts";
 import {
   PLUGIN_CATEGORIES,
   type PluginCategory,
@@ -102,8 +102,13 @@ export function pluginBlocker(plugin: PluginDirectoryDefinition): string | null 
 export function pluginPrimaryAction(
   plugin: PluginDirectoryDefinition,
   server: McpServer | undefined,
+  accessStatus?: ProviderAccessStatus,
 ): PluginPrimaryAction {
-  if (server?.enabled) return { label: "Disable", enable: false };
+  const needsReconnect =
+    (plugin.authentication === "oauth" || plugin.authentication === "optional-oauth") &&
+    accessStatus !== undefined &&
+    ["expired", "revoked", "failed", "failed-first-request"].includes(accessStatus.health);
+  if (server?.enabled && !needsReconnect) return { label: "Disable", enable: false };
   const blocker = pluginBlocker(plugin);
   if (blocker) return { label: "Connect", enable: null, blocker };
   if (server) return { label: "Reconnect", enable: true };

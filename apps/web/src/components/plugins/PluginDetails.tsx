@@ -42,7 +42,7 @@ export function PluginDetailsContent({
   onViewSource,
   onOpenSkill,
 }: PluginDetailsContentProps) {
-  const action = pluginPrimaryAction(plugin, server);
+  const action = pluginPrimaryAction(plugin, server, accessStatus);
   const blocker = pluginBlocker(plugin);
   return (
     <DialogPanel className="px-6 pt-6! pb-6 sm:px-8">
@@ -79,7 +79,7 @@ export function PluginDetailsContent({
                 aria-label={`${action.label} ${plugin.title}`}
                 className="h-8 min-w-16 rounded-full px-3 text-xs"
                 size="sm"
-                variant={server?.enabled ? "secondary" : "default"}
+                variant={action.enable === false ? "secondary" : "default"}
                 disabled={pending || action.enable === null}
                 title={action.blocker}
                 onClick={() => action.enable !== null && onToggle(action.enable)}

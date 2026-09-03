@@ -181,6 +181,9 @@ import { ServerSettings, ServerSettingsError, ServerSettingsRpcPatch } from "./s
 import {
   BotInboxItem,
   BotInboxResolveInput,
+  McpServerAuthenticateInput,
+  McpServerAuthenticationError,
+  McpServerAuthenticationProgress,
   SubscriptionAuthCompleteInput,
   SubscriptionAuthError,
   SubscriptionAuthHealthTestInput,
@@ -300,6 +303,7 @@ export const WS_METHODS = {
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
   subscriptionAuthHealthTest: "subscriptionAuth.healthTest",
+  mcpServerAuthenticate: "mcpServer.authenticate",
   botInboxList: "botInbox.list",
   botInboxResolve: "botInbox.resolve",
   voiceCallGet: "voiceCall.get",
@@ -457,6 +461,13 @@ export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionA
   payload: SubscriptionAuthHealthTestInput,
   success: SubscriptionAuthStatuses,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsMcpServerAuthenticateRpc = Rpc.make(WS_METHODS.mcpServerAuthenticate, {
+  payload: McpServerAuthenticateInput,
+  success: McpServerAuthenticationProgress,
+  error: Schema.Union([McpServerAuthenticationError, EnvironmentAuthorizationError]),
+  stream: true,
 });
 
 export const WsBotInboxListRpc = Rpc.make(WS_METHODS.botInboxList, {
@@ -1042,6 +1053,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
   WsSubscriptionAuthHealthTestRpc,
+  WsMcpServerAuthenticateRpc,
   WsBotInboxListRpc,
   WsBotInboxResolveRpc,
   WsVoiceCallGetRpc,

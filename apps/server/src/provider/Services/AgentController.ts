@@ -4,6 +4,7 @@ import type {
   BotEngine,
   BotId,
   ModelSelection,
+  McpServer,
   ProviderInteractionMode,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -60,6 +61,11 @@ export interface AgentControllerShape {
     readonly threadId: ThreadId;
     readonly error: string;
   }) => Effect.Effect<void>;
+
+  readonly authenticateMcpServer: (input: {
+    readonly server: McpServer;
+    readonly onAuthorizationUrl: (url: string) => void;
+  }) => Effect.Effect<{ readonly toolCount: number }, AgentControllerError>;
 
   readonly readConversationMemory?: (
     threadId: ThreadId,

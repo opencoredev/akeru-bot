@@ -43,6 +43,7 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
 import { PluginDetails } from "./PluginDetails";
+import { runPluginEnablePlan } from "./pluginConnection";
 import {
   findPluginServer,
   isBuiltinMcpServer,
@@ -144,6 +145,9 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
   const enableServer = useAtomCommand(mcpServerEnvironment.enable, { reportFailure: false });
   const disableServer = useAtomCommand(mcpServerEnvironment.disable, { reportFailure: false });
+  const authenticateServer = useAtomCommand(serverEnvironment.authenticateMcpServer, {
+    reportFailure: false,
+  });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PluginFilter>("All");
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDirectoryDefinition | null>(null);
@@ -199,39 +203,83 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   };
 
   const togglePlugin = async (plugin: PluginDirectoryDefinition, enabled: boolean) => {
-    let plan;
-    if (enabled) {
-      if (!isInstallablePlugin(plugin)) return;
-      plan = planPluginToggle(plugin, servers, true);
-    } else {
-      plan = { action: "disable" as const, mcpServerId: pluginMcpServerId(plugin) };
+    if (!enabled) {
+      const mcpServerId = pluginMcpServerId(plugin);
+      setPendingServerId(mcpServerId);
+      const result = await disableServer({ environmentId, input: { mcpServerId } });
+      setPendingServerId(null);
+      reportFailure(`Could not disable ${plugin.title}`, result);
+      return;
     }
+    if (!isInstallablePlugin(plugin)) return;
+
+    const plan = planPluginToggle(plugin, servers, true);
+    if (plan.action === "disable") return;
     setPendingServerId(plan.mcpServerId);
-    if (plan.action === "refresh-and-enable") {
-      const updateResult = await updateServer({
-        environmentId,
-        input: { mcpServerId: plan.mcpServerId, ...plan.configuration },
+    const commandSucceeded = (title: string, result: Awaited<ReturnType<typeof createServer>>) => {
+      if (result._tag === "Success") return true;
+      reportFailure(title, result);
+      return false;
+    };
+    const shouldAuthenticate =
+      plugin.authentication === "oauth" || plugin.authentication === "optional-oauth";
+
+    try {
+      await runPluginEnablePlan(plan, {
+        create: async (mcpServerId, configuration) =>
+          commandSucceeded(
+            `Could not enable ${plugin.title}`,
+            await createServer({
+              environmentId,
+              input: { mcpServerId, ...configuration },
+            }),
+          ),
+        update: async (mcpServerId, configuration) =>
+          commandSucceeded(
+            `Could not update ${plugin.title}`,
+            await updateServer({
+              environmentId,
+              input: { mcpServerId, ...configuration },
+            }),
+          ),
+        enable: async (mcpServerId) =>
+          commandSucceeded(
+            `Could not enable ${plugin.title}`,
+            await enableServer({ environmentId, input: { mcpServerId } }),
+          ),
+        ...(shouldAuthenticate
+          ? {
+              authenticate: async (mcpServerId, onAuthorizationUrl) => {
+                const result = await authenticateServer({
+                  environmentId,
+                  mcpServerId,
+                  onAuthorizationUrl,
+                });
+                if (result._tag === "Success") return true;
+                if (!isAtomCommandInterrupted(result)) {
+                  const error = squashAtomCommandFailure(result);
+                  toastManager.add({
+                    type: "error",
+                    title: `Could not connect ${plugin.title}`,
+                    description: error instanceof Error ? error.message : "Authentication failed.",
+                  });
+                }
+                return false;
+              },
+            }
+          : {}),
+        openAuthorizationUrl: async (url) => {
+          const authorizationUrl = new URL(url);
+          if (authorizationUrl.protocol !== "https:") {
+            throw new Error("The authorization URL must use HTTPS.");
+          }
+          await ensureLocalApi().shell.openExternal(authorizationUrl.toString());
+        },
       });
-      if (reportFailure(`Could not update ${plugin.title}`, updateResult)) {
-        setPendingServerId(null);
-        return;
-      }
+    } finally {
+      setPendingServerId(null);
+      subscriptionAuth.refresh();
     }
-    const result =
-      plan.action === "create"
-        ? await createServer({
-            environmentId,
-            input: { mcpServerId: plan.mcpServerId, ...plan.configuration },
-          })
-        : await (plan.action === "refresh-and-enable" ? enableServer : disableServer)({
-            environmentId,
-            input: { mcpServerId: plan.mcpServerId },
-          });
-    setPendingServerId(null);
-    reportFailure(
-      enabled ? `Could not enable ${plugin.title}` : `Could not disable ${plugin.title}`,
-      result,
-    );
   };
 
   const toggleCustom = async (server: McpServer, enabled: boolean) => {
@@ -366,6 +414,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
             <PluginsCatalog
               sections={sections}
               servers={servers}
+              accessStatuses={subscriptionAuth.data?.access ?? []}
               pendingServerId={pendingServerId}
               onToggle={(plugin, enabled) => void togglePlugin(plugin, enabled)}
               onOpen={openPlugin}

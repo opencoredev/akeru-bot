@@ -8,7 +8,8 @@
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { BotId, IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { BotId, IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { McpServerId } from "./mcpServer.ts";
 
 export const SubscriptionProviderId = Schema.Literals([
   "anthropic",
@@ -196,6 +197,35 @@ export class SubscriptionAuthError extends Schema.TaggedErrorClass<SubscriptionA
   "SubscriptionAuthError",
   {
     reason: Schema.String,
+  },
+) {
+  override get message(): string {
+    return this.reason;
+  }
+}
+
+export const McpServerAuthenticateInput = Schema.Struct({
+  mcpServerId: McpServerId,
+});
+export type McpServerAuthenticateInput = typeof McpServerAuthenticateInput.Type;
+
+export const McpServerAuthenticationProgress = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("authorization-required"),
+    authorizationUrl: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("connected"),
+    toolCount: NonNegativeInt,
+  }),
+]);
+export type McpServerAuthenticationProgress = typeof McpServerAuthenticationProgress.Type;
+
+export class McpServerAuthenticationError extends Schema.TaggedErrorClass<McpServerAuthenticationError>()(
+  "McpServerAuthenticationError",
+  {
+    mcpServerId: McpServerId,
+    reason: TrimmedNonEmptyString,
   },
 ) {
   override get message(): string {

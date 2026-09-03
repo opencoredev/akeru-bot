@@ -105,6 +105,7 @@ function createAgentControllerHarness(
         ] satisfies ReadonlyArray<ProviderSession>)
       : Effect.succeed([] as ReadonlyArray<ProviderSession>);
   const service: AgentControllerShape = {
+    authenticateMcpServer: () => unsupported(),
     resolveEngine: () => unsupported(),
     inspectEngine: () => unsupported(),
     startSession: () => unsupported(),

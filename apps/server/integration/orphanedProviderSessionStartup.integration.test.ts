@@ -106,6 +106,7 @@ const startupDependencies = Layer.mergeAll(
   ),
   AnalyticsService.layerTest,
   Layer.succeed(AgentController.AgentController, {
+    authenticateMcpServer: () => Effect.die("unused"),
     resolveEngine: () => Effect.die("unused"),
     inspectEngine: () => Effect.die("unused"),
     startSession: () => Effect.die("unused"),
