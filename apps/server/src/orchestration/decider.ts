@@ -3051,7 +3051,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Message '${command.messageId}' is not visible in thread '${command.threadId}'.`,
         });
       }
-      if (thread.groupId != null) {
+      if (actor === undefined && command.botId === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Trusted bot reactions require a bot identity.",
+        });
+      }
+      if (actor === undefined && thread.groupId != null) {
         const group = yield* requireGroup({
           readModel,
           command,
@@ -3070,7 +3076,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           groupId: thread.groupId,
           botId: reactionBotId,
         });
-      } else if (thread.botId !== command.botId) {
+      } else if (actor === undefined && thread.botId !== command.botId) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
@@ -3087,7 +3093,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           messageId: command.messageId,
-          botId: command.botId,
+          ...(actor === undefined ? { botId: command.botId } : { personId: actor.personId }),
           emoji: command.emoji,
           present: command.present,
           updatedAt: command.updatedAt,

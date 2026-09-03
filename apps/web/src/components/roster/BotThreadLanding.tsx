@@ -57,7 +57,7 @@ import {
   MessageControls,
   type MessageReactionOption,
   type MessageReplyTarget,
-  selectedReactionForBot,
+  selectedReactionForPerson,
 } from "../chat/MessageControls";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
@@ -194,7 +194,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
         (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
       ) ?? [])
     : [];
-  const reactionBotId = BotId.make(bot.id);
+  const currentPersonId = snapshot?.currentPersonId;
   const updateReaction = async (
     messageId: MessageId,
     current: MessageReactionOption | null,
@@ -208,7 +208,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
         input: {
           threadId: threadRef.threadId,
           messageId,
-          botId: reactionBotId,
           emoji,
           present,
         },
@@ -281,9 +280,9 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                       <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
-                          selectedReaction={selectedReactionForBot(
+                          selectedReaction={selectedReactionForPerson(
                             message.reactions,
-                            reactionBotId,
+                            currentPersonId,
                           )}
                           onReply={() =>
                             setReplyTarget({
@@ -295,7 +294,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                           onReactionChange={(next) =>
                             void updateReaction(
                               message.id,
-                              selectedReactionForBot(message.reactions, reactionBotId),
+                              selectedReactionForPerson(message.reactions, currentPersonId),
                               next,
                             )
                           }
@@ -335,7 +334,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                           message.attachments?.map((attachment) => attachment.name).join(", ") ||
                           "Attachment"
                         }
-                        selectedReaction={selectedReactionForBot(message.reactions, reactionBotId)}
+                        selectedReaction={selectedReactionForPerson(
+                          message.reactions,
+                          currentPersonId,
+                        )}
                         onReply={() =>
                           setReplyTarget({
                             messageId: message.id,
@@ -351,7 +353,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         onReactionChange={(next) =>
                           void updateReaction(
                             message.id,
-                            selectedReactionForBot(message.reactions, reactionBotId),
+                            selectedReactionForPerson(message.reactions, currentPersonId),
                             next,
                           )
                         }

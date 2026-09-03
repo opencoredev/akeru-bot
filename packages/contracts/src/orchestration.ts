@@ -495,7 +495,8 @@ export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
 export const OrchestrationMessageReaction = Schema.Struct({
   emoji: TrimmedNonEmptyString,
-  botId: BotId,
+  botId: Schema.optional(BotId),
+  personId: Schema.optional(AuthSessionId),
 });
 export type OrchestrationMessageReaction = typeof OrchestrationMessageReaction.Type;
 
@@ -1627,7 +1628,7 @@ const ThreadMessageReactionSetCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   messageId: MessageId,
-  botId: BotId,
+  botId: Schema.optional(BotId),
   emoji: TrimmedNonEmptyString,
   present: Schema.Boolean,
   updatedAt: IsoDateTime,
@@ -2241,7 +2242,8 @@ export const ThreadMessageSentPayload = Schema.Struct({
 export const ThreadMessageReactionSetPayload = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
-  botId: BotId,
+  botId: Schema.optional(BotId),
+  personId: Schema.optional(AuthSessionId),
   emoji: TrimmedNonEmptyString,
   present: Schema.Boolean,
   updatedAt: IsoDateTime,

@@ -617,7 +617,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
-  it.effect("binds group message reactions to the thread responder", () =>
+  it.effect("binds client group reactions to the authenticated person", () =>
     Effect.gen(function* () {
       const messageId = MessageId.make("message-1");
       const readModel = makeReadModel({
@@ -649,7 +649,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         commandId: CommandId.make("cmd-member-thread-reaction"),
         threadId: ThreadId.make("thread-group"),
         messageId,
-        botId: BOSS_ID,
+        botId: SPECIALIST_ID,
         emoji: "👍",
         present: true,
         updatedAt: NOW,
@@ -660,15 +660,6 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         readModel,
         actor: { personId: PERSON_ID, canManageGroups: false },
       });
-      const error = yield* decideOrchestrationCommand({
-        command: {
-          ...command,
-          commandId: CommandId.make("cmd-forged-specialist-reaction"),
-          botId: SPECIALIST_ID,
-        },
-        readModel,
-        actor: { personId: PERSON_ID, canManageGroups: false },
-      }).pipe(Effect.flip);
 
       const event = (Array.isArray(result) ? result : [result]).find(
         (candidate) => candidate.type === "thread.message-reaction-set",
@@ -676,11 +667,58 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (event?.type !== "thread.message-reaction-set") {
         throw new Error("Expected thread.message-reaction-set");
       }
-      expect(event.payload.botId).toBe(BOSS_ID);
-      if (error._tag !== "OrchestrationCommandInvariantError") {
-        throw new Error("Expected reaction attribution invariant error");
+      expect(event.payload).toMatchObject({ personId: PERSON_ID, emoji: "👍", present: true });
+      expect(event.payload.botId).toBeUndefined();
+    }),
+  );
+
+  it.effect("keeps trusted internal group reactions bot-authored", () =>
+    Effect.gen(function* () {
+      const messageId = MessageId.make("message-1");
+      const readModel = makeReadModel({
+        bots: [makeBot({ id: BOSS_ID, groupId: GROUP_ID })],
+        groups: [makeGroup()],
+        threads: [
+          {
+            ...makeGroupThread(),
+            respondingBotId: BOSS_ID,
+            messages: [
+              {
+                id: messageId,
+                role: "user",
+                text: "Please investigate.",
+                turnId: null,
+                streaming: false,
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.message.reaction.set",
+          commandId: CommandId.make("cmd-internal-thread-reaction"),
+          threadId: ThreadId.make("thread-group"),
+          messageId,
+          botId: BOSS_ID,
+          emoji: "👍",
+          present: true,
+          updatedAt: NOW,
+        },
+        readModel,
+      });
+
+      const event = (Array.isArray(result) ? result : [result]).find(
+        (candidate) => candidate.type === "thread.message-reaction-set",
+      );
+      if (event?.type !== "thread.message-reaction-set") {
+        throw new Error("Expected thread.message-reaction-set");
       }
-      expect(error.detail).toContain(`Bot '${SPECIALIST_ID}' cannot react`);
+      expect(event.payload).toMatchObject({ botId: BOSS_ID, emoji: "👍", present: true });
+      expect(event.payload.personId).toBeUndefined();
     }),
   );
 

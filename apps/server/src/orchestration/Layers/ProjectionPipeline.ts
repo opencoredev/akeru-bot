@@ -1487,12 +1487,22 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           if (Option.isNone(existingMessage)) return;
           const withoutReaction = (existingMessage.value.reactions ?? []).filter(
             (reaction) =>
-              reaction.botId !== event.payload.botId || reaction.emoji !== event.payload.emoji,
+              reaction.botId !== event.payload.botId ||
+              reaction.personId !== event.payload.personId ||
+              reaction.emoji !== event.payload.emoji,
           );
           yield* projectionThreadMessageRepository.upsert({
             ...existingMessage.value,
             reactions: event.payload.present
-              ? [...withoutReaction, { botId: event.payload.botId, emoji: event.payload.emoji }]
+              ? [
+                  ...withoutReaction,
+                  {
+                    ...(event.payload.botId !== undefined
+                      ? { botId: event.payload.botId }
+                      : { personId: event.payload.personId }),
+                    emoji: event.payload.emoji,
+                  },
+                ]
               : withoutReaction,
             updatedAt: event.payload.updatedAt,
           });

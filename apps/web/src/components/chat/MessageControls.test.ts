@@ -6,7 +6,7 @@ import {
   buildReplyPrompt,
   MESSAGE_REACTION_OPTIONS,
   MessageControls,
-  selectedReactionForBot,
+  selectedReactionForPerson,
 } from "./MessageControls";
 
 const mocks = vi.hoisted(() => ({
@@ -25,14 +25,14 @@ describe("message controls", () => {
     expect(MESSAGE_REACTION_OPTIONS).toEqual(["👍", "👎", "❤️", "😂", "🎉", "😮"]);
   });
 
-  it("resolves the current bot reaction and quotes a reply into the sent prompt", () => {
+  it("resolves the current person reaction and quotes a reply into the sent prompt", () => {
     expect(
-      selectedReactionForBot(
+      selectedReactionForPerson(
         [
-          { botId: "bot-1", emoji: "👍" },
-          { botId: "bot-2", emoji: "😂" },
+          { personId: "person-1", emoji: "👍" },
+          { personId: "person-2", emoji: "😂" },
         ],
-        "bot-2",
+        "person-2",
       ),
     ).toBe("😂");
     expect(

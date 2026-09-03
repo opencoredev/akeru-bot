@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type EnvironmentId, type MessageId } from "@t3tools/contracts";
+import { type EnvironmentId, type MessageId } from "@t3tools/contracts";
 import { useEffect, useMemo, useState } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
@@ -21,7 +21,7 @@ import {
   MessageControls,
   type MessageReactionOption,
   type MessageReplyTarget,
-  selectedReactionForBot,
+  selectedReactionForPerson,
 } from "../chat/MessageControls";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotActivityStatus } from "./BotActivityStatus";
@@ -101,7 +101,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     : [];
   const updateReaction = async (
     messageId: MessageId,
-    reactionBotId: BotId,
     current: MessageReactionOption | null,
     next: MessageReactionOption | null,
   ) => {
@@ -113,7 +112,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         input: {
           threadId: threadRef.threadId,
           messageId,
-          botId: reactionBotId,
           emoji,
           present,
         },
@@ -198,7 +196,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     </div>
                   );
                 }
-                const reactionBotId = BotId.make(respondingBot.id);
                 return (
                   <div
                     key={message.id}
@@ -224,9 +221,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                       <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
-                          selectedReaction={selectedReactionForBot(
+                          selectedReaction={selectedReactionForPerson(
                             message.reactions,
-                            reactionBotId,
+                            peopleIdentity.current?.id,
                           )}
                           onReply={() =>
                             setReplyTarget({
@@ -238,8 +235,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                           onReactionChange={(next) =>
                             void updateReaction(
                               message.id,
-                              reactionBotId,
-                              selectedReactionForBot(message.reactions, reactionBotId),
+                              selectedReactionForPerson(
+                                message.reactions,
+                                peopleIdentity.current?.id,
+                              ),
                               next,
                             )
                           }
@@ -254,7 +253,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 peopleIdentity.current?.id,
                 peopleIdentity.host?.id,
               );
-              const reactionBotId = activeBot ?? boss;
               return (
                 <div
                   key={message.id}
@@ -269,11 +267,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         message.attachments?.map((attachment) => attachment.name).join(", ") ||
                         "Attachment"
                       }
-                      selectedReaction={
-                        reactionBotId
-                          ? selectedReactionForBot(message.reactions, reactionBotId.id)
-                          : null
-                      }
+                      selectedReaction={selectedReactionForPerson(
+                        message.reactions,
+                        peopleIdentity.current?.id,
+                      )}
                       onReply={() =>
                         setReplyTarget({
                           messageId: message.id,
@@ -284,17 +281,13 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                             "Attachment",
                         })
                       }
-                      {...(reactionBotId
-                        ? {
-                            onReactionChange: (next: MessageReactionOption | null) =>
-                              void updateReaction(
-                                message.id,
-                                BotId.make(reactionBotId.id),
-                                selectedReactionForBot(message.reactions, reactionBotId.id),
-                                next,
-                              ),
-                          }
-                        : {})}
+                      onReactionChange={(next: MessageReactionOption | null) =>
+                        void updateReaction(
+                          message.id,
+                          selectedReactionForPerson(message.reactions, peopleIdentity.current?.id),
+                          next,
+                        )
+                      }
                     />
                   </div>
                   <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">

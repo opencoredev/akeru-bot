@@ -16,11 +16,14 @@ export interface MessageReplyTarget {
   readonly text: string;
 }
 
-export function selectedReactionForBot(
-  reactions: ReadonlyArray<{ readonly botId: string; readonly emoji: string }> | undefined,
-  botId: string,
+export function selectedReactionForPerson(
+  reactions:
+    | ReadonlyArray<{ readonly personId?: string | undefined; readonly emoji: string }>
+    | undefined,
+  personId: string | null | undefined,
 ): MessageReactionOption | null {
-  const emoji = reactions?.find((reaction) => reaction.botId === botId)?.emoji;
+  if (!personId) return null;
+  const emoji = reactions?.find((reaction) => reaction.personId === personId)?.emoji;
   return MESSAGE_REACTION_OPTIONS.find((option) => option === emoji) ?? null;
 }
 
