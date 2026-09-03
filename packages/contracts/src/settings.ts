@@ -153,7 +153,7 @@ export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationM
 export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
 
-export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru.bot/v1/feedback";
+export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT = "https://feedback.akeru-bot.com/v1/feedback";
 export const AKERU_MARKETING_SITE_URL = "https://akeru.bot";
 export const AKERU_PRIVACY_POLICY_VERSION = "2026-08-31";
 export const AKERU_TERMS_VERSION = "2026-08-31";
@@ -549,6 +549,18 @@ export const KimiSettings = makeProviderSettingsSchema({
 });
 export type KimiSettings = typeof KimiSettings.Type;
 
+export const OpenCodeGoSettings = makeProviderSettingsSchema({
+  enabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+  ),
+  customModels: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+  ),
+});
+export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
+
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     // Off by default (like Cursor and Grok): the binding is not yet stable
@@ -816,6 +828,7 @@ export const ServerSettings = Schema.Struct({
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     kimi: KimiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    opencodeGo: OpenCodeGoSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
   // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
@@ -973,6 +986,11 @@ const KimiSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const OpenCodeGoSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const OpenCodeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -1060,6 +1078,7 @@ const ServerSettingsPatchFields = {
       grok: Schema.optionalKey(GrokSettingsPatch),
       kimi: Schema.optionalKey(KimiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
+      opencodeGo: Schema.optionalKey(OpenCodeGoSettingsPatch),
     }),
   ),
   // Whole-map replacement for the new instance config. Patching individual

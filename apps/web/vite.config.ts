@@ -211,7 +211,9 @@ export default defineConfig(() => {
       tsconfigPaths: true,
       dedupe: ["react", "react-dom", "effect"],
       alias: {
+        clsx: "cn",
         "react-grab": reactGrabEntry,
+        "tailwind-merge": "cn",
       },
     },
     experimental: {

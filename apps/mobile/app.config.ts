@@ -46,19 +46,22 @@ if (expoOwner && !EXPO_OWNER_PATTERN.test(expoOwner)) {
 }
 
 const DEVELOPMENT_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
-  androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.developmentUniversalIconPng),
-  androidAdaptiveBackgroundColor: "#00639B",
-  androidMonochromeIcon: "./assets/android-dev-monochrome.png",
-  androidNotificationIcon: "./assets/android-dev-monochrome.png",
-  androidNotificationColor: "#00639B",
+  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  androidAdaptiveBackgroundColor: "#F4F1EA",
+  androidMonochromeIcon: "./assets/android-akeru-monochrome.png",
+  androidNotificationIcon: "./assets/android-akeru-monochrome.png",
+  androidNotificationColor: "#F4F1EA",
 } as const;
 
 const RELEASE_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  iosIcon: {
+    light: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+    dark: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  },
   splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
   androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
   androidAdaptiveBackgroundColor: "#F4F1EA",

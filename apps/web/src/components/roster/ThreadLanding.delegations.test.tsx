@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   activities: [] as OrchestrationThreadActivity[],
   messages: [] as OrchestrationMessage[],
   pendingUserInputs: [] as PendingUserInput[],
+  groupPendingUserInputs: [] as PendingUserInput[],
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -128,6 +129,7 @@ vi.mock("./useBotThreadRuntime", () => ({
 vi.mock("./useGroupThreadRuntime", () => ({
   useGroupThreadRuntime: () => ({
     sending: false,
+    respondingRequestIds: [],
     messages: [],
     error: null,
     defaultProject: null,
@@ -138,6 +140,11 @@ vi.mock("./useGroupThreadRuntime", () => ({
       environmentId: EnvironmentId.make("environment-1"),
       threadId: ThreadId.make("thread-parent"),
     },
+    pendingUserInputs: mocks.groupPendingUserInputs,
+    pendingUserInputAnswers: {},
+    pendingUserInputQuestionIndex: 0,
+    selectPendingUserInputOption: vi.fn(),
+    advancePendingUserInput: vi.fn(),
     send: vi.fn(),
   }),
 }));
@@ -147,6 +154,7 @@ import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputP
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
+import { BotUserInputPrompt } from "./BotUserInputPrompt";
 
 const decodeDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord);
 const parentBot: Bot = {
@@ -226,6 +234,7 @@ describe("thread landing delegations", () => {
     mocks.activities = [];
     mocks.messages = [];
     mocks.pendingUserInputs = [];
+    mocks.groupPendingUserInputs = [];
     mocks.snapshot = {
       snapshotSequence: 1,
       bots: [],
@@ -348,5 +357,32 @@ describe("thread landing delegations", () => {
     expect(card?.props.pendingUserInputs[0]?.questions[0]?.question).toBe(
       "If you had to pick a snack right now, which one?",
     );
+  });
+
+  it("renders pending provider questions in group threads", () => {
+    mocks.groupPendingUserInputs = [
+      {
+        requestId: "group-question" as PendingUserInput["requestId"],
+        createdAt: "2026-09-01T00:00:00.000Z",
+        questions: [
+          {
+            id: "scope",
+            header: "Scope",
+            question: "Which workspace should I use?",
+            options: [{ label: "Current", description: "Use the current workspace." }],
+            multiSelect: false,
+          },
+        ],
+      },
+    ];
+
+    hooks.beginRender();
+    const prompt = visitElements(
+      GroupThreadLanding({ groupId: group.id }),
+      (element) => element.type === BotUserInputPrompt,
+    ) as ReactElement<Parameters<typeof BotUserInputPrompt>[0]> | null;
+
+    expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
+    expect(prompt?.props.onSelectSingleOption).toBe(prompt?.props.onToggleOption);
   });
 });

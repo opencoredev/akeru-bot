@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Cause from "effect/Cause";
 
@@ -32,6 +32,7 @@ import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
 import { buildThreadFeed } from "../lib/threadActivity";
+import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import { appAtomRegistry } from "../state/atom-registry";
 import {
   appendComposerDraftAttachments,
@@ -88,6 +89,7 @@ export function useThreadDraftForThread(input: {
 export function useThreadComposerState() {
   const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
+  const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   const composerDrafts = useAtomValue(composerDraftsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
   const [feedbackSubmissionsByThreadKey, setFeedbackSubmissionsByThreadKey] = useState<
@@ -100,6 +102,24 @@ export function useThreadComposerState() {
   useEffect(() => {
     ensureComposerDraftsLoaded();
   }, []);
+
+  useEffect(() => {
+    for (const activity of selectedThreadDetail?.activities ?? []) {
+      if (activity.kind !== "mcp.oauth.authorization-required") continue;
+      if (openedAuthorizationActivitiesRef.current.has(activity.id)) continue;
+      if (!activity.payload || typeof activity.payload !== "object") continue;
+      const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
+      if (typeof authorizationUrl !== "string") continue;
+      try {
+        if (new URL(authorizationUrl).protocol !== "https:") continue;
+      } catch {
+        continue;
+      }
+      openedAuthorizationActivitiesRef.current.add(activity.id);
+      void tryOpenExternalUrl(authorizationUrl, "mcp-oauth");
+      break;
+    }
+  }, [selectedThreadDetail?.activities]);
 
   const selectedThreadKey = selectedThreadShell
     ? scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id)

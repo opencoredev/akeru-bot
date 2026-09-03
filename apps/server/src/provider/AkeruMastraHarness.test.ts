@@ -17,7 +17,10 @@ import {
 import * as DateTime from "effect/DateTime";
 import { assert, describe, expect, it, vi } from "vite-plus/test";
 
-import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import {
+  createAkeruAgentInstructions,
+  createAkeruBotInstructions,
+} from "./AkeruAgentInstructions.ts";
 import {
   AKERU_RECENT_MESSAGE_LIMIT,
   AKERU_DELETE_ROUTINES_TOOL_NAME,
@@ -34,6 +37,7 @@ import {
   resolveAkeruTools,
   routineToolInputSchema,
   routineToolNeedsGlobalApproval,
+  withAkeruModelRunOptions,
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
@@ -48,19 +52,46 @@ describe("Akeru action classifier", () => {
     ['curl -X POST --data \'{"text":"hello"}\' https://example.com/messages', "send"],
     ["cd workspace && git push origin main", "publish"],
     ["find . -name '*.tmp' -delete", "delete"],
+    ["git reset --hard HEAD~1", "delete"],
+    ["git clean -fd", "delete"],
+    ["find . -name '*.tmp' -exec rm -rf {} \\;", "delete"],
     ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
+    ["shred important-file", "delete"],
+    ["sudo shred -u important-file", "delete"],
+    ["command shred -u important-file", "delete"],
+    ['bash -c "shred -u important-file"', "delete"],
+    ["dd if=/dev/zero of=important-file", "delete"],
+    ["sudo dd if=image.img of=/dev/disk4 bs=4m", "delete"],
+    ["dd if=/dev/zero > important-file", "delete"],
+    ['bash -c "dd if=/dev/zero 1> important-file"', "delete"],
+    ["mv replacement important-file", "delete"],
+    ["mv -f replacement important-file", "delete"],
+    ["command mv --force replacement important-file", "delete"],
+    ["bash -lc 'command shred -u important-file'", "delete"],
+    ["printf '%s\\n' important-file | xargs shred -u", "delete"],
+    ["printf '%s\\n' important-file | xargs rm -f", "delete"],
+    ["printf '%s\\n' important-file | xargs env rm -f", "delete"],
+    ["printf '%s\\n' empty-dir | xargs rmdir", "delete"],
+    ["printf '%s\\n' important-link | xargs unlink", "delete"],
+    ["find . -name important-file -exec shred -u {} \\;", "delete"],
+    ["find . -name important-file -exec env rm -f {} \\;", "delete"],
+    ["printf '%s\\n' important-file | xargs sh -c 'rm -f \"$1\"' _", "delete"],
+    ["find . -name important-file -exec sh -c 'rm -f \"$1\"' _ {} \\;", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);
     expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);
   });
 
-  it.each(["bun test", "git status", "rg -n TODO apps", "cat README.md"])(
-    "leaves ordinary local command %s unclassified",
-    (command) => {
-      expect(criticalAkeruAction("execute_command", { command })).toBeNull();
-      expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
-    },
-  );
+  it.each([
+    "bun test",
+    "git status",
+    "rg -n TODO apps",
+    "cat README.md",
+    'echo "shred important-file"',
+  ])("leaves ordinary local command %s unclassified", (command) => {
+    expect(criticalAkeruAction("execute_command", { command })).toBeNull();
+    expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
+  });
 
   it("requires approval when nested input exceeds the inspection limit", () => {
     let args: unknown = { action: "send" };
@@ -384,25 +415,76 @@ describe("AkeruMastraHarness", () => {
     );
   });
 
-  it("configures Akeru as a general-purpose assistant with plugin awareness", () => {
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "general-purpose assistant");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "enabled plugin tools");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "Prefer preview_* tools over browser_* tools");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "akeru_list_routines");
-    assert.include(AKERU_AGENT_INSTRUCTIONS, "Do not assume");
-    assert.notInclude(AKERU_AGENT_INSTRUCTIONS, "coding agent");
+  it("keeps OpenCode Go model names on the direct subscription transport", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
+    assert.equal(
+      mastraModelId(ProviderDriverKind.make("opencodeGo"), "gpt-5.6-luna"),
+      "opencode-go/gpt-5.6-luna",
+    );
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "opencode-go/gpt-5.6-luna",
+        authStorage,
+        undefined,
+        async () => "go-key",
+      ),
+      { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
+    );
+    assert.throws(
+      () => resolveAkeruMastraModel("opencode-go/gpt-5.6-luna", authStorage),
+      "subscription access is unavailable",
+    );
+  });
+
+  it("builds a compact, human prompt with the bot name and current date", () => {
+    const instructions = createAkeruAgentInstructions({
+      name: "  Research\nBot  ",
+      now: DateTime.makeUnsafe("2026-09-02T12:00:00.000Z"),
+    });
+
+    assert.include(instructions, "You are Research Bot, a sharp, curious general assistant");
+    assert.include(instructions, "Today is Wednesday, September 2, 2026");
+    assert.include(instructions, "Write like a thoughtful human teammate");
+    assert.include(instructions, "Silently reread before sending");
+    assert.include(instructions, "Name every drawback");
+    assert.include(instructions, "Never use em or en dashes");
+    assert.include(instructions, "enabled plugin tools");
+    assert.include(instructions, "Prefer preview_* tools over browser_* tools");
+    assert.include(instructions, "akeru_list_routines");
+    assert.notInclude(instructions, "—");
+    assert.notInclude(instructions, "coding agent");
+    assert.isBelow(createAkeruBotInstructions({ now: DateTime.nowUnsafe() }).length, 3_000);
+  });
+
+  it("passes the saved Codex service tier to Mastra provider options", () => {
+    expect(
+      withAkeruModelRunOptions(
+        { providerOptions: { anthropic: { fallback: true }, openai: { store: false } } },
+        { modelOptions: { serviceTier: "priority" } },
+      ),
+    ).toEqual({
+      providerOptions: {
+        anthropic: { fallback: true },
+        openai: { store: false, serviceTier: "priority" },
+      },
+    });
   });
 
   it("adds reply and status rules only to bot conversations", () => {
+    const now = DateTime.makeUnsafe("2026-09-02T12:00:00.000Z");
     const regular = new RequestContext();
     regular.setRaw("controller", { state: { botConversation: false } });
     const bot = new RequestContext();
-    bot.setRaw("controller", { state: { botConversation: true } });
+    bot.setRaw("controller", { state: { botConversation: true, botName: "Mina" } });
 
-    assert.equal(resolveAkeruInstructions(regular), AKERU_AGENT_INSTRUCTIONS);
-    assert.equal(resolveAkeruInstructions(bot), AKERU_BOT_INSTRUCTIONS);
-    assert.include(resolveAkeruInstructions(bot), "Before you use a tool");
-    assert.include(resolveAkeruInstructions(bot), "automatic continuation");
+    assert.equal(resolveAkeruInstructions(regular, now), createAkeruAgentInstructions({ now }));
+    assert.equal(
+      resolveAkeruInstructions(bot, now),
+      createAkeruBotInstructions({ name: "Mina", now }),
+    );
+    assert.include(resolveAkeruInstructions(bot, now), "You are Mina");
+    assert.include(resolveAkeruInstructions(bot, now), "Before you use a tool");
+    assert.include(resolveAkeruInstructions(bot, now), "automatic continuation");
   });
 
   it("selects implemented runtime tools without dropping approval-aware plugins", async () => {

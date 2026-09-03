@@ -48,7 +48,6 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
     />
   );
 });
-
 const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard({
   prompt,
   isResponding,

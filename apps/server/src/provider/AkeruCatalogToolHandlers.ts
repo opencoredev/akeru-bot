@@ -58,7 +58,10 @@ import type { RequestHealthStatus } from "../subscription-auth/service.ts";
 
 export interface AkeruCatalogToolHandlerInput {
   readonly input: unknown;
-  readonly emitProgress: (summary: string) => void | Promise<void>;
+  readonly emitProgress: (
+    summary: string,
+    details?: { readonly authorizationUrl?: string },
+  ) => void | Promise<void>;
 }
 
 export type AkeruCatalogToolHandler = (input: AkeruCatalogToolHandlerInput) => Promise<unknown>;
@@ -540,7 +543,9 @@ export function createAkeruCatalogToolHandlers(
             const status = await mcpManager.authenticateServer(serverId, {
               onAuthorizationUrl: (url) => {
                 authorizationUrl = url;
-                void emitProgress(`Authorize MCP server '${serverId}' at ${url}`);
+                void emitProgress(`Authorize MCP server '${serverId}'.`, {
+                  authorizationUrl: url,
+                });
               },
             });
             if (!status.connected) {

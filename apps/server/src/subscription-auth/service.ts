@@ -1,12 +1,12 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off
+// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 /**
- * Subscription auth service: one API over five login flows.
+ * Subscription auth service: one API over OAuth and API-key login flows.
  *
  * Storage follows Mastra Code's `AuthStorage` (mastra-ai/mastra,
  * `mastracode/sdk/src/auth/storage.ts`, Apache-2.0): a mode-0600 JSON file of
- * OAuth credentials. It lives in the server's secrets directory, never inside
- * a workspace or sandbox — a sandbox (E2B or local worktree) receives a
- * short-lived access token per run and holds no refresh token.
+ * Provider credentials. They live in the server's secrets directory, never inside
+ * a workspace or sandbox. Provider runtimes request credentials from this
+ * service and do not copy refresh credentials into a sandbox.
  *
  * Login flows are client-driven: `start` returns a URL (and user code) to
  * show, then the client calls `poll` until the flow settles. Every pending
@@ -51,12 +51,17 @@ import {
 } from "./providers/xai.ts";
 import type { OAuthCredential, OAuthCredentials, SubscriptionAuthData } from "./types.ts";
 
+const OPENCODE_GO_AUTH_URL = "https://opencode.ai/auth";
+const OPENCODE_GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage";
+const OPENCODE_GO_USER_AGENT = "akeru-bot/0.0.37";
+
 export const SUBSCRIPTION_PROVIDER_IDS = [
   "anthropic",
   "openai-codex",
   "cursor",
   "xai",
   "kimi-for-coding",
+  "opencode-go",
 ] as const;
 
 export type SubscriptionProviderId = (typeof SUBSCRIPTION_PROVIDER_IDS)[number];
@@ -138,7 +143,8 @@ type PendingLogin =
   | { provider: "openai-codex"; pending: CodexDeviceLoginPending }
   | { provider: "cursor"; pending: CursorLoginPending }
   | { provider: "xai"; pending: XAIDeviceLoginPending }
-  | { provider: "kimi-for-coding"; pending: KimiDeviceLoginPending };
+  | { provider: "kimi-for-coding"; pending: KimiDeviceLoginPending }
+  | { provider: "opencode-go" };
 
 /** A completed login that the client has not observed yet must not be re-runnable. */
 const PENDING_LOGIN_CAP = 16;
@@ -239,7 +245,7 @@ export class SubscriptionAuthService {
     return SUBSCRIPTION_PROVIDER_IDS.map((provider) => {
       const credential = this.data[provider];
       const health = this.health[provider];
-      const expired = credential !== undefined && credential.expires <= now;
+      const expired = credential?.type === "oauth" && credential.expires <= now;
       const failedAfterSuccess =
         health?.lastFailedRequest !== undefined &&
         (health.lastSuccessfulRequestAt === undefined ||
@@ -266,14 +272,21 @@ export class SubscriptionAuthService {
       return {
         provider,
         connected: credential !== undefined,
-        ...(credential ? { expiresAt: credential.expires } : {}),
+        ...(credential?.type === "oauth" ? { expiresAt: credential.expires } : {}),
         health: state,
         ...(health?.lastSuccessfulRequestAt
           ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
           : {}),
         ...(health?.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
         ...(health?.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
-        reconnectAction: credential ? "Reconnect account" : "Connect account",
+        reconnectAction:
+          provider === "opencode-go"
+            ? credential
+              ? "Replace API key"
+              : "Connect API key"
+            : credential
+              ? "Reconnect account"
+              : "Connect account",
         healthTest: health?.healthTest ?? { status: "not-run" },
         ...(health?.oauthCheck ? { oauthCheck: health.oauthCheck } : {}),
         dependentBots: dependentBots
@@ -409,6 +422,33 @@ export class SubscriptionAuthService {
       this.recordOAuthFailure(provider, "No account is connected.");
       return;
     }
+    if (provider === "opencode-go") {
+      try {
+        const response = await fetch(OPENCODE_GO_USAGE_URL, {
+          headers: {
+            Authorization: `Bearer ${credential.access}`,
+            "User-Agent": OPENCODE_GO_USER_AGENT,
+            "x-opencode-client": "akeru-bot",
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`OpenCode Go rejected the API key (${response.status}).`);
+        }
+        this.recordRequestSuccess(provider);
+      } catch (cause) {
+        this.recordRequestFailure(
+          provider,
+          cause instanceof Error ? cause.message : "OpenCode Go rejected the API key.",
+          undefined,
+          oauthFailureKind(cause),
+        );
+      }
+      return;
+    }
+    if (credential.type !== "oauth") {
+      this.recordOAuthFailure(provider, "The stored credential has the wrong type.");
+      return;
+    }
     try {
       const refreshed = await this.runRefresh(provider, credential);
       this.setCredential(provider, refreshed);
@@ -514,6 +554,17 @@ export class SubscriptionAuthService {
         };
         break;
       }
+      case "opencode-go": {
+        this.pendingLogins.set(loginId, { provider });
+        started = {
+          loginId,
+          provider,
+          url: OPENCODE_GO_AUTH_URL,
+          instructions: "Subscribe to OpenCode Go, copy the API key, then paste it here.",
+          completion: "paste",
+        };
+        break;
+      }
     }
 
     // Drop the oldest abandoned login rather than growing without bound.
@@ -564,6 +615,8 @@ export class SubscriptionAuthService {
         }
         return this.foldPoll(loginId, login.provider, result);
       }
+      case "opencode-go":
+        return { status: "pending", nextPollMs: 2000 };
     }
   }
 
@@ -597,8 +650,20 @@ export class SubscriptionAuthService {
     if (!login) {
       return { status: "failed", error: "Login expired or already completed. Start again." };
     }
-    if (login.provider !== "anthropic") {
+    if (login.provider !== "anthropic" && login.provider !== "opencode-go") {
       return { status: "failed", error: "This login completes by polling, not with a code." };
+    }
+
+    if (login.provider === "opencode-go") {
+      const apiKey = code.trim();
+      if (apiKey.length === 0) {
+        return { status: "failed", error: "Paste an OpenCode Go API key." };
+      }
+      this.pendingLogins.delete(loginId);
+      this.savePending();
+      this.data["opencode-go"] = { type: "api-key", access: apiKey };
+      this.save();
+      return { status: "connected" };
     }
 
     try {
@@ -643,6 +708,8 @@ export class SubscriptionAuthService {
     const credential = this.data[provider];
     if (!credential) return undefined;
 
+    if (credential.type === "api-key") return credential.access;
+
     if (Date.now() < credential.expires) {
       return credential.access;
     }
@@ -663,7 +730,7 @@ export class SubscriptionAuthService {
     this.reload();
     const accessToken = await this.getAccessToken("openai-codex");
     const credential = this.data["openai-codex"];
-    const accountId = credential?.accountId;
+    const accountId = credential?.type === "oauth" ? credential.accountId : undefined;
     return accessToken && typeof accountId === "string" && accountId.length > 0
       ? { accessToken, accountId }
       : undefined;
@@ -674,7 +741,8 @@ export class SubscriptionAuthService {
   > {
     this.reload();
     const accessToken = await this.getAccessToken("kimi-for-coding");
-    const deviceId = this.data["kimi-for-coding"]?.deviceId;
+    const credential = this.data["kimi-for-coding"];
+    const deviceId = credential?.type === "oauth" ? credential.deviceId : undefined;
     return accessToken && isKimiCodingDeviceId(deviceId) ? { accessToken, deviceId } : undefined;
   }
 
@@ -717,6 +785,8 @@ export class SubscriptionAuthService {
           undefined,
           typeof credential.deviceId === "string" ? credential.deviceId : undefined,
         );
+      case "opencode-go":
+        throw new Error("OpenCode Go API keys do not refresh.");
     }
   }
 }

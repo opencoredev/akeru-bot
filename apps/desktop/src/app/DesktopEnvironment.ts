@@ -219,7 +219,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : path.join(input.appPath, "dev-app-update.yml"),
     devServerUrl,
     devRemoteT3ServerEntryPath: config.devRemoteT3ServerEntryPath,
-    configuredBackendPort: config.configuredBackendPort,
+    configuredBackendPort: input.isPackaged ? Option.none() : config.configuredBackendPort,
     commitHashOverride: config.commitHashOverride,
     otlpTracesUrl: config.otlpTracesUrl,
     otlpExportIntervalMs: config.otlpExportIntervalMs,

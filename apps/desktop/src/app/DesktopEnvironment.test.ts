@@ -118,6 +118,20 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
+  it.effect("ignores an ambient development port in packaged apps", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        {
+          isPackaged: true,
+          appPath: "/Applications/Akeru Bot.app/Contents/Resources/app.asar",
+        },
+        { T3CODE_PORT: "3773" },
+      );
+
+      assert.deepEqual(environment.configuredBackendPort, Option.none());
+    }),
+  );
+
   it.effect("keeps implicit development state separate from production state", () =>
     Effect.gen(function* () {
       const development = yield* makeEnvironment(

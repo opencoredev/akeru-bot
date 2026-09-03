@@ -154,9 +154,9 @@ export const RuntimeMode = Schema.Literals([
 export type RuntimeMode = typeof RuntimeMode.Type;
 // Event decoders keep the historical full-access fallback for old persisted data.
 export const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
-export const LocalExecutionMode = Schema.Literals(["approval-required", "full-access"]);
+export const LocalExecutionMode = Schema.Literals(["approval-required", "auto", "full-access"]);
 export type LocalExecutionMode = typeof LocalExecutionMode.Type;
-export const DEFAULT_LOCAL_EXECUTION_MODE: LocalExecutionMode = "approval-required";
+export const DEFAULT_LOCAL_EXECUTION_MODE: LocalExecutionMode = "auto";
 export const ProviderInteractionMode = Schema.Literals(["default", "plan"]);
 export type ProviderInteractionMode = typeof ProviderInteractionMode.Type;
 export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "default";
@@ -323,6 +323,7 @@ export type BotAvatar = typeof BotAvatar.Type;
 export const BotEngine = Schema.Struct({
   provider: TrimmedNonEmptyString,
   model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(ProviderOptionSelections),
 });
 export type BotEngine = typeof BotEngine.Type;
 

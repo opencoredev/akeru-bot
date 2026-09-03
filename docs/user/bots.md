@@ -22,9 +22,10 @@ lets bots share files and browser cookies.
 Bots can use Local, E2B, Daytona, Vercel Sandbox, or Upstash Box. Connect remote services under
 **Settings > Sandbox**. A bot-specific sandbox overrides the environment default.
 
-Local bots ask before file changes and shell commands by default. Set **Settings > General > Local
-execution** to **Full access** to skip routine local prompts. Protected actions still ask. Cloud
-sandboxes do not show the local-computer prompt.
+Local bots use **Auto review** by default. Safe actions continue without a prompt. Actions that send,
+pay, delete, change production, use secrets, or have unclear intent still ask. Select **Settings >
+General > Local execution** to ask before each local change or grant full access. Bots that run in a
+cloud sandbox do not show the local computer prompt.
 
 ## Run a routine
 

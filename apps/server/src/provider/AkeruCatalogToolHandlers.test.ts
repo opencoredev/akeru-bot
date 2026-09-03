@@ -72,9 +72,9 @@ describe("Akeru catalog MCP tool handlers", () => {
       ...status,
       authorizationUrl: "https://example.com/authorize",
     });
-    expect(emitProgress).toHaveBeenCalledWith(
-      "Authorize MCP server 'search' at https://example.com/authorize",
-    );
+    expect(emitProgress).toHaveBeenCalledWith("Authorize MCP server 'search'.", {
+      authorizationUrl: "https://example.com/authorize",
+    });
 
     authenticateServer.mockResolvedValueOnce({
       ...status,

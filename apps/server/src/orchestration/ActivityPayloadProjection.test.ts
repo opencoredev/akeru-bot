@@ -75,6 +75,28 @@ describe("projectActivityPayload", () => {
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
+  it("scans tool output without retaining the full text behind its preview", () => {
+    const preview = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: { rawOutput: `\`\`\`\n  actual\tresult  \n${"x".repeat(5000)}` },
+      }),
+    );
+    const fences = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: { rawOutput: "```\r\n \t \n```\n" },
+      }),
+    );
+
+    expect((preview.payload as { data: { rawOutput: unknown } }).data.rawOutput).toEqual({
+      content: "actual result",
+    });
+    expect((fences.payload as { data: { rawOutput: unknown } }).data.rawOutput).toEqual({
+      content: "2 lines",
+    });
+  });
+
   it("keeps bounded Claude and ACP command output summaries", () => {
     const claude = projectActivityPayload(
       activity({
@@ -199,6 +221,35 @@ describe("projectActivityPayload", () => {
     expect(data.input).toEqual({ pr: 42 });
     expect(data.result).toEqual({ content: "first line of output" });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
+  });
+
+  it("bounds large MCP arguments and inputs in client projections", () => {
+    const oversized = "x".repeat(10_000_000);
+    const codex = projectActivityPayload(
+      activity({
+        itemType: "mcp_tool_call",
+        data: {
+          item: {
+            type: "mcpToolCall",
+            tool: "write_file",
+            arguments: { content: oversized },
+          },
+        },
+      }),
+    );
+    const claude = projectActivityPayload(
+      activity({
+        itemType: "mcp_tool_call",
+        data: { toolName: "mcp__files__write", input: { content: oversized } },
+      }),
+    );
+
+    expect(JSON.stringify(codex.payload).length).toBeLessThan(5_000);
+    expect(JSON.stringify(claude.payload).length).toBeLessThan(5_000);
+    expect(
+      (codex.payload as { data: { item: { arguments: { content: string } } } }).data.item.arguments
+        .content.length,
+    ).toBe(4_096);
   });
 
   it("passes task lifecycle payloads (no data field) through untouched", () => {

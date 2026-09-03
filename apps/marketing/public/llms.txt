@@ -10,8 +10,10 @@ Agents should read the relevant guide before giving install or configuration com
 
 ## Product resources
 
-- [Akeru Bot developer guide](https://www.akeru-bot.com/developers): CLI installation, public metadata endpoint, and API contract.
-- [Akeru Bot OpenAPI document](https://www.akeru-bot.com/openapi.json): Machine-readable contract for the public schema endpoint.
+- [Akeru Bot developer guide](https://www.akeru-bot.com/developers): CLI installation, public metadata endpoint, API versioning, deprecation policy, and rate limits.
+- [Akeru Bot OpenAPI document](https://www.akeru-bot.com/openapi.json): Machine-readable contract for the public schema endpoint, with typed schemas and operation identifiers.
+- [Akeru Bot project-file schema](https://www.akeru-bot.com/v1/schema/t3.json): Versioned metadata endpoint. `GET /v1/schema/t3.json` returns the JSON Schema for `t3.json` files.
+- [Akeru Bot API catalog](https://www.akeru-bot.com/.well-known/ard.json): Machine-readable index of the agent-facing documents on this domain.
 - [Akeru Bot documentation](https://github.com/opencoredev/akeru-bot/tree/main/docs/user): User guides for the product.
 - [Install Akeru Bot](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/install.md): Supported installation and update commands.
 - [Bot profiles](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/bots.md): Configure bot instructions, tools, and memory.
@@ -19,6 +21,14 @@ Agents should read the relevant guide before giving install or configuration com
 - [Remote access](https://raw.githubusercontent.com/opencoredev/akeru-bot/main/docs/user/remote-access.md): Connect clients to an Akeru environment.
 - [Akeru Bot source](https://github.com/opencoredev/akeru-bot): Source, releases, issues, and contribution rules.
 - [Akeru Bot on npm](https://www.npmjs.com/package/akeru-bot): Official CLI package.
+
+## Agent conventions
+
+The public metadata API is versioned in the URL path, starting at `/v1`. Breaking changes ship under a new prefix, and a deprecated path returns `Deprecation` and `Sunset` headers before it stops serving. Responses carry `RateLimit-Policy` and `RateLimit` headers with a quota of 600 requests per 60 second window, and a throttled request returns `429` with `Retry-After` in seconds. Read the quota from the headers instead of guessing.
+
+## Feedback
+
+- [Send feedback about Akeru Bot](https://www.akeru-bot.com/feedback.md): Where to report a failed command, a wrong page, or a schema that does not match the product.
 
 ## Trust and contact
 

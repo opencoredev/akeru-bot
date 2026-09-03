@@ -345,7 +345,11 @@ export async function dispatchInboundChannelMessage(
       const project = model.projects.find((candidate) => candidate.deletedAt === null);
       if (!project) throw new Error("A project is required before a channel can start a turn.");
       const modelSelection = bot.engine
-        ? { instanceId: ProviderInstanceId.make(bot.engine.provider), model: bot.engine.model }
+        ? {
+            instanceId: ProviderInstanceId.make(bot.engine.provider),
+            model: bot.engine.model,
+            ...(bot.engine.options ? { options: bot.engine.options } : {}),
+          }
         : project.defaultModelSelection;
       if (!modelSelection)
         throw new Error(`Bot '${bot.name}' needs a model before channel messages.`);

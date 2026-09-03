@@ -6,6 +6,7 @@ import {
   HardDriveIcon,
   KeyboardIcon,
   Link02Icon,
+  Message01Icon,
   PaintBrush01Icon,
   SecurityCheckIcon,
   Settings02Icon,
@@ -80,7 +81,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
 };
 
 /** Sections with a nav row. Anything else is reached from a link inside a panel. */
-const NAV_ITEMS: ReadonlyArray<{
+export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   readonly section: SettingsSection;
   readonly label: string;
   readonly icon: IconSvgElement;
@@ -88,6 +89,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { section: "general", label: "General", icon: Settings02Icon },
   { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
   { section: "providers", label: "Providers", icon: BotIcon },
+  { section: "channels", label: "Bot channels", icon: Message01Icon },
   { section: "browser", label: "Browser", icon: BrowserIcon },
   { section: "plugins", label: "Plugins", icon: Link02Icon },
   { section: "sandbox", label: "Sandbox", icon: HardDriveIcon },
@@ -119,7 +121,7 @@ export function SettingsDialog() {
           aria-label="Settings sections"
           className="flex w-52 shrink-0 flex-col gap-0.5 border-e bg-muted/30 p-2 max-sm:w-full max-sm:flex-row max-sm:overflow-x-auto max-sm:border-e-0 max-sm:border-b"
         >
-          {NAV_ITEMS.map((item) => {
+          {SETTINGS_NAV_ITEMS.map((item) => {
             const isActive = section === item.section;
             return (
               <button

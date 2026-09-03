@@ -78,7 +78,10 @@ import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
-import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
+import {
+  createAkeruAgentInstructions,
+  createAkeruBotInstructions,
+} from "../AkeruAgentInstructions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { toClaudeMcpServers } from "../McpServerConfig.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
@@ -4320,7 +4323,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: input.botId ? AKERU_BOT_INSTRUCTIONS : AKERU_AGENT_INSTRUCTIONS,
+          append: input.botId
+            ? createAkeruBotInstructions({ ...(input.botName ? { name: input.botName } : {}) })
+            : createAkeruAgentInstructions(),
         },
         settingSources: [...CLAUDE_SETTING_SOURCES],
         // `ultracode` is a Claude Code setting, not an API effort level. It is

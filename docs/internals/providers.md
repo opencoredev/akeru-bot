@@ -7,15 +7,16 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with five entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with six entries:
 
-| Driver kind   | Driver source                           |
-| ------------- | --------------------------------------- |
-| `codex`       | [`Drivers/CodexDriver.ts`][codex]       |
-| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]     |
-| `grok`        | [`Drivers/GrokDriver.ts`][grok]         |
-| `kimi`        | [`Drivers/KimiDriver.ts`][kimi]         |
-| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode] |
+| Driver kind   | Driver source                                |
+| ------------- | -------------------------------------------- |
+| `codex`       | [`Drivers/CodexDriver.ts`][codex]            |
+| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]          |
+| `grok`        | [`Drivers/GrokDriver.ts`][grok]              |
+| `kimi`        | [`Drivers/KimiDriver.ts`][kimi]              |
+| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]      |
+| `opencodeGo`  | [`Drivers/OpenCodeGoDriver.ts`][opencode-go] |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
 adapter in a child scope. Adapter implementations live beside them in
@@ -44,9 +45,10 @@ resolves the selected subscription model through explicit server-owned auth. Age
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
-Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves only
-the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
-that sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
+Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves
+`ask_user`, then converts its suspension into a user-input request. In automatic mode, it approves
+only the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
+that can write through MCP, sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
 an account. Unknown mutating intent also asks. The pending approval map binds the response to the
 exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
 as one-use approval.
@@ -138,6 +140,7 @@ when a request opens (approval) or user input is requested, via
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
 [kimi]: ../../apps/server/src/provider/Drivers/KimiDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
+[opencode-go]: ../../apps/server/src/provider/Drivers/OpenCodeGoDriver.ts
 [adapter]: ../../apps/server/src/provider/Services/ProviderAdapter.ts
 [instances]: ../../apps/server/src/provider/Services/ProviderInstanceRegistry.ts
 [registry]: ../../apps/server/src/provider/Services/ProviderAdapterRegistry.ts

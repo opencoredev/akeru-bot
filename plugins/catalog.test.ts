@@ -34,6 +34,7 @@ const EXPECTED_DIRECTORY_IDS = [
   "github",
   "gmail",
   "help-scout",
+  "hoplite",
   "hubspot",
   "intercom",
   "lemon-squeezy",
@@ -66,7 +67,13 @@ const EXPECTED_DIRECTORY_IDS = [
   "zernio",
 ] as const;
 
-const EXPECTED_INSTALLABLE_IDS = ["context", "exa", "firecrawl", "parallel-search"] as const;
+const EXPECTED_INSTALLABLE_IDS = [
+  "context",
+  "hoplite",
+  "exa",
+  "firecrawl",
+  "parallel-search",
+] as const;
 
 function manifest(id: string) {
   return parsePluginManifestJson(
@@ -183,6 +190,7 @@ describe("plugin catalog loader", () => {
       { id: "context", rank: 1 },
       { id: "gmail", rank: 1 },
       { id: "zernio", rank: 2 },
+      { id: "hoplite", rank: 3 },
     ]);
     expect(
       new Set(
@@ -190,7 +198,7 @@ describe("plugin catalog loader", () => {
           plugin.featuredRank === undefined ? [] : [plugin.featuredRank],
         ),
       ).size,
-    ).toBe(2);
+    ).toBe(3);
     expect(catalog.every((plugin) => plugin.logo.src.length > 0)).toBe(true);
 
     const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
@@ -213,6 +221,13 @@ describe("plugin catalog loader", () => {
       kind: "mcp-url",
       url: "https://search.parallel.ai/mcp-oauth",
       authentication: "oauth",
+    });
+    expect(byId.get("hoplite")).toMatchObject({
+      kind: "mcp-url",
+      url: "https://api.hoplite.sh/mcp",
+      authentication: "oauth",
+      featuredRank: 3,
+      connection: { type: "ready" },
     });
   });
 

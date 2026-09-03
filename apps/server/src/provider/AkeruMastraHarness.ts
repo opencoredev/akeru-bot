@@ -3,6 +3,7 @@ import * as NodeURL from "node:url";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
+import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
 import type { ToolsInput } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
@@ -36,12 +37,17 @@ import {
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
   type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
 
-import { AKERU_AGENT_INSTRUCTIONS, AKERU_BOT_INSTRUCTIONS } from "./AkeruAgentInstructions.ts";
+import {
+  createAkeruAgentInstructions,
+  createAkeruBotInstructions,
+} from "./AkeruAgentInstructions.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
+import { akeruOpenCodeGoProvider } from "./AkeruOpenCodeGoProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
@@ -139,13 +145,49 @@ export interface AkeruMastraState {
   readonly projectPath?: string;
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
+  readonly botName?: string;
+  readonly modelOptions?: {
+    readonly reasoningEffort?: string;
+    readonly serviceTier?: string;
+  };
 }
 
 export type AkeruMastraSession = Session<AkeruMastraState>;
 
+type AkeruRunOptions = {
+  readonly providerOptions?: unknown;
+  readonly [key: string]: unknown;
+};
+
+export function withAkeruModelRunOptions(
+  runOptions: AkeruRunOptions,
+  state: AkeruMastraState,
+): AkeruRunOptions {
+  const serviceTier = state.modelOptions?.serviceTier;
+  if (!serviceTier) return runOptions;
+  const providerOptions =
+    typeof runOptions.providerOptions === "object" && runOptions.providerOptions !== null
+      ? runOptions.providerOptions
+      : {};
+  const openai =
+    "openai" in providerOptions &&
+    typeof providerOptions.openai === "object" &&
+    providerOptions.openai !== null
+      ? providerOptions.openai
+      : {};
+  return {
+    ...runOptions,
+    providerOptions: {
+      ...providerOptions,
+      openai: { ...openai, serviceTier },
+    },
+  };
+}
+
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
   readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
+  readonly getOpenCodeGoApiKey?: () => Promise<string | undefined>;
   readonly memoryDbPath: string;
   readonly startMemoryCall?: (input: {
     readonly threadId: string;
@@ -204,6 +246,7 @@ type AkeruMastraToolOptions = Pick<
   AkeruMastraHarnessOptions,
   | "authStorage"
   | "getKimiAccess"
+  | "getOpenCodeGoApiKey"
   | "getThreadTools"
   | "syncThreadToolApproval"
   | "toolRuntime"
@@ -262,6 +305,17 @@ function controllerModelId(requestContext: RequestContext): string {
   return typeof session.modelId === "string" ? session.modelId : DEFAULT_MODEL_ID;
 }
 
+function controllerModelOptions(requestContext: RequestContext): AkeruMastraState["modelOptions"] {
+  const state = controllerContext(requestContext)?.state;
+  if (typeof state !== "object" || state === null || !("modelOptions" in state)) {
+    return undefined;
+  }
+  const modelOptions = state.modelOptions;
+  return typeof modelOptions === "object" && modelOptions !== null
+    ? (modelOptions as AkeruMastraState["modelOptions"])
+    : undefined;
+}
+
 function controllerResourceId(requestContext: RequestContext): string | undefined {
   const value = controllerContext(requestContext)?.resourceId;
   return typeof value === "string" ? value : undefined;
@@ -311,7 +365,10 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
 }
 
 export async function createAkeruMastraMemory(
-  options: Pick<AkeruMastraHarnessOptions, "authStorage" | "getKimiAccess" | "memoryDbPath">,
+  options: Pick<
+    AkeruMastraHarnessOptions,
+    "authStorage" | "getKimiAccess" | "getOpenCodeGoApiKey" | "memoryDbPath"
+  >,
 ) {
   const storage = new LibSQLStore({
     id: "akeru-observational-memory",
@@ -324,6 +381,7 @@ export async function createAkeruMastraMemory(
       controllerModelId(requestContext),
       options.authStorage,
       options.getKimiAccess,
+      options.getOpenCodeGoApiKey,
     );
   const memory = new Memory({
     storage,
@@ -375,6 +433,7 @@ export async function createAkeruMastraMemory(
 const MASTRA_MODEL_PREFIX = {
   codex: "openai",
   kimi: "kimi-for-coding",
+  opencodeGo: "opencode-go",
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
@@ -389,26 +448,45 @@ export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
   getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
+  getOpenCodeGoApiKey?: () => Promise<string | undefined>,
+  modelOptions?: AkeruMastraState["modelOptions"],
 ) {
   const trimmed = modelId.trim();
   if (trimmed.startsWith("openai/")) {
-    return openaiCodexProvider(trimmed.slice("openai/".length), { authStorage });
+    const reasoningEffort = modelOptions?.reasoningEffort;
+    return openaiCodexProvider(trimmed.slice("openai/".length), {
+      authStorage,
+      ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
+    });
   }
   if (trimmed.startsWith("kimi-for-coding/")) {
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
   }
+  if (trimmed.startsWith("opencode-go/")) {
+    if (!getOpenCodeGoApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
+    return akeruOpenCodeGoProvider(trimmed.slice("opencode-go/".length), getOpenCodeGoApiKey);
+  }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
 }
 
-export function resolveAkeruInstructions(requestContext: RequestContext): string {
+export function resolveAkeruInstructions(
+  requestContext: RequestContext,
+  now = DateTime.nowUnsafe(),
+): string {
   const state = controllerContext(requestContext)?.state;
-  return typeof state === "object" &&
+  const isBotConversation =
+    typeof state === "object" &&
     state !== null &&
     "botConversation" in state &&
-    state.botConversation === true
-    ? AKERU_BOT_INSTRUCTIONS
-    : AKERU_AGENT_INSTRUCTIONS;
+    state.botConversation === true;
+  const name =
+    isBotConversation && "botName" in state && typeof state.botName === "string"
+      ? state.botName
+      : "Akeru";
+  return isBotConversation
+    ? createAkeruBotInstructions({ name, now })
+    : createAkeruAgentInstructions({ name, now });
 }
 
 export async function resolveAkeruTools(
@@ -609,6 +687,21 @@ const CRITICAL_SHELL_ACTIONS: ReadonlyArray<readonly [AkeruCriticalAction, RegEx
     "delete",
     /(?:^|[;&|]\s*)(?:sudo\s+)?(?:rm|rmdir|unlink)\b|\b(?:drop|truncate)\s+(?:database|schema|table)\b|\bdelete\s+from\b/i,
   ],
+  ["delete", /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*shred\b/i],
+  [
+    "delete",
+    /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*dd\b[^\n;&|]*(?:\sof=(?:"[^"]*"|'[^']*'|[^\s;&|]+)|\s1?>>?\s*[^\s;&|]+)/i,
+  ],
+  ["delete", /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*mv\b/i],
+  ["delete", /(?:^|[;&|]\s*)git\s+(?:reset\s+--hard|clean\s+-[a-z]*[fdx][a-z]*)\b/i],
+  [
+    "delete",
+    /\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+(?:(?:sudo|command|builtin|exec|nohup|env)\s+)*(?:rm|rmdir|shred|unlink)\b/i,
+  ],
+  [
+    "delete",
+    /\bxargs\b[^\n;&|]*\s(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:rm|rmdir|shred|unlink)\b/i,
+  ],
   ["publish", /(?:^|[;&|]\s*)git\s+push\b/i],
   [
     "production",
@@ -622,6 +715,10 @@ const CRITICAL_SHELL_ACTIONS: ReadonlyArray<readonly [AkeruCriticalAction, RegEx
     "send",
     /(?:^|[;&|]\s*)(?:(?:mail|mailx)\b|curl\b[^\n;&|]*(?:--data(?:-raw|-binary)?|-d\b|--form|-F\b|--request\s+post|-X\s*post))/i,
   ],
+];
+const SHELL_COMMAND_WRAPPER_PATTERNS = [
+  /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi,
+  /(?:\bxargs\b[^\n;&|]*?\s+|\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi,
 ];
 
 function textTokens(value: string): ReadonlySet<string> {
@@ -649,9 +746,22 @@ function criticalActionFromText(value: string): AkeruCriticalAction | null {
   return null;
 }
 
-function criticalActionFromShellCommand(value: string): AkeruCriticalAction | null {
+function criticalActionFromShellCommand(
+  value: string,
+  wrapperDepth = 0,
+): AkeruCriticalAction | null {
   for (const [action, pattern] of CRITICAL_SHELL_ACTIONS) {
     if (pattern.test(value)) return action;
+  }
+  if (wrapperDepth < 5) {
+    for (const wrapperPattern of SHELL_COMMAND_WRAPPER_PATTERNS) {
+      for (const match of value.matchAll(wrapperPattern)) {
+        const nestedCommand = match[1] ?? match[2] ?? match[3];
+        if (!nestedCommand) continue;
+        const action = criticalActionFromShellCommand(nestedCommand, wrapperDepth + 1);
+        if (action) return action;
+      }
+    }
   }
   return criticalActionFromText(value);
 }
@@ -747,6 +857,8 @@ export async function createAkeruMastraHarness(
         controllerModelId(requestContext),
         options.authStorage,
         options.getKimiAccess,
+        options.getOpenCodeGoApiKey,
+        controllerModelOptions(requestContext),
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,
@@ -782,7 +894,7 @@ export async function createAkeruMastraHarness(
     intervalHandlers: [],
   });
   const controllerWithRunOptions = controller as unknown as {
-    buildSharedRunOptions: (session: unknown) => {
+    buildSharedRunOptions: (session: AkeruMastraSession) => {
       readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
       readonly [key: string]: unknown;
     };
@@ -790,11 +902,15 @@ export async function createAkeruMastraHarness(
   const buildSharedRunOptions = controllerWithRunOptions.buildSharedRunOptions.bind(controller);
   controllerWithRunOptions.buildSharedRunOptions = (session) => {
     const runOptions = buildSharedRunOptions(session);
-    if (runOptions.requireToolApproval !== true) return runOptions;
-    return {
-      ...runOptions,
-      requireToolApproval: ({ toolName }) => routineToolNeedsGlobalApproval(toolName),
-    };
+    const approvalOptions =
+      runOptions.requireToolApproval === true
+        ? {
+            ...runOptions,
+            requireToolApproval: ({ toolName }: { readonly toolName: string }) =>
+              routineToolNeedsGlobalApproval(toolName),
+          }
+        : runOptions;
+    return withAkeruModelRunOptions(approvalOptions, session.state.get());
   };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {

@@ -1,8 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { composerTestInstanceId, makeComposerTestProvider } from "../../test/chatComposerProps";
 import { visitElements } from "../../test/reactElementTree";
 import {
   BotPromptAttachments,
@@ -92,40 +90,73 @@ describe("bot prompt composer", () => {
 
   it("uses the available chat width", () => {
     const markup = renderToStaticMarkup(
-      <BotPromptComposer
-        botName="Akeru"
-        disabled={false}
-        modelPicker={null}
-        onSubmit={vi.fn(async () => true)}
-      />,
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
     expect(markup).toContain('class="w-full px-4');
     expect(markup).not.toContain("max-w-4xl");
   });
 
-  it("shows the active model and keeps it changeable", () => {
-    const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+  it("attaches a pending question above the custom answer field", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer
         botName="Akeru"
         disabled={false}
-        modelPicker={{
-          activeInstanceId: composerTestInstanceId,
-          model: "gpt-5-codex",
-          instanceEntries,
-          modelOptionsByInstance: new Map([
-            [composerTestInstanceId, [{ slug: "gpt-5-codex", name: "Launchbar Model" }]],
-          ]),
-          onChange: vi.fn(),
-        }}
+        pendingActionSlot={<div data-testid="pending-question">Question</div>}
+        placeholder="Write a custom answer..."
         onSubmit={vi.fn(async () => true)}
       />,
     );
 
-    expect(markup).toContain("Launchbar Model");
-    expect(markup).toContain('aria-label="Change model"');
-    expect(markup).toContain("data-chat-provider-model-picker");
+    expect(markup).toContain('data-testid="pending-question"');
+    expect(markup).toContain('data-testid="bot-pending-action-motion"');
+    expect(markup).toContain('placeholder="Write a custom answer..."');
+    expect(markup).toContain("rounded-t-md border-t-transparent");
+  });
+
+  it("squares the prompt box against an approval rendered above it", () => {
+    const withoutApproval = renderToStaticMarkup(
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
+    );
+    const withApproval = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Akeru"
+        disabled={false}
+        pendingActionSlot={<div data-testid="approval-slot">Run this command?</div>}
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+
+    expect(withoutApproval).not.toContain("rounded-t-md");
+    expect(withApproval).toContain('data-testid="approval-slot"');
+    expect(withApproval).toContain("rounded-t-md");
+    expect(withApproval).toContain("border-t-transparent");
+  });
+
+  it("renders an inert preview with the production composer", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Your bot"
+        disabled
+        readOnly
+        onSubmit={vi.fn(async () => false)}
+      />,
+    );
+
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).toContain('readOnly=""');
+    expect(markup).toContain('tabindex="-1"');
+    expect(markup).toContain('aria-label="Send message"');
+  });
+
+  it("does not render model or reasoning controls", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
+    );
+
+    expect(markup).not.toContain("Reasoning");
+    expect(markup).not.toContain('aria-label="Change model"');
+    expect(markup).not.toContain("data-chat-provider-model-picker");
   });
 
   it("creates stable previews in file order and releases their object URLs", () => {

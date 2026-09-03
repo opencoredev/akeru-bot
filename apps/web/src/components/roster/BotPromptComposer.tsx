@@ -1,7 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon } from "lucide-react";
-import { type ComponentProps, useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   hydrateImagesFromPersisted,
@@ -25,7 +26,6 @@ import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
-import { BotModelPicker } from "./BotModelPicker";
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -33,11 +33,6 @@ import {
   releaseBotPromptAttachments,
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
-
-type BotModelPickerProps = Pick<
-  ComponentProps<typeof BotModelPicker>,
-  "activeInstanceId" | "model" | "instanceEntries" | "modelOptionsByInstance" | "onChange"
->;
 
 export function isBotPromptExpanded(prompt: string): boolean {
   return prompt.includes("\n") || prompt.length > 80;
@@ -113,17 +108,23 @@ export function BotPromptComposer({
   botName,
   draftKey,
   disabled,
+  readOnly = false,
   mentionBots = EMPTY_MENTION_BOTS,
-  modelPicker,
+  pendingActionSlot = null,
+  placeholder,
   onSubmit,
 }: {
   botName: string;
   draftKey?: string;
   disabled: boolean;
+  readOnly?: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
-  modelPicker: BotModelPickerProps | null;
+  /** Rendered above the prompt box so a pending decision reads as part of the composer. */
+  pendingActionSlot?: ReactNode;
+  placeholder?: string;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
@@ -184,7 +185,7 @@ export function BotPromptComposer({
     [releaseAttachments],
   );
 
-  const expanded = modelPicker !== null || attachments.length > 0 || isBotPromptExpanded(draft);
+  const expanded = attachments.length > 0 || isBotPromptExpanded(draft);
   const addFiles = (next: FileList | readonly File[]) => {
     revisionRef.current += 1;
     const added = createBotPromptAttachments(Array.from(next));
@@ -411,6 +412,7 @@ export function BotPromptComposer({
   ]);
 
   useEffect(() => {
+    if (readOnly) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcutCommand = resolveShortcutCommand(event, keybindings, {
         context: {
@@ -454,11 +456,12 @@ export function BotPromptComposer({
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings, stashCurrentPrompt]);
+  }, [keybindings, readOnly, stashCurrentPrompt]);
 
   return (
     <form
       data-chat-composer-form="true"
+      aria-disabled={readOnly || undefined}
       className="w-full px-4 pb-4 pt-2 sm:px-6 sm:pb-6"
       onSubmit={(event) => {
         event.preventDefault();
@@ -519,12 +522,27 @@ export function BotPromptComposer({
           onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
         />
       </ComposerBanner.Dock>
+      <AnimatePresence initial={false}>
+        {pendingActionSlot ? (
+          <motion.div
+            key="pending-action"
+            data-testid="bot-pending-action-motion"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.16, ease: "easeOut" }}
+          >
+            {pendingActionSlot}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <div
         data-testid="bot-prompt-composer"
         data-expanded={expanded || undefined}
         className={cn(
           "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
           expanded && "min-h-28",
+          pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
         )}
       >
         <BotPromptAttachments
@@ -541,9 +559,11 @@ export function BotPromptComposer({
           ref={promptInputRef}
           aria-label={`Message ${botName}`}
           data-testid="bot-prompt-input"
-          placeholder={`Message ${botName}`}
+          placeholder={placeholder ?? `Message ${botName}`}
           rows={1}
           value={draft}
+          readOnly={readOnly}
+          tabIndex={readOnly ? -1 : undefined}
           className={cn(
             "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
             expanded ? "min-h-16 px-4 pb-2 pt-3" : "min-h-13 px-14 py-[0.9rem]",
@@ -556,7 +576,9 @@ export function BotPromptComposer({
             }
           }}
           onPaste={(event) => {
-            if (event.clipboardData.files.length > 0) addFiles(event.clipboardData.files);
+            if (!readOnly && event.clipboardData.files.length > 0) {
+              addFiles(event.clipboardData.files);
+            }
           }}
         />
         <div
@@ -573,6 +595,7 @@ export function BotPromptComposer({
                   <button
                     type="button"
                     aria-label="Add to prompt"
+                    disabled={readOnly}
                     className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8"
                   />
                 }
@@ -595,15 +618,6 @@ export function BotPromptComposer({
                 ))}
               </MenuPopup>
             </Menu>
-            {modelPicker ? (
-              <BotModelPicker
-                activeInstanceId={modelPicker.activeInstanceId}
-                model={modelPicker.model}
-                instanceEntries={modelPicker.instanceEntries}
-                modelOptionsByInstance={modelPicker.modelOptionsByInstance}
-                onChange={modelPicker.onChange}
-              />
-            ) : null}
           </div>
           <button
             type="submit"
@@ -620,6 +634,7 @@ export function BotPromptComposer({
         type="file"
         accept="image/*"
         multiple
+        disabled={readOnly}
         className="sr-only"
         onChange={(event) => {
           if (event.currentTarget.files) addFiles(event.currentTarget.files);

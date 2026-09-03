@@ -302,6 +302,38 @@ describe("derivePendingApprovals", () => {
 });
 
 describe("derivePendingUserInputs", () => {
+  it("keeps free-text questions that do not have options", () => {
+    const pending = derivePendingUserInputs([
+      makeActivity({
+        kind: "user-input.requested",
+        payload: {
+          requestId: "req-free-text",
+          questions: [
+            {
+              id: "answer",
+              header: "Question",
+              question: "What should the bot do next?",
+              options: [],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    expect(pending).toMatchObject([
+      {
+        requestId: "req-free-text",
+        questions: [
+          {
+            id: "answer",
+            question: "What should the bot do next?",
+            options: [],
+          },
+        ],
+      },
+    ]);
+  });
+
   it("tracks open structured prompts and removes resolved ones", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

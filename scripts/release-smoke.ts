@@ -74,7 +74,7 @@ for (const [needle, label] of [
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
   ["runner: depot-macos-15", "Depot macOS runner"],
   ["runner: depot-windows-2025-8", "8-vCPU Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-8", "8-vCPU Depot Linux runner"],
+  ["runner: depot-ubuntu-24.04-4", "4-vCPU Depot Linux runner"],
   [
     "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
     "pinned Developer ID certificate import",
@@ -117,7 +117,10 @@ for (const [needle, label] of [
   ["runner: macos-15", "GitHub-hosted macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: ubuntu-24.04", "GitHub-hosted Linux runner"],
-  ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
+  [
+    "Stable macOS releases require complete signing and notarization credentials.",
+    "required macOS signing credentials",
+  ],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
   ["verify-release-assets.ts", "asset name and hash verification"],
@@ -127,6 +130,11 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
+assertOmits(
+  releaseWorkflow,
+  "Verify unsigned macOS app signature",
+  "stable unsigned macOS artifact path",
+);
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
   ["vp run release:changelog", "merged pull request changelog"],
@@ -164,7 +172,11 @@ for (const [needle, label] of [
   assertOmits(ciWorkflow, needle, `CI workflow still contains ${label}.`);
 }
 
-assertContains(ciWorkflow, "runs-on: depot-ubuntu-24.04-8", "CI does not use Depot runners.");
+assertContains(
+  ciWorkflow,
+  "runs-on: depot-ubuntu-24.04-4",
+  "CI does not use 4-vCPU Depot runners.",
+);
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
 assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
 assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");
@@ -178,6 +190,11 @@ assertContains(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "dev.leodoes.akeru"',
   "Akeru desktop bundle identifier is missing.",
+);
+assertContains(
+  desktopArtifactBuilder,
+  'identity: "-"',
+  "Unsigned macOS builds do not opt into a sealed ad-hoc signature.",
 );
 
 for (const relativePath of [

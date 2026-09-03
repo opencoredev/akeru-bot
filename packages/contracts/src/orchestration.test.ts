@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { ChannelConnectionId, MessageId } from "./baseSchemas.ts";
 import {
   BotAvatar,
+  BotEngine,
   DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -36,6 +37,7 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 const decodeBotAvatar = Schema.decodeUnknownEffect(BotAvatar);
+const decodeBotEngine = Schema.decodeUnknownEffect(BotEngine);
 const decodeOrchestrationBot = Schema.decodeUnknownEffect(OrchestrationBot);
 const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
 const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput);
@@ -86,6 +88,33 @@ it.effect("decodes every bot avatar variant", () =>
         { kind: "dither", seed: "scout" },
         { kind: "image", assetPath: "bots/scout.png", dithered: true },
       ],
+    );
+  }),
+);
+
+it.effect("decodes bot engine options while keeping old engines valid", () =>
+  Effect.gen(function* () {
+    assert.deepStrictEqual(yield* decodeBotEngine({ provider: "codex", model: "gpt-5.6-sol" }), {
+      provider: "codex",
+      model: "gpt-5.6-sol",
+    });
+    assert.deepStrictEqual(
+      yield* decodeBotEngine({
+        provider: "codex",
+        model: "gpt-5.6-sol",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "serviceTier", value: "priority" },
+        ],
+      }),
+      {
+        provider: "codex",
+        model: "gpt-5.6-sol",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "serviceTier", value: "priority" },
+        ],
+      },
     );
   }),
 );

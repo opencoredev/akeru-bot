@@ -46,6 +46,7 @@ import {
   type MemoryCandidateRepositoryShape,
 } from "../../memory/Services/MemoryCandidateRepository.ts";
 import { AgentController } from "../Services/AgentController.ts";
+import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
@@ -68,9 +69,11 @@ import { withMcpRuntimeHeaders } from "../McpServerConfig.ts";
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
 const kimiThreadId = ThreadId.make("thread-mastra-kimi");
+const openCodeGoThreadId = ThreadId.make("thread-mastra-opencode-go");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
 const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
+const openCodeGoInstanceId = ProviderInstanceId.make("opencodeGo");
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -126,6 +129,12 @@ function makeProviderSession(
 }
 
 function makeBridge() {
+  let instanceEnabled = true;
+  let disableBeforeNextDispatchAdmission = false;
+  let nextDispatchAdmissionWait: Promise<void> | undefined;
+  let releaseNextDispatchAdmission: (() => void) | undefined;
+  let nextDispatchAdmissionReached = Promise.resolve();
+  let markNextDispatchAdmissionReached: (() => void) | undefined;
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
       makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : "claudeAgent"),
@@ -154,19 +163,43 @@ function makeBridge() {
     rollbackConversation,
     listSessions: () => Effect.succeed([]),
     getCapabilities,
-    getInstanceInfo: (instanceId) => {
-      const driverKind = ProviderDriverKind.make(
-        instanceId === kimiInstanceId ? "kimi" : String(instanceId),
-      );
-      return Effect.succeed({
-        instanceId,
-        driverKind,
-        displayName: undefined,
-        enabled: true,
-        continuationIdentity: {
+    getInstanceInfo: (instanceId) =>
+      Effect.sync(() => {
+        const driverKind = ProviderDriverKind.make(
+          instanceId === kimiInstanceId ? "kimi" : String(instanceId),
+        );
+        return {
+          instanceId,
           driverKind,
-          continuationKey: `${driverKind}:instance:${instanceId}`,
-        },
+          displayName: undefined,
+          enabled: instanceEnabled,
+          continuationIdentity: {
+            driverKind,
+            continuationKey: `${driverKind}:instance:${instanceId}`,
+          },
+        };
+      }),
+    dispatchIfEnabled: (instanceId, operation, dispatch) => {
+      const dispatchNow = () => {
+        if (disableBeforeNextDispatchAdmission) {
+          disableBeforeNextDispatchAdmission = false;
+          instanceEnabled = false;
+        }
+        return instanceEnabled
+          ? Effect.sync(dispatch)
+          : Effect.fail(
+              new ProviderValidationError({
+                operation,
+                issue: `Provider instance '${instanceId}' is disabled in Akeru Bot settings.`,
+              }),
+            );
+      };
+      return Effect.suspend(() => {
+        const wait = nextDispatchAdmissionWait;
+        nextDispatchAdmissionWait = undefined;
+        markNextDispatchAdmissionReached?.();
+        markNextDispatchAdmissionReached = undefined;
+        return wait ? Effect.promise(() => wait).pipe(Effect.flatMap(dispatchNow)) : dispatchNow();
       });
     },
     uploadFeedback: (input) => Effect.succeed({ feedbackId: `feedback-${String(input.threadId)}` }),
@@ -182,6 +215,25 @@ function makeBridge() {
     stopSession,
     rollbackConversation,
     getCapabilities,
+    setInstanceEnabled: (enabled: boolean) => {
+      instanceEnabled = enabled;
+    },
+    disableBeforeNextDispatchAdmission: () => {
+      disableBeforeNextDispatchAdmission = true;
+    },
+    blockNextDispatchAdmission: () => {
+      nextDispatchAdmissionWait = new Promise<void>((resolve) => {
+        releaseNextDispatchAdmission = resolve;
+      });
+      nextDispatchAdmissionReached = new Promise<void>((resolve) => {
+        markNextDispatchAdmissionReached = resolve;
+      });
+    },
+    waitForNextDispatchAdmission: () => nextDispatchAdmissionReached,
+    releaseNextDispatchAdmission: () => {
+      releaseNextDispatchAdmission?.();
+      releaseNextDispatchAdmission = undefined;
+    },
   };
 }
 
@@ -211,6 +263,7 @@ function makeMastraHarness() {
   const listeners = new Set<(event: AgentControllerEvent) => void>();
   let modeId = "build";
   let modelId = "openai/gpt-5.6-sol";
+  let state: Record<string, unknown> = {};
   let resolveSend: (() => void) | undefined;
   const rejectSends: Array<(cause: unknown) => void> = [];
   const sendMessage = vi.fn(
@@ -221,7 +274,12 @@ function makeMastraHarness() {
       }),
   );
   const session = {
-    state: { set: vi.fn(async () => undefined) },
+    state: {
+      get: () => state,
+      set: vi.fn(async (next: Record<string, unknown>) => {
+        state = next;
+      }),
+    },
     mode: {
       get: () => modeId,
       switch: vi.fn(async ({ modeId: next }: { readonly modeId: string }) => {
@@ -911,6 +969,72 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("keeps the current bot name in reused Mastra session state", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+          botId: BotId.make("bot-one"),
+        };
+
+        yield* controller.startSession(codexThreadId, { ...input, botName: "Research bot" });
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botConversation: true, botName: "Research bot" }),
+        );
+
+        yield* controller.startSession(codexThreadId, { ...input, botName: "Mina" });
+        expect(mastra.createSession).toHaveBeenCalledOnce();
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botConversation: true, botName: "Mina" }),
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("clears a stale bot name in reused Mastra session state", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+          botId: BotId.make("bot-one"),
+        };
+
+        yield* controller.startSession(codexThreadId, { ...input, botName: "Research bot" });
+        yield* controller.startSession(codexThreadId, input);
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botConversation: true, botName: "" }),
+        );
+
+        yield* controller.startSession(codexThreadId, { ...input, botName: "Research bot" });
+        yield* controller.startSession(codexThreadId, { ...input, botName: "" });
+        expect(mastra.createSession).toHaveBeenCalledOnce();
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botConversation: true, botName: "" }),
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("queues Mastra follow-ups while the current turn is active", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -956,6 +1080,175 @@ describe("AgentControllerLive", () => {
             .map((event) => event.payload.state),
         ).toEqual(["running", "running"]);
         yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects a queued Mastra turn when its provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "First message" });
+        const queued = yield* controller.sendTurn({
+          threadId: openCodeGoThreadId,
+          input: "Queued follow-up",
+        });
+        const failedTurn = yield* controller.streamEvents.pipe(
+          Stream.filter(
+            (event) =>
+              event.type === "turn.completed" &&
+              event.turnId === queued.turnId &&
+              event.payload.state === "failed",
+          ),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+
+        bridge.setInstanceEnabled(false);
+        mastra.finishSend();
+        const failure = yield* Fiber.join(failedTurn);
+
+        assert.equal(failure._tag, "Some");
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("serializes queued turns while dispatch admission is pending", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        bridge.blockNextDispatchAdmission();
+        const firstFiber = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "First message" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+
+        const second = yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Queued while admission is pending",
+        });
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+
+        const secondStarted = yield* controller.streamEvents.pipe(
+          Stream.filter((event) => event.type === "turn.started" && event.turnId === second.turnId),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        bridge.releaseNextDispatchAdmission();
+        yield* Fiber.join(firstFiber);
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+
+        mastra.finishSend();
+        const started = yield* Fiber.join(secondStarted);
+        assert.equal(started._tag, "Some");
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(2);
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("does not revive a turn interrupted during dispatch admission", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const events: ProviderRuntimeEvent[] = [];
+        const eventsFiber = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+
+        bridge.blockNextDispatchAdmission();
+        const sendFiber = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "Do not revive this turn" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        bridge.setInstanceEnabled(false);
+        bridge.releaseNextDispatchAdmission();
+
+        const exit = yield* Fiber.await(sendFiber);
+        assert.equal(Exit.isFailure(exit), true);
+        yield* Effect.yieldNow;
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+        expect(events.some((event) => event.type === "turn.started")).toBe(false);
+        yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("releases dispatch admission when the caller is interrupted", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        bridge.blockNextDispatchAdmission();
+        const blocked = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "Canceled before admission" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+        yield* Fiber.interrupt(blocked);
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Next message" });
+        expect(mastra.sendMessage).toHaveBeenCalledTimes(1);
+        mastra.finishSend();
       }),
       bridge.service,
       mastra.factory,
@@ -1663,6 +1956,7 @@ describe("AgentControllerLive", () => {
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({
         indexed_read: { mcp: { annotations: { readOnlyHint: true } } },
+        ask_user: { mcp: { annotations: {} } },
       })),
       getServerStatuses: vi.fn(() => []),
     };
@@ -1703,6 +1997,7 @@ describe("AgentControllerLive", () => {
         for (const [toolCallId, toolName, args] of [
           ["builtin-safe", "execute_command", { command: "bun test" }],
           ["indexed-read", "indexed_read", { query: "status" }],
+          ["connector-name-collision", "ask_user", { prompt: "Run connector action" }],
           ["missing-index", "new_mcp_tool", { value: "unknown" }],
         ] as const) {
           mastra.emit({
@@ -1723,6 +2018,10 @@ describe("AgentControllerLive", () => {
           decision: "approve",
         });
         expect(events.filter((event) => event.type === "request.opened")).toEqual([
+          expect.objectContaining({
+            requestId: "connector-name-collision",
+            payload: expect.objectContaining({ target: "ask_user" }),
+          }),
           expect.objectContaining({
             requestId: "missing-index",
             payload: expect.objectContaining({ target: "new_mcp_tool" }),
@@ -1806,6 +2105,227 @@ describe("AgentControllerLive", () => {
           });
         }
         yield* Fiber.interrupt(eventsFiber);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("approves question tools without showing an approval request", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask me a question." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "question-1",
+          toolName: "ask_user",
+          args: {
+            question: "Pick one.",
+            options: [{ label: "First", description: "Choose the first option" }],
+          },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "question-1",
+          decision: "approve",
+        });
+        expect(events.some((event) => event.type === "request.opened")).toBe(false);
+
+        mastra.emit({
+          type: "tool_suspended",
+          toolCallId: "question-1",
+          toolName: "ask_user",
+          args: {},
+          suspendPayload: {
+            question: "Pick one.",
+            options: [{ label: "First", description: "Choose the first option" }],
+            selectionMode: "single_select",
+          },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: "user-input.requested",
+            requestId: "question-1",
+            payload: expect.objectContaining({
+              questions: [
+                expect.objectContaining({
+                  question: "Pick one.",
+                  options: [{ label: "First", description: "Choose the first option" }],
+                }),
+              ],
+            }),
+          }),
+        );
+        yield* Fiber.interrupt(collector);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("auto review allows safe commands and asks before destructive commands", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "auto",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Inspect, then clean up." });
+
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "read-safe",
+          toolName: "execute_command",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "delete-risky",
+          toolName: "execute_command",
+          args: { command: "rm -rf ./temporary-output" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "shred-risky",
+          toolName: "execute_command",
+          args: { command: "shred important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "wrapped-shred-risky",
+          toolName: "execute_command",
+          args: { command: 'bash -c "shred -u important-file"' },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "command-shred-risky",
+          toolName: "execute_command",
+          args: { command: "command shred -u important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "xargs-shred-risky",
+          toolName: "execute_command",
+          args: { command: "printf '%s\\n' important-file | xargs shred -u" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "xargs-rm-risky",
+          toolName: "execute_command",
+          args: { command: "printf '%s\\n' important-file | xargs rm -f" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "xargs-env-rm-risky",
+          toolName: "execute_command",
+          args: { command: "printf '%s\\n' important-file | xargs env rm -f" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "xargs-shell-rm-risky",
+          toolName: "execute_command",
+          args: { command: "printf '%s\\n' important-file | xargs sh -c 'rm -f \"$1\"' _" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "find-shred-risky",
+          toolName: "execute_command",
+          args: { command: "find . -name important-file -exec shred -u {} \\;" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "find-env-rm-risky",
+          toolName: "execute_command",
+          args: { command: "find . -name important-file -exec env rm -f {} \\;" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "dd-risky",
+          toolName: "execute_command",
+          args: { command: "dd if=/dev/zero of=important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "redirected-dd-risky",
+          toolName: "execute_command",
+          args: { command: "dd if=/dev/zero > important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "plain-move-risky",
+          toolName: "execute_command",
+          args: { command: "mv replacement important-file" },
+        } as AgentControllerEvent);
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "forced-move-risky",
+          toolName: "execute_command",
+          args: { command: "mv -f replacement important-file" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "read-safe",
+          decision: "approve",
+        });
+        for (const requestId of [
+          "delete-risky",
+          "shred-risky",
+          "wrapped-shred-risky",
+          "command-shred-risky",
+          "xargs-shred-risky",
+          "xargs-rm-risky",
+          "xargs-env-rm-risky",
+          "xargs-shell-rm-risky",
+          "find-shred-risky",
+          "find-env-rm-risky",
+          "dd-risky",
+          "redirected-dd-risky",
+          "plain-move-risky",
+          "forced-move-risky",
+        ]) {
+          expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
+            toolCallId: requestId,
+            decision: "approve",
+          });
+          expect(events).toContainEqual(
+            expect.objectContaining({ type: "request.opened", requestId }),
+          );
+        }
+        yield* Fiber.interrupt(collector);
       }),
       bridge.service,
       mastra.factory,
@@ -2753,6 +3273,234 @@ describe("AgentControllerLive", () => {
         });
         expect(bridge.startSession).not.toHaveBeenCalled();
         expect(bridge.getCapabilities).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects an OpenCode Go turn after the provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+
+        bridge.setInstanceEnabled(false);
+        const error = yield* controller
+          .sendTurn({ threadId: openCodeGoThreadId, input: "Do not run this turn." })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        if (error._tag === "ProviderValidationError") {
+          assert.include(error.issue, "disabled in Akeru Bot settings");
+        }
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects an OpenCode Go turn disabled during dispatch admission", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+
+        bridge.disableBeforeNextDispatchAdmission();
+        const error = yield* controller
+          .sendTurn({ threadId: openCodeGoThreadId, input: "Do not dispatch this turn." })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects an OpenCode Go approval after the provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "Run a tool." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "disabled-approval",
+          toolName: "Shell",
+          args: { command: "pwd" },
+        } as AgentControllerEvent);
+
+        bridge.disableBeforeNextDispatchAdmission();
+        const error = yield* controller
+          .respondToRequest({
+            threadId: openCodeGoThreadId,
+            requestId: ApprovalRequestId.make("disabled-approval"),
+            decision: "accept",
+          })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("rejects OpenCode Go user input after the provider is disabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          cwd: process.cwd(),
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "Ask for input." });
+        mastra.emit({
+          type: "tool_suspended",
+          toolCallId: "disabled-user-input",
+          toolName: "ask_user",
+          args: {},
+          suspendPayload: {},
+        } as AgentControllerEvent);
+
+        bridge.disableBeforeNextDispatchAdmission();
+        const error = yield* controller
+          .respondToUserInput({
+            threadId: openCodeGoThreadId,
+            requestId: ApprovalRequestId.make("disabled-user-input"),
+            answers: { "disabled-user-input": "Continue" },
+          })
+          .pipe(Effect.flip);
+
+        assert.equal(error._tag, "ProviderValidationError");
+        expect(mastra.session.respondToToolSuspension).not.toHaveBeenCalled();
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("applies saved Codex options to initial and active Mastra sessions", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: codexThreadId,
+          engine: {
+            provider: "codex",
+            model: "gpt-5.6-sol",
+            options: [
+              { id: "reasoningEffort", value: "high" },
+              { id: "serviceTier", value: "priority" },
+            ],
+          },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            modelOptions: { reasoningEffort: "high", serviceTier: "priority" },
+          }),
+        );
+
+        yield* controller.resolveEngine({
+          threadId: codexThreadId,
+          engine: {
+            provider: "codex",
+            model: "gpt-5.6-sol",
+            options: [
+              { id: "reasoningEffort", value: "low" },
+              { id: "serviceTier", value: "flex" },
+            ],
+          },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+
+        expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            modelOptions: { reasoningEffort: "low", serviceTier: "flex" },
+          }),
+        );
       }),
       bridge.service,
       mastra.factory,

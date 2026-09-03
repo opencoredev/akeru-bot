@@ -41,11 +41,13 @@ import { resolveBotRuntimeMode } from "./botSandbox";
 import {
   buildBotTurnStartInput,
   createBotTurnSubmissionQueue,
+  findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
   resolveBotThreadTarget,
 } from "./botThreadRuntime.logic";
 import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
+import { ensureLocalApi } from "../../localApi";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -118,6 +120,16 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   }
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
+  const openedAuthorizationActivitiesRef = useRef(new Set<string>());
+  useEffect(() => {
+    const authorization = findUnhandledMcpAuthorization(
+      activities,
+      openedAuthorizationActivitiesRef.current,
+    );
+    if (!authorization) return;
+    openedAuthorizationActivitiesRef.current.add(authorization.activityId);
+    void ensureLocalApi().shell.openExternal(authorization.url);
+  }, [activities]);
   const pendingApprovals = useMemo(() => derivePendingApprovals(activities), [activities]);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 
 describe("ComposerPendingApprovalPanel", () => {
-  it("keeps the complete command readable in the compact row", () => {
+  it("shows a complete highlighted command without a duplicate disclosure", () => {
     const detail = `bun run release -- ${"x".repeat(500)}\nsecond line`;
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
@@ -24,17 +24,63 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).toContain('role="group"');
     expect(markup).toContain('tabindex="0"');
     expect(markup).toContain(detail);
-    expect(markup).toContain("max-h-40");
+    expect(markup).toContain("max-h-28");
     expect(markup).toContain("overflow-auto");
     expect(markup).toContain("whitespace-pre-wrap");
     expect(markup).toContain("[scrollbar-width:thin]");
     expect(markup).toContain("[&amp;::-webkit-scrollbar]:h-1.5");
-    expect(markup).toContain("truncate");
+    expect(markup).toContain("break-words");
     expect(markup).not.toContain("line-clamp");
     expect(markup).toContain("min-w-0");
-    expect(markup).toContain("Expand");
-    expect(markup).toContain("Collapse");
+    expect(markup).not.toContain("Expand");
+    expect(markup).not.toContain("Collapse");
+    expect(markup).not.toContain("<details");
     expect(markup).not.toContain("Command approval requested");
+  });
+
+  it("drops the expander when a short command has nothing more to show", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-pwd"),
+          requestKind: "command",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          detail: "pwd",
+          args: { command: "pwd" },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("pwd");
+    expect(markup).toContain('data-approval-detail="complete"');
+    expect(markup).not.toContain("Expand");
+    expect(markup).not.toContain("Collapse");
+    expect(markup).not.toContain("<details");
+  });
+
+  it("shows the folder, reason, and effects under the command", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-risky"),
+          requestKind: "command",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          detail: "cd apps/web && rm -rf dist",
+          args: {
+            command: "cd apps/web && rm -rf dist",
+            cwd: "/tmp/work",
+            justification: "Clear the stale build",
+          },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).not.toContain("Expand");
+    expect(markup).toContain("Deletes files");
+    expect(markup).toContain("/tmp/work");
+    expect(markup).toContain("Clear the stale build");
   });
 
   it("falls back to the approval kind when the provider sends an empty detail", () => {
