@@ -4,6 +4,7 @@ import type { McpServer, McpServerId } from "@t3tools/contracts";
 interface AuthenticateMcpServerOptions {
   readonly server: McpServer;
   readonly managers: readonly McpManager[];
+  readonly managerThreadIds?: readonly string[];
   readonly createManager: () => McpManager;
   readonly onAuthorizationUrl: (url: string) => void;
   readonly signal?: AbortSignal;
@@ -54,9 +55,10 @@ export async function authenticateMcpServer(
       try {
         requireConnected(await other.reconnectServer(serverId));
       } catch (cause) {
+        const threadId = options.managerThreadIds?.[index + 1];
         options.recordRecoveryFailure?.(
           options.server.id,
-          `Active MCP session ${index + 2} did not reconnect: ${failureMessage(cause)}`,
+          `${threadId ? `MCP session for thread '${threadId}'` : `Active MCP session ${index + 2}`} did not reconnect: ${failureMessage(cause)}`,
         );
       }
     }

@@ -87,13 +87,13 @@ describe("Plugins dialog content", () => {
   it("gives the user a recovery action when an active session does not reconnect", () => {
     expect(
       pluginRecoveryNotice("Hoplite", [
-        "Active MCP session 2 did not reconnect: Secondary session failed.",
+        "MCP session for thread 'thread-secondary' did not reconnect: Secondary session failed.",
       ]),
     ).toEqual({
       type: "warning",
       title: "Hoplite connected with a session issue",
       description:
-        "Active MCP session 2 did not reconnect: Secondary session failed. Restart the affected agent session to retry.",
+        "MCP session for thread 'thread-secondary' did not reconnect: Secondary session failed. Restart the affected agent session to retry.",
     });
     expect(pluginRecoveryNotice("Hoplite", [])).toBeNull();
   });

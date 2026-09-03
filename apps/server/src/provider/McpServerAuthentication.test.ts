@@ -150,6 +150,7 @@ describe("MCP server authentication", () => {
     const result = await authenticateMcpServer({
       server,
       managers: [primary, secondary],
+      managerThreadIds: ["thread-primary", "thread-secondary"],
       createManager: vi.fn(),
       onAuthorizationUrl: vi.fn(),
       recordSuccess,
@@ -162,7 +163,7 @@ describe("MCP server authentication", () => {
     expect(recordFailure).not.toHaveBeenCalled();
     expect(recordRecoveryFailure).toHaveBeenCalledWith(
       server.id,
-      "Active MCP session 2 did not reconnect: Secondary session failed.",
+      "MCP session for thread 'thread-secondary' did not reconnect: Secondary session failed.",
     );
     expect(secondary.reconnectServer).toHaveBeenCalledWith("builtin-hoplite");
   });

@@ -2535,9 +2535,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         Effect.tryPromise({
           try: async (signal) => {
             const recoveryFailures: string[] = [];
+            const managerSessions = sessionResources.getMcpManagerSessionsForServer(
+              String(server.id),
+            );
             const status = await authenticateMcpServer({
               server,
-              managers: sessionResources.getMcpManagersForServer(String(server.id)),
+              managers: managerSessions.map(({ manager }) => manager),
+              managerThreadIds: managerSessions.map(({ threadId }) => threadId),
               createManager: () =>
                 (options?.makeMcpManager ?? createMcpManager)(
                   NodePath.join(config.stateDir, "bot-mcp-runtime"),
