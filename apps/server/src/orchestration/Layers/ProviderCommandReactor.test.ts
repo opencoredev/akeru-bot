@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 import {
   ModelSelection,
   ComposioOperationError,
+  type McpServer,
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderDriverKind,
@@ -466,7 +467,9 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(Layer.succeed(AgentController, service)),
       Layer.provideMerge(
         Layer.mock(ComposioService, {
-          resolveRuntimeMcpServer: input?.composioResolveRuntimeMcpServer ?? (() => Effect.void),
+          resolveRuntimeMcpServer:
+            input?.composioResolveRuntimeMcpServer ??
+            (() => Effect.succeed<McpServer | undefined>(undefined)),
         }),
       ),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),

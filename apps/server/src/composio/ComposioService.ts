@@ -294,7 +294,9 @@ export function make(
       return server;
     }).pipe(
       Effect.catch((error) =>
-        error.message === "Connect Composio in Settings first." ? Effect.void : Effect.fail(error),
+        error.message === "Connect Composio in Settings first."
+          ? Effect.succeed<McpServer | undefined>(undefined)
+          : Effect.fail(error),
       ),
     );
 
