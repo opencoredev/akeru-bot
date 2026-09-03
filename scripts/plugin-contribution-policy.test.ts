@@ -168,7 +168,7 @@ describe("plugin contribution policy", () => {
   });
 
   it("runs catalog validation and contribution policy tests in CI", () => {
-    const ci = yaml(".depot/workflows/ci.yml") as {
+    const ci = yaml(".github/workflows/ci.yml") as {
       jobs: Record<string, { steps?: Array<{ run?: string }> }>;
     };
     const commands = Object.values(ci.jobs).flatMap(

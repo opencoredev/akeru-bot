@@ -1,4 +1,4 @@
-# Depot CI builds smoke artifacts. It does not publish or release them.
+# This workflow builds smoke artifacts. It does not publish or release them.
 
 name: Release artifact smoke
 
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   release_smoke:
     name: Release configuration
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: tenki-standard-medium-4c-8g
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -52,21 +52,21 @@ jobs:
       matrix:
         include:
           - label: macOS arm64 DMG
-            runner: depot-macos-15
+            runner: tenki-macos-15-small
             platform: mac
             target: dmg
             arch: arm64
             extension: dmg
             rust_target: aarch64-apple-darwin
           - label: Windows x64 NSIS
-            runner: depot-windows-2025-8
+            runner: windows-2025
             platform: win
             target: nsis
             arch: x64
             extension: exe
             rust_target: x86_64-pc-windows-msvc
           - label: Linux x64 AppImage
-            runner: depot-ubuntu-24.04-4
+            runner: tenki-standard-medium-4c-8g
             platform: linux
             target: AppImage
             arch: x64
@@ -232,7 +232,7 @@ jobs:
   cli:
     name: CLI package
     needs: release_smoke
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: tenki-standard-medium-4c-8g
     timeout-minutes: 20
     env:
       RELEASE_VERSION: ${{ inputs.version }}
@@ -265,7 +265,7 @@ jobs:
   marketing:
     name: Marketing site
     needs: release_smoke
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: tenki-standard-medium-4c-8g
     timeout-minutes: 15
     steps:
       - name: Checkout

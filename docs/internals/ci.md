@@ -2,11 +2,12 @@
 
 > For Akeru Bot maintainers.
 
-[`.depot/workflows/ci.yml`](../../.depot/workflows/ci.yml) runs on each ready pull request revision.
-Draft pull requests do not use a Depot runner. A new revision cancels the older run for that pull
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs on each ready pull request revision.
+Draft pull requests do not use a runner. A new revision cancels the older run for that pull
 request. Maintainers can also dispatch the workflow manually for diagnostics. The workflow uses one
-4-vCPU `depot-ubuntu-24.04-4` runner.
-Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04` because they write GitHub issue and pull-request labels.
+4-vCPU `tenki-standard-medium-4c-8g` runner.
+Issue-label, PR-vouch, and PR-size jobs use the 2-vCPU
+`tenki-standard-small-2c-4g` runner.
 
 - **Repository checks.** The job rejects external local dependencies, installs the committed
   lockfile once, checks lint and formatting, runs workspace type checks,
@@ -17,13 +18,14 @@ Issue-label, PR-vouch, and PR-size jobs stay in GitHub Actions on `ubuntu-24.04`
   `orchestrationEngine.integration.test.ts` until the executor stack
   restores its test adapter and stops the fixture from calling OpenAI with a test credential.
 
-The repository ruleset requires the Depot `Repository checks` result before a pull request can
+The repository ruleset requires the `Repository checks` result before a pull request can
 merge. Direct pushes to `main` cannot bypass this gate. Release workflows start after the validated
 revision lands on `main`; version packaging is separate from pull-request CI.
 
-[`.depot/workflows/release-smoke.yml`](../../.depot/workflows/release-smoke.yml) is a manual, non-publishing
-artifact smoke workflow. It uses 4-vCPU Depot runners for Linux, 8-vCPU Windows, plus Apple Silicon
-macOS. It builds a Developer ID signed macOS arm64 app. Electron-builder notarizes and staples the
+[`.github/workflows/release-smoke.yml`](../../.github/workflows/release-smoke.yml) is a manual,
+non-publishing artifact smoke workflow. It uses 4-vCPU Tenki runners for Linux and Apple Silicon
+macOS, plus GitHub's Windows runner. It builds a Developer ID signed macOS arm64 app.
+Electron-builder notarizes and staples the
 app before it packages the DMG. The workflow then submits and staples the DMG as a separate object.
 It checks both objects with Apple's verification tools. Windows and Linux artifacts stay unsigned.
 The workflow also builds and dry-runs the CLI package and checks the marketing site. It uploads

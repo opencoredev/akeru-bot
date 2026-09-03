@@ -25,24 +25,18 @@ function assertOmits(haystack: string, needle: string, message: string): void {
 }
 
 const releaseWorkflow = read(".github/workflows/release.yml");
-const versionPackagesWorkflow = read(".depot/workflows/version-packages.yml");
-const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
-const ciWorkflow = read(".depot/workflows/ci.yml");
+const versionPackagesWorkflow = read(".github/workflows/version-packages.yml");
+const releaseSmokeWorkflow = read(".github/workflows/release-smoke.yml");
+const ciWorkflow = read(".github/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 const serverCli = read("apps/server/scripts/cli.ts");
-const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
-
-for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
-  if (!workflowFile.endsWith(".yml") && !workflowFile.endsWith(".yaml")) continue;
-  const workflow = read(NodePath.join(".depot/workflows", workflowFile));
-  if (/^\s*(?:runs-on|runner): (?:ubuntu|macos|windows)-/mu.test(workflow)) {
-    throw new Error(`Depot workflow still uses a GitHub-hosted runner: ${workflowFile}.`);
-  }
-}
-
-for (const relativePath of [".github/workflows/ci.yml"] as const) {
+for (const relativePath of [
+  ".depot/workflows/ci.yml",
+  ".depot/workflows/release-smoke.yml",
+  ".depot/workflows/version-packages.yml",
+] as const) {
   if (NodeFS.existsSync(NodePath.join(repoRoot, relativePath))) {
-    throw new Error(`GitHub Actions still owns ${relativePath}; move it to .depot/workflows.`);
+    throw new Error(`Depot still owns ${relativePath}; move it to .github/workflows.`);
   }
 }
 
@@ -72,9 +66,9 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: depot-macos-15", "Depot macOS runner"],
-  ["runner: depot-windows-2025-8", "8-vCPU Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-4", "4-vCPU Depot Linux runner"],
+  ["runner: tenki-macos-15-small", "4-vCPU Tenki macOS runner"],
+  ["runner: windows-2025", "GitHub-hosted Windows runner"],
+  ["runner: tenki-standard-medium-4c-8g", "4-vCPU Tenki Linux runner"],
   [
     "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
     "pinned Developer ID certificate import",
@@ -166,10 +160,10 @@ for (const [needle, label] of [
 
 assertContains(
   ciWorkflow,
-  "runs-on: depot-ubuntu-24.04-4",
-  "CI does not use 4-vCPU Depot runners.",
+  "runs-on: tenki-standard-medium-4c-8g",
+  "CI does not use 4-vCPU Tenki runners.",
 );
-assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
+assertOmits(ciWorkflow, "runs-on: depot-", "Depot runners");
 assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
 assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");
 assertOmits(releaseWorkflow, "runner: depot-ubuntu-24.04-8", "Depot Linux runner");
