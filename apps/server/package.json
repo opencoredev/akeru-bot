@@ -47,6 +47,7 @@
     "chat": "4.39.0",
     "e2b": "^2.32.0",
     "effect": "catalog:",
+    "execa": "9.6.1",
     "libsql": "0.5.29",
     "msgpackr-extract": "3.0.4",
     "node-pty": "^1.1.0",
