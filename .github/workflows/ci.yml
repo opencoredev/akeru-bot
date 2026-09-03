@@ -1,4 +1,4 @@
-# Tenki CI validates pull requests before they reach main.
+# Tenki runs the required checks before pull requests reach main.
 
 name: CI
 
