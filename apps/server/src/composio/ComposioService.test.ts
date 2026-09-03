@@ -317,4 +317,31 @@ describe("ComposioService", () => {
       expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
     }),
   );
+
+  it.effect("shares concurrent runtime resolution for the same resource", () =>
+    Effect.gen(function* () {
+      let releaseSessionCreation!: () => void;
+      const sessionCreationGate = new Promise<void>((resolve) => {
+        releaseSessionCreation = resolve;
+      });
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
+        sessionCreationGate,
+      });
+      const createClient = vi.fn(() => client);
+      const service = make(store, createClient);
+
+      const first = yield* Effect.forkChild(service.resolveRuntimeMcpServer("thread-1"));
+      yield* Effect.promise(() => vi.waitFor(() => expect(createSession).toHaveBeenCalledTimes(1)));
+      const second = yield* Effect.forkChild(service.resolveRuntimeMcpServer("thread-1"));
+      yield* Effect.promise(() => vi.waitFor(() => expect(createClient).toHaveBeenCalledTimes(2)));
+      releaseSessionCreation();
+
+      expect(yield* Fiber.join(first)).toBe(yield* Fiber.join(second));
+      expect(createSession).toHaveBeenCalledTimes(1);
+      yield* service.remove;
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+    }),
+  );
 });

@@ -36,6 +36,7 @@ import {
   disconnectChannel,
   reconnectChannel,
   sendChannelMessage,
+  setThreadMessageReaction,
   settleThread,
   setGroupBoss,
   startThreadTurn,
@@ -343,6 +344,34 @@ describe("environment commands", () => {
           commandId: "unsettle-command",
           threadId: "thread-1",
           reason: "user",
+        },
+      ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("dispatches message reactions", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* setThreadMessageReaction({
+        commandId: CommandId.make("reaction-command"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: MessageId.make("message-1"),
+        emoji: "👍",
+        present: true,
+        updatedAt: "2026-09-01T00:00:00.000Z",
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toEqual([
+        {
+          type: "thread.message.reaction.set",
+          commandId: "reaction-command",
+          threadId: "thread-1",
+          messageId: "message-1",
+          emoji: "👍",
+          present: true,
+          updatedAt: "2026-09-01T00:00:00.000Z",
         },
       ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),

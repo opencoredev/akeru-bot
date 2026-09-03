@@ -393,7 +393,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarProviderUpdatePill />
         <SidebarUpdateArchitectureWarning />
       </div>
-      <SidebarMenu className="flex-row items-center justify-center gap-1 group-data-[collapsible=icon]:flex-col">
+      <SidebarMenu className="flex-row flex-wrap items-center justify-center gap-1 overflow-visible group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:flex-nowrap">
         <SidebarPluginSummary onClick={handlePluginsClick} />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}

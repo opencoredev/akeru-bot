@@ -1,4 +1,5 @@
 import type { ChatAttachment, EnvironmentId } from "@t3tools/contracts";
+import { FileTextIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useAssetUrls } from "../../assets/assetUrls";
@@ -12,11 +13,17 @@ export function buildBotMessageAttachmentPreview(
   failedIds: ReadonlySet<string> = new Set(),
 ): ExpandedImagePreview | null {
   return buildExpandedImagePreview(
-    attachments.map((attachment, index) => ({
-      id: attachment.id,
-      name: attachment.name,
-      ...(urls[index] && !failedIds.has(attachment.id) ? { previewUrl: urls[index] } : {}),
-    })),
+    attachments.flatMap((attachment, index) =>
+      attachment.type === "image"
+        ? [
+            {
+              id: attachment.id,
+              name: attachment.name,
+              ...(urls[index] && !failedIds.has(attachment.id) ? { previewUrl: urls[index] } : {}),
+            },
+          ]
+        : [],
+    ),
     selectedAttachmentId,
   );
 }
@@ -46,7 +53,22 @@ export function BotMessageAttachments({
       <div className="grid max-w-[420px] grid-cols-1 gap-2 sm:grid-cols-2">
         {attachments.map((attachment, index) => {
           const url = urls[index];
-          const canPreview = url !== null && !failedIds.has(attachment.id);
+          const canPreview =
+            attachment.type === "image" && url !== null && !failedIds.has(attachment.id);
+          if (attachment.type === "file") {
+            return (
+              <a
+                key={attachment.id}
+                data-testid="bot-message-attachment"
+                className="flex min-h-14 items-center gap-2 rounded-lg border border-border/70 bg-background/45 px-3 py-2 text-sm hover:bg-muted/50"
+                href={url ?? undefined}
+                download={attachment.name}
+              >
+                <FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate">{attachment.name}</span>
+              </a>
+            );
+          }
           return (
             <div
               key={attachment.id}

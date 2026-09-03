@@ -19,6 +19,7 @@ import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   useAllEnvironmentShellsBootstrapped,
   useProjects,
+  readEnvironmentSupportsFileAttachments,
   useThreadActivities,
   useThreadMessages,
   useThreadShell,
@@ -47,6 +48,7 @@ import {
 } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
 import { ensureLocalApi } from "../../localApi";
+import { resolveBotFileAttachment } from "./botFileAttachment";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -55,7 +57,12 @@ function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): s
   return error instanceof Error ? error.message : "Could not send the message.";
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
+function threadTitle(prompt: string, files: readonly File[]): string {
+  const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New thread");
+  return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
+}
+
+function readFileAsDataUrl(file: File, mimeType: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener(
@@ -67,7 +74,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
       "load",
       () =>
         typeof reader.result === "string"
-          ? resolve(reader.result)
+          ? resolve(`data:${mimeType};base64,${reader.result.split(",", 2)[1] ?? ""}`)
           : reject(new Error(`Could not read ${file.name}.`)),
       { once: true },
     );
@@ -280,9 +287,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         setError("Add a project before you message a bot.");
         return Promise.resolve(false);
       }
-      const unsupported = files.find((file) => !file.type.startsWith("image/"));
+      const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);
       if (unsupported) {
-        setError("Bot attachments must be images.");
+        setError(`This file type is not supported: ${unsupported.name}`);
         return Promise.resolve(false);
       }
 
@@ -300,22 +307,32 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           bot?.sandbox ?? null,
           settings.localExecutionMode,
         );
-        const title = bot?.name ?? "Bot";
+        const title = threadTitle(prompt, files);
 
         try {
           const attachments = await Promise.all(
-            files.map(async (file) => ({
-              type: "image" as const,
-              name: file.name,
-              mimeType: file.type,
-              sizeBytes: file.size,
-              dataUrl: await readFileAsDataUrl(file),
-            })),
+            files.map(async (file) => {
+              const attachment = resolveBotFileAttachment(file);
+              if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
+              return {
+                ...attachment,
+                name: file.name,
+                sizeBytes: file.size,
+                dataUrl: await readFileAsDataUrl(file, attachment.mimeType),
+              };
+            }),
           );
           const currentThreadRef =
             retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
           if (!currentThreadRef) {
             setError("Could not send the message.");
+            return false;
+          }
+          if (
+            files.some((file) => resolveBotFileAttachment(file)?.type === "file") &&
+            !readEnvironmentSupportsFileAttachments(activeProject.environmentId)
+          ) {
+            setError("Update the connected Akeru server to attach files.");
             return false;
           }
           if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {

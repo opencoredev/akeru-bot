@@ -573,6 +573,16 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           threadId: ThreadId.make("thread-group"),
           createdAt: NOW,
         },
+        {
+          type: "thread.message.reaction.set",
+          commandId: CommandId.make("cmd-outsider-thread-reaction"),
+          threadId: ThreadId.make("thread-group"),
+          messageId: MessageId.make("message-1"),
+          botId: BOSS_ID,
+          emoji: "👍",
+          present: true,
+          updatedAt: NOW,
+        },
       ] satisfies ReadonlyArray<OrchestrationCommand>;
       const errors = yield* Effect.all(
         commands.map((command) =>
@@ -604,6 +614,111 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
 
       if (!("type" in result)) throw new Error("Expected one thread.meta-updated event");
       expect(result.type).toBe("thread.meta-updated");
+    }),
+  );
+
+  it.effect("binds client group reactions to the authenticated person", () =>
+    Effect.gen(function* () {
+      const messageId = MessageId.make("message-1");
+      const readModel = makeReadModel({
+        bots: [
+          makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
+          makeBot({ id: SPECIALIST_ID, groupId: GROUP_ID }),
+        ],
+        groups: [makeGroup()],
+        threads: [
+          {
+            ...makeGroupThread(),
+            respondingBotId: BOSS_ID,
+            messages: [
+              {
+                id: messageId,
+                role: "user",
+                text: "Please investigate.",
+                turnId: null,
+                streaming: false,
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          },
+        ],
+      });
+      const command = {
+        type: "thread.message.reaction.set",
+        commandId: CommandId.make("cmd-member-thread-reaction"),
+        threadId: ThreadId.make("thread-group"),
+        messageId,
+        botId: SPECIALIST_ID,
+        emoji: "👍",
+        present: true,
+        updatedAt: NOW,
+      } as const;
+
+      const result = yield* decideOrchestrationCommand({
+        command,
+        readModel,
+        actor: { personId: PERSON_ID, canManageGroups: false },
+      });
+
+      const event = (Array.isArray(result) ? result : [result]).find(
+        (candidate) => candidate.type === "thread.message-reaction-set",
+      );
+      if (event?.type !== "thread.message-reaction-set") {
+        throw new Error("Expected thread.message-reaction-set");
+      }
+      expect(event.payload).toMatchObject({ personId: PERSON_ID, emoji: "👍", present: true });
+      expect(event.payload.botId).toBeUndefined();
+    }),
+  );
+
+  it.effect("keeps trusted internal group reactions bot-authored", () =>
+    Effect.gen(function* () {
+      const messageId = MessageId.make("message-1");
+      const readModel = makeReadModel({
+        bots: [makeBot({ id: BOSS_ID, groupId: GROUP_ID })],
+        groups: [makeGroup()],
+        threads: [
+          {
+            ...makeGroupThread(),
+            respondingBotId: BOSS_ID,
+            messages: [
+              {
+                id: messageId,
+                role: "user",
+                text: "Please investigate.",
+                turnId: null,
+                streaming: false,
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.message.reaction.set",
+          commandId: CommandId.make("cmd-internal-thread-reaction"),
+          threadId: ThreadId.make("thread-group"),
+          messageId,
+          botId: BOSS_ID,
+          emoji: "👍",
+          present: true,
+          updatedAt: NOW,
+        },
+        readModel,
+      });
+
+      const event = (Array.isArray(result) ? result : [result]).find(
+        (candidate) => candidate.type === "thread.message-reaction-set",
+      );
+      if (event?.type !== "thread.message-reaction-set") {
+        throw new Error("Expected thread.message-reaction-set");
+      }
+      expect(event.payload).toMatchObject({ botId: BOSS_ID, emoji: "👍", present: true });
+      expect(event.payload.personId).toBeUndefined();
     }),
   );
 

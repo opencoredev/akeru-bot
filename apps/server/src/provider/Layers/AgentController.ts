@@ -2125,7 +2125,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 mediaType: attachment.mimeType,
                 filename: attachment.name,
               },
-              pathLine: `[Attached image "${attachment.name}" is saved at: ${path}]`,
+              pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
             }),
             catch: (cause) =>
               new AgentControllerRuntimeError({

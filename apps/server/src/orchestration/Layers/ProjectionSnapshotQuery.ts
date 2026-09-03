@@ -6,7 +6,6 @@ import {
   BotUsageCap,
   ChannelBinding,
   ChatAttachment,
-  ChannelMessageOrigin,
   CheckpointRef,
   GroupMembership,
   IsoDateTime,
@@ -1326,6 +1325,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           AND sequence <= ${maxSequence}
           AND event_type IN (
             'thread.message-sent',
+            'thread.message-reaction-set',
             'thread.proposed-plan-upserted',
             'thread.activity-appended',
             'thread.turn-diff-completed',

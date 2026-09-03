@@ -302,7 +302,9 @@ export function GroupDetailsPanel(props: {
     <>
       <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
         <h2 className="text-sm font-medium">Group</h2>
-        <div className="absolute right-3 flex items-center">{closeButton}</div>
+        <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
+          {closeButton}
+        </div>
       </header>
       <GroupEditor {...props} />
     </>

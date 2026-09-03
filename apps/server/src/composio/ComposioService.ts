@@ -104,6 +104,7 @@ export function make(
 ): ComposioServiceShape {
   let runtimeConfigurationGeneration = 0;
   const pendingHostedSessionDeletes = new Set<() => Promise<void>>();
+  const pendingRuntimeResolutions = new Map<string, Promise<McpServer | undefined>>();
   const runtimeCache = new Map<
     string,
     {
@@ -303,65 +304,80 @@ export function make(
 
   const resolveRuntimeMcpServer: ComposioServiceShape["resolveRuntimeMcpServer"] = (resourceId) =>
     withClient("prepare connected tools", async (client, userId) => {
-      const configurationGeneration = runtimeConfigurationGeneration;
-      const connections = (await listConnections(client, userId)).filter(
-        (connection) => connection.status === "ACTIVE",
-      );
-      if (connections.length === 0) {
+      const pending = pendingRuntimeResolutions.get(resourceId);
+      if (pending) return pending;
+      const resolving = (async () => {
+        const configurationGeneration = runtimeConfigurationGeneration;
+        const connections = (await listConnections(client, userId)).filter(
+          (connection) => connection.status === "ACTIVE",
+        );
+        if (connections.length === 0) {
+          await deleteCachedSession(resourceId);
+          return undefined;
+        }
+        const connectedAccounts = Object.groupBy(
+          connections,
+          (connection) => connection.toolkitSlug,
+        );
+        const accountMap = Object.fromEntries(
+          Object.entries(connectedAccounts).map(([toolkit, accounts]) => [
+            toolkit,
+            (accounts ?? []).map((account) => account.id),
+          ]),
+        );
+        const fingerprint = JSON.stringify(accountMap);
+        const cached = runtimeCache.get(resourceId);
+        if (cached?.fingerprint === fingerprint) return cached.server;
         await deleteCachedSession(resourceId);
-        return undefined;
+        if (runtimeCache.size >= 100) {
+          const oldest = runtimeCache.keys().next().value;
+          if (oldest !== undefined) await deleteCachedSession(oldest);
+        }
+        const session = await client.sessions.create(userId, {
+          mcp: true,
+          toolkits: Object.keys(accountMap),
+          connectedAccounts: accountMap,
+          manageConnections: true,
+          multiAccount: {
+            enable: true,
+            maxAccountsPerToolkit: 10,
+            requireExplicitSelection: true,
+          },
+        });
+        const deleteSession = () => session.delete().then(() => undefined);
+        if (configurationGeneration !== runtimeConfigurationGeneration) {
+          pendingHostedSessionDeletes.add(deleteSession);
+          await deletePendingHostedSession(deleteSession);
+          return undefined;
+        }
+        const now = "1970-01-01T00:00:00.000Z";
+        const server = withMcpRuntimeHeaders(
+          {
+            id: COMPOSIO_MCP_SERVER_ID,
+            name: "Composio",
+            transport: "url",
+            url: session.mcp.url,
+            enabled: true,
+            createdAt: now,
+            updatedAt: now,
+          },
+          session.mcp.headers ?? {},
+        );
+        runtimeCache.set(resourceId, {
+          fingerprint,
+          server,
+          deleteSession,
+        });
+        return server;
+      })();
+      pendingRuntimeResolutions.set(resourceId, resolving);
+      try {
+        return await resolving;
+      } finally {
+        if (pendingRuntimeResolutions.get(resourceId) === resolving) {
+          pendingRuntimeResolutions.delete(resourceId);
+        }
       }
-      const connectedAccounts = Object.groupBy(connections, (connection) => connection.toolkitSlug);
-      const accountMap = Object.fromEntries(
-        Object.entries(connectedAccounts).map(([toolkit, accounts]) => [
-          toolkit,
-          (accounts ?? []).map((account) => account.id),
-        ]),
-      );
-      const fingerprint = JSON.stringify(accountMap);
-      const cached = runtimeCache.get(resourceId);
-      if (cached?.fingerprint === fingerprint) return cached.server;
-      await deleteCachedSession(resourceId);
-      if (runtimeCache.size >= 100) {
-        const oldest = runtimeCache.keys().next().value;
-        if (oldest !== undefined) await deleteCachedSession(oldest);
-      }
-      const session = await client.sessions.create(userId, {
-        mcp: true,
-        toolkits: Object.keys(accountMap),
-        connectedAccounts: accountMap,
-        manageConnections: true,
-        multiAccount: {
-          enable: true,
-          maxAccountsPerToolkit: 10,
-          requireExplicitSelection: true,
-        },
-      });
-      const deleteSession = () => session.delete().then(() => undefined);
-      if (configurationGeneration !== runtimeConfigurationGeneration) {
-        pendingHostedSessionDeletes.add(deleteSession);
-        await deletePendingHostedSession(deleteSession);
-        return undefined;
-      }
-      const now = "1970-01-01T00:00:00.000Z";
-      const server = withMcpRuntimeHeaders(
-        {
-          id: COMPOSIO_MCP_SERVER_ID,
-          name: "Composio",
-          transport: "url",
-          url: session.mcp.url,
-          enabled: true,
-          createdAt: now,
-          updatedAt: now,
-        },
-        session.mcp.headers ?? {},
-      );
-      runtimeCache.set(resourceId, {
-        fingerprint,
-        server,
-        deleteSession,
-      });
-      return server;
     }).pipe(
       Effect.catch((error) =>
         error.message === "Connect Composio in Settings first."

@@ -11,7 +11,36 @@ import {
 } from "./attachmentPaths.ts";
 import { inferImageExtension, SAFE_IMAGE_FILE_EXTENSIONS } from "./imageMime.ts";
 
-const ATTACHMENT_FILENAME_EXTENSIONS = [...SAFE_IMAGE_FILE_EXTENSIONS, ".bin"];
+const FILE_EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
+  "application/json": ".json",
+  "application/pdf": ".pdf",
+  "application/toml": ".toml",
+  "application/xml": ".xml",
+  "application/x-yaml": ".yaml",
+  "text/csv": ".csv",
+  "text/markdown": ".md",
+  "text/plain": ".txt",
+  "text/toml": ".toml",
+  "text/xml": ".xml",
+  "text/yaml": ".yaml",
+};
+const SAFE_FILE_EXTENSIONS = new Set([
+  ".csv",
+  ".json",
+  ".md",
+  ".markdown",
+  ".pdf",
+  ".toml",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
+const ATTACHMENT_FILENAME_EXTENSIONS = [
+  ...SAFE_IMAGE_FILE_EXTENSIONS,
+  ...SAFE_FILE_EXTENSIONS,
+  ".bin",
+];
 const ATTACHMENT_ID_THREAD_SEGMENT_MAX_CHARS = 80;
 const ATTACHMENT_ID_THREAD_SEGMENT_PATTERN = "[a-z0-9_]+(?:-[a-z0-9_]+)*";
 const ATTACHMENT_ID_UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -80,7 +109,29 @@ export function attachmentRelativePath(attachment: ChatAttachment): string {
       });
       return `${attachment.id}${extension}`;
     }
+    case "file":
+      return `${attachment.id}${inferFileExtension(attachment)}`;
   }
+}
+
+export function inferFileExtension(input: { readonly mimeType: string; readonly name?: string }) {
+  const fromMime = FILE_EXTENSION_BY_MIME_TYPE[input.mimeType.toLowerCase()];
+  if (fromMime) return fromMime;
+  const match = /\.([a-z0-9]{1,12})$/i.exec(input.name?.trim() ?? "");
+  const fromName = match ? `.${match[1]!.toLowerCase()}` : "";
+  return SAFE_FILE_EXTENSIONS.has(fromName) ? fromName : ".bin";
+}
+
+export function inferAttachmentExtension(input: {
+  readonly mimeType: string;
+  readonly name?: string;
+}) {
+  return input.mimeType.toLowerCase().startsWith("image/")
+    ? inferImageExtension({
+        mimeType: input.mimeType,
+        ...(input.name !== undefined ? { fileName: input.name } : {}),
+      })
+    : inferFileExtension(input);
 }
 
 export function resolveAttachmentPath(input: {

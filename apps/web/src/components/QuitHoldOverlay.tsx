@@ -37,7 +37,7 @@ export function QuitHoldOverlay() {
   return (
     <div
       role="status"
-      className="pointer-events-none fixed inset-x-0 top-[22%] z-100 flex justify-center"
+      className="pointer-events-none fixed inset-0 z-100 flex items-center justify-center"
     >
       <div className="rounded-full bg-neutral-700/95 px-8 py-4 text-2xl font-bold text-white shadow-xl">
         Hold {shortcut} to Quit

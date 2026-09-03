@@ -230,7 +230,7 @@ import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import { CircleAlertIcon, RotateCcwIcon, XIcon } from "lucide-react";
+import { CircleAlertIcon, PaperclipIcon, RotateCcwIcon, XIcon } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import {
   applyProviderInstanceSettings,
@@ -922,6 +922,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Refs
   // ------------------------------------------------------------------
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
   const providerInputRejectedRef = useRef(false);
@@ -3259,6 +3260,30 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 )}
               >
                 <div className="-m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {activeThreadId && pendingUserInputs.length === 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            aria-label="Attach images"
+                            className="shrink-0"
+                            disabled={
+                              isConnecting ||
+                              projectSelectionRequired ||
+                              composerImages.length >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS
+                            }
+                            size="icon-sm"
+                            variant="ghost"
+                            onClick={() => attachmentInputRef.current?.click()}
+                          />
+                        }
+                      >
+                        <PaperclipIcon className="size-4" />
+                      </TooltipTrigger>
+                      <TooltipPopup side="top">Attach images</TooltipPopup>
+                    </Tooltip>
+                  ) : null}
                   {noProviderAvailable ? (
                     <Button
                       type="button"
@@ -3323,6 +3348,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           </div>
         </div>
       </div>
+      <input
+        ref={attachmentInputRef}
+        className="sr-only"
+        type="file"
+        accept="image/gif,image/heic,image/heif,image/jpeg,image/png,image/webp"
+        multiple
+        tabIndex={-1}
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          event.currentTarget.value = "";
+          void addComposerImages(files);
+        }}
+      />
       {noProviderAvailable ? null : (
         <Dialog open={isComposerModelPickerOpen} onOpenChange={setIsComposerModelPickerOpen}>
           <DialogPopup
