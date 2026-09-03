@@ -50,7 +50,6 @@ describe("MCP server authentication", () => {
       onAuthorizationUrl,
       recordSuccess,
       recordFailure: vi.fn(),
-      recordReconnectFailure: vi.fn(),
     });
 
     expect(result.connected).toBe(true);
@@ -73,7 +72,6 @@ describe("MCP server authentication", () => {
         onAuthorizationUrl: vi.fn(),
         recordSuccess: vi.fn(),
         recordFailure,
-        recordReconnectFailure: vi.fn(),
       }),
     ).rejects.toThrow("Authentication cancelled.");
     expect(recordFailure).toHaveBeenCalledWith(server.id, "Authentication cancelled.");
@@ -96,7 +94,6 @@ describe("MCP server authentication", () => {
       onAuthorizationUrl: vi.fn(),
       recordSuccess: vi.fn(),
       recordFailure: vi.fn(),
-      recordReconnectFailure: vi.fn(),
     });
 
     expect(createManager).toHaveBeenCalledOnce();
@@ -128,7 +125,6 @@ describe("MCP server authentication", () => {
       signal: controller.signal,
       recordSuccess: vi.fn(),
       recordFailure: vi.fn(),
-      recordReconnectFailure: vi.fn(),
     });
     await vi.waitFor(() => expect(manager.authenticateServer).toHaveBeenCalledOnce());
     controller.abort();
@@ -149,7 +145,6 @@ describe("MCP server authentication", () => {
     } as unknown as McpManager;
     const recordSuccess = vi.fn();
     const recordFailure = vi.fn();
-    const recordReconnectFailure = vi.fn();
 
     const result = await authenticateMcpServer({
       server,
@@ -158,12 +153,11 @@ describe("MCP server authentication", () => {
       onAuthorizationUrl: vi.fn(),
       recordSuccess,
       recordFailure,
-      recordReconnectFailure,
     });
 
     expect(result.connected).toBe(true);
     expect(recordSuccess).toHaveBeenCalledWith(server.id);
     expect(recordFailure).not.toHaveBeenCalled();
-    expect(recordReconnectFailure).toHaveBeenCalledWith(server.id, "Secondary session failed.");
+    expect(secondary.reconnectServer).toHaveBeenCalledWith("builtin-hoplite");
   });
 });
