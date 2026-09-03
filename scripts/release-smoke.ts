@@ -39,12 +39,14 @@ for (const relativePath of [
   }
 }
 
-const depotBootstrapWorkflow = read(".depot/workflows/ci.yml");
-assertContains(
-  depotBootstrapWorkflow,
-  "github.head_ref == 't3code/migrate-ci-off-depot'",
-  "Depot CI is not limited to the Tenki migration pull request.",
-);
+const depotBootstrapPath = NodePath.join(repoRoot, ".depot/workflows/ci.yml");
+if (NodeFS.existsSync(depotBootstrapPath)) {
+  assertContains(
+    NodeFS.readFileSync(depotBootstrapPath, "utf8"),
+    "github.head_ref == 't3code/migrate-ci-off-depot'",
+    "Depot CI is not limited to the Tenki migration pull request.",
+  );
+}
 
 assertContains(
   desktopArtifactBuilder,
