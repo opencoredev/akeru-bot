@@ -23,6 +23,7 @@ import {
   type MessageReplyTarget,
   selectedReactionForPerson,
 } from "../chat/MessageControls";
+import { MessageReactions } from "../chat/MessageReactions";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
@@ -244,6 +245,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                           }
                         />
                       </div>
+                      <MessageReactions reactions={message.reactions ?? []} />
                     </div>
                   </div>
                 );
@@ -290,16 +292,19 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                       }
                     />
                   </div>
-                  <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                    {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-                    {message.attachments?.length ? (
-                      <div className={message.text ? "mt-2" : undefined}>
-                        <BotMessageAttachments
-                          attachments={message.attachments}
-                          environmentId={environmentId ?? NO_ENVIRONMENT}
-                        />
-                      </div>
-                    ) : null}
+                  <div className="flex max-w-[78%] flex-col items-end">
+                    <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+                      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
+                      {message.attachments?.length ? (
+                        <div className={message.text ? "mt-2" : undefined}>
+                          <BotMessageAttachments
+                            attachments={message.attachments}
+                            environmentId={environmentId ?? NO_ENVIRONMENT}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                    <MessageReactions reactions={message.reactions ?? []} />
                   </div>
                 </div>
               );

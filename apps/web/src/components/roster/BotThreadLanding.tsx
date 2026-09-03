@@ -59,6 +59,7 @@ import {
   type MessageReplyTarget,
   selectedReactionForPerson,
 } from "../chat/MessageControls";
+import { MessageReactions } from "../chat/MessageReactions";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
@@ -300,6 +301,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                           }
                         />
                       </div>
+                      <MessageReactions reactions={message.reactions ?? []} />
                       {canManageChannelBindings && environmentId && runtime.linkedThreadRef
                         ? (() => {
                             const origin = channelOriginForAssistantMessage(messages, messageIndex);
@@ -359,16 +361,21 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         }
                       />
                     </div>
-                    <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-                      {message.attachments?.length ? (
-                        <div className={message.text ? "mt-2" : undefined}>
-                          <BotMessageAttachments
-                            attachments={message.attachments}
-                            environmentId={environmentId ?? NO_ENVIRONMENT}
-                          />
-                        </div>
-                      ) : null}
+                    <div className="flex max-w-[78%] flex-col items-end">
+                      <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+                        {message.text ? (
+                          <p className="whitespace-pre-wrap">{message.text}</p>
+                        ) : null}
+                        {message.attachments?.length ? (
+                          <div className={message.text ? "mt-2" : undefined}>
+                            <BotMessageAttachments
+                              attachments={message.attachments}
+                              environmentId={environmentId ?? NO_ENVIRONMENT}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                      <MessageReactions reactions={message.reactions ?? []} />
                     </div>
                   </div>
                 ),
