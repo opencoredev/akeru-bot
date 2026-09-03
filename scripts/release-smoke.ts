@@ -25,24 +25,18 @@ function assertOmits(haystack: string, needle: string, message: string): void {
 }
 
 const releaseWorkflow = read(".github/workflows/release.yml");
-const versionPackagesWorkflow = read(".depot/workflows/version-packages.yml");
-const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
-const ciWorkflow = read(".depot/workflows/ci.yml");
+const versionPackagesWorkflow = read(".github/workflows/version-packages.yml");
+const releaseSmokeWorkflow = read(".github/workflows/release-smoke.yml");
+const ciWorkflow = read(".github/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 const serverCli = read("apps/server/scripts/cli.ts");
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
-
-for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
-  if (!workflowFile.endsWith(".yml") && !workflowFile.endsWith(".yaml")) continue;
-  const workflow = read(NodePath.join(".depot/workflows", workflowFile));
-  if (/^\s*(?:runs-on|runner): (?:ubuntu|macos|windows)-/mu.test(workflow)) {
-    throw new Error(`Depot workflow still uses a GitHub-hosted runner: ${workflowFile}.`);
-  }
-}
-
-for (const relativePath of [".github/workflows/ci.yml"] as const) {
-  if (NodeFS.existsSync(NodePath.join(repoRoot, relativePath))) {
-    throw new Error(`GitHub Actions still owns ${relativePath}; move it to .depot/workflows.`);
+if (NodeFS.existsSync(depotWorkflowDirectory)) {
+  const depotWorkflows = NodeFS.readdirSync(depotWorkflowDirectory).filter(
+    (workflowFile) => workflowFile.endsWith(".yml") || workflowFile.endsWith(".yaml"),
+  );
+  if (depotWorkflows.length > 0) {
+    throw new Error(`Retired Depot workflows still exist: ${depotWorkflows.join(", ")}.`);
   }
 }
 
@@ -72,9 +66,9 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: depot-macos-15", "Depot macOS runner"],
-  ["runner: depot-windows-2025-8", "8-vCPU Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-4", "4-vCPU Depot Linux runner"],
+  ["runner: tenki-macos-15-medium", "Tenki macOS runner"],
+  ["runner: windows-2025", "GitHub-hosted Windows runner"],
+  ["runner: tenki-standard-medium-4c-8g", "4-vCPU Tenki Linux runner"],
   [
     "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
     "pinned Developer ID certificate import",
@@ -114,9 +108,9 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: macos-15", "GitHub-hosted macOS runner"],
+  ["runner: tenki-macos-15-medium", "Tenki macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
-  ["runner: ubuntu-24.04", "GitHub-hosted Linux runner"],
+  ["runner: tenki-standard-medium-4c-8g", "Tenki Linux runner"],
   [
     "Stable macOS releases require complete signing and notarization credentials.",
     "required macOS signing credentials",
@@ -174,13 +168,13 @@ for (const [needle, label] of [
 
 assertContains(
   ciWorkflow,
-  "runs-on: depot-ubuntu-24.04-4",
-  "CI does not use 4-vCPU Depot runners.",
+  "runs-on: tenki-standard-medium-4c-8g",
+  "CI does not use 4-vCPU Tenki runners.",
 );
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
-assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
-assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");
-assertOmits(releaseWorkflow, "runner: depot-ubuntu-24.04-8", "Depot Linux runner");
+assertOmits(ciWorkflow, "depot-", "Depot runners");
+assertOmits(releaseSmokeWorkflow, "depot-", "Depot runners");
+assertOmits(releaseWorkflow, "depot-", "Depot runners");
 assertOmits(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',

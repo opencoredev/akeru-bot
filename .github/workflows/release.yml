@@ -1,6 +1,6 @@
-# Native GitHub runners build every stable asset before the final job creates the tag and release.
+# Tenki and GitHub-hosted runners build every stable asset before the final job creates the tag and release.
 
-name: Stable release native
+name: Stable release
 
 on:
   workflow_dispatch:
@@ -81,7 +81,7 @@ jobs:
       matrix:
         include:
           - label: macOS arm64 DMG
-            runner: macos-15
+            runner: tenki-macos-15-medium
             platform: mac
             target: dmg
             arch: arm64
@@ -93,7 +93,7 @@ jobs:
             arch: x64
             rust_target: x86_64-pc-windows-msvc
           - label: Linux x64 AppImage
-            runner: ubuntu-24.04
+            runner: tenki-standard-medium-4c-8g
             platform: linux
             target: AppImage
             arch: x64
