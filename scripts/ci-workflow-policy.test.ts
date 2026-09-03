@@ -29,9 +29,9 @@ function workflow(path: string): Workflow {
   return parse(NodeFS.readFileSync(new URL(`../${path}`, import.meta.url), "utf8")) as Workflow;
 }
 
-describe("Depot workflow budget", () => {
+describe("CI workflow budget", () => {
   it("validates ready pull requests in one 4-vCPU job", () => {
-    const ci = workflow(".depot/workflows/ci.yml");
+    const ci = workflow(".github/workflows/ci.yml");
     const commands = Object.values(ci.jobs).flatMap((job) =>
       job.steps.flatMap((step) => (step.run ? [step.run] : [])),
     );
@@ -48,7 +48,7 @@ describe("Depot workflow budget", () => {
     expect(ci.jobs.check?.if).toBe(
       "${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}",
     );
-    expect(ci.jobs.check?.["runs-on"]).toBe("depot-ubuntu-24.04-4");
+    expect(ci.jobs.check?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
 
     for (const command of [
       "git ls-files .github/pr-assets",
@@ -86,28 +86,30 @@ describe("Depot workflow budget", () => {
   });
 
   it("coalesces version updates on a 4-vCPU runner", () => {
-    const versionPackages = workflow(".depot/workflows/version-packages.yml");
+    const versionPackages = workflow(".github/workflows/version-packages.yml");
     const versionJob = versionPackages.jobs.version;
 
     expect(versionPackages.concurrency).toEqual({
       group: "version-packages",
       "cancel-in-progress": true,
     });
-    expect(versionJob?.["runs-on"]).toBe("depot-ubuntu-24.04-4");
+    expect(versionJob?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
     expect(versionJob?.steps.find((step) => step.run)?.run).toContain(
       "vp run tegami version --no-checks",
     );
   });
 
   it("uses 4-vCPU Linux runners in the manual release smoke workflow", () => {
-    const releaseSmoke = workflow(".depot/workflows/release-smoke.yml");
+    const releaseSmoke = workflow(".github/workflows/release-smoke.yml");
     const text = NodeFS.readFileSync(
-      new URL("../.depot/workflows/release-smoke.yml", import.meta.url),
+      new URL("../.github/workflows/release-smoke.yml", import.meta.url),
       "utf8",
     );
 
-    expect(text).not.toContain("depot-ubuntu-24.04-8");
-    expect(text).toContain("depot-ubuntu-24.04-4");
+    expect(text).not.toContain("depot-");
+    expect(text).toContain("tenki-standard-medium-4c-8g");
+    expect(text).toContain("tenki-macos-15-medium");
+    expect(text).toContain("windows-2025");
     expect(Object.keys(releaseSmoke.jobs).length).toBeGreaterThan(0);
   });
 });
