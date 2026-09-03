@@ -102,7 +102,8 @@ export function make(
   secretStore: ServerSecretStore["Service"],
   createClient: ComposioClientFactory = (apiKey) => new Composio({ apiKey }),
 ): ComposioServiceShape {
-  const pendingAuthorizationSessionDeletes = new Set<() => Promise<void>>();
+  let runtimeConfigurationGeneration = 0;
+  const pendingHostedSessionDeletes = new Set<() => Promise<void>>();
   const runtimeCache = new Map<
     string,
     {
@@ -129,24 +130,29 @@ export function make(
     }
   };
 
-  const deleteAuthorizationSession = async (deleteSession: () => Promise<void>) => {
+  const deletePendingHostedSession = async (deleteSession: () => Promise<void>) => {
     try {
       await deleteSession();
     } catch (cause) {
       if (!isNotFoundError(cause)) throw cause;
     }
-    pendingAuthorizationSessionDeletes.delete(deleteSession);
+    pendingHostedSessionDeletes.delete(deleteSession);
   };
 
-  const clearAuthorizationSessions = async () => {
-    for (const deleteSession of pendingAuthorizationSessionDeletes) {
-      await deleteAuthorizationSession(deleteSession);
+  const clearPendingHostedSessions = async () => {
+    for (const deleteSession of pendingHostedSessionDeletes) {
+      await deletePendingHostedSession(deleteSession);
     }
   };
 
   const clearHostedSessions = async () => {
     await clearRuntimeCache();
-    await clearAuthorizationSessions();
+    await clearPendingHostedSessions();
+  };
+
+  const invalidateHostedSessions = async () => {
+    runtimeConfigurationGeneration += 1;
+    await clearHostedSessions();
   };
 
   const readApiKey = secretStore.get(API_KEY_SECRET).pipe(
@@ -202,24 +208,22 @@ export function make(
       }
       const client = createClient(normalized);
       yield* tryComposio("validate its API key", () => client.toolkits.get({ limit: 1 }));
-      yield* tryComposio("delete hosted tool sessions", clearHostedSessions);
+      yield* tryComposio("delete hosted tool sessions", invalidateHostedSessions);
       yield* secretStore
         .set(API_KEY_SECRET, textEncoder.encode(normalized))
         .pipe(Effect.mapError((cause) => operationError("save its API key", cause)));
+      yield* tryComposio("delete hosted tool sessions", invalidateHostedSessions);
       return yield* getStatus;
     });
 
-  const remove: ComposioServiceShape["remove"] = tryComposio(
-    "delete hosted tool sessions",
-    clearHostedSessions,
-  ).pipe(
-    Effect.andThen(
-      secretStore
-        .remove(API_KEY_SECRET)
-        .pipe(Effect.mapError((cause) => operationError("remove its API key", cause))),
-    ),
-    Effect.as({ configured: false, connections: [] }),
-  );
+  const remove: ComposioServiceShape["remove"] = Effect.gen(function* () {
+    yield* tryComposio("delete hosted tool sessions", invalidateHostedSessions);
+    yield* secretStore
+      .remove(API_KEY_SECRET)
+      .pipe(Effect.mapError((cause) => operationError("remove its API key", cause)));
+    yield* tryComposio("delete hosted tool sessions", invalidateHostedSessions);
+    return { configured: false, connections: [] };
+  });
 
   const searchToolkits: ComposioServiceShape["searchToolkits"] = (input) =>
     withClient("load toolkits", async (client) => {
@@ -249,7 +253,7 @@ export function make(
 
   const authorize: ComposioServiceShape["authorize"] = (input) =>
     withClient("start account authorization", async (client, userId) => {
-      await clearHostedSessions();
+      await invalidateHostedSessions();
       const session = await client.sessions.create(userId, {
         mcp: true,
         toolkits: [input.toolkitSlug],
@@ -257,7 +261,7 @@ export function make(
         multiAccount: { enable: true, maxAccountsPerToolkit: 10 },
       });
       const deleteSession = () => session.delete().then(() => undefined);
-      pendingAuthorizationSessionDeletes.add(deleteSession);
+      pendingHostedSessionDeletes.add(deleteSession);
       const authorization = await session
         .authorize(input.toolkitSlug, input.alias ? { alias: input.alias } : undefined)
         .then((request) => {
@@ -270,7 +274,7 @@ export function make(
           (value) => ({ ok: true as const, value }),
           (error: unknown) => ({ ok: false as const, error }),
         );
-      const cleanup = await deleteAuthorizationSession(deleteSession).then(
+      const cleanup = await deletePendingHostedSession(deleteSession).then(
         () => ({ ok: true as const }),
         (error: unknown) => ({ ok: false as const, error }),
       );
@@ -292,12 +296,14 @@ export function make(
 
   const disconnect: ComposioServiceShape["disconnect"] = (connectionId) =>
     withClient("disconnect an account", async (client) => {
-      await clearRuntimeCache();
+      await invalidateHostedSessions();
       await client.connectedAccounts.delete(connectionId);
+      await invalidateHostedSessions();
     }).pipe(Effect.flatMap(() => getStatus));
 
   const resolveRuntimeMcpServer: ComposioServiceShape["resolveRuntimeMcpServer"] = (resourceId) =>
     withClient("prepare connected tools", async (client, userId) => {
+      const configurationGeneration = runtimeConfigurationGeneration;
       const connections = (await listConnections(client, userId)).filter(
         (connection) => connection.status === "ACTIVE",
       );
@@ -331,6 +337,12 @@ export function make(
           requireExplicitSelection: true,
         },
       });
+      const deleteSession = () => session.delete().then(() => undefined);
+      if (configurationGeneration !== runtimeConfigurationGeneration) {
+        pendingHostedSessionDeletes.add(deleteSession);
+        await deletePendingHostedSession(deleteSession);
+        return undefined;
+      }
       const now = "1970-01-01T00:00:00.000Z";
       const server = withMcpRuntimeHeaders(
         {
@@ -347,7 +359,7 @@ export function make(
       runtimeCache.set(resourceId, {
         fingerprint,
         server,
-        deleteSession: () => session.delete().then(() => undefined),
+        deleteSession,
       });
       return server;
     }).pipe(

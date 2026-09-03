@@ -1,6 +1,7 @@
 import { Composio } from "@composio/core";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import { describe, expect, vi } from "vite-plus/test";
 
@@ -43,9 +44,11 @@ function fakeClient(input?: {
     readonly redirectUrl?: string;
   }>;
   readonly deleteSession?: () => Promise<void>;
+  readonly sessionCreationGate?: Promise<void>;
 }) {
   const sessionDeletes: Array<ReturnType<typeof vi.fn<() => Promise<void>>>> = [];
   const createSession = vi.fn(async () => {
+    await input?.sessionCreationGate;
     const deleteSession = vi.fn(input?.deleteSession ?? (async () => undefined));
     sessionDeletes.push(deleteSession);
     return {
@@ -289,6 +292,29 @@ describe("ComposioService", () => {
       expect(createSession).toHaveBeenCalledTimes(101);
       expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
       expect(sessionDeletes[1]).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect("deletes a runtime session created while an account is disconnected", () =>
+    Effect.gen(function* () {
+      let releaseSessionCreation!: () => void;
+      const sessionCreationGate = new Promise<void>((resolve) => {
+        releaseSessionCreation = resolve;
+      });
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
+        sessionCreationGate,
+      });
+      const service = make(store, () => client);
+
+      const resolving = yield* Effect.forkChild(service.resolveRuntimeMcpServer("thread-1"));
+      yield* Effect.promise(() => vi.waitFor(() => expect(createSession).toHaveBeenCalledTimes(1)));
+      yield* service.disconnect("gmail-work");
+      releaseSessionCreation();
+
+      expect(yield* Fiber.join(resolving)).toBeUndefined();
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
     }),
   );
 });
