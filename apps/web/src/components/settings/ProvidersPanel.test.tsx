@@ -8,6 +8,7 @@ describe("subscription providers", () => {
   it("offers Kimi subscription login without Cursor", () => {
     const providers = SUBSCRIPTION_PROVIDERS.map((provider) => provider.id);
     expect(providers).toContain("kimi-for-coding");
+    expect(providers).toContain("opencode-go");
     expect(providers).not.toContain("cursor");
   });
 

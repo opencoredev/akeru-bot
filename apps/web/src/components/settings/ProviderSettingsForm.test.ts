@@ -57,6 +57,13 @@ describe("ProviderSettingsForm helpers", () => {
     expect(DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("cursor")]).toBeUndefined();
   });
 
+  it("registers OpenCode Go in the provider picker", () => {
+    const openCodeGo = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencodeGo")];
+
+    expect(openCodeGo).toMatchObject({ label: "OpenCode Go" });
+    expect(deriveProviderSettingsFields(openCodeGo!)).toEqual([]);
+  });
+
   it("preserves unknown config keys while omitting empty configurable fields", () => {
     const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
     expect(opencode).toBeDefined();

@@ -342,7 +342,7 @@ function AboutVersionSection() {
             render={
               <Button
                 size="xs"
-                variant={action === "install" ? "default" : "outline"}
+                variant="outline"
                 disabled={buttonDisabled || isUpdateActionPending}
                 onClick={handleButtonClick}
               >
@@ -2066,7 +2066,7 @@ export function GeneralSettingsPanel() {
 
         <SettingsRow
           {...searchableSetting("local-execution")}
-          description="Ask before local file changes and shell commands. Full access skips these prompts. Sensitive actions still ask."
+          description="Auto review runs safe actions and asks before sensitive ones."
           resetAction={
             settings.localExecutionMode !== DEFAULT_UNIFIED_SETTINGS.localExecutionMode ? (
               <SettingResetButton
@@ -2083,17 +2083,24 @@ export function GeneralSettingsPanel() {
             <Select
               value={settings.localExecutionMode}
               onValueChange={(value) => {
-                if (value === "approval-required" || value === "full-access") {
+                if (value === "approval-required" || value === "auto" || value === "full-access") {
                   updateSettings({ localExecutionMode: value });
                 }
               }}
             >
               <SelectTrigger className="w-full sm:w-40" aria-label="Local execution">
                 <SelectValue>
-                  {settings.localExecutionMode === "full-access" ? "Full access" : "Ask first"}
+                  {settings.localExecutionMode === "full-access"
+                    ? "Full access"
+                    : settings.localExecutionMode === "approval-required"
+                      ? "Ask first"
+                      : "Auto review"}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="auto">
+                  Auto review
+                </SelectItem>
                 <SelectItem hideIndicator value="approval-required">
                   Ask first
                 </SelectItem>

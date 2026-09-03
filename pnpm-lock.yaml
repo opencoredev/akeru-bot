@@ -71,6 +71,7 @@ patchedDependencies:
   '@expo/metro-config@56.0.14': 8cb08b5bb7051ed9d2dbe46a2c293c5a1e17f1bd6ddf30de27909e18c921ff46
   '@ff-labs/fff-node@0.9.4': ab9ff544009e1891cfe3930105862d3699007f38922a79f3c98d90018deca368
   '@legendapp/list@3.3.5': 064530db83875fa671559a81ae42dc159726dc2dd6ec4c982da44ff7c7a74706
+  '@mastra/mcp@1.17.2': 016edd26ea06f6ebcde74dc84648bb45937a3dc5c6876407c2474c4525f91871
   '@pierre/diffs@1.3.0-beta.10': 7ef7cb0cbabb17c15cdb137554068b36f15f6f5265e73fb51452aa3380db91aa
   '@react-native-menu/menu@2.0.0': c7f66d121c726ade4f5c4e1aed11a691e5711d244c544084e289ac26132a0045
   '@react-native/gradle-plugin@0.85.3': c1b594a16e682d621b6a960926f8ce13fc92edfb397884cfe7fcb0518996a784
@@ -268,9 +269,9 @@ importers:
       '@tabler/icons-react-native':
         specifier: ^3.44.0
         version: 3.44.0(react-native-svg@15.15.4(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3))(react@19.2.3)
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
+      cn:
+        specifier: ^0.2.4
+        version: 0.2.4
       diff:
         specifier: 8.0.3
         version: 8.0.3
@@ -418,9 +419,6 @@ importers:
       shiki:
         specifier: 4.2.0
         version: 4.2.0
-      tailwind-merge:
-        specifier: ^3.5.0
-        version: 3.6.0
       uniwind:
         specifier: ^1.6.2
         version: 1.7.0(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)(tailwindcss@4.3.0)
@@ -452,6 +450,12 @@ importers:
       '@ai-sdk/anthropic':
         specifier: 3.0.113
         version: 3.0.113(zod@4.4.3)
+      '@ai-sdk/openai':
+        specifier: 3.0.101
+        version: 3.0.101(zod@4.4.3)
+      '@ai-sdk/openai-compatible':
+        specifier: 2.0.72
+        version: 2.0.72(zod@4.4.3)
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.170
         version: 0.3.170(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
@@ -518,6 +522,9 @@ importers:
       effect:
         specifier: 4.0.0-beta.103
         version: 4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6)
+      execa:
+        specifier: 9.6.1
+        version: 9.6.1
       libsql:
         specifier: 0.5.29
         version: 0.5.29
@@ -645,9 +652,9 @@ importers:
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
+      cn:
+        specifier: ^0.2.4
+        version: 0.2.4
       culori:
         specifier: ^4.0.2
         version: 4.0.2
@@ -711,9 +718,6 @@ importers:
       remark-math:
         specifier: ^6.0.0
         version: 6.0.0
-      tailwind-merge:
-        specifier: ^3.4.0
-        version: 3.6.0
       zustand:
         specifier: ^5.0.11
         version: 5.0.14(@types/react@19.2.16)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
@@ -7378,6 +7382,11 @@ packages:
     resolution: {integrity: sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw==}
     engines: {node: '>=0.10.0'}
 
+  cn@0.2.4:
+    resolution: {integrity: sha512-SzQvoh5FwizWtQg9+JueKdjWhlfCZMdu5DqNHm9q1wUlRVmKb9WXlepR9bTTbPwzEOyX1ujJ6lcCppmn3bNUCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   code-excerpt@4.0.0:
     resolution: {integrity: sha512-xxodCmBen3iy2i0WtAK8FlFNrRzjUqjRsMfho58xT/wvZU1YTM3fCnRjcy1gJPMepaRlgm/0e6w8SpWHpn3/cA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
@@ -12388,9 +12397,6 @@ packages:
     resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
     engines: {node: '>=20'}
 
-  tailwind-merge@3.6.0:
-    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
-
   tailwindcss@4.2.1:
     resolution: {integrity: sha512-/tBrSQ36vCleJkAOsy9kbNTgaxvGbyOamC30PRePTQe/o1MFwEKHQk4Cn7BNGaPtjp+PuUrByJehM1hgxfq4sw==}
 
@@ -16863,7 +16869,7 @@ snapshots:
       '@mastra/fastembed': 1.3.0
       '@mastra/github-signals': 0.3.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
       '@mastra/libsql': 1.22.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@mastra/mcp': 1.17.2(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
+      '@mastra/mcp': 1.17.2(patch_hash=016edd26ea06f6ebcde74dc84648bb45937a3dc5c6876407c2474c4525f91871)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
       '@mastra/memory': 1.28.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))
       '@mastra/observability': 1.17.3(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
       '@mastra/parallel': 0.1.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
@@ -16976,7 +16982,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@mastra/mcp@1.17.2(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
+  '@mastra/mcp@1.17.2(patch_hash=016edd26ea06f6ebcde74dc84648bb45937a3dc5c6876407c2474c4525f91871)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3)
       '@modelcontextprotocol/client': 2.0.0
@@ -21118,6 +21124,8 @@ snapshots:
   clsx@2.1.1: {}
 
   cluster-key-slot@1.1.1: {}
+
+  cn@0.2.4: {}
 
   code-excerpt@4.0.0:
     dependencies:
@@ -27254,8 +27262,6 @@ snapshots:
   tabbable@6.4.0: {}
 
   tagged-tag@1.0.0: {}
-
-  tailwind-merge@3.6.0: {}
 
   tailwindcss@4.2.1: {}
 

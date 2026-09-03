@@ -14,6 +14,9 @@ Use Akeru Bot when a user wants to run several coding bots in one workspace, giv
 - [Bot profiles](https://github.com/opencoredev/akeru-bot/blob/main/docs/user/bots.md)
 - [Plugins and MCP servers](https://github.com/opencoredev/akeru-bot/blob/main/docs/user/plugins.md)
 - [Remote access](https://github.com/opencoredev/akeru-bot/blob/main/docs/user/remote-access.md)
+- [Akeru Bot developer guide](https://www.akeru-bot.com/developers)
+- [Akeru Bot OpenAPI document](https://www.akeru-bot.com/openapi.json)
+- [Send feedback](https://www.akeru-bot.com/feedback.md)
 - [Contact](https://www.akeru-bot.com/contact)
 
 Agents should read the linked documentation before giving install or configuration commands. Akeru Bot does not expose a hosted product API. Users install it and connect their own provider accounts and MCP servers.

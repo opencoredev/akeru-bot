@@ -1384,6 +1384,30 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("ignores provider content deltas that cannot change thread state", async () => {
+    const harness = await createHarness();
+    const before = await harness.readModel();
+
+    for (const [index, streamKind] of (
+      ["command_output", "file_change_output", "reasoning_summary_text", "reasoning_text"] as const
+    ).entries()) {
+      harness.emit({
+        type: "content.delta",
+        eventId: asEventId(`evt-ignored-delta-${index}`),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:01.000Z",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-ignored-deltas"),
+        itemId: asItemId(`item-ignored-delta-${index}`),
+        payload: { streamKind, delta: "large transient provider output" },
+      });
+    }
+
+    await harness.drain();
+
+    expect(await harness.readModel()).toEqual(before);
+  });
+
   it("projects a persisted tool screenshot as an assistant image attachment", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

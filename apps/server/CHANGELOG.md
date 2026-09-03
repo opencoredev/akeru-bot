@@ -1,3 +1,27 @@
+## akeru-bot@0.0.38
+
+### Changes
+
+- [#126](https://github.com/opencoredev/akeru-bot/pull/126) fix(web): replace sidebar footer labels with icons
+- [#109](https://github.com/opencoredev/akeru-bot/pull/109) docs: update user guides for subscription runtimes
+- [#127](https://github.com/opencoredev/akeru-bot/pull/127) feat(web): switch bots with number shortcuts
+- [#129](https://github.com/opencoredev/akeru-bot/pull/129) fix(web): show Grok models during limited probes
+- [#135](https://github.com/opencoredev/akeru-bot/pull/135) docs: align agent guidance with Akeru Bot
+- [#138](https://github.com/opencoredev/akeru-bot/pull/138) ci: validate merge queue candidates with Depot
+- [#139](https://github.com/opencoredev/akeru-bot/pull/139) feat(bots): move model controls to sidebar
+- [#136](https://github.com/opencoredev/akeru-bot/pull/136) fix(channels): restore settings and delivery
+- [#140](https://github.com/opencoredev/akeru-bot/pull/140) feat(bots): personalize Akeru prompts
+- [#144](https://github.com/opencoredev/akeru-bot/pull/144) ci: run Depot checks on pull requests
+- [#146](https://github.com/opencoredev/akeru-bot/pull/146) ci: migrate workflows to tenki
+- [#142](https://github.com/opencoredev/akeru-bot/pull/142) feat(plugins): add Hoplite MCP integration
+- [#147](https://github.com/opencoredev/akeru-bot/pull/147) fix(brand): use the Akeru icon in development
+- [#143](https://github.com/opencoredev/akeru-bot/pull/143) perf(server): reduce streaming and tool update overhead
+- [#148](https://github.com/opencoredev/akeru-bot/pull/148) perf(ui): replace class merging with cn
+- [#137](https://github.com/opencoredev/akeru-bot/pull/137) feat(providers): add OpenCode Go support
+- [#145](https://github.com/opencoredev/akeru-bot/pull/145) feat(web): add first-install bot onboarding
+- [#123](https://github.com/opencoredev/akeru-bot/pull/123) fix(macos): install unsigned Mac builds from a checksummed GitHub DMG
+- [#133](https://github.com/opencoredev/akeru-bot/pull/133) feat(approvals): add auto review and bot prompts
+
 ## akeru-bot@0.0.37
 
 ### Changes

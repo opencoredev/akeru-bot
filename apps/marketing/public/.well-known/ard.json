@@ -14,6 +14,24 @@
       "url": "https://www.akeru-bot.com/llms.txt"
     },
     {
+      "identifier": "urn:air:akeru-bot.com:api-description",
+      "displayName": "Akeru Bot public metadata API description",
+      "type": "application/vnd.oai.openapi+json",
+      "url": "https://www.akeru-bot.com/openapi.json"
+    },
+    {
+      "identifier": "urn:air:akeru-bot.com:developer-guide",
+      "displayName": "Akeru Bot developer guide",
+      "type": "text/html",
+      "url": "https://www.akeru-bot.com/developers"
+    },
+    {
+      "identifier": "urn:air:akeru-bot.com:feedback",
+      "displayName": "Akeru Bot agent feedback channels",
+      "type": "text/markdown",
+      "url": "https://www.akeru-bot.com/feedback.md"
+    },
+    {
       "identifier": "urn:air:akeru-bot.com:documentation",
       "displayName": "Akeru Bot user documentation",
       "type": "text/html",

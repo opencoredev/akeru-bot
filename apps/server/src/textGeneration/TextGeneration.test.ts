@@ -48,6 +48,12 @@ const makeStubRegistry = (
   const byId = new Map(instances.map((instance) => [instance.instanceId, instance] as const));
   return {
     getInstance: (id) => Effect.succeed(byId.get(id)),
+    dispatchIfEnabled: (id, dispatch) =>
+      Effect.sync(() =>
+        byId.has(id)
+          ? ({ _tag: "Dispatched", value: dispatch() } as const)
+          : ({ _tag: "Missing" } as const),
+      ),
     listInstances: Effect.succeed(instances),
     listUnavailable: Effect.succeed([]),
     streamChanges: Stream.empty,

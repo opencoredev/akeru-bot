@@ -50,6 +50,7 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { buildUnavailableProviderSnapshot } from "../unavailableProviderSnapshot.ts";
@@ -367,12 +368,15 @@ export const makeProviderInstanceRegistry = <R>(input: {
     const entries = yield* Ref.make<ReadonlyMap<ProviderInstanceId, LiveEntry>>(new Map());
     const unavailable = yield* Ref.make<ReadonlyMap<ProviderInstanceId, ServerProvider>>(new Map());
     const changes = yield* PubSub.unbounded<void>();
+    const reconciliationLock = yield* Semaphore.make(1);
     yield* Effect.addFinalizer(() => PubSub.shutdown(changes));
 
     const state: RegistryState = { entries, unavailable, changes };
     const reconcileWithR = makeReconcile({ state, driversById, parentScope });
     const reconcile: ProviderInstanceRegistryMutatorShape["reconcile"] = (configMap) =>
-      reconcileWithR(configMap).pipe(Effect.provideContext(driverContext));
+      reconciliationLock.withPermits(1)(
+        reconcileWithR(configMap).pipe(Effect.provideContext(driverContext)),
+      );
 
     // Hydrate the initial configMap synchronously so callers can read
     // `listInstances` immediately after this effect completes.
@@ -380,6 +384,15 @@ export const makeProviderInstanceRegistry = <R>(input: {
 
     const registry: ProviderInstanceRegistryShape = {
       getInstance: (id) => Ref.get(entries).pipe(Effect.map((map) => map.get(id)?.instance)),
+      dispatchIfEnabled: (id, dispatch) =>
+        reconciliationLock.withPermits(1)(
+          Effect.gen(function* () {
+            const instance = (yield* Ref.get(entries)).get(id)?.instance;
+            if (!instance) return { _tag: "Missing" as const };
+            if (!instance.enabled) return { _tag: "Disabled" as const };
+            return { _tag: "Dispatched" as const, value: yield* Effect.sync(dispatch) };
+          }),
+        ),
       listInstances: Ref.get(entries).pipe(
         Effect.map(
           (map) =>

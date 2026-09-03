@@ -38,7 +38,6 @@ import {
   type OrchestrationEvent,
   type OrchestrationShellStreamEvent,
   type OrchestrationShellStreamItem,
-  type OrchestrationThreadStreamItem,
   isGroupBotMember,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetSnapshotError,
@@ -99,6 +98,7 @@ import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
+import { makeThreadLiveEventCoalescer } from "./orchestration/ThreadLiveEventCoalescer.ts";
 import {
   applyAuthenticatedCommandActor,
   applyKnownGroupPerson,
@@ -1981,17 +1981,15 @@ const makeWsRpcLayer = (
                 Stream.filter(isThisThreadDetailEvent),
                 Stream.map((event) => ({
                   kind: "event" as const,
-                  event: projectActivityEvent(event),
+                  event,
                 })),
               );
 
               // Attach live delivery before reading either replay or snapshot state.
               // Otherwise an event published while the snapshot is loading is lost.
-              const liveBuffer = yield* Queue.unbounded<OrchestrationThreadStreamItem>();
-              yield* Effect.forkScoped(
-                liveStream.pipe(Stream.runForEach((item) => Queue.offer(liveBuffer, item))),
-              );
-              const bufferedLiveStream = Stream.fromQueue(liveBuffer);
+              const liveBuffer = yield* makeThreadLiveEventCoalescer();
+              yield* Effect.forkScoped(liveStream.pipe(Stream.runForEach(liveBuffer.offer)));
+              const bufferedLiveStream = liveBuffer.stream;
 
               // When the client already loaded the snapshot over HTTP it passes
               // that snapshot's sequence, and we resume the live subscription by
@@ -2040,8 +2038,10 @@ const makeWsRpcLayer = (
                     input.requestCompletionMarker === true
                       ? Stream.concat(
                           Stream.fromEffect(
-                            Queue.offer(liveBuffer, { kind: "synchronized" as const }),
-                          ).pipe(Stream.drain),
+                            liveBuffer
+                              .offerAndWait({ kind: "synchronized" as const })
+                              .pipe(Effect.andThen(liveBuffer.takeAll)),
+                          ).pipe(Stream.flatMap((items) => Stream.fromIterable(items))),
                           bufferedLiveStream,
                         )
                       : bufferedLiveStream;
@@ -2082,8 +2082,10 @@ const makeWsRpcLayer = (
                 input.requestCompletionMarker === true
                   ? Stream.concat(
                       Stream.fromEffect(
-                        Queue.offer(liveBuffer, { kind: "synchronized" as const }),
-                      ).pipe(Stream.drain),
+                        liveBuffer
+                          .offerAndWait({ kind: "synchronized" as const })
+                          .pipe(Effect.andThen(liveBuffer.takeAll)),
+                      ).pipe(Stream.flatMap((items) => Stream.fromIterable(items))),
                       bufferedLiveStream,
                     )
                   : bufferedLiveStream;

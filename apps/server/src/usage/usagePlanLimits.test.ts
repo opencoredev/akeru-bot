@@ -182,4 +182,24 @@ describe("readPlanLimits cache", () => {
       },
     ]);
   });
+
+  it("shows a connected OpenCode Go card without calling an unsupported usage endpoint", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const limits = await readPlanLimits(async (provider) =>
+      provider === "opencode-go" ? "go-key" : undefined,
+    );
+
+    expect(limits).toEqual([
+      {
+        provider: "opencode-go",
+        status: "ok",
+        plan: null,
+        message: null,
+        windows: [],
+      },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

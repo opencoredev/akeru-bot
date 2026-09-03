@@ -589,7 +589,6 @@ export const waitForSessionLoadReplayIdle = (input: {
   readonly gateRef: Ref.Ref<Option.Option<SessionLoadGate>>;
 }): Effect.Effect<EffectAcpSchema.LoadSessionResponse, never> =>
   Effect.gen(function* () {
-    const pollInterval = Duration.millis(25);
     while (true) {
       const gate = yield* Ref.get(input.gateRef);
       if (
@@ -602,8 +601,14 @@ export const waitForSessionLoadReplayIdle = (input: {
         if (nowMillis - gate.value.lastActivityAtMillis >= idleGapMillis) {
           return syntheticLoadSessionResponseFromInitialize(gate.value.initializeResult);
         }
+        yield* Effect.sleep(
+          Duration.millis(
+            Math.max(1, idleGapMillis - (nowMillis - gate.value.lastActivityAtMillis)),
+          ),
+        );
+        continue;
       }
-      yield* Effect.sleep(pollInterval);
+      yield* Effect.sleep(Duration.millis(25));
     }
   });
 

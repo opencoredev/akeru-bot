@@ -831,6 +831,22 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("keeps OpenCode Go disabled after settings reload", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"providers":{"opencodeGo":{"enabled":false}}}',
+      );
+
+      const settings = yield* serverSettings.getSettings;
+      assert.isFalse(settings.providers.opencodeGo.enabled);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("folds a legacy in-config enabled flag into the envelope on load", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;

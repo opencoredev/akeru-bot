@@ -93,10 +93,9 @@ export function RemoteHandoffCard(props: { machine: string; latencyMs: number })
 `;
 
 const PROJECT_FAVICONS = {
-  t3code: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="10" fill="#000"/>
-  <path fill-rule="evenodd" d="M64 34L100 94H28L64 34ZM64 55L83 87H45L64 55Z" fill="#fff"/>
-  <path d="M47 72H81V81H47V72Z" fill="#fff"/>
+  akeru: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="24" fill="#f4f1ea"/>
+  <text x="64" y="91" fill="#171716" font-family="Georgia,serif" font-size="96" text-anchor="middle">a</text>
 </svg>`,
   react: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="15" fill="#20232a"/>
@@ -119,7 +118,7 @@ export const SHOWCASE_PROJECTS = [
     title: "Akeru Bot",
     directory: "akeru-bot",
     repositoryUrl: "https://github.com/opencoredev/akeru-bot.git",
-    favicon: PROJECT_FAVICONS.t3code,
+    favicon: PROJECT_FAVICONS.akeru,
   },
   {
     id: "react",
@@ -299,7 +298,7 @@ async function seedT3CodeWorkspace(workspaceRoot: string): Promise<void> {
     NodePath.join(workspaceRoot, "package.json"),
     `${JSON.stringify({ name: "t3code", private: true, scripts: { test: "vp test" } }, null, 2)}\n`,
   );
-  await NodeFSP.writeFile(NodePath.join(workspaceRoot, "favicon.svg"), PROJECT_FAVICONS.t3code);
+  await NodeFSP.writeFile(NodePath.join(workspaceRoot, "favicon.svg"), PROJECT_FAVICONS.akeru);
   await NodeFSP.writeFile(
     NodePath.join(workspaceRoot, "apps/mobile/src/features/home/environmentPresence.ts"),
     BASE_ENVIRONMENT_PRESENCE,
