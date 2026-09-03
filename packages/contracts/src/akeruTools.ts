@@ -483,6 +483,7 @@ export const AkeruToolReceipt = Schema.Struct({
   botId: Schema.optional(BotId),
   handleId: Schema.optional(AkeruAwaitHandleId),
   summary: Schema.optional(TrimmedNonEmptyString),
+  authorizationUrl: Schema.optional(TrimmedNonEmptyString),
   progress: Schema.optional(NonNegativeInt),
   approvalClass: Schema.optional(AkeruToolApprovalClass),
   failureCode: Schema.optional(AkeruToolFailureCode),

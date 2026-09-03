@@ -771,6 +771,26 @@ export function runtimeEventToActivities(
       ];
     }
 
+    case "tool.receipt": {
+      if (event.payload.phase !== "progress" || !event.payload.authorizationUrl) return [];
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "mcp.oauth.authorization-required",
+          summary: event.payload.summary ?? "Authorize MCP server",
+          payload: {
+            authorizationUrl: event.payload.authorizationUrl,
+            toolCallId: event.payload.receiptId,
+            toolName: event.payload.toolId,
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
     case "task.completed": {
       return [
         {

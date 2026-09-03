@@ -617,7 +617,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           createdAt: receipt.createdAt,
         });
       },
-      onProgress: ({ threadId, toolId, toolCallId, summary }) => {
+      onProgress: ({ threadId, toolId, toolCallId, summary, authorizationUrl }) => {
         const active = sessions.get(threadId);
         if (!active) return;
         PubSub.publishUnsafe(runtimeEvents, {
@@ -630,6 +630,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             threadId: ThreadId.make(threadId),
             ...(active.toolSession.botId ? { botId: active.toolSession.botId } : {}),
             summary,
+            ...(authorizationUrl ? { authorizationUrl } : {}),
             fatalToThread: false,
             createdAt: nowIso(),
           },

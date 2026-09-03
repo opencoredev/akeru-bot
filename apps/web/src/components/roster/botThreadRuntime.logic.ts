@@ -191,3 +191,28 @@ export function findLatestGroupThreadTarget(
     )[0];
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
 }
+
+export function findUnhandledMcpAuthorization(
+  activities: ReadonlyArray<{
+    readonly id: string;
+    readonly kind: string;
+    readonly payload: unknown;
+  }>,
+  handledIds: ReadonlySet<string>,
+): { readonly activityId: string; readonly url: string } | null {
+  for (const activity of activities) {
+    if (activity.kind !== "mcp.oauth.authorization-required" || handledIds.has(activity.id)) {
+      continue;
+    }
+    if (!activity.payload || typeof activity.payload !== "object") continue;
+    const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
+    if (typeof authorizationUrl !== "string") continue;
+    try {
+      const url = new URL(authorizationUrl);
+      if (url.protocol === "https:") return { activityId: activity.id, url: url.href };
+    } catch {
+      // Ignore malformed server data.
+    }
+  }
+  return null;
+}

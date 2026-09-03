@@ -103,6 +103,7 @@ export interface AkeruToolRuntimeOptions {
     readonly toolId: AkeruToolId;
     readonly toolCallId: string;
     readonly summary: string;
+    readonly authorizationUrl?: string;
   }) => void | Promise<void>;
   readonly now?: () => string;
 }
@@ -519,12 +520,13 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           failureCode = "internal";
           result = await catalogHandler({
             input: decoded,
-            emitProgress: (summary: string) =>
+            emitProgress: (summary, details) =>
               options?.onProgress?.({
                 threadId: input.threadId,
                 toolId: input.toolId as AkeruToolId,
                 toolCallId: input.toolCallId,
                 summary,
+                ...details,
               }),
           });
         } else if (input.toolId === "SendToAgent" || input.toolId === "MessageAgent") {
