@@ -2440,7 +2440,11 @@ const makeWsRpcLayer = (
                     });
                   },
                 });
-                yield* Queue.offer(queue, { type: "connected", toolCount: result.toolCount });
+                yield* Queue.offer(queue, {
+                  type: "connected",
+                  toolCount: result.toolCount,
+                  recoveryFailures: result.recoveryFailures,
+                });
               }).pipe(
                 Effect.mapError((cause) =>
                   isMcpServerAuthenticationError(cause)

@@ -713,6 +713,7 @@ export function createServerEnvironmentAtoms<R, E>(
       Effect.gen(function* () {
         const environmentRegistry = yield* EnvironmentRegistry;
         let toolCount: number | undefined;
+        let recoveryFailures: readonly string[] = [];
         yield* environmentRegistry
           .runStream(
             target.environmentId,
@@ -736,6 +737,7 @@ export function createServerEnvironmentAtoms<R, E>(
                   })
                 : Effect.sync(() => {
                     toolCount = event.toolCount;
+                    recoveryFailures = event.recoveryFailures;
                   }),
             ),
           );
@@ -744,7 +746,7 @@ export function createServerEnvironmentAtoms<R, E>(
             message: "MCP authentication ended before the server connected.",
           });
         }
-        return { toolCount };
+        return { toolCount, recoveryFailures };
       }),
   });
   const settingsValueAtom = Atom.family((environmentId: EnvironmentId) =>

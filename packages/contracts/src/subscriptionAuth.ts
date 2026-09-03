@@ -217,6 +217,7 @@ export const McpServerAuthenticationProgress = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("connected"),
     toolCount: NonNegativeInt,
+    recoveryFailures: Schema.Array(TrimmedNonEmptyString),
   }),
 ]);
 export type McpServerAuthenticationProgress = typeof McpServerAuthenticationProgress.Type;

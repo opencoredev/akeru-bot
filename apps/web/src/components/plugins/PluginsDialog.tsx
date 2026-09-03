@@ -92,6 +92,15 @@ export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col
 export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME = "shrink-0 gap-3 px-6 pt-5 pb-4";
 export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8 px-5 pt-5! pb-5 sm:px-6";
 
+export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: readonly string[]) {
+  if (recoveryFailures.length === 0) return null;
+  return {
+    type: "warning" as const,
+    title: `${pluginTitle} connected with a session issue`,
+    description: `${recoveryFailures.join(" ")} Restart the affected agent session to retry.`,
+  };
+}
+
 export interface McpServerDraft {
   readonly name: string;
   readonly transport: "stdio" | "url";
@@ -383,7 +392,11 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
                   mcpServerId,
                   onAuthorizationUrl,
                 });
-                if (result._tag === "Success") return true;
+                if (result._tag === "Success") {
+                  const notice = pluginRecoveryNotice(plugin.title, result.value.recoveryFailures);
+                  if (notice) toastManager.add(notice);
+                  return true;
+                }
                 if (!isAtomCommandInterrupted(result)) {
                   const error = squashAtomCommandFailure(result);
                   toastManager.add({

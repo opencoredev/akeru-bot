@@ -15,6 +15,7 @@ import {
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
   PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
+  pluginRecoveryNotice,
   resolvePluginDialogServers,
   validateMcpServerDraft,
 } from "./PluginsDialog";
@@ -83,6 +84,20 @@ const removedBuiltinServer: McpServer = {
 const noop = () => undefined;
 
 describe("Plugins dialog content", () => {
+  it("gives the user a recovery action when an active session does not reconnect", () => {
+    expect(
+      pluginRecoveryNotice("Hoplite", [
+        "Active MCP session 2 did not reconnect: Secondary session failed.",
+      ]),
+    ).toEqual({
+      type: "warning",
+      title: "Hoplite connected with a session issue",
+      description:
+        "Active MCP session 2 did not reconnect: Secondary session failed. Restart the affected agent session to retry.",
+    });
+    expect(pluginRecoveryNotice("Hoplite", [])).toBeNull();
+  });
+
   it("lists Gmail as an app connected through Composio", () => {
     const gmail = COMPOSIO_APPS[0];
     const markup = renderToStaticMarkup(

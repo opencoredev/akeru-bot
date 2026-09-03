@@ -2534,6 +2534,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
         Effect.tryPromise({
           try: async (signal) => {
+            const recoveryFailures: string[] = [];
             const status = await authenticateMcpServer({
               server,
               managers: sessionResources.getMcpManagersForServer(String(server.id)),
@@ -2549,6 +2550,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               recordFailure: (serverId, message) =>
                 subscriptionAuth.recordMcpRequestFailure(serverId, message),
               recordRecoveryFailure: (serverId, message) => {
+                recoveryFailures.push(message);
                 void runPromise(
                   Effect.logWarning("MCP session recovery failed after authentication.", {
                     serverId,
@@ -2557,7 +2559,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 );
               },
             });
-            return { toolCount: status.toolCount };
+            return { toolCount: status.toolCount, recoveryFailures };
           },
           catch: (cause) =>
             new AgentControllerRuntimeError({

@@ -73,7 +73,10 @@ export interface AgentControllerShape {
   readonly authenticateMcpServer: (input: {
     readonly server: McpServer;
     readonly onAuthorizationUrl: (url: string) => void;
-  }) => Effect.Effect<{ readonly toolCount: number }, AgentControllerError>;
+  }) => Effect.Effect<
+    { readonly toolCount: number; readonly recoveryFailures: readonly string[] },
+    AgentControllerError
+  >;
 
   readonly readConversationMemory?: (
     threadId: ThreadId,
