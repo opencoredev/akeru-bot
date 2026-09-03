@@ -29,6 +29,7 @@ import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -407,6 +408,7 @@ const make = Effect.gen(function* () {
   const threadModelSelections = new Map<string, ModelSelection>();
   const threadBotWorkspaceKeys = new Map<string, string>();
   const threadMcpServers = new Map<string, readonly McpServer[]>();
+  const threadsAwaitingRestrictiveSessionCleanup = new Set<string>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -641,6 +643,64 @@ const make = Effect.gen(function* () {
       .getThreadDetailById(threadId)
       .pipe(Effect.map(Option.getOrUndefined));
   });
+
+  const reconcileRestrictiveSessionCleanup = Effect.fn("reconcileRestrictiveSessionCleanup")(
+    function* (threadId: ThreadId) {
+      const thread = yield* resolveThread(threadId);
+      const persistedCleanupRequired =
+        thread?.runtimeMode === "approval-required" &&
+        thread.session?.runtimeMode === "full-access" &&
+        thread.session.status === "error";
+      if (!threadsAwaitingRestrictiveSessionCleanup.has(threadId) && !persistedCleanupRequired) {
+        return false;
+      }
+
+      threadsAwaitingRestrictiveSessionCleanup.add(threadId);
+      const activeSession = (yield* agentController.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      if (activeSession === undefined) {
+        threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+        return true;
+      }
+
+      yield* agentController.interruptTurn({ threadId }).pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) {
+            return Effect.interrupt;
+          }
+          return Effect.logWarning(
+            "provider command reactor failed to interrupt quarantined session",
+            {
+              threadId,
+              cause: Cause.pretty(cause),
+            },
+          );
+        }),
+      );
+      const sessionAfterInterrupt = (yield* agentController.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      if (sessionAfterInterrupt === undefined) {
+        threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+        return true;
+      }
+      yield* agentController.stopSession({ threadId });
+
+      const remainingSession = (yield* agentController.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      if (remainingSession !== undefined) {
+        return yield* new ProviderAdapterRequestError({
+          provider: providerErrorLabel(remainingSession.provider),
+          method: "thread.session.stop",
+          detail: `Provider session '${threadId}' is still active after a restrictive runtime mode update failed.`,
+        });
+      }
+      threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+      return true;
+    },
+  );
 
   const inspectAvailableEngine = (modelSelection: ModelSelection) =>
     agentController.inspectEngine(modelSelection);
@@ -1845,6 +1905,7 @@ const make = Effect.gen(function* () {
 
   const processSessionStopRequested = Effect.fn("processSessionStopRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.session-stop-requested" }>,
+    restrictiveSessionCleanupConfirmed: boolean,
   ) {
     const thread = yield* resolveThread(event.payload.threadId);
     if (!thread) {
@@ -1852,7 +1913,11 @@ const make = Effect.gen(function* () {
     }
 
     const now = event.payload.createdAt;
-    if (thread.session && thread.session.status !== "stopped") {
+    if (
+      thread.session &&
+      thread.session.status !== "stopped" &&
+      !restrictiveSessionCleanupConfirmed
+    ) {
       yield* agentController.stopSession({ threadId: thread.id });
     }
 
@@ -1877,6 +1942,7 @@ const make = Effect.gen(function* () {
 
   const processDomainEvent = Effect.fn("processDomainEvent")(function* (
     event: ProviderIntentEvent,
+    restrictiveSessionCleanupConfirmed: boolean,
   ) {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
@@ -1921,40 +1987,14 @@ const make = Effect.gen(function* () {
             const detail = formatFailureDetail(cause);
             const restrictsActiveSession =
               session.runtimeMode === "full-access" && thread.runtimeMode === "approval-required";
-            const stopActiveSession = restrictsActiveSession
-              ? agentController.interruptTurn({ threadId: thread.id }).pipe(
-                  Effect.catchCause((interruptCause) =>
-                    Effect.logWarning(
-                      "provider command reactor failed to interrupt session after runtime mode update failure",
-                      {
-                        threadId: thread.id,
-                        cause: Cause.pretty(interruptCause),
-                      },
-                    ),
-                  ),
-                  Effect.andThen(
-                    agentController.stopSession({ threadId: thread.id }).pipe(
-                      Effect.catchCause((stopCause) =>
-                        Effect.logWarning(
-                          "provider command reactor failed to stop session after runtime mode update failure",
-                          {
-                            threadId: thread.id,
-                            cause: Cause.pretty(stopCause),
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              : Effect.void;
-            return stopActiveSession.pipe(
-              Effect.andThen(
-                setThreadSessionErrorOnTurnStartFailure({
-                  threadId: thread.id,
-                  detail,
-                  createdAt: event.occurredAt,
-                }),
-              ),
+            if (restrictsActiveSession) {
+              threadsAwaitingRestrictiveSessionCleanup.add(thread.id);
+            }
+            const reportFailure = setThreadSessionErrorOnTurnStartFailure({
+              threadId: thread.id,
+              detail,
+              createdAt: event.occurredAt,
+            }).pipe(
               Effect.andThen(
                 appendProviderFailureActivity({
                   threadId: thread.id,
@@ -1964,6 +2004,17 @@ const make = Effect.gen(function* () {
                   turnId: session.activeTurnId,
                   createdAt: event.occurredAt,
                 }),
+              ),
+            );
+            return Effect.exit(
+              restrictsActiveSession ? reconcileRestrictiveSessionCleanup(thread.id) : Effect.void,
+            ).pipe(
+              Effect.flatMap((cleanupExit) =>
+                reportFailure.pipe(
+                  Effect.andThen(
+                    Exit.isFailure(cleanupExit) ? Effect.failCause(cleanupExit.cause) : Effect.void,
+                  ),
+                ),
               ),
             );
           }),
@@ -1983,13 +2034,19 @@ const make = Effect.gen(function* () {
         yield* processUserInputResponseRequested(event);
         return;
       case "thread.session-stop-requested":
-        yield* processSessionStopRequested(event);
+        yield* processSessionStopRequested(event, restrictiveSessionCleanupConfirmed);
         return;
     }
   });
 
   const processDomainEventSafely = (event: ProviderIntentEvent) =>
-    processDomainEvent(event).pipe(
+    (event.type === "delegation.updated"
+      ? event.payload.delegation.childThreadId === null
+        ? Effect.succeed(false)
+        : reconcileRestrictiveSessionCleanup(event.payload.delegation.childThreadId)
+      : reconcileRestrictiveSessionCleanup(event.payload.threadId)
+    ).pipe(
+      Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;

@@ -173,6 +173,7 @@ describe("ProviderCommandReactor", () => {
     readonly titleRegenerationCompletionDispatchFailures?: number;
     readonly titleRegenerationBeforeStart?: "one" | "two";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
+    readonly interruptTurnRemovesSession?: boolean;
     readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly startSessionEffect?: (
       session: ProviderSession,
@@ -264,7 +265,30 @@ describe("ProviderCommandReactor", () => {
         turnId: asTurnId("turn-1"),
       }),
     );
-    const interruptTurn = vi.fn((_: unknown) => input?.interruptTurnEffect?.() ?? Effect.void);
+    const interruptTurn = vi.fn((interruptInput: unknown) =>
+      (input?.interruptTurnEffect?.() ?? Effect.void).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            if (input?.interruptTurnRemovesSession !== true) {
+              return;
+            }
+            const threadId =
+              typeof interruptInput === "object" &&
+              interruptInput !== null &&
+              "threadId" in interruptInput
+                ? (interruptInput as { threadId?: ThreadId }).threadId
+                : undefined;
+            if (!threadId) {
+              return;
+            }
+            const index = runtimeSessions.findIndex((session) => session.threadId === threadId);
+            if (index >= 0) {
+              runtimeSessions.splice(index, 1);
+            }
+          }),
+        ),
+      ),
+    );
     const respondToRequest = vi.fn<AgentControllerShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<AgentControllerShape["respondToUserInput"]>(() => Effect.void);
     const stopSession = vi.fn((stopInput: unknown) =>
@@ -2751,6 +2775,225 @@ describe("ProviderCommandReactor", () => {
         },
       }),
     );
+  });
+
+  it("quarantines a full-access session until restrictive cleanup is confirmed", async () => {
+    let failComposioPreparation = false;
+    let failSessionStop = true;
+    const providerFailure = (method: string, detail: string) =>
+      new ProviderAdapterRequestError({
+        provider: "codex",
+        method,
+        detail,
+      });
+    const harness = await createHarness({
+      composioResolveRuntimeMcpServer: () =>
+        failComposioPreparation
+          ? Effect.fail(
+              new ComposioOperationError({
+                operation: "prepare connected tools",
+                message: "Composio could not prepare connected tools.",
+              }),
+            )
+          : Effect.succeed<McpServer | undefined>(undefined),
+      interruptTurnEffect: () =>
+        Effect.fail(providerFailure("thread.turn.interrupt", "Interrupt failed.")),
+      stopSessionEffect: () =>
+        failSessionStop
+          ? Effect.fail(providerFailure("thread.session.stop", "Stop failed."))
+          : Effect.void,
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-quarantine-full-access"),
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-quarantine-start"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-quarantine-start"),
+          role: "user",
+          text: "start with full access",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    failComposioPreparation = true;
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-quarantine-restrict"),
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.runtimeSessions).toHaveLength(1);
+    expect(harness.stopSession).toHaveBeenCalledTimes(1);
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-quarantine-blocked-turn"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-quarantine-blocked-turn"),
+          role: "user",
+          text: "do not send this while cleanup is pending",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.stopSession).toHaveBeenCalledTimes(2);
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+
+    failSessionStop = false;
+    failComposioPreparation = false;
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.stop",
+        commandId: CommandId.make("cmd-quarantine-stop"),
+        threadId: ThreadId.make("thread-1"),
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.runtimeSessions).toHaveLength(0);
+    expect(harness.stopSession).toHaveBeenCalledTimes(3);
+    expect(
+      (await harness.readModel()).threads.find((thread) => thread.id === ThreadId.make("thread-1"))
+        ?.session?.status,
+    ).toBe("stopped");
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-quarantine-reconciled-turn"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-quarantine-reconciled-turn"),
+          role: "user",
+          text: "continue after cleanup",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.runtimeSessions).toHaveLength(1);
+    expect(harness.runtimeSessions[0]?.runtimeMode).toBe("approval-required");
+    expect(harness.stopSession).toHaveBeenCalledTimes(3);
+    expect(harness.startSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts an interrupt that already removed the unrestricted session", async () => {
+    let failComposioPreparation = false;
+    const harness = await createHarness({
+      composioResolveRuntimeMcpServer: () =>
+        failComposioPreparation
+          ? Effect.fail(
+              new ComposioOperationError({
+                operation: "prepare connected tools",
+                message: "Composio could not prepare connected tools.",
+              }),
+            )
+          : Effect.succeed<McpServer | undefined>(undefined),
+      interruptTurnRemovesSession: true,
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-interrupt-removes-full-access"),
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-interrupt-removes-start"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-interrupt-removes-start"),
+          role: "user",
+          text: "start with full access",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    failComposioPreparation = true;
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-interrupt-removes-restrict"),
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.runtimeSessions).toHaveLength(0);
+    expect(harness.interruptTurn).toHaveBeenCalledTimes(1);
+    expect(harness.stopSession).not.toHaveBeenCalled();
+
+    failComposioPreparation = false;
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-interrupt-removes-restricted-turn"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-interrupt-removes-restricted-turn"),
+          role: "user",
+          text: "continue with approval required",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.runtimeSessions).toHaveLength(1);
+    expect(harness.runtimeSessions[0]?.runtimeMode).toBe("approval-required");
   });
 
   it("does not inject derived model options when restarting claude on runtime mode changes", async () => {
