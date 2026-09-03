@@ -3052,11 +3052,23 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
       if (thread.groupId != null) {
+        const group = yield* requireGroup({
+          readModel,
+          command,
+          groupId: thread.groupId,
+        });
+        const reactionBotId = thread.respondingBotId ?? group.bossBotId;
+        if (reactionBotId === null || command.botId !== reactionBotId) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
+          });
+        }
         yield* requireActiveGroupMember({
           readModel,
           command,
           groupId: thread.groupId,
-          botId: command.botId,
+          botId: reactionBotId,
         });
       } else if (thread.botId !== command.botId) {
         return yield* new OrchestrationCommandInvariantError({

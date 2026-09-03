@@ -617,6 +617,73 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
+  it.effect("binds group message reactions to the thread responder", () =>
+    Effect.gen(function* () {
+      const messageId = MessageId.make("message-1");
+      const readModel = makeReadModel({
+        bots: [
+          makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
+          makeBot({ id: SPECIALIST_ID, groupId: GROUP_ID }),
+        ],
+        groups: [makeGroup()],
+        threads: [
+          {
+            ...makeGroupThread(),
+            respondingBotId: BOSS_ID,
+            messages: [
+              {
+                id: messageId,
+                role: "user",
+                text: "Please investigate.",
+                turnId: null,
+                streaming: false,
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          },
+        ],
+      });
+      const command = {
+        type: "thread.message.reaction.set",
+        commandId: CommandId.make("cmd-member-thread-reaction"),
+        threadId: ThreadId.make("thread-group"),
+        messageId,
+        botId: BOSS_ID,
+        emoji: "👍",
+        present: true,
+        updatedAt: NOW,
+      } as const;
+
+      const result = yield* decideOrchestrationCommand({
+        command,
+        readModel,
+        actor: { personId: PERSON_ID, canManageGroups: false },
+      });
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          ...command,
+          commandId: CommandId.make("cmd-forged-specialist-reaction"),
+          botId: SPECIALIST_ID,
+        },
+        readModel,
+        actor: { personId: PERSON_ID, canManageGroups: false },
+      }).pipe(Effect.flip);
+
+      const event = (Array.isArray(result) ? result : [result]).find(
+        (candidate) => candidate.type === "thread.message-reaction-set",
+      );
+      if (event?.type !== "thread.message-reaction-set") {
+        throw new Error("Expected thread.message-reaction-set");
+      }
+      expect(event.payload.botId).toBe(BOSS_ID);
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected reaction attribution invariant error");
+      }
+      expect(error.detail).toContain(`Bot '${SPECIALIST_ID}' cannot react`);
+    }),
+  );
+
   it.effect("lets an administrator mutate a group-owned thread without membership", () =>
     Effect.gen(function* () {
       const result = yield* decideOrchestrationCommand({
