@@ -7,6 +7,7 @@ import * as NodeURL from "node:url";
 
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+import { parse } from "yaml";
 
 import { checkPublicDependencies } from "./check-public-dependencies.ts";
 
@@ -157,6 +158,30 @@ const desktopJobHeader = /\n  desktop:\n([\s\S]*?)\n    strategy:/u.exec(release
 if (!desktopJobHeader) throw new Error("Stable release workflow is missing the desktop job.");
 assertOmits(desktopJobHeader, "secrets.", "Desktop signing secrets are scoped at the job level");
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
+
+const parsedReleaseWorkflow = parse(releaseWorkflow) as {
+  readonly jobs?: {
+    readonly desktop?: {
+      readonly steps?: ReadonlyArray<{
+        readonly name?: string;
+        readonly if?: string;
+        readonly env?: Readonly<Record<string, string>>;
+        readonly with?: Readonly<Record<string, string>>;
+      }>;
+    };
+  };
+};
+for (const step of parsedReleaseWorkflow.jobs?.desktop?.steps ?? []) {
+  const secretInputs = JSON.stringify({ env: step.env, with: step.with });
+  if (/MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) && step.if !== "matrix.platform == 'mac'") {
+    throw new Error(`${step.name ?? "Unnamed step"} exposes macOS secrets outside the macOS job.`);
+  }
+  if (/AZURE_/u.test(secretInputs) && step.if !== "matrix.platform == 'win'") {
+    throw new Error(
+      `${step.name ?? "Unnamed step"} exposes Windows secrets outside the Windows job.`,
+    );
+  }
+}
 
 for (const [needle, label] of [
   ["blacksmith", "private CI runners"],

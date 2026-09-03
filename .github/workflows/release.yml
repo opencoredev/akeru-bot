@@ -123,7 +123,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
-      - name: Validate signing credentials
+      - name: Validate macOS signing credentials
+        if: matrix.platform == 'mac'
         shell: bash
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
@@ -132,6 +133,19 @@ jobs:
           APPSTORE_API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          values=("$MACOS_CERTIFICATE_P12" "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_SIGNING_IDENTITY" "$APPSTORE_API_KEY_P8" "$APPSTORE_API_KEY_ID" "$APPSTORE_ISSUER_ID")
+          for value in "${values[@]}"; do
+            if test -z "$value"; then
+              printf 'Stable macOS releases require complete signing and notarization credentials.\n' >&2
+              exit 1
+            fi
+          done
+
+      - name: Validate Windows signing credentials
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
           AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
           AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
@@ -140,24 +154,14 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
-          signed=false
-          if test "${{ matrix.platform }}" = mac; then
-            values=("$MACOS_CERTIFICATE_P12" "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_SIGNING_IDENTITY" "$APPSTORE_API_KEY_P8" "$APPSTORE_API_KEY_ID" "$APPSTORE_ISSUER_ID")
-          elif test "${{ matrix.platform }}" = win; then
-            values=("$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME" "$AZURE_TRUSTED_SIGNING_ENDPOINT" "$AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME" "$AZURE_TRUSTED_SIGNING_ACCOUNT_NAME" "$AZURE_CLIENT_ID" "$AZURE_TENANT_ID" "$AZURE_CLIENT_SECRET")
-          else
-            values=()
-          fi
+          values=("$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME" "$AZURE_TRUSTED_SIGNING_ENDPOINT" "$AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME" "$AZURE_TRUSTED_SIGNING_ACCOUNT_NAME" "$AZURE_CLIENT_ID" "$AZURE_TENANT_ID" "$AZURE_CLIENT_SECRET")
           present=0
           for value in "${values[@]}"; do test -n "$value" && present=$((present + 1)); done
-          if test "${{ matrix.platform }}" = mac && (( present != ${#values[@]} )); then
-            printf 'Stable macOS releases require complete signing and notarization credentials.\n' >&2
-            exit 1
-          fi
-          if test "${{ matrix.platform }}" != mac && (( present != 0 && present != ${#values[@]} )); then
+          if (( present != 0 && present != ${#values[@]} )); then
             printf 'Signing credentials must be either complete or absent.\n' >&2
             exit 1
           fi
+          signed=false
           if (( present > 0 )); then signed=true; fi
           printf 'SIGNED=%s\n' "$signed" >> "$GITHUB_ENV"
 
@@ -182,13 +186,27 @@ jobs:
           printf '%s' "$APPSTORE_API_KEY_P8" > "$RUNNER_TEMP/notarytool-api-key.p8"
           chmod 600 "$RUNNER_TEMP/notarytool-api-key.p8"
 
-      - name: Build desktop artifact
+      - name: Build signed macOS artifact
+        if: matrix.platform == 'mac'
         shell: bash
         env:
           APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
           APPLE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
           CSC_NAME: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          vp run dist:desktop:artifact \
+            --platform mac \
+            --target dmg \
+            --arch arm64 \
+            --build-version "$RELEASE_VERSION" \
+            --signed \
+            --verbose
+
+      - name: Build Windows artifact
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
           AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
           AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
@@ -197,9 +215,14 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
-          args=(--platform "${{ matrix.platform }}" --target "${{ matrix.target }}" --arch "${{ matrix.arch }}" --build-version "$RELEASE_VERSION" --verbose)
+          args=(--platform win --target nsis --arch x64 --build-version "$RELEASE_VERSION" --verbose)
           if test "$SIGNED" = true; then args+=(--signed); fi
           vp run dist:desktop:artifact "${args[@]}"
+
+      - name: Build Linux artifact
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 --build-version "$RELEASE_VERSION" --verbose
 
       - name: Notarize and verify macOS DMG
         if: matrix.platform == 'mac'
