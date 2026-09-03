@@ -26,6 +26,7 @@ import {
 } from "./lib/brand-assets.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
+  CLI_LAZY_RUNTIME_PACKAGES,
   findInlinedExternalPackages,
   selectCliPackagedRuntimeDependencies,
 } from "./lib/cli-external-packages.ts";
@@ -1409,6 +1410,40 @@ const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSel
         ),
       ),
     );
+
+    for (const packageName of CLI_LAZY_RUNTIME_PACKAGES) {
+      yield* runCommand(
+        ChildProcess.make(
+          process.execPath,
+          [
+            "--no-global-search-paths",
+            "--input-type=module",
+            "--eval",
+            "await import(process.argv[1])",
+            packageName,
+          ],
+          {
+            cwd: probeApp,
+            stdout: "pipe",
+            stderr: "pipe",
+            env: { ...process.env, NODE_PATH: "" },
+          },
+        ),
+        {
+          label: `server sidecar lazy dependency check (${packageName})`,
+          verbose: input.verbose,
+        },
+      ).pipe(
+        Effect.catchTag("BuildCommandFailedError", (error) =>
+          Effect.fail(
+            new BundleNotSelfContainedError({
+              exitCode: error.exitCode,
+              output: `${error.stderrTail ?? ""}${error.stdoutTail ?? ""}`.trim(),
+            }),
+          ),
+        ),
+      );
+    }
   },
 );
 

@@ -7,10 +7,30 @@ import {
   createBotTurnSubmissionQueue,
   findLatestBotThreadTarget,
   findLatestGroupThreadTarget,
+  findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
 } from "./botThreadRuntime.logic";
 
 describe("bot thread runtime", () => {
+  it("finds each secure MCP authorization once and rejects unsafe URLs", () => {
+    const activities = [
+      {
+        id: "unsafe",
+        kind: "mcp.oauth.authorization-required",
+        payload: { authorizationUrl: "http://example.com" },
+      },
+      {
+        id: "oauth",
+        kind: "mcp.oauth.authorization-required",
+        payload: { authorizationUrl: "https://hoplite.example/authorize" },
+      },
+    ];
+    expect(findUnhandledMcpAuthorization(activities, new Set())).toEqual({
+      activityId: "oauth",
+      url: "https://hoplite.example/authorize",
+    });
+    expect(findUnhandledMcpAuthorization(activities, new Set(["oauth"]))).toBeNull();
+  });
   it("queues rapid submissions without waiting for the active reply", async () => {
     const queue = createBotTurnSubmissionQueue();
     const order: string[] = [];

@@ -150,7 +150,11 @@ jobs:
           fi
           present=0
           for value in "${values[@]}"; do test -n "$value" && present=$((present + 1)); done
-          if (( present != 0 && present != ${#values[@]} )); then
+          if test "${{ matrix.platform }}" = mac && (( present != ${#values[@]} )); then
+            printf 'Stable macOS releases require complete signing and notarization credentials.\n' >&2
+            exit 1
+          fi
+          if test "${{ matrix.platform }}" != mac && (( present != 0 && present != ${#values[@]} )); then
             printf 'Signing credentials must be either complete or absent.\n' >&2
             exit 1
           fi
@@ -158,14 +162,14 @@ jobs:
           printf 'SIGNED=%s\n' "$signed" >> "$GITHUB_ENV"
 
       - name: Import macOS signing certificate
-        if: matrix.platform == 'mac' && env.SIGNED == 'true'
+        if: matrix.platform == 'mac'
         uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
       - name: Configure macOS notarization
-        if: matrix.platform == 'mac' && env.SIGNED == 'true'
+        if: matrix.platform == 'mac'
         shell: bash
         env:
           MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -198,7 +202,7 @@ jobs:
           vp run dist:desktop:artifact "${args[@]}"
 
       - name: Notarize and verify macOS DMG
-        if: matrix.platform == 'mac' && env.SIGNED == 'true'
+        if: matrix.platform == 'mac'
         shell: bash
         env:
           APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
@@ -219,25 +223,6 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "${apps[0]}"
           xcrun stapler validate "${apps[0]}"
           spctl --assess --type execute --verbose=2 "${apps[0]}"
-
-      - name: Verify unsigned macOS app signature
-        if: matrix.platform == 'mac' && env.SIGNED != 'true'
-        shell: bash
-        run: |
-          dmg="release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
-          mount_point="$RUNNER_TEMP/akeru-unsigned-dmg"
-          mkdir -p "$mount_point"
-          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
-          trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
-          apps=("$mount_point"/*.app)
-          test "${#apps[@]}" -eq 1
-          codesign --verify --deep --strict --verbose=2 "${apps[0]}"
-          signature="$(codesign -dv --verbose=4 "${apps[0]}" 2>&1)"
-          printf '%s\n' "$signature"
-          if ! printf '%s\n' "$signature" | grep -q 'Identifier=dev.leodoes.akeru$'; then
-            printf 'Packaged app is missing the Akeru bundle identifier.\n' >&2
-            exit 1
-          fi
 
       - name: Launch macOS DMG
         if: matrix.platform == 'mac'

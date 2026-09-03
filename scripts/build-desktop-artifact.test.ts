@@ -101,6 +101,7 @@ function iconResizeSpawnerLayer(
 
 const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(function* (input: {
   readonly copyUnpackedNatives: boolean;
+  readonly includeLazyRuntimePackage?: boolean;
   readonly serverEntrySource?: string;
 }) {
   const fs = yield* FileSystem.FileSystem;
@@ -111,6 +112,7 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
   const sourceDir = path.join(tempDir, "server-source");
   const serverEntryPath = path.join(sourceDir, "apps/server/dist/bin.mjs");
   const nativePath = path.join(sourceDir, "node_modules/native/addon.node");
+  const execaManifestPath = path.join(sourceDir, "node_modules/execa/package.json");
   yield* fs.makeDirectory(path.dirname(serverEntryPath), { recursive: true });
   yield* fs.makeDirectory(path.dirname(nativePath), { recursive: true });
   yield* fs.writeFileString(
@@ -119,6 +121,17 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
       'import { readdirSync } from "node:fs";\nreaddirSync(new URL("../../../../plugins/entries/", import.meta.url));\nconsole.log("server");\n',
   );
   yield* fs.writeFileString(nativePath, "native-binary");
+  if (input.includeLazyRuntimePackage !== false) {
+    yield* fs.makeDirectory(path.dirname(execaManifestPath), { recursive: true });
+    yield* fs.writeFileString(
+      execaManifestPath,
+      '{"name":"execa","version":"9.6.1","type":"module","exports":"./index.js"}',
+    );
+    yield* fs.writeFileString(
+      path.join(sourceDir, "node_modules/execa/index.js"),
+      "export const execa = () => undefined;\n",
+    );
+  }
 
   const generatedAsarPath = path.join(tempDir, WINDOWS_SERVER_ASAR_RESOURCE);
   yield* packWindowsServerAsar({ sourceDir, asarPath: generatedAsarPath, arch: "x64" });
@@ -532,6 +545,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@ff-labs/fff-node": "0.9.4",
           "@opencode-ai/sdk": "^1.3.15",
           "@pierre/diffs": "1.3.0",
+          execa: "9.6.1",
           libsql: "0.5.29",
           "msgpackr-extract": "3.0.4",
           "node-pty": "1.1.0",
@@ -546,6 +560,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       }),
       {
         "@ff-labs/fff-node": "0.9.4",
+        execa: "9.6.1",
         libsql: "0.5.29",
         "msgpackr-extract": "3.0.4",
         "node-pty": "1.1.0",
@@ -973,6 +988,25 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
         assert.instanceOf(error, BundleNotSelfContainedError);
         assert.include(error.output, "t3code-deliberately-missing-package");
+      }),
+    ),
+  );
+
+  it.effect("rejects a sidecar that omits a lazy runtime package", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeWindowsPayloadFixture({
+          copyUnpackedNatives: true,
+          includeLazyRuntimePackage: false,
+        });
+        const error = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+        }).pipe(Effect.flip);
+
+        assert.instanceOf(error, BundleNotSelfContainedError);
+        assert.include(error.output, "Cannot find package 'execa'");
       }),
     ),
   );

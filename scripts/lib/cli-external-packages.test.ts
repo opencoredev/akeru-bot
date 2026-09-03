@@ -100,10 +100,12 @@ describe("selectCliPackagedRuntimeDependencies", () => {
     assert.deepStrictEqual(
       selectCliPackagedRuntimeDependencies({
         effect: "4.0.0",
+        execa: "9.6.1",
         libsql: "0.5.29",
         "node-pty": "1.1.0",
       }),
       {
+        execa: "9.6.1",
         libsql: "0.5.29",
         "node-pty": "1.1.0",
       },

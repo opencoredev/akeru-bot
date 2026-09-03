@@ -117,7 +117,10 @@ for (const [needle, label] of [
   ["runner: macos-15", "GitHub-hosted macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: ubuntu-24.04", "GitHub-hosted Linux runner"],
-  ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
+  [
+    "Stable macOS releases require complete signing and notarization credentials.",
+    "required macOS signing credentials",
+  ],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
   ["verify-release-assets.ts", "asset name and hash verification"],
@@ -127,6 +130,11 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
+assertOmits(
+  releaseWorkflow,
+  "Verify unsigned macOS app signature",
+  "stable unsigned macOS artifact path",
+);
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
   ["vp run release:changelog", "merged pull request changelog"],

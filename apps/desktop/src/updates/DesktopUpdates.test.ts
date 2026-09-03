@@ -31,6 +31,7 @@ interface UpdatesHarnessOptions {
   readonly setUpdateChannelError?: DesktopAppSettings.DesktopSettingsWriteError;
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
   readonly stopBackend?: Effect.Effect<void>;
+  readonly startBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
 }
 
@@ -116,7 +117,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   const stubBackendInstance: DesktopBackendPool.DesktopBackendInstance = {
     id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
     label: Effect.succeed("Windows"),
-    start: Effect.void,
+    start: options.startBackend ?? Effect.void,
     stop: () => options.stopBackend ?? Effect.void,
     currentConfig: Effect.succeed(Option.none()),
     snapshot: Effect.succeed({
@@ -538,6 +539,36 @@ describe("DesktopUpdates", () => {
 
         const result = yield* updates.install;
         assert.isTrue(result.accepted);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("restarts stopped backends when update installation fails", () => {
+    let starts = 0;
+    const harness = makeHarness({
+      startBackend: Effect.sync(() => {
+        starts += 1;
+      }),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const desktopState = yield* DesktopState.DesktopState;
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        harness.emit("update-downloaded", { version: "1.2.4" });
+        yield* flushCallbacks;
+
+        const install = yield* updates.install;
+        assert.isTrue(install.accepted);
+
+        harness.emit("error", new Error("installer failed"));
+        yield* flushCallbacks;
+
+        assert.equal(starts, 1);
+        assert.isFalse(yield* Ref.get(desktopState.quitting));
+        const state = yield* updates.getState;
+        assert.equal(state.errorContext, "install");
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
