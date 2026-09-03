@@ -205,6 +205,33 @@ function MessageAttachmentImage(props: {
   );
 }
 
+function MessageAttachmentFile(props: {
+  readonly environmentId: EnvironmentId;
+  readonly attachmentId: string;
+  readonly name: string;
+}) {
+  const uri = useAssetUrl(props.environmentId, {
+    _tag: "attachment",
+    attachmentId: props.attachmentId,
+  });
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${props.name}`}
+      className="flex-row items-center gap-2 rounded-[14px] bg-black/5 px-3 py-3 dark:bg-white/10"
+      disabled={uri === null}
+      onPress={() => {
+        if (uri) void tryOpenExternalUrl(uri, "file-preview");
+      }}
+    >
+      <SymbolView name="doc.text" size={20} tintColor="gray" />
+      <Text className="min-w-0 flex-1" numberOfLines={1}>
+        {props.name}
+      </Text>
+    </Pressable>
+  );
+}
+
 function ThreadMarkdownImageView(props: {
   readonly uri: string | null;
   readonly sourceKey: string;
@@ -1102,7 +1129,14 @@ function renderFeedEntry(
               />
             ) : null}
             {attachments.map((attachment) => {
-              return (
+              return attachment.type === "file" ? (
+                <MessageAttachmentFile
+                  key={attachment.id}
+                  environmentId={props.environmentId}
+                  attachmentId={attachment.id}
+                  name={attachment.name}
+                />
+              ) : (
                 <MessageAttachmentImage
                   key={attachment.id}
                   environmentId={props.environmentId}
@@ -1165,7 +1199,14 @@ function renderFeedEntry(
           )
         ) : null}
         {attachments.map((attachment) => {
-          return (
+          return attachment.type === "file" ? (
+            <MessageAttachmentFile
+              key={attachment.id}
+              environmentId={props.environmentId}
+              attachmentId={attachment.id}
+              name={attachment.name}
+            />
+          ) : (
             <MessageAttachmentImage
               key={attachment.id}
               environmentId={props.environmentId}

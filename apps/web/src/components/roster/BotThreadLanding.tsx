@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
+  type BotEngine,
   type ChannelMessageOrigin,
   type EnvironmentId,
   type MessageId,
@@ -12,7 +13,10 @@ import { useEffect, useMemo, useState } from "react";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
-import { resolveAppModelSelectionState } from "../../modelSelection";
+import {
+  getCustomModelOptionsByInstance,
+  resolveAppModelSelectionState,
+} from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -23,6 +27,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
+import { threadEnvironment } from "../../state/threads";
 import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -51,6 +56,13 @@ import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import {
+  buildReplyPrompt,
+  MessageControls,
+  type MessageReactionOption,
+  type MessageReplyTarget,
+  selectedReactionForBot,
+} from "../chat/MessageControls";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
@@ -117,9 +129,16 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const canManageChannelBindings = canManageChannels(channelSession.data);
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
+  const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
+    reportFailure: false,
+  });
   const bots = useRosterStore((state) => state.bots);
   const bot = bots.find((candidate) => candidate.id === botId);
-  const configuredEngine = bot?.engine ?? null;
+  const [pendingEngine, setPendingEngine] = useState<BotEngine | null>(null);
+  const [modelUpdatePending, setModelUpdatePending] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
+  const configuredEngine = pendingEngine ?? bot?.engine ?? null;
   const instanceEntries = useMemo(
     () =>
       sortProviderInstanceEntries(
@@ -142,7 +161,17 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       }),
     [configuredEngine, defaultSelection, instanceEntries, providers, settings],
   );
-  const runtime = useBotThreadRuntime(botId, stickyEngine);
+  const activeEntry = useMemo(
+    () => instanceEntries.find((entry) => entry.instanceId === stickyEngine?.instanceId) ?? null,
+    [instanceEntries, stickyEngine?.instanceId],
+  );
+  const activeModel = stickyEngine?.model ?? null;
+  const modelOptionsByInstance = useMemo(
+    () => getCustomModelOptionsByInstance(settings, providers),
+    [providers, settings],
+  );
+  const effectiveModelSelection = stickyEngine;
+  const runtime = useBotThreadRuntime(botId, effectiveModelSelection);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
@@ -154,6 +183,20 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
+
+  useEffect(() => {
+    setReplyTarget(null);
+  }, [botId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
+
+  useEffect(() => {
+    if (
+      pendingEngine &&
+      bot?.engine?.provider === pendingEngine.provider &&
+      bot.engine.model === pendingEngine.model
+    ) {
+      setPendingEngine(null);
+    }
+  }, [bot?.engine, pendingEngine]);
 
   useEffect(() => {
     if (!bot || bot.archivedAt !== null) {
@@ -178,6 +221,39 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
         (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
       ) ?? [])
     : [];
+  const reactionBotId = BotId.make(bot.id);
+  const updateReaction = async (
+    messageId: MessageId,
+    current: MessageReactionOption | null,
+    next: MessageReactionOption | null,
+  ) => {
+    const threadRef = runtime.linkedThreadRef;
+    if (!threadRef) return;
+    const dispatch = (emoji: MessageReactionOption, present: boolean) =>
+      setMessageReaction({
+        environmentId: threadRef.environmentId,
+        input: {
+          threadId: threadRef.threadId,
+          messageId,
+          botId: reactionBotId,
+          emoji,
+          present,
+        },
+      });
+    if (current && current !== next) {
+      const removed = await dispatch(current, false);
+      if (removed._tag === "Failure") {
+        toastManager.add({ type: "error", title: "Could not update reaction" });
+        return;
+      }
+    }
+    if (next) {
+      const added = await dispatch(next, true);
+      if (added._tag === "Failure") {
+        toastManager.add({ type: "error", title: "Could not update reaction" });
+      }
+    }
+  };
 
   return (
     <SidebarInset
@@ -210,7 +286,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 message.role === "assistant" ? (
                   <div
                     key={message.id}
-                    className="flex items-start gap-3"
+                    className="group/message flex items-start gap-3"
                     data-testid="bot-provider-message"
                   >
                     <BotAvatarView
@@ -229,6 +305,29 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                        <MessageControls
+                          copyText={message.text || "Attachment"}
+                          selectedReaction={selectedReactionForBot(
+                            message.reactions,
+                            reactionBotId,
+                          )}
+                          onReply={() =>
+                            setReplyTarget({
+                              messageId: message.id,
+                              label: bot.name,
+                              text: message.text || "Attachment",
+                            })
+                          }
+                          onReactionChange={(next) =>
+                            void updateReaction(
+                              message.id,
+                              selectedReactionForBot(message.reactions, reactionBotId),
+                              next,
+                            )
+                          }
+                        />
+                      </div>
                       {canManageChannelBindings && environmentId && runtime.linkedThreadRef
                         ? (() => {
                             const origin = channelOriginForAssistantMessage(messages, messageIndex);
@@ -250,7 +349,41 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     </div>
                   </div>
                 ) : (
-                  <div key={message.id} className="flex justify-end" data-testid="bot-user-message">
+                  <div
+                    key={message.id}
+                    className="group/message flex items-end justify-end gap-1"
+                    data-testid="bot-user-message"
+                  >
+                    <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <MessageControls
+                        align="end"
+                        copyText={
+                          message.text ||
+                          message.attachments?.map((attachment) => attachment.name).join(", ") ||
+                          "Attachment"
+                        }
+                        selectedReaction={selectedReactionForBot(message.reactions, reactionBotId)}
+                        onReply={() =>
+                          setReplyTarget({
+                            messageId: message.id,
+                            label: "you",
+                            text:
+                              message.text ||
+                              message.attachments
+                                ?.map((attachment) => attachment.name)
+                                .join(", ") ||
+                              "Attachment",
+                          })
+                        }
+                        onReactionChange={(next) =>
+                          void updateReaction(
+                            message.id,
+                            selectedReactionForBot(message.reactions, reactionBotId),
+                            next,
+                          )
+                        }
+                      />
+                    </div>
                     <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
                       {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
                       {message.attachments?.length ? (
@@ -321,17 +454,54 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               runtime.respondingRequestIds.length > 0 ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||
-              stickyEngine === null ||
+              modelUpdatePending ||
+              effectiveModelSelection === null ||
               !runtime.botReady ||
               !runtime.bootstrapped ||
               runtime.defaultProject === null
             }
-            onSubmit={runtime.send}
+            modelPicker={
+              environmentId && activeEntry && activeModel
+                ? {
+                    activeInstanceId: activeEntry.instanceId,
+                    model: activeModel,
+                    instanceEntries,
+                    modelOptionsByInstance,
+                    onChange: (instanceId, model) => {
+                      const nextEngine = { provider: instanceId, model };
+                      setPendingEngine(nextEngine);
+                      setModelUpdatePending(true);
+                      void updateBot({
+                        environmentId,
+                        input: {
+                          botId: BotId.make(bot.id),
+                          engine: nextEngine,
+                        },
+                      }).then((result) => {
+                        setModelUpdatePending(false);
+                        if (result._tag === "Failure") {
+                          setPendingEngine(null);
+                          toastManager.add({ type: "error", title: "Could not change model" });
+                        }
+                      });
+                    },
+                  }
+                : null
+            }
+            replyPreview={replyTarget}
+            onCancelReply={() => setReplyTarget(null)}
+            onSubmit={async (prompt, files) => {
+              const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
+              if (sent) setReplyTarget(null);
+              return sent;
+            }}
           />
-          {stickyEngine === null ? (
+          {effectiveModelSelection === null ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
               Enable a provider before you message this bot.
             </p>
+          ) : modelUpdatePending ? (
+            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">Changing model…</p>
           ) : !runtime.botReady ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">Connecting bot…</p>
           ) : runtime.bootstrapped && runtime.defaultProject === null ? (

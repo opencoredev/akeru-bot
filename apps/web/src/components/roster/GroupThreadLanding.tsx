@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { BotId, type EnvironmentId, type MessageId } from "@t3tools/contracts";
+import { useEffect, useMemo, useState } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
@@ -11,9 +10,19 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useThreadActivities } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
+import { threadEnvironment } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { SidebarInset } from "../ui/sidebar";
+import { toastManager } from "../ui/toast";
 import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import {
+  buildReplyPrompt,
+  MessageControls,
+  type MessageReactionOption,
+  type MessageReplyTarget,
+  selectedReactionForBot,
+} from "../chat/MessageControls";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
@@ -53,6 +62,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
+    reportFailure: false,
+  });
+  const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
@@ -63,6 +76,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
+
+  useEffect(() => {
+    setReplyTarget(null);
+  }, [groupId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
   if (!group) return null;
   const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
@@ -82,6 +99,39 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
       ) ?? [])
     : [];
+  const updateReaction = async (
+    messageId: MessageId,
+    reactionBotId: BotId,
+    current: MessageReactionOption | null,
+    next: MessageReactionOption | null,
+  ) => {
+    const threadRef = runtime.linkedThreadRef;
+    if (!threadRef) return;
+    const dispatch = (emoji: MessageReactionOption, present: boolean) =>
+      setMessageReaction({
+        environmentId: threadRef.environmentId,
+        input: {
+          threadId: threadRef.threadId,
+          messageId,
+          botId: reactionBotId,
+          emoji,
+          present,
+        },
+      });
+    if (current && current !== next) {
+      const removed = await dispatch(current, false);
+      if (removed._tag === "Failure") {
+        toastManager.add({ type: "error", title: "Could not update reaction" });
+        return;
+      }
+    }
+    if (next) {
+      const added = await dispatch(next, true);
+      if (added._tag === "Failure") {
+        toastManager.add({ type: "error", title: "Could not update reaction" });
+      }
+    }
+  };
 
   return (
     <SidebarInset
@@ -116,8 +166,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           ) : (
             messages.map((message) => {
               if (message.role === "assistant") {
-                const respondingBot =
-                  members.find((bot) => bot.id === message.respondingBotId) ?? boss;
+                const respondingBot = message.respondingBotId
+                  ? members.find((bot) => bot.id === message.respondingBotId)
+                  : boss;
                 if (!respondingBot) {
                   return (
                     <div
@@ -132,13 +183,26 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      <div className="mt-1">
+                        <MessageControls
+                          copyText={message.text || "Attachment"}
+                          onReply={() =>
+                            setReplyTarget({
+                              messageId: message.id,
+                              label: "Unavailable bot",
+                              text: message.text || "Attachment",
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   );
                 }
+                const reactionBotId = BotId.make(respondingBot.id);
                 return (
                   <div
                     key={message.id}
-                    className="flex items-start gap-3"
+                    className="group/message flex items-start gap-3"
                     data-testid="group-provider-message"
                   >
                     <BotAvatarView
@@ -157,6 +221,30 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                        <MessageControls
+                          copyText={message.text || "Attachment"}
+                          selectedReaction={selectedReactionForBot(
+                            message.reactions,
+                            reactionBotId,
+                          )}
+                          onReply={() =>
+                            setReplyTarget({
+                              messageId: message.id,
+                              label: respondingBot.name,
+                              text: message.text || "Attachment",
+                            })
+                          }
+                          onReactionChange={(next) =>
+                            void updateReaction(
+                              message.id,
+                              reactionBotId,
+                              selectedReactionForBot(message.reactions, reactionBotId),
+                              next,
+                            )
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 );
@@ -166,8 +254,49 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 peopleIdentity.current?.id,
                 peopleIdentity.host?.id,
               );
+              const reactionBotId = activeBot ?? boss;
               return (
-                <div key={message.id} className="flex justify-end" data-testid="group-user-message">
+                <div
+                  key={message.id}
+                  className="group/message flex items-end justify-end gap-1"
+                  data-testid="group-user-message"
+                >
+                  <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                    <MessageControls
+                      align="end"
+                      copyText={
+                        message.text ||
+                        message.attachments?.map((attachment) => attachment.name).join(", ") ||
+                        "Attachment"
+                      }
+                      selectedReaction={
+                        reactionBotId
+                          ? selectedReactionForBot(message.reactions, reactionBotId.id)
+                          : null
+                      }
+                      onReply={() =>
+                        setReplyTarget({
+                          messageId: message.id,
+                          label: current ? "you" : "participant",
+                          text:
+                            message.text ||
+                            message.attachments?.map((attachment) => attachment.name).join(", ") ||
+                            "Attachment",
+                        })
+                      }
+                      {...(reactionBotId
+                        ? {
+                            onReactionChange: (next: MessageReactionOption | null) =>
+                              void updateReaction(
+                                message.id,
+                                BotId.make(reactionBotId.id),
+                                selectedReactionForBot(message.reactions, reactionBotId.id),
+                                next,
+                              ),
+                          }
+                        : {})}
+                    />
+                  </div>
                   <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
                     {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
                     {message.attachments?.length ? (
@@ -248,7 +377,18 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             boss === null
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
-          onSubmit={runtime.send}
+          modelPicker={null}
+          replyPreview={replyTarget}
+          onCancelReply={() => setReplyTarget(null)}
+          onSubmit={async (prompt, files, respondingBotId) => {
+            const sent = await runtime.send(
+              buildReplyPrompt(replyTarget, prompt),
+              files,
+              respondingBotId,
+            );
+            if (sent) setReplyTarget(null);
+            return sent;
+          }}
         />
       </div>
     </SidebarInset>

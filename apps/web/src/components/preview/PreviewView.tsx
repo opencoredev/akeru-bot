@@ -705,6 +705,7 @@ export function PreviewView({
             key={runtimeTabId}
             tabId={runtimeTabId}
             visible={visible && !isUnreachable}
+            interactive={visible && !isUnreachable}
             className="absolute inset-0 h-full w-full"
           />
         ) : null}

@@ -150,6 +150,19 @@ describe("provider access capabilities", () => {
     );
   });
 
+  it("lets a recovered real request override a stale provider scan error", () => {
+    const provider = {
+      ...providerFixture("custom-openai", "codex", "apiKey"),
+      status: "error" as const,
+    };
+
+    const capabilities = buildProviderAccessCapabilities([], [provider], () => "recovered");
+
+    expect(capabilities.find((item) => item.id === "api-key-custom-openai")?.health).toBe(
+      "recovered",
+    );
+  });
+
   it("labels unsupported browser gaps as temporary and gives a repair action", () => {
     const capabilities = buildProviderAccessCapabilities([], []);
 

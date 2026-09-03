@@ -70,7 +70,7 @@ import { ProposedPlanCard } from "./ProposedPlanCard";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
 import { keepTimelineEndVisibleAfterOverlayGrowth } from "./timelineScrollAnchoring";
-import { MessageCopyButton } from "./MessageCopyButton";
+import { MessageControls } from "./MessageControls";
 import { MessageImageAttachments } from "./MessageImageAttachments";
 import {
   computeStableMessagesTimelineRows,
@@ -1084,9 +1084,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </Tooltip>
           <div className="flex items-center gap-0.5">
             {canRevertAgentWork && <RevertUserMessageButton messageId={row.message.id} />}
-            {displayedUserMessage.copyText && (
-              <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
-            )}
+            {displayedUserMessage.copyText ? (
+              <MessageControls align="end" copyText={displayedUserMessage.copyText} />
+            ) : null}
           </div>
         </div>
       </div>
@@ -1177,7 +1177,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           />
           {row.showAssistantMeta ? (
             <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
-              <AssistantCopyButton row={row} />
+              <AssistantMessageControls row={row} />
               {!row.message.streaming && (
                 <Tooltip>
                   <TooltipTrigger
@@ -1198,7 +1198,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   );
 }
 
-function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+function AssistantMessageControls({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const assistantCopyState = resolveAssistantMessageCopyState({
     text: row.message.text ?? null,
     showCopyButton: row.showAssistantCopyButton,
@@ -1209,7 +1209,7 @@ function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "messa
     return null;
   }
 
-  return <MessageCopyButton text={assistantCopyState.text ?? ""} variant="ghost" />;
+  return <MessageControls copyText={assistantCopyState.text ?? ""} />;
 }
 
 function ProposedPlanTimelineRow({

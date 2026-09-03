@@ -48,6 +48,24 @@ import { ThemeWireframe } from "./ThemeWireframe";
 
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = BUILT_IN_THEMES;
 
+export function resolveSelectedThemeCardId(input: {
+  readonly appearanceMode: ThemeMode;
+  readonly initialAppearance: ThemeAppearance;
+  readonly lightOwner: string | null;
+  readonly darkOwner: string | null;
+}): string | null {
+  if (input.appearanceMode === "dark") return input.darkOwner;
+  if (input.appearanceMode === "light") return input.lightOwner;
+  return input.initialAppearance === "dark" ? input.darkOwner : input.lightOwner;
+}
+
+export function standardThemePreference(
+  appearanceMode: ThemeMode,
+  initialAppearance: ThemeAppearance,
+): ThemeMode {
+  return appearanceMode === "system" ? initialAppearance : appearanceMode;
+}
+
 function collectionVariantLabels(themes: ReadonlyArray<ThemeDefinition>): ReadonlyArray<string> {
   if (themes.length === 0) return [];
   const words = themes.map((theme) => theme.label.trim().split(/\s+/));
@@ -681,6 +699,13 @@ export function ThemeLibrary({
     return rings;
   };
 
+  const selectedCardId = resolveSelectedThemeCardId({
+    appearanceMode,
+    initialAppearance,
+    lightOwner,
+    darkOwner,
+  });
+
   const wireframeColors = (appearance: ThemeAppearance) =>
     pickColors(appearance === "light" ? lightOwner : darkOwner, appearance);
 
@@ -763,7 +788,7 @@ export function ThemeLibrary({
         {STANDARD_THEME_CARDS.map((standardTheme) => (
           <ThemeLibraryCard
             activeModes={pickedModesFor(null)}
-            isActive={false}
+            isActive={selectedCardId === null}
             key={standardTheme.id}
             onDuplicate={() =>
               openThemeEditor({
@@ -773,7 +798,7 @@ export function ThemeLibrary({
                 initialAppearance,
               })
             }
-            onUse={() => persistTheme(appearanceMode === "system" ? "system" : appearanceMode)}
+            onUse={() => persistTheme(standardThemePreference(appearanceMode, initialAppearance))}
             onUseMode={handlePairPick(null)}
             theme={standardTheme}
           />
@@ -783,7 +808,7 @@ export function ThemeLibrary({
           return (
             <ThemeLibraryCard
               activeModes={pickedModesFor(maintainerTheme.id)}
-              isActive={false}
+              isActive={selectedCardId === maintainerTheme.id}
               key={maintainerTheme.id}
               onDuplicate={() =>
                 openThemeEditor({

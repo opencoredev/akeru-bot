@@ -1,8 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
-import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon } from "lucide-react";
+import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   hydrateImagesFromPersisted,
@@ -26,6 +33,7 @@ import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
+import { BotModelPicker } from "./BotModelPicker";
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -33,6 +41,11 @@ import {
   releaseBotPromptAttachments,
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
+
+type BotModelPickerProps = Pick<
+  ComponentProps<typeof BotModelPicker>,
+  "activeInstanceId" | "model" | "instanceEntries" | "modelOptionsByInstance" | "onChange"
+>;
 
 export function isBotPromptExpanded(prompt: string): boolean {
   return prompt.includes("\n") || prompt.length > 80;
@@ -112,6 +125,9 @@ export function BotPromptComposer({
   mentionBots = EMPTY_MENTION_BOTS,
   pendingActionSlot = null,
   placeholder,
+  modelPicker = null,
+  replyPreview,
+  onCancelReply,
   onSubmit,
 }: {
   botName: string;
@@ -122,6 +138,9 @@ export function BotPromptComposer({
   /** Rendered above the prompt box so a pending decision reads as part of the composer. */
   pendingActionSlot?: ReactNode;
   placeholder?: string;
+  modelPicker?: BotModelPickerProps | null;
+  replyPreview?: { readonly label: string; readonly text: string } | null;
+  onCancelReply?: () => void;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
   const prefersReducedMotion = useReducedMotion();
@@ -185,7 +204,11 @@ export function BotPromptComposer({
     [releaseAttachments],
   );
 
-  const expanded = attachments.length > 0 || isBotPromptExpanded(draft);
+  const expanded =
+    modelPicker !== null ||
+    attachments.length > 0 ||
+    replyPreview != null ||
+    isBotPromptExpanded(draft);
   const addFiles = (next: FileList | readonly File[]) => {
     revisionRef.current += 1;
     const added = createBotPromptAttachments(Array.from(next));
@@ -545,6 +568,22 @@ export function BotPromptComposer({
           pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
         )}
       >
+        {replyPreview ? (
+          <div className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-foreground/8 px-3 py-2 text-xs">
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">Replying to {replyPreview.label}</div>
+              <div className="truncate text-muted-foreground">{replyPreview.text}</div>
+            </div>
+            <button
+              type="button"
+              aria-label="Cancel reply"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground"
+              onClick={onCancelReply}
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </div>
+        ) : null}
         <BotPromptAttachments
           attachments={attachments}
           className="px-3 pt-3"
@@ -605,7 +644,7 @@ export function BotPromptComposer({
               <MenuPopup align="start" side="top" sideOffset={8}>
                 <MenuItem onClick={() => fileInputRef.current?.click()}>
                   <PaperclipIcon />
-                  Attach image
+                  Attach file
                 </MenuItem>
                 {mentionBots.map((bot) => (
                   <MenuItem
@@ -632,7 +671,7 @@ export function BotPromptComposer({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.txt,.md,.markdown,.csv,.json,.yaml,.yml,.toml,.xml,.pdf"
         multiple
         disabled={readOnly}
         className="sr-only"

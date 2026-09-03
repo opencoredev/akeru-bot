@@ -960,7 +960,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
 
               const text = input.input?.trim();
               const imagePromptParts = yield* Effect.forEach(
-                input.attachments ?? [],
+                (input.attachments ?? []).filter((attachment) => attachment.type === "image"),
                 (attachment) =>
                   Effect.gen(function* () {
                     const attachmentPath = resolveAttachmentPath({

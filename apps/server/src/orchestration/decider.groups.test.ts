@@ -573,6 +573,16 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           threadId: ThreadId.make("thread-group"),
           createdAt: NOW,
         },
+        {
+          type: "thread.message.reaction.set",
+          commandId: CommandId.make("cmd-outsider-thread-reaction"),
+          threadId: ThreadId.make("thread-group"),
+          messageId: MessageId.make("message-1"),
+          botId: BOSS_ID,
+          emoji: "👍",
+          present: true,
+          updatedAt: NOW,
+        },
       ] satisfies ReadonlyArray<OrchestrationCommand>;
       const errors = yield* Effect.all(
         commands.map((command) =>

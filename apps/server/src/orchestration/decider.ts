@@ -397,6 +397,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
     case "thread.voice-transcript.append":
+    case "thread.message.reaction.set":
     case "thread.turn.interrupt":
     case "thread.approval.respond":
     case "thread.user-input.respond":
@@ -852,7 +853,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "group.rename": {
-      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+      yield* requireGroup({ readModel, command, groupId: command.groupId });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({

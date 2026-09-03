@@ -10,6 +10,7 @@ describe("resolveHostedBrowserWebviewWrapperStyle", () => {
     expect(
       resolveHostedBrowserWebviewWrapperStyle({
         active: true,
+        interactive: true,
         renderingActive: true,
         rect: { x: 12, y: 34, width: 800, height: 600 },
         hiddenSize: { width: 1280, height: 800 },
@@ -28,6 +29,7 @@ describe("resolveHostedBrowserWebviewWrapperStyle", () => {
     expect(
       resolveHostedBrowserWebviewWrapperStyle({
         active: true,
+        interactive: true,
         renderingActive: true,
         cornerRadius: 12,
         rect: { x: 12, y: 34, width: 360, height: 203 },
@@ -45,6 +47,7 @@ describe("resolveHostedBrowserWebviewWrapperStyle", () => {
   it("suspends painting for an inactive webview", () => {
     const style = resolveHostedBrowserWebviewWrapperStyle({
       active: false,
+      interactive: false,
       renderingActive: false,
       rect: { x: 12, y: 34, width: 800, height: 600 },
       hiddenSize: { width: 393, height: 852 },
@@ -64,6 +67,7 @@ describe("resolveHostedBrowserWebviewWrapperStyle", () => {
   it("keeps an active background task paintable offscreen", () => {
     const style = resolveHostedBrowserWebviewWrapperStyle({
       active: false,
+      interactive: false,
       renderingActive: true,
       rect: null,
       hiddenSize: { width: 1280, height: 800 },
@@ -78,5 +82,17 @@ describe("resolveHostedBrowserWebviewWrapperStyle", () => {
       pointerEvents: "none",
       visibility: "visible",
     });
+  });
+
+  it("keeps a visible docked preview inert", () => {
+    expect(
+      resolveHostedBrowserWebviewWrapperStyle({
+        active: true,
+        interactive: false,
+        renderingActive: true,
+        rect: { x: 12, y: 34, width: 360, height: 203 },
+        hiddenSize: { width: 1280, height: 800 },
+      }),
+    ).toMatchObject({ pointerEvents: "none" });
   });
 });
