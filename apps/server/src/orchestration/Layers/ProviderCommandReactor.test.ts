@@ -2677,6 +2677,82 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
+  it("stops a full-access session when a restrictive runtime mode update fails", async () => {
+    let failComposioPreparation = false;
+    const harness = await createHarness({
+      composioResolveRuntimeMcpServer: () =>
+        failComposioPreparation
+          ? Effect.fail(
+              new ComposioOperationError({
+                operation: "prepare connected tools",
+                message: "Composio could not prepare connected tools.",
+              }),
+            )
+          : Effect.succeed<McpServer | undefined>(undefined),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-set-full-access-before-composio-failure"),
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-before-composio-mode-failure"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-before-composio-mode-failure"),
+          role: "user",
+          text: "start with full access",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    failComposioPreparation = true;
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-set-restricted-after-composio-failure"),
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.interruptTurn).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
+    expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
+    expect(harness.runtimeSessions).toHaveLength(0);
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(thread?.runtimeMode).toBe("approval-required");
+    expect(thread?.session).toMatchObject({
+      status: "error",
+      activeTurnId: null,
+      lastError: "Composio could not prepare connected tools.",
+    });
+    expect(thread?.activities).toContainEqual(
+      expect.objectContaining({
+        kind: "provider.session.update.failed",
+        payload: {
+          detail: "Composio could not prepare connected tools.",
+        },
+      }),
+    );
+  });
+
   it("does not inject derived model options when restarting claude on runtime mode changes", async () => {
     const harness = await createHarness({
       threadModelSelection: {
@@ -2725,7 +2801,7 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
-  it("does not stop the active session when restart fails before rebind", async () => {
+  it("stops the active session when a restrictive restart fails before rebind", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
@@ -2781,13 +2857,18 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.startSession.mock.calls.length === 2);
     await harness.drain();
 
-    expect(harness.stopSession.mock.calls.length).toBe(0);
+    expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
     expect(harness.sendTurn.mock.calls.length).toBe(1);
+    expect(harness.runtimeSessions).toHaveLength(0);
 
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.runtimeMode).toBe("full-access");
+    expect(thread?.session?.status).toBe("error");
+    expect(thread?.activities).toContainEqual(
+      expect.objectContaining({ kind: "provider.session.update.failed" }),
+    );
   });
 
   it("restarts the session when a turn changes provider", async () => {

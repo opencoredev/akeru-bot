@@ -415,6 +415,7 @@ const make = Effect.gen(function* () {
       | "provider.turn.interrupt.failed"
       | "provider.approval.respond.failed"
       | "provider.user-input.respond.failed"
+      | "provider.session.update.failed"
       | "provider.session.stop.failed";
     readonly summary: string;
     readonly detail: string;
@@ -1906,11 +1907,66 @@ const make = Effect.gen(function* () {
         if (!thread?.session || thread.session.status === "stopped") {
           return;
         }
+        const session = thread.session;
         const cachedModelSelection = threadModelSelections.get(event.payload.threadId);
         yield* ensureSessionForThread(
           event.payload.threadId,
           event.occurredAt,
           cachedModelSelection !== undefined ? { modelSelection: cachedModelSelection } : {},
+        ).pipe(
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterruptsOnly(cause)) {
+              return Effect.interrupt;
+            }
+            const detail = formatFailureDetail(cause);
+            const restrictsActiveSession =
+              session.runtimeMode === "full-access" && thread.runtimeMode === "approval-required";
+            const stopActiveSession = restrictsActiveSession
+              ? agentController.interruptTurn({ threadId: thread.id }).pipe(
+                  Effect.catchCause((interruptCause) =>
+                    Effect.logWarning(
+                      "provider command reactor failed to interrupt session after runtime mode update failure",
+                      {
+                        threadId: thread.id,
+                        cause: Cause.pretty(interruptCause),
+                      },
+                    ),
+                  ),
+                  Effect.andThen(
+                    agentController.stopSession({ threadId: thread.id }).pipe(
+                      Effect.catchCause((stopCause) =>
+                        Effect.logWarning(
+                          "provider command reactor failed to stop session after runtime mode update failure",
+                          {
+                            threadId: thread.id,
+                            cause: Cause.pretty(stopCause),
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : Effect.void;
+            return stopActiveSession.pipe(
+              Effect.andThen(
+                setThreadSessionErrorOnTurnStartFailure({
+                  threadId: thread.id,
+                  detail,
+                  createdAt: event.occurredAt,
+                }),
+              ),
+              Effect.andThen(
+                appendProviderFailureActivity({
+                  threadId: thread.id,
+                  kind: "provider.session.update.failed",
+                  summary: "Provider session update failed",
+                  detail,
+                  turnId: session.activeTurnId,
+                  createdAt: event.occurredAt,
+                }),
+              ),
+            );
+          }),
         );
         return;
       }
