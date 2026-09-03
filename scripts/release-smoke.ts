@@ -31,7 +31,6 @@ const ciWorkflow = read(".github/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 const serverCli = read("apps/server/scripts/cli.ts");
 for (const relativePath of [
-  ".depot/workflows/ci.yml",
   ".depot/workflows/release-smoke.yml",
   ".depot/workflows/version-packages.yml",
 ] as const) {
@@ -39,6 +38,13 @@ for (const relativePath of [
     throw new Error(`Depot still owns ${relativePath}; move it to .github/workflows.`);
   }
 }
+
+const depotBootstrapWorkflow = read(".depot/workflows/ci.yml");
+assertContains(
+  depotBootstrapWorkflow,
+  "github.head_ref == 't3code/migrate-ci-off-depot'",
+  "Depot CI is not limited to the Tenki migration pull request.",
+);
 
 assertContains(
   desktopArtifactBuilder,
