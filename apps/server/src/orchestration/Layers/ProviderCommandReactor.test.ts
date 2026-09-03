@@ -3460,8 +3460,10 @@ describe("ProviderCommandReactor", () => {
       const readModel = await harness.readModel();
       const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
       if (!thread) return false;
-      return thread.activities.some(
-        (activity) => activity.kind === "provider.approval.respond.failed",
+      return (
+        thread.activities.some(
+          (activity) => activity.kind === "provider.approval.respond.failed",
+        ) && thread.session?.status === "error"
       );
     });
 
@@ -3579,8 +3581,10 @@ describe("ProviderCommandReactor", () => {
       const readModel = await harness.readModel();
       const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
       if (!thread) return false;
-      return thread.activities.some(
-        (activity) => activity.kind === "provider.user-input.respond.failed",
+      return (
+        thread.activities.some(
+          (activity) => activity.kind === "provider.user-input.respond.failed",
+        ) && thread.session?.status === "error"
       );
     });
 
