@@ -1,0 +1,108 @@
+---
+import SearchPage from "../../components/SearchPage.astro";
+---
+
+<SearchPage
+  title="Akeru Bot vs Grok Bot | Open-source comparison"
+  description="Compare Akeru Bot with the official Grok Bot across source access, hosting, providers, clients, bot memory, tools, and computer boundaries."
+  eyebrow="Akeru Bot vs Grok Bot"
+  heading="Akeru Bot and Grok Bot compared"
+  lede="Both products use named bots that keep context and work with tools. The main difference is control. Akeru is an open-source app for environments you run, while Grok Bot uses a managed cloud computer."
+  path="/compare/akeru-vs-grok-bot"
+  kind="Article"
+  datePublished="2026-09-03"
+  dateModified="2026-09-03"
+>
+  <p class="note">
+    Reviewed September 3, 2026. Grok Bot facts link to the official documentation. Akeru Bot is not
+    affiliated with xAI or Cursor.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Area</th>
+          <th scope="col">Akeru Bot</th>
+          <th scope="col">Grok Bot</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Public source repository</td>
+          <td>Public GitHub repository under the MIT License</td>
+          <td>Not documented in the official product guide as of September 3, 2026</td>
+        </tr>
+        <tr>
+          <td>Computer</td>
+          <td>Local machine or a connected cloud sandbox</td>
+          <td>One managed cloud computer shared by all bots on the user account</td>
+        </tr>
+        <tr>
+          <td>Providers</td>
+          <td>Codex, Claude, Grok, Kimi For Coding, and OpenCode</td>
+          <td>Grok Bot product access through an eligible xAI, Cursor, or team plan</td>
+        </tr>
+        <tr>
+          <td>Desktop clients</td>
+          <td>macOS, Windows, and Linux</td>
+          <td>macOS and Windows</td>
+        </tr>
+        <tr>
+          <td>Other clients</td>
+          <td>Web and mobile clients connect to the same environment</td>
+          <td>Mobile app connects to the same managed service</td>
+        </tr>
+        <tr>
+          <td>Bot state</td>
+          <td>Separate profiles, instructions, tools, memory, and optional workspace isolation</td>
+          <td>Separate roles and memory, with files and sign-ins on one shared computer</td>
+        </tr>
+        <tr>
+          <td>Model access</td>
+          <td>Bring an existing supported provider subscription</td>
+          <td>Requires an eligible Grok Bot plan</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Choose Akeru Bot when you want control of the environment</h2>
+  <p>
+    Akeru fits users who want public source code, Linux support, several provider drivers, or an
+    environment that can stay on their own machine. It also fits teams that need separate workspace
+    identities or browser profiles for different bots.
+  </p>
+
+  <h2>Choose Grok Bot when you want a managed cloud computer</h2>
+  <p>
+    The official product runs work on a persistent cloud computer rather than the user's laptop.
+    Its desktop and mobile clients connect to that managed computer. This removes the need to keep
+    your own Akeru server online.
+  </p>
+
+  <h2>Memory and tools</h2>
+  <p>
+    Both products document persistent named bots, memory, plugins, and MCP servers. The boundary is
+    different. The official Grok Bot documentation says its bots share files, browser sessions, and
+    command-line credentials across the user's roster. Akeru can give each bot a separate workspace
+    identity and browser profile.
+  </p>
+
+  <h2>Sources</h2>
+  <ul>
+    <li><a href="https://docs.x.ai/grok-bot/overview">Official Grok Bot overview</a></li>
+    <li>
+      <a href="https://docs.x.ai/grok-bot/approvals-security-and-privacy">
+        Official Grok Bot security and shared-computer boundary
+      </a>
+    </li>
+    <li><a href="https://docs.x.ai/grok-bot/get-started">Official Grok Bot setup and plan requirements</a></li>
+    <li><a href="https://github.com/opencoredev/akeru-bot">Akeru Bot source and license</a></li>
+  </ul>
+
+  <p>
+    Start with the <a href="/open-source-grok-bot">open-source Grok Bot alternative overview</a>, or
+    follow the <a href="/guides/self-hosted-grok-bot">self-hosting guide</a> to run Akeru.
+  </p>
+</SearchPage>

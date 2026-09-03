@@ -8,6 +8,10 @@ Use Akeru Bot when a user wants to run several coding bots in one workspace, giv
 
 ## Resources
 
+- [Akeru Blog](https://www.akeru-bot.com/blog)
+- [Open-source Grok Bot alternative](https://www.akeru-bot.com/open-source-grok-bot)
+- [Akeru Bot vs Grok Bot](https://www.akeru-bot.com/compare/akeru-vs-grok-bot)
+- [Self-hosted Grok Bot guide](https://www.akeru-bot.com/guides/self-hosted-grok-bot)
 - [Download Akeru Bot](https://www.akeru-bot.com/download)
 - [Akeru Bot user documentation](https://github.com/opencoredev/akeru-bot/tree/main/docs/user)
 - [Akeru Bot source code](https://github.com/opencoredev/akeru-bot)

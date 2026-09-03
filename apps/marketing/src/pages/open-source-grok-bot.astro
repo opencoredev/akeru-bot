@@ -1,0 +1,102 @@
+---
+import SearchPage from "../components/SearchPage.astro";
+---
+
+<SearchPage
+  title="Open-source Grok Bot alternative | Akeru Bot"
+  description="Run named Grok bots with separate tools, plugins, instructions, and long-term memory. Akeru Bot is open source and runs in an environment you control."
+  eyebrow="Open-source Grok Bot"
+  heading="An open-source alternative to Grok Bot"
+  lede="Akeru Bot gives you named AI teammates without locking the app or its data inside one hosted service. Connect your Grok subscription, choose where the environment runs, and inspect the MIT-licensed source."
+  path="/open-source-grok-bot"
+  datePublished="2026-09-03"
+  dateModified="2026-09-03"
+>
+  <p class="note">
+    Akeru Bot is an independent open-source project. It is not affiliated with xAI, Cursor, or the
+    official Grok Bot product.
+  </p>
+  <p>
+    This page covers the Grok Bot open source alternative. It does not describe Grok Build, the
+    separate coding agent and terminal interface that xAI{" "}
+    <a href="https://x.ai/news/grok-build-open-source">released as open source</a>.
+  </p>
+
+  <h2>What makes Akeru an open-source Grok Bot alternative?</h2>
+  <p>
+    Akeru Bot runs named agents through a desktop, web, or mobile client. Each bot can have its own
+    instructions, enabled tools, plugins, and long-term memory. The environment server stores the
+    threads and settings, and you choose whether that server runs on your computer or in a cloud
+    sandbox that you control.
+  </p>
+
+  <div class="feature-grid">
+    <section class="feature-card">
+      <h3>Public source code</h3>
+      <p>
+        The complete Akeru Bot application is available on{" "}
+        <a href="https://github.com/opencoredev/akeru-bot">GitHub</a> under the MIT License.
+      </p>
+    </section>
+    <section class="feature-card">
+      <h3>Your Grok access</h3>
+      <p>
+        Connect a supported xAI login under Settings. Akeru does not sell model usage or bundle a
+        separate model plan.
+      </p>
+    </section>
+    <section class="feature-card">
+      <h3>Separate bot setups</h3>
+      <p>
+        Give each bot a different role and tool list. Choose separate or shared workspaces based on
+        the job.
+      </p>
+    </section>
+    <section class="feature-card">
+      <h3>Five provider drivers</h3>
+      <p>
+        Use Grok beside Codex, Claude, Kimi For Coding, and OpenCode without moving to another app.
+      </p>
+    </section>
+  </div>
+
+  <h2>A different computer boundary</h2>
+  <p>
+    The{" "}
+    <a href="https://docs.x.ai/grok-bot/approvals-security-and-privacy">
+      official Grok Bot documentation
+    </a>{" "}
+    says all bots for one user share one persistent cloud computer. Akeru environments can run
+    locally or on a server that you manage. Akeru also lets each bot use a separate workspace
+    identity and browser profile, or share them when the work needs a handoff.
+  </p>
+  <p>
+    Read the full <a href="/compare/akeru-vs-grok-bot">Akeru Bot and Grok Bot comparison</a> for the
+    differences in hosting, clients, providers, and data location.
+  </p>
+
+  <h2>Run a Grok bot on your own environment</h2>
+  <p>
+    Install the desktop app on macOS, Windows, or Linux. You can also start the server with the
+    command-line package and open the web client. Connect Grok under Settings, create a bot, then
+    choose its model, instructions, tools, and workspace.
+  </p>
+  <p>
+    Follow the <a href="/guides/self-hosted-grok-bot">self-hosted Grok Bot guide</a> for the exact
+    commands and remote-access options.
+  </p>
+
+  <h2>What open source means here</h2>
+  <p>
+    Akeru Bot makes the application source public. Grok remains a provider service, and your xAI
+    account terms still apply. Running Akeru on your machine does not turn Grok into a local model
+    and does not remove the network connection required by the provider.
+  </p>
+
+  <h2>Is Akeru Bot a Grok Bot OSS project?</h2>
+  <p>
+    Yes, if Grok Bot OSS means an open-source application for running named Grok agents. Akeru Bot
+    publishes its application source and accepts contributions on GitHub. It does not publish or
+    replace Grok model weights.
+  </p>
+</SearchPage>

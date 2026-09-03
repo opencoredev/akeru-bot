@@ -1,0 +1,94 @@
+---
+import SearchPage from "../../components/SearchPage.astro";
+---
+
+<SearchPage
+  title="Self-hosted Grok Bot alternative | Akeru Bot"
+  description="Run a self-hosted Grok Bot alternative with Akeru Bot. Install the local server, connect your Grok subscription, create a bot, and add remote access."
+  eyebrow="Self-hosted Grok Bot"
+  heading="Run a Grok bot on an environment you control"
+  lede="Akeru Bot is an open-source way to run named Grok agents from your own computer or server. The application and its state stay in your environment. Grok model requests still use your connected provider account."
+  path="/guides/self-hosted-grok-bot"
+  kind="TechArticle"
+  datePublished="2026-09-03"
+  dateModified="2026-09-03"
+>
+  <p class="note">
+    Self-hosted refers to the Akeru application, environment server, and stored state. Grok is not a
+    local model. Akeru connects to the provider through your supported xAI login.
+  </p>
+
+  <h2>1. Choose the desktop app or command-line server</h2>
+  <p>
+    The desktop app includes the Akeru server. Download it for macOS, Windows, or Linux from the{" "}
+    <a href="/download">Akeru Bot download page</a>.
+  </p>
+  <p>
+    For a browser-based or remote setup, install Node.js{" "}<code>^22.16 || ^23.11 || >=24.10</code>{" "}
+    and run:
+  </p>
+  <pre><code>npx akeru-bot@latest</code></pre>
+  <p>The command starts the environment server and opens the local web client.</p>
+
+  <h2>2. Connect your Grok subscription</h2>
+  <ol>
+    <li>Open Settings, then Providers.</li>
+    <li>Find Grok under Subscriptions.</li>
+    <li>Select Connect and complete the device-code flow.</li>
+    <li>Select Check OAuth to test the stored login.</li>
+  </ol>
+  <p>
+    The environment server stores the connection. Akeru clients receive connection status, not the
+    provider token.
+  </p>
+
+  <h2>3. Create a Grok bot</h2>
+  <p>
+    Add a bot, select the Grok provider and model, then give the bot a clear job. Set its
+    instructions, enabled tools, and workspace mode in the bot panel. Akeru stores that profile on
+    the connected environment so the same bot appears on every connected client.
+  </p>
+
+  <h2>4. Add plugins and MCP servers</h2>
+  <p>
+    Open Plugins to install a connector or add a custom MCP server. Then open the bot's Tools setting
+    and choose which tools it can use. Each bot can have a different tool list.
+  </p>
+
+  <h2>5. Keep the server available</h2>
+  <p>
+    A local desktop session stops when its computer shuts down. On macOS or Linux, run the
+    command-line server as a background service on a machine that stays online if bots must remain
+    reachable. Windows users can keep the command-line server running in a terminal.
+  </p>
+  <p>To create a one-time link for another device, run:</p>
+  <pre><code>npx akeru-bot pair</code></pre>
+  <p>
+    The other device must be able to reach the address in the pairing URL. Use a private network
+    such as Tailscale for access outside the local network. Do not expose an unencrypted HTTP server
+    to the public internet.
+  </p>
+
+  <h2>Where Akeru stores data</h2>
+  <p>
+    Threads, settings, secrets, and logs live under <code>~/.akeru</code> on the environment server.
+    Projects and provider sessions belong to that environment. Akeru does not host an account that
+    copies this state to its own service.
+  </p>
+
+  <h2>Next steps</h2>
+  <ul>
+    <li><a href="/open-source-grok-bot">Read the open-source Grok Bot overview</a></li>
+    <li><a href="/compare/akeru-vs-grok-bot">Compare Akeru Bot with Grok Bot</a></li>
+    <li>
+      <a href="https://github.com/opencoredev/akeru-bot/blob/main/docs/user/install.md">
+        Read the complete installation guide
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/opencoredev/akeru-bot/blob/main/docs/user/remote-access.md">
+        Configure remote access
+      </a>
+    </li>
+  </ul>
+</SearchPage>

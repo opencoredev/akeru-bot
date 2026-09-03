@@ -4,7 +4,11 @@ import Layout from "../layouts/Layout.astro";
 Astro.response.status = 404;
 ---
 
-<Layout title="Page not found | Akeru Bot" description="The requested Akeru Bot page does not exist.">
+<Layout
+  title="Page not found | Akeru Bot"
+  description="The requested Akeru Bot page does not exist."
+  noindex
+>
   <section class="not-found">
     <h1>Page not found</h1>
     <p>The requested page does not exist. Use the links below to continue.</p>

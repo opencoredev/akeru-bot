@@ -13,6 +13,10 @@ describe("agent readiness files", () => {
 
     expect(llms).toMatch(/^# Akeru Bot/m);
     expect(llms).toContain("## When to use Akeru Bot");
+    expect(llms).toContain("https://www.akeru-bot.com/open-source-grok-bot");
+    expect(llms).toContain("https://www.akeru-bot.com/blog");
+    expect(llms).toContain("https://www.akeru-bot.com/compare/akeru-vs-grok-bot");
+    expect(llms).toContain("https://www.akeru-bot.com/guides/self-hosted-grok-bot");
     expect(robots).toContain("User-agent: GPTBot\nAllow: /");
     expect(robots).toContain("User-agent: CCBot\nDisallow: /");
     expect(robots).toContain("https://www.akeru-bot.com/sitemap.xml");
@@ -23,6 +27,10 @@ describe("agent readiness files", () => {
 
     expect(sitemap).toContain("<loc>https://www.akeru-bot.com/about</loc>");
     expect(sitemap).toContain("<loc>https://www.akeru-bot.com/contact</loc>");
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/blog</loc>");
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/open-source-grok-bot</loc>");
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/compare/akeru-vs-grok-bot</loc>");
+    expect(sitemap).toContain("<loc>https://www.akeru-bot.com/guides/self-hosted-grok-bot</loc>");
     expect(sitemap).toContain("<loc>https://www.akeru-bot.com/privacy-policy</loc>");
     expect(sitemap).toMatch(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
   });

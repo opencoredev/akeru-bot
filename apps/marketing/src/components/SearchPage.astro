@@ -1,0 +1,446 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+interface Props {
+  readonly title: string;
+  readonly description: string;
+  readonly eyebrow: string;
+  readonly heading: string;
+  readonly lede: string;
+  readonly path: string;
+  readonly kind?: "Article" | "TechArticle";
+  readonly datePublished: string;
+  readonly dateModified?: string;
+}
+
+const {
+  title,
+  description,
+  eyebrow,
+  heading,
+  lede,
+  path,
+  kind = "Article",
+  datePublished,
+  dateModified = datePublished,
+} = Astro.props;
+const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+const canonicalUrl = new URL(path, siteOrigin).href;
+const displayDate = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+}).format(new Date(`${datePublished}T00:00:00Z`));
+const related = [
+  {
+    href: "/open-source-grok-bot",
+    title: "An open-source alternative to Grok Bot",
+    category: "Open source",
+  },
+  {
+    href: "/compare/akeru-vs-grok-bot",
+    title: "Akeru Bot and Grok Bot compared",
+    category: "Comparison",
+  },
+  {
+    href: "/guides/self-hosted-grok-bot",
+    title: "Run a Grok bot on an environment you control",
+    category: "Guide",
+  },
+].filter((article) => article.href !== path);
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Akeru Bot", item: siteOrigin.href },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Blog",
+        item: new URL("/blog", siteOrigin).href,
+      },
+      { "@type": "ListItem", position: 3, name: heading, item: canonicalUrl },
+    ],
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": kind,
+    headline: heading,
+    description,
+    datePublished,
+    dateModified,
+    mainEntityOfPage: canonicalUrl,
+    author: {
+      "@type": "Organization",
+      name: "Akeru Bot",
+      url: "https://github.com/opencoredev/akeru-bot",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Akeru Bot",
+      url: "https://github.com/opencoredev/akeru-bot",
+    },
+  },
+];
+---
+
+<Layout
+  title={title}
+  description={description}
+  socialTitle={heading}
+  socialType="article"
+  articlePublishedTime={datePublished}
+  articleModifiedTime={dateModified}
+  structuredData={structuredData}
+>
+  <article class="editorial-article">
+    <header class="article-header">
+      <a class="back-link" href="/blog" aria-label="Back to blog">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M13 8H3M7 4 3 8l4 4" fill="none" stroke="currentColor" stroke-linecap="square" />
+        </svg>
+        <span>Blog</span>
+      </a>
+      <div class="article-meta">
+        <time datetime={datePublished}>{displayDate}</time>
+        <span aria-hidden="true">&bull;</span>
+        <span>{eyebrow}</span>
+      </div>
+      <h1>{heading}</h1>
+    </header>
+
+    <div class="article-layout">
+      <div class="article-copy">
+        <p class="article-lede"><em>{lede}</em></p>
+        <slot />
+      </div>
+
+      <aside class="article-cta">
+        <p>Run named Grok agents in an environment you control.</p>
+        <div>
+          <a class="primary-action" href="/download">Download Akeru Bot</a>
+          <a
+            class="secondary-action"
+            href="https://github.com/opencoredev/akeru-bot"
+            target="_blank"
+            rel="noopener noreferrer">View the source</a
+          >
+        </div>
+      </aside>
+    </div>
+
+    <section class="related" aria-label="More articles">
+      <h2>More from the blog</h2>
+      <div class="related-grid">
+        {
+          related.map((article) => (
+            <a class="related-card" href={article.href}>
+              <p class="related-title">{article.title}</p>
+              <p class="related-meta">
+                <time datetime="2026-09-03">Sep 3, 2026</time>
+                <span aria-hidden="true">&bull;</span>
+                <span>{article.category}</span>
+              </p>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+  </article>
+
+</Layout>
+
+<style>
+  .editorial-article {
+    width: min(1152px, calc(100% - 80px));
+    margin: 0 auto;
+    padding: 40px 0 140px;
+  }
+
+  .article-header {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 96px 0 56px;
+    text-align: center;
+  }
+
+  .back-link {
+    position: absolute;
+    top: 40px;
+    left: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-dim-foreground);
+    font-size: 14px;
+    line-height: 19px;
+    transition: color 0.15s ease;
+  }
+
+  .back-link:hover,
+  .back-link:focus-visible { color: var(--color-foreground); }
+
+  .back-link:focus-visible,
+  .primary-action:focus-visible,
+  .secondary-action:focus-visible,
+  .related-card:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+  }
+
+  .article-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-dim-foreground);
+    font-size: 14px;
+    line-height: 19px;
+  }
+
+  h1 {
+    margin-top: 24px;
+    font-size: 60px;
+    font-weight: 500;
+    line-height: 66px;
+    letter-spacing: -1.5px;
+    text-wrap: balance;
+  }
+
+  .article-layout {
+    display: grid;
+    justify-content: center;
+    max-width: 640px;
+    margin: 24px auto 0;
+  }
+
+  .article-copy {
+    min-width: 0;
+    color: var(--color-muted-foreground);
+    font-size: 16px;
+    line-height: 24px;
+  }
+
+  .article-lede { margin-bottom: 16px; }
+
+  .article-copy :global(p) { margin-top: 16px; }
+  .article-copy :global(.article-lede) { margin-top: 0; }
+
+  .article-copy :global(h2) {
+    margin-top: 40px;
+    color: var(--color-foreground);
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 41px;
+    letter-spacing: -0.5px;
+    text-wrap: balance;
+  }
+
+  .article-copy :global(h2 + p) { margin-top: 16px; }
+
+  .article-copy :global(h3) {
+    margin-top: 28px;
+    color: var(--color-foreground);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 27px;
+    letter-spacing: -0.2px;
+  }
+
+  .article-copy :global(strong) {
+    color: var(--color-foreground);
+    font-weight: 600;
+  }
+
+  .article-copy :global(a) {
+    color: var(--color-foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--color-input);
+    text-underline-offset: 4px;
+  }
+
+  .article-copy :global(a:hover) { text-decoration-color: var(--color-foreground); }
+
+  .article-copy :global(a:focus-visible) {
+    border-radius: 2px;
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+  }
+
+  .article-copy :global(ul),
+  .article-copy :global(ol) {
+    display: grid;
+    gap: 4px;
+    margin-top: 16px;
+    padding-left: 20px;
+  }
+
+  .article-copy :global(.feature-grid) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 32px;
+    margin-top: 32px;
+  }
+
+  .article-copy :global(.feature-card h3) { margin-top: 0; }
+  .article-copy :global(.feature-card p) { margin-top: 8px; font-size: 14px; line-height: 19px; }
+
+  .article-copy :global(.note) {
+    margin: 0 0 32px;
+    padding: 16px 20px;
+    border-left: 2px solid var(--color-primary);
+    color: var(--color-muted-foreground);
+    font-size: 14px;
+    line-height: 19px;
+  }
+
+  .article-copy :global(.table-wrap) {
+    overflow-x: auto;
+    margin-top: 24px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+  }
+
+  .article-copy :global(table) { width: 100%; min-width: 620px; border-collapse: collapse; }
+
+  .article-copy :global(th),
+  .article-copy :global(td) {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 14px;
+    line-height: 19px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .article-copy :global(th) {
+    color: var(--color-foreground);
+    font-weight: 500;
+  }
+
+  .article-copy :global(tr:last-child td) { border-bottom: 0; }
+
+  .article-copy :global(code) {
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--color-secondary);
+    color: var(--color-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+
+  .article-copy :global(pre) {
+    overflow-x: auto;
+    margin-top: 16px;
+    padding: 16px 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-card);
+  }
+
+  .article-copy :global(pre code) { padding: 0; background: none; }
+
+  .article-cta {
+    display: grid;
+    gap: 16px;
+    margin-top: 40px;
+    padding: 24px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-media);
+  }
+
+  .article-cta p {
+    margin: 0;
+    color: var(--color-foreground);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 27px;
+    letter-spacing: -0.2px;
+  }
+
+  .article-cta div { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .primary-action,
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none !important;
+  }
+
+  .primary-action { background: var(--color-foreground); color: var(--color-background) !important; }
+  .secondary-action { border: 1px solid var(--color-border); color: var(--color-foreground) !important; }
+
+  .related {
+    margin-top: 120px;
+    padding-top: 48px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .related h2 {
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 27px;
+    letter-spacing: -0.2px;
+  }
+
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 32px;
+    margin-top: 24px;
+  }
+
+  .related-card {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .related-title {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 19px;
+  }
+
+  .related-meta {
+    display: flex;
+    gap: 4px;
+    color: var(--color-dim-foreground);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+  }
+
+  @media (max-width: 860px) {
+    .editorial-article { width: calc(100% - 40px); padding: 32px 0 104px; }
+    .article-header { padding: 88px 0 40px; }
+    .back-link { top: 32px; }
+    .article-layout { margin-top: 40px; }
+    .related { margin-top: 80px; }
+    .related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  }
+
+  @media (max-width: 580px) {
+    .article-header { justify-items: start; padding: 80px 0 32px; text-align: left; }
+    h1 { margin-top: 16px; font-size: 30px; line-height: 41px; letter-spacing: -0.5px; }
+    .article-copy :global(h2) { margin-top: 32px; font-size: 30px; line-height: 41px; }
+    .article-copy :global(.feature-grid) { grid-template-columns: 1fr; gap: 20px; }
+    .article-cta { padding: 20px; }
+    .related-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .back-link { transition: none; }
+  }
+</style>

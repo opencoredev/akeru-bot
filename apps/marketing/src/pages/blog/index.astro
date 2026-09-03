@@ -1,0 +1,192 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const articles = [
+  {
+    href: "/open-source-grok-bot",
+    category: "Open source",
+    date: "Sep 3, 2026",
+    title: "An open-source alternative to Grok Bot",
+  },
+  {
+    href: "/compare/akeru-vs-grok-bot",
+    category: "Comparison",
+    date: "Sep 3, 2026",
+    title: "Akeru Bot and Grok Bot compared",
+  },
+  {
+    href: "/guides/self-hosted-grok-bot",
+    category: "Guide",
+    date: "Sep 3, 2026",
+    title: "Run a Grok bot on an environment you control",
+  },
+] as const;
+const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Akeru Blog",
+    description: "Guides and comparisons for running open-source AI coding agents.",
+    url: new URL("/blog", siteOrigin).href,
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: articles.map((article, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: article.title,
+      url: new URL(article.href, siteOrigin).href,
+    })),
+  },
+];
+---
+
+<Layout
+  title="Akeru Blog | Open-source AI agent guides"
+  description="Read practical guides and factual comparisons for open-source AI coding agents, Grok bots, self-hosting, and Akeru Bot."
+  structuredData={structuredData}
+>
+  <div class="blog-index">
+    <header class="blog-header">
+      <h1>Blog</h1>
+      <p>Guides, comparisons, and updates from the Akeru project.</p>
+    </header>
+
+    <nav class="topic-nav" aria-label="Article topics">
+      <a class="topic-link topic-link--active" href="#articles">All</a>
+      {
+        articles.map((article) => (
+          <a class="topic-link" href={article.href}>{article.category}</a>
+        ))
+      }
+    </nav>
+
+    <section class="article-grid" id="articles" aria-label="All articles">
+      {
+        articles.map((article) => (
+          <a class="article-card" href={article.href}>
+            <h2>{article.title}</h2>
+            <div class="article-meta">
+              <time datetime="2026-09-03">{article.date}</time>
+              <span aria-hidden="true">&bull;</span>
+              <span>{article.category}</span>
+            </div>
+          </a>
+        ))
+      }
+    </section>
+  </div>
+</Layout>
+
+<style>
+  .blog-index {
+    width: min(960px, calc(100% - 80px));
+    margin: 0 auto;
+    padding: 120px 0 140px;
+  }
+
+  .blog-header {
+    display: grid;
+    gap: 16px;
+    max-width: 700px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .blog-header h1 {
+    font-size: 60px;
+    font-weight: 500;
+    line-height: 66px;
+    letter-spacing: -1.5px;
+  }
+
+  .blog-header p {
+    color: var(--color-muted-foreground);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 27px;
+    letter-spacing: -0.2px;
+  }
+
+  .topic-nav {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    margin-top: 72px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .topic-nav::-webkit-scrollbar { display: none; }
+
+  .topic-link {
+    flex: 0 0 auto;
+    color: var(--color-dim-foreground);
+    font-size: 14px;
+    line-height: 19px;
+    transition: color 0.15s ease;
+  }
+
+  .topic-link:hover,
+  .topic-link:focus-visible,
+  .topic-link--active {
+    color: var(--color-foreground);
+    font-weight: 500;
+  }
+
+  .topic-link:focus-visible,
+  .article-card:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+  }
+
+  .article-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 48px 32px;
+    margin-top: 40px;
+    scroll-margin-top: 24px;
+  }
+
+  .article-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .article-card h2 {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 19px;
+  }
+
+  .article-meta {
+    display: flex;
+    gap: 6px;
+    color: var(--color-muted-foreground);
+    font-size: 14px;
+    line-height: 19px;
+  }
+
+  @media (max-width: 860px) {
+    .blog-index { width: calc(100% - 40px); padding: 96px 0 104px; }
+    .article-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 24px; }
+  }
+
+  @media (max-width: 580px) {
+    .blog-index { padding: 88px 0 96px; }
+    .blog-header p { font-size: 18px; line-height: 25px; }
+    .topic-nav { justify-content: flex-start; gap: 28px; margin-top: 48px; }
+    .article-grid { grid-template-columns: 1fr; gap: 40px; margin-top: 32px; }
+    .article-card { gap: 6px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .topic-link { transition: none; }
+  }
+</style>

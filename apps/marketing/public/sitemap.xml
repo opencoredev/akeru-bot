@@ -2,6 +2,10 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://www.akeru-bot.com/</loc><lastmod>2026-09-01</lastmod></url>
   <url><loc>https://www.akeru-bot.com/download</loc><lastmod>2026-09-01</lastmod></url>
+  <url><loc>https://www.akeru-bot.com/blog</loc><lastmod>2026-09-03</lastmod></url>
+  <url><loc>https://www.akeru-bot.com/open-source-grok-bot</loc><lastmod>2026-09-03</lastmod></url>
+  <url><loc>https://www.akeru-bot.com/compare/akeru-vs-grok-bot</loc><lastmod>2026-09-03</lastmod></url>
+  <url><loc>https://www.akeru-bot.com/guides/self-hosted-grok-bot</loc><lastmod>2026-09-03</lastmod></url>
   <url><loc>https://www.akeru-bot.com/about</loc><lastmod>2026-09-01</lastmod></url>
   <url><loc>https://www.akeru-bot.com/contact</loc><lastmod>2026-09-01</lastmod></url>
   <url><loc>https://www.akeru-bot.com/developers</loc><lastmod>2026-09-01</lastmod></url>
