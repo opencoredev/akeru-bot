@@ -284,7 +284,7 @@ export function useGroupThreadRuntime(groupId: string) {
             respondingBotId: BotId.make(respondingBot.id),
             threadId,
             projectId: activeProject.id,
-            title: group.name,
+            title: threadTitle(prompt, files),
             message: {
               messageId: newMessageId(),
               role: "user",

@@ -377,7 +377,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             boss === null
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
-          modelPicker={null}
           replyPreview={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
           onSubmit={async (prompt, files, respondingBotId) => {
