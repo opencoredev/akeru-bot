@@ -9,6 +9,7 @@ interface AuthenticateMcpServerOptions {
   readonly signal?: AbortSignal;
   readonly recordSuccess: (serverId: McpServerId) => void;
   readonly recordFailure: (serverId: McpServerId, message: string) => void;
+  readonly recordReconnectFailure: (serverId: McpServerId, message: string) => void;
 }
 
 function failureMessage(cause: unknown): string {
@@ -32,25 +33,32 @@ export async function authenticateMcpServer(
   options.signal?.addEventListener("abort", cancelAuthentication, { once: true });
 
   try {
-    if (temporary) await manager.init();
+    let connected: McpServerStatus;
+    try {
+      if (temporary) await manager.init();
 
-    const reconnectStatus = await manager.reconnectServer(serverId);
-    const authenticatedStatus = reconnectStatus.connected
-      ? reconnectStatus
-      : await manager.authenticateServer(serverId, {
-          onAuthorizationUrl: options.onAuthorizationUrl,
-        });
-    const connected = requireConnected(authenticatedStatus);
-
-    for (const other of options.managers.slice(1)) {
-      requireConnected(await other.reconnectServer(serverId));
+      const reconnectStatus = await manager.reconnectServer(serverId);
+      const authenticatedStatus = reconnectStatus.connected
+        ? reconnectStatus
+        : await manager.authenticateServer(serverId, {
+            onAuthorizationUrl: options.onAuthorizationUrl,
+          });
+      connected = requireConnected(authenticatedStatus);
+      options.recordSuccess(options.server.id);
+    } catch (cause) {
+      options.recordFailure(options.server.id, failureMessage(cause));
+      throw cause;
     }
 
-    options.recordSuccess(options.server.id);
+    for (const other of options.managers.slice(1)) {
+      try {
+        requireConnected(await other.reconnectServer(serverId));
+      } catch (cause) {
+        options.recordReconnectFailure(options.server.id, failureMessage(cause));
+      }
+    }
+
     return connected;
-  } catch (cause) {
-    options.recordFailure(options.server.id, failureMessage(cause));
-    throw cause;
   } finally {
     options.signal?.removeEventListener("abort", cancelAuthentication);
     if (temporary) await manager.disconnect().catch(() => undefined);

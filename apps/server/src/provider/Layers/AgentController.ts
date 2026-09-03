@@ -2545,6 +2545,8 @@ const make = (options?: AgentControllerLiveOptions) =>
               recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
               recordFailure: (serverId, message) =>
                 subscriptionAuth.recordMcpRequestFailure(serverId, message),
+              recordReconnectFailure: (serverId, message) =>
+                subscriptionAuth.recordMcpRequestFailure(serverId, message),
             });
             return { toolCount: status.toolCount };
           },
