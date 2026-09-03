@@ -72,6 +72,7 @@ describe("legacy settings deep links", () => {
     expect(settingsSectionFromPathname("/settings/inbox")).toBe("inbox");
     expect(settingsSectionFromPathname("/settings/voice")).toBe("voice");
     expect(settingsSectionFromPathname("/settings/browser")).toBe("browser");
+    expect(settingsSectionFromPathname("/settings/plugins")).toBe("plugins");
     expect(settingsSectionFromPathname("/settings/channels")).toBe("channels");
     expect(settingsSectionFromPathname("/settings/bots")).toBe("channels");
     expect(settingsSectionFromPathname("/settings/sandbox")).toBe("sandbox");

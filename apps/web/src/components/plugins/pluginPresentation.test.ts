@@ -9,6 +9,7 @@ import {
   buildPluginFilters,
   buildPluginSections,
   pluginActiveDependentBotNames,
+  pluginBrokerName,
   pluginConnectionLabel,
   pluginMatchesQuery,
   pluginPrimaryAction,
@@ -43,7 +44,7 @@ const verificationPlugin = {
     type: "verification-pending",
     blocker: "The connection lifecycle still needs verification.",
   },
-  catalogStatus: "verification-pending",
+  catalogStatus: "available",
 } satisfies PluginDirectoryDefinition;
 const apiKeyPlugin = {
   ...firecrawl,
@@ -53,6 +54,23 @@ const apiKeyPlugin = {
   authentication: "api-key",
   connection: { type: "api-key" },
   requiredCredentials: ["key-vendor-api-key"],
+} satisfies PluginDirectoryDefinition;
+const brokeredPlugin = {
+  ...pendingBase,
+  id: "gmail",
+  name: "Gmail",
+  title: "Gmail",
+  description: "Read, draft, and send Gmail messages.",
+  tags: ["email", "inbox"],
+  authentication: "oauth",
+  requiredCredentials: [],
+  kind: "mcp-unavailable",
+  transport: { type: "unavailable" },
+  connection: {
+    type: "brokered",
+    broker: { name: "Composio", url: "https://composio.dev" },
+  },
+  catalogStatus: "verification-pending",
 } satisfies PluginDirectoryDefinition;
 
 function server(enabled: boolean): McpServer {
@@ -92,7 +110,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "All" }).flatMap((section) =>
         section.plugins.map((plugin) => plugin.id),
       ),
-    ).toHaveLength(53);
+    ).toHaveLength(54);
     expect(
       buildPluginSections({
         plugins: catalog,
@@ -105,7 +123,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "Featured" })[0]?.plugins.map(
         (plugin) => plugin.id,
       ),
-    ).toEqual(["context", "zernio", "hoplite"]);
+    ).toEqual(["context", "gmail", "zernio", "hoplite"]);
     expect(
       buildPluginSections({ plugins: catalog, query: "", filter: "Web" })[0]?.plugins.map(
         (plugin) => plugin.id,
@@ -135,6 +153,7 @@ describe("plugin presentation", () => {
     expect(sections.every((section) => section.plugins.length > 0)).toBe(true);
     expect(sections[0]?.plugins.map((plugin) => plugin.id)).toEqual([
       "context",
+      "gmail",
       "zernio",
       "hoplite",
     ]);
@@ -233,5 +252,19 @@ describe("plugin presentation", () => {
       blocker: "The connection lifecycle still needs verification.",
     });
     expect(pluginConnectionLabel(verificationPlugin)).toBe("Verification pending");
+  });
+
+  it("names the broker without hiding the app it stands for", () => {
+    expect(pluginBrokerName(brokeredPlugin)).toBe("Composio");
+    expect(pluginBrokerName(firecrawl)).toBeNull();
+    for (const query of ["Gmail", "email", "inbox", "Composio"]) {
+      expect(pluginMatchesQuery(brokeredPlugin, query)).toBe(true);
+    }
+    expect(pluginMatchesQuery(firecrawl, "Composio")).toBe(false);
+    expect(pluginPrimaryAction(brokeredPlugin, undefined)).toEqual({
+      label: "Connect",
+      enable: true,
+    });
+    expect(pluginConnectionLabel(brokeredPlugin)).toBe("OAuth");
   });
 });

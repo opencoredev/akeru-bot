@@ -10,6 +10,7 @@ import {
 import { PluginDetailsContent } from "./PluginDetails";
 import {
   EMPTY_MCP_SERVER_DRAFT,
+  COMPOSIO_APPS,
   PLUGIN_DIRECTORY_FILTERS,
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
@@ -17,7 +18,12 @@ import {
   resolvePluginDialogServers,
   validateMcpServerDraft,
 } from "./PluginsDialog";
-import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
+import {
+  ComposioToolkitResults,
+  CustomMcpServers,
+  PluginsCatalog,
+  RemovedBuiltinServers,
+} from "./PluginsCatalog";
 import { buildPluginSections } from "./pluginPresentation";
 import { planPluginToggle, pluginMcpServerId } from "./pluginRegistry";
 
@@ -77,6 +83,81 @@ const removedBuiltinServer: McpServer = {
 const noop = () => undefined;
 
 describe("Plugins dialog content", () => {
+  it("lists Gmail as an app connected through Composio", () => {
+    const gmail = COMPOSIO_APPS[0];
+    const markup = renderToStaticMarkup(
+      <PluginsCatalog
+        sections={buildPluginSections({ plugins: COMPOSIO_APPS, query: "gmail", filter: "All" })}
+        servers={[]}
+        pendingServerId={null}
+        onToggle={noop}
+        onOpen={noop}
+      />,
+    );
+
+    expect(gmail.id).toBe("gmail");
+    expect(markup).toContain("Gmail");
+    expect(markup).toContain("Composio");
+    expect(markup).toContain("Connect Gmail");
+  });
+
+  it("renders Composio search results with a neutral fallback when no logo exists", () => {
+    const markup = renderToStaticMarkup(
+      <ComposioToolkitResults
+        toolkits={[
+          {
+            slug: "google-calendar",
+            name: "Google Calendar",
+            description: "Manage calendars and events.",
+            categories: ["Productivity"],
+            toolsCount: 12,
+          },
+        ]}
+        connectedToolkitIds={new Set()}
+        pendingToolkitId={null}
+        onConnect={noop}
+      />,
+    );
+
+    expect(markup).toContain('data-composio-toolkit="google-calendar"');
+    expect(markup).toContain("Google Calendar");
+    expect(markup).toContain("Manage calendars and events.");
+    expect(markup).toContain("Connect Google Calendar");
+    expect(markup).toMatch(/aria-hidden="true"[^>]*>G<\/span>/);
+  });
+
+  it("presents Composio once as Gmail's connection provider", () => {
+    const gmail = COMPOSIO_APPS[0];
+    const markup = renderToStaticMarkup(
+      <PluginDetailsContent
+        plugin={gmail}
+        server={undefined}
+        activeDependentBotNames={[]}
+        pending={false}
+        onToggle={noop}
+        onRemove={noop}
+        onViewDocumentation={noop}
+        onViewSource={noop}
+        onOpenSkill={noop}
+      />,
+    );
+
+    expect(gmail.logo.src).toBe("https://logos.composio.dev/api/gmail");
+    expect(markup).toContain('src="https://logos.composio.dev/api/gmail"');
+    expect(markup).not.toContain("/plugin-logos/gmail.svg");
+    expect(markup).toContain("Provider");
+    expect(markup).toContain("Composio");
+    expect(markup).toContain("Sign-in");
+    expect(markup).toContain("Google OAuth");
+    expect(markup).toContain("Not connected");
+    expect(markup).not.toContain("Authentication");
+    expect(markup).not.toContain("Execution");
+    expect(markup).not.toContain("Health");
+    expect(markup).not.toContain("Transport");
+    expect(markup).not.toContain("Platforms");
+    expect(markup).not.toContain("License");
+  });
+
   it("keeps the directory and details at one fixed size", () => {
     expect(PLUGIN_DIALOG_CLASS_NAME).toContain("h-[min(48rem,90dvh)]");
     expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("border-b");

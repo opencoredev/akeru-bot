@@ -2,18 +2,20 @@ import { create } from "zustand";
 
 interface PluginsDialogState {
   readonly open: boolean;
-  readonly openPlugins: () => void;
+  readonly requestedQuery: string | null;
+  readonly openPlugins: (query?: string) => void;
   readonly closePlugins: () => void;
 }
 
 export const usePluginsDialogStore = create<PluginsDialogState>((set) => ({
   open: false,
-  openPlugins: () => set({ open: true }),
-  closePlugins: () => set({ open: false }),
+  requestedQuery: null,
+  openPlugins: (query) => set({ open: true, requestedQuery: query?.trim() || null }),
+  closePlugins: () => set({ open: false, requestedQuery: null }),
 }));
 
-export function openPlugins(): void {
-  usePluginsDialogStore.getState().openPlugins();
+export function openPlugins(query?: string): void {
+  usePluginsDialogStore.getState().openPlugins(query);
 }
 
 export function closePlugins(): void {

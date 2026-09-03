@@ -1269,6 +1269,39 @@ describe("deriveWorkLogEntries", () => {
     expect(entry?.toolData).toEqual(item);
   });
 
+  it("preserves plugin search results for inline recommendations", () => {
+    const result = {
+      kind: "plugin-search-results",
+      query: "email",
+      total: 1,
+      sources: { directory: "available", composio: "available" },
+      recommendations: [
+        {
+          id: "composio:gmail",
+          source: "composio",
+          name: "Gmail",
+          description: "Read and send email.",
+          action: "connect",
+          logoUrl: "https://logos.composio.dev/api/gmail",
+        },
+      ],
+    };
+    const [entry] = deriveWorkLogEntries([
+      makeActivity({
+        id: "plugin-search-done",
+        kind: "tool.completed",
+        summary: "SearchPlugins",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "SearchPlugins",
+          data: { result },
+        },
+      }),
+    ]);
+
+    expect(entry?.toolData).toEqual(result);
+  });
+
   it("keeps MCP payloads while collapsing lifecycle updates", () => {
     const item = {
       type: "mcpToolCall",

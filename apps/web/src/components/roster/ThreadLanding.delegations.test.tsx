@@ -1,10 +1,16 @@
 import type { ReactElement } from "react";
 import {
   AkeruDelegationRecord,
+  ApprovalRequestId,
   BotId,
   EnvironmentId,
+  EventId,
+  MessageId,
   ThreadId,
+  TurnId,
+  type OrchestrationMessage,
   type OrchestrationShellSnapshot,
+  type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -21,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   snapshot: null as OrchestrationShellSnapshot | null,
   bots: [] as Bot[],
   groups: [] as Group[],
+  activities: [] as OrchestrationThreadActivity[],
+  messages: [] as OrchestrationMessage[],
+  pendingUserInputs: [] as PendingUserInput[],
   groupPendingUserInputs: [] as PendingUserInput[],
 }));
 
@@ -66,6 +75,9 @@ vi.mock("../../state/bots", () => ({
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+vi.mock("../../state/entities", () => ({
+  useThreadActivities: () => mocks.activities,
+}));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: mocks.providersAtom,
@@ -96,15 +108,15 @@ vi.mock("./useBotThreadRuntime", () => ({
   useBotThreadRuntime: () => ({
     sending: false,
     respondingRequestIds: [],
-    messages: [],
-    error: null,
-    latestTurn: null,
-    defaultProject: null,
-    pendingUserInputs: [],
+    pendingUserInputs: mocks.pendingUserInputs,
     pendingUserInputAnswers: {},
     pendingUserInputQuestionIndex: 0,
     selectPendingUserInputOption: vi.fn(),
     advancePendingUserInput: vi.fn(),
+    messages: mocks.messages,
+    error: null,
+    latestTurn: null,
+    defaultProject: null,
     botReady: true,
     bootstrapped: true,
     linkedThreadRef: {
@@ -138,6 +150,8 @@ vi.mock("./useGroupThreadRuntime", () => ({
 }));
 
 import { BotThreadLanding } from "./BotThreadLanding";
+import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
+import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
@@ -217,6 +231,9 @@ describe("thread landing delegations", () => {
     hooks.reset();
     mocks.bots = [parentBot, childBot];
     mocks.groups = [group];
+    mocks.activities = [];
+    mocks.messages = [];
+    mocks.pendingUserInputs = [];
     mocks.groupPendingUserInputs = [];
     mocks.snapshot = {
       snapshotSequence: 1,
@@ -241,6 +258,105 @@ describe("thread landing delegations", () => {
 
     expect(card?.props.delegation.delegationId).toBe("matching");
     expect(card?.props.childBot).toBe(childBot);
+  });
+
+  it("renders plugin recommendations inside the bot conversation", () => {
+    const turnId = TurnId.make("turn-plugins");
+    const timestamp = "2026-09-02T20:00:00.000Z";
+    mocks.messages = [
+      {
+        id: MessageId.make("message-user"),
+        role: "user",
+        text: "Can you connect my email?",
+        turnId,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("message-assistant"),
+        role: "assistant",
+        text: "I found Gmail.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+    mocks.activities = [
+      {
+        id: EventId.make("activity-plugin-search"),
+        tone: "tool",
+        kind: "tool.completed",
+        summary: "SearchPlugins",
+        turnId,
+        createdAt: timestamp,
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "SearchPlugins",
+          data: {
+            result: {
+              kind: "plugin-search-results",
+              query: "email",
+              total: 1,
+              sources: { directory: "available", composio: "available" },
+              recommendations: [
+                {
+                  id: "composio:gmail",
+                  source: "composio",
+                  name: "Gmail",
+                  description: "Read and send email.",
+                  action: "connect",
+                  logoUrl: "https://logos.composio.dev/api/gmail",
+                },
+              ],
+            },
+          },
+        },
+      },
+    ];
+
+    hooks.beginRender();
+    const card = visitElements(
+      BotThreadLanding({ botId: parentBot.id }),
+      (element) => element.type === PluginSearchResultCard,
+    ) as ReactElement<Parameters<typeof PluginSearchResultCard>[0]> | null;
+
+    expect(card?.props.result.query).toBe("email");
+    expect(card?.props.result.recommendations[0]?.name).toBe("Gmail");
+  });
+
+  it("renders provider questions inside the bot conversation", () => {
+    mocks.pendingUserInputs = [
+      {
+        requestId: ApprovalRequestId.make("question-request"),
+        createdAt: "2026-09-02T20:00:00.000Z",
+        questions: [
+          {
+            id: "snack",
+            header: "Question",
+            question: "If you had to pick a snack right now, which one?",
+            options: [
+              { label: "Chips", description: "Chips" },
+              { label: "Fruit", description: "Fruit" },
+              { label: "Chocolate", description: "Chocolate" },
+            ],
+            multiSelect: false,
+          },
+        ],
+      },
+    ];
+
+    hooks.beginRender();
+    const card = visitElements(
+      BotThreadLanding({ botId: parentBot.id }),
+      (element) => element.type === ComposerPendingUserInputPanel,
+    ) as ReactElement<Parameters<typeof ComposerPendingUserInputPanel>[0]> | null;
+
+    expect(card?.props.pendingUserInputs[0]?.questions[0]?.question).toBe(
+      "If you had to pick a snack right now, which one?",
+    );
   });
 
   it("renders pending provider questions in group threads", () => {

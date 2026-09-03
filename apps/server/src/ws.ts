@@ -151,6 +151,7 @@ import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as Composio from "./composio/ComposioService.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -385,6 +386,7 @@ export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract
   {
     type:
       | "thread.message-sent"
+      | "thread.message-reaction-set"
       | "thread.proposed-plan-upserted"
       | "thread.activity-appended"
       | "thread.turn-diff-completed"
@@ -394,6 +396,7 @@ export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract
 > {
   return (
     event.type === "thread.message-sent" ||
+    event.type === "thread.message-reaction-set" ||
     event.type === "thread.proposed-plan-upserted" ||
     event.type === "thread.activity-appended" ||
     event.type === "thread.turn-diff-completed" ||
@@ -513,10 +516,10 @@ const makeWsRpcLayer = (
       const dispatchFromClient: OrchestrationEngine.OrchestrationEngineShape["dispatch"] = (
         command,
       ) =>
-        orchestrationEngine.dispatch(
-          command,
-          hasClientOrigin ? { origin: clientOrigin } : undefined,
-        );
+        orchestrationEngine.dispatch(command, {
+          actor: dispatchActor,
+          ...(hasClientOrigin ? { origin: clientOrigin } : {}),
+        });
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
@@ -564,6 +567,8 @@ const makeWsRpcLayer = (
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
       const secretStore = yield* ServerSecretStore.ServerSecretStore;
+      const composioService = yield* Effect.serviceOption(Composio.ComposioService);
+      const composio = Option.getOrElse(composioService, () => Composio.make(secretStore));
       const channelDeliveryStore = yield* Effect.serviceOption(
         ChannelDeliveryStore.ChannelDeliveryStore,
       );
@@ -2209,6 +2214,30 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "server",
             },
           ),
+        [WS_METHODS.composioGetStatus]: (_input) =>
+          observeRpcEffect(WS_METHODS.composioGetStatus, composio.getStatus, {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioConfigure]: ({ apiKey }) =>
+          observeRpcEffect(WS_METHODS.composioConfigure, composio.configure(apiKey), {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioRemove]: (_input) =>
+          observeRpcEffect(WS_METHODS.composioRemove, composio.remove, {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioSearchToolkits]: (input) =>
+          observeRpcEffect(WS_METHODS.composioSearchToolkits, composio.searchToolkits(input), {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioAuthorize]: (input) =>
+          observeRpcEffect(WS_METHODS.composioAuthorize, composio.authorize(input), {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioDisconnect]: ({ connectionId }) =>
+          observeRpcEffect(WS_METHODS.composioDisconnect, composio.disconnect(connectionId), {
+            "rpc.aggregate": "composio",
+          }),
         [WS_METHODS.portabilityExport]: (_input) =>
           observeRpcEffect(
             WS_METHODS.portabilityExport,

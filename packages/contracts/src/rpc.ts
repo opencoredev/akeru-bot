@@ -221,6 +221,16 @@ import {
   PortabilityPreviewImportInput,
 } from "./portability.ts";
 import { RoutineListRunsInput, RoutineListRunsResult, RoutineReadError } from "./routines.ts";
+import {
+  ComposioAuthorizeInput,
+  ComposioAuthorizeResult,
+  ComposioConfigureInput,
+  ComposioDisconnectInput,
+  ComposioOperationError,
+  ComposioStatus,
+  ComposioToolkit,
+  ComposioToolkitSearchInput,
+} from "./composio.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -296,6 +306,12 @@ export const WS_METHODS = {
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  composioGetStatus: "composio.getStatus",
+  composioConfigure: "composio.configure",
+  composioRemove: "composio.remove",
+  composioSearchToolkits: "composio.searchToolkits",
+  composioAuthorize: "composio.authorize",
+  composioDisconnect: "composio.disconnect",
   subscriptionAuthList: "subscriptionAuth.list",
   subscriptionAuthStart: "subscriptionAuth.start",
   subscriptionAuthPoll: "subscriptionAuth.poll",
@@ -419,6 +435,42 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   payload: Schema.Struct({ patch: ServerSettingsRpcPatch }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioGetStatusRpc = Rpc.make(WS_METHODS.composioGetStatus, {
+  payload: Schema.Struct({}),
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioConfigureRpc = Rpc.make(WS_METHODS.composioConfigure, {
+  payload: ComposioConfigureInput,
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioRemoveRpc = Rpc.make(WS_METHODS.composioRemove, {
+  payload: Schema.Struct({}),
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioSearchToolkitsRpc = Rpc.make(WS_METHODS.composioSearchToolkits, {
+  payload: ComposioToolkitSearchInput,
+  success: Schema.Array(ComposioToolkit),
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioAuthorizeRpc = Rpc.make(WS_METHODS.composioAuthorize, {
+  payload: ComposioAuthorizeInput,
+  success: ComposioAuthorizeResult,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioDisconnectRpc = Rpc.make(WS_METHODS.composioDisconnect, {
+  payload: ComposioDisconnectInput,
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
 });
 
 export const WsSubscriptionAuthListRpc = Rpc.make(WS_METHODS.subscriptionAuthList, {
@@ -1046,6 +1098,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRemoveKeybindingRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
+  WsComposioGetStatusRpc,
+  WsComposioConfigureRpc,
+  WsComposioRemoveRpc,
+  WsComposioSearchToolkitsRpc,
+  WsComposioAuthorizeRpc,
+  WsComposioDisconnectRpc,
   WsSubscriptionAuthListRpc,
   WsSubscriptionAuthStartRpc,
   WsSubscriptionAuthPollRpc,

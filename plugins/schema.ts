@@ -17,6 +17,7 @@ interface Party {
 }
 
 interface PluginLogoManifest {
+  readonly url?: string;
   readonly provenance: { readonly sourceUrl: string; readonly license: string };
 }
 
@@ -181,10 +182,11 @@ function party(value: unknown, path: string): Party {
 
 function logo(value: unknown, path: string): PluginLogoManifest {
   const input = object(value, path);
-  exactKeys(input, ["provenance"], path);
+  exactKeys(input, ["provenance", "url"], path);
   const provenance = object(input.provenance, `${path}.provenance`);
   exactKeys(provenance, ["sourceUrl", "license"], `${path}.provenance`);
   return {
+    ...(input.url === undefined ? {} : { url: secureUrl(input.url, `${path}.url`) }),
     provenance: {
       sourceUrl: secureUrl(provenance.sourceUrl, `${path}.provenance.sourceUrl`),
       license: nonEmptyString(provenance.license, `${path}.provenance.license`),
@@ -402,13 +404,18 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
   }
   if (
     manifest.transport.type === "unavailable" &&
-    manifest.connection.type !== "approval-pending"
+    manifest.connection.type !== "approval-pending" &&
+    manifest.connection.type !== "brokered"
   ) {
     throw new TypeError(
-      `Plugin '${manifest.id}' unavailable transport requires an approval blocker.`,
+      `Plugin '${manifest.id}' unavailable transport requires an approval blocker or a broker.`,
     );
   }
-  if (manifest.catalogStatus === "available" && manifest.transport.type === "unavailable") {
+  if (
+    manifest.catalogStatus === "available" &&
+    manifest.transport.type === "unavailable" &&
+    manifest.connection.type !== "brokered"
+  ) {
     throw new TypeError(`Plugin '${manifest.id}' cannot be available without a transport recipe.`);
   }
   if (

@@ -514,6 +514,49 @@ describe("applyThreadDetailEvent", () => {
     });
   });
 
+  describe("thread.message-reaction-set", () => {
+    it("projects person-authored reactions without a bot identity", () => {
+      const personId = AuthSessionId.make("person-1");
+      const messageId = MessageId.make("msg-reaction");
+      const threadWithMessage: OrchestrationThread = {
+        ...baseThread,
+        messages: [
+          {
+            id: messageId,
+            role: "assistant",
+            text: "Done.",
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-04-01T07:00:00.000Z",
+            updatedAt: "2026-04-01T07:00:00.000Z",
+          },
+        ],
+      };
+
+      const result = applyThreadDetailEvent(threadWithMessage, {
+        ...baseEventFields,
+        sequence: 9,
+        occurredAt: "2026-04-01T07:01:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.message-reaction-set",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          messageId,
+          personId,
+          emoji: "👍",
+          present: true,
+          updatedAt: "2026-04-01T07:01:00.000Z",
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.messages[0]?.reactions).toEqual([{ personId, emoji: "👍" }]);
+      }
+    });
+  });
+
   describe("thread.session-set", () => {
     it("settles a running latestTurn when the session leaves the running status", () => {
       const threadWithRunningTurn: OrchestrationThread = {

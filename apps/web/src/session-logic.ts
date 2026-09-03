@@ -3,6 +3,7 @@ import * as Arr from "effect/Array";
 import * as Schema from "effect/Schema";
 import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
+  AkeruPluginSearchResult,
   ApprovalRequestId,
   isToolLifecycleItemType,
   type OrchestrationLatestTurn,
@@ -122,6 +123,7 @@ const derivedWorkLogEntryByActivity = new WeakMap<
   OrchestrationThreadActivity,
   DerivedWorkLogEntry
 >();
+const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
 
 export interface PendingApproval {
   requestId: ApprovalRequestId;
@@ -201,6 +203,12 @@ export function workLogEntryIsToolLike(entry: WorkLogEntry): boolean {
     return true;
   }
   return entry.itemType !== undefined && isToolLifecycleItemType(entry.itemType);
+}
+
+export function pluginSearchResultForWorkEntry(
+  entry: WorkLogEntry,
+): AkeruPluginSearchResult | null {
+  return isPluginSearchResult(entry.toolData) ? entry.toolData : null;
 }
 
 /** Heuristic: providers often emit successful lifecycle status while error text lives in `detail` / `command`. */
@@ -1000,6 +1008,11 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     const data = asRecord(payload?.data);
     if (data?.item !== undefined) {
       entry.toolData = data.item;
+    }
+  } else if (itemType === "dynamic_tool_call") {
+    const data = asRecord(payload?.data);
+    if (isPluginSearchResult(data?.result)) {
+      entry.toolData = data.result;
     }
   }
   if (itemType) {

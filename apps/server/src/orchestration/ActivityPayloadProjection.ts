@@ -3,6 +3,10 @@ import type {
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
 } from "@t3tools/contracts";
+import { AkeruPluginSearchResult } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+
+const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -376,6 +380,14 @@ function projectAcpContent(value: unknown): Record<string, unknown> | undefined 
   return summary ? { content: summary } : undefined;
 }
 
+function projectPluginSearchResult(value: unknown): AkeruPluginSearchResult | undefined {
+  if (!isPluginSearchResult(value)) return undefined;
+  return {
+    ...value,
+    recommendations: value.recommendations.slice(0, 6),
+  };
+}
+
 /**
  * Removes activity payload fields that no current client reads while retaining
  * the full payload in persistence and the event store.
@@ -403,6 +415,22 @@ export function projectActivityPayload(
         data: projectMcpToolCallData(data),
       },
     };
+  }
+
+  if (payload.itemType === "dynamic_tool_call" && activity.summary === "SearchPlugins") {
+    const result = projectPluginSearchResult(data.result);
+    if (result) {
+      return {
+        ...activity,
+        payload: {
+          ...projectedPayload,
+          data: {
+            result,
+            ...(data.toolCallId !== undefined ? { toolCallId: data.toolCallId } : {}),
+          },
+        },
+      };
+    }
   }
 
   const projectedData: Record<string, unknown> = {};

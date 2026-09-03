@@ -78,6 +78,12 @@ export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
 export type UpdateThreadMetadataInput = CommandInput<"thread.meta.update">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
 export type SetThreadInteractionModeInput = CommandInput<"thread.interaction-mode.set">;
+export type SetThreadMessageReactionInput = Omit<
+  CommandInput<"thread.message.reaction.set">,
+  "updatedAt"
+> & {
+  readonly updatedAt?: CommandOf<"thread.message.reaction.set">["updatedAt"];
+};
 export type StartThreadTurnInput = CommandInput<"thread.turn.start">;
 export type AppendVoiceTranscriptInput = CommandInput<"thread.voice-transcript.append">;
 export type InterruptThreadTurnInput = CommandInput<"thread.turn.interrupt">;
@@ -657,6 +663,16 @@ export const setThreadInteractionMode: (input: SetThreadInteractionModeInput) =>
       type: "thread.interaction-mode.set",
       commandId: metadata.commandId,
       createdAt: metadata.createdAt,
+    });
+  });
+
+export const setThreadMessageReaction: (input: SetThreadMessageReactionInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.setThreadMessageReaction")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "thread.message.reaction.set",
+      commandId: yield* commandId(input),
+      updatedAt: input.updatedAt ?? (yield* DateTime.now.pipe(Effect.map(DateTime.formatIso))),
     });
   });
 

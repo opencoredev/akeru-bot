@@ -94,10 +94,11 @@ function toPluginDefinition(
   manifest: PluginManifest,
   assets: AssetModules,
 ): PluginDirectoryDefinition {
+  const remoteLogoUrl = manifest.logo.url;
   const logo = {
-    ...manifest.logo,
-    src: assetUrl(assets, manifest.id, "logo.svg", manifest.id),
-    darkSrc: assetUrl(assets, manifest.id, "logo-dark.svg", manifest.id),
+    provenance: manifest.logo.provenance,
+    src: remoteLogoUrl ?? assetUrl(assets, manifest.id, "logo.svg", manifest.id),
+    darkSrc: remoteLogoUrl ?? assetUrl(assets, manifest.id, "logo-dark.svg", manifest.id),
   };
   const base = {
     ...manifest,

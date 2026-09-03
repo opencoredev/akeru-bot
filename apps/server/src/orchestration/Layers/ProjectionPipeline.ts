@@ -387,9 +387,6 @@ function collectThreadAttachmentRelativePaths(
   const relativePaths = new Set<string>();
   for (const message of messages) {
     for (const attachment of message.attachments ?? []) {
-      if (attachment.type !== "image") {
-        continue;
-      }
       const attachmentThreadSegment = parseThreadSegmentFromAttachmentId(attachment.id);
       if (!attachmentThreadSegment || attachmentThreadSegment !== threadSegment) {
         continue;
@@ -1321,6 +1318,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         }
 
         case "thread.message-sent":
+        case "thread.message-reaction-set":
         case "thread.proposed-plan-upserted":
         case "thread.activity-appended":
         case "thread.approval-response-requested":
@@ -1489,12 +1487,22 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           if (Option.isNone(existingMessage)) return;
           const withoutReaction = (existingMessage.value.reactions ?? []).filter(
             (reaction) =>
-              reaction.botId !== event.payload.botId || reaction.emoji !== event.payload.emoji,
+              reaction.botId !== event.payload.botId ||
+              reaction.personId !== event.payload.personId ||
+              reaction.emoji !== event.payload.emoji,
           );
           yield* projectionThreadMessageRepository.upsert({
             ...existingMessage.value,
             reactions: event.payload.present
-              ? [...withoutReaction, { botId: event.payload.botId, emoji: event.payload.emoji }]
+              ? [
+                  ...withoutReaction,
+                  {
+                    ...(event.payload.botId !== undefined
+                      ? { botId: event.payload.botId }
+                      : { personId: event.payload.personId }),
+                    emoji: event.payload.emoji,
+                  },
+                ]
               : withoutReaction,
             updatedAt: event.payload.updatedAt,
           });

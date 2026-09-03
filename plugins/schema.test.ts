@@ -221,4 +221,21 @@ describe("plugin catalog schema", () => {
       parsePluginManifest({ ...pending, connection: { type: "approval-pending" } }),
     ).toThrow("blocker");
   });
+
+  it("allows a broker to supply the runtime transport", () => {
+    const brokered = {
+      ...VALID_MANIFEST,
+      transport: { type: "unavailable" },
+      connection: {
+        type: "brokered",
+        broker: { name: "Example Broker", url: "https://broker.example.com" },
+      },
+    } as const;
+
+    expect(parsePluginManifest(brokered)).toMatchObject({
+      transport: { type: "unavailable" },
+      connection: { type: "brokered", broker: { name: "Example Broker" } },
+      catalogStatus: "available",
+    });
+  });
 });

@@ -61,7 +61,7 @@ export const MessageCopyButton = memo(function MessageCopyButton({
       <TooltipTrigger
         render={
           <Button
-            aria-label="Copy link"
+            aria-label={isCopied ? "Copied message" : "Copy message"}
             disabled={isCopied}
             onClick={() => copyToClipboard(text)}
             ref={ref}
@@ -75,7 +75,7 @@ export const MessageCopyButton = memo(function MessageCopyButton({
         {isCopied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
       </TooltipTrigger>
       <TooltipPopup>
-        <p>Copy to clipboard</p>
+        <p>{isCopied ? "Copied" : "Copy message"}</p>
       </TooltipPopup>
     </Tooltip>
   );

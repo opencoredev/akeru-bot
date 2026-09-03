@@ -797,6 +797,16 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.subscriptionAuthList,
       staleTimeMs: 5_000,
     }),
+    composioStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:composio-status",
+      tag: WS_METHODS.composioGetStatus,
+      staleTimeMs: 2_000,
+    }),
+    composioToolkits: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:composio-toolkits",
+      tag: WS_METHODS.composioSearchToolkits,
+      staleTimeMs: 30_000,
+    }),
     voiceCall: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:voice-call",
       tag: WS_METHODS.voiceCallGet,
@@ -844,6 +854,22 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverUpdateSettings,
       scheduler: configScheduler,
       concurrency: configConcurrency,
+    }),
+    configureComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-configure",
+      tag: WS_METHODS.composioConfigure,
+    }),
+    removeComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-remove",
+      tag: WS_METHODS.composioRemove,
+    }),
+    authorizeComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-authorize",
+      tag: WS_METHODS.composioAuthorize,
+    }),
+    disconnectComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-disconnect",
+      tag: WS_METHODS.composioDisconnect,
     }),
     startSubscriptionAuth: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:subscription-auth:start",

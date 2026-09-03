@@ -19,6 +19,13 @@ const attachments: ChatAttachment[] = [
     sizeBytes: 20,
   },
 ];
+const fileAttachment: ChatAttachment = {
+  type: "file",
+  id: "attachment-notes",
+  name: "notes.md",
+  mimeType: "text/markdown",
+  sizeBytes: 30,
+};
 
 describe("sent bot message attachments", () => {
   it("preserves image order and opens the selected image", () => {
@@ -51,6 +58,16 @@ describe("sent bot message attachments", () => {
         ["http://example.test/first", "http://example.test/second"],
         "attachment-second",
         new Set(["attachment-second"]),
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps documents out of the image lightbox", () => {
+    expect(
+      buildBotMessageAttachmentPreview(
+        [...attachments, fileAttachment],
+        ["http://example.test/first", "http://example.test/second", "http://example.test/notes"],
+        fileAttachment.id,
       ),
     ).toBeNull();
   });

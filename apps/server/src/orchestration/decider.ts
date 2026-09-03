@@ -397,6 +397,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
     case "thread.voice-transcript.append":
+    case "thread.message.reaction.set":
     case "thread.turn.interrupt":
     case "thread.approval.respond":
     case "thread.user-input.respond":
@@ -852,7 +853,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "group.rename": {
-      const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+      yield* requireGroup({ readModel, command, groupId: command.groupId });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -3050,14 +3051,32 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Message '${command.messageId}' is not visible in thread '${command.threadId}'.`,
         });
       }
-      if (thread.groupId != null) {
+      if (actor === undefined && command.botId === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Trusted bot reactions require a bot identity.",
+        });
+      }
+      if (actor === undefined && thread.groupId != null) {
+        const group = yield* requireGroup({
+          readModel,
+          command,
+          groupId: thread.groupId,
+        });
+        const reactionBotId = thread.respondingBotId ?? group.bossBotId;
+        if (reactionBotId === null || command.botId !== reactionBotId) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
+          });
+        }
         yield* requireActiveGroupMember({
           readModel,
           command,
           groupId: thread.groupId,
-          botId: command.botId,
+          botId: reactionBotId,
         });
-      } else if (thread.botId !== command.botId) {
+      } else if (actor === undefined && thread.botId !== command.botId) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
@@ -3074,7 +3093,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           messageId: command.messageId,
-          botId: command.botId,
+          ...(actor === undefined ? { botId: command.botId } : { personId: actor.personId }),
           emoji: command.emoji,
           present: command.present,
           updatedAt: command.updatedAt,

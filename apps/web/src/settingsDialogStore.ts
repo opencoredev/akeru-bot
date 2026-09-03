@@ -18,6 +18,7 @@ export const SETTINGS_SECTIONS = [
   "appearance",
   "providers",
   "browser",
+  "plugins",
   "channels",
   "sandbox",
   "voice",

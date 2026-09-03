@@ -5,6 +5,7 @@ import {
   type EnvironmentId,
   type MessageId,
   type ThreadId,
+  type TurnId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -23,6 +24,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
+import { threadEnvironment } from "../../state/threads";
 import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -34,7 +36,6 @@ import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
-import { BotUserInputPrompt } from "./BotUserInputPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
@@ -51,11 +52,22 @@ import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
+import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
+import {
+  buildReplyPrompt,
+  MessageControls,
+  type MessageReactionOption,
+  type MessageReplyTarget,
+  selectedReactionForPerson,
+} from "../chat/MessageControls";
+import { MessageReactions } from "../chat/MessageReactions";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
+import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -117,8 +129,12 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const canManageChannelBindings = canManageChannels(channelSession.data);
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
+    reportFailure: false,
+  });
   const bots = useRosterStore((state) => state.bots);
   const bot = bots.find((candidate) => candidate.id === botId);
+  const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const configuredEngine = bot?.engine ?? null;
   const instanceEntries = useMemo(
     () =>
@@ -146,6 +162,23 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const pluginResultsByTurn = useMemo(() => {
+    const results = new Map<
+      TurnId,
+      {
+        readonly id: string;
+        readonly result: NonNullable<ReturnType<typeof pluginSearchResultForWorkEntry>>;
+      }[]
+    >();
+    for (const entry of deriveWorkLogEntries(activities)) {
+      const result = pluginSearchResultForWorkEntry(entry);
+      if (!result || !entry.turnId) continue;
+      const turnResults = results.get(entry.turnId) ?? [];
+      turnResults.push({ id: entry.id, result });
+      results.set(entry.turnId, turnResults);
+    }
+    return results;
+  }, [activities]);
   const voiceCall = useVoiceCall();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
@@ -154,6 +187,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
+
+  useEffect(() => {
+    setReplyTarget(null);
+  }, [botId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
   useEffect(() => {
     if (!bot || bot.archivedAt !== null) {
@@ -170,14 +207,53 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  const assistantTurnIds = new Set(
+    messages.flatMap((message) =>
+      message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
+    ),
+  );
+  const pendingPluginResults = [...pluginResultsByTurn.entries()].filter(
+    ([turnId]) => !assistantTurnIds.has(turnId),
+  );
   const pendingApproval = approvalState.pendingApproval;
-  const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
   const delegations = runtime.linkedThreadRef
     ? (snapshot?.delegations.filter(
         (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
       ) ?? [])
     : [];
+  const currentPersonId = snapshot?.currentPersonId;
+  const updateReaction = async (
+    messageId: MessageId,
+    current: MessageReactionOption | null,
+    next: MessageReactionOption | null,
+  ) => {
+    const threadRef = runtime.linkedThreadRef;
+    if (!threadRef) return;
+    const dispatch = (emoji: MessageReactionOption, present: boolean) =>
+      setMessageReaction({
+        environmentId: threadRef.environmentId,
+        input: {
+          threadId: threadRef.threadId,
+          messageId,
+          emoji,
+          present,
+        },
+      });
+    if (current && current !== next) {
+      const removed = await dispatch(current, false);
+      if (removed._tag === "Failure") {
+        toastManager.add({ type: "error", title: "Could not update reaction" });
+        return;
+      }
+    }
+    if (next) {
+      const added = await dispatch(next, true);
+      if (added._tag === "Failure") {
+        toastManager.add({ type: "error", title: "Could not update reaction" });
+      }
+    }
+  };
 
   return (
     <SidebarInset
@@ -210,7 +286,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 message.role === "assistant" ? (
                   <div
                     key={message.id}
-                    className="flex items-start gap-3"
+                    className="group/message flex items-start gap-3"
                     data-testid="bot-provider-message"
                   >
                     <BotAvatarView
@@ -229,6 +305,37 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
+                      {message.turnId === null
+                        ? null
+                        : pluginResultsByTurn
+                            .get(message.turnId)
+                            ?.map(({ id, result }) => (
+                              <PluginSearchResultCard className="mt-3" key={id} result={result} />
+                            ))}
+                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                        <MessageControls
+                          copyText={message.text || "Attachment"}
+                          selectedReaction={selectedReactionForPerson(
+                            message.reactions,
+                            currentPersonId,
+                          )}
+                          onReply={() =>
+                            setReplyTarget({
+                              messageId: message.id,
+                              label: bot.name,
+                              text: message.text || "Attachment",
+                            })
+                          }
+                          onReactionChange={(next) =>
+                            void updateReaction(
+                              message.id,
+                              selectedReactionForPerson(message.reactions, currentPersonId),
+                              next,
+                            )
+                          }
+                        />
+                      </div>
+                      <MessageReactions reactions={message.reactions ?? []} />
                       {canManageChannelBindings && environmentId && runtime.linkedThreadRef
                         ? (() => {
                             const origin = channelOriginForAssistantMessage(messages, messageIndex);
@@ -250,22 +357,102 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     </div>
                   </div>
                 ) : (
-                  <div key={message.id} className="flex justify-end" data-testid="bot-user-message">
-                    <div className="max-w-[78%] rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-                      {message.attachments?.length ? (
-                        <div className={message.text ? "mt-2" : undefined}>
-                          <BotMessageAttachments
-                            attachments={message.attachments}
-                            environmentId={environmentId ?? NO_ENVIRONMENT}
-                          />
-                        </div>
-                      ) : null}
+                  <div
+                    key={message.id}
+                    className="group/message flex items-end justify-end gap-1"
+                    data-testid="bot-user-message"
+                  >
+                    <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <MessageControls
+                        align="end"
+                        copyText={
+                          message.text ||
+                          message.attachments?.map((attachment) => attachment.name).join(", ") ||
+                          "Attachment"
+                        }
+                        selectedReaction={selectedReactionForPerson(
+                          message.reactions,
+                          currentPersonId,
+                        )}
+                        onReply={() =>
+                          setReplyTarget({
+                            messageId: message.id,
+                            label: "you",
+                            text:
+                              message.text ||
+                              message.attachments
+                                ?.map((attachment) => attachment.name)
+                                .join(", ") ||
+                              "Attachment",
+                          })
+                        }
+                        onReactionChange={(next) =>
+                          void updateReaction(
+                            message.id,
+                            selectedReactionForPerson(message.reactions, currentPersonId),
+                            next,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="flex max-w-[78%] flex-col items-end">
+                      <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+                        {message.text ? (
+                          <p className="whitespace-pre-wrap">{message.text}</p>
+                        ) : null}
+                        {message.attachments?.length ? (
+                          <div className={message.text ? "mt-2" : undefined}>
+                            <BotMessageAttachments
+                              attachments={message.attachments}
+                              environmentId={environmentId ?? NO_ENVIRONMENT}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                      <MessageReactions reactions={message.reactions ?? []} />
                     </div>
                   </div>
                 ),
               )
             )}
+            {pendingPluginResults.map(([turnId, results]) => (
+              <div className="flex items-start gap-3" key={`${turnId}:plugins`}>
+                <BotAvatarView
+                  avatar={bot.avatar}
+                  name={bot.name}
+                  className="mt-0.5 size-7 shrink-0"
+                />
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="text-sm font-medium">{bot.name}</div>
+                  {results.map(({ id, result }) => (
+                    <PluginSearchResultCard key={id} result={result} />
+                  ))}
+                </div>
+              </div>
+            ))}
+            {runtime.pendingUserInputs.length > 0 ? (
+              <div className="flex items-start gap-3">
+                <BotAvatarView
+                  avatar={bot.avatar}
+                  name={bot.name}
+                  className="mt-0.5 size-7 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 text-sm font-medium">{bot.name}</div>
+                  <ComposerPendingUserInputPanel
+                    pendingUserInputs={runtime.pendingUserInputs}
+                    respondingRequestIds={runtime.respondingRequestIds}
+                    answers={runtime.pendingUserInputAnswers}
+                    questionIndex={runtime.pendingUserInputQuestionIndex}
+                    onToggleOption={runtime.selectPendingUserInputOption}
+                    onSelectSingleOption={runtime.selectPendingUserInputOption}
+                    onAdvance={() => {
+                      void runtime.advancePendingUserInput();
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
             {delegations.map((delegation) => (
               <DelegationCard
                 key={delegation.delegationId}
@@ -303,19 +490,8 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     approvalState.respond(pendingApproval.requestId, decision)
                   }
                 />
-              ) : pendingUserInput ? (
-                <BotUserInputPrompt
-                  pendingUserInputs={runtime.pendingUserInputs}
-                  respondingRequestIds={runtime.respondingRequestIds}
-                  answers={runtime.pendingUserInputAnswers}
-                  questionIndex={runtime.pendingUserInputQuestionIndex}
-                  onToggleOption={runtime.selectPendingUserInputOption}
-                  onSelectSingleOption={runtime.selectPendingUserInputOption}
-                  onAdvance={runtime.advancePendingUserInput}
-                />
               ) : null
             }
-            {...(pendingUserInput ? { placeholder: "Write a custom answer..." } : {})}
             disabled={
               pendingApproval !== null ||
               runtime.respondingRequestIds.length > 0 ||
@@ -326,7 +502,13 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               !runtime.bootstrapped ||
               runtime.defaultProject === null
             }
-            onSubmit={runtime.send}
+            replyPreview={replyTarget}
+            onCancelReply={() => setReplyTarget(null)}
+            onSubmit={async (prompt, files) => {
+              const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
+              if (sent) setReplyTarget(null);
+              return sent;
+            }}
           />
           {stickyEngine === null ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">

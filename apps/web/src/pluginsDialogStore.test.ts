@@ -17,6 +17,15 @@ describe("plugins dialog store", () => {
     expect(usePluginsDialogStore.getState().open).toBe(false);
   });
 
+  it("opens with a search from an inline recommendation", () => {
+    openPlugins("Gmail");
+
+    expect(usePluginsDialogStore.getState()).toMatchObject({
+      open: true,
+      requestedQuery: "Gmail",
+    });
+  });
+
   it("recognizes the old Settings plugins path", () => {
     expect(isLegacyPluginsPath("/settings/plugins")).toBe(true);
     expect(isLegacyPluginsPath("/settings/providers")).toBe(false);

@@ -64,6 +64,7 @@ import {
   BotUsageLedger,
   type BotUsageLedgerShape,
 } from "../../usage/BotUsageLedger.ts";
+import { withMcpRuntimeHeaders } from "../McpServerConfig.ts";
 
 const codexThreadId = ThreadId.make("thread-mastra-codex");
 const claudeThreadId = ThreadId.make("thread-legacy-claude");
@@ -465,6 +466,29 @@ describe("toMcpServerConfigs", () => {
       "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
       "local-tools": { command: "bunx", args: ["local-tools"] },
     });
+  });
+
+  it("forwards transient MCP headers without adding them to the server record", () => {
+    const server = withMcpRuntimeHeaders(
+      {
+        id: McpServerId.make("composio-session"),
+        name: "Composio",
+        transport: "url" as const,
+        url: "https://app.composio.dev/tool_router/v3/session/mcp",
+        enabled: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      { "x-api-key": "project-key" },
+    );
+
+    expect(toMcpServerConfigs([server])).toEqual({
+      "composio-session": {
+        url: "https://app.composio.dev/tool_router/v3/session/mcp",
+        headers: { "x-api-key": "project-key" },
+      },
+    });
+    expect(server).not.toHaveProperty("headers");
   });
 });
 

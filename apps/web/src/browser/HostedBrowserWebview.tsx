@@ -70,6 +70,7 @@ export function HostedBrowserWebview(props: {
         fittedSourceContent: current?.fittedSourceContent ?? null,
         rect: resolveBrowserSurfacePanelRect(state.byTabId, runtimeTabId),
         visible: current?.visible ?? false,
+        interactive: current?.interactive ?? false,
       };
     }),
   );
@@ -241,6 +242,7 @@ export function HostedBrowserWebview(props: {
   const renderingActive = active || backgroundActivity || pictureInPicture || recordingActive;
   const wrapperStyle = resolveHostedBrowserWebviewWrapperStyle({
     active,
+    interactive: presentation.interactive,
     renderingActive,
     cornerRadius: presentation.cornerRadius,
     rect: lastRect,
@@ -292,6 +294,7 @@ export function HostedBrowserWebview(props: {
                 : effectiveViewport.height
           }
           aria-hidden={active ? undefined : true}
+          tabIndex={active && presentation.interactive ? undefined : -1}
           className={cn(
             "absolute flex overflow-hidden bg-background",
             active && !layout.fillsPanel && "ring-1 ring-border/70 shadow-sm",
