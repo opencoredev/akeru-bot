@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 
 import {
   ModelSelection,
+  ComposioOperationError,
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderDriverKind,
@@ -71,6 +72,7 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
 import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.ts";
+import { ComposioService, type ComposioServiceShape } from "../../composio/ComposioService.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asApprovalRequestId = (value: string): ApprovalRequestId => ApprovalRequestId.make(value);
@@ -178,6 +180,7 @@ describe("ProviderCommandReactor", () => {
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
+    readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -461,6 +464,11 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(ProjectionBotRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory))),
       Layer.provideMerge(botUsageLedgerLayer),
       Layer.provideMerge(Layer.succeed(AgentController, service)),
+      Layer.provideMerge(
+        Layer.mock(ComposioService, {
+          resolveRuntimeMcpServer: input?.composioResolveRuntimeMcpServer ?? (() => Effect.void),
+        }),
+      ),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
       Layer.provideMerge(
         Layer.mock(GitWorkflowService.GitWorkflowService)({
@@ -915,6 +923,51 @@ describe("ProviderCommandReactor", () => {
         payload: {
           detail: "Provider instance 'missing' is not available.",
           requestId: "user-message-missing-bot-engine",
+        },
+      }),
+    );
+    expect(harness.startSession).not.toHaveBeenCalled();
+    expect(harness.sendTurn).not.toHaveBeenCalled();
+  });
+
+  it("fails the turn before provider dispatch when Composio runtime preparation fails", async () => {
+    const harness = await createHarness({
+      composioResolveRuntimeMcpServer: () =>
+        Effect.fail(
+          new ComposioOperationError({
+            operation: "prepare connected tools",
+            message: "Composio could not prepare connected tools.",
+          }),
+        ),
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-composio-failure"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-composio-failure"),
+          role: "user",
+          text: "check my inbox",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await harness.drain();
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(thread?.activities).toContainEqual(
+      expect.objectContaining({
+        kind: "provider.turn.start.failed",
+        payload: {
+          detail: "Composio could not prepare connected tools.",
+          requestId: "user-message-composio-failure",
         },
       }),
     );

@@ -3,6 +3,7 @@ import {
   AkeruMemoryUserId,
   AkeruUsageReservationId,
   type ChatAttachment,
+  ComposioOperationError,
   CommandId,
   EventId,
   MessageId,
@@ -75,6 +76,7 @@ import { ComposioService } from "../../composio/ComposioService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isAgentControllerUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
+const isComposioOperationError = Schema.is(ComposioOperationError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
 export function resolveControllerBotId(
@@ -520,6 +522,10 @@ const make = Effect.gen(function* () {
     const failReason = cause.reasons.find(Cause.isFailReason);
     const capError = isBotUsageCapExceeded(failReason?.error) ? failReason.error : undefined;
     if (capError) return capError.message;
+    const composioError = isComposioOperationError(failReason?.error)
+      ? failReason.error
+      : undefined;
+    if (composioError) return composioError.message;
     const providerError = isProviderAdapterRequestError(failReason?.error)
       ? failReason.error
       : undefined;
@@ -671,15 +677,7 @@ const make = Effect.gen(function* () {
     const servers = yield* projectionMcpServerRepository.listAll();
     const resolved = resolveBotMcpServers(servers, bot?.disabledMcpServerIds ?? []);
     const composioServer = Option.isSome(composio)
-      ? yield* composio.value
-          .resolveRuntimeMcpServer(thread.id)
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Composio tools are unavailable", { detail: error.message }).pipe(
-                Effect.as(undefined),
-              ),
-            ),
-          )
+      ? yield* composio.value.resolveRuntimeMcpServer(thread.id)
       : undefined;
     return composioServer ? [...resolved, composioServer] : resolved;
   });

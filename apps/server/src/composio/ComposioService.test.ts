@@ -39,16 +39,22 @@ function fakeClient(input?: {
     readonly alias?: string | null;
   }>;
 }) {
-  const createSession = vi.fn(async () => ({
-    mcp: {
-      url: "https://app.composio.dev/tool_router/v3/session/mcp",
-      headers: { "x-api-key": "project-key" },
-    },
-    authorize: vi.fn(async () => ({
-      id: "connection-new",
-      redirectUrl: "https://connect.composio.dev/link",
-    })),
-  }));
+  const sessionDeletes: Array<ReturnType<typeof vi.fn<() => Promise<void>>>> = [];
+  const createSession = vi.fn(async () => {
+    const deleteSession = vi.fn(async () => undefined);
+    sessionDeletes.push(deleteSession);
+    return {
+      mcp: {
+        url: "https://app.composio.dev/tool_router/v3/session/mcp",
+        headers: { "x-api-key": "project-key" },
+      },
+      authorize: vi.fn(async () => ({
+        id: "connection-new",
+        redirectUrl: "https://connect.composio.dev/link",
+      })),
+      delete: deleteSession,
+    };
+  });
   const client = {
     toolkits: { get: vi.fn(async () => []) },
     connectedAccounts: {
@@ -57,7 +63,7 @@ function fakeClient(input?: {
     },
     sessions: { create: createSession },
   } as unknown as InstanceType<typeof Composio>;
-  return { client, createSession };
+  return { client, createSession, sessionDeletes };
 }
 
 describe("ComposioService", () => {
@@ -135,6 +141,69 @@ describe("ComposioService", () => {
         createdAt: "1970-01-01T00:00:00.000Z",
         updatedAt: "1970-01-01T00:00:00.000Z",
       });
+    }),
+  );
+
+  it.effect("deletes a hosted session before replacing its cached runtime", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
+      });
+      const service = make(store, () => client);
+
+      yield* service.resolveRuntimeMcpServer("thread-1");
+      vi.mocked(client.connectedAccounts.list).mockResolvedValue({
+        items: [{ id: "slack-work", toolkit: { slug: "slack" }, status: "ACTIVE" }],
+        totalPages: 1,
+      } as never);
+      yield* service.resolveRuntimeMcpServer("thread-1");
+
+      expect(createSession).toHaveBeenCalledTimes(2);
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+      expect(sessionDeletes[1]).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect("keeps failed hosted-session cleanup retryable", () =>
+    Effect.gen(function* () {
+      const { store, values } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, sessionDeletes } = fakeClient({
+        accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
+      });
+      const service = make(store, () => client);
+
+      yield* service.resolveRuntimeMcpServer("thread-1");
+      sessionDeletes[0]!.mockRejectedValueOnce(new Error("cleanup failed"));
+
+      const error = yield* Effect.flip(service.remove);
+      expect(error).toMatchObject({
+        operation: "delete hosted tool sessions",
+        message: "Composio could not delete hosted tool sessions.",
+      });
+      expect(values.has("composio-api-key")).toBe(true);
+
+      expect(yield* service.remove).toEqual({ configured: false, connections: [] });
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(2);
+      expect(values.has("composio-api-key")).toBe(false);
+    }),
+  );
+
+  it.effect("deletes the oldest hosted session before LRU eviction", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
+      });
+      const service = make(store, () => client);
+
+      for (let index = 0; index <= 100; index += 1) {
+        yield* service.resolveRuntimeMcpServer(`thread-${index}`);
+      }
+
+      expect(createSession).toHaveBeenCalledTimes(101);
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+      expect(sessionDeletes[1]).not.toHaveBeenCalled();
     }),
   );
 });

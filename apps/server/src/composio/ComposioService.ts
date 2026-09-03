@@ -95,8 +95,25 @@ export function make(
 ): ComposioServiceShape {
   const runtimeCache = new Map<
     string,
-    { readonly fingerprint: string; readonly server: McpServer }
+    {
+      readonly fingerprint: string;
+      readonly server: McpServer;
+      readonly deleteSession: () => Promise<void>;
+    }
   >();
+
+  const deleteCachedSession = async (resourceId: string) => {
+    const cached = runtimeCache.get(resourceId);
+    if (!cached) return;
+    await cached.deleteSession();
+    if (runtimeCache.get(resourceId) === cached) runtimeCache.delete(resourceId);
+  };
+
+  const clearRuntimeCache = async () => {
+    for (const resourceId of runtimeCache.keys()) {
+      await deleteCachedSession(resourceId);
+    }
+  };
 
   const readApiKey = secretStore.get(API_KEY_SECRET).pipe(
     Effect.mapError((cause) => operationError("read its API key", cause)),
@@ -151,16 +168,22 @@ export function make(
       }
       const client = createClient(normalized);
       yield* tryComposio("validate its API key", () => client.toolkits.get({ limit: 1 }));
+      yield* tryComposio("delete hosted tool sessions", clearRuntimeCache);
       yield* secretStore
         .set(API_KEY_SECRET, textEncoder.encode(normalized))
         .pipe(Effect.mapError((cause) => operationError("save its API key", cause)));
-      runtimeCache.clear();
       return yield* getStatus;
     });
 
-  const remove: ComposioServiceShape["remove"] = secretStore.remove(API_KEY_SECRET).pipe(
-    Effect.tap(() => Effect.sync(() => runtimeCache.clear())),
-    Effect.mapError((cause) => operationError("remove its API key", cause)),
+  const remove: ComposioServiceShape["remove"] = tryComposio(
+    "delete hosted tool sessions",
+    clearRuntimeCache,
+  ).pipe(
+    Effect.andThen(
+      secretStore
+        .remove(API_KEY_SECRET)
+        .pipe(Effect.mapError((cause) => operationError("remove its API key", cause))),
+    ),
     Effect.as({ configured: false, connections: [] }),
   );
 
@@ -192,6 +215,7 @@ export function make(
 
   const authorize: ComposioServiceShape["authorize"] = (input) =>
     withClient("start account authorization", async (client, userId) => {
+      await clearRuntimeCache();
       const session = await client.sessions.create(userId, {
         mcp: true,
         toolkits: [input.toolkitSlug],
@@ -205,14 +229,13 @@ export function make(
       if (!request.redirectUrl) {
         throw new Error("Composio did not return an authorization URL.");
       }
-      runtimeCache.clear();
       return { connectionId: request.id, redirectUrl: request.redirectUrl };
     });
 
   const disconnect: ComposioServiceShape["disconnect"] = (connectionId) =>
     withClient("disconnect an account", async (client) => {
+      await clearRuntimeCache();
       await client.connectedAccounts.delete(connectionId);
-      runtimeCache.clear();
     }).pipe(Effect.flatMap(() => getStatus));
 
   const resolveRuntimeMcpServer: ComposioServiceShape["resolveRuntimeMcpServer"] = (resourceId) =>
@@ -220,7 +243,10 @@ export function make(
       const connections = (await listConnections(client, userId)).filter(
         (connection) => connection.status === "ACTIVE",
       );
-      if (connections.length === 0) return undefined;
+      if (connections.length === 0) {
+        await deleteCachedSession(resourceId);
+        return undefined;
+      }
       const connectedAccounts = Object.groupBy(connections, (connection) => connection.toolkitSlug);
       const accountMap = Object.fromEntries(
         Object.entries(connectedAccounts).map(([toolkit, accounts]) => [
@@ -231,6 +257,11 @@ export function make(
       const fingerprint = JSON.stringify(accountMap);
       const cached = runtimeCache.get(resourceId);
       if (cached?.fingerprint === fingerprint) return cached.server;
+      await deleteCachedSession(resourceId);
+      if (runtimeCache.size >= 100) {
+        const oldest = runtimeCache.keys().next().value;
+        if (oldest !== undefined) await deleteCachedSession(oldest);
+      }
       const session = await client.sessions.create(userId, {
         mcp: true,
         toolkits: Object.keys(accountMap),
@@ -255,17 +286,15 @@ export function make(
         },
         session.mcp.headers ?? {},
       );
-      runtimeCache.set(resourceId, { fingerprint, server });
-      if (runtimeCache.size > 100) {
-        const oldest = runtimeCache.keys().next().value;
-        if (oldest !== undefined) runtimeCache.delete(oldest);
-      }
+      runtimeCache.set(resourceId, {
+        fingerprint,
+        server,
+        deleteSession: () => session.delete().then(() => undefined),
+      });
       return server;
     }).pipe(
       Effect.catch((error) =>
-        error.message === "Connect Composio in Settings first."
-          ? Effect.succeed<McpServer | undefined>(undefined)
-          : Effect.fail(error),
+        error.message === "Connect Composio in Settings first." ? Effect.void : Effect.fail(error),
       ),
     );
 
