@@ -222,14 +222,36 @@ export function make(
         manageConnections: true,
         multiAccount: { enable: true, maxAccountsPerToolkit: 10 },
       });
-      const request = await session.authorize(
-        input.toolkitSlug,
-        input.alias ? { alias: input.alias } : undefined,
+      const authorization = await session
+        .authorize(input.toolkitSlug, input.alias ? { alias: input.alias } : undefined)
+        .then((request) => {
+          if (!request.redirectUrl) {
+            throw new Error("Composio did not return an authorization URL.");
+          }
+          return { connectionId: request.id, redirectUrl: request.redirectUrl };
+        })
+        .then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
+      const cleanup = await session.delete().then(
+        () => ({ ok: true as const }),
+        (error: unknown) => ({ ok: false as const, error }),
       );
-      if (!request.redirectUrl) {
-        throw new Error("Composio did not return an authorization URL.");
+      if (!authorization.ok) {
+        if (!cleanup.ok) {
+          throw new AggregateError(
+            [authorization.error, cleanup.error],
+            "Composio authorization and hosted-session cleanup both failed.",
+            { cause: authorization.error },
+          );
+        }
+        throw authorization.error;
       }
-      return { connectionId: request.id, redirectUrl: request.redirectUrl };
+      if (!cleanup.ok) {
+        throw cleanup.error;
+      }
+      return authorization.value;
     });
 
   const disconnect: ComposioServiceShape["disconnect"] = (connectionId) =>

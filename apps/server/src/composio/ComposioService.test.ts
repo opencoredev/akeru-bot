@@ -38,6 +38,10 @@ function fakeClient(input?: {
     readonly status: "ACTIVE" | "FAILED";
     readonly alias?: string | null;
   }>;
+  readonly authorize?: () => Promise<{
+    readonly id: string;
+    readonly redirectUrl?: string;
+  }>;
 }) {
   const sessionDeletes: Array<ReturnType<typeof vi.fn<() => Promise<void>>>> = [];
   const createSession = vi.fn(async () => {
@@ -48,10 +52,13 @@ function fakeClient(input?: {
         url: "https://app.composio.dev/tool_router/v3/session/mcp",
         headers: { "x-api-key": "project-key" },
       },
-      authorize: vi.fn(async () => ({
-        id: "connection-new",
-        redirectUrl: "https://connect.composio.dev/link",
-      })),
+      authorize: vi.fn(
+        input?.authorize ??
+          (async () => ({
+            id: "connection-new",
+            redirectUrl: "https://connect.composio.dev/link",
+          })),
+      ),
       delete: deleteSession,
     };
   });
@@ -93,6 +100,52 @@ describe("ComposioService", () => {
       const error = yield* Effect.flip(service.configure("bad-key"));
       expect(error).toMatchObject({ message: "The Composio API key is invalid." });
       expect(values.has("composio-api-key")).toBe(false);
+    }),
+  );
+
+  it.effect("deletes its hosted session after starting authorization", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, sessionDeletes } = fakeClient();
+      const service = make(store, () => client);
+
+      expect(yield* service.authorize({ toolkitSlug: "gmail" })).toEqual({
+        connectionId: "connection-new",
+        redirectUrl: "https://connect.composio.dev/link",
+      });
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.effect("deletes its hosted session when authorization fails", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, sessionDeletes } = fakeClient({
+        authorize: () => Promise.reject(new Error("authorization failed")),
+      });
+      const service = make(store, () => client);
+
+      expect(yield* Effect.flip(service.authorize({ toolkitSlug: "gmail" }))).toMatchObject({
+        operation: "start account authorization",
+        message: "Composio could not start account authorization.",
+      });
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.effect("deletes its hosted session when the authorization URL is missing", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, sessionDeletes } = fakeClient({
+        authorize: async () => ({ id: "connection-new" }),
+      });
+      const service = make(store, () => client);
+
+      expect(yield* Effect.flip(service.authorize({ toolkitSlug: "gmail" }))).toMatchObject({
+        operation: "start account authorization",
+        message: "Composio could not start account authorization.",
+      });
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
     }),
   );
 
