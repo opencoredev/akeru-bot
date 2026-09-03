@@ -42,10 +42,11 @@ function fakeClient(input?: {
     readonly id: string;
     readonly redirectUrl?: string;
   }>;
+  readonly deleteSession?: () => Promise<void>;
 }) {
   const sessionDeletes: Array<ReturnType<typeof vi.fn<() => Promise<void>>>> = [];
   const createSession = vi.fn(async () => {
-    const deleteSession = vi.fn(async () => undefined);
+    const deleteSession = vi.fn(input?.deleteSession ?? (async () => undefined));
     sessionDeletes.push(deleteSession);
     return {
       mcp: {
@@ -146,6 +147,37 @@ describe("ComposioService", () => {
         message: "Composio could not start account authorization.",
       });
       expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.effect("retries failed authorization-session cleanup before authorizing again", () =>
+    Effect.gen(function* () {
+      let cleanupAttempt = 0;
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        deleteSession: async () => {
+          cleanupAttempt += 1;
+          if (cleanupAttempt === 1) throw new Error("cleanup response was lost");
+          if (cleanupAttempt === 2) {
+            throw Object.assign(new Error("session not found"), { status: 404 });
+          }
+        },
+      });
+      const service = make(store, () => client);
+
+      expect(yield* Effect.flip(service.authorize({ toolkitSlug: "gmail" }))).toMatchObject({
+        operation: "start account authorization",
+        message: "Composio could not start account authorization.",
+      });
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+
+      expect(yield* service.authorize({ toolkitSlug: "gmail" })).toEqual({
+        connectionId: "connection-new",
+        redirectUrl: "https://connect.composio.dev/link",
+      });
+      expect(createSession).toHaveBeenCalledTimes(2);
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(2);
+      expect(sessionDeletes[1]).toHaveBeenCalledTimes(1);
     }),
   );
 

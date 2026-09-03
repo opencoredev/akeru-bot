@@ -65,6 +65,15 @@ function operationError(operation: string, cause: unknown): ComposioOperationErr
   return new ComposioOperationError({ operation, message });
 }
 
+function isNotFoundError(cause: unknown): boolean {
+  return (
+    typeof cause === "object" &&
+    cause !== null &&
+    "status" in cause &&
+    Number((cause as { readonly status?: unknown }).status) === 404
+  );
+}
+
 const tryComposio = <A>(operation: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
@@ -93,6 +102,7 @@ export function make(
   secretStore: ServerSecretStore["Service"],
   createClient: ComposioClientFactory = (apiKey) => new Composio({ apiKey }),
 ): ComposioServiceShape {
+  const pendingAuthorizationSessionDeletes = new Set<() => Promise<void>>();
   const runtimeCache = new Map<
     string,
     {
@@ -105,7 +115,11 @@ export function make(
   const deleteCachedSession = async (resourceId: string) => {
     const cached = runtimeCache.get(resourceId);
     if (!cached) return;
-    await cached.deleteSession();
+    try {
+      await cached.deleteSession();
+    } catch (cause) {
+      if (!isNotFoundError(cause)) throw cause;
+    }
     if (runtimeCache.get(resourceId) === cached) runtimeCache.delete(resourceId);
   };
 
@@ -113,6 +127,26 @@ export function make(
     for (const resourceId of runtimeCache.keys()) {
       await deleteCachedSession(resourceId);
     }
+  };
+
+  const deleteAuthorizationSession = async (deleteSession: () => Promise<void>) => {
+    try {
+      await deleteSession();
+    } catch (cause) {
+      if (!isNotFoundError(cause)) throw cause;
+    }
+    pendingAuthorizationSessionDeletes.delete(deleteSession);
+  };
+
+  const clearAuthorizationSessions = async () => {
+    for (const deleteSession of pendingAuthorizationSessionDeletes) {
+      await deleteAuthorizationSession(deleteSession);
+    }
+  };
+
+  const clearHostedSessions = async () => {
+    await clearRuntimeCache();
+    await clearAuthorizationSessions();
   };
 
   const readApiKey = secretStore.get(API_KEY_SECRET).pipe(
@@ -168,7 +202,7 @@ export function make(
       }
       const client = createClient(normalized);
       yield* tryComposio("validate its API key", () => client.toolkits.get({ limit: 1 }));
-      yield* tryComposio("delete hosted tool sessions", clearRuntimeCache);
+      yield* tryComposio("delete hosted tool sessions", clearHostedSessions);
       yield* secretStore
         .set(API_KEY_SECRET, textEncoder.encode(normalized))
         .pipe(Effect.mapError((cause) => operationError("save its API key", cause)));
@@ -177,7 +211,7 @@ export function make(
 
   const remove: ComposioServiceShape["remove"] = tryComposio(
     "delete hosted tool sessions",
-    clearRuntimeCache,
+    clearHostedSessions,
   ).pipe(
     Effect.andThen(
       secretStore
@@ -215,13 +249,15 @@ export function make(
 
   const authorize: ComposioServiceShape["authorize"] = (input) =>
     withClient("start account authorization", async (client, userId) => {
-      await clearRuntimeCache();
+      await clearHostedSessions();
       const session = await client.sessions.create(userId, {
         mcp: true,
         toolkits: [input.toolkitSlug],
         manageConnections: true,
         multiAccount: { enable: true, maxAccountsPerToolkit: 10 },
       });
+      const deleteSession = () => session.delete().then(() => undefined);
+      pendingAuthorizationSessionDeletes.add(deleteSession);
       const authorization = await session
         .authorize(input.toolkitSlug, input.alias ? { alias: input.alias } : undefined)
         .then((request) => {
@@ -234,7 +270,7 @@ export function make(
           (value) => ({ ok: true as const, value }),
           (error: unknown) => ({ ok: false as const, error }),
         );
-      const cleanup = await session.delete().then(
+      const cleanup = await deleteAuthorizationSession(deleteSession).then(
         () => ({ ok: true as const }),
         (error: unknown) => ({ ok: false as const, error }),
       );
