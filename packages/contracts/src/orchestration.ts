@@ -154,9 +154,9 @@ export const RuntimeMode = Schema.Literals([
 export type RuntimeMode = typeof RuntimeMode.Type;
 // Event decoders keep the historical full-access fallback for old persisted data.
 export const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
-export const LocalExecutionMode = Schema.Literals(["approval-required", "full-access"]);
+export const LocalExecutionMode = Schema.Literals(["approval-required", "auto", "full-access"]);
 export type LocalExecutionMode = typeof LocalExecutionMode.Type;
-export const DEFAULT_LOCAL_EXECUTION_MODE: LocalExecutionMode = "approval-required";
+export const DEFAULT_LOCAL_EXECUTION_MODE: LocalExecutionMode = "auto";
 export const ProviderInteractionMode = Schema.Literals(["default", "plan"]);
 export type ProviderInteractionMode = typeof ProviderInteractionMode.Type;
 export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "default";
@@ -188,6 +188,7 @@ export type ProviderUserInputAnswers = typeof ProviderUserInputAnswers.Type;
 export const PROVIDER_SEND_TURN_MAX_INPUT_CHARS = 120_000;
 export const PROVIDER_SEND_TURN_MAX_ATTACHMENTS = 8;
 export const PROVIDER_SEND_TURN_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const PROVIDER_SEND_TURN_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES = [
   "image/gif",
   "image/jpeg",
@@ -202,7 +203,28 @@ const PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPE_SET = new Set<string>(
 export function isProviderSendTurnSupportedImageMimeType(mimeType: string): boolean {
   return PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPE_SET.has(mimeType.toLowerCase());
 }
+export const PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES = [
+  "application/json",
+  "application/pdf",
+  "application/toml",
+  "application/xml",
+  "application/x-yaml",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+  "text/toml",
+  "text/xml",
+  "text/yaml",
+] as const;
+const PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPE_SET = new Set<string>(
+  PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES,
+);
+
+export function isProviderSendTurnSupportedFileMimeType(mimeType: string): boolean {
+  return PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPE_SET.has(mimeType.toLowerCase());
+}
 const PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS = 14_000_000;
+const PROVIDER_SEND_TURN_MAX_FILE_DATA_URL_CHARS = 14_000_000;
 const CHAT_ATTACHMENT_ID_MAX_CHARS = 128;
 // Correlation id is command id by design in this model.
 export const CorrelationId = CommandId;
@@ -234,9 +256,29 @@ const UploadChatImageAttachment = Schema.Struct({
 });
 export type UploadChatImageAttachment = typeof UploadChatImageAttachment.Type;
 
-export const ChatAttachment = Schema.Union([ChatImageAttachment]);
+export const ChatFileAttachment = Schema.Struct({
+  type: Schema.Literal("file"),
+  id: ChatAttachmentId,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  mimeType: Schema.Literals(PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES)),
+});
+export type ChatFileAttachment = typeof ChatFileAttachment.Type;
+
+const UploadChatFileAttachment = Schema.Struct({
+  type: Schema.Literal("file"),
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  mimeType: Schema.Literals(PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES)),
+  dataUrl: TrimmedNonEmptyString.check(
+    Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_FILE_DATA_URL_CHARS),
+  ),
+});
+export type UploadChatFileAttachment = typeof UploadChatFileAttachment.Type;
+
+export const ChatAttachment = Schema.Union([ChatImageAttachment, ChatFileAttachment]);
 export type ChatAttachment = typeof ChatAttachment.Type;
-const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
+const UploadChatAttachment = Schema.Union([UploadChatImageAttachment, UploadChatFileAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
 export const ProjectScriptIcon = Schema.Literals([
@@ -453,7 +495,8 @@ export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
 export const OrchestrationMessageReaction = Schema.Struct({
   emoji: TrimmedNonEmptyString,
-  botId: BotId,
+  botId: Schema.optional(BotId),
+  personId: Schema.optional(AuthSessionId),
 });
 export type OrchestrationMessageReaction = typeof OrchestrationMessageReaction.Type;
 
@@ -1478,7 +1521,6 @@ export const ThreadTurnStartCommand = Schema.Struct({
     channelOrigin: Schema.optional(ChannelMessageOrigin),
   }),
   modelSelection: Schema.optional(ModelSelection),
-  titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
   ),
@@ -1506,7 +1548,6 @@ const ClientThreadTurnStartCommand = Schema.Struct({
     attachments: Schema.Array(Schema.Union([UploadChatAttachment, ChatAttachment])),
   }),
   modelSelection: Schema.optional(ModelSelection),
-  titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
@@ -1582,6 +1623,17 @@ export const DelegationCancelCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadMessageReactionSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.reaction.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  botId: Schema.optional(BotId),
+  emoji: TrimmedNonEmptyString,
+  present: Schema.Boolean,
+  updatedAt: IsoDateTime,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
@@ -1625,6 +1677,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
+  ThreadMessageReactionSetCommand,
   ThreadSessionStopCommand,
   DelegationCancelCommand,
 ]);
@@ -1681,6 +1734,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
+  ThreadMessageReactionSetCommand,
   ThreadSessionStopCommand,
   DelegationCancelCommand,
 ]);
@@ -1712,17 +1766,6 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   messageId: MessageId,
   turnId: Schema.optional(TurnId),
   createdAt: IsoDateTime,
-});
-
-const ThreadMessageReactionSetCommand = Schema.Struct({
-  type: Schema.Literal("thread.message.reaction.set"),
-  commandId: CommandId,
-  threadId: ThreadId,
-  messageId: MessageId,
-  botId: BotId,
-  emoji: TrimmedNonEmptyString,
-  present: Schema.Boolean,
-  updatedAt: IsoDateTime,
 });
 
 const ThreadProposedPlanUpsertCommand = Schema.Struct({
@@ -1805,7 +1848,6 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
-  ThreadMessageReactionSetCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
@@ -2200,7 +2242,8 @@ export const ThreadMessageSentPayload = Schema.Struct({
 export const ThreadMessageReactionSetPayload = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
-  botId: BotId,
+  botId: Schema.optional(BotId),
+  personId: Schema.optional(AuthSessionId),
   emoji: TrimmedNonEmptyString,
   present: Schema.Boolean,
   updatedAt: IsoDateTime,
@@ -2210,7 +2253,6 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   modelSelection: Schema.optional(ModelSelection),
-  titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),

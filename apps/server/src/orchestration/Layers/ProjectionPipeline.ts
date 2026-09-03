@@ -387,9 +387,6 @@ function collectThreadAttachmentRelativePaths(
   const relativePaths = new Set<string>();
   for (const message of messages) {
     for (const attachment of message.attachments ?? []) {
-      if (attachment.type !== "image") {
-        continue;
-      }
       const attachmentThreadSegment = parseThreadSegmentFromAttachmentId(attachment.id);
       if (!attachmentThreadSegment || attachmentThreadSegment !== threadSegment) {
         continue;
@@ -1321,6 +1318,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         }
 
         case "thread.message-sent":
+        case "thread.message-reaction-set":
         case "thread.proposed-plan-upserted":
         case "thread.activity-appended":
         case "thread.approval-response-requested":
@@ -1422,21 +1420,38 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     )(function* (event, attachmentSideEffects) {
       switch (event.type) {
         case "thread.message-sent": {
+          if (event.payload.streaming) {
+            const attachments =
+              event.payload.attachments !== undefined
+                ? yield* materializeAttachmentsForProjection({
+                    attachments: event.payload.attachments,
+                  })
+                : undefined;
+            yield* projectionThreadMessageRepository.appendStreaming({
+              messageId: event.payload.messageId,
+              threadId: event.payload.threadId,
+              turnId: event.payload.turnId,
+              respondingBotId: event.payload.respondingBotId ?? null,
+              authorPersonId: event.payload.authorPersonId ?? null,
+              authorDisplayName: event.payload.authorDisplayName ?? null,
+              channelOrigin: event.payload.channelOrigin ?? null,
+              role: event.payload.role,
+              text: event.payload.text,
+              ...(attachments !== undefined ? { attachments: [...attachments] } : {}),
+              createdAt: event.payload.createdAt,
+              updatedAt: event.payload.updatedAt,
+            });
+            return;
+          }
+
           const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
             messageId: event.payload.messageId,
           });
           const previousMessage = Option.getOrUndefined(existingMessage);
           const nextText = Option.match(existingMessage, {
             onNone: () => event.payload.text,
-            onSome: (message) => {
-              if (event.payload.streaming) {
-                return `${message.text}${event.payload.text}`;
-              }
-              if (event.payload.text.length === 0) {
-                return message.text;
-              }
-              return event.payload.text;
-            },
+            onSome: (message) =>
+              event.payload.text.length === 0 ? message.text : event.payload.text,
           });
           const nextAttachments =
             event.payload.attachments !== undefined
@@ -1458,7 +1473,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             text: nextText,
             ...(nextAttachments !== undefined ? { attachments: [...nextAttachments] } : {}),
             reactions: previousMessage?.reactions ?? [],
-            isStreaming: event.payload.streaming,
+            isStreaming: false,
             createdAt: previousMessage?.createdAt ?? event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
           });
@@ -1472,12 +1487,22 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           if (Option.isNone(existingMessage)) return;
           const withoutReaction = (existingMessage.value.reactions ?? []).filter(
             (reaction) =>
-              reaction.botId !== event.payload.botId || reaction.emoji !== event.payload.emoji,
+              reaction.botId !== event.payload.botId ||
+              reaction.personId !== event.payload.personId ||
+              reaction.emoji !== event.payload.emoji,
           );
           yield* projectionThreadMessageRepository.upsert({
             ...existingMessage.value,
             reactions: event.payload.present
-              ? [...withoutReaction, { botId: event.payload.botId, emoji: event.payload.emoji }]
+              ? [
+                  ...withoutReaction,
+                  {
+                    ...(event.payload.botId !== undefined
+                      ? { botId: event.payload.botId }
+                      : { personId: event.payload.personId }),
+                    emoji: event.payload.emoji,
+                  },
+                ]
               : withoutReaction,
             updatedAt: event.payload.updatedAt,
           });

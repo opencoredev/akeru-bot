@@ -5,8 +5,8 @@
 
 > For Akeru Bot maintainers.
 
-`.depot/workflows/release-smoke.yml` validates release inputs without publishing or releasing anything.
-Dispatch it from Depot with a version such as `0.0.0-smoke.0`.
+`.github/workflows/release-smoke.yml` validates release inputs without publishing or releasing
+anything. Dispatch it from GitHub Actions with a version such as `0.0.0-smoke.0`.
 
 ## What it checks
 
@@ -14,10 +14,12 @@ Dispatch it from Depot with a version such as `0.0.0-smoke.0`.
   local path outside the repository.
 - The release configuration passes `scripts/release-smoke.ts`.
 - macOS builds one arm64 DMG with the `dev.leodoes.akeru` bundle identifier.
-- The macOS app uses a Developer ID Application certificate. Electron-builder submits and staples
-  the app before it packages the DMG. The workflow submits and staples the DMG separately.
-- Signed apps always include the Electron hardened-runtime and microphone entitlements.
-- The workflow staples and validates the notarization tickets, then runs `codesign` and `spctl`.
+- Unsigned macOS builds use a sealed ad-hoc signature. The workflow verifies the signature and the
+  `dev.leodoes.akeru` identifier.
+- Signed macOS builds use a Developer ID Application certificate. Electron-builder submits and
+  staples the app before it packages the DMG. The workflow submits and staples the DMG separately.
+- Signed apps include the Electron hardened-runtime and microphone entitlements. The workflow
+  validates the notarization tickets, then runs `codesign` and `spctl`.
 - Windows builds one unsigned x64 NSIS installer.
 - Linux builds one unsigned x64 AppImage.
 - The CLI build includes the web client, then completes a package publish dry-run.
@@ -27,20 +29,19 @@ Each desktop job uploads its artifact to the workflow run for seven days. The wo
 create tags, create GitHub releases, publish npm packages, deploy a site, update AUR, or send
 release announcements.
 
-## Depot setup
+## Runner setup
 
-CI and release smoke run on Depot CI. Code Access is already installed for `opencoredev/akeru-bot`.
-GitHub Actions owns the publishing workflow because Depot does not provide the macOS runner and
-rejects the Windows runner needed for stable desktop artifacts. All Depot smoke jobs use a Depot
-runner label:
+CI and release workflows run through GitHub Actions. Tenki provides Linux and Apple Silicon macOS
+runners. GitHub provides the Windows runner. The Tenki Runner GitHub App must have access to
+`opencoredev/akeru-bot`.
 
-- Linux uses the 4-vCPU `depot-ubuntu-24.04-4` runner.
-- Windows uses the 8-vCPU `depot-windows-2025-8` runner.
-- macOS uses the Apple Silicon `depot-macos-15` image.
+- Linux uses the 4-vCPU `tenki-standard-medium-4c-8g` runner.
+- Windows uses the GitHub-hosted `windows-2025` runner.
+- macOS uses the 4-vCPU Apple Silicon `tenki-macos-15-medium` runner.
 
 ## macOS secrets
 
-Add these Depot CI secrets before running the workflow:
+Add these GitHub Actions secrets before running the workflow:
 
 - `MACOS_CERTIFICATE_P12` contains the base64-encoded `.p12` export of the Developer ID Application
   certificate and its private key.

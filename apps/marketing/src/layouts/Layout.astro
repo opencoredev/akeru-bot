@@ -97,7 +97,7 @@ const structuredData = [
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=EB+Garamond:wght@500&display=swap"
       rel="stylesheet"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -216,7 +216,7 @@ const structuredData = [
     --color-primary-surface: #121f3d;
     --color-secondary: #141414;
     --color-muted: #141414;
-    --color-muted-foreground: #b4b4b4;
+    --color-muted-foreground: #8a8a8a;
     --color-dim-foreground: #7b7b7b;
     --color-border: #232323;
     --color-input: #2c2c2c;
@@ -227,8 +227,7 @@ const structuredData = [
     --color-band: #0c0c0c;
 
     --font-sans: "Geist", system-ui, sans-serif;
-    /* The wordmark and headings share the body face. */
-    --font-serif: var(--font-sans);
+    --font-serif: "EB Garamond", Georgia, serif;
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 14px;
@@ -334,10 +333,10 @@ const structuredData = [
   }
 
   .nav-brand {
-    font-size: 18px;
+    font-family: var(--font-serif);
+    font-size: 24px;
     line-height: 24px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.005em;
     color: var(--color-foreground);
   }
 
@@ -351,7 +350,7 @@ const structuredData = [
   .nav-link {
     font-size: 14px;
     line-height: 18px;
-    font-weight: 400;
+    font-weight: 500;
     color: var(--color-muted-foreground);
     transition: color 0.15s ease;
   }
@@ -405,10 +404,10 @@ const structuredData = [
   }
 
   .footer-brand {
-    font-size: 18px;
+    font-family: var(--font-serif);
+    font-size: 22px;
     line-height: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.005em;
     color: var(--color-foreground);
   }
 
@@ -437,7 +436,7 @@ const structuredData = [
     line-height: 16px;
     font-weight: 600;
     letter-spacing: 0.08em;
-    color: var(--color-dim-foreground);
+    color: var(--color-muted-foreground);
   }
 
   .footer-col a {

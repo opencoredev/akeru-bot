@@ -3,6 +3,7 @@ import * as Arr from "effect/Array";
 import * as Schema from "effect/Schema";
 import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
+  AkeruPluginSearchResult,
   ApprovalRequestId,
   isToolLifecycleItemType,
   type OrchestrationLatestTurn,
@@ -52,6 +53,12 @@ export const PROVIDER_OPTIONS: Array<{
   {
     value: ProviderDriverKind.make("kimi"),
     label: "Kimi For Coding",
+    available: true,
+    pickerSidebarBadge: "new",
+  },
+  {
+    value: ProviderDriverKind.make("opencodeGo"),
+    label: "OpenCode Go",
     available: true,
     pickerSidebarBadge: "new",
   },
@@ -116,6 +123,7 @@ const derivedWorkLogEntryByActivity = new WeakMap<
   OrchestrationThreadActivity,
   DerivedWorkLogEntry
 >();
+const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
 
 export interface PendingApproval {
   requestId: ApprovalRequestId;
@@ -195,6 +203,12 @@ export function workLogEntryIsToolLike(entry: WorkLogEntry): boolean {
     return true;
   }
   return entry.itemType !== undefined && isToolLifecycleItemType(entry.itemType);
+}
+
+export function pluginSearchResultForWorkEntry(
+  entry: WorkLogEntry,
+): AkeruPluginSearchResult | null {
+  return isPluginSearchResult(entry.toolData) ? entry.toolData : null;
 }
 
 /** Heuristic: providers often emit successful lifecycle status while error text lives in `detail` / `command`. */
@@ -528,9 +542,6 @@ function parseUserInputQuestions(
           };
         })
         .filter((option): option is UserInputQuestion["options"][number] => option !== null);
-      if (options.length === 0) {
-        return null;
-      }
       return {
         id: question.id,
         header: question.header,
@@ -997,6 +1008,11 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     const data = asRecord(payload?.data);
     if (data?.item !== undefined) {
       entry.toolData = data.item;
+    }
+  } else if (itemType === "dynamic_tool_call") {
+    const data = asRecord(payload?.data);
+    if (isPluginSearchResult(data?.result)) {
+      entry.toolData = data.result;
     }
   }
   if (itemType) {

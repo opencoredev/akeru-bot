@@ -1,4 +1,4 @@
-import { CommandId, MessageId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
+import { CommandId, MessageId, type OrchestrationCommand } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -281,7 +281,6 @@ const make = Effect.gen(function* () {
           text: `Execute this routine now. Do not create or change a schedule.\n\n${routine.procedure}`,
           attachments: [],
         },
-        titleSeed: routine.job,
         runtimeMode: routine.approvalPolicy,
         interactionMode: "default",
         createdAt,

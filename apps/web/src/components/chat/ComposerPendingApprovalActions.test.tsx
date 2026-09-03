@@ -1,4 +1,8 @@
-import { AKERU_CREATE_ROUTINE_TOOL_NAME, ApprovalRequestId } from "@t3tools/contracts";
+import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  ApprovalRequestId,
+} from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -17,9 +21,10 @@ describe("ComposerPendingApprovalActions", () => {
     expect(markup).toContain(">Cancel<");
     expect(markup).toContain("Always allow this session");
     expect(markup).not.toContain(">Always allow<");
-    expect(markup).toContain("h-5");
-    expect(markup).toContain("sm:text-[11px]");
-    expect(markup).not.toContain("sm:h-6");
+    expect(markup).toContain("h-7");
+    expect(markup).toContain("sm:h-6");
+    expect(markup).toContain("bg-primary");
+    expect(markup).toContain("border-input");
   });
 
   it("shows only the approval choices advertised by an MCP server", () => {
@@ -56,7 +61,7 @@ describe("ComposerPendingApprovalActions", () => {
     expect(markup).toContain(label);
   });
 
-  it("uses the three clear command permission choices", () => {
+  it("does not invent persistent permission for a one-use command", () => {
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalActions
         requestId={ApprovalRequestId.make("approval-shell")}
@@ -70,10 +75,30 @@ describe("ComposerPendingApprovalActions", () => {
       />,
     );
 
-    expect(markup).toContain("Always allow");
+    expect(markup).not.toContain("Enable Auto Review");
     expect(markup).toContain("Allow once");
     expect(markup).toContain("Never");
     expect(markup).not.toContain(">Decline<");
+  });
+
+  it("uses the three clear choices when session approval is available", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalActions
+        requestId={ApprovalRequestId.make("approval-shell-session")}
+        requestKind="command"
+        isResponding={false}
+        options={[
+          { decision: "acceptForSession", label: "Allow for session" },
+          { decision: "accept", label: "Allow" },
+          { decision: "decline", label: "Decline" },
+        ]}
+        onRespondToApproval={async () => undefined}
+      />,
+    );
+
+    expect(markup).toContain("Enable Auto Review");
+    expect(markup).toContain("Allow once");
+    expect(markup).toContain("Never");
   });
 
   it("uses one create or cancel choice for a routine", () => {
@@ -93,7 +118,7 @@ describe("ComposerPendingApprovalActions", () => {
 
     expect(markup).toContain("Create routine");
     expect(markup).toContain(">Cancel<");
-    expect(markup).not.toContain("Always allow");
+    expect(markup).not.toContain("Enable Auto Review");
     expect(markup).not.toContain("Allow once");
     expect(markup).not.toContain(">Never<");
 
@@ -108,6 +133,27 @@ describe("ComposerPendingApprovalActions", () => {
     );
     expect(fallbackMarkup).toContain("Create routine");
     expect(fallbackMarkup).toContain(">Cancel<");
-    expect(fallbackMarkup).not.toContain("Always allow");
+    expect(fallbackMarkup).not.toContain("Enable Auto Review");
+  });
+
+  it("keeps product feedback action labels", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalActions
+        requestId={ApprovalRequestId.make("approval-feedback")}
+        requestKind="command"
+        toolName={AKERU_PRODUCT_FEEDBACK_TOOL_NAME}
+        isResponding={false}
+        options={[
+          { decision: "accept", label: "Add to feedback draft" },
+          { decision: "decline", label: "Cancel" },
+        ]}
+        onRespondToApproval={async () => undefined}
+      />,
+    );
+
+    expect(markup).toContain("Add to feedback draft");
+    expect(markup).toContain(">Cancel<");
+    expect(markup).not.toContain("Allow once");
+    expect(markup).not.toContain(">Never<");
   });
 });

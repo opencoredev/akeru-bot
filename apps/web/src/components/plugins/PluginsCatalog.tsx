@@ -1,9 +1,11 @@
-import type { McpServer } from "@t3tools/contracts";
+import type { ComposioToolkit, McpServer, ProviderAccessStatus } from "@t3tools/contracts";
 import { CheckIcon, ChevronRightIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { findPluginServer, pluginMcpServerId } from "./pluginRegistry";
 import {
+  pluginBrokerName,
   pluginConnectionLabel,
   pluginPrimaryAction,
   type PluginSection,
@@ -40,25 +42,31 @@ export function PluginLogoImage({
 interface PluginsCatalogProps {
   readonly sections: readonly PluginSection[];
   readonly servers: readonly McpServer[];
+  readonly accessStatuses?: readonly ProviderAccessStatus[];
   readonly pendingServerId: string | null;
   readonly onToggle: (plugin: PluginDirectoryDefinition, enabled: boolean) => void;
   readonly onOpen: (plugin: PluginDirectoryDefinition) => void;
 }
 
+const EMPTY_PROVIDER_ACCESS_STATUSES: readonly ProviderAccessStatus[] = [];
+
 function PluginRow({
   plugin,
   server,
+  accessStatus,
   pending,
   onToggle,
   onOpen,
 }: {
   readonly plugin: PluginDirectoryDefinition;
   readonly server: McpServer | undefined;
+  readonly accessStatus: ProviderAccessStatus | undefined;
   readonly pending: boolean;
   readonly onToggle: (enabled: boolean) => void;
   readonly onOpen: () => void;
 }) {
-  const action = pluginPrimaryAction(plugin, server);
+  const action = pluginPrimaryAction(plugin, server, accessStatus);
+  const brokerName = pluginBrokerName(plugin);
   return (
     <article
       className="group flex min-w-0 items-center rounded-xl pe-2.5 transition-colors hover:bg-muted/45"
@@ -75,6 +83,15 @@ function PluginRow({
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-medium leading-5">{plugin.title}</h3>
             <span className="shrink-0 text-[11px] text-muted-foreground">{plugin.category}</span>
+            {brokerName ? (
+              <Badge
+                className="border-border/60 bg-background/60 px-1.5 text-muted-foreground"
+                size="sm"
+                variant="outline"
+              >
+                {brokerName}
+              </Badge>
+            ) : null}
             {plugin.connection.type === "approval-pending" ||
             plugin.connection.type === "verification-pending" ? (
               <span className="shrink-0 text-[11px] text-warning-foreground">
@@ -107,6 +124,7 @@ function PluginRow({
 export function PluginsCatalog({
   sections,
   servers,
+  accessStatuses = EMPTY_PROVIDER_ACCESS_STATUSES,
   pendingServerId,
   onToggle,
   onOpen,
@@ -132,6 +150,7 @@ export function PluginsCatalog({
                   key={`${section.title}:${plugin.id}`}
                   plugin={plugin}
                   server={server}
+                  accessStatus={accessStatuses.find((status) => status.pluginId === plugin.id)}
                   pending={pendingServerId === pluginMcpServerId(plugin)}
                   onToggle={(enabled) => onToggle(plugin, enabled)}
                   onOpen={() => onOpen(plugin)}
@@ -142,6 +161,75 @@ export function PluginsCatalog({
         </section>
       ))}
     </div>
+  );
+}
+
+export function ComposioToolkitResults({
+  toolkits,
+  connectedToolkitIds,
+  pendingToolkitId,
+  onConnect,
+}: {
+  readonly toolkits: readonly ComposioToolkit[];
+  readonly connectedToolkitIds: ReadonlySet<string>;
+  readonly pendingToolkitId: string | null;
+  readonly onConnect: (toolkit: ComposioToolkit) => void;
+}) {
+  if (toolkits.length === 0) return null;
+  return (
+    <section aria-label="From Composio">
+      <div className="mb-2 flex items-center justify-between px-2">
+        <h2 className="text-xs font-medium text-muted-foreground">From Composio</h2>
+        <span className="text-xs text-muted-foreground">{toolkits.length}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-x-7 md:grid-cols-2">
+        {toolkits.map((toolkit) => {
+          const connected = connectedToolkitIds.has(toolkit.slug);
+          return (
+            <article
+              className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/45"
+              data-composio-toolkit={toolkit.slug}
+              key={toolkit.slug}
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted p-2">
+                {toolkit.logoUrl ? (
+                  <img alt="" className="size-full object-contain" src={toolkit.logoUrl} />
+                ) : (
+                  <span aria-hidden="true" className="text-sm font-medium text-muted-foreground">
+                    {toolkit.name.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="truncate text-sm font-medium leading-5">{toolkit.name}</h3>
+                  <Badge
+                    className="border-border/60 bg-background/60 px-1.5 text-muted-foreground"
+                    size="sm"
+                    variant="outline"
+                  >
+                    Composio
+                  </Badge>
+                </div>
+                <p className="truncate text-xs leading-5 text-muted-foreground">
+                  {toolkit.description ?? `${toolkit.toolsCount} tools`}
+                </p>
+              </div>
+              <Button
+                aria-label={`${connected ? "Connected" : "Connect"} ${toolkit.name}`}
+                className="h-7 min-w-14 rounded-full px-3 text-xs"
+                disabled={connected || pendingToolkitId === toolkit.slug}
+                size="sm"
+                variant="secondary"
+                onClick={() => onConnect(toolkit)}
+              >
+                {connected ? "Connected" : "Connect"}
+              </Button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

@@ -4,9 +4,8 @@ Use a thread's menu to settle, snooze, wake, archive, delete, pin, or unpin it.
 
 ## Active and settled threads
 
-Akeru settles inactive threads after three days by default. An open pull request blocks inactivity
-settlement. Closed pull requests settle their threads, and merged pull requests settle them when
-**Auto-settle merged threads** is on.
+Akeru settles a thread only when you select **Settle thread**. Inactivity and pull request state do
+not move threads to the settled list.
 
 Settling a pinned thread also removes its pin. **Un-settle thread** returns the thread to the top of
 the active list without changing its timestamps.
@@ -24,8 +23,7 @@ newest-first order until it is updated.
 ## Link a pull request
 
 Right-click a pull-request link and select **Link to thread**. Select **Unlink from thread** from the
-same menu to remove it. Linked review state appears with the thread and can trigger automatic
-settlement.
+same menu to remove it. Linked review state appears with the thread.
 
 ## Regenerate a title
 

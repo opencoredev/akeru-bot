@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "gmail",
+  "name": "Gmail",
+  "description": "Search mail, draft replies, and send messages.",
+  "primaryCategory": "Work",
+  "tags": ["email", "inbox", "google"],
+  "capabilities": ["search email", "read email", "draft email", "send email"],
+  "featuredRank": 1,
+  "publisher": { "name": "Google", "url": "https://gmail.com" },
+  "maintainer": { "name": "Composio", "url": "https://composio.dev" },
+  "documentationUrl": "https://composio.dev/toolkits/gmail",
+  "sourceUrl": "https://composio.dev/toolkits/gmail",
+  "license": "Proprietary",
+  "logo": {
+    "url": "https://logos.composio.dev/api/gmail",
+    "provenance": {
+      "sourceUrl": "https://composio.dev/toolkits/gmail",
+      "license": "Google brand asset served by Composio"
+    }
+  },
+  "platforms": ["web", "desktop", "mobile"],
+  "transport": { "type": "unavailable" },
+  "connection": {
+    "type": "brokered",
+    "broker": { "name": "Composio", "url": "https://composio.dev" }
+  },
+  "authentication": "oauth",
+  "requiredCredentials": [],
+  "setup": ["Connect a Gmail account through Composio."],
+  "permissions": [
+    { "id": "read-email", "description": "Read Gmail messages.", "approval": "read" },
+    { "id": "send-email", "description": "Send Gmail messages.", "approval": "send" },
+    { "id": "delete-email", "description": "Delete Gmail messages.", "approval": "delete" },
+    {
+      "id": "change-email-settings",
+      "description": "Change Gmail settings.",
+      "approval": "account-wide"
+    }
+  ],
+  "approvals": ["send", "delete", "account-wide"],
+  "catalogStatus": "available"
+}

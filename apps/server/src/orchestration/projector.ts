@@ -1058,12 +1058,23 @@ export function projectEvent(
           const messages = thread.messages.map((message) => {
             if (message.id !== payload.messageId) return message;
             const withoutReaction = (message.reactions ?? []).filter(
-              (reaction) => reaction.botId !== payload.botId || reaction.emoji !== payload.emoji,
+              (reaction) =>
+                reaction.botId !== payload.botId ||
+                reaction.personId !== payload.personId ||
+                reaction.emoji !== payload.emoji,
             );
             return {
               ...message,
               reactions: payload.present
-                ? [...withoutReaction, { botId: payload.botId, emoji: payload.emoji }]
+                ? [
+                    ...withoutReaction,
+                    {
+                      ...(payload.botId !== undefined
+                        ? { botId: payload.botId }
+                        : { personId: payload.personId }),
+                      emoji: payload.emoji,
+                    },
+                  ]
                 : withoutReaction,
               updatedAt: payload.updatedAt,
             };

@@ -4,15 +4,18 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { McpServerId, type EnvironmentId, type McpServer } from "@t3tools/contracts";
-import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ExternalLinkIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { ensureLocalApi } from "../../localApi";
 import { randomUUID } from "../../lib/utils";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { serverEnvironment } from "../../state/server";
+import { useEnvironmentQuery } from "../../state/query";
 import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcpServers";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import {
   Dialog,
   DialogDescription,
@@ -97,12 +100,71 @@ function PluginsSettingsForEnvironment({
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
   const enableServer = useAtomCommand(mcpServerEnvironment.enable, { reportFailure: false });
   const disableServer = useAtomCommand(mcpServerEnvironment.disable, { reportFailure: false });
+  const composioStatus = useEnvironmentQuery(
+    serverEnvironment.composioStatus({ environmentId, input: {} }),
+  );
+  const configureComposio = useAtomCommand(serverEnvironment.configureComposio, {
+    reportFailure: false,
+  });
+  const removeComposio = useAtomCommand(serverEnvironment.removeComposio, {
+    reportFailure: false,
+  });
+  const disconnectComposio = useAtomCommand(serverEnvironment.disconnectComposio, {
+    reportFailure: false,
+  });
+  const [composioApiKey, setComposioApiKey] = useState("");
+  const [composioPending, setComposioPending] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
   const [draft, setDraft] = useState<McpServerDraft>(EMPTY_DRAFT);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
   const validationError = validateMcpServerDraft(draft);
+
+  const reportComposioFailure = (
+    title: string,
+    result: Awaited<ReturnType<typeof configureComposio>>,
+  ): boolean => {
+    if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return false;
+    const error = squashAtomCommandFailure(result);
+    toastManager.add({
+      type: "error",
+      title,
+      description: error instanceof Error ? error.message : "The command failed.",
+    });
+    return true;
+  };
+
+  const saveComposio = async () => {
+    const apiKey = composioApiKey.trim();
+    if (!apiKey) return;
+    setComposioPending("key");
+    const result = await configureComposio({ environmentId, input: { apiKey } });
+    setComposioPending(null);
+    if (!reportComposioFailure("Could not connect Composio", result)) {
+      setComposioApiKey("");
+      composioStatus.refresh();
+    }
+  };
+
+  const removeComposioKey = async () => {
+    const confirmed = await ensureLocalApi().dialogs.confirm(
+      "Remove the Composio API key from this environment?",
+      { variant: "destructive" },
+    );
+    if (!confirmed) return;
+    setComposioPending("key");
+    const result = await removeComposio({ environmentId, input: {} });
+    setComposioPending(null);
+    if (!reportComposioFailure("Could not remove Composio", result)) composioStatus.refresh();
+  };
+
+  const disconnectComposioAccount = async (connectionId: string) => {
+    setComposioPending(connectionId);
+    const result = await disconnectComposio({ environmentId, input: { connectionId } });
+    setComposioPending(null);
+    if (!reportComposioFailure("Could not disconnect account", result)) composioStatus.refresh();
+  };
 
   const openCreate = () => {
     setEditingServer(null);
@@ -194,6 +256,93 @@ function PluginsSettingsForEnvironment({
 
   return (
     <SettingsPageContainer>
+      <SettingsSection
+        title="Composio"
+        headerAction={
+          <Badge variant={composioStatus.data?.configured ? "success" : "secondary"}>
+            {composioStatus.data?.configured ? "Connected" : "Not connected"}
+          </Badge>
+        }
+      >
+        <SettingsRow title="API key" description="Stored only on this Akeru Bot server.">
+          <form
+            className="flex items-center gap-2 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveComposio();
+            }}
+          >
+            <Input
+              aria-label="Composio API key"
+              autoComplete="off"
+              placeholder={
+                composioStatus.data?.configured ? "Enter a new key to replace" : "Composio API key"
+              }
+              spellCheck={false}
+              type="password"
+              value={composioApiKey}
+              onChange={(event) => setComposioApiKey(event.currentTarget.value)}
+            />
+            <Button
+              disabled={!composioApiKey.trim() || composioPending !== null}
+              size="sm"
+              type="submit"
+            >
+              {composioStatus.data?.configured ? "Replace" : "Save"}
+            </Button>
+            {composioStatus.data?.configured ? (
+              <Button
+                disabled={composioPending !== null}
+                size="sm"
+                type="button"
+                variant="outline"
+                onClick={() => void removeComposioKey()}
+              >
+                Remove
+              </Button>
+            ) : null}
+          </form>
+          <Button
+            className="mt-2 px-0"
+            size="sm"
+            type="button"
+            variant="link"
+            onClick={() =>
+              void ensureLocalApi().shell.openExternal("https://app.composio.dev/settings/api-keys")
+            }
+          >
+            Create a Composio API key
+            <ExternalLinkIcon className="size-3.5" />
+          </Button>
+        </SettingsRow>
+        {(composioStatus.data?.connections ?? []).length === 0 ? (
+          <SettingsRow
+            title="Connected accounts"
+            description="Connect Gmail or another app from Plugins."
+            status="No accounts"
+          />
+        ) : null}
+        {(composioStatus.data?.connections ?? []).map((connection) => (
+          <SettingsRow
+            key={connection.id}
+            title={connection.alias ?? connection.toolkitSlug}
+            description={`${connection.toolkitSlug === "gmail" ? "Gmail" : connection.toolkitSlug} account`}
+            status={connection.status}
+            control={
+              <Button
+                aria-label={`Disconnect ${connection.alias ?? connection.toolkitSlug}`}
+                disabled={composioPending !== null}
+                size="sm"
+                variant="outline"
+                onClick={() => void disconnectComposioAccount(connection.id)}
+              >
+                Disconnect
+              </Button>
+            }
+          />
+        ))}
+      </SettingsSection>
+
       <SettingsSection
         title="MCP servers"
         headerAction={
@@ -337,7 +486,7 @@ function PluginsSettingsForEnvironment({
 }
 
 export function PluginsSettingsPanel() {
-  const environmentId = usePrimaryEnvironmentId();
+  const environmentId = useSettingsEnvironmentId();
   if (environmentId === null) {
     return (
       <SettingsPageContainer>

@@ -35,6 +35,9 @@ const ProvidersPanel = lazy(async () => ({
 const BrowserSettingsPanel = lazy(async () => ({
   default: (await import("./BrowserSettings")).BrowserSettingsPanel,
 }));
+const PluginsSettingsPanel = lazy(async () => ({
+  default: (await import("./PluginsSettings")).PluginsSettingsPanel,
+}));
 const BotChannelsSettingsPanel = lazy(async () => ({
   default: (await import("./BotChannelsSettings")).BotChannelsSettingsPanel,
 }));
@@ -66,6 +69,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   appearance: AppearanceSettingsPanel,
   providers: ProvidersPanel,
   browser: BrowserSettingsPanel,
+  plugins: PluginsSettingsPanel,
   channels: BotChannelsSettingsPanel,
   sandbox: SandboxSettingsPanel,
   voice: VoiceSettingsPanel,
@@ -87,6 +91,7 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   { section: "providers", label: "Providers", icon: BotIcon },
   { section: "channels", label: "Bot channels", icon: Message01Icon },
   { section: "browser", label: "Browser", icon: BrowserIcon },
+  { section: "plugins", label: "Plugins", icon: Link02Icon },
   { section: "sandbox", label: "Sandbox", icon: HardDriveIcon },
   { section: "voice", label: "Voice", icon: CallIcon },
   { section: "privacy", label: "Privacy", icon: SecurityCheckIcon },

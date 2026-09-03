@@ -8,7 +8,8 @@
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { BotId, IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { BotId, IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { McpServerId } from "./mcpServer.ts";
 
 export const SubscriptionProviderId = Schema.Literals([
   "anthropic",
@@ -16,6 +17,7 @@ export const SubscriptionProviderId = Schema.Literals([
   "cursor",
   "xai",
   "kimi-for-coding",
+  "opencode-go",
 ]);
 export type SubscriptionProviderId = typeof SubscriptionProviderId.Type;
 
@@ -154,7 +156,7 @@ export type SubscriptionAuthStartInput = typeof SubscriptionAuthStartInput.Type;
 
 /**
  * A started login. `completion` says how it finishes: "poll" flows settle by
- * repeated `poll` calls; "paste" flows need the user to paste a code into
+ * repeated `poll` calls; "paste" flows need the user to paste a code or key into
  * `complete`.
  */
 export const SubscriptionAuthStartResult = Schema.Struct({
@@ -174,7 +176,7 @@ export type SubscriptionAuthPollInput = typeof SubscriptionAuthPollInput.Type;
 
 export const SubscriptionAuthCompleteInput = Schema.Struct({
   loginId: Schema.String,
-  /** Pasted authorization input: full URL, `code#state`, or bare code. */
+  /** Pasted authorization input or API key. */
   code: Schema.String,
 });
 export type SubscriptionAuthCompleteInput = typeof SubscriptionAuthCompleteInput.Type;
@@ -195,6 +197,36 @@ export class SubscriptionAuthError extends Schema.TaggedErrorClass<SubscriptionA
   "SubscriptionAuthError",
   {
     reason: Schema.String,
+  },
+) {
+  override get message(): string {
+    return this.reason;
+  }
+}
+
+export const McpServerAuthenticateInput = Schema.Struct({
+  mcpServerId: McpServerId,
+});
+export type McpServerAuthenticateInput = typeof McpServerAuthenticateInput.Type;
+
+export const McpServerAuthenticationProgress = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("authorization-required"),
+    authorizationUrl: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("connected"),
+    toolCount: NonNegativeInt,
+    recoveryFailures: Schema.Array(TrimmedNonEmptyString),
+  }),
+]);
+export type McpServerAuthenticationProgress = typeof McpServerAuthenticationProgress.Type;
+
+export class McpServerAuthenticationError extends Schema.TaggedErrorClass<McpServerAuthenticationError>()(
+  "McpServerAuthenticationError",
+  {
+    mcpServerId: McpServerId,
+    reason: TrimmedNonEmptyString,
   },
 ) {
   override get message(): string {

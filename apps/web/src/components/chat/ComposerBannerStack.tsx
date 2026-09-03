@@ -193,17 +193,19 @@ function ComposerBannerStackAlert({
   readonly onDismissRequest: () => void;
 }) {
   const dismissOnly = item.onDismiss && !item.actions;
+  const visualVariant =
+    item.variant === "info" || item.variant === "success" ? "default" : item.variant;
 
   return (
     <Alert
-      variant={item.variant}
+      variant={visualVariant}
       className={cn(
         attached
           ? "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-[calc(var(--chat-composer-attachment-overlap)_+_0.375rem)] text-xs sm:px-4"
           : "alert-glass rounded-[22px]",
         item.className,
       )}
-      data-variant={item.variant}
+      data-variant={visualVariant}
     >
       {item.icon}
       <AlertTitle>{item.title}</AlertTitle>

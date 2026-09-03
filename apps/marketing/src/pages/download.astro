@@ -91,7 +91,12 @@ import { RELEASES_URL } from "../lib/releases";
       if (!suffix) return;
       const asset = await resolveAssetDownload(card, suffix, releasePromise);
       const promptPlatform = installPromptPlatformForDownload(card.dataset.os, asset !== null);
-      if (promptPlatform) card.dataset.installPrompt = promptPlatform;
+      if (promptPlatform) {
+        card.dataset.installPrompt = promptPlatform;
+        card.href = "#";
+        card.removeAttribute("data-unsigned");
+        return;
+      }
       card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
     });
 

@@ -72,9 +72,9 @@ describe("Akeru catalog MCP tool handlers", () => {
       ...status,
       authorizationUrl: "https://example.com/authorize",
     });
-    expect(emitProgress).toHaveBeenCalledWith(
-      "Authorize MCP server 'search' at https://example.com/authorize",
-    );
+    expect(emitProgress).toHaveBeenCalledWith("Authorize MCP server 'search'.", {
+      authorizationUrl: "https://example.com/authorize",
+    });
 
     authenticateServer.mockResolvedValueOnce({
       ...status,
@@ -184,6 +184,42 @@ describe("Akeru catalog MCP tool handlers", () => {
       routinesAvailable: false,
     });
     await expect(runtime.getPlugin("missing")).rejects.toThrow("was not found");
+  });
+
+  it("merges Composio toolkits into plugin search recommendations", async () => {
+    const runtime = createAkeruPluginRuntime({
+      readSnapshot: async () => snapshot(),
+      dispatch: async () => undefined,
+      searchComposioToolkits: async () => ({
+        status: "available" as const,
+        toolkits: [
+          {
+            slug: "gmail",
+            name: "Gmail",
+            description: "Read and send email.",
+            logoUrl: "https://logos.composio.dev/api/gmail",
+            categories: ["Productivity"],
+            toolsCount: 61,
+          },
+        ],
+      }),
+    } as never);
+
+    const result = await runtime.search({ query: "email", limit: 5 });
+
+    expect(result.kind).toBe("plugin-search-results");
+    expect(result.sources.composio).toBe("available");
+    expect(result.recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "composio:gmail",
+          source: "composio",
+          name: "Gmail",
+          action: "connect",
+          logoUrl: "https://logos.composio.dev/api/gmail",
+        }),
+      ]),
+    );
   });
 
   it("installs catalog-owned recipes and enables an existing disabled plugin", async () => {

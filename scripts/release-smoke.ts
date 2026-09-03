@@ -7,6 +7,7 @@ import * as NodeURL from "node:url";
 
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+import { parse } from "yaml";
 
 import { checkPublicDependencies } from "./check-public-dependencies.ts";
 
@@ -25,24 +26,18 @@ function assertOmits(haystack: string, needle: string, message: string): void {
 }
 
 const releaseWorkflow = read(".github/workflows/release.yml");
-const versionPackagesWorkflow = read(".depot/workflows/version-packages.yml");
-const releaseSmokeWorkflow = read(".depot/workflows/release-smoke.yml");
-const ciWorkflow = read(".depot/workflows/ci.yml");
+const versionPackagesWorkflow = read(".github/workflows/version-packages.yml");
+const releaseSmokeWorkflow = read(".github/workflows/release-smoke.yml");
+const ciWorkflow = read(".github/workflows/ci.yml");
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 const serverCli = read("apps/server/scripts/cli.ts");
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
-
-for (const workflowFile of NodeFS.readdirSync(depotWorkflowDirectory)) {
-  if (!workflowFile.endsWith(".yml") && !workflowFile.endsWith(".yaml")) continue;
-  const workflow = read(NodePath.join(".depot/workflows", workflowFile));
-  if (/^\s*(?:runs-on|runner): (?:ubuntu|macos|windows)-/mu.test(workflow)) {
-    throw new Error(`Depot workflow still uses a GitHub-hosted runner: ${workflowFile}.`);
-  }
-}
-
-for (const relativePath of [".github/workflows/ci.yml"] as const) {
-  if (NodeFS.existsSync(NodePath.join(repoRoot, relativePath))) {
-    throw new Error(`GitHub Actions still owns ${relativePath}; move it to .depot/workflows.`);
+if (NodeFS.existsSync(depotWorkflowDirectory)) {
+  const depotWorkflows = NodeFS.readdirSync(depotWorkflowDirectory).filter(
+    (workflowFile) => workflowFile.endsWith(".yml") || workflowFile.endsWith(".yaml"),
+  );
+  if (depotWorkflows.length > 0) {
+    throw new Error(`Retired Depot workflows still exist: ${depotWorkflows.join(", ")}.`);
   }
 }
 
@@ -72,9 +67,9 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: depot-macos-15", "Depot macOS runner"],
-  ["runner: depot-windows-2025-8", "8-vCPU Depot Windows runner"],
-  ["runner: depot-ubuntu-24.04-4", "4-vCPU Depot Linux runner"],
+  ["runner: tenki-macos-15-medium", "Tenki macOS runner"],
+  ["runner: windows-2025", "GitHub-hosted Windows runner"],
+  ["runner: tenki-standard-medium-4c-8g", "4-vCPU Tenki Linux runner"],
   [
     "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
     "pinned Developer ID certificate import",
@@ -114,10 +109,13 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: macos-15", "GitHub-hosted macOS runner"],
+  ["runner: tenki-macos-15-medium", "Tenki macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
-  ["runner: ubuntu-24.04", "GitHub-hosted Linux runner"],
-  ["Signing credentials must be either complete or absent.", "unsigned signing fallback"],
+  ["runner: tenki-standard-medium-4c-8g", "Tenki Linux runner"],
+  [
+    "Stable macOS releases require complete signing and notarization credentials.",
+    "required macOS signing credentials",
+  ],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
   ["verify-release-assets.ts", "asset name and hash verification"],
@@ -127,6 +125,11 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
+assertOmits(
+  releaseWorkflow,
+  "Verify unsigned macOS app signature",
+  "stable unsigned macOS artifact path",
+);
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
   ["vp run release:changelog", "merged pull request changelog"],
@@ -156,6 +159,30 @@ if (!desktopJobHeader) throw new Error("Stable release workflow is missing the d
 assertOmits(desktopJobHeader, "secrets.", "Desktop signing secrets are scoped at the job level");
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
+const parsedReleaseWorkflow = parse(releaseWorkflow) as {
+  readonly jobs?: {
+    readonly desktop?: {
+      readonly steps?: ReadonlyArray<{
+        readonly name?: string;
+        readonly if?: string;
+        readonly env?: Readonly<Record<string, string>>;
+        readonly with?: Readonly<Record<string, string>>;
+      }>;
+    };
+  };
+};
+for (const step of parsedReleaseWorkflow.jobs?.desktop?.steps ?? []) {
+  const secretInputs = JSON.stringify({ env: step.env, with: step.with });
+  if (/MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) && step.if !== "matrix.platform == 'mac'") {
+    throw new Error(`${step.name ?? "Unnamed step"} exposes macOS secrets outside the macOS job.`);
+  }
+  if (/AZURE_/u.test(secretInputs) && step.if !== "matrix.platform == 'win'") {
+    throw new Error(
+      `${step.name ?? "Unnamed step"} exposes Windows secrets outside the Windows job.`,
+    );
+  }
+}
+
 for (const [needle, label] of [
   ["blacksmith", "private CI runners"],
   ["thread-transfer", "thread transfer reporting"],
@@ -166,13 +193,13 @@ for (const [needle, label] of [
 
 assertContains(
   ciWorkflow,
-  "runs-on: depot-ubuntu-24.04-4",
-  "CI does not use 4-vCPU Depot runners.",
+  "runs-on: tenki-standard-medium-4c-8g",
+  "CI does not use 4-vCPU Tenki runners.",
 );
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
-assertOmits(releaseWorkflow, "runner: depot-macos-15", "unavailable Depot macOS runner");
-assertOmits(releaseWorkflow, "runner: depot-windows-2025-8", "unsupported Depot Windows runner");
-assertOmits(releaseWorkflow, "runner: depot-ubuntu-24.04-8", "Depot Linux runner");
+assertOmits(ciWorkflow, "depot-", "Depot runners");
+assertOmits(releaseSmokeWorkflow, "depot-", "Depot runners");
+assertOmits(releaseWorkflow, "depot-", "Depot runners");
 assertOmits(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',
@@ -182,6 +209,11 @@ assertContains(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "dev.leodoes.akeru"',
   "Akeru desktop bundle identifier is missing.",
+);
+assertContains(
+  desktopArtifactBuilder,
+  'identity: "-"',
+  "Unsigned macOS builds do not opt into a sealed ad-hoc signature.",
 );
 
 for (const relativePath of [

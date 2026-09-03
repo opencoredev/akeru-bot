@@ -45,6 +45,7 @@ const makeThread = (
 
 const makeAgentController = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
   ({
+    authenticateMcpServer: () => Effect.die("unused"),
     resolveEngine: () => Effect.die("unused"),
     inspectEngine: () => Effect.die("unused"),
     startSession: () => Effect.die("unused"),

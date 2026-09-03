@@ -1,9 +1,11 @@
 import type {
   AkeruConversationMemorySnapshot,
   AkeruMemoryThreadAccess,
+  ComposioToolkit,
   BotEngine,
   BotId,
   ModelSelection,
+  McpServer,
   ProviderInteractionMode,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -50,6 +52,13 @@ export interface AgentControllerShape {
   readonly configurePluginRuntime?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
     readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+    readonly searchComposioToolkits?: (input: {
+      readonly query?: string;
+      readonly limit?: number;
+    }) => Promise<{
+      readonly status: "available" | "setup-required" | "unavailable";
+      readonly toolkits: readonly ComposioToolkit[];
+    }>;
   }) => Effect.Effect<void>;
   readonly configureDelegation?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
@@ -60,6 +69,14 @@ export interface AgentControllerShape {
     readonly threadId: ThreadId;
     readonly error: string;
   }) => Effect.Effect<void>;
+
+  readonly authenticateMcpServer: (input: {
+    readonly server: McpServer;
+    readonly onAuthorizationUrl: (url: string) => void;
+  }) => Effect.Effect<
+    { readonly toolCount: number; readonly recoveryFailures: readonly string[] },
+    AgentControllerError
+  >;
 
   readonly readConversationMemory?: (
     threadId: ThreadId,

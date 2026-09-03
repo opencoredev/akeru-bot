@@ -130,15 +130,20 @@ describe("ClaudeSettings auto-compaction", () => {
 });
 
 describe("ServerSettings local execution", () => {
-  it("asks before local execution by default and accepts an explicit full-access opt-in", () => {
-    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+  it("auto-reviews local execution by default and accepts each supported policy", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("auto");
+    expect(
+      decodeServerSettingsPatch({ localExecutionMode: "approval-required" }).localExecutionMode,
+    ).toBe("approval-required");
+    expect(decodeServerSettingsPatch({ localExecutionMode: "auto" }).localExecutionMode).toBe(
+      "auto",
+    );
     expect(
       decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
     ).toBe("full-access");
   });
 
-  it("rejects other runtime modes", () => {
-    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
+  it("rejects edit-only automatic approval", () => {
     expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto-accept-edits" })).toThrow();
   });
 });
@@ -211,11 +216,9 @@ describe("ClientSettings environment identification", () => {
 });
 
 describe("ClientSettings sidebar", () => {
-  it("defaults to the current sidebar with automatic merge and inactivity settling", () => {
+  it("defaults to the current sidebar", () => {
     const settings = decodeClientSettings({});
     expect(settings.legacySidebarEnabled).toBe(false);
-    expect(settings.sidebarAutoSettleAfterDays).toBe(3);
-    expect(settings.sidebarAutoSettleOnMerge).toBe(true);
   });
 
   it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {
@@ -235,24 +238,13 @@ describe("ClientSettings sidebar", () => {
     );
   });
 
-  it("allows auto-settle by inactivity to be disabled", () => {
-    expect(
-      decodeClientSettings({ sidebarAutoSettleAfterDays: null }).sidebarAutoSettleAfterDays,
-    ).toBeNull();
-  });
-
-  it("allows auto-settle on merge to be disabled", () => {
-    expect(decodeClientSettings({ sidebarAutoSettleOnMerge: false }).sidebarAutoSettleOnMerge).toBe(
-      false,
-    );
-    expect(
-      decodeClientSettingsPatch({ sidebarAutoSettleOnMerge: false }).sidebarAutoSettleOnMerge,
-    ).toBe(false);
-  });
-
-  it.each([-1, 0, 91])("rejects an auto-settle threshold outside 1..90: %s", (value) => {
-    expect(() => decodeClientSettings({ sidebarAutoSettleAfterDays: value })).toThrow();
-    expect(() => decodeClientSettingsPatch({ sidebarAutoSettleAfterDays: value })).toThrow();
+  it("drops retired auto-settle settings", () => {
+    const settings = decodeClientSettings({
+      sidebarAutoSettleAfterDays: 3,
+      sidebarAutoSettleOnMerge: true,
+    });
+    expect(settings).not.toHaveProperty("sidebarAutoSettleAfterDays");
+    expect(settings).not.toHaveProperty("sidebarAutoSettleOnMerge");
   });
 });
 
@@ -311,12 +303,14 @@ describe("ServerSettings sandbox providers", () => {
 });
 
 describe("ServerSettings local execution", () => {
-  it("asks first by default and accepts full access only as an opt-in", () => {
-    expect(decodeServerSettings({}).localExecutionMode).toBe("approval-required");
+  it("keeps auto review as the unified default", () => {
+    expect(decodeServerSettings({}).localExecutionMode).toBe("auto");
+    expect(decodeServerSettingsPatch({ localExecutionMode: "auto" }).localExecutionMode).toBe(
+      "auto",
+    );
     expect(
       decodeServerSettingsPatch({ localExecutionMode: "full-access" }).localExecutionMode,
     ).toBe("full-access");
-    expect(() => decodeServerSettingsPatch({ localExecutionMode: "auto" })).toThrow();
   });
 });
 
@@ -392,12 +386,14 @@ describe("provider enabled defaults", () => {
     expect(decoded.providers.cursor.enabled).toBe(false);
     expect(decoded.providers.grok.enabled).toBe(false);
     expect(decoded.providers.opencode.enabled).toBe(false);
+    expect(decoded.providers.opencodeGo.enabled).toBe(true);
   });
 
   it("derives per-driver defaults from the settings schemas", () => {
     expect(defaultEnabledForDriver(ProviderDriverKind.make("codex"))).toBe(true);
     expect(defaultEnabledForDriver(ProviderDriverKind.make("cursor"))).toBe(false);
     expect(defaultEnabledForDriver(ProviderDriverKind.make("grok"))).toBe(false);
+    expect(defaultEnabledForDriver(ProviderDriverKind.make("opencodeGo"))).toBe(true);
     // Unknown fork drivers stay enabled; their own build decides otherwise.
     expect(defaultEnabledForDriver(ProviderDriverKind.make("ollama"))).toBe(true);
   });

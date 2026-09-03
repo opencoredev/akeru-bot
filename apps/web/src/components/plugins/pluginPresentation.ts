@@ -1,4 +1,4 @@
-import type { McpServer, OrchestrationBot } from "@t3tools/contracts";
+import type { McpServer, OrchestrationBot, ProviderAccessStatus } from "@t3tools/contracts";
 import {
   PLUGIN_CATEGORIES,
   type PluginCategory,
@@ -46,6 +46,7 @@ export function pluginMatchesQuery(plugin: PluginDirectoryDefinition, query: str
     ...plugin.tags,
     ...plugin.capabilities,
     plugin.publisher.name,
+    ...(plugin.connection.type === "brokered" ? [plugin.connection.broker.name] : []),
   ]
     .join("\n")
     .toLocaleLowerCase()
@@ -89,6 +90,7 @@ export function buildPluginSections(input: {
 }
 
 export function pluginBlocker(plugin: PluginDirectoryDefinition): string | null {
+  if (plugin.connection.type === "brokered") return null;
   if (
     plugin.connection.type === "approval-pending" ||
     plugin.connection.type === "verification-pending"
@@ -102,8 +104,13 @@ export function pluginBlocker(plugin: PluginDirectoryDefinition): string | null 
 export function pluginPrimaryAction(
   plugin: PluginDirectoryDefinition,
   server: McpServer | undefined,
+  accessStatus?: ProviderAccessStatus,
 ): PluginPrimaryAction {
-  if (server?.enabled) return { label: "Disable", enable: false };
+  const needsReconnect =
+    (plugin.authentication === "oauth" || plugin.authentication === "optional-oauth") &&
+    accessStatus !== undefined &&
+    ["expired", "revoked", "failed", "failed-first-request"].includes(accessStatus.health);
+  if (server?.enabled && !needsReconnect) return { label: "Disable", enable: false };
   const blocker = pluginBlocker(plugin);
   if (blocker) return { label: "Connect", enable: null, blocker };
   if (server) return { label: "Reconnect", enable: true };
@@ -125,7 +132,17 @@ export function pluginConnectionLabel(plugin: PluginDirectoryDefinition): string
   return "No sign-in";
 }
 
+/**
+ * Names the broker that holds a plugin's accounts. Catalog rows and details use
+ * it so an app such as Gmail reads as its own entry while still saying who
+ * actually carries the connection.
+ */
+export function pluginBrokerName(plugin: PluginDirectoryDefinition): string | null {
+  return plugin.connection.type === "brokered" ? plugin.connection.broker.name : null;
+}
+
 export function pluginExecutionLabel(plugin: PluginDirectoryDefinition): string {
+  if (plugin.connection.type === "brokered") return "Hosted";
   if (plugin.kind === "mcp-unavailable") return "Unavailable";
   return plugin.kind === "mcp-stdio" || plugin.connection.type === "local" ? "Local" : "Hosted";
 }

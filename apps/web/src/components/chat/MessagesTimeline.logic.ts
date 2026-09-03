@@ -1,6 +1,7 @@
 import * as Equal from "effect/Equal";
 import {
   formatDuration,
+  pluginSearchResultForWorkEntry,
   workEntryDisplayIndicatesToolFailure,
   workEntryIndicatesToolNeutralStatus,
   workLogEntryIsToolLike,
@@ -856,6 +857,7 @@ export function deriveMessagesTimelineRows(input: {
         const onlyToolEntries = visibleGroupedEntries.every(
           (entry) =>
             workLogEntryIsToolLike(entry) &&
+            pluginSearchResultForWorkEntry(entry) === null &&
             entry.agentSpawn === undefined &&
             entry.tone !== "error",
         );

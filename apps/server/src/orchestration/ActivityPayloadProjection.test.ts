@@ -75,6 +75,28 @@ describe("projectActivityPayload", () => {
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
+  it("scans tool output without retaining the full text behind its preview", () => {
+    const preview = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: { rawOutput: `\`\`\`\n  actual\tresult  \n${"x".repeat(5000)}` },
+      }),
+    );
+    const fences = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: { rawOutput: "```\r\n \t \n```\n" },
+      }),
+    );
+
+    expect((preview.payload as { data: { rawOutput: unknown } }).data.rawOutput).toEqual({
+      content: "actual result",
+    });
+    expect((fences.payload as { data: { rawOutput: unknown } }).data.rawOutput).toEqual({
+      content: "2 lines",
+    });
+  });
+
   it("keeps bounded Claude and ACP command output summaries", () => {
     const claude = projectActivityPayload(
       activity({
@@ -201,6 +223,35 @@ describe("projectActivityPayload", () => {
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
+  it("bounds large MCP arguments and inputs in client projections", () => {
+    const oversized = "x".repeat(10_000_000);
+    const codex = projectActivityPayload(
+      activity({
+        itemType: "mcp_tool_call",
+        data: {
+          item: {
+            type: "mcpToolCall",
+            tool: "write_file",
+            arguments: { content: oversized },
+          },
+        },
+      }),
+    );
+    const claude = projectActivityPayload(
+      activity({
+        itemType: "mcp_tool_call",
+        data: { toolName: "mcp__files__write", input: { content: oversized } },
+      }),
+    );
+
+    expect(JSON.stringify(codex.payload).length).toBeLessThan(5_000);
+    expect(JSON.stringify(claude.payload).length).toBeLessThan(5_000);
+    expect(
+      (codex.payload as { data: { item: { arguments: { content: string } } } }).data.item.arguments
+        .content.length,
+    ).toBe(4_096);
+  });
+
   it("passes task lifecycle payloads (no data field) through untouched", () => {
     const source = activity({
       taskId: "task-9",
@@ -216,5 +267,39 @@ describe("projectActivityPayload", () => {
     });
     const projected = projectActivityPayload(source);
     expect(projected.payload).toEqual(source.payload);
+  });
+
+  it("keeps bounded plugin recommendations for the chat card", () => {
+    const projected = projectActivityPayload({
+      ...activity({
+        itemType: "dynamic_tool_call",
+        data: {
+          result: {
+            kind: "plugin-search-results",
+            query: "email",
+            total: 1,
+            sources: { directory: "available", composio: "available" },
+            recommendations: [
+              {
+                id: "composio:gmail",
+                source: "composio",
+                name: "Gmail",
+                description: "Read and send email.",
+                action: "connect",
+                logoUrl: "https://logos.composio.dev/api/gmail",
+              },
+            ],
+          },
+        },
+      }),
+      summary: "SearchPlugins",
+    });
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+
+    expect(data.result).toMatchObject({
+      kind: "plugin-search-results",
+      recommendations: [expect.objectContaining({ id: "composio:gmail" })],
+    });
+    expect(JSON.stringify(projected.payload).length).toBeLessThan(2_000);
   });
 });

@@ -74,7 +74,8 @@ export function validatePluginCatalog(
     if (ids.has(manifest.id)) throw new TypeError(`Duplicate plugin id '${manifest.id}'.`);
     ids.add(manifest.id);
 
-    const logos = ["logo.svg", "logo-dark.svg"];
+    // A manifest with a remote logo URL ships no local artwork.
+    const logos = manifest.logo.url ? [] : ["logo.svg", "logo-dark.svg"];
     for (const filename of logos) validateLogo(directoryUrl, directory, filename, hashes);
     const expectedFiles = new Set(["plugin.json", ...logos]);
     const unexpected = NodeFS.readdirSync(directoryUrl).filter((file) => !expectedFiles.has(file));

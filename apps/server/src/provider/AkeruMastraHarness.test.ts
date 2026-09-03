@@ -52,19 +52,46 @@ describe("Akeru action classifier", () => {
     ['curl -X POST --data \'{"text":"hello"}\' https://example.com/messages', "send"],
     ["cd workspace && git push origin main", "publish"],
     ["find . -name '*.tmp' -delete", "delete"],
+    ["git reset --hard HEAD~1", "delete"],
+    ["git clean -fd", "delete"],
+    ["find . -name '*.tmp' -exec rm -rf {} \\;", "delete"],
     ["python -c 'import os; os.remove(\"tmp.txt\")'", "delete"],
+    ["shred important-file", "delete"],
+    ["sudo shred -u important-file", "delete"],
+    ["command shred -u important-file", "delete"],
+    ['bash -c "shred -u important-file"', "delete"],
+    ["dd if=/dev/zero of=important-file", "delete"],
+    ["sudo dd if=image.img of=/dev/disk4 bs=4m", "delete"],
+    ["dd if=/dev/zero > important-file", "delete"],
+    ['bash -c "dd if=/dev/zero 1> important-file"', "delete"],
+    ["mv replacement important-file", "delete"],
+    ["mv -f replacement important-file", "delete"],
+    ["command mv --force replacement important-file", "delete"],
+    ["bash -lc 'command shred -u important-file'", "delete"],
+    ["printf '%s\\n' important-file | xargs shred -u", "delete"],
+    ["printf '%s\\n' important-file | xargs rm -f", "delete"],
+    ["printf '%s\\n' important-file | xargs env rm -f", "delete"],
+    ["printf '%s\\n' empty-dir | xargs rmdir", "delete"],
+    ["printf '%s\\n' important-link | xargs unlink", "delete"],
+    ["find . -name important-file -exec shred -u {} \\;", "delete"],
+    ["find . -name important-file -exec env rm -f {} \\;", "delete"],
+    ["printf '%s\\n' important-file | xargs sh -c 'rm -f \"$1\"' _", "delete"],
+    ["find . -name important-file -exec sh -c 'rm -f \"$1\"' _ {} \\;", "delete"],
   ] as const)("classifies %s as %s", (command, action) => {
     expect(criticalAkeruAction("execute_command", { command })).toBe(action);
     expect(akeruActionNeedsApproval("execute_command", { command })).toBe(true);
   });
 
-  it.each(["bun test", "git status", "rg -n TODO apps", "cat README.md"])(
-    "leaves ordinary local command %s unclassified",
-    (command) => {
-      expect(criticalAkeruAction("execute_command", { command })).toBeNull();
-      expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
-    },
-  );
+  it.each([
+    "bun test",
+    "git status",
+    "rg -n TODO apps",
+    "cat README.md",
+    'echo "shred important-file"',
+  ])("leaves ordinary local command %s unclassified", (command) => {
+    expect(criticalAkeruAction("execute_command", { command })).toBeNull();
+    expect(akeruActionNeedsApproval("execute_command", { command })).toBe(false);
+  });
 
   it("requires approval when nested input exceeds the inspection limit", () => {
     let args: unknown = { action: "send" };
@@ -384,6 +411,27 @@ describe("AkeruMastraHarness", () => {
     );
     assert.throws(
       () => resolveAkeruMastraModel("kimi-for-coding/k3-256k", authStorage),
+      "subscription access is unavailable",
+    );
+  });
+
+  it("keeps OpenCode Go model names on the direct subscription transport", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
+    assert.equal(
+      mastraModelId(ProviderDriverKind.make("opencodeGo"), "gpt-5.6-luna"),
+      "opencode-go/gpt-5.6-luna",
+    );
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "opencode-go/gpt-5.6-luna",
+        authStorage,
+        undefined,
+        async () => "go-key",
+      ),
+      { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
+    );
+    assert.throws(
+      () => resolveAkeruMastraModel("opencode-go/gpt-5.6-luna", authStorage),
       "subscription access is unavailable",
     );
   });

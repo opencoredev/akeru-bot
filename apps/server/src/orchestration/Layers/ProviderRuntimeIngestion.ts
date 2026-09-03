@@ -53,7 +53,6 @@ import {
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { canReplaceThreadTitle } from "../threadTitles.ts";
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
@@ -764,6 +763,26 @@ export function runtimeEventToActivities(
             ...(event.payload.parentToolUseId
               ? { parentToolUseId: event.payload.parentToolUseId }
               : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "tool.receipt": {
+      if (event.payload.phase !== "progress" || !event.payload.authorizationUrl) return [];
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "mcp.oauth.authorization-required",
+          summary: event.payload.summary ?? "Authorize MCP server",
+          payload: {
+            authorizationUrl: event.payload.authorizationUrl,
+            toolCallId: event.payload.receiptId,
+            toolName: event.payload.toolId,
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -1625,6 +1644,9 @@ const make = Effect.gen(function* () {
 
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
+      if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") {
+        return;
+      }
       const thread = yield* resolveThreadShell(event.threadId);
       if (!thread) return;
       if (event.type === "request.opened" || event.type === "request.resolved") {
@@ -1647,9 +1669,17 @@ const make = Effect.gen(function* () {
       const activeTurnId = thread.session?.activeTurnId ?? null;
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
-      const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
-        threadId: thread.id,
-      });
+      const needsPendingTurnStart =
+        event.type === "session.started" ||
+        event.type === "session.state.changed" ||
+        event.type === "thread.started" ||
+        event.type === "thread.token-usage.updated" ||
+        event.type === "turn.started" ||
+        event.type === "turn.aborted" ||
+        event.type === "turn.completed";
+      const pendingTurnStart = needsPendingTurnStart
+        ? yield* projectionTurnRepository.getPendingTurnStartByThreadId({ threadId: thread.id })
+        : Option.none();
       const expectedPendingTurnId = Option.isSome(pendingTurnStart)
         ? yield* getExpectedProviderTurnIdForThread(thread.id)
         : undefined;
@@ -2154,17 +2184,6 @@ const make = Effect.gen(function* () {
               updatedAt: now,
             },
             createdAt: now,
-          });
-        }
-      }
-
-      if (event.type === "thread.metadata.updated" && event.payload.name) {
-        if (canReplaceThreadTitle(thread.title)) {
-          yield* orchestrationEngine.dispatch({
-            type: "thread.meta.update",
-            commandId: yield* providerCommandId(event, "thread-meta-update"),
-            threadId: thread.id,
-            title: event.payload.name,
           });
         }
       }

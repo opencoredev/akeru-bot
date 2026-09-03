@@ -594,7 +594,6 @@ describe("first-send turn payload", () => {
     threadId,
     message,
     modelSelection,
-    titleSeed: "New thread",
     runtimeMode: "approval-required" as const,
     interactionMode: "default" as const,
     createdAt: now,

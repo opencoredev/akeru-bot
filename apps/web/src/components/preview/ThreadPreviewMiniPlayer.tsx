@@ -320,6 +320,7 @@ export function ThreadPreviewMiniPlayer({ threadRef, tabId, bottomInset }: Props
         <BrowserSurfaceSlot
           tabId={runtimeTabId}
           visible={Boolean(desktopOverlay?.hasWebContents)}
+          interactive={false}
           cornerRadius={12}
           fitSourceContent
           layoutVersion={
@@ -329,6 +330,17 @@ export function ThreadPreviewMiniPlayer({ threadRef, tabId, bottomInset }: Props
           }
           className="absolute inset-0"
         />
+        {desktopOverlay?.hasWebContents ? (
+          <Button
+            type="button"
+            className="pointer-events-auto absolute bottom-3 left-1/2 z-[32] -translate-x-1/2 bg-background/92 shadow-sm backdrop-blur"
+            size="xs"
+            variant="outline"
+            onClick={openInPanel}
+          >
+            Open to interact
+          </Button>
+        ) : null}
         <div className="pointer-events-none absolute inset-0 z-[31] rounded-xl ring-1 ring-inset ring-border/80" />
         {!desktopOverlay?.hasWebContents ? (
           <div className="pointer-events-none absolute inset-0 z-[32] flex items-center justify-center rounded-xl bg-muted text-xs text-muted-foreground">

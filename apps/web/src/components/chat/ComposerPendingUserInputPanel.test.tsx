@@ -35,24 +35,20 @@ function renderPanel() {
 }
 
 describe("ComposerPendingUserInputPanel", () => {
-  it("renders the header as a disclosure control for the question body", () => {
+  it("renders a standalone question card with letter shortcuts", () => {
     const markup = renderPanel();
 
-    const toggle = markup.match(/<button[^>]*data-pending-user-input-toggle="[^"]*"[^>]*>/)?.[0];
-    expect(toggle).toBeDefined();
-    expect(toggle).toContain('data-pending-user-input-toggle="expanded"');
-    expect(toggle).toContain('aria-expanded="true"');
-    expect(toggle).toContain('type="button"');
-
-    const controlledId = toggle?.match(/aria-controls="([^"]+)"/)?.[1];
-    expect(controlledId).toBeDefined();
-    expect(markup).toMatch(new RegExp(`<div[^>]*\\sid="${controlledId}"`));
+    expect(markup).toContain('data-testid="pending-user-input-card"');
+    expect(markup).toContain('aria-label="Which approach should the migration take?"');
+    expect(markup).toContain("<kbd");
+    expect(markup).toContain(">A</kbd>");
+    expect(markup).toContain(">B</kbd>");
+    expect(markup).not.toContain("data-pending-user-input-toggle");
   });
 
   it("starts expanded so the question and its options are visible", () => {
     const markup = renderPanel();
 
-    expect(markup).toContain("Approach");
     expect(markup).toContain("Which approach should the migration take?");
     expect(markup).toContain("Incremental");
     expect(markup).toContain("Big bang");
@@ -75,5 +71,7 @@ describe("ComposerPendingUserInputPanel", () => {
     );
 
     expect(markup).toContain(">Submit</button>");
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('aria-pressed="false"');
   });
 });

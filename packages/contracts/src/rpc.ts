@@ -181,6 +181,9 @@ import { ServerSettings, ServerSettingsError, ServerSettingsRpcPatch } from "./s
 import {
   BotInboxItem,
   BotInboxResolveInput,
+  McpServerAuthenticateInput,
+  McpServerAuthenticationError,
+  McpServerAuthenticationProgress,
   SubscriptionAuthCompleteInput,
   SubscriptionAuthError,
   SubscriptionAuthHealthTestInput,
@@ -218,6 +221,16 @@ import {
   PortabilityPreviewImportInput,
 } from "./portability.ts";
 import { RoutineListRunsInput, RoutineListRunsResult, RoutineReadError } from "./routines.ts";
+import {
+  ComposioAuthorizeInput,
+  ComposioAuthorizeResult,
+  ComposioConfigureInput,
+  ComposioDisconnectInput,
+  ComposioOperationError,
+  ComposioStatus,
+  ComposioToolkit,
+  ComposioToolkitSearchInput,
+} from "./composio.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -293,6 +306,12 @@ export const WS_METHODS = {
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  composioGetStatus: "composio.getStatus",
+  composioConfigure: "composio.configure",
+  composioRemove: "composio.remove",
+  composioSearchToolkits: "composio.searchToolkits",
+  composioAuthorize: "composio.authorize",
+  composioDisconnect: "composio.disconnect",
   subscriptionAuthList: "subscriptionAuth.list",
   subscriptionAuthStart: "subscriptionAuth.start",
   subscriptionAuthPoll: "subscriptionAuth.poll",
@@ -300,6 +319,7 @@ export const WS_METHODS = {
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
   subscriptionAuthHealthTest: "subscriptionAuth.healthTest",
+  mcpServerAuthenticate: "mcpServer.authenticate",
   botInboxList: "botInbox.list",
   botInboxResolve: "botInbox.resolve",
   voiceCallGet: "voiceCall.get",
@@ -417,6 +437,42 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
 });
 
+export const WsComposioGetStatusRpc = Rpc.make(WS_METHODS.composioGetStatus, {
+  payload: Schema.Struct({}),
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioConfigureRpc = Rpc.make(WS_METHODS.composioConfigure, {
+  payload: ComposioConfigureInput,
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioRemoveRpc = Rpc.make(WS_METHODS.composioRemove, {
+  payload: Schema.Struct({}),
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioSearchToolkitsRpc = Rpc.make(WS_METHODS.composioSearchToolkits, {
+  payload: ComposioToolkitSearchInput,
+  success: Schema.Array(ComposioToolkit),
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioAuthorizeRpc = Rpc.make(WS_METHODS.composioAuthorize, {
+  payload: ComposioAuthorizeInput,
+  success: ComposioAuthorizeResult,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsComposioDisconnectRpc = Rpc.make(WS_METHODS.composioDisconnect, {
+  payload: ComposioDisconnectInput,
+  success: ComposioStatus,
+  error: Schema.Union([ComposioOperationError, EnvironmentAuthorizationError]),
+});
+
 export const WsSubscriptionAuthListRpc = Rpc.make(WS_METHODS.subscriptionAuthList, {
   payload: Schema.Struct({}),
   success: SubscriptionAuthStatuses,
@@ -457,6 +513,13 @@ export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionA
   payload: SubscriptionAuthHealthTestInput,
   success: SubscriptionAuthStatuses,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsMcpServerAuthenticateRpc = Rpc.make(WS_METHODS.mcpServerAuthenticate, {
+  payload: McpServerAuthenticateInput,
+  success: McpServerAuthenticationProgress,
+  error: Schema.Union([McpServerAuthenticationError, EnvironmentAuthorizationError]),
+  stream: true,
 });
 
 export const WsBotInboxListRpc = Rpc.make(WS_METHODS.botInboxList, {
@@ -1035,6 +1098,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRemoveKeybindingRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
+  WsComposioGetStatusRpc,
+  WsComposioConfigureRpc,
+  WsComposioRemoveRpc,
+  WsComposioSearchToolkitsRpc,
+  WsComposioAuthorizeRpc,
+  WsComposioDisconnectRpc,
   WsSubscriptionAuthListRpc,
   WsSubscriptionAuthStartRpc,
   WsSubscriptionAuthPollRpc,
@@ -1042,6 +1111,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
   WsSubscriptionAuthHealthTestRpc,
+  WsMcpServerAuthenticateRpc,
   WsBotInboxListRpc,
   WsBotInboxResolveRpc,
   WsVoiceCallGetRpc,

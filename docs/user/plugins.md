@@ -18,7 +18,7 @@ connection works. A routine can require an enabled connector.
 - **Connect** starts OAuth.
 - **Add key** stores a required key in the host environment.
 - **Disable** stops the plugin without deleting it.
-- **Reconnect** repairs and enables a disabled plugin.
+- **Reconnect** repairs a failed OAuth connection or enables a disabled plugin.
 - **Remove** deletes the registration.
 
 A plugin waiting for publisher approval stays visible, but **Connect** remains disabled. A plugin
@@ -28,6 +28,22 @@ removed from the public directory stays under **Installed** until you remove it.
 
 Akeru enables a new plugin for every bot by default. Open the bot's **Tools** setting to disable it
 for that bot. Changing the bot's provider starts a fresh provider session with the same enabled tools.
+
+## Composio integrations
+
+Gmail appears as a normal plugin with a **Composio** provider badge. Select **Connect**, then enter a
+Composio API key. Akeru opens Composio's hosted sign-in page for the Gmail account.
+
+Get a key from [Composio API keys](https://app.composio.dev/settings/api-keys). You can also save or
+replace the key under **Settings > Plugins**. Akeru stores the key on the environment server, not in
+the plugin catalog or MCP registry.
+
+Connect more than one Gmail account when you need separate work and personal accounts. Manage each
+account under **Settings > Plugins**. The agent asks you to select an account when a tool call could
+use more than one.
+
+Composio tools work in threads opened from web, desktop, or mobile after an environment has a key and
+at least one connected account. Configure accounts from the web or desktop client.
 
 ## Custom MCP servers
 

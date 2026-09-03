@@ -399,7 +399,9 @@ export function applyThreadDetailEvent(
       if (!message) return { kind: "unchanged" };
       const withoutReaction = (message.reactions ?? []).filter(
         (reaction) =>
-          reaction.botId !== event.payload.botId || reaction.emoji !== event.payload.emoji,
+          reaction.botId !== event.payload.botId ||
+          reaction.personId !== event.payload.personId ||
+          reaction.emoji !== event.payload.emoji,
       );
       return {
         kind: "updated",
@@ -412,7 +414,12 @@ export function applyThreadDetailEvent(
                   reactions: event.payload.present
                     ? [
                         ...withoutReaction,
-                        { botId: event.payload.botId, emoji: event.payload.emoji },
+                        {
+                          ...(event.payload.botId !== undefined
+                            ? { botId: event.payload.botId }
+                            : { personId: event.payload.personId }),
+                          emoji: event.payload.emoji,
+                        },
                       ]
                     : withoutReaction,
                   updatedAt: event.payload.updatedAt,

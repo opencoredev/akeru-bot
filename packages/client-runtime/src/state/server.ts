@@ -1,5 +1,6 @@
 import {
   type EnvironmentId,
+  type McpServerId,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
@@ -65,6 +66,12 @@ export interface ServerUpdateTarget {
   readonly input: EnvironmentRpcInput<typeof WS_METHODS.serverUpdateServer>;
 }
 
+export interface McpServerAuthenticationTarget {
+  readonly environmentId: EnvironmentId;
+  readonly mcpServerId: McpServerId;
+  readonly onAuthorizationUrl: (url: string) => void | Promise<void>;
+}
+
 export function voiceCallHangupConcurrencyKey(input: {
   readonly environmentId: EnvironmentId;
   readonly input: EnvironmentRpcInput<typeof WS_METHODS.voiceCallHangup>;
@@ -117,6 +124,11 @@ export class ServerUpdateTerminalError extends Schema.TaggedErrorClass<ServerUpd
     return this.reason ?? `The Akeru Bot ${this.targetVersion} update ${this.status}.`;
   }
 }
+
+export class McpServerAuthenticationClientError extends Schema.TaggedErrorClass<McpServerAuthenticationClientError>()(
+  "McpServerAuthenticationClientError",
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 // Covers the 120-second trial deadline and a final restart of the previous
 // version when the trial rolls back.
@@ -690,6 +702,53 @@ export function createServerEnvironmentAtoms<R, E>(
       );
     },
   });
+  const authenticateMcpServer = createRuntimeCommand(runtime, {
+    label: "environment-data:server:authenticate-mcp-server",
+    concurrency: {
+      mode: "singleFlight",
+      key: (target: McpServerAuthenticationTarget) =>
+        `${target.environmentId}:${target.mcpServerId}`,
+    },
+    execute: (target: McpServerAuthenticationTarget) =>
+      Effect.gen(function* () {
+        const environmentRegistry = yield* EnvironmentRegistry;
+        let toolCount: number | undefined;
+        let recoveryFailures: readonly string[] = [];
+        yield* environmentRegistry
+          .runStream(
+            target.environmentId,
+            runStream(WS_METHODS.mcpServerAuthenticate, {
+              mcpServerId: target.mcpServerId,
+            }),
+          )
+          .pipe(
+            Stream.runForEach((event) =>
+              event.type === "authorization-required"
+                ? Effect.tryPromise({
+                    try: () => Promise.resolve(target.onAuthorizationUrl(event.authorizationUrl)),
+                    catch: (cause) =>
+                      new McpServerAuthenticationClientError({
+                        message:
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not open the authorization URL.",
+                        cause,
+                      }),
+                  })
+                : Effect.sync(() => {
+                    toolCount = event.toolCount;
+                    recoveryFailures = event.recoveryFailures;
+                  }),
+            ),
+          );
+        if (toolCount === undefined) {
+          return yield* new McpServerAuthenticationClientError({
+            message: "MCP authentication ended before the server connected.",
+          });
+        }
+        return { toolCount, recoveryFailures };
+      }),
+  });
   const settingsValueAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => get(configValueAtom(environmentId))?.settings ?? null).pipe(
       Atom.withLabel(`environment-data:server:settings:${environmentId}`),
@@ -740,6 +799,16 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.subscriptionAuthList,
       staleTimeMs: 5_000,
     }),
+    composioStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:composio-status",
+      tag: WS_METHODS.composioGetStatus,
+      staleTimeMs: 2_000,
+    }),
+    composioToolkits: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:composio-toolkits",
+      tag: WS_METHODS.composioSearchToolkits,
+      staleTimeMs: 30_000,
+    }),
     voiceCall: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:voice-call",
       tag: WS_METHODS.voiceCallGet,
@@ -769,6 +838,7 @@ export function createServerEnvironmentAtoms<R, E>(
       concurrency: configConcurrency,
     }),
     updateServer,
+    authenticateMcpServer,
     upsertKeybinding: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:upsert-keybinding",
       tag: WS_METHODS.serverUpsertKeybinding,
@@ -786,6 +856,22 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverUpdateSettings,
       scheduler: configScheduler,
       concurrency: configConcurrency,
+    }),
+    configureComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-configure",
+      tag: WS_METHODS.composioConfigure,
+    }),
+    removeComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-remove",
+      tag: WS_METHODS.composioRemove,
+    }),
+    authorizeComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-authorize",
+      tag: WS_METHODS.composioAuthorize,
+    }),
+    disconnectComposio: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:composio-disconnect",
+      tag: WS_METHODS.composioDisconnect,
     }),
     startSubscriptionAuth: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:subscription-auth:start",

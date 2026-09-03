@@ -302,6 +302,38 @@ describe("derivePendingApprovals", () => {
 });
 
 describe("derivePendingUserInputs", () => {
+  it("keeps free-text questions that do not have options", () => {
+    const pending = derivePendingUserInputs([
+      makeActivity({
+        kind: "user-input.requested",
+        payload: {
+          requestId: "req-free-text",
+          questions: [
+            {
+              id: "answer",
+              header: "Question",
+              question: "What should the bot do next?",
+              options: [],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    expect(pending).toMatchObject([
+      {
+        requestId: "req-free-text",
+        questions: [
+          {
+            id: "answer",
+            question: "What should the bot do next?",
+            options: [],
+          },
+        ],
+      },
+    ]);
+  });
+
   it("tracks open structured prompts and removes resolved ones", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -1235,6 +1267,39 @@ describe("deriveWorkLogEntries", () => {
     const [entry] = deriveWorkLogEntries(activities);
     expect(entry?.toolTitle).toBe("t3-code · preview_status");
     expect(entry?.toolData).toEqual(item);
+  });
+
+  it("preserves plugin search results for inline recommendations", () => {
+    const result = {
+      kind: "plugin-search-results",
+      query: "email",
+      total: 1,
+      sources: { directory: "available", composio: "available" },
+      recommendations: [
+        {
+          id: "composio:gmail",
+          source: "composio",
+          name: "Gmail",
+          description: "Read and send email.",
+          action: "connect",
+          logoUrl: "https://logos.composio.dev/api/gmail",
+        },
+      ],
+    };
+    const [entry] = deriveWorkLogEntries([
+      makeActivity({
+        id: "plugin-search-done",
+        kind: "tool.completed",
+        summary: "SearchPlugins",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "SearchPlugins",
+          data: { result },
+        },
+      }),
+    ]);
+
+    expect(entry?.toolData).toEqual(result);
   });
 
   it("keeps MCP payloads while collapsing lifecycle updates", () => {

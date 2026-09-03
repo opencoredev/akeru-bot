@@ -1,11 +1,13 @@
 import type { McpServer, ProviderAccessStatus } from "@t3tools/contracts";
 import { ArrowUpRightIcon, ChevronLeftIcon } from "lucide-react";
 import type { PluginDirectoryDefinition, PluginSkill } from "../../../../../plugins";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { DialogHeader, DialogPanel, DialogTitle } from "../ui/dialog";
 import { PluginLogoImage } from "./PluginsCatalog";
 import {
   pluginBlocker,
+  pluginBrokerName,
   pluginConnectionLabel,
   pluginExecutionLabel,
   pluginPrimaryAction,
@@ -42,8 +44,30 @@ export function PluginDetailsContent({
   onViewSource,
   onOpenSkill,
 }: PluginDetailsContentProps) {
-  const action = pluginPrimaryAction(plugin, server);
+  const action = pluginPrimaryAction(plugin, server, accessStatus);
   const blocker = pluginBlocker(plugin);
+  const brokerName = pluginBrokerName(plugin);
+  const connectionDetails = brokerName
+    ? [
+        ["Provider", brokerName],
+        ["Sign-in", `${plugin.publisher.name} ${pluginConnectionLabel(plugin)}`],
+        ["Status", server ? (server.enabled ? "Connected" : "Disabled") : "Not connected"],
+      ]
+    : [
+        ["Authentication", pluginConnectionLabel(plugin)],
+        ["Execution", pluginExecutionLabel(plugin)],
+        ["Transport", transportLabel(plugin)],
+        ["Status", server ? (server.enabled ? "Connected" : "Disabled") : "Not installed"],
+        [
+          "Health",
+          accessStatus
+            ? `${accessStatus.health.charAt(0).toUpperCase()}${accessStatus.health.slice(1).replaceAll("-", " ")}`
+            : "Not checked",
+        ],
+        ...(accessStatus?.repairAction ? [["Repair", accessStatus.repairAction]] : []),
+        ["Platforms", plugin.platforms.join(", ")],
+        ["License", plugin.license],
+      ];
   return (
     <DialogPanel className="px-6 pt-6! pb-6 sm:px-8">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -56,6 +80,15 @@ export function PluginDetailsContent({
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                   {plugin.category}
                 </span>
+                {brokerName ? (
+                  <Badge
+                    className="border-border/60 bg-background/60 text-muted-foreground"
+                    size="sm"
+                    variant="outline"
+                  >
+                    {brokerName}
+                  </Badge>
+                ) : null}
               </div>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {plugin.description}
@@ -79,7 +112,7 @@ export function PluginDetailsContent({
                 aria-label={`${action.label} ${plugin.title}`}
                 className="h-8 min-w-16 rounded-full px-3 text-xs"
                 size="sm"
-                variant={server?.enabled ? "secondary" : "default"}
+                variant={action.enable === false ? "secondary" : "default"}
                 disabled={pending || action.enable === null}
                 title={action.blocker}
                 onClick={() => action.enable !== null && onToggle(action.enable)}
@@ -113,32 +146,13 @@ export function PluginDetailsContent({
             Connection
           </h3>
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border text-sm sm:grid-cols-3">
-            {[
-              ["Authentication", pluginConnectionLabel(plugin)],
-              ["Execution", pluginExecutionLabel(plugin)],
-              ["Transport", transportLabel(plugin)],
-              ["Status", server ? (server.enabled ? "Enabled" : "Disabled") : "Not installed"],
-              [
-                "Health",
-                accessStatus
-                  ? `${accessStatus.health.charAt(0).toUpperCase()}${accessStatus.health.slice(1).replaceAll("-", " ")}`
-                  : "Not checked",
-              ],
-              ...(accessStatus?.repairAction ? [["Repair", accessStatus.repairAction]] : []),
-              ["Platforms", plugin.platforms.join(", ")],
-              ["License", plugin.license],
-            ].map(([label, value]) => (
+            {connectionDetails.map(([label, value]) => (
               <div className="bg-background px-4 py-3" key={label}>
                 <dt className="text-xs text-muted-foreground">{label}</dt>
                 <dd className="mt-1 font-medium">{value}</dd>
               </div>
             ))}
           </dl>
-          {plugin.connection.type === "brokered" ? (
-            <p className="mt-2 px-1 text-xs text-muted-foreground">
-              Brokered by {plugin.connection.broker.name}
-            </p>
-          ) : null}
         </section>
 
         <section aria-labelledby="plugin-dependents-title">

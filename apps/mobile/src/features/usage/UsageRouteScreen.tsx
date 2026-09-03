@@ -18,6 +18,7 @@ const PLAN_LABELS = {
   cursor: "Cursor",
   xai: "Grok",
   "kimi-for-coding": "Kimi For Coding",
+  "opencode-go": "OpenCode Go",
 } as const;
 
 export function UsageRouteScreen() {

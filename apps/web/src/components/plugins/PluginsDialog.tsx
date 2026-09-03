@@ -5,12 +5,13 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   McpServerId,
+  type ComposioToolkit,
   type EnvironmentId,
   type McpServer,
   type ProviderAccessStatus,
 } from "@t3tools/contracts";
 import { SearchIcon } from "lucide-react";
-import { useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import {
   isInstallablePlugin,
   loadDirectoryCatalog,
@@ -41,8 +42,15 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
-import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
+import {
+  CustomMcpServers,
+  ComposioToolkitResults,
+  PluginLogoImage,
+  PluginsCatalog,
+  RemovedBuiltinServers,
+} from "./PluginsCatalog";
 import { PluginDetails } from "./PluginDetails";
+import { runPluginEnablePlan } from "./pluginConnection";
 import {
   findPluginServer,
   isBuiltinMcpServer,
@@ -57,6 +65,9 @@ import {
 } from "./pluginPresentation";
 
 const CATALOG = loadDirectoryCatalog();
+const gmailPlugin = CATALOG.find((plugin) => plugin.id === "gmail");
+if (!gmailPlugin) throw new TypeError("Gmail is missing from the plugin directory.");
+export const COMPOSIO_APPS = [gmailPlugin] as const;
 export const PLUGIN_DIRECTORY_FILTERS = buildPluginFilters(CATALOG);
 
 export function resolvePluginDialogServers(
@@ -80,6 +91,15 @@ export function resolvePluginDialogServers(
 export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden";
 export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME = "shrink-0 gap-3 px-6 pt-5 pb-4";
 export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8 px-5 pt-5! pb-5 sm:px-6";
+
+export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: readonly string[]) {
+  if (recoveryFailures.length === 0) return null;
+  return {
+    type: "warning" as const,
+    title: `${pluginTitle} connected with a session issue`,
+    description: `${recoveryFailures.join(" ")} Restart the affected agent session to retry.`,
+  };
+}
 
 export interface McpServerDraft {
   readonly name: string;
@@ -134,35 +154,99 @@ export function validateMcpServerDraft(draft: McpServerDraft): string | null {
 }
 
 function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const requestedQuery = usePluginsDialogStore((state) => state.requestedQuery);
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const bots = useAtomValue(environmentBotsAtom(environmentId));
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const composioStatus = useEnvironmentQuery(
+    serverEnvironment.composioStatus({ environmentId, input: {} }),
+  );
+  const configureComposio = useAtomCommand(serverEnvironment.configureComposio, {
+    reportFailure: false,
+  });
+  const authorizeComposio = useAtomCommand(serverEnvironment.authorizeComposio, {
+    reportFailure: false,
+  });
+  const disconnectComposio = useAtomCommand(serverEnvironment.disconnectComposio, {
+    reportFailure: false,
+  });
   const createServer = useAtomCommand(mcpServerEnvironment.create, { reportFailure: false });
   const updateServer = useAtomCommand(mcpServerEnvironment.update, { reportFailure: false });
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
   const enableServer = useAtomCommand(mcpServerEnvironment.enable, { reportFailure: false });
   const disableServer = useAtomCommand(mcpServerEnvironment.disable, { reportFailure: false });
+  const authenticateServer = useAtomCommand(serverEnvironment.authenticateMcpServer, {
+    reportFailure: false,
+  });
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query.trim());
   const [filter, setFilter] = useState<PluginFilter>("All");
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDirectoryDefinition | null>(null);
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
   const [draft, setDraft] = useState(EMPTY_MCP_SERVER_DRAFT);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
+  const [composioSetupPlugin, setComposioSetupPlugin] = useState<PluginDirectoryDefinition | null>(
+    null,
+  );
+  const [composioApiKey, setComposioApiKey] = useState("");
+  const composioToolkits = useEnvironmentQuery(
+    composioStatus.data?.configured === true && deferredQuery.length >= 2
+      ? serverEnvironment.composioToolkits({
+          environmentId,
+          input: { query: deferredQuery, limit: 12 },
+        })
+      : null,
+  );
   const { customServers, installedPlugins, removedBuiltinServers } =
     resolvePluginDialogServers(servers);
+  const connectedComposioPluginIds = new Set(
+    (composioStatus.data?.connections ?? [])
+      .filter((connection) => connection.status === "ACTIVE")
+      .map((connection) => connection.toolkitSlug),
+  );
+  const composioViewServers: readonly McpServer[] = CATALOG.filter(
+    (plugin) => plugin.connection.type === "brokered" && connectedComposioPluginIds.has(plugin.id),
+  ).map((plugin) => ({
+    id: pluginMcpServerId(plugin),
+    name: plugin.title,
+    transport: "url" as const,
+    url: "https://composio.dev",
+    enabled: true,
+    createdAt: "1970-01-01T00:00:00.000Z",
+    updatedAt: "1970-01-01T00:00:00.000Z",
+  }));
+  const displayServers = [...servers, ...composioViewServers];
+  const brokeredCatalogIds = new Set(
+    CATALOG.filter((plugin) => plugin.connection.type === "brokered").map((plugin) => plugin.id),
+  );
+  const composioSearchResults = (composioToolkits.data ?? []).filter(
+    (toolkit) => !brokeredCatalogIds.has(toolkit.slug),
+  );
   const sections = buildPluginSections({
     plugins: CATALOG,
     query,
     filter,
-    installedPluginIds: new Set(installedPlugins.map((plugin) => plugin.id)),
+    installedPluginIds: new Set([
+      ...installedPlugins.map((plugin) => plugin.id),
+      ...connectedComposioPluginIds,
+    ]),
   });
   const validationError = validateMcpServerDraft(draft);
   const selectedPluginServer = selectedPlugin
-    ? findPluginServer(selectedPlugin, servers)
+    ? findPluginServer(selectedPlugin, displayServers)
     : undefined;
+
+  useEffect(() => {
+    const refresh = () => composioStatus.refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [composioStatus.refresh]);
+  useEffect(() => {
+    if (requestedQuery !== null) setQuery(requestedQuery);
+  }, [requestedQuery]);
   const selectedPluginAccess: ProviderAccessStatus | undefined = selectedPlugin
     ? subscriptionAuth.data?.access.find((status) => status.pluginId === selectedPlugin.id)
     : undefined;
@@ -199,39 +283,205 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
   };
 
   const togglePlugin = async (plugin: PluginDirectoryDefinition, enabled: boolean) => {
-    let plan;
-    if (enabled) {
-      if (!isInstallablePlugin(plugin)) return;
-      plan = planPluginToggle(plugin, servers, true);
-    } else {
-      plan = { action: "disable" as const, mcpServerId: pluginMcpServerId(plugin) };
-    }
-    setPendingServerId(plan.mcpServerId);
-    if (plan.action === "refresh-and-enable") {
-      const updateResult = await updateServer({
-        environmentId,
-        input: { mcpServerId: plan.mcpServerId, ...plan.configuration },
-      });
-      if (reportFailure(`Could not update ${plugin.title}`, updateResult)) {
+    if (plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio") {
+      const mcpServerId = pluginMcpServerId(plugin);
+      if (enabled && composioStatus.data?.configured !== true) {
+        setComposioSetupPlugin(plugin);
+        return;
+      }
+      setPendingServerId(mcpServerId);
+      if (enabled) {
+        const result = await authorizeComposio({
+          environmentId,
+          input: { toolkitSlug: plugin.id },
+        });
+        setPendingServerId(null);
+        if (result._tag === "Failure") {
+          if (!isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: `Could not connect ${plugin.title}`,
+              description: error instanceof Error ? error.message : "The command failed.",
+            });
+          }
+          return;
+        }
+        openExternal(result.value.redirectUrl, `Could not open ${plugin.title} sign-in`);
+        return;
+      }
+      const connections = (composioStatus.data?.connections ?? []).filter(
+        (connection) => connection.toolkitSlug === plugin.id,
+      );
+      const confirmed = await ensureLocalApi().dialogs.confirm(
+        `Disconnect ${connections.length} ${plugin.title} account${connections.length === 1 ? "" : "s"}?`,
+        { variant: "destructive" },
+      );
+      if (!confirmed) {
         setPendingServerId(null);
         return;
       }
-    }
-    const result =
-      plan.action === "create"
-        ? await createServer({
-            environmentId,
-            input: { mcpServerId: plan.mcpServerId, ...plan.configuration },
-          })
-        : await (plan.action === "refresh-and-enable" ? enableServer : disableServer)({
-            environmentId,
-            input: { mcpServerId: plan.mcpServerId },
+      for (const connection of connections) {
+        const result = await disconnectComposio({
+          environmentId,
+          input: { connectionId: connection.id },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add({
+            type: "error",
+            title: `Could not disconnect ${plugin.title}`,
+            description: error instanceof Error ? error.message : "The command failed.",
           });
+          break;
+        }
+      }
+      setPendingServerId(null);
+      composioStatus.refresh();
+      return;
+    }
+    if (!enabled) {
+      const mcpServerId = pluginMcpServerId(plugin);
+      setPendingServerId(mcpServerId);
+      const result = await disableServer({ environmentId, input: { mcpServerId } });
+      setPendingServerId(null);
+      reportFailure(`Could not disable ${plugin.title}`, result);
+      return;
+    }
+    if (!isInstallablePlugin(plugin)) return;
+
+    const plan = planPluginToggle(plugin, servers, true);
+    if (plan.action === "disable") return;
+    setPendingServerId(plan.mcpServerId);
+    const commandSucceeded = (title: string, result: Awaited<ReturnType<typeof createServer>>) => {
+      if (result._tag === "Success") return true;
+      reportFailure(title, result);
+      return false;
+    };
+    const shouldAuthenticate =
+      plugin.authentication === "oauth" || plugin.authentication === "optional-oauth";
+
+    try {
+      await runPluginEnablePlan(plan, {
+        create: async (mcpServerId, configuration) =>
+          commandSucceeded(
+            `Could not enable ${plugin.title}`,
+            await createServer({
+              environmentId,
+              input: { mcpServerId, ...configuration },
+            }),
+          ),
+        update: async (mcpServerId, configuration) =>
+          commandSucceeded(
+            `Could not update ${plugin.title}`,
+            await updateServer({
+              environmentId,
+              input: { mcpServerId, ...configuration },
+            }),
+          ),
+        enable: async (mcpServerId) =>
+          commandSucceeded(
+            `Could not enable ${plugin.title}`,
+            await enableServer({ environmentId, input: { mcpServerId } }),
+          ),
+        ...(shouldAuthenticate
+          ? {
+              authenticate: async (mcpServerId, onAuthorizationUrl) => {
+                const result = await authenticateServer({
+                  environmentId,
+                  mcpServerId,
+                  onAuthorizationUrl,
+                });
+                if (result._tag === "Success") {
+                  const notice = pluginRecoveryNotice(plugin.title, result.value.recoveryFailures);
+                  if (notice) toastManager.add(notice);
+                  return true;
+                }
+                if (!isAtomCommandInterrupted(result)) {
+                  const error = squashAtomCommandFailure(result);
+                  toastManager.add({
+                    type: "error",
+                    title: `Could not connect ${plugin.title}`,
+                    description: error instanceof Error ? error.message : "Authentication failed.",
+                  });
+                }
+                return false;
+              },
+            }
+          : {}),
+        openAuthorizationUrl: async (url) => {
+          const authorizationUrl = new URL(url);
+          if (authorizationUrl.protocol !== "https:") {
+            throw new Error("The authorization URL must use HTTPS.");
+          }
+          await ensureLocalApi().shell.openExternal(authorizationUrl.toString());
+        },
+      });
+    } finally {
+      setPendingServerId(null);
+      subscriptionAuth.refresh();
+    }
+  };
+
+  const connectComposioToolkit = async (toolkit: ComposioToolkit) => {
+    setPendingServerId(`composio:${toolkit.slug}`);
+    const result = await authorizeComposio({
+      environmentId,
+      input: { toolkitSlug: toolkit.slug },
+    });
     setPendingServerId(null);
-    reportFailure(
-      enabled ? `Could not enable ${plugin.title}` : `Could not disable ${plugin.title}`,
-      result,
-    );
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: `Could not connect ${toolkit.name}`,
+          description: error instanceof Error ? error.message : "The command failed.",
+        });
+      }
+      return;
+    }
+    openExternal(result.value.redirectUrl, `Could not open ${toolkit.name} sign-in`);
+  };
+
+  const saveComposioAndConnect = async () => {
+    const plugin = composioSetupPlugin;
+    const apiKey = composioApiKey.trim();
+    if (!plugin || !apiKey) return;
+    setPendingServerId(pluginMcpServerId(plugin));
+    const configured = await configureComposio({ environmentId, input: { apiKey } });
+    if (configured._tag === "Failure") {
+      setPendingServerId(null);
+      if (!isAtomCommandInterrupted(configured)) {
+        const error = squashAtomCommandFailure(configured);
+        toastManager.add({
+          type: "error",
+          title: "Could not connect Composio",
+          description: error instanceof Error ? error.message : "The command failed.",
+        });
+      }
+      return;
+    }
+    const authorized = await authorizeComposio({
+      environmentId,
+      input: { toolkitSlug: plugin.id },
+    });
+    setPendingServerId(null);
+    if (authorized._tag === "Failure") {
+      if (!isAtomCommandInterrupted(authorized)) {
+        const error = squashAtomCommandFailure(authorized);
+        toastManager.add({
+          type: "error",
+          title: `Could not connect ${plugin.title}`,
+          description: error instanceof Error ? error.message : "The command failed.",
+        });
+      }
+      return;
+    }
+    setComposioApiKey("");
+    setComposioSetupPlugin(null);
+    composioStatus.refresh();
+    openExternal(authorized.value.redirectUrl, `Could not open ${plugin.title} sign-in`);
   };
 
   const toggleCustom = async (server: McpServer, enabled: boolean) => {
@@ -312,6 +562,10 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
           onBack={() => setSelectedPlugin(null)}
           onToggle={(enabled) => void togglePlugin(selectedPlugin, enabled)}
           onRemove={() => {
+            if (selectedPlugin.connection.type === "brokered") {
+              void togglePlugin(selectedPlugin, false);
+              return;
+            }
             const server = findPluginServer(selectedPlugin, servers);
             if (server) void removeServer(server);
           }}
@@ -365,10 +619,21 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
           <DialogPanel className={PLUGIN_DIRECTORY_PANEL_CLASS_NAME}>
             <PluginsCatalog
               sections={sections}
-              servers={servers}
+              servers={displayServers}
+              accessStatuses={subscriptionAuth.data?.access ?? []}
               pendingServerId={pendingServerId}
               onToggle={(plugin, enabled) => void togglePlugin(plugin, enabled)}
               onOpen={openPlugin}
+            />
+            <ComposioToolkitResults
+              toolkits={composioSearchResults}
+              connectedToolkitIds={connectedComposioPluginIds}
+              pendingToolkitId={
+                pendingServerId?.startsWith("composio:")
+                  ? pendingServerId.slice("composio:".length)
+                  : null
+              }
+              onConnect={(toolkit) => void connectComposioToolkit(toolkit)}
             />
             {filter === "Installed" ? (
               <>
@@ -463,6 +728,65 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
             </Button>
             <Button disabled={pendingServerId !== null} onClick={() => void saveEditor()}>
               {editorTarget?.server ? "Save" : "Add server"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+      <Dialog
+        open={composioSetupPlugin !== null}
+        onOpenChange={(open) => {
+          if (!open) setComposioSetupPlugin(null);
+        }}
+      >
+        <DialogPopup className="max-w-md">
+          <DialogHeader className="pb-4">
+            <div className="flex items-center gap-3 pe-8">
+              {composioSetupPlugin ? (
+                <PluginLogoImage className="size-11 rounded-xl" plugin={composioSetupPlugin} />
+              ) : null}
+              <div className="min-w-0">
+                <DialogTitle>Connect {composioSetupPlugin?.title}</DialogTitle>
+                <DialogDescription>Sign-in handled by Composio</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 border-t px-6 py-5">
+            <Field>
+              <FieldLabel>Composio API key</FieldLabel>
+              <Input
+                autoFocus
+                autoComplete="off"
+                type="password"
+                value={composioApiKey}
+                onChange={(event) => setComposioApiKey(event.currentTarget.value)}
+              />
+              <p className="text-xs leading-5 text-muted-foreground">
+                Stored only on this Akeru Bot server.
+              </p>
+            </Field>
+            <Button
+              className="px-0"
+              size="sm"
+              variant="link"
+              onClick={() =>
+                openExternal(
+                  "https://app.composio.dev/settings/api-keys",
+                  "Could not open Composio",
+                )
+              }
+            >
+              Create a Composio API key
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setComposioSetupPlugin(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!composioApiKey.trim() || pendingServerId !== null}
+              onClick={() => void saveComposioAndConnect()}
+            >
+              Connect
             </Button>
           </DialogFooter>
         </DialogPopup>

@@ -251,6 +251,56 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.live("blocks dispatch after disable without awaiting the provider promise", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.make("codex_atomic");
+      const enabledConfig: ProviderInstanceConfigMap = {
+        [instanceId]: {
+          driver: ProviderDriverKind.make("codex"),
+          enabled: true,
+          config: makeCodexConfig({ enabled: true }),
+        },
+      };
+      const disabledConfig: ProviderInstanceConfigMap = {
+        [instanceId]: {
+          driver: ProviderDriverKind.make("codex"),
+          enabled: false,
+          config: makeCodexConfig({ enabled: false }),
+        },
+      };
+      const { registry, mutator } = yield* makeProviderInstanceRegistry({
+        drivers: [CodexDriver],
+        configMap: enabledConfig,
+      });
+      let dispatchCalls = 0;
+      let resolveDispatch!: () => void;
+      const pendingDispatch = new Promise<void>((resolve) => {
+        resolveDispatch = resolve;
+      });
+
+      const admitted = yield* registry.dispatchIfEnabled(instanceId, () => {
+        dispatchCalls += 1;
+        return pendingDispatch;
+      });
+      expect(admitted._tag).toBe("Dispatched");
+      expect(dispatchCalls).toBe(1);
+
+      yield* mutator.reconcile(disabledConfig);
+      const disabled = yield* registry.dispatchIfEnabled(instanceId, () => {
+        dispatchCalls += 1;
+      });
+      expect(disabled._tag).toBe("Disabled");
+      expect(dispatchCalls).toBe(1);
+
+      const missing = yield* registry.dispatchIfEnabled(ProviderInstanceId.make("missing"), () => {
+        dispatchCalls += 1;
+      });
+      expect(missing._tag).toBe("Missing");
+      expect(dispatchCalls).toBe(1);
+      resolveDispatch();
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.live(
     "shadows instances whose driver is not registered in this build without failing boot",
     () =>

@@ -101,24 +101,9 @@ function ConnectedBotBrowserPreview({
       <section className="flex min-h-0 flex-1 flex-col" data-testid="bot-browser-expanded">
         <header className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center gap-2 px-3">
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{botName}'s browser</h2>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-label={`Restore ${botName} browser preview`}
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => onExpandedChange(false)}
-                />
-              }
-            >
-              <Minimize2Icon />
-            </TooltipTrigger>
-            <TooltipPopup side="left">Restore preview</TooltipPopup>
-          </Tooltip>
           {trailingAction}
         </header>
-        <div className="min-h-0 flex-1 overflow-hidden border-t border-border">
+        <div className="relative min-h-0 flex-1 overflow-hidden border-t border-border">
           {nativeSupported ? (
             <PreviewPanel mode="embedded" threadRef={threadRef} visible={visible} />
           ) : (
@@ -129,6 +114,12 @@ function ConnectedBotBrowserPreview({
               className="size-full rounded-none"
             />
           )}
+          <PreviewSizeButton
+            label={`Restore ${botName} browser preview`}
+            tooltip="Restore preview"
+            onClick={() => onExpandedChange(false)}
+            expanded
+          />
         </div>
       </section>
     );
@@ -171,23 +162,6 @@ function BotBrowserPreviewFrame({
     <section className="shrink-0 px-3 pt-3" data-testid="bot-browser-preview">
       <div className="mb-2 flex min-h-7 items-center gap-2">
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{botName}'s browser</h2>
-        {onExpand ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-label={`Expand ${botName} browser`}
-                  size="icon-xs"
-                  variant="ghost"
-                  onClick={onExpand}
-                />
-              }
-            >
-              <Maximize2Icon />
-            </TooltipTrigger>
-            <TooltipPopup side="left">Expand browser</TooltipPopup>
-          </Tooltip>
-        ) : null}
         {trailingAction}
       </div>
       <BrowserFrame
@@ -205,8 +179,44 @@ function BotBrowserPreviewFrame({
             className="absolute inset-0"
           />
         ) : null}
+        {onExpand ? (
+          <PreviewSizeButton
+            label={`Expand ${botName} browser`}
+            tooltip="Expand browser"
+            onClick={onExpand}
+          />
+        ) : null}
       </BrowserFrame>
     </section>
+  );
+}
+
+function PreviewSizeButton(props: {
+  readonly label: string;
+  readonly tooltip: string;
+  readonly expanded?: boolean;
+  readonly onClick: () => void;
+}) {
+  const Icon = props.expanded ? Minimize2Icon : Maximize2Icon;
+  return (
+    <div className="absolute bottom-2 right-2 z-40">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              aria-label={props.label}
+              className="bg-background/88 shadow-sm backdrop-blur hover:bg-background"
+              size="icon-sm"
+              variant="outline"
+              onClick={props.onClick}
+            />
+          }
+        >
+          <Icon />
+        </TooltipTrigger>
+        <TooltipPopup side="left">{props.tooltip}</TooltipPopup>
+      </Tooltip>
+    </div>
   );
 }
 

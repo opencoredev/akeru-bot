@@ -116,23 +116,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
   },
   {
-    id: "project-grouping",
-    title: "Project grouping",
-    to: "/settings/general",
-  },
-  {
     id: "sandbox-browser-sharing",
     title: "Sandbox and browser sharing",
-    to: "/settings/general",
-  },
-  {
-    id: "auto-settle-inactive-threads",
-    title: "Auto-settle inactive threads",
-    to: "/settings/general",
-  },
-  {
-    id: "auto-settle-merged-threads",
-    title: "Auto-settle merged threads",
     to: "/settings/general",
   },
   {
@@ -201,29 +186,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/voice",
   },
   {
-    id: "new-threads",
-    title: "New threads",
-    to: "/settings/general",
-  },
-  {
-    id: "start-from-origin",
-    title: "Start from origin",
-    to: "/settings/general",
-    targetId: "new-threads",
-  },
-  {
     id: "add-project-starts-in",
     title: "Add project starts in",
-    to: "/settings/general",
-  },
-  {
-    id: "archive-confirmation",
-    title: "Archive confirmation",
-    to: "/settings/general",
-  },
-  {
-    id: "delete-confirmation",
-    title: "Delete confirmation",
     to: "/settings/general",
   },
   {
@@ -234,7 +198,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "text-generation-model",
-    title: "Text generation model",
+    title: "Fallback model",
     to: "/settings/general",
   },
   {

@@ -1,0 +1,100 @@
+# Tenki CI validates pull requests before they reach main.
+
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Repository checks
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: tenki-standard-medium-4c-8g
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Reject repository-owned PR assets
+        run: |
+          files="$(git ls-files .github/pr-assets)"
+          if test -n "$files"; then
+            printf 'PR evidence must be uploaded to GitHub, not committed:\n%s\n' "$files" >&2
+            exit 1
+          fi
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Reject dependencies outside the repository
+        run: node scripts/check-public-dependencies.ts
+
+      - name: Install from the committed lockfile
+        run: vp install --frozen-lockfile
+
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Validate plugin catalog
+        run: node scripts/validate-plugin-catalog.ts
+
+      - name: Test plugin catalog and contribution policy
+        run: >-
+          vp test run
+          scripts/validate-plugin-catalog.test.ts
+          scripts/plugin-contribution-policy.test.ts
+          plugins/catalog.test.ts
+          plugins/schema.test.ts
+          plugins/lifecycle-matrix.test.ts
+
+      - name: Lint
+        run: vp run lint
+
+      - name: Check formatting
+        run: vp run fmt:check
+
+      - name: Typecheck
+        run: vp run typecheck
+
+      - name: Build desktop pipeline
+        run: vp run build:desktop
+
+      - name: Verify preload bundle output
+        run: |
+          test -f apps/desktop/dist-electron/preload.cjs
+          grep -nE "desktopBridge|getLocalEnvironmentBootstrap|PICK_FOLDER_CHANNEL|wsUrl" apps/desktop/dist-electron/preload.cjs
+
+      - name: Build marketing site
+        run: vp run build:marketing
+
+      - name: Test shipped desktop and shared packages
+        run: vp run --parallel --concurrency-limit 4 --filter '!akeru-bot' --filter '!t3code-relay' --filter '!@t3tools/monorepo' --filter '!@t3tools/mobile' test
+
+      - name: Test isolated server suite
+        run: >-
+          vp run --filter akeru-bot test
+          --exclude integration/orchestrationEngine.integration.test.ts
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check resource monitor formatting
+        run: cargo fmt --manifest-path native/resource-monitor/Cargo.toml -- --check
+
+      - name: Test resource monitor
+        run: cargo test --locked --manifest-path native/resource-monitor/Cargo.toml
+
+      - name: Exercise release-only configuration
+        run: vp run release:smoke

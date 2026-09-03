@@ -62,9 +62,10 @@ describe("marketing search metadata", () => {
     const layout = sourceFile("layouts/Layout.astro");
     const home = sourceFile("pages/index.astro");
 
-    expect(layout).toContain("family=Geist:wght@400;500;600;700");
-    expect(layout).not.toContain("Garamond");
-    expect(layout).toContain("--font-serif: var(--font-sans);");
+    expect(layout).toContain("family=Geist:wght@400;500;600&family=EB+Garamond:wght@500");
+    expect(layout).toContain('--font-serif: "EB Garamond", Georgia, serif;');
+    expect(layout).toContain("--color-muted-foreground: #8a8a8a;");
+    expect(home).not.toContain("--color-editorial-muted-foreground");
     expect(home).toContain("data-demo-video");
     expect(home).toMatch(/\.hero-title \{[\s\S]*?font-size: 84px;/);
     expect(home).toMatch(/background:[\s\S]*?url\("\/download-glow\.webp"\)/);

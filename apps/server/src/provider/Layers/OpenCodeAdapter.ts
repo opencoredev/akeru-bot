@@ -37,6 +37,7 @@ import {
   ProviderAdapterSessionNotFoundError,
   ProviderAdapterValidationError,
 } from "../Errors.ts";
+import { getMcpRuntimeHeaders } from "../McpServerConfig.ts";
 import { type OpenCodeAdapterShape } from "../Services/OpenCodeAdapter.ts";
 import {
   buildOpenCodePermissionRules,
@@ -1241,6 +1242,9 @@ export function makeOpenCodeAdapter(
                           ? {
                               type: "remote",
                               url: mcpServer.url,
+                              ...(Object.keys(getMcpRuntimeHeaders(mcpServer)).length > 0
+                                ? { headers: getMcpRuntimeHeaders(mcpServer) }
+                                : {}),
                               oauth: false,
                             }
                           : {

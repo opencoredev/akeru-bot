@@ -3,6 +3,7 @@ import {
   AkeruMemoryUserId,
   AkeruUsageReservationId,
   type ChatAttachment,
+  ComposioOperationError,
   CommandId,
   EventId,
   MessageId,
@@ -28,6 +29,7 @@ import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -64,16 +66,18 @@ import {
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
 import { forkParked, ServerActivation } from "../../serverActivation.ts";
-import { canReplaceThreadTitle, DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
+import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
 import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { ComposioService } from "../../composio/ComposioService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isAgentControllerUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
+const isComposioOperationError = Schema.is(ComposioOperationError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
 export function resolveControllerBotId(
@@ -346,11 +350,29 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
+  const composio = yield* Effect.serviceOption(ComposioService);
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   if (agentController.configurePluginRuntime) {
     yield* agentController.configurePluginRuntime({
       readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
       dispatch: (command) => runPromise(orchestrationEngine.dispatch(command)),
+      ...(Option.isSome(composio)
+        ? {
+            searchComposioToolkits: async (input: {
+              readonly query?: string;
+              readonly limit?: number;
+            }) => {
+              const status = await runPromise(composio.value.getStatus);
+              if (!status.configured) {
+                return { status: "setup-required" as const, toolkits: [] };
+              }
+              return {
+                status: "available" as const,
+                toolkits: await runPromise(composio.value.searchToolkits(input)),
+              };
+            },
+          }
+        : {}),
     });
   }
   const failDelegation = (threadId: ThreadId, error: string) =>
@@ -386,6 +408,7 @@ const make = Effect.gen(function* () {
   const threadModelSelections = new Map<string, ModelSelection>();
   const threadBotWorkspaceKeys = new Map<string, string>();
   const threadMcpServers = new Map<string, readonly McpServer[]>();
+  const threadsAwaitingRestrictiveSessionCleanup = new Set<string>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -394,6 +417,7 @@ const make = Effect.gen(function* () {
       | "provider.turn.interrupt.failed"
       | "provider.approval.respond.failed"
       | "provider.user-input.respond.failed"
+      | "provider.session.update.failed"
       | "provider.session.stop.failed";
     readonly summary: string;
     readonly detail: string;
@@ -501,6 +525,10 @@ const make = Effect.gen(function* () {
     const failReason = cause.reasons.find(Cause.isFailReason);
     const capError = isBotUsageCapExceeded(failReason?.error) ? failReason.error : undefined;
     if (capError) return capError.message;
+    const composioError = isComposioOperationError(failReason?.error)
+      ? failReason.error
+      : undefined;
+    if (composioError) return composioError.message;
     const providerError = isProviderAdapterRequestError(failReason?.error)
       ? failReason.error
       : undefined;
@@ -616,6 +644,64 @@ const make = Effect.gen(function* () {
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
+  const reconcileRestrictiveSessionCleanup = Effect.fn("reconcileRestrictiveSessionCleanup")(
+    function* (threadId: ThreadId) {
+      const thread = yield* resolveThread(threadId);
+      const persistedCleanupRequired =
+        thread?.runtimeMode === "approval-required" &&
+        thread.session?.runtimeMode === "full-access" &&
+        thread.session.status === "error";
+      if (!threadsAwaitingRestrictiveSessionCleanup.has(threadId) && !persistedCleanupRequired) {
+        return false;
+      }
+
+      threadsAwaitingRestrictiveSessionCleanup.add(threadId);
+      const activeSession = (yield* agentController.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      if (activeSession === undefined) {
+        threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+        return true;
+      }
+
+      yield* agentController.interruptTurn({ threadId }).pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) {
+            return Effect.interrupt;
+          }
+          return Effect.logWarning(
+            "provider command reactor failed to interrupt quarantined session",
+            {
+              threadId,
+              cause: Cause.pretty(cause),
+            },
+          );
+        }),
+      );
+      const sessionAfterInterrupt = (yield* agentController.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      if (sessionAfterInterrupt === undefined) {
+        threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+        return true;
+      }
+      yield* agentController.stopSession({ threadId });
+
+      const remainingSession = (yield* agentController.listSessions()).find(
+        (session) => session.threadId === threadId,
+      );
+      if (remainingSession !== undefined) {
+        return yield* new ProviderAdapterRequestError({
+          provider: providerErrorLabel(remainingSession.provider),
+          method: "thread.session.stop",
+          detail: `Provider session '${threadId}' is still active after a restrictive runtime mode update failed.`,
+        });
+      }
+      threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+      return true;
+    },
+  );
+
   const inspectAvailableEngine = (modelSelection: ModelSelection) =>
     agentController.inspectEngine(modelSelection);
 
@@ -650,7 +736,11 @@ const make = Effect.gen(function* () {
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
     const servers = yield* projectionMcpServerRepository.listAll();
-    return resolveBotMcpServers(servers, bot?.disabledMcpServerIds ?? []);
+    const resolved = resolveBotMcpServers(servers, bot?.disabledMcpServerIds ?? []);
+    const composioServer = Option.isSome(composio)
+      ? yield* composio.value.resolveRuntimeMcpServer(thread.id)
+      : undefined;
+    return composioServer ? [...resolved, composioServer] : resolved;
   });
 
   const rejectStartedThreadModelChangeIfRequired = Effect.fnUntraced(function* (input: {
@@ -1153,51 +1243,6 @@ const make = Effect.gen(function* () {
     );
   });
 
-  const maybeGenerateThreadTitleForFirstTurn = Effect.fn("maybeGenerateThreadTitleForFirstTurn")(
-    function* (input: {
-      readonly threadId: ThreadId;
-      readonly cwd: string;
-      readonly messageText: string;
-      readonly attachments?: ReadonlyArray<ChatAttachment>;
-      readonly titleSeed?: string;
-    }) {
-      const attachments = input.attachments ?? [];
-      yield* Effect.gen(function* () {
-        const { textGenerationModelSelection: modelSelection } =
-          yield* serverSettingsService.getSettings;
-
-        const generated = yield* textGeneration.generateThreadTitle({
-          cwd: input.cwd,
-          message: input.messageText,
-          ...(attachments.length > 0 ? { attachments } : {}),
-          modelSelection,
-        });
-        if (!generated) return;
-
-        const thread = yield* resolveThread(input.threadId);
-        if (!thread) return;
-        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
-          return;
-        }
-
-        yield* orchestrationEngine.dispatch({
-          type: "thread.meta.update",
-          commandId: yield* serverCommandId("thread-title-rename"),
-          threadId: input.threadId,
-          title: generated.title,
-        });
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("provider command reactor failed to generate or rename thread title", {
-            threadId: input.threadId,
-            cwd: input.cwd,
-            cause: Cause.pretty(cause),
-          }),
-        ),
-      );
-    },
-  );
-
   const regenerateThreadTitle = Effect.fn("regenerateThreadTitle")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.meta-updated" }>,
     requestId: CommandId,
@@ -1407,16 +1452,9 @@ const make = Effect.gen(function* () {
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
     if (isFirstUserMessageTurn) {
-      const project = yield* resolveProject(thread.projectId);
-      const generationCwd =
-        resolveThreadWorkspaceCwd({
-          thread,
-          projects: project ? [project] : [],
-        }) ?? process.cwd();
       const generationInput = {
         messageText: message.text,
         ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
-        ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
       };
 
       yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
@@ -1425,14 +1463,6 @@ const make = Effect.gen(function* () {
         worktreePath: thread.worktreePath,
         ...generationInput,
       }).pipe(Effect.forkScoped);
-
-      if (canReplaceThreadTitle(thread.title, event.payload.titleSeed)) {
-        yield* maybeGenerateThreadTitleForFirstTurn({
-          threadId: event.payload.threadId,
-          cwd: generationCwd,
-          ...generationInput,
-        }).pipe(Effect.forkScoped);
-      }
     }
 
     const handleTurnStartFailure = (cause: Cause.Cause<unknown>) => {
@@ -1815,6 +1845,7 @@ const make = Effect.gen(function* () {
 
   const processSessionStopRequested = Effect.fn("processSessionStopRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.session-stop-requested" }>,
+    restrictiveSessionCleanupConfirmed: boolean,
   ) {
     const thread = yield* resolveThread(event.payload.threadId);
     if (!thread) {
@@ -1822,7 +1853,11 @@ const make = Effect.gen(function* () {
     }
 
     const now = event.payload.createdAt;
-    if (thread.session && thread.session.status !== "stopped") {
+    if (
+      thread.session &&
+      thread.session.status !== "stopped" &&
+      !restrictiveSessionCleanupConfirmed
+    ) {
       yield* agentController.stopSession({ threadId: thread.id });
     }
 
@@ -1847,6 +1882,7 @@ const make = Effect.gen(function* () {
 
   const processDomainEvent = Effect.fn("processDomainEvent")(function* (
     event: ProviderIntentEvent,
+    restrictiveSessionCleanupConfirmed: boolean,
   ) {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
@@ -1877,11 +1913,51 @@ const make = Effect.gen(function* () {
         if (!thread?.session || thread.session.status === "stopped") {
           return;
         }
+        const session = thread.session;
         const cachedModelSelection = threadModelSelections.get(event.payload.threadId);
         yield* ensureSessionForThread(
           event.payload.threadId,
           event.occurredAt,
           cachedModelSelection !== undefined ? { modelSelection: cachedModelSelection } : {},
+        ).pipe(
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterruptsOnly(cause)) {
+              return Effect.interrupt;
+            }
+            const detail = formatFailureDetail(cause);
+            const restrictsActiveSession =
+              session.runtimeMode === "full-access" && thread.runtimeMode === "approval-required";
+            if (restrictsActiveSession) {
+              threadsAwaitingRestrictiveSessionCleanup.add(thread.id);
+            }
+            const reportFailure = setThreadSessionErrorOnTurnStartFailure({
+              threadId: thread.id,
+              detail,
+              createdAt: event.occurredAt,
+            }).pipe(
+              Effect.andThen(
+                appendProviderFailureActivity({
+                  threadId: thread.id,
+                  kind: "provider.session.update.failed",
+                  summary: "Provider session update failed",
+                  detail,
+                  turnId: session.activeTurnId,
+                  createdAt: event.occurredAt,
+                }),
+              ),
+            );
+            return Effect.exit(
+              restrictsActiveSession ? reconcileRestrictiveSessionCleanup(thread.id) : Effect.void,
+            ).pipe(
+              Effect.flatMap((cleanupExit) =>
+                reportFailure.pipe(
+                  Effect.andThen(
+                    Exit.isFailure(cleanupExit) ? Effect.failCause(cleanupExit.cause) : Effect.void,
+                  ),
+                ),
+              ),
+            );
+          }),
         );
         return;
       }
@@ -1898,13 +1974,19 @@ const make = Effect.gen(function* () {
         yield* processUserInputResponseRequested(event);
         return;
       case "thread.session-stop-requested":
-        yield* processSessionStopRequested(event);
+        yield* processSessionStopRequested(event, restrictiveSessionCleanupConfirmed);
         return;
     }
   });
 
   const processDomainEventSafely = (event: ProviderIntentEvent) =>
-    processDomainEvent(event).pipe(
+    (event.type === "delegation.updated"
+      ? event.payload.delegation.childThreadId === null
+        ? Effect.succeed(false)
+        : reconcileRestrictiveSessionCleanup(event.payload.delegation.childThreadId)
+      : reconcileRestrictiveSessionCleanup(event.payload.threadId)
+    ).pipe(
+      Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;

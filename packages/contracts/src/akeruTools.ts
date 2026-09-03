@@ -23,6 +23,29 @@ export const AKERU_PATH_MAX_CHARS = 512;
 export const AkeruAwaitHandleId = TrimmedNonEmptyString.pipe(Schema.brand("AkeruAwaitHandleId"));
 export type AkeruAwaitHandleId = typeof AkeruAwaitHandleId.Type;
 
+export const AkeruPluginRecommendation = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  source: Schema.Literals(["directory", "composio"]),
+  name: TrimmedNonEmptyString,
+  description: Schema.String,
+  category: Schema.optional(TrimmedNonEmptyString),
+  logoUrl: Schema.optional(TrimmedNonEmptyString),
+  action: Schema.Literals(["open", "install", "connect", "unavailable"]),
+});
+export type AkeruPluginRecommendation = typeof AkeruPluginRecommendation.Type;
+
+export const AkeruPluginSearchResult = Schema.Struct({
+  kind: Schema.Literal("plugin-search-results"),
+  query: Schema.String,
+  total: NonNegativeInt,
+  sources: Schema.Struct({
+    directory: Schema.Literal("available"),
+    composio: Schema.Literals(["available", "setup-required", "unavailable"]),
+  }),
+  recommendations: Schema.Array(AkeruPluginRecommendation),
+});
+export type AkeruPluginSearchResult = typeof AkeruPluginSearchResult.Type;
+
 export const AkeruComputerBoundary = Schema.Literals(["bot-workspace", "user-computer"]);
 export type AkeruComputerBoundary = typeof AkeruComputerBoundary.Type;
 
@@ -315,7 +338,11 @@ export const AKERU_TOOL_CATALOG = [
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
     approval: "send",
   }),
-  define("SearchPlugins", "bot-workspace", "Search the curated plugin directory."),
+  define(
+    "SearchPlugins",
+    "bot-workspace",
+    "Search available plugins and connected integration providers when the user needs a capability that is not installed.",
+  ),
   define(
     "GetPlugin",
     "bot-workspace",
@@ -483,6 +510,7 @@ export const AkeruToolReceipt = Schema.Struct({
   botId: Schema.optional(BotId),
   handleId: Schema.optional(AkeruAwaitHandleId),
   summary: Schema.optional(TrimmedNonEmptyString),
+  authorizationUrl: Schema.optional(TrimmedNonEmptyString),
   progress: Schema.optional(NonNegativeInt),
   approvalClass: Schema.optional(AkeruToolApprovalClass),
   failureCode: Schema.optional(AkeruToolFailureCode),

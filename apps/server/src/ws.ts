@@ -38,7 +38,6 @@ import {
   type OrchestrationEvent,
   type OrchestrationShellStreamEvent,
   type OrchestrationShellStreamItem,
-  type OrchestrationThreadStreamItem,
   isGroupBotMember,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetSnapshotError,
@@ -68,6 +67,7 @@ import {
   AssetWorkspaceContextResolutionError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  McpServerAuthenticationError,
   SubscriptionAuthError,
   ThreadId,
   type TerminalAttachStreamEvent,
@@ -99,6 +99,7 @@ import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
+import { makeThreadLiveEventCoalescer } from "./orchestration/ThreadLiveEventCoalescer.ts";
 import {
   applyAuthenticatedCommandActor,
   applyKnownGroupPerson,
@@ -150,6 +151,7 @@ import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as Composio from "./composio/ComposioService.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -174,6 +176,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isMcpServerAuthenticationError = Schema.is(McpServerAuthenticationError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -383,6 +386,7 @@ export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract
   {
     type:
       | "thread.message-sent"
+      | "thread.message-reaction-set"
       | "thread.proposed-plan-upserted"
       | "thread.activity-appended"
       | "thread.turn-diff-completed"
@@ -392,6 +396,7 @@ export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract
 > {
   return (
     event.type === "thread.message-sent" ||
+    event.type === "thread.message-reaction-set" ||
     event.type === "thread.proposed-plan-upserted" ||
     event.type === "thread.activity-appended" ||
     event.type === "thread.turn-diff-completed" ||
@@ -511,10 +516,10 @@ const makeWsRpcLayer = (
       const dispatchFromClient: OrchestrationEngine.OrchestrationEngineShape["dispatch"] = (
         command,
       ) =>
-        orchestrationEngine.dispatch(
-          command,
-          hasClientOrigin ? { origin: clientOrigin } : undefined,
-        );
+        orchestrationEngine.dispatch(command, {
+          actor: dispatchActor,
+          ...(hasClientOrigin ? { origin: clientOrigin } : {}),
+        });
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
@@ -562,6 +567,8 @@ const makeWsRpcLayer = (
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
       const secretStore = yield* ServerSecretStore.ServerSecretStore;
+      const composioService = yield* Effect.serviceOption(Composio.ComposioService);
+      const composio = Option.getOrElse(composioService, () => Composio.make(secretStore));
       const channelDeliveryStore = yield* Effect.serviceOption(
         ChannelDeliveryStore.ChannelDeliveryStore,
       );
@@ -1981,17 +1988,15 @@ const makeWsRpcLayer = (
                 Stream.filter(isThisThreadDetailEvent),
                 Stream.map((event) => ({
                   kind: "event" as const,
-                  event: projectActivityEvent(event),
+                  event,
                 })),
               );
 
               // Attach live delivery before reading either replay or snapshot state.
               // Otherwise an event published while the snapshot is loading is lost.
-              const liveBuffer = yield* Queue.unbounded<OrchestrationThreadStreamItem>();
-              yield* Effect.forkScoped(
-                liveStream.pipe(Stream.runForEach((item) => Queue.offer(liveBuffer, item))),
-              );
-              const bufferedLiveStream = Stream.fromQueue(liveBuffer);
+              const liveBuffer = yield* makeThreadLiveEventCoalescer();
+              yield* Effect.forkScoped(liveStream.pipe(Stream.runForEach(liveBuffer.offer)));
+              const bufferedLiveStream = liveBuffer.stream;
 
               // When the client already loaded the snapshot over HTTP it passes
               // that snapshot's sequence, and we resume the live subscription by
@@ -2040,8 +2045,10 @@ const makeWsRpcLayer = (
                     input.requestCompletionMarker === true
                       ? Stream.concat(
                           Stream.fromEffect(
-                            Queue.offer(liveBuffer, { kind: "synchronized" as const }),
-                          ).pipe(Stream.drain),
+                            liveBuffer
+                              .offerAndWait({ kind: "synchronized" as const })
+                              .pipe(Effect.andThen(liveBuffer.takeAll)),
+                          ).pipe(Stream.flatMap((items) => Stream.fromIterable(items))),
                           bufferedLiveStream,
                         )
                       : bufferedLiveStream;
@@ -2082,8 +2089,10 @@ const makeWsRpcLayer = (
                 input.requestCompletionMarker === true
                   ? Stream.concat(
                       Stream.fromEffect(
-                        Queue.offer(liveBuffer, { kind: "synchronized" as const }),
-                      ).pipe(Stream.drain),
+                        liveBuffer
+                          .offerAndWait({ kind: "synchronized" as const })
+                          .pipe(Effect.andThen(liveBuffer.takeAll)),
+                      ).pipe(Stream.flatMap((items) => Stream.fromIterable(items))),
                       bufferedLiveStream,
                     )
                   : bufferedLiveStream;
@@ -2205,6 +2214,30 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "server",
             },
           ),
+        [WS_METHODS.composioGetStatus]: (_input) =>
+          observeRpcEffect(WS_METHODS.composioGetStatus, composio.getStatus, {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioConfigure]: ({ apiKey }) =>
+          observeRpcEffect(WS_METHODS.composioConfigure, composio.configure(apiKey), {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioRemove]: (_input) =>
+          observeRpcEffect(WS_METHODS.composioRemove, composio.remove, {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioSearchToolkits]: (input) =>
+          observeRpcEffect(WS_METHODS.composioSearchToolkits, composio.searchToolkits(input), {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioAuthorize]: (input) =>
+          observeRpcEffect(WS_METHODS.composioAuthorize, composio.authorize(input), {
+            "rpc.aggregate": "composio",
+          }),
+        [WS_METHODS.composioDisconnect]: ({ connectionId }) =>
+          observeRpcEffect(WS_METHODS.composioDisconnect, composio.disconnect(connectionId), {
+            "rpc.aggregate": "composio",
+          }),
         [WS_METHODS.portabilityExport]: (_input) =>
           observeRpcEffect(
             WS_METHODS.portabilityExport,
@@ -2370,6 +2403,66 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.subscriptionAuthList, getAccessHealthSnapshot(), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.mcpServerAuthenticate]: ({ mcpServerId }) =>
+          observeRpcStream(
+            WS_METHODS.mcpServerAuthenticate,
+            Stream.callback((queue) =>
+              Effect.gen(function* () {
+                const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+                const server = snapshot.mcpServers?.find(
+                  (candidate) => candidate.id === mcpServerId,
+                );
+                if (!server) {
+                  return yield* new McpServerAuthenticationError({
+                    mcpServerId,
+                    reason: "The MCP server does not exist.",
+                  });
+                }
+                if (!server.enabled) {
+                  return yield* new McpServerAuthenticationError({
+                    mcpServerId,
+                    reason: "Enable the MCP server before authentication.",
+                  });
+                }
+                if (server.transport === "stdio") {
+                  return yield* new McpServerAuthenticationError({
+                    mcpServerId,
+                    reason: "Local MCP servers do not support OAuth authentication.",
+                  });
+                }
+
+                const result = yield* agentController.authenticateMcpServer({
+                  server,
+                  onAuthorizationUrl: (authorizationUrl) => {
+                    Queue.offerUnsafe(queue, {
+                      type: "authorization-required",
+                      authorizationUrl,
+                    });
+                  },
+                });
+                yield* Queue.offer(queue, {
+                  type: "connected",
+                  toolCount: result.toolCount,
+                  recoveryFailures: result.recoveryFailures,
+                });
+              }).pipe(
+                Effect.mapError((cause) =>
+                  isMcpServerAuthenticationError(cause)
+                    ? cause
+                    : new McpServerAuthenticationError({
+                        mcpServerId,
+                        reason: cause instanceof Error ? cause.message : String(cause),
+                      }),
+                ),
+                Effect.catchTag("McpServerAuthenticationError", (error) =>
+                  Queue.fail(queue, error),
+                ),
+                Effect.andThen(Queue.end(queue)),
+                Effect.forkScoped,
+              ),
+            ),
+            { "rpc.aggregate": "provider" },
+          ),
         [WS_METHODS.botInboxList]: (_input) =>
           observeRpcEffect(
             WS_METHODS.botInboxList,

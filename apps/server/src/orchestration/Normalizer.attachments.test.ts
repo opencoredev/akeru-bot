@@ -73,6 +73,44 @@ describe("normalizeDispatchCommand attachments", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("persists inline document attachments", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const command: Extract<ClientOrchestrationCommand, { type: "thread.turn.start" }> = {
+        type: "thread.turn.start",
+        commandId: CommandId.make("command-file"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: MessageId.make("message-file"),
+          role: "user" as const,
+          text: "read this",
+          attachments: [
+            {
+              type: "file" as const,
+              name: "notes.md",
+              mimeType: "text/markdown" as const,
+              sizeBytes: 5,
+              dataUrl: "data:text/markdown;base64,aGVsbG8=",
+            },
+          ],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt: "2026-08-01T00:00:00.000Z",
+      };
+      const normalized = yield* normalizeDispatchCommand(command);
+      if (normalized.type !== "thread.turn.start") {
+        throw new Error("Expected a thread.turn.start command.");
+      }
+
+      const attachment = normalized.message.attachments[0]!;
+      expect(attachment.type).toBe("file");
+      expect(
+        NodeFS.readFileSync(NodePath.join(config.attachmentsDir, `${attachment.id}.md`)),
+      ).toEqual(Buffer.from("hello"));
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("claims uploaded attachments while retaining a retryable pending copy", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
@@ -306,10 +344,9 @@ describe("normalizeDispatchCommand attachments", () => {
         ...mismatchedTypeCommand,
         message: {
           ...mismatchedTypeCommand.message,
-          attachments: mismatchedTypeCommand.message.attachments.map((attachment) => ({
-            ...attachment,
-            mimeType: "image/jpeg",
-          })),
+          attachments: mismatchedTypeCommand.message.attachments.map((attachment) =>
+            attachment.type === "image" ? { ...attachment, mimeType: "image/jpeg" } : attachment,
+          ),
         },
       }).pipe(Effect.flip);
       expect(mismatchedType.message).toContain("image type");

@@ -26,6 +26,7 @@ import {
 } from "./lib/brand-assets.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
+  CLI_LAZY_RUNTIME_PACKAGES,
   findInlinedExternalPackages,
   selectCliPackagedRuntimeDependencies,
 } from "./lib/cli-external-packages.ts";
@@ -1409,6 +1410,40 @@ const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSel
         ),
       ),
     );
+
+    for (const packageName of CLI_LAZY_RUNTIME_PACKAGES) {
+      yield* runCommand(
+        ChildProcess.make(
+          process.execPath,
+          [
+            "--no-global-search-paths",
+            "--input-type=module",
+            "--eval",
+            "await import(process.argv[1])",
+            packageName,
+          ],
+          {
+            cwd: probeApp,
+            stdout: "pipe",
+            stderr: "pipe",
+            env: { ...process.env, NODE_PATH: "" },
+          },
+        ),
+        {
+          label: `server sidecar lazy dependency check (${packageName})`,
+          verbose: input.verbose,
+        },
+      ).pipe(
+        Effect.catchTag("BuildCommandFailedError", (error) =>
+          Effect.fail(
+            new BundleNotSelfContainedError({
+              exitCode: error.exitCode,
+              output: `${error.stderrTail ?? ""}${error.stdoutTail ?? ""}`.trim(),
+            }),
+          ),
+        ),
+      );
+    }
   },
 );
 
@@ -1844,10 +1879,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
         },
       ],
-      // electron-builder notarizes and staples the signed app before target
-      // builders package the DMG. CI notarizes the resulting DMG separately.
+      // Unsigned builds opt into identity "-" so electron-builder replaces
+      // Electron's linker-signed stub. Developer ID builds use CSC_NAME.
       notarize: signed,
-      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      sign: path.join(repoRoot, "scripts/sign-macos.ts"),
+      ...(signed ? {} : { identity: "-" }),
       ...(macSigning
         ? {
             entitlements: macSigning.entitlementsPath,
@@ -2634,9 +2670,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 
   const macEntitlementsPath =
-    options.platform === "mac" && options.signed
-      ? path.join(stageAppDir, "entitlements.mac.plist")
-      : undefined;
+    options.platform === "mac" ? path.join(stageAppDir, "entitlements.mac.plist") : undefined;
   if (macEntitlementsPath) {
     yield* fs.writeFileString(macEntitlementsPath, renderMacEntitlements());
   }

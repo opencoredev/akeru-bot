@@ -70,6 +70,11 @@ export const CLI_BUILD_ONLY_EXTERNAL_PREFIXES = [
 // the correct optional binding for the target OS and architecture.
 export const CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES = ["libsql"] as const;
 
+// Mastra constructs this import at runtime to keep Node-only dependencies out
+// of Cloudflare Worker bundles. The CLI bundler cannot see it, so desktop
+// packaging must stage the package and its production dependency closure.
+export const CLI_LAZY_RUNTIME_PACKAGES = ["execa"] as const;
+
 export const CLI_EXTERNAL_PACKAGE_PREFIXES = [
   ...CLI_RUNTIME_EXTERNAL_PREFIXES,
   ...CLI_BUILD_ONLY_EXTERNAL_PREFIXES,
@@ -116,7 +121,8 @@ export function selectCliPackagedRuntimeDependencies(
     Object.entries(dependencies).filter(
       ([name]) =>
         isRuntimeExternalCliDependency(name) ||
-        CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES.some((packageName) => name === packageName),
+        CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES.some((packageName) => name === packageName) ||
+        CLI_LAZY_RUNTIME_PACKAGES.some((packageName) => name === packageName),
     ),
   );
 }

@@ -21,6 +21,7 @@ const SUBSCRIPTION_DRIVER: Readonly<Record<SubscriptionProviderId, string>> = {
   cursor: "cursor",
   xai: "grok",
   "kimi-for-coding": "kimi",
+  "opencode-go": "opencodeGo",
 };
 
 export function subscriptionDependentBots(
@@ -84,8 +85,8 @@ function providerAccessHealth(
 ) {
   if (!provider || !provider.installed) return "missing" as const;
   if (provider.availability === "unavailable") return "unsupported" as const;
-  if (provider.status === "error") return "failed-first-request" as const;
   if (actualRequestHealth) return actualRequestHealth;
+  if (provider.status === "error") return "failed-first-request" as const;
   return "detected" as const;
 }
 

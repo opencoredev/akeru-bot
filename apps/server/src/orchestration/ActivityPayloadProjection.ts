@@ -3,6 +3,10 @@ import type {
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
 } from "@t3tools/contracts";
+import { AkeruPluginSearchResult } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+
+const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -16,6 +20,42 @@ function asTrimmedString(value: unknown): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+const MAX_PROJECTED_VALUE_DEPTH = 4;
+const MAX_PROJECTED_STRING_LENGTH = 4_096;
+const MAX_PROJECTED_ARRAY_LENGTH = 24;
+const MAX_PROJECTED_OBJECT_KEYS = 32;
+
+function copyTruncatedString(value: string): string {
+  if (value.length <= MAX_PROJECTED_STRING_LENGTH) {
+    return value;
+  }
+  const prefix = Array.from(value.slice(0, MAX_PROJECTED_STRING_LENGTH - 1)).join("");
+  return `${prefix}…`;
+}
+
+function projectBoundedValue(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") {
+    return copyTruncatedString(value);
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (depth >= MAX_PROJECTED_VALUE_DEPTH) {
+    return "[truncated]";
+  }
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MAX_PROJECTED_ARRAY_LENGTH)
+      .map((entry) => projectBoundedValue(entry, depth + 1));
+  }
+
+  const projected: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value).slice(0, MAX_PROJECTED_OBJECT_KEYS)) {
+    projected[key] = projectBoundedValue(entry, depth + 1);
+  }
+  return projected;
 }
 
 function pushChangedFile(target: string[], seen: Set<string>, value: unknown): void {
@@ -88,7 +128,7 @@ function projectCommandData(data: Record<string, unknown>): Record<string, unkno
 
   const projectedItem: Record<string, unknown> = {};
   if ("command" in item) {
-    projectedItem.command = item.command;
+    projectedItem.command = projectBoundedValue(item.command);
   }
 
   const aggregatedOutput = asTrimmedString(item.aggregatedOutput);
@@ -101,14 +141,14 @@ function projectCommandData(data: Record<string, unknown>): Record<string, unkno
 
   const input = asRecord(item.input);
   if (input && "command" in input) {
-    projectedItem.input = { command: input.command };
+    projectedItem.input = { command: projectBoundedValue(input.command) };
   }
 
   const result = asRecord(item.result);
   if (result) {
     const projectedResult: Record<string, unknown> = {};
     if ("command" in result) {
-      projectedResult.command = result.command;
+      projectedResult.command = projectBoundedValue(result.command);
     }
     const content = asTrimmedString(result.content);
     if (content) {
@@ -149,22 +189,28 @@ function projectCommandValue(data: Record<string, unknown>): unknown {
 }
 
 function summarizeToolTextOutput(value: string): string | null {
-  const lines: string[] = [];
-  for (const rawLine of value.split(/\r?\n/u)) {
-    const line = rawLine.replace(/\s+/g, " ").trim();
+  let meaningfulLineCount = 0;
+  let offset = 0;
+
+  while (offset <= value.length) {
+    const newlineIndex = value.indexOf("\n", offset);
+    const lineEnd = newlineIndex === -1 ? value.length : newlineIndex;
+    const line = value.slice(offset, lineEnd).replace(/\s+/g, " ").trim();
     if (line.length > 0) {
-      lines.push(line);
+      meaningfulLineCount += 1;
+      if (line !== "```") {
+        const summary = line.length <= 84 ? line : `${line.slice(0, 83).trimEnd()}…`;
+        // Copy the preview so V8 cannot retain the full tool output behind a slice.
+        return Array.from(summary).join("");
+      }
     }
+    if (newlineIndex === -1) {
+      break;
+    }
+    offset = newlineIndex + 1;
   }
 
-  const firstLine = lines.find((line) => line !== "```");
-  if (firstLine) {
-    return firstLine.length <= 84 ? firstLine : `${firstLine.slice(0, 83).trimEnd()}…`;
-  }
-  if (lines.length > 1) {
-    return `${lines.length.toLocaleString()} lines`;
-  }
-  return null;
+  return meaningfulLineCount > 1 ? `${meaningfulLineCount.toLocaleString()} lines` : null;
 }
 
 /**
@@ -236,7 +282,7 @@ function projectMcpToolCallData(data: Record<string, unknown>): Record<string, u
     const projectedItem: Record<string, unknown> = {};
     for (const key of MCP_ITEM_KEPT_FIELDS) {
       if (key in item) {
-        projectedItem[key] = item[key];
+        projectedItem[key] = projectBoundedValue(item[key]);
       }
     }
     const result = summarizeMcpResult(item.result);
@@ -250,7 +296,7 @@ function projectMcpToolCallData(data: Record<string, unknown>): Record<string, u
     projectedData.toolName = data.toolName;
   }
   if ("input" in data) {
-    projectedData.input = data.input;
+    projectedData.input = projectBoundedValue(data.input);
   }
   if (!item) {
     const result = summarizeMcpResult(data.result);
@@ -334,6 +380,14 @@ function projectAcpContent(value: unknown): Record<string, unknown> | undefined 
   return summary ? { content: summary } : undefined;
 }
 
+function projectPluginSearchResult(value: unknown): AkeruPluginSearchResult | undefined {
+  if (!isPluginSearchResult(value)) return undefined;
+  return {
+    ...value,
+    recommendations: value.recommendations.slice(0, 6),
+  };
+}
+
 /**
  * Removes activity payload fields that no current client reads while retaining
  * the full payload in persistence and the event store.
@@ -363,6 +417,22 @@ export function projectActivityPayload(
     };
   }
 
+  if (payload.itemType === "dynamic_tool_call" && activity.summary === "SearchPlugins") {
+    const result = projectPluginSearchResult(data.result);
+    if (result) {
+      return {
+        ...activity,
+        payload: {
+          ...projectedPayload,
+          data: {
+            result,
+            ...(data.toolCallId !== undefined ? { toolCallId: data.toolCallId } : {}),
+          },
+        },
+      };
+    }
+  }
+
   const projectedData: Record<string, unknown> = {};
   const item = projectCommandData(data);
   if (item) {
@@ -370,7 +440,7 @@ export function projectActivityPayload(
   }
   const command = projectCommandValue(data);
   if (command !== undefined) {
-    projectedData.command = command;
+    projectedData.command = projectBoundedValue(command);
   }
 
   const changedFiles: string[] = [];

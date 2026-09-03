@@ -15,8 +15,8 @@ describe("botSandbox", () => {
     expect(botSandboxChoice("vercel")).toBe("vercel");
   });
 
-  it("asks before local tools unless full access is enabled", () => {
-    expect(DEFAULT_BOT_RUNTIME_MODE).toBe("approval-required");
+  it("auto-reviews local tools unless another mode is selected", () => {
+    expect(DEFAULT_BOT_RUNTIME_MODE).toBe("auto");
     expect(resolveBotRuntimeMode(null, "approval-required")).toBe("approval-required");
     expect(resolveBotRuntimeMode("local", "full-access")).toBe("full-access");
   });
