@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@t3tools/shared": "workspace:*",
+    "@usenotra/geo": "0.3.0",
     "astro": "^7.0.3"
   },
   "devDependencies": {
