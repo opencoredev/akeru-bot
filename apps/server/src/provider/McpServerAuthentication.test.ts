@@ -145,6 +145,7 @@ describe("MCP server authentication", () => {
     } as unknown as McpManager;
     const recordSuccess = vi.fn();
     const recordFailure = vi.fn();
+    const recordRecoveryFailure = vi.fn();
 
     const result = await authenticateMcpServer({
       server,
@@ -153,11 +154,16 @@ describe("MCP server authentication", () => {
       onAuthorizationUrl: vi.fn(),
       recordSuccess,
       recordFailure,
+      recordRecoveryFailure,
     });
 
     expect(result.connected).toBe(true);
     expect(recordSuccess).toHaveBeenCalledWith(server.id);
     expect(recordFailure).not.toHaveBeenCalled();
+    expect(recordRecoveryFailure).toHaveBeenCalledWith(
+      server.id,
+      "Active MCP session 2 did not reconnect: Secondary session failed.",
+    );
     expect(secondary.reconnectServer).toHaveBeenCalledWith("builtin-hoplite");
   });
 });

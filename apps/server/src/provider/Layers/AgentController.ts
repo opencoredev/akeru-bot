@@ -2548,6 +2548,14 @@ const make = (options?: AgentControllerLiveOptions) =>
               recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
               recordFailure: (serverId, message) =>
                 subscriptionAuth.recordMcpRequestFailure(serverId, message),
+              recordRecoveryFailure: (serverId, message) => {
+                void runPromise(
+                  Effect.logWarning("MCP session recovery failed after authentication.", {
+                    serverId,
+                    error: message,
+                  }),
+                );
+              },
             });
             return { toolCount: status.toolCount };
           },

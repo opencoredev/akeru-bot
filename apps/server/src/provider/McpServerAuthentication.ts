@@ -9,6 +9,7 @@ interface AuthenticateMcpServerOptions {
   readonly signal?: AbortSignal;
   readonly recordSuccess: (serverId: McpServerId) => void;
   readonly recordFailure: (serverId: McpServerId, message: string) => void;
+  readonly recordRecoveryFailure?: (serverId: McpServerId, message: string) => void;
 }
 
 function failureMessage(cause: unknown): string {
@@ -49,8 +50,15 @@ export async function authenticateMcpServer(
       throw cause;
     }
 
-    for (const other of options.managers.slice(1)) {
-      await other.reconnectServer(serverId).catch(() => undefined);
+    for (const [index, other] of options.managers.slice(1).entries()) {
+      try {
+        requireConnected(await other.reconnectServer(serverId));
+      } catch (cause) {
+        options.recordRecoveryFailure?.(
+          options.server.id,
+          `Active MCP session ${index + 2} did not reconnect: ${failureMessage(cause)}`,
+        );
+      }
     }
 
     return connected;
