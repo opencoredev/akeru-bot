@@ -1032,7 +1032,7 @@ it.effect(
     }),
 );
 
-it.effect("accepts a title seed in thread.turn.start", () =>
+it.effect("drops the retired title seed in thread.turn.start", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadTurnStartCommand({
       type: "thread.turn.start",
@@ -1047,7 +1047,7 @@ it.effect("accepts a title seed in thread.turn.start", () =>
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+    assert.ok(!("titleSeed" in parsed));
   }),
 );
 
@@ -1179,7 +1179,7 @@ it.effect("decodes thread.turn-start-requested source proposed plan metadata whe
   }),
 );
 
-it.effect("decodes thread.turn-start-requested title seed when present", () =>
+it.effect("drops the retired title seed from thread.turn-start-requested events", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadTurnStartRequestedPayload({
       threadId: "thread-2",
@@ -1187,7 +1187,7 @@ it.effect("decodes thread.turn-start-requested title seed when present", () =>
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+    assert.ok(!("titleSeed" in parsed));
   }),
 );
 

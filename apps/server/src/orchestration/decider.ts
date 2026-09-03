@@ -2712,7 +2712,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             : command.modelSelection !== undefined
               ? { modelSelection: command.modelSelection }
               : {}),
-          ...(command.titleSeed !== undefined ? { titleSeed: command.titleSeed } : {}),
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
@@ -2721,9 +2720,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           createdAt: command.createdAt,
         },
       };
-      // Real activity resets ANY override: it wakes an explicitly settled
-      // thread, and it clears a keep-active pin back to neutral so the
-      // thread can auto-settle again after this burst of work goes stale.
+      // Real activity resets any override. It wakes an explicitly settled
+      // thread and clears an active override back to neutral.
       // A snooze clears the same way — sending a message to a snoozed
       // thread is the user re-engaging, so the return ticket is spent.
       const lifecycleResetEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];

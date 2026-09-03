@@ -51,7 +51,6 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQu
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
-import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
@@ -3558,8 +3557,8 @@ describe("ProviderRuntimeIngestion", () => {
     expect(checkpoint?.checkpointRef).toBe("provider-diff:evt-turn-diff-updated");
   });
 
-  it("mirrors a provider title only while the thread still has the default title", async () => {
-    const harness = await createHarness({ threadTitle: DEFAULT_THREAD_TITLE });
+  it("does not replace the app title with provider metadata", async () => {
+    const harness = await createHarness({ threadTitle: "Bot conversation" });
     const now = "2026-01-01T00:00:00.000Z";
 
     harness.emit({
@@ -3574,33 +3573,10 @@ describe("ProviderRuntimeIngestion", () => {
       },
     });
 
-    const thread = await waitForThread(
-      harness.readModel,
-      (entry) => entry.title === "Renamed by provider",
-    );
-    expect(thread.title).toBe("Renamed by provider");
-  });
-
-  it("rejects a provider title once the thread has a real title", async () => {
-    const harness = await createHarness({ threadTitle: "User-set title" });
-    const now = "2026-01-01T00:00:00.000Z";
-
-    harness.emit({
-      type: "thread.metadata.updated",
-      eventId: asEventId("evt-thread-metadata-real"),
-      provider: ProviderDriverKind.make("codex"),
-      createdAt: now,
-      threadId: asThreadId("thread-1"),
-      payload: {
-        name: "Renamed by provider",
-        metadata: { source: "provider" },
-      },
-    });
-
     await harness.drain();
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.title).toBe("User-set title");
+    expect(thread?.title).toBe("Bot conversation");
   });
 
   it("projects context window updates into normalized thread activities", async () => {

@@ -385,13 +385,7 @@ export async function crossWorktreeSendBoundary<Result>(input: {
 type FirstSendTurnInput = Required<
   Pick<
     StartThreadTurnInput,
-    | "threadId"
-    | "message"
-    | "modelSelection"
-    | "titleSeed"
-    | "runtimeMode"
-    | "interactionMode"
-    | "createdAt"
+    "threadId" | "message" | "modelSelection" | "runtimeMode" | "interactionMode" | "createdAt"
   >
 > &
   Pick<StartThreadTurnInput, "bootstrap">;
@@ -402,7 +396,6 @@ export function buildFirstSendTurnInput(input: FirstSendTurnInput): StartThreadT
     threadId: input.threadId,
     message: input.message,
     modelSelection: input.modelSelection,
-    titleSeed: input.titleSeed,
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
     ...(input.bootstrap === undefined ? {} : { bootstrap: input.bootstrap }),

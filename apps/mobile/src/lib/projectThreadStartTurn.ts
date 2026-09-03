@@ -58,7 +58,6 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
       attachments: toUploadChatImageAttachments(spec.attachments),
     },
     modelSelection: spec.modelSelection,
-    titleSeed: title,
     runtimeMode: spec.runtimeMode,
     interactionMode: spec.interactionMode,
     bootstrap: {

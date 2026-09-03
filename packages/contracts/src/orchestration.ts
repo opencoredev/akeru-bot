@@ -1478,7 +1478,6 @@ export const ThreadTurnStartCommand = Schema.Struct({
     channelOrigin: Schema.optional(ChannelMessageOrigin),
   }),
   modelSelection: Schema.optional(ModelSelection),
-  titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
   ),
@@ -1506,7 +1505,6 @@ const ClientThreadTurnStartCommand = Schema.Struct({
     attachments: Schema.Array(Schema.Union([UploadChatAttachment, ChatAttachment])),
   }),
   modelSelection: Schema.optional(ModelSelection),
-  titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
@@ -2210,7 +2208,6 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   modelSelection: Schema.optional(ModelSelection),
-  titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),

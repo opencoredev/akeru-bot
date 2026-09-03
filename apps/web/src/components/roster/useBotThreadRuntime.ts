@@ -45,7 +45,6 @@ import {
   joinOrStartThreadCreate,
   resolveBotThreadTarget,
 } from "./botThreadRuntime.logic";
-import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { ensureLocalApi } from "../../localApi";
 
@@ -54,11 +53,6 @@ const NO_ENVIRONMENT = "" as EnvironmentId;
 function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
   const error = squashAtomCommandFailure(result);
   return error instanceof Error ? error.message : "Could not send the message.";
-}
-
-function threadTitle(prompt: string, files: readonly File[]): string {
-  const seed = prompt || (files[0] ? `Image: ${files[0].name}` : "New thread");
-  return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -306,7 +300,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           bot?.sandbox ?? null,
           settings.localExecutionMode,
         );
-        const title = threadTitle(prompt, files);
+        const title = bot?.name ?? "Bot";
 
         try {
           const attachments = await Promise.all(

@@ -981,7 +981,7 @@ describe("sortSettledThreadsForSidebar", () => {
     expect(sorted.map((thread) => thread.id)).toEqual(["settled-last", "settled-first"]);
   });
 
-  it("falls back to last activity for auto-settled threads without a settledAt stamp", () => {
+  it("falls back to last activity for settled threads without a settledAt stamp", () => {
     const sorted = sortSettledThreadsForSidebar([
       settled({ id: "auto-old", latestUserMessageAt: "2026-03-09T08:00:00.000Z" }),
       settled({ id: "explicit", settledAt: "2026-03-09T10:00:00.000Z" }),
@@ -991,7 +991,7 @@ describe("sortSettledThreadsForSidebar", () => {
     expect(sorted.map((thread) => thread.id)).toEqual(["auto-recent", "explicit", "auto-old"]);
   });
 
-  it("counts a turn completion as activity for auto-settled threads", () => {
+  it("counts a turn completion as activity for settled threads without a stamp", () => {
     // The message came in before the other thread's, but its turn finished
     // after: completion time is the real "work ended" moment.
     const sorted = sortSettledThreadsForSidebar([

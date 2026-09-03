@@ -66,7 +66,7 @@ import {
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
 import { forkParked, ServerActivation } from "../../serverActivation.ts";
-import { canReplaceThreadTitle, DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
+import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
 import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
@@ -1243,51 +1243,6 @@ const make = Effect.gen(function* () {
     );
   });
 
-  const maybeGenerateThreadTitleForFirstTurn = Effect.fn("maybeGenerateThreadTitleForFirstTurn")(
-    function* (input: {
-      readonly threadId: ThreadId;
-      readonly cwd: string;
-      readonly messageText: string;
-      readonly attachments?: ReadonlyArray<ChatAttachment>;
-      readonly titleSeed?: string;
-    }) {
-      const attachments = input.attachments ?? [];
-      yield* Effect.gen(function* () {
-        const { textGenerationModelSelection: modelSelection } =
-          yield* serverSettingsService.getSettings;
-
-        const generated = yield* textGeneration.generateThreadTitle({
-          cwd: input.cwd,
-          message: input.messageText,
-          ...(attachments.length > 0 ? { attachments } : {}),
-          modelSelection,
-        });
-        if (!generated) return;
-
-        const thread = yield* resolveThread(input.threadId);
-        if (!thread) return;
-        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
-          return;
-        }
-
-        yield* orchestrationEngine.dispatch({
-          type: "thread.meta.update",
-          commandId: yield* serverCommandId("thread-title-rename"),
-          threadId: input.threadId,
-          title: generated.title,
-        });
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("provider command reactor failed to generate or rename thread title", {
-            threadId: input.threadId,
-            cwd: input.cwd,
-            cause: Cause.pretty(cause),
-          }),
-        ),
-      );
-    },
-  );
-
   const regenerateThreadTitle = Effect.fn("regenerateThreadTitle")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.meta-updated" }>,
     requestId: CommandId,
@@ -1497,16 +1452,9 @@ const make = Effect.gen(function* () {
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
     if (isFirstUserMessageTurn) {
-      const project = yield* resolveProject(thread.projectId);
-      const generationCwd =
-        resolveThreadWorkspaceCwd({
-          thread,
-          projects: project ? [project] : [],
-        }) ?? process.cwd();
       const generationInput = {
         messageText: message.text,
         ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
-        ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
       };
 
       yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
@@ -1515,14 +1463,6 @@ const make = Effect.gen(function* () {
         worktreePath: thread.worktreePath,
         ...generationInput,
       }).pipe(Effect.forkScoped);
-
-      if (canReplaceThreadTitle(thread.title, event.payload.titleSeed)) {
-        yield* maybeGenerateThreadTitleForFirstTurn({
-          threadId: event.payload.threadId,
-          cwd: generationCwd,
-          ...generationInput,
-        }).pipe(Effect.forkScoped);
-      }
     }
 
     const handleTurnStartFailure = (cause: Cause.Cause<unknown>) => {
