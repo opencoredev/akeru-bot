@@ -45,10 +45,12 @@ function fakeClient(input?: {
   }>;
   readonly deleteSession?: () => Promise<void>;
   readonly sessionCreationGate?: Promise<void>;
+  readonly sessionCreationGates?: readonly Promise<void>[];
 }) {
   const sessionDeletes: Array<ReturnType<typeof vi.fn<() => Promise<void>>>> = [];
   const createSession = vi.fn(async () => {
-    await input?.sessionCreationGate;
+    await (input?.sessionCreationGates?.[createSession.mock.calls.length - 1] ??
+      input?.sessionCreationGate);
     const deleteSession = vi.fn(input?.deleteSession ?? (async () => undefined));
     sessionDeletes.push(deleteSession);
     return {
@@ -342,6 +344,35 @@ describe("ComposioService", () => {
       expect(createSession).toHaveBeenCalledTimes(1);
       yield* service.remove;
       expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.effect("starts a new runtime resolution after configuration changes", () =>
+    Effect.gen(function* () {
+      let releaseOldSessionCreation!: () => void;
+      const oldSessionCreationGate = new Promise<void>((resolve) => {
+        releaseOldSessionCreation = resolve;
+      });
+      const { store } = makeSecretStore({ "composio-api-key": "old-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
+        sessionCreationGates: [oldSessionCreationGate, Promise.resolve()],
+      });
+      const service = make(store, () => client);
+
+      const oldResolution = yield* Effect.forkChild(service.resolveRuntimeMcpServer("thread-1"));
+      yield* Effect.promise(() => vi.waitFor(() => expect(createSession).toHaveBeenCalledTimes(1)));
+      yield* service.configure("new-key");
+
+      expect(yield* service.resolveRuntimeMcpServer("thread-1")).toBeDefined();
+      expect(createSession).toHaveBeenCalledTimes(2);
+      releaseOldSessionCreation();
+      expect(yield* Fiber.join(oldResolution)).toBeUndefined();
+
+      yield* service.remove;
+      expect(sessionDeletes).toHaveLength(2);
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+      expect(sessionDeletes[1]).toHaveBeenCalledTimes(1);
     }),
   );
 });

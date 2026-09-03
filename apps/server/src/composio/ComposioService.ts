@@ -104,7 +104,13 @@ export function make(
 ): ComposioServiceShape {
   let runtimeConfigurationGeneration = 0;
   const pendingHostedSessionDeletes = new Set<() => Promise<void>>();
-  const pendingRuntimeResolutions = new Map<string, Promise<McpServer | undefined>>();
+  const pendingRuntimeResolutions = new Map<
+    string,
+    {
+      readonly generation: number;
+      readonly promise: Promise<McpServer | undefined>;
+    }
+  >();
   const runtimeCache = new Map<
     string,
     {
@@ -304,10 +310,10 @@ export function make(
 
   const resolveRuntimeMcpServer: ComposioServiceShape["resolveRuntimeMcpServer"] = (resourceId) =>
     withClient("prepare connected tools", async (client, userId) => {
+      const configurationGeneration = runtimeConfigurationGeneration;
       const pending = pendingRuntimeResolutions.get(resourceId);
-      if (pending) return pending;
+      if (pending?.generation === configurationGeneration) return pending.promise;
       const resolving = (async () => {
-        const configurationGeneration = runtimeConfigurationGeneration;
         const connections = (await listConnections(client, userId)).filter(
           (connection) => connection.status === "ACTIVE",
         );
@@ -370,11 +376,12 @@ export function make(
         });
         return server;
       })();
-      pendingRuntimeResolutions.set(resourceId, resolving);
+      const pendingResolution = { generation: configurationGeneration, promise: resolving };
+      pendingRuntimeResolutions.set(resourceId, pendingResolution);
       try {
         return await resolving;
       } finally {
-        if (pendingRuntimeResolutions.get(resourceId) === resolving) {
+        if (pendingRuntimeResolutions.get(resourceId) === pendingResolution) {
           pendingRuntimeResolutions.delete(resourceId);
         }
       }
