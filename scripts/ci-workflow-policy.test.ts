@@ -171,5 +171,8 @@ describe("CI workflow budget", () => {
     expect(
       steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
     ).toContain("^Signature=adhoc$");
+    expect(
+      steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
+    ).toContain("grep -Fqx 'Identifier=dev.leodoes.akeru'");
   });
 });

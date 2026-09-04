@@ -167,12 +167,13 @@ const parsedReleaseWorkflow = parse(releaseWorkflow) as {
     };
   };
 };
+const macOSConditions = new Set([
+  "matrix.platform == 'mac'",
+  "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+]);
 for (const step of parsedReleaseWorkflow.jobs?.desktop?.steps ?? []) {
   const secretInputs = JSON.stringify({ env: step.env, with: step.with });
-  if (
-    /MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) &&
-    !step.if?.startsWith("matrix.platform == 'mac'")
-  ) {
+  if (/MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) && !macOSConditions.has(step.if ?? "")) {
     throw new Error(`${step.name ?? "Unnamed step"} exposes macOS secrets outside the macOS job.`);
   }
   if (/AZURE_/u.test(secretInputs) && step.if !== "matrix.platform == 'win'") {
