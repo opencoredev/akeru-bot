@@ -251,7 +251,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   }, []);
   const windowHeight = useWindowDimensions().height;
   const navigationHeaderHeight = useContext(HeaderHeightContext) || insets.top + IOS_NAV_BAR_HEIGHT;
-  const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;
+  const agentLabel = `${props.selectedThread.modelSelection.instanceId} bot`;
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
   const composerOverlayRef = useRef<View>(null);
@@ -743,7 +743,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 editorRef={composerEditorRef}
                 draftMessage={props.draftMessage}
                 draftAttachments={props.draftAttachments}
-                placeholder="Ask the repo agent, or run a command…"
+                placeholder="Ask the bot, or run a command…"
                 contentMaxWidth={contentMaxWidth}
                 connectionState={props.connectionStateLabel}
                 connectionError={props.connectionError}

@@ -98,11 +98,11 @@ function childInstructions(input: {
   readonly parentThreadId: ThreadId;
 }): string {
   return [
-    `Delegated task from thread ${input.parentThreadId}.`,
+    "This work was delegated from another bot chat.",
     `Task: ${input.task}`,
     `Expected result: ${input.expectedResult}`,
     ...(input.deadline ? [`Deadline: ${input.deadline}`] : []),
-    "Return a concise final result to the parent thread. Report a concrete blocker or failure.",
+    "Return a concise final result to the parent chat. Report a concrete blocker or failure.",
   ].join("\n");
 }
 
@@ -136,7 +136,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       sourceThread.latestTurn?.turnId !== parent.turnId ||
       sourceThread.latestTurn.state !== "running"
     ) {
-      throw new Error("The source bot is not authorized for this active thread.");
+      throw new Error("The source bot is not authorized for this active chat.");
     }
 
     const messageId = MessageId.make(`bot-message-${id()}`);
@@ -247,7 +247,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       commandId: commandId("bot-create"),
       botId,
       name: request.name,
-      title: request.title ?? "Assistant",
+      title: request.title ?? "Bot",
       label: null,
       description: request.description ?? null,
       disabledMcpServerIds: parentBot.disabledMcpServerIds,
@@ -343,10 +343,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       throw new Error("The target bot is not available in this workspace.");
     }
     if (bot.id === parent.botId || parent.ancestorBotIds.includes(bot.id)) {
-      throw new Error("Delegation would create a self-call or cycle.");
+      throw new Error("Bot work would create a self-call or cycle.");
     }
     if (parent.depth >= AKERU_DELEGATION_MAX_DEPTH) {
-      throw new Error(`Delegation depth cannot exceed ${AKERU_DELEGATION_MAX_DEPTH}.`);
+      throw new Error(`Bot work depth cannot exceed ${AKERU_DELEGATION_MAX_DEPTH}.`);
     }
     const active = snapshot.delegations.filter(
       (delegation) =>
@@ -354,11 +354,11 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     );
     if (active.length >= AKERU_DELEGATION_MAX_CONCURRENCY) {
       throw new Error(
-        `A turn cannot run more than ${AKERU_DELEGATION_MAX_CONCURRENCY} delegations.`,
+        `A turn cannot run more than ${AKERU_DELEGATION_MAX_CONCURRENCY} bot work items.`,
       );
     }
     if (request.memoryScopes && request.memoryScopes.length > 0) {
-      throw new Error("Delegated memory is unavailable until the child memory packet is bounded.");
+      throw new Error("Bot work memory is unavailable until the child memory packet is bounded.");
     }
 
     const group = bot.groupId
@@ -387,7 +387,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       projectId: parentThread.projectId,
       botId: group ? null : bot.id,
       groupId: group?.id ?? null,
-      title: `Delegation to ${bot.name}`,
+      title: `Bot work for ${bot.name}`,
       modelSelection:
         bot.engine === null
           ? parentThread.modelSelection
@@ -457,7 +457,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     const byParent = activeByParent.get(parent.threadId) ?? new Map();
     byParent.set(delegationId, { threadId: childThreadId, turnId: null });
     activeByParent.set(parent.threadId, byParent);
-    await deliver(delegation, "running", `Delegated to ${bot.name}.`);
+    await deliver(delegation, "running", `Sent bot work to ${bot.name}.`);
 
     await dispatch({
       type: "thread.turn.start",
@@ -496,13 +496,13 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
             updatedAt: now(),
           };
           await setState(blocked);
-          await deliver(blocked, "blocked", outcome.error ?? "The delegated bot is blocked.");
+          await deliver(blocked, "blocked", outcome.error ?? "The bot is blocked.");
           return { blocked: true, childThreadId, childTurnId: outcome.turnId };
         }
         return await fail(
           { ...delegation, childTurnId: outcome.turnId },
           "child_failed",
-          outcome.error ?? "The delegated bot did not return a result.",
+          outcome.error ?? "The bot did not return a result.",
         );
       }
       const completedAt = now();

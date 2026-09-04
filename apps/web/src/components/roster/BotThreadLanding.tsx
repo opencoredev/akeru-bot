@@ -257,7 +257,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
 
   return (
     <SidebarInset
-      aria-label={`${bot.name} thread`}
+      aria-label={`${bot.name} chat`}
       className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
       data-testid="bot-thread-landing"
     >

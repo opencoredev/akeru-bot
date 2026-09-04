@@ -58,9 +58,10 @@ describe("withRecentThreadShortcut", () => {
 });
 
 describe("buildShortcutActions", () => {
-  it("leads with the static new-task action", () => {
+  it("leads with the static new-chat action", () => {
     const actions = buildShortcutActions([thread("a")]);
     expect(actions[0]?.id).toBe(NEW_TASK_SHORTCUT_ID);
+    expect(actions[0]?.title).toBe("New chat");
     expect(actions[0]?.params?.href).toBe("/new");
     expect(actions).toHaveLength(2);
   });
@@ -75,7 +76,7 @@ describe("buildShortcutActions", () => {
 
   it("falls back to a generic label for missing titles", () => {
     const actions = buildShortcutActions([thread("a", "  ")]);
-    expect(actions[1]?.title).toBe("Thread");
+    expect(actions[1]?.title).toBe("Chat");
   });
 });
 

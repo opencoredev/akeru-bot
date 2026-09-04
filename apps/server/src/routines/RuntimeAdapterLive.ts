@@ -278,7 +278,7 @@ const make = Effect.gen(function* () {
         message: {
           messageId: MessageId.make(`routine:${run.id}:message`),
           role: "user",
-          text: `Execute this routine now. Do not create or change a schedule.\n\n${routine.procedure}`,
+          text: `Run the approved routine procedure below once. Do not create, update, enable, pause, or delete a routine or schedule.\n\n${routine.procedure}`,
           attachments: [],
         },
         runtimeMode: routine.approvalPolicy,

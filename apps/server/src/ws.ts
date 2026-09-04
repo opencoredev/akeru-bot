@@ -636,13 +636,13 @@ const makeWsRpcLayer = (
             .getThreadShellById(threadId)
             .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
           if (Option.isNone(thread)) {
-            return yield* memoryOperationError(operation, "The thread does not exist.");
+            return yield* memoryOperationError(operation, "The chat does not exist.");
           }
           const project = yield* projectionSnapshotQuery
             .getProjectShellById(thread.value.projectId)
             .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
           if (Option.isNone(project)) {
-            return yield* memoryOperationError(operation, "The thread project does not exist.");
+            return yield* memoryOperationError(operation, "The chat project does not exist.");
           }
           const legacyWorkspaceOwnerProjectId = yield* projectionSnapshotQuery
             .getOriginalProjectIdByWorkspaceRoot(project.value.workspaceRoot)
@@ -656,7 +656,7 @@ const makeWsRpcLayer = (
                     Option.match({
                       onNone: () =>
                         Effect.fail(
-                          memoryOperationError(operation, "The thread group does not exist."),
+                          memoryOperationError(operation, "The chat group does not exist."),
                         ),
                       onSome: (group) =>
                         Effect.succeed(
@@ -869,8 +869,7 @@ const makeWsRpcLayer = (
         return isOrchestrationDispatchCommandError(error)
           ? error
           : new OrchestrationDispatchCommandError({
-              message:
-                error instanceof Error ? error.message : "Failed to bootstrap thread turn start.",
+              message: error instanceof Error ? error.message : "Failed to start the chat.",
               cause,
             });
       };
@@ -1801,7 +1800,7 @@ const makeWsRpcLayer = (
               Effect.mapError(
                 (cause) =>
                   new OrchestrationGetFullThreadDiffError({
-                    message: "Failed to load full thread diff",
+                    message: "Failed to load the full chat diff",
                     cause,
                   }),
               ),
@@ -1815,7 +1814,7 @@ const makeWsRpcLayer = (
               Effect.mapError(
                 (cause) =>
                   new OrchestrationSearchThreadsError({
-                    message: "Failed to search threads",
+                    message: "Failed to search conversations",
                     cause,
                   }),
               ),
@@ -2036,7 +2035,7 @@ const makeWsRpcLayer = (
                       Stream.mapError(
                         (cause) =>
                           new OrchestrationGetSnapshotError({
-                            message: `Failed to replay thread ${input.threadId} events`,
+                            message: `Failed to restore chat ${input.threadId}`,
                             cause,
                           }),
                       ),
@@ -2072,7 +2071,7 @@ const makeWsRpcLayer = (
                   Effect.mapError(
                     (cause) =>
                       new OrchestrationGetSnapshotError({
-                        message: `Failed to load thread ${input.threadId}`,
+                        message: `Failed to load chat ${input.threadId}`,
                         cause,
                       }),
                   ),
@@ -2080,7 +2079,7 @@ const makeWsRpcLayer = (
 
               if (Option.isNone(snapshot)) {
                 return yield* new OrchestrationGetSnapshotError({
-                  message: `Thread ${input.threadId} was not found`,
+                  message: `Chat ${input.threadId} was not found`,
                   cause: input.threadId,
                 });
               }

@@ -2191,7 +2191,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ) {
           return yield* new AgentControllerRuntimeError({
             operation: "respondToRequest",
-            detail: `Stale pending approval request: ${input.requestId}. The agent session restarted. Send the request again.`,
+            detail: `Stale pending approval request: ${input.requestId}. The bot session restarted. Send the request again.`,
           });
         }
         return yield* legacyProviderBridge.respondToRequest(input);
@@ -2206,7 +2206,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (!active.activeTurn) {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToRequest",
-          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+          detail: `Stale pending approval request: ${input.requestId}. The bot turn has ended. Send the request again.`,
         });
       }
       const toolCallId = String(input.requestId);
@@ -2301,7 +2301,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (admitted._tag === "Stale") {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToRequest",
-          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+          detail: `Stale pending approval request: ${input.requestId}. The bot turn has ended. Send the request again.`,
         });
       }
       const permissionUpdate = admitted.permissionUpdate;
@@ -2335,7 +2335,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ) {
           return yield* new AgentControllerRuntimeError({
             operation: "respondToUserInput",
-            detail: `Unknown pending user-input request: ${input.requestId}. The agent session restarted. Send the request again.`,
+            detail: `Unknown pending user-input request: ${input.requestId}. The bot session restarted. Send the request again.`,
           });
         }
         return yield* legacyProviderBridge.respondToUserInput(input);
@@ -2382,7 +2382,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (admitted._tag === "Stale") {
           return yield* new AgentControllerRuntimeError({
             operation: "respondToUserInput",
-            detail: `Unknown pending user-input request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+            detail: `Unknown pending user-input request: ${input.requestId}. The bot turn has ended. Send the request again.`,
           });
         }
         yield* runMastra("respondToToolSuspension", () => admitted.resume);

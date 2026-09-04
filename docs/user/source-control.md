@@ -1,7 +1,7 @@
 # Source control integrations
 
 Akeru can clone and publish repositories, create and inspect change requests, and show review state
-beside the thread that owns the work.
+beside the chat that owns the bot work.
 
 ## Supported hosts
 
@@ -35,10 +35,10 @@ the first commit, then push it.
 
 ## Work with change requests
 
-Use the Git controls in the thread toolbar to push a branch and create a pull request or merge
+Use the Git controls in the chat toolbar to push a branch and create a pull request or merge
 request. Akeru can draft a title and description from the branch commits.
 
-The **Pull requests** page opens reviews in right-panel tabs. From a thread, you can open a linked
+The **Pull requests** page opens reviews in right-panel tabs. From a chat, you can open a linked
 review in the panel or in the system browser. Command-click on macOS, or Control-click on Windows and
 Linux, opens a sidebar change-request number in the browser.
 

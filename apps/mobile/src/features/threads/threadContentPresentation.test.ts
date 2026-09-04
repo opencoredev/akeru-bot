@@ -40,6 +40,21 @@ describe("thread content presentation", () => {
     });
   });
 
+  it("uses chat language when the detail was deleted", () => {
+    expect(
+      projectThreadContentPresentation({
+        hasDetail: false,
+        detailError: null,
+        detailDeleted: true,
+        connectionState: "connected",
+      }),
+    ).toEqual({
+      kind: "unavailable",
+      title: "Chat unavailable",
+      detail: "This chat was deleted or is no longer available.",
+    });
+  });
+
   it("surfaces detail errors before presenting a loading state", () => {
     expect(
       projectThreadContentPresentation({

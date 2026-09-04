@@ -1,11 +1,10 @@
 # Permission modes
 
-A permission mode controls which actions an agent can take before it must ask you.
+A permission mode controls which actions a bot can take before it must ask you.
 
-The mode is set per thread, from the mode control in the message composer. Changing it in one
-thread does not change any other thread. A thread created from inside another thread keeps that
-thread's mode. Otherwise, new threads use **Settings > General > Local execution** and use
-**Auto review** by default.
+The mode is set per chat from the mode control in the message composer. Changing it in one chat does
+not change any other chat. A chat created from inside another chat keeps that chat's mode. Otherwise,
+new chats use **Settings > General > Local execution** and use **Auto review** by default.
 
 ## The modes
 
@@ -16,7 +15,7 @@ thread's mode. Otherwise, new threads use **Settings > General > Local execution
 **Auto** allows routine actions and asks before risky ones. Each provider maps this mode to its own
 permission system. A provider without an equivalent can fall back to supervised behavior.
 
-**Full access** allows routine commands and edits without local prompts. The agent still asks its own
+**Full access** allows routine commands and edits without local prompts. The bot still asks its own
 questions and still stops at protected actions.
 
 ## Protected actions
@@ -33,11 +32,11 @@ own approval rules.
 
 ## Choose a mode
 
-Use **Supervised** for an unfamiliar task or a repository where an unwanted command is expensive.
+Use **Supervised** for unfamiliar bot work or a repository where an unwanted command is expensive.
 
 Use **Auto-accept edits** when you want the refactor but still want to inspect shell commands.
 
 Use **Full access** for a worktree or sandbox that you can restore. Check the workspace and Git diff
-after the agent finishes.
+after the bot finishes.
 
 Web, desktop, and mobile use the same four labels.

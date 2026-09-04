@@ -51,6 +51,28 @@ describe("buildThreadActionMenuItems", () => {
     expect(ids(baseState)).toEqual(expect.arrayContaining(["pin", "settle", "snooze"]));
   });
 
+  it("uses chat language without changing action ids", () => {
+    const items = buildThreadActionMenuItems({ ...baseState, branch: "main" });
+    const labels = items.flatMap((item) => [
+      item.label,
+      ...(item.children ?? []).map((child) => child.label),
+    ]);
+
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        "New chat on main",
+        "Pin chat",
+        "Settle chat",
+        "Rename chat",
+        "Chat ID",
+        "Archive chat",
+      ]),
+    );
+    expect(allIds({ ...baseState, branch: "main" })).toEqual(
+      expect.arrayContaining(["new-thread-on-branch", "copy-thread-id", "archive"]),
+    );
+  });
+
   it("disables snooze when the thread cannot snooze, keeping presets visible", () => {
     const snooze = buildThreadActionMenuItems({ ...baseState, canSnoozeNow: false }).find(
       (item) => item.id === "snooze",

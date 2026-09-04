@@ -114,10 +114,10 @@ SuperGrok or X Premium+.
 ## What Akeru runs
 
 Codex and Kimi use Akeru's custom Mastra-based runtime. Akeru supplies the workspace, memory,
-plugins, approval rules, and subscription access for each thread.
+plugins, approval rules, and subscription access for each chat.
 
 Claude, Grok, and OpenCode use their provider adapters. OpenCode Go uses Akeru's Mastra-based runtime.
-Both paths keep provider-specific session and permission behavior behind the same Akeru thread interface.
+Both paths keep provider-specific session and permission behavior behind the same Akeru chat interface.
 
 ## Next steps
 

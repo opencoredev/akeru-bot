@@ -661,16 +661,16 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
     return;
   }
   if (record.type === "thread") {
-    assertSafeImportedText(`Thread '${record.id}' title`, record.data.title);
+    assertSafeImportedText(`Chat '${record.id}' title`, record.data.title);
     for (const message of record.data.messages) {
-      assertSafeImportedText(`Thread '${record.id}' message`, message.text);
+      assertSafeImportedText(`Chat '${record.id}' message`, message.text);
     }
     for (const plan of record.data.proposedPlans) {
-      assertSafeImportedText(`Thread '${record.id}' proposed plan`, plan.planMarkdown);
+      assertSafeImportedText(`Chat '${record.id}' proposed plan`, plan.planMarkdown);
     }
     for (const approval of record.data.approvalHistory) {
-      assertSafeImportedText(`Thread '${record.id}' approval summary`, approval.summary);
-      assertSafeImportedText(`Thread '${record.id}' approval provider`, approval.provider);
+      assertSafeImportedText(`Chat '${record.id}' approval summary`, approval.summary);
+      assertSafeImportedText(`Chat '${record.id}' approval provider`, approval.provider);
       for (const value of [
         approval.requestId,
         approval.requestKind,
@@ -682,14 +682,14 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
         approval.outcome,
       ]) {
         if (value !== undefined)
-          assertSafeImportedText(`Thread '${record.id}' approval field`, value);
+          assertSafeImportedText(`Chat '${record.id}' approval field`, value);
       }
     }
     if (
       (record.data.settledOverride === "settled") !== (record.data.settledAt !== null) ||
       (record.data.snoozedUntil === null) !== (record.data.snoozedAt === null)
     ) {
-      throw new Error(`Thread '${record.id}' has inconsistent lifecycle timestamps.`);
+      throw new Error(`Chat '${record.id}' has inconsistent lifecycle timestamps.`);
     }
   }
 }
@@ -770,21 +770,21 @@ export function parsePortabilityArchive(contents: string) {
     if (record.type === "thread") {
       if (!projectIds.has(record.data.projectId)) {
         throw new Error(
-          `Thread '${record.id}' references missing project '${record.data.projectId}'.`,
+          `Chat '${record.id}' references missing project '${record.data.projectId}'.`,
         );
       }
       if (record.data.botId && !botIds.has(record.data.botId)) {
-        throw new Error(`Thread '${record.id}' references missing bot '${record.data.botId}'.`);
+        throw new Error(`Chat '${record.id}' references missing bot '${record.data.botId}'.`);
       }
       if (record.data.groupId && !groupIds.has(record.data.groupId)) {
-        throw new Error(`Thread '${record.id}' references missing group '${record.data.groupId}'.`);
+        throw new Error(`Chat '${record.id}' references missing group '${record.data.groupId}'.`);
       }
       const missingRespondingBot = record.data.messages.find(
         (message) => message.respondingBotId && !botIds.has(message.respondingBotId),
       )?.respondingBotId;
       if (missingRespondingBot) {
         throw new Error(
-          `Thread '${record.id}' message references missing bot '${missingRespondingBot}'.`,
+          `Chat '${record.id}' message references missing bot '${missingRespondingBot}'.`,
         );
       }
       const missingImplementationThread = record.data.proposedPlans.find(
@@ -793,7 +793,7 @@ export function parsePortabilityArchive(contents: string) {
       )?.implementationThreadId;
       if (missingImplementationThread) {
         throw new Error(
-          `Thread '${record.id}' plan references missing thread '${missingImplementationThread}'.`,
+          `Chat '${record.id}' plan references missing chat '${missingImplementationThread}'.`,
         );
       }
     }

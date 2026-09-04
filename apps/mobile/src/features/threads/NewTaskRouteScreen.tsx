@@ -44,7 +44,7 @@ function deriveProjectEmptyState(catalogState: WorkspaceState): {
   if (!catalogState.hasConnections) {
     return {
       title: "No environments connected",
-      detail: "Add an environment before creating a task.",
+      detail: "Add an environment before starting a chat.",
       loading: false,
     };
   }
@@ -105,7 +105,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
         ? "Choose a project for the image you shared"
         : `Choose a project for the ${incomingShare.attachments.length} images you shared`
     : null;
-  const screenTitle = incomingShare ? "Start a task" : "Choose project";
+  const screenTitle = incomingShare ? "Start a chat" : "Choose project";
   const projectEmptyState = deriveProjectEmptyState(catalogState);
   const resumedDestinationKeyRef = useRef<string | null>(null);
   const reservedDestinationProject = incomingShare?.destination
@@ -212,7 +212,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
           <NativeHeaderToolbar placement="right">
             {layout.usesSplitView ? (
               <NativeHeaderToolbar.Button
-                accessibilityLabel="Close new task"
+                accessibilityLabel="Close new chat"
                 icon="xmark"
                 onPress={() => navigation.goBack()}
                 separateBackground

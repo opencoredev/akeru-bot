@@ -598,7 +598,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     slashCommands: [
       {
         name: "feedback",
-        description: "Send this thread and Codex logs to OpenAI",
+        description: "Send this chat and Codex logs to OpenAI",
         input: { hint: "Describe the issue (optional)" },
       },
     ],

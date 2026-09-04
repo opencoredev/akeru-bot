@@ -47,7 +47,7 @@ function BotInbox({
             className={index === 0 ? "gap-2 p-4" : "gap-2 border-t border-border-subtle p-4"}
           >
             <Text className="text-base font-t3-medium text-foreground">{item.botName}</Text>
-            <Field label="Task or routine" value={item.taskOrRoutine} />
+            <Field label="Bot work or routine" value={item.taskOrRoutine} />
             <Field label="Last failure" value={item.lastFailure} />
             <Field label="Next action" value={item.nextAction} />
             {canResolveInboxItem(item) ? (

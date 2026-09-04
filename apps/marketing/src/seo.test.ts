@@ -10,10 +10,8 @@ describe("marketing search metadata", () => {
   it("keeps search metadata while preserving the original home page", () => {
     const home = sourceFile("pages/index.astro");
 
-    expect(home).toContain('title="Akeru Bot | Open-source AI coding agent desktop app"');
-    expect(home).toContain(
-      'description="Run Claude, Codex, Grok, Kimi, and OpenCode coding agents',
-    );
+    expect(home).toContain('title="Akeru Bot | Open-source AI coding bot desktop app"');
+    expect(home).toContain('description="Run Claude, Codex, Grok, Kimi, and OpenCode coding bots');
     expect(home).toContain('<h1 class="hero-title">Meet Akeru Bot</h1>');
     expect(home).toContain('<h2 class="section-title">Every bot has its own setup</h2>');
   });
@@ -44,7 +42,7 @@ describe("marketing search metadata", () => {
     const blog = sourceFile("pages/blog/index.astro");
     const layout = sourceFile("layouts/Layout.astro");
 
-    expect(blog).toContain('title="Akeru Blog | Open-source AI agent guides"');
+    expect(blog).toContain('title="Akeru Blog | Open-source AI bot guides"');
     expect(blog).toContain("<h1>Blog</h1>");
     expect(blog).toContain('href: "/open-source-grok-bot"');
     expect(blog).toContain('href: "/compare/akeru-vs-grok-bot"');

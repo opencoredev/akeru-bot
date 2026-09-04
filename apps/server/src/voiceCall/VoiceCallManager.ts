@@ -124,7 +124,7 @@ export function defaultSession(): ChatGptRealtimeSession {
                 type: "function",
                 name: "send_to_chat",
                 description:
-                  "Delegate work to the bot's existing chat thread. Use this for requests that need files, tools, code, the workspace, permissions, or stored memory. Pass the user's request as one clear message.",
+                  "Send work to the bot's existing chat. Use this for requests that need files, tools, code, the workspace, permissions, or stored memory. Pass the user's request as one clear message.",
                 parameters: {
                   type: "object",
                   properties: {

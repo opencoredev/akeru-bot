@@ -415,7 +415,7 @@ export function NewTaskDraftScreen(props: {
         alertedUnavailableIncomingShareIdRef.current = shareId;
         Alert.alert(
           "Shared content unavailable",
-          "The shared content is no longer in the inbox. You can continue editing this task draft.",
+          "The shared content is no longer in the inbox. You can continue editing this chat draft.",
         );
       }
       return;
@@ -692,8 +692,8 @@ export function NewTaskDraftScreen(props: {
         await enqueueThreadOutboxMessage(message);
       } catch (error) {
         Alert.alert(
-          "Could not queue task",
-          error instanceof Error ? error.message : "The task could not be saved to the outbox.",
+          "Could not queue chat",
+          error instanceof Error ? error.message : "The chat could not be saved to the outbox.",
         );
         return;
       } finally {
@@ -745,8 +745,8 @@ export function NewTaskDraftScreen(props: {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         Alert.alert(
-          "Could not start task",
-          error instanceof Error ? error.message : "The task could not be started.",
+          "Could not start chat",
+          error instanceof Error ? error.message : "The chat could not be started.",
         );
       }
       return;
@@ -776,10 +776,10 @@ export function NewTaskDraftScreen(props: {
         {Platform.OS === "android" ? (
           <>
             <NativeStackScreenOptions options={{ headerShown: false }} />
-            <AndroidScreenHeader title="New Thread" onBack={() => navigation.goBack()} />
+            <AndroidScreenHeader title="New chat" onBack={() => navigation.goBack()} />
           </>
         ) : (
-          <NativeStackScreenOptions options={{ title: "Loading task" }} />
+          <NativeStackScreenOptions options={{ title: "Loading chat" }} />
         )}
       </View>
     );
@@ -1017,7 +1017,7 @@ export function NewTaskDraftScreen(props: {
           </ComposerToolbarScroller>
           <ComposerToolbarButton
             accessibilityLabel={
-              flow.submitting ? "Starting task" : environmentConnected ? "Start task" : "Queue task"
+              flow.submitting ? "Starting chat" : environmentConnected ? "Start chat" : "Queue chat"
             }
             disabled={!canStart}
             icon={environmentConnected ? "arrow.up" : "tray.and.arrow.up"}
@@ -1034,7 +1034,7 @@ export function NewTaskDraftScreen(props: {
     return (
       <View className="flex-1 bg-sheet" collapsable={false}>
         <NativeStackScreenOptions options={{ headerShown: false }} />
-        <AndroidScreenHeader title="New task" onBack={closeNewTask} />
+        <AndroidScreenHeader title="New chat" onBack={closeNewTask} />
         {heroViewport}
 
         <KeyboardStickyView
@@ -1058,7 +1058,7 @@ export function NewTaskDraftScreen(props: {
       />
       <NativeHeaderToolbar placement="left">
         <NativeHeaderToolbar.Button
-          accessibilityLabel="Cancel new task"
+          accessibilityLabel="Cancel new chat"
           label="Cancel"
           onPress={closeNewTask}
         />
