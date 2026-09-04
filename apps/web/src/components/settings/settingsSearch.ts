@@ -258,7 +258,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "agent-browser-access",
-    title: "Agent browser access",
+    title: "Bot browser access",
     to: "/settings/browser",
     targetId: "browser",
   },
@@ -304,7 +304,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "archive",
-    title: "Archived threads",
+    title: "Archived chats",
     to: "/settings/archived",
   },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;

@@ -120,8 +120,8 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
     widgets: [
       {
         name: "AgentActivity",
-        displayName: "Agent Activity",
-        description: "Shows the current state of active Akeru Bot agents.",
+        displayName: "Bot Work",
+        description: "Shows current bot work in Akeru Bot.",
         supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
       },
     ],

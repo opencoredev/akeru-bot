@@ -93,7 +93,7 @@ describe("Plugins dialog content", () => {
       type: "warning",
       title: "Hoplite connected with a session issue",
       description:
-        "MCP session for thread 'thread-secondary' did not reconnect: Secondary session failed. Restart the affected agent session to retry.",
+        "MCP session for thread 'thread-secondary' did not reconnect: Secondary session failed. Restart the affected bot session to retry.",
     });
     expect(pluginRecoveryNotice("Hoplite", [])).toBeNull();
   });

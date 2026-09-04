@@ -1,12 +1,12 @@
 # Privacy and outbound data
 
-Akeru stores environment data under `~/.akeru` by default. This includes projects, threads, bot
+Akeru stores environment data under `~/.akeru` by default. This includes projects, chats, bot
 profiles, settings, secrets, logs, local memory, and cached provider data. A worktree development
 server uses that worktree's `.akeru` directory instead.
 
 ## Data that can leave the environment
 
-- Agent requests send the prompt, selected files, tool results, and conversation context to the
+- Provider requests send the prompt, selected files, tool results, and conversation context to the
   provider that you select. That provider controls its processing and retention.
 - Product feedback sends the text and an optional safe interface descriptor to
   `feedback.akeru.bot`. The service can retain accepted feedback for up to 90 days.

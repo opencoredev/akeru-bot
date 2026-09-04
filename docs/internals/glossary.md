@@ -33,7 +33,7 @@ A Git worktree used as an isolated workspace for a thread. If a thread has a `wo
 
 #### Thread
 
-The main durable unit of conversation and workspace history. In [the orchestration contracts][1], a thread holds messages, activities, checkpoints, and session-related state. See [projector.ts][4].
+The internal durable record for one user-facing chat and its workspace history. In [the orchestration contracts][1], a thread holds messages, activities, checkpoints, and session-related state. Interface copy and user documentation call this a chat or conversation. See [projector.ts][4].
 
 #### Turn
 

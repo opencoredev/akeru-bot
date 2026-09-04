@@ -8,7 +8,7 @@
 - [Permission modes](./user/permission-modes.md)
 - [Configure sandboxes](./user/sandboxes.md)
 - [Keyboard shortcuts](./user/keybindings.md)
-- [Organizing threads](./user/thread-sidebar.md)
+- [Organizing chats](./user/chats.md)
 - [Sending product feedback](./user/product-feedback.md)
 - [Plugins](./user/plugins.md)
 - [Privacy and outbound data](./user/privacy.md)

@@ -1387,7 +1387,7 @@ describe("ProviderCommandReactor", () => {
   it("keeps the current title when regeneration returns the fallback", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
-    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "New thread" }));
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "New chat" }));
 
     await harness.runEffect(
       harness.engine.dispatch({
@@ -3863,7 +3863,7 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.messages).toContainEqual(
       expect.objectContaining({
         role: "assistant",
-        text: "I could not continue that approval because the agent session restarted. Send it again.",
+        text: "I could not continue that approval because the bot session restarted. Send it again.",
       }),
     );
     expect(thread?.session).toMatchObject({
@@ -3975,7 +3975,7 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.messages).toContainEqual(
       expect.objectContaining({
         role: "assistant",
-        text: "I could not continue that request because the agent session restarted. Send it again.",
+        text: "I could not continue that request because the bot session restarted. Send it again.",
       }),
     );
     expect(thread?.session).toMatchObject({

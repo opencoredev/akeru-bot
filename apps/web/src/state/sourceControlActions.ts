@@ -336,7 +336,7 @@ export function usePreparePullRequestThreadAction(scope: SourceControlActionScop
   );
   return useAction({
     kind: "preparePullRequestThread",
-    label: "Preparing pull request thread",
+    label: "Preparing pull request workspace",
     scope,
     action,
   });

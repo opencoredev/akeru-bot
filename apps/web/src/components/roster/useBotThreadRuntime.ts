@@ -58,7 +58,7 @@ function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): s
 }
 
 function threadTitle(prompt: string, files: readonly File[]): string {
-  const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New thread");
+  const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
   return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
 }
 

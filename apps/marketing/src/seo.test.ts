@@ -1,19 +1,36 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import * as JPEG from "jpeg-js";
 import { describe, expect, it } from "vite-plus/test";
 
 const sourceFile = (path: string) =>
   NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, path), "utf8");
 
+const jpegFrameMarker = (image: Buffer) => {
+  let offset = 2;
+
+  while (offset < image.byteLength) {
+    while (image[offset] === 0xff) offset += 1;
+    const marker = image[offset];
+    offset += 1;
+
+    if (marker >= 0xc0 && marker <= 0xc3) return marker;
+    if (marker === 0xda || marker === undefined) break;
+
+    const segmentLength = image.readUInt16BE(offset);
+    offset += segmentLength;
+  }
+
+  return undefined;
+};
+
 describe("marketing search metadata", () => {
   it("keeps search metadata while preserving the original home page", () => {
     const home = sourceFile("pages/index.astro");
 
-    expect(home).toContain('title="Akeru Bot | Open-source AI coding agent desktop app"');
-    expect(home).toContain(
-      'description="Run Claude, Codex, Grok, Kimi, and OpenCode coding agents',
-    );
+    expect(home).toContain('title="Akeru Bot | Open-source AI coding bot desktop app"');
+    expect(home).toContain('description="Run Claude, Codex, Grok, Kimi, and OpenCode coding bots');
     expect(home).toContain('<h1 class="hero-title">Meet Akeru Bot</h1>');
     expect(home).toContain('<h2 class="section-title">Every bot has its own setup</h2>');
   });
@@ -44,7 +61,7 @@ describe("marketing search metadata", () => {
     const blog = sourceFile("pages/blog/index.astro");
     const layout = sourceFile("layouts/Layout.astro");
 
-    expect(blog).toContain('title="Akeru Blog | Open-source AI agent guides"');
+    expect(blog).toContain('title="Akeru Blog | Open-source AI bot guides"');
     expect(blog).toContain("<h1>Blog</h1>");
     expect(blog).toContain('href: "/open-source-grok-bot"');
     expect(blog).toContain('href: "/compare/akeru-vs-grok-bot"');
@@ -104,6 +121,24 @@ describe("marketing search metadata", () => {
 
     expect(searchPage).toMatch(/\.article-copy \{[\s\S]*?min-width: 0;/);
     expect(searchPage).toContain("overflow-x: auto;");
+  });
+
+  it("serves a crawler-compatible social card from a cache-busted URL", () => {
+    const layout = sourceFile("layouts/Layout.astro");
+    const socialImage = NodeFS.readFileSync(
+      NodePath.resolve(import.meta.dirname, "../public/og-v2.jpg"),
+    );
+    const decoded = JPEG.decode(socialImage, { formatAsRGBA: false, useTArray: true });
+
+    expect(layout).toContain('new URL("/og-v2.jpg", siteOrigin)');
+    expect(layout).toContain('<meta property="og:image:type" content="image/jpeg" />');
+    expect(layout).toContain('<meta property="og:image:width" content="1200" />');
+    expect(layout).toContain('<meta property="og:image:height" content="630" />');
+    expect(layout).toContain('<meta name="twitter:image:alt"');
+    expect(jpegFrameMarker(socialImage)).toBe(0xc0);
+    expect(decoded).toMatchObject({ width: 1200, height: 630 });
+    expect(decoded.data.byteLength).toBe(1200 * 630 * 3);
+    expect(socialImage.byteLength).toBeLessThan(5_000_000);
   });
 
   it("keeps missing pages out of search results", () => {

@@ -123,7 +123,7 @@ function formatThreadError(cause: Cause.Cause<unknown>): string {
   const error = Cause.squash(cause);
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
-    : "Could not synchronize the thread.";
+    : "Could not synchronize the chat.";
 }
 
 function shouldPersistThread(thread: OrchestrationThread): boolean {

@@ -73,7 +73,7 @@ const SLIM_MENU_ACTIONS: MenuAction[] = [
 ];
 
 const SNOOZED_MENU_ACTIONS: MenuAction[] = [
-  { id: "unsnooze", title: "Wake thread", image: "clock" },
+  { id: "unsnooze", title: "Wake chat", image: "clock" },
   { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
 ];
 
@@ -119,9 +119,9 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
   return (
     <Pressable
       accessibilityHint={
-        props.expanded ? "Collapses the snoozed threads." : "Expands the snoozed threads."
+        props.expanded ? "Collapses the snoozed chats." : "Expands the snoozed chats."
       }
-      accessibilityLabel={props.count === 1 ? "1 snoozed thread" : `${props.count} snoozed threads`}
+      accessibilityLabel={props.count === 1 ? "1 snoozed chat" : `${props.count} snoozed chats`}
       accessibilityRole="button"
       accessibilityState={{ disabled: props.disabled, expanded: props.expanded }}
       className={cn(
@@ -158,9 +158,9 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
   return (
     <Pressable
       accessibilityHint={
-        props.expanded ? "Collapses the settled threads." : "Expands the settled threads."
+        props.expanded ? "Collapses the settled chats." : "Expands the settled chats."
       }
-      accessibilityLabel={props.count === 1 ? "1 settled thread" : `${props.count} settled threads`}
+      accessibilityLabel={props.count === 1 ? "1 settled chat" : `${props.count} settled chats`}
       accessibilityRole="button"
       accessibilityState={{ disabled: props.disabled, expanded: props.expanded }}
       className={cn(
@@ -275,7 +275,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
         shouldOpenOnLongPress
       >
         <Pressable
-          accessibilityHint="Opens the queued task for editing"
+          accessibilityHint="Opens the queued chat for editing"
           accessibilityLabel={pendingTask.title}
           accessibilityRole="button"
           onPress={() => onSelectPendingTask(pendingTask)}
@@ -570,7 +570,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (snoozeSelection._tag === "selected") {
         handleSnooze(snoozeSelection.preset.snoozedUntil);
       } else if (snoozeSelection._tag === "expired") {
-        Alert.alert("Could not snooze thread", "That snooze time has passed. Choose another time.");
+        Alert.alert("Could not snooze chat", "That snooze time has passed. Choose another time.");
       }
     },
     [
@@ -648,8 +648,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   );
   const swipeAccessibilityHint =
     secondaryAction === null
-      ? `Opens the thread. Swipe left to ${primaryAction.label.toLowerCase()}.`
-      : `Opens the thread. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
+      ? `Opens the chat. Swipe left to ${primaryAction.label.toLowerCase()}.`
+      : `Opens the chat. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
 
   // The sidebar pane fills selected rows with the theme's message surface, so
   // every piece of row text must use that surface's paired foreground.

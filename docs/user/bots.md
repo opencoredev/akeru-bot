@@ -37,8 +37,8 @@ cloud sandbox do not show the local computer prompt.
 
 ## Run a routine
 
-Open **Routines** in the bot panel. Add a job, procedure, schedule, timezone, required skills, and
-connectors. Run a dry run and approve the procedure before you enable its schedule.
+Open **Routines** in the bot panel. Add a routine, procedure, schedule, timezone, required skills,
+and connectors. Run a dry run and approve the procedure before you enable its schedule.
 
 The panel shows the next and last run, latest result or failure, and five recent attempts. You can
 run, pause, resume, edit, or delete the routine. A procedure change needs approval again.
@@ -60,7 +60,7 @@ Use the panel button to collapse or reopen the bot editor. The default shortcut 
 can change **Right Panel: Toggle** in keybinding settings. Narrow screens open the editor as a sheet.
 
 Bot replies support headings, links, tables, task lists, code blocks, math, and Mermaid diagrams.
-During longer work, the bot posts short status notes after meaningful progress.
+During longer bot work, the bot posts short status notes after meaningful progress.
 
 ## Voice calls
 

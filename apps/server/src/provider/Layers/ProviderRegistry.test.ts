@@ -385,7 +385,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           assert.deepStrictEqual(status.slashCommands, [
             {
               name: "feedback",
-              description: "Send this thread and Codex logs to OpenAI",
+              description: "Send this chat and Codex logs to OpenAI",
               input: { hint: "Describe the issue (optional)" },
             },
           ]);

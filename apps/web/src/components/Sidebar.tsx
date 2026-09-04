@@ -402,7 +402,7 @@ function SnoozePopoverButton(props: {
               render={
                 <button
                   type="button"
-                  aria-label="Snooze thread"
+                  aria-label="Snooze chat"
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                   className="inline-flex h-full cursor-pointer items-center gap-0.5 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -413,7 +413,7 @@ function SnoozePopoverButton(props: {
         >
           <ClockIcon className="size-3" />
         </TooltipTrigger>
-        <TooltipPopup>Snooze thread</TooltipPopup>
+        <TooltipPopup>Snooze chat</TooltipPopup>
       </Tooltip>
       <PopoverPopup side="bottom" align="end" className="w-56" viewportClassName="p-1">
         {presets.map((preset) => (
@@ -704,7 +704,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   settlementSupported: boolean;
   // Same contract for thread.snooze/unsnooze.
   snoozeSupported: boolean;
-  // Pinned threads show the same pin marker in active, settled, and snoozed
+  // Pinned chats show the same pin marker in active, settled, and snoozed
   // rows. The marker can unpin the thread when the server supports pinning.
   pinningSupported: boolean;
   isPinned: boolean;
@@ -1125,7 +1125,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     <input
       autoFocus
       value={renamingTitle}
-      aria-label="Thread title"
+      aria-label="Chat title"
       onChange={(event) => onRenameTitleChange(event.target.value)}
       onFocus={(event) => event.currentTarget.select()}
       onKeyDown={handleRenameKeyDown}
@@ -1207,7 +1207,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           render={
             <button
               type="button"
-              aria-label="Unpin thread"
+              aria-label="Unpin chat"
               onClick={handleUnpinClick}
               className="inline-flex cursor-pointer items-center rounded-sm text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             />
@@ -1215,7 +1215,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         >
           <PinIcon aria-hidden className="size-3 shrink-0" />
         </TooltipTrigger>
-        <TooltipPopup>Unpin thread</TooltipPopup>
+        <TooltipPopup>Unpin chat</TooltipPopup>
       </Tooltip>
     ) : (
       <PinIcon
@@ -1321,7 +1321,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 !props.snoozeSupported ? null : (
                   <button
                     type="button"
-                    aria-label="Wake thread now"
+                    aria-label="Wake chat now"
                     onClick={handleUnsnoozeClick}
                     className={cn(
                       "pointer-events-none absolute inset-y-0 right-0 -mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100",
@@ -1337,7 +1337,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     render={
                       <button
                         type="button"
-                        aria-label="Un-settle thread"
+                        aria-label="Un-settle chat"
                         onClick={handleUnsettleClick}
                         className={cn(
                           "pointer-events-none absolute inset-y-0 right-0 -mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100",
@@ -1348,12 +1348,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   >
                     <Undo2Icon className="mb-px size-3.5" />
                   </TooltipTrigger>
-                  <TooltipPopup side="top">Un-settle thread</TooltipPopup>
+                  <TooltipPopup side="top">Un-settle chat</TooltipPopup>
                 </Tooltip>
               ) : (
                 <button
                   type="button"
-                  aria-label="Settle thread"
+                  aria-label="Settle chat"
                   onClick={handleSettleClick}
                   className={cn(
                     "pointer-events-none absolute inset-y-0 right-0 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100",
@@ -1527,7 +1527,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           render={
                             <button
                               type="button"
-                              aria-label="Settle thread"
+                              aria-label="Settle chat"
                               onClick={handleSettleClick}
                               className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
                             />
@@ -1536,7 +1536,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <CheckIcon className="size-3.5" />
                           Settle
                         </TooltipTrigger>
-                        <TooltipPopup>Settle thread</TooltipPopup>
+                        <TooltipPopup>Settle chat</TooltipPopup>
                       </Tooltip>
                     ) : null}
                   </span>
@@ -1790,7 +1790,7 @@ export default function Sidebar() {
     onCopy: ({ threadId }) => {
       toastManager.add({
         type: "success",
-        title: "Thread ID copied",
+        title: "Chat ID copied",
         description: threadId,
       });
     },
@@ -1798,7 +1798,7 @@ export default function Sidebar() {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Failed to copy thread ID",
+          title: "Failed to copy chat ID",
           description: error instanceof Error ? error.message : "An error occurred.",
         }),
       );
@@ -2412,7 +2412,7 @@ export default function Sidebar() {
         const trimmed = title.trim();
         setRenamingThreadKey(null);
         if (trimmed.length === 0) {
-          toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+          toastManager.add({ type: "warning", title: "Chat title cannot be empty" });
           return;
         }
         if (trimmed === originalTitle) return;
@@ -2425,7 +2425,7 @@ export default function Sidebar() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to rename thread",
+              title: "Failed to rename chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2508,7 +2508,7 @@ export default function Sidebar() {
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Failed to settle thread",
+                  title: "Failed to settle chat",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -2536,7 +2536,7 @@ export default function Sidebar() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to un-settle thread",
+              title: "Failed to un-settle chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2554,7 +2554,7 @@ export default function Sidebar() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to wake thread",
+              title: "Failed to wake chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2647,7 +2647,7 @@ export default function Sidebar() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to pin thread",
+              title: "Failed to pin chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2665,7 +2665,7 @@ export default function Sidebar() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to unpin thread",
+              title: "Failed to unpin chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2730,7 +2730,7 @@ export default function Sidebar() {
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to reorder pinned threads",
+                title: "Failed to reorder pinned chats",
                 description: error instanceof Error ? error.message : "An error occurred.",
               }),
             );
@@ -2789,7 +2789,7 @@ export default function Sidebar() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to snooze thread",
+              title: "Failed to snooze chat",
               description:
                 outcome.error instanceof Error ? outcome.error.message : "An error occurred.",
             }),
@@ -2909,11 +2909,11 @@ export default function Sidebar() {
                 type: failedCount > 0 ? "warning" : "success",
                 title:
                   failedCount > 0
-                    ? `Snoozed ${snoozedCount} of ${selectedThreads.length} threads`
-                    : `Snoozed ${snoozedCount} thread${snoozedCount === 1 ? "" : "s"}`,
+                    ? `Snoozed ${snoozedCount} of ${selectedThreads.length} chats`
+                    : `Snoozed ${snoozedCount} chat${snoozedCount === 1 ? "" : "s"}`,
                 description:
                   failedCount > 0
-                    ? `${failedCount} thread${failedCount === 1 ? "" : "s"} couldn't be snoozed.`
+                    ? `${failedCount} chat${failedCount === 1 ? "" : "s"} couldn't be snoozed.`
                     : undefined,
                 timeout: 5_000,
                 actionProps: {
@@ -2929,7 +2929,7 @@ export default function Sidebar() {
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to snooze threads",
+                title: "Failed to snooze chats",
                 description:
                   firstError instanceof Error ? firstError.message : "An error occurred.",
               }),
@@ -2950,7 +2950,7 @@ export default function Sidebar() {
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to regenerate thread titles",
+                title: "Failed to regenerate chat titles",
                 description: error instanceof Error ? error.message : "An error occurred.",
               }),
             );
@@ -2988,8 +2988,8 @@ export default function Sidebar() {
         const confirmed = await settlePromise(() =>
           api.dialogs.confirm(
             [
-              `Delete ${count} thread${count === 1 ? "" : "s"}?`,
-              "This permanently clears conversation history for these threads.",
+              `Delete ${count} chat${count === 1 ? "" : "s"}?`,
+              "This permanently clears these conversation histories.",
             ].join("\n"),
             { variant: "destructive" },
           ),
@@ -3013,7 +3013,7 @@ export default function Sidebar() {
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to delete threads",
+                title: "Failed to delete chats",
                 description: error instanceof Error ? error.message : "An error occurred.",
               }),
             );
@@ -3122,7 +3122,7 @@ export default function Sidebar() {
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Could not create thread",
+                  title: "Could not create chat",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -3158,7 +3158,7 @@ export default function Sidebar() {
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Failed to regenerate thread title",
+                  title: "Failed to regenerate chat title",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -3174,7 +3174,7 @@ export default function Sidebar() {
                 stackedThreadToast({
                   type: "error",
                   title: "Path unavailable",
-                  description: "This thread does not have a workspace path to copy.",
+                  description: "This chat does not have a workspace path to copy.",
                 }),
               );
               return;
@@ -3192,7 +3192,7 @@ export default function Sidebar() {
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
-                api.dialogs.confirm(`Archive thread "${thread.title}"?`),
+                api.dialogs.confirm(`Archive chat "${thread.title}"?`),
               );
               if (confirmed._tag === "Failure" || !confirmed.value) return;
             }
@@ -3208,8 +3208,8 @@ export default function Sidebar() {
                 stackedThreadToast({
                   type: "error",
                   title: didArchive
-                    ? "Thread archived, but navigation failed"
-                    : "Failed to archive thread",
+                    ? "Chat archived, but navigation failed"
+                    : "Failed to archive chat",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -3222,8 +3222,8 @@ export default function Sidebar() {
               const confirmed = await settlePromise(() =>
                 api.dialogs.confirm(
                   [
-                    `Delete thread "${thread.title}"?`,
-                    "This permanently clears conversation history for this thread.",
+                    `Delete chat "${thread.title}"?`,
+                    "This permanently clears this conversation history.",
                   ].join("\n"),
                   { variant: "destructive" },
                 ),
@@ -3236,7 +3236,7 @@ export default function Sidebar() {
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Failed to delete thread",
+                  title: "Failed to delete chat",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -3352,9 +3352,9 @@ export default function Sidebar() {
     autoAnimate(node, { duration: 150, easing: "ease-out" });
   }, []);
 
-  // New thread defaults to the project you're in (active thread's project,
+  // New chat defaults to the project you're in (active thread's project,
   // falling back to the top project) — same resolution the command palette
-  // uses. The command palette already offers a "New thread in..." submenu
+  // uses. The command palette already offers a "New chat in..." submenu
   // for multi-project setups.
   const handleNewThreadClick = useCallback(
     (event?: ReactMouseEvent) => {
@@ -3378,7 +3378,7 @@ export default function Sidebar() {
   );
 
   // The button mirrors chat.new: in multi-project setups both route through
-  // the command palette's "New thread in..." picker, and in single-project
+  // the command palette's "New chat in..." picker, and in single-project
   // setups both create immediately. In multi-project setups the label is only
   // the picker's shortcut: falling back to chat.newLocal would advertise the
   // same shortcut for both the picker and direct create. In single-project
@@ -3413,7 +3413,7 @@ export default function Sidebar() {
                   }}
                   onKeyDown={handleThreadSearchKeyDown}
                   placeholder="Search"
-                  aria-label="Search threads"
+                  aria-label="Search conversations"
                   role="combobox"
                   aria-autocomplete="list"
                   aria-expanded={isSearchingThreads && threadSearchResults.length > 0}
@@ -3435,7 +3435,7 @@ export default function Sidebar() {
                     size="icon-micro"
                     variant="ghost"
                     className="shrink-0 text-sidebar-muted-foreground hover:bg-sidebar-control-surface hover:text-sidebar-foreground"
-                    aria-label="Clear thread search"
+                    aria-label="Clear conversation search"
                     onClick={() => {
                       clearThreadSearch();
                       threadSearchInputRef.current?.focus();
@@ -3455,7 +3455,7 @@ export default function Sidebar() {
                         className="relative focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                         onClick={handleNewThreadClick}
                         disabled={projects.length === 0}
-                        aria-label="New thread"
+                        aria-label="New chat"
                       />
                     }
                   >
@@ -3470,20 +3470,20 @@ export default function Sidebar() {
                       <span className="flex flex-col gap-0.5">
                         <span>
                           {newThreadShortcutLabel
-                            ? `New thread (${newThreadShortcutLabel})`
-                            : "New thread"}
+                            ? `New chat (${newThreadShortcutLabel})`
+                            : "New chat"}
                         </span>
                         <span className="text-muted-foreground">
-                          New thread in current project: Shift+click
+                          New chat in current project: Shift+click
                           {newThreadInProjectShortcutLabel
                             ? ` (${newThreadInProjectShortcutLabel})`
                             : ""}
                         </span>
                       </span>
                     ) : newThreadShortcutLabel ? (
-                      `New thread (${newThreadShortcutLabel})`
+                      `New chat (${newThreadShortcutLabel})`
                     ) : (
-                      "New thread"
+                      "New chat"
                     )}
                   </TooltipPopup>
                 </Tooltip>
@@ -3495,7 +3495,7 @@ export default function Sidebar() {
                   <MenuTrigger
                     render={
                       <SidebarMenuButton
-                        aria-label="Filter threads by project"
+                        aria-label="Filter conversations by project"
                         className="min-w-0 flex-1 ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                       />
                     }
@@ -3602,7 +3602,7 @@ export default function Sidebar() {
                 <ul
                   id="sidebar-thread-search-results"
                   role="listbox"
-                  aria-label="Thread search results"
+                  aria-label="Conversation search results"
                   className="flex flex-col gap-px"
                 >
                   {threadSearchResults.map((thread, index) => {
@@ -3646,7 +3646,7 @@ export default function Sidebar() {
                 role="status"
                 className="px-2 py-6 text-center text-xs text-sidebar-muted-foreground"
               >
-                No threads found
+                No conversations found
               </p>
             )
           ) : null}
@@ -3801,7 +3801,7 @@ export default function Sidebar() {
                           >
                             <ul
                               role="list"
-                              aria-label="Pinned threads"
+                              aria-label="Pinned chats"
                               className="flex flex-col gap-px"
                             >
                               {orderedPinnedThreads.map((thread) => {
@@ -3980,9 +3980,9 @@ export default function Sidebar() {
                   </button>
                 </>
               ) : scopedProjectGroup ? (
-                `No threads in ${scopedProjectGroup.displayName} yet`
+                `No chats in ${scopedProjectGroup.displayName} yet`
               ) : (
-                "No threads yet"
+                "No chats yet"
               )}
             </div>
           ) : null}

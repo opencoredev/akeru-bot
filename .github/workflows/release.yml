@@ -13,6 +13,7 @@ on:
       - packages/contracts/package.json
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -102,7 +103,7 @@ jobs:
       matrix:
         include:
           - label: macOS arm64 DMG
-            runner: tenki-macos-15-medium
+            runner: macos-15
             platform: mac
             target: dmg
             arch: arm64
@@ -303,3 +304,5 @@ jobs:
         run: node scripts/verify-release-assets.ts release "$RELEASE_VERSION"
       - name: Create stable tag and GitHub Release
         run: gh release create "$RELEASE_TAG" release/* --target "$GITHUB_SHA" --title "Akeru Bot $RELEASE_TAG" --generate-notes
+      - name: Update the next version PR
+        run: gh workflow run version-packages.yml --ref main

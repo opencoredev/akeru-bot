@@ -165,7 +165,7 @@ const SettingsContentStack = createNativeStackNavigator({
       screen: ArchivedThreadsRouteScreen,
       linking: "archive",
       options: {
-        title: "Archived Threads",
+        title: "Archived conversations",
       },
     }),
     SettingsAppearance: createNativeStackScreen({

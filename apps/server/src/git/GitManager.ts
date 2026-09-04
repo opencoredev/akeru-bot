@@ -2090,7 +2090,7 @@ export const make = Effect.gen(function* () {
           operation: "preparePullRequestThread",
           cwd: input.cwd,
           detail:
-            "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread.",
+            "This PR branch is already checked out in the main repo. Use Local, or switch the main repository off that branch before creating a worktree chat.",
         });
       }
 
@@ -2118,7 +2118,7 @@ export const make = Effect.gen(function* () {
           operation: "preparePullRequestThread",
           cwd: input.cwd,
           detail:
-            "This PR branch is already checked out in the main repo. Use Local, or switch the main repo off that branch before creating a worktree thread.",
+            "This PR branch is already checked out in the main repo. Use Local, or switch the main repository off that branch before creating a worktree chat.",
         });
       }
 

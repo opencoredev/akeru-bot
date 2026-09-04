@@ -42,7 +42,7 @@ const entityFor = (
     case "bot-user":
       return { entityKind: "user" as const, entityId: AkeruMemoryEntityId.make(access.userId) };
     case "bot":
-      if (access.botId === null) throw new Error("This thread has no private bot identity.");
+      if (access.botId === null) throw new Error("This chat has no private bot identity.");
       return { entityKind: "bot" as const, entityId: AkeruMemoryEntityId.make(access.botId) };
     case "project":
       return {
@@ -50,7 +50,7 @@ const entityFor = (
         entityId: AkeruMemoryEntityId.make(access.projectId),
       };
     case "group":
-      if (access.groupId === null) throw new Error("This thread is not in a group.");
+      if (access.groupId === null) throw new Error("This chat is not in a group.");
       return { entityKind: "group" as const, entityId: AkeruMemoryEntityId.make(access.groupId) };
     case "workspace":
       return {

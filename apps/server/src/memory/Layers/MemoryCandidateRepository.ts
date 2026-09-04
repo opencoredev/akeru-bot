@@ -154,7 +154,7 @@ const makeMemoryCandidateRepository = Effect.gen(function* () {
     if (!rows[0]) {
       return yield* new MemoryCandidateConflictError({
         candidateId,
-        detail: "it is missing, already decided, or outside this thread",
+        detail: "it is missing, already decided, or outside this chat",
       });
     }
     return yield* decodeCandidate(rows[0]);

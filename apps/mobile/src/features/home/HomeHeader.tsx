@@ -129,7 +129,7 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
             },
             {
               id: "thread-sort",
-              title: "Sort threads",
+              title: "Sort chats",
               subactions: THREAD_SORT_OPTIONS.map((option) => ({
                 id: `thread-sort:${option.value}`,
                 title: option.label,
@@ -236,7 +236,7 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
               onPressAction={handleMenuAction}
             >
               <Pressable
-                accessibilityLabel="Filter and sort threads"
+                accessibilityLabel="Filter and sort chats"
                 accessibilityRole="button"
                 className="size-11 items-center justify-center rounded-full bg-subtle"
               >
@@ -268,10 +268,10 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
           <View className="min-h-12 flex-row items-center gap-2.5 rounded-2xl border border-input-border bg-input px-3.5">
             <SymbolView name="magnifyingglass" size={17} tintColor={mutedColor} type="monochrome" />
             <TextInput
-              accessibilityLabel="Search threads"
+              accessibilityLabel="Search conversations"
               autoCapitalize="none"
               onChangeText={props.onSearchQueryChange}
-              placeholder="Search threads"
+              placeholder="Search conversations"
               placeholderTextColorClassName="accent-placeholder"
               className="flex-1 py-2.5 text-base font-sans text-foreground"
               value={props.searchQuery}
@@ -381,13 +381,13 @@ function IosHomeHeader(props: HomeHeaderProps) {
       {NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED ? null : (
         <NativeHeaderToolbar placement="bottom">
           <NativeHeaderToolbar.Menu
-            accessibilityLabel="Filter and sort threads"
+            accessibilityLabel="Filter and sort chats"
             icon={
               hasCustomListOptions
                 ? "line.3.horizontal.decrease.circle.fill"
                 : "line.3.horizontal.decrease.circle"
             }
-            title="Thread list options"
+            title="Chat list options"
             separateBackground
           >
             <NativeHeaderToolbar.Menu title="Environment">
@@ -395,7 +395,7 @@ function IosHomeHeader(props: HomeHeaderProps) {
               <NativeHeaderToolbar.MenuAction
                 isOn={props.selectedEnvironmentId === null}
                 onPress={() => props.onEnvironmentChange(null)}
-                subtitle="Show threads from every environment"
+                subtitle="Show chats from every environment"
               >
                 <NativeHeaderToolbar.Label>All environments</NativeHeaderToolbar.Label>
               </NativeHeaderToolbar.MenuAction>
@@ -416,7 +416,7 @@ function IosHomeHeader(props: HomeHeaderProps) {
                 <NativeHeaderToolbar.MenuAction
                   isOn={props.selectedProjectKey === null}
                   onPress={() => props.onProjectChange(null)}
-                  subtitle="Show threads from every project"
+                  subtitle="Show chats from every project"
                 >
                   <NativeHeaderToolbar.Label>All projects</NativeHeaderToolbar.Label>
                 </NativeHeaderToolbar.MenuAction>
@@ -448,8 +448,8 @@ function IosHomeHeader(props: HomeHeaderProps) {
             )}
 
             {threadListV2Enabled ? null : (
-              <NativeHeaderToolbar.Menu title="Sort threads">
-                <NativeHeaderToolbar.Label>Sort threads</NativeHeaderToolbar.Label>
+              <NativeHeaderToolbar.Menu title="Sort chats">
+                <NativeHeaderToolbar.Label>Sort chats</NativeHeaderToolbar.Label>
                 {THREAD_SORT_OPTIONS.map((option) => (
                   <NativeHeaderToolbar.MenuAction
                     key={option.value}
@@ -464,7 +464,7 @@ function IosHomeHeader(props: HomeHeaderProps) {
           </NativeHeaderToolbar.Menu>
           <NativeHeaderToolbar.Spacer flexible />
           <NativeHeaderToolbar.Button
-            accessibilityLabel="New task"
+            accessibilityLabel="New chat"
             icon="square.and.pencil"
             onPress={props.onStartNewTask}
             separateBackground

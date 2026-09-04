@@ -196,7 +196,7 @@ export function DelegationCard({
           size="sm"
           variant="ghost-muted"
           className="min-h-11"
-          aria-label={`Open ${childName} thread`}
+          aria-label={`Open ${childName} chat`}
           disabled={!canOpen}
           onClick={() => {
             if (!canOpen) return;
@@ -206,7 +206,7 @@ export function DelegationCard({
             void navigate({ to: "/bots/$botId", params: { botId: activeChildBot.id } });
           }}
         >
-          Open thread
+          Open chat
         </Button>
       </div>
     </article>

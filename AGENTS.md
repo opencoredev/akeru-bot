@@ -4,7 +4,7 @@ Akeru Bot is an independent fork of [T3 Code](https://t3.codes). It is a desktop
 
 Akeru Bot is local-first software. It has no hosted account and does not provide model access. Users connect an existing ChatGPT, Claude, Grok, or Kimi For Coding subscription. Five provider drivers ship built in: Codex, Claude, Grok, Kimi For Coding, and OpenCode.
 
-Threads, settings, secrets, and logs live under `~/.akeru`. Worktree state lives under `.akeru`. Akeru Bot never shares T3 Code's `~/.t3` database or desktop profile.
+Conversations, bot profiles, settings, secrets, and logs live under `~/.akeru`. Worktree state lives under `.akeru`. Akeru Bot never shares T3 Code's `~/.t3` database or desktop profile.
 
 Akeru Bot is not affiliated with ping.gg.
 
@@ -56,14 +56,16 @@ We need to be on the same page with terminology. When communicating, use this la
 
 - **you** means the agent reading this file and changing Akeru Bot.
 - **we, us, and maintainers** mean Leo and the people working with him on Akeru Bot. Theo, Julius, and the T3 Code contributors are upstream authors and maintainers.
-- **user** means the person using Akeru Bot to direct coding agents.
-- **agent** means the coding agent a user runs inside Akeru Bot. Depending on context, that may also include you.
+- **user** means the person using Akeru Bot to work with named teammate bots.
+- **bot** means the named teammate a user configures and talks to in Akeru Bot.
+- **agent** means the provider runtime or coding process behind a bot. Depending on context, agent may also include you.
 - **provider** means the agent runtime Akeru Bot talks to: Codex, Claude, Grok, Kimi For Coding, or OpenCode.
 - **client** means the web, desktop, or mobile UI.
 - **environment** means one running Akeru Bot server and the machine, filesystem, provider credentials, and state it owns.
 - **project** means an environment-local workspace record rooted at a directory.
-- **thread** means the durable conversation and work history for a project.
-- **turn** means one user-to-agent cycle, including follow-up work such as checkpointing.
+- **chat** means the user-facing conversation with a bot. Use chat or conversation in interface copy and user documentation.
+- **thread** means the internal durable record for one chat and its work history. Use thread in source identifiers, contracts, architecture documentation, logs, and compatibility paths.
+- **turn** means one user request and the bot work that follows it inside a chat.
 - **Akeru home** means the base data directory. Runtime state normally lives below its userdata directory.
 
 ## The three ways to hurt yourself

@@ -1065,14 +1065,14 @@ function ThreadSettingsModelsScreen() {
         <AndroidScreenHeader
           actions={[
             {
-              accessibilityLabel: hasPendingChanges ? "Save thread settings" : "Done",
+              accessibilityLabel: hasPendingChanges ? "Save chat settings" : "Done",
               disabled: saving || !session.botUsageCapValid,
               icon: "checkmark",
               onPress: () => void commitAndClose(),
             },
           ]}
           onBack={presentation.onClose}
-          title="Thread settings"
+          title="Chat settings"
         />
       ) : null}
       <NativeStackScreenOptions
@@ -1124,14 +1124,14 @@ function ThreadSettingsModelsScreen() {
       />
       <NativeHeaderToolbar placement="left">
         <NativeHeaderToolbar.Button
-          accessibilityLabel="Cancel thread settings"
+          accessibilityLabel="Cancel chat settings"
           label="Cancel"
           onPress={presentation.onClose}
         />
       </NativeHeaderToolbar>
       <NativeHeaderToolbar placement="right">
         <NativeHeaderToolbar.Button
-          accessibilityLabel={hasPendingChanges ? "Save thread settings" : "Done"}
+          accessibilityLabel={hasPendingChanges ? "Save chat settings" : "Done"}
           disabled={saving || !session.botUsageCapValid}
           label={hasPendingChanges ? "Save" : "Done"}
           onPress={() => void commitAndClose()}
@@ -1232,7 +1232,7 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsModels"
           component={ThreadSettingsModelsScreen}
-          options={{ headerBackVisible: false, title: "Thread settings" }}
+          options={{ headerBackVisible: false, title: "Chat settings" }}
         />
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsChoice"

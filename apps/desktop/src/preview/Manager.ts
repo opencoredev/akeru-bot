@@ -4251,7 +4251,7 @@ export class PreviewAutomationDevToolsOpenError extends Schema.TaggedErrorClass<
   { webContentsId: Schema.Number },
 ) {
   override get message(): string {
-    return `Close preview DevTools before using agent browser control for WebContents ${this.webContentsId}`;
+    return `Close preview DevTools before using bot browser control for WebContents ${this.webContentsId}`;
   }
 }
 

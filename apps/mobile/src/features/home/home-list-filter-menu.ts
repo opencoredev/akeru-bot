@@ -57,7 +57,7 @@ export function buildHomeListFilterMenu(props: {
       {
         type: "action",
         title: "All environments",
-        subtitle: "Show threads from every environment",
+        subtitle: "Show chats from every environment",
         state: props.selectedEnvironmentId === null ? "on" : "off",
         onPress: () => props.onEnvironmentChange(null),
       },
@@ -81,7 +81,7 @@ export function buildHomeListFilterMenu(props: {
         {
           type: "action",
           title: "All projects",
-          subtitle: "Show threads from every project",
+          subtitle: "Show chats from every project",
           state: props.selectedProjectKey === null ? "on" : "off",
           onPress: () => props.onProjectChange(null),
         },
@@ -109,7 +109,7 @@ export function buildHomeListFilterMenu(props: {
       },
       {
         type: "submenu",
-        title: "Sort threads",
+        title: "Sort chats",
         items: THREAD_SORT_OPTIONS.map((option) => ({
           type: "action",
           title: option.label,
@@ -121,7 +121,7 @@ export function buildHomeListFilterMenu(props: {
   }
 
   return {
-    title: "Thread list options",
+    title: "Chat list options",
     items,
   };
 }

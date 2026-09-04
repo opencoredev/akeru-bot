@@ -2583,8 +2583,8 @@ const AgentSpawnCtaRow = memo(function AgentSpawnCtaRow(props: { workEntry: Time
   const working = running + waiting;
   const dotClass = live ? "bg-info" : failed > 0 ? "bg-destructive" : "bg-success";
   const lead = live
-    ? `Kicked off ${agentCount} subagent${agentCount === 1 ? "" : "s"}`
-    : `Ran ${agentCount} subagent${agentCount === 1 ? "" : "s"}`;
+    ? `Delegated ${agentCount} bot work item${agentCount === 1 ? "" : "s"}`
+    : `Completed ${agentCount} bot work item${agentCount === 1 ? "" : "s"}`;
   const status = live
     ? livePhase
       ? `${livePhase.title} · ${livePhase.activeCount} working`
@@ -2612,7 +2612,7 @@ const AgentSpawnCtaRow = memo(function AgentSpawnCtaRow(props: { workEntry: Time
         {totalTokens > 0 ? (
           <span className="tabular-nums">Σ {formatSubagentTokenCount(totalTokens)}</span>
         ) : null}
-        <span className="text-info-foreground">{live ? "Open Agents ▸" : "View ▸"}</span>
+        <span className="text-info-foreground">{live ? "Open bot work ▸" : "View ▸"}</span>
       </span>
     </button>
   );

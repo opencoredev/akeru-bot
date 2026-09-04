@@ -39,10 +39,10 @@ replace the key under **Settings > Plugins**. Akeru stores the key on the enviro
 the plugin catalog or MCP registry.
 
 Connect more than one Gmail account when you need separate work and personal accounts. Manage each
-account under **Settings > Plugins**. The agent asks you to select an account when a tool call could
+account under **Settings > Plugins**. The bot asks you to select an account when a tool call could
 use more than one.
 
-Composio tools work in threads opened from web, desktop, or mobile after an environment has a key and
+Composio tools work in chats opened from web, desktop, or mobile after an environment has a key and
 at least one connected account. Configure accounts from the web or desktop client.
 
 ## Custom MCP servers

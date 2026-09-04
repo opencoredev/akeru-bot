@@ -134,7 +134,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   return (
     <SidebarInset
-      aria-label={`${group.name} group thread`}
+      aria-label={`${group.name} group chat`}
       className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
       data-testid="group-thread-landing"
     >

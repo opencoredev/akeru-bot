@@ -47,7 +47,7 @@ function makeRow(overrides: Partial<AgentActivityRowProps>): AgentActivityRowPro
 
 const props = {
   title: "Akeru Bot",
-  subtitle: "Agent work in progress",
+  subtitle: "Bot work in progress",
   activeCount: 1,
   updatedAt: "2026-05-25T13:07:00.000Z",
   activities: [],
@@ -143,7 +143,7 @@ describe("AgentActivity widget layout", () => {
       environment as never,
     );
     const banner = JSON.stringify(layout.banner);
-    expect(banner).toContain("3 active agents");
+    expect(banner).toContain("3 active bots");
     expect(banner).toContain("1 needs attention");
   });
 
@@ -206,14 +206,14 @@ describe("AgentActivity widget layout", () => {
     const layout = AgentActivity(
       {
         ...props,
-        subtitle: "Agent work completed",
+        subtitle: "Bot work completed",
         activeCount: 0,
         activities: [makeRow({ phase: "completed", status: "Done" })],
       },
       environment as never,
     );
     const banner = JSON.stringify(layout.banner);
-    expect(banner).toContain("Agent work completed");
+    expect(banner).toContain("Bot work completed");
     expect(banner).not.toContain("0 active");
     expect(banner).toContain("#6ee7b7"); // emerald-300 header tint
     expect(JSON.stringify(layout.compactTrailing)).toContain("Done");
@@ -227,14 +227,14 @@ describe("AgentActivity widget layout", () => {
     const layout = AgentActivity(
       {
         ...props,
-        subtitle: "Agent work failed",
+        subtitle: "Bot work failed",
         activeCount: 0,
         activities: [makeRow({ phase: "failed", status: "Failed" })],
       },
       environment as never,
     );
     const banner = JSON.stringify(layout.banner);
-    expect(banner).toContain("Agent work failed");
+    expect(banner).toContain("Bot work failed");
     expect(banner).toContain("#fca5a5"); // red-300 header tint
     expect(JSON.stringify(layout.compactTrailing)).toContain("Failed");
     expect(JSON.stringify(layout.expandedLeading)).toContain("Failed");
@@ -248,7 +248,7 @@ describe("AgentActivity widget layout", () => {
         // The server subtitle keys off the newest terminal row (completed
         // here); the layout must still read Failed everywhere so the header
         // text never disagrees with the tint, count slots, or minimal glyph.
-        subtitle: "Agent work completed",
+        subtitle: "Bot work completed",
         activeCount: 0,
         activities: [
           makeRow({ phase: "completed", status: "Done" }),
@@ -258,8 +258,8 @@ describe("AgentActivity widget layout", () => {
       environment as never,
     );
     const banner = JSON.stringify(layout.banner);
-    expect(banner).toContain("Agent work failed");
-    expect(banner).not.toContain("Agent work completed");
+    expect(banner).toContain("Bot work failed");
+    expect(banner).not.toContain("Bot work completed");
     expect(banner).toContain("#fca5a5"); // red-300 header tint
     expect(JSON.stringify(layout.compactTrailing)).toContain("Failed");
     expect(JSON.stringify(layout.expandedLeading)).toContain("Failed");
