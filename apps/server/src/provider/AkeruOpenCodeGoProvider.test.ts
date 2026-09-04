@@ -9,6 +9,7 @@ import {
 describe("AkeruOpenCodeGoProvider", () => {
   it("selects the protocol required by each model family", () => {
     expect(openCodeGoProtocol("gpt-5.6-luna")).toBe("responses");
+    expect(openCodeGoProtocol("muse-spark-1.3-contributor")).toBe("responses");
     expect(openCodeGoProtocol("qwen3.8-max")).toBe("anthropic");
     expect(openCodeGoProtocol("deepseek-v4-pro")).toBe("chat-completions");
   });

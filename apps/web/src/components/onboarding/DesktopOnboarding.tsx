@@ -29,6 +29,15 @@ import { useEnvironmentQuery } from "../../state/query";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentShell } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { BotAvatarView } from "../roster/BotAvatarView";
@@ -46,6 +55,7 @@ import {
   DESKTOP_ONBOARDING_USE_CASES,
   type DesktopOnboardingDraft,
   desktopOnboardingModelSelection,
+  markDesktopOnboardingCompleted,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
@@ -183,6 +193,7 @@ function SubscriptionStep({
       setBusy(false);
       return;
     }
+    setBusy(false);
     setActiveLogin({ flow: result.value, error: null });
     window.open(result.value.url, "_blank", "noopener,noreferrer");
   };
@@ -664,6 +675,8 @@ function OnboardingSurface({
   const [createError, setCreateError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const readyBotIdRef = useRef<string | null>(null);
   const rosterBot = useRosterStore((state) =>
     draft.botId ? state.bots.find((bot) => bot.id === draft.botId) : undefined,
@@ -730,8 +743,7 @@ function OnboardingSurface({
   const finish = (firstMessage: string) => {
     setMessage(firstMessage);
     setFinishing(true);
-    window.localStorage.removeItem(DESKTOP_ONBOARDING_STORAGE_KEY);
-    window.localStorage.setItem(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
+    markDesktopOnboardingCompleted(window.localStorage);
     const delay = reducedMotion ? 0 : 560;
     window.setTimeout(() => {
       if (draft.botId) {
@@ -742,9 +754,16 @@ function OnboardingSurface({
     }, delay);
   };
 
+  const skip = () => {
+    setSkipConfirmOpen(false);
+    markDesktopOnboardingCompleted(window.localStorage);
+    onFinished();
+  };
+
   const step = stepNumber(draft.step);
   return (
     <motion.div
+      ref={surfaceRef}
       data-testid="desktop-onboarding"
       className="fixed inset-0 z-[10000] flex overflow-hidden bg-background text-foreground"
       initial={reducedMotion ? false : { opacity: 0 }}
@@ -822,7 +841,17 @@ function OnboardingSurface({
             </motion.div>
           </AnimatePresence>
         </div>
-        <p className="text-[11px] text-muted-foreground/65">Step {step} of 4</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground/65">Step {step} of 4</p>
+          <Button
+            size="xs"
+            variant="ghost-muted"
+            disabled={creating || finishing}
+            onClick={() => setSkipConfirmOpen(true)}
+          >
+            Skip setup
+          </Button>
+        </div>
       </motion.aside>
       <motion.div
         className="flex min-w-0 flex-1"
@@ -837,6 +866,20 @@ function OnboardingSurface({
           onMessageSent={finish}
         />
       </motion.div>
+      <AlertDialog open={skipConfirmOpen} onOpenChange={setSkipConfirmOpen}>
+        <AlertDialogPopup portalContainer={surfaceRef}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skip setup?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You can connect a subscription and create a bot later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button onClick={skip}>Skip setup</Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </motion.div>
   );
 }

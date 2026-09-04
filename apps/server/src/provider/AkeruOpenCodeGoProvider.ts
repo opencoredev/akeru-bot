@@ -11,6 +11,7 @@ const RESPONSES_MODELS = new Set([
   "grok-4.5",
   "grok-4.6",
   "muse-spark-1.2-contributor",
+  "muse-spark-1.3-contributor",
 ]);
 
 export type OpenCodeGoProtocol = "anthropic" | "chat-completions" | "responses";
