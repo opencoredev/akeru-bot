@@ -132,8 +132,8 @@ assertOmits(
 );
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["vp run release:changelog", "merged pull request changelog"],
-  ["vp run tegami version --no-checks", "Tegami version command"],
+  ["vp run release:version-pr", "version pull request command"],
+  ["actions: write", "CI dispatch permission"],
   ["contents: write", "version branch permission"],
   ["pull-requests: write", "version pull request permission"],
 ] as const) {
