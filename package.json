@@ -44,6 +44,7 @@
     "dist:desktop:win:x64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64",
     "release:smoke": "node scripts/release-smoke.ts",
     "release:changelog": "node scripts/generate-release-changelog.ts",
+    "release:version-pr": "node scripts/update-version-pull-request.ts",
     "tegami": "node scripts/tegami.ts",
     "release:verify": "node scripts/verify-release-candidate.ts",
     "release:verify-assets": "node scripts/verify-release-assets.ts",

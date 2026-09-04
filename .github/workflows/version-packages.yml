@@ -5,8 +5,10 @@ name: Version packages
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -34,7 +36,6 @@ jobs:
 
       - name: Update version PR
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          vp run release:changelog
-          vp run tegami version --no-checks
+        run: vp run release:version-pr
