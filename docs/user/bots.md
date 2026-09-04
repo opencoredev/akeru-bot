@@ -2,6 +2,14 @@
 
 Open a bot, then use the panel beside the conversation to edit it.
 
+## Skip initial setup
+
+Select **Skip setup** on any setup step, then confirm **Skip setup** in the dialog.
+Select **Cancel** to stay in setup. Skipping keeps any connected subscriptions and bots you already
+created. Setup will not open again after a restart.
+
+You can connect a subscription in Settings and use **Create** to add a bot later.
+
 ## Profile
 
 You can change the bot's avatar, name, label, description, model, voice access, and enabled tools.
