@@ -168,5 +168,8 @@ describe("CI workflow budget", () => {
     expect(steps.find((step) => step.name === "Verify unsigned macOS app signature")?.if).toBe(
       "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
     );
+    expect(
+      steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
+    ).toContain("^Signature=adhoc$");
   });
 });

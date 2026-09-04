@@ -297,6 +297,10 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "${apps[0]}"
           signature="$(codesign -dv --verbose=4 "${apps[0]}" 2>&1)"
           printf '%s\n' "$signature"
+          if ! printf '%s\n' "$signature" | grep -q '^Signature=adhoc$'; then
+            printf 'Packaged app does not use an ad-hoc signature.\n' >&2
+            exit 1
+          fi
           if ! printf '%s\n' "$signature" | grep -q 'Identifier=dev.leodoes.akeru$'; then
             printf 'Packaged app is missing the Akeru bundle identifier.\n' >&2
             exit 1
