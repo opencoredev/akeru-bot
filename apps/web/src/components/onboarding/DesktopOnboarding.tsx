@@ -47,6 +47,12 @@ import { DEFAULT_BOT_RUNTIME_MODE } from "../roster/botSandbox";
 import { BLOB_COLORS, BLOB_SHAPES } from "../roster/roster.logic";
 import { useRosterStore } from "../roster/rosterStore";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
+import {
+  apiKeyStartInput,
+  apiKeyValidationError,
+  providerSupportsBaseUrl,
+} from "@t3tools/client-runtime/provider-auth";
+import { ProviderApiKeyForm } from "../settings/ProvidersPanel";
 import { SUBSCRIPTION_PROVIDERS } from "../settings/subscriptionProviders";
 import {
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
@@ -94,7 +100,7 @@ interface ActiveLogin {
   readonly error: string | null;
 }
 
-function SubscriptionStep({
+export function SubscriptionStep({
   environmentId,
   draft,
   onChange,
@@ -124,6 +130,9 @@ function SubscriptionStep({
   const [activeLogin, setActiveLogin] = useState<ActiveLogin | null>(null);
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
+  const [keyMode, setKeyMode] = useState(false);
+  const [baseUrl, setBaseUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const statusByProvider = useMemo(
     () => new Map(statusQuery.data?.providers.map((status) => [status.provider, status]) ?? []),
@@ -178,18 +187,73 @@ function SubscriptionStep({
     };
   }, [activeLogin, environmentId, pollAuth, settle]);
 
+  const openKey = () => {
+    setCode("");
+    setError(null);
+    setBaseUrl(statusByProvider.get(draft.providerId)?.baseUrl ?? "");
+    setKeyMode(true);
+  };
+
+  const saveKey = async () => {
+    if (busy) return;
+    const validation = apiKeyValidationError(code, baseUrl);
+    setError(validation);
+    if (validation) return;
+    setBusy(true);
+    const started = await startAuth({
+      environmentId,
+      input: apiKeyStartInput(draft.providerId, baseUrl),
+    });
+    if (started._tag !== "Success") {
+      setBusy(false);
+      if (started._tag === "Failure") setError(commandError(started));
+      return;
+    }
+    const result = await completeAuth({
+      environmentId,
+      input: { loginId: started.value.loginId, code: code.trim() },
+    });
+    if (result._tag === "Success" && result.value.status === "connected") {
+      setCode("");
+      setBaseUrl("");
+      setKeyMode(false);
+      setBusy(false);
+      statusQuery.refresh();
+      onContinue();
+      return;
+    }
+    if (result._tag === "Failure") setError(commandError(result));
+    else if (result._tag === "Success") {
+      setError(
+        result.value.status === "failed" ? result.value.error : "The key was not saved. Try again.",
+      );
+    }
+    await cancelAuth({ environmentId, input: { loginId: started.value.loginId } });
+    setBusy(false);
+  };
+
   const connect = async () => {
+    if (draft.providerId === "opencode-go" && !captureMode) {
+      openKey();
+      return;
+    }
     if (captureMode) {
       onContinue();
       return;
     }
+    setError(null);
+    setCode("");
     setBusy(true);
     const result = await startAuth({
       environmentId,
       input: { provider: draft.providerId },
     });
-    if (isAtomCommandInterrupted(result)) return;
+    if (isAtomCommandInterrupted(result)) {
+      setBusy(false);
+      return;
+    }
     if (result._tag === "Failure") {
+      setError(commandError(result));
       setBusy(false);
       return;
     }
@@ -225,6 +289,32 @@ function SubscriptionStep({
       await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
     }
   };
+
+  if (keyMode) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
+          Connect {selected.label} with an API key
+        </h1>
+        <ProviderApiKeyForm
+          supportsBaseUrl={providerSupportsBaseUrl(draft.providerId)}
+          apiKey={code}
+          baseUrl={baseUrl}
+          busy={busy}
+          error={error}
+          onKeyChange={setCode}
+          onBaseUrlChange={setBaseUrl}
+          onSave={() => void saveKey()}
+          onCancel={() => {
+            setKeyMode(false);
+            setCode("");
+            setBaseUrl("");
+            setError(null);
+          }}
+        />
+      </div>
+    );
+  }
 
   if (activeLogin) {
     return (
@@ -296,13 +386,10 @@ function SubscriptionStep({
     <div className="space-y-6">
       <div>
         <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
-          Connect your subscription
+          Connect your provider
         </h1>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          Use an account you already pay for. Akeru keeps the login on this Mac.
-        </p>
       </div>
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Subscription">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Provider">
         {SUBSCRIPTION_PROVIDERS.map((definition) => {
           const active = definition.id === draft.providerId;
           const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
@@ -315,6 +402,7 @@ function SubscriptionStep({
               type="button"
               role="radio"
               aria-checked={active}
+              disabled={busy}
               onClick={() => onChange({ ...draft, providerId: definition.id })}
               className={`relative flex min-h-24 flex-col items-start rounded-2xl border p-3 text-left transition duration-150 motion-reduce:transition-none ${
                 active
@@ -348,6 +436,16 @@ function SubscriptionStep({
           );
         })}
       </div>
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {!connected && selected.id !== "opencode-go" ? (
+        <Button className="w-full" variant="outline" disabled={busy} onClick={openKey}>
+          Use an API key
+        </Button>
+      ) : null}
       <Button
         className="h-10 w-full rounded-xl"
         disabled={busy}

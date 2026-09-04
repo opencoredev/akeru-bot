@@ -39,6 +39,10 @@
       "types": "./src/platform/index.ts",
       "default": "./src/platform/index.ts"
     },
+    "./provider-auth": {
+      "types": "./src/providerAuth.ts",
+      "default": "./src/providerAuth.ts"
+    },
     "./providerSkills": {
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"

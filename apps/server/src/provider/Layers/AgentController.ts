@@ -713,7 +713,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
-        getOpenCodeGoApiKey: () => subscriptionAuth.getAccessToken("opencode-go"),
+        getOpenCodeGoApiKey: async () =>
+          subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
+        getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
         memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);

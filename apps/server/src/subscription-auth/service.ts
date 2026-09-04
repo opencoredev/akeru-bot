@@ -17,7 +17,12 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
-import type { BotId } from "@t3tools/contracts";
+import {
+  SubscriptionBaseUrl,
+  type BotId,
+  type SubscriptionAuthStartInput,
+} from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 import {
   completeAnthropicLogin,
@@ -49,7 +54,19 @@ import {
   startXAIDeviceLogin,
   type XAIDeviceLoginPending,
 } from "./providers/xai.ts";
-import type { OAuthCredential, OAuthCredentials, SubscriptionAuthData } from "./types.ts";
+import type {
+  ApiKeyCredential,
+  OAuthCredential,
+  OAuthCredentials,
+  SubscriptionAuthData,
+} from "./types.ts";
+
+const decodeBaseUrl = Schema.decodeUnknownSync(SubscriptionBaseUrl);
+
+/** Anthropic endpoints use an API root; a trailing /v1 is accepted for compatibility. */
+export function anthropicApiBaseUrl(baseUrl = "https://api.anthropic.com"): string {
+  return baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+}
 
 const OPENCODE_GO_AUTH_URL = "https://opencode.ai/auth";
 const OPENCODE_GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage";
@@ -92,6 +109,8 @@ export type LoginPollStatus =
 export interface ProviderStatus {
   provider: SubscriptionProviderId;
   connected: boolean;
+  authMode?: "oauth" | "api-key";
+  baseUrl?: string;
   /** ms epoch when the current access token expires; refreshed on demand. */
   expiresAt?: number;
   health:
@@ -139,6 +158,7 @@ function oauthFailureKind(cause: unknown): "request" | "revoked" {
 }
 
 type PendingLogin =
+  | { provider: SubscriptionProviderId; authMode: "api-key"; baseUrl?: string }
   | { provider: "anthropic"; verifier: string }
   | { provider: "openai-codex"; pending: CodexDeviceLoginPending }
   | { provider: "cursor"; pending: CursorLoginPending }
@@ -272,6 +292,10 @@ export class SubscriptionAuthService {
       return {
         provider,
         connected: credential !== undefined,
+        ...(credential ? { authMode: credential.type } : {}),
+        ...(credential?.type === "api-key" && credential.baseUrl
+          ? { baseUrl: credential.baseUrl }
+          : {}),
         ...(credential?.type === "oauth" ? { expiresAt: credential.expires } : {}),
         health: state,
         ...(health?.lastSuccessfulRequestAt
@@ -280,7 +304,7 @@ export class SubscriptionAuthService {
         ...(health?.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
         ...(health?.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
         reconnectAction:
-          provider === "opencode-go"
+          credential?.type === "api-key" || provider === "opencode-go"
             ? credential
               ? "Replace API key"
               : "Connect API key"
@@ -348,8 +372,16 @@ export class SubscriptionAuthService {
     at: string,
     failureKind: "request" | "revoked",
   ): void {
-    this.reloadHealth();
+    this.reload();
     const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
+    for (const credential of Object.values(this.data)) {
+      for (const secret of [
+        credential.access,
+        credential.type === "oauth" ? credential.refresh : undefined,
+      ]) {
+        if (secret) message = message.replaceAll(secret, "[redacted]");
+      }
+    }
     this.health[key] = {
       ...previous,
       lastFailedRequest: { at, message },
@@ -417,40 +449,61 @@ export class SubscriptionAuthService {
   }
 
   async testHealth(provider: SubscriptionProviderId): Promise<void> {
+    this.reload();
     const credential = this.data[provider];
     if (!credential) {
       this.recordOAuthFailure(provider, "No account is connected.");
       return;
     }
-    if (provider === "opencode-go") {
+    if (credential.type === "api-key") {
+      const defaultBaseUrls: Record<SubscriptionProviderId, string> = {
+        anthropic: "https://api.anthropic.com/v1",
+        "openai-codex": "https://api.openai.com/v1",
+        cursor: "https://api.cursor.com",
+        xai: "https://api.x.ai/v1",
+        "kimi-for-coding": "https://api.kimi.com/coding/v1",
+        "opencode-go": "https://opencode.ai/zen/go/v1",
+      };
+      const url =
+        provider === "opencode-go" && !credential.baseUrl
+          ? OPENCODE_GO_USAGE_URL
+          : provider === "anthropic"
+            ? `${anthropicApiBaseUrl(credential.baseUrl)}/v1/models`
+            : `${credential.baseUrl ?? defaultBaseUrls[provider]}/models`;
       try {
-        const response = await fetch(OPENCODE_GO_USAGE_URL, {
+        const response = await fetch(url, {
+          redirect: "error",
           headers: {
-            Authorization: `Bearer ${credential.access}`,
+            ...(provider === "anthropic"
+              ? { "x-api-key": credential.access, "anthropic-version": "2023-06-01" }
+              : { Authorization: `Bearer ${credential.access}` }),
             "User-Agent": OPENCODE_GO_USER_AGENT,
-            "x-opencode-client": "akeru-bot",
+            ...(provider === "opencode-go" ? { "x-opencode-client": "akeru-bot" } : {}),
           },
         });
         if (!response.ok) {
-          throw new Error(`OpenCode Go rejected the API key (${response.status}).`);
+          this.recordRequestFailure(
+            provider,
+            `The provider rejected the API-key check (${response.status}).`,
+            undefined,
+            response.status === 401 || response.status === 403 ? "revoked" : "request",
+          );
+        } else {
+          this.recordRequestSuccess(provider);
         }
-        this.recordRequestSuccess(provider);
-      } catch (cause) {
+      } catch {
         this.recordRequestFailure(
           provider,
-          cause instanceof Error ? cause.message : "OpenCode Go rejected the API key.",
-          undefined,
-          oauthFailureKind(cause),
+          "The API-key check failed. Check the base URL and connection.",
         );
       }
       return;
     }
-    if (credential.type !== "oauth") {
-      this.recordOAuthFailure(provider, "The stored credential has the wrong type.");
-      return;
-    }
     try {
       const refreshed = await this.runRefresh(provider, credential);
+      this.reload();
+      const current = this.data[provider];
+      if (current?.type !== "oauth" || current.refresh !== credential.refresh) return;
       this.setCredential(provider, refreshed);
       // Refresh proves the OAuth grant is usable. It does not prove that the
       // subscription can make a model request, so keep access detected until
@@ -492,80 +545,113 @@ export class SubscriptionAuthService {
     return this.data[provider] !== undefined;
   }
 
-  async startLogin(provider: SubscriptionProviderId): Promise<StartedLogin> {
+  async startLogin(
+    provider: SubscriptionProviderId,
+    options: Omit<SubscriptionAuthStartInput, "provider"> = {},
+  ): Promise<StartedLogin> {
+    this.reload();
+    const authMode = options.authMode ?? (provider === "opencode-go" ? "api-key" : "oauth");
+    if (options.baseUrl !== undefined && authMode !== "api-key") {
+      throw new Error("Custom base URLs require API-key authentication. Select API key first.");
+    }
+    if (authMode === "api-key" && provider === "cursor") {
+      throw new Error("Cursor API-key authentication is not supported. Use OAuth.");
+    }
+    if (options.baseUrl !== undefined && provider === "xai") {
+      throw new Error(
+        "The Grok bridge does not support custom base URLs. Use the default endpoint.",
+      );
+    }
+    if (authMode === "oauth" && provider === "opencode-go") {
+      throw new Error("OpenCode Go requires an API key. Select API key first.");
+    }
+    const baseUrl =
+      options.baseUrl === undefined
+        ? undefined
+        : decodeBaseUrl(options.baseUrl).replace(/\/+$/, "");
     const loginId = NodeCrypto.randomUUID();
     let started: StartedLogin;
 
-    switch (provider) {
-      case "anthropic": {
-        const { url, verifier } = await startAnthropicLogin();
-        this.pendingLogins.set(loginId, { provider, verifier });
-        started = { loginId, provider, url, completion: "paste" };
-        break;
+    if (authMode === "api-key") {
+      this.pendingLogins.set(loginId, { provider, authMode, ...(baseUrl ? { baseUrl } : {}) });
+      started = {
+        loginId,
+        provider,
+        url: provider === "opencode-go" ? OPENCODE_GO_AUTH_URL : "",
+        instructions: "Paste the provider API key.",
+        completion: "paste",
+      };
+    } else
+      switch (provider) {
+        case "anthropic": {
+          const { url, verifier } = await startAnthropicLogin();
+          this.pendingLogins.set(loginId, { provider, verifier });
+          started = { loginId, provider, url, completion: "paste" };
+          break;
+        }
+        case "openai-codex": {
+          const pending = await startCodexDeviceLogin();
+          this.pendingLogins.set(loginId, { provider, pending });
+          started = {
+            loginId,
+            provider,
+            url: pending.url,
+            userCode: pending.userCode,
+            instructions: pending.instructions,
+            completion: "poll",
+          };
+          break;
+        }
+        case "cursor": {
+          const pending = await startCursorLogin();
+          this.pendingLogins.set(loginId, { provider, pending });
+          started = {
+            loginId,
+            provider,
+            url: pending.url,
+            instructions: "Approve the Cursor login in your browser.",
+            completion: "poll",
+          };
+          break;
+        }
+        case "xai": {
+          const pending = await startXAIDeviceLogin();
+          this.pendingLogins.set(loginId, { provider, pending });
+          started = {
+            loginId,
+            provider,
+            url: pending.url,
+            userCode: pending.userCode,
+            instructions: pending.instructions,
+            completion: "poll",
+          };
+          break;
+        }
+        case "kimi-for-coding": {
+          const pending = await startKimiDeviceLogin();
+          this.pendingLogins.set(loginId, { provider, pending });
+          started = {
+            loginId,
+            provider,
+            url: pending.url,
+            userCode: pending.userCode,
+            instructions: pending.instructions,
+            completion: "poll",
+          };
+          break;
+        }
+        case "opencode-go": {
+          this.pendingLogins.set(loginId, { provider });
+          started = {
+            loginId,
+            provider,
+            url: OPENCODE_GO_AUTH_URL,
+            instructions: "Subscribe to OpenCode Go, copy the API key, then paste it here.",
+            completion: "paste",
+          };
+          break;
+        }
       }
-      case "openai-codex": {
-        const pending = await startCodexDeviceLogin();
-        this.pendingLogins.set(loginId, { provider, pending });
-        started = {
-          loginId,
-          provider,
-          url: pending.url,
-          userCode: pending.userCode,
-          instructions: pending.instructions,
-          completion: "poll",
-        };
-        break;
-      }
-      case "cursor": {
-        const pending = await startCursorLogin();
-        this.pendingLogins.set(loginId, { provider, pending });
-        started = {
-          loginId,
-          provider,
-          url: pending.url,
-          instructions: "Approve the Cursor login in your browser.",
-          completion: "poll",
-        };
-        break;
-      }
-      case "xai": {
-        const pending = await startXAIDeviceLogin();
-        this.pendingLogins.set(loginId, { provider, pending });
-        started = {
-          loginId,
-          provider,
-          url: pending.url,
-          userCode: pending.userCode,
-          instructions: pending.instructions,
-          completion: "poll",
-        };
-        break;
-      }
-      case "kimi-for-coding": {
-        const pending = await startKimiDeviceLogin();
-        this.pendingLogins.set(loginId, { provider, pending });
-        started = {
-          loginId,
-          provider,
-          url: pending.url,
-          userCode: pending.userCode,
-          instructions: pending.instructions,
-          completion: "poll",
-        };
-        break;
-      }
-      case "opencode-go": {
-        this.pendingLogins.set(loginId, { provider });
-        started = {
-          loginId,
-          provider,
-          url: OPENCODE_GO_AUTH_URL,
-          instructions: "Subscribe to OpenCode Go, copy the API key, then paste it here.",
-          completion: "paste",
-        };
-        break;
-      }
-    }
 
     // Drop the oldest abandoned login rather than growing without bound.
     if (this.pendingLogins.size > PENDING_LOGIN_CAP) {
@@ -579,10 +665,13 @@ export class SubscriptionAuthService {
 
   /** One upstream poll for a started login. Persists credentials on success. */
   async pollLogin(loginId: string): Promise<LoginPollStatus> {
+    this.reload();
     const login = this.pendingLogins.get(loginId);
     if (!login) {
       return { status: "failed", error: "Login expired or already completed. Start again." };
     }
+
+    if ("authMode" in login) return { status: "pending", nextPollMs: 2000 };
 
     switch (login.provider) {
       case "anthropic":
@@ -631,6 +720,9 @@ export class SubscriptionAuthService {
   ): LoginPollStatus {
     switch (result.status) {
       case "complete":
+        this.reload();
+        if (!this.pendingLogins.has(loginId))
+          return { status: "failed", error: "Login cancelled. Start again." };
         this.pendingLogins.delete(loginId);
         this.savePending();
         this.setCredential(provider, result.credentials);
@@ -646,28 +738,41 @@ export class SubscriptionAuthService {
 
   /** Finish a paste-completion login (Anthropic) with the pasted code. */
   async completeLogin(loginId: string, code: string): Promise<LoginPollStatus> {
+    this.reload();
     const login = this.pendingLogins.get(loginId);
     if (!login) {
       return { status: "failed", error: "Login expired or already completed. Start again." };
     }
-    if (login.provider !== "anthropic" && login.provider !== "opencode-go") {
-      return { status: "failed", error: "This login completes by polling, not with a code." };
-    }
-
-    if (login.provider === "opencode-go") {
+    if ("authMode" in login || login.provider === "opencode-go") {
       const apiKey = code.trim();
-      if (apiKey.length === 0) {
-        return { status: "failed", error: "Paste an OpenCode Go API key." };
+      if (apiKey.length === 0 || /[\r\n]/.test(apiKey)) {
+        return { status: "failed", error: "Paste a non-empty API key on one line." };
       }
-      this.pendingLogins.delete(loginId);
-      this.savePending();
-      this.data["opencode-go"] = { type: "api-key", access: apiKey };
+      const baseUrl = "baseUrl" in login ? login.baseUrl : undefined;
+      this.reload();
+      this.data[login.provider] = {
+        type: "api-key",
+        access: apiKey,
+        ...(baseUrl ? { baseUrl } : {}),
+      };
+      delete this.health[login.provider];
       this.save();
+      this.saveHealth();
+      for (const [id, pending] of this.pendingLogins) {
+        if (pending.provider === login.provider) this.pendingLogins.delete(id);
+      }
+      this.savePending();
       return { status: "connected" };
+    }
+    if (login.provider !== "anthropic") {
+      return { status: "failed", error: "This login completes by polling, not with a code." };
     }
 
     try {
       const credentials = await completeAnthropicLogin(code, login.verifier);
+      this.reload();
+      if (!this.pendingLogins.has(loginId))
+        return { status: "failed", error: "Login cancelled. Start again." };
       this.pendingLogins.delete(loginId);
       this.savePending();
       this.setCredential("anthropic", credentials);
@@ -682,11 +787,17 @@ export class SubscriptionAuthService {
   }
 
   cancelLogin(loginId: string): void {
+    this.reload();
     this.pendingLogins.delete(loginId);
     this.savePending();
   }
 
   logout(provider: SubscriptionProviderId): void {
+    this.reload();
+    for (const [loginId, pending] of this.pendingLogins) {
+      if (pending.provider === provider) this.pendingLogins.delete(loginId);
+    }
+    this.savePending();
     delete this.data[provider];
     this.reloadHealth();
     delete this.health[provider];
@@ -695,6 +806,11 @@ export class SubscriptionAuthService {
   }
 
   private setCredential(provider: SubscriptionProviderId, credentials: OAuthCredentials): void {
+    if (this.data[provider]?.type === "api-key") {
+      this.reloadHealth();
+      delete this.health[provider];
+      this.saveHealth();
+    }
     this.data[provider] = { type: "oauth", ...credentials };
     this.save();
   }
@@ -724,6 +840,18 @@ export class SubscriptionAuthService {
     return refresh;
   }
 
+  async getPlanAccessToken(provider: SubscriptionProviderId): Promise<string | undefined> {
+    const apiKey = this.getApiKeyCredential(provider);
+    if (apiKey && (provider !== "opencode-go" || apiKey.baseUrl)) return undefined;
+    return this.getAccessToken(provider);
+  }
+
+  getApiKeyCredential(provider: SubscriptionProviderId): ApiKeyCredential | undefined {
+    this.reload();
+    const credential = this.data[provider];
+    return credential?.type === "api-key" ? credential : undefined;
+  }
+
   async getOpenAICodexAccess(): Promise<
     { readonly accessToken: string; readonly accountId: string } | undefined
   > {
@@ -737,11 +865,15 @@ export class SubscriptionAuthService {
   }
 
   async getKimiForCodingAccess(): Promise<
-    { readonly accessToken: string; readonly deviceId: string } | undefined
+    | { readonly accessToken: string; readonly deviceId?: string; readonly baseUrl?: string }
+    | undefined
   > {
     this.reload();
     const accessToken = await this.getAccessToken("kimi-for-coding");
     const credential = this.data["kimi-for-coding"];
+    if (credential?.type === "api-key" && accessToken) {
+      return { accessToken, ...(credential.baseUrl ? { baseUrl: credential.baseUrl } : {}) };
+    }
     const deviceId = credential?.type === "oauth" ? credential.deviceId : undefined;
     return accessToken && isKimiCodingDeviceId(deviceId) ? { accessToken, deviceId } : undefined;
   }
@@ -752,6 +884,11 @@ export class SubscriptionAuthService {
   ): Promise<string | undefined> {
     try {
       const refreshed = await this.runRefresh(provider, credential);
+      this.reload();
+      const current = this.data[provider];
+      if (current?.type !== "oauth" || current.refresh !== credential.refresh) {
+        return current?.access;
+      }
       this.setCredential(provider, refreshed);
       return refreshed.access;
     } catch (cause) {

@@ -18,6 +18,284 @@ function fixture() {
 }
 
 describe("subscription auth storage", () => {
+  it("keeps API keys away from subscription plan endpoints except default OpenCode Go", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const anthropic = await service.startLogin("anthropic", { authMode: "api-key" });
+    await service.completeLogin(anthropic.loginId, "anthropic-key");
+    expect(await service.getPlanAccessToken("anthropic")).toBeUndefined();
+    const go = await service.startLogin("opencode-go");
+    await service.completeLogin(go.loginId, "go-key");
+    expect(await service.getPlanAccessToken("opencode-go")).toBe("go-key");
+    const custom = await service.startLogin("opencode-go", {
+      authMode: "api-key",
+      baseUrl: "https://proxy.example/v1",
+    });
+    await service.completeLogin(custom.loginId, "custom-key");
+    expect(await service.getPlanAccessToken("opencode-go")).toBeUndefined();
+  });
+  it("switches back to OAuth without retaining the API endpoint or key", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const keyLogin = await service.startLogin("anthropic", {
+      authMode: "api-key",
+      baseUrl: "https://proxy.example/v1",
+    });
+    await service.completeLogin(keyLogin.loginId, "old-api-key");
+    service.recordRequestFailure("anthropic", "Key rejected");
+    const oauth = await service.startLogin("anthropic");
+    const state = new URL(oauth.url).searchParams.get("state");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: "oauth-access",
+            refresh_token: "oauth-refresh",
+            expires_in: 3600,
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    try {
+      expect(await service.completeLogin(oauth.loginId, `code#${state}`)).toEqual({
+        status: "connected",
+      });
+      expect(service.statuses()[0]).toMatchObject({ authMode: "oauth", health: "detected" });
+      expect(service.statuses()[0]?.baseUrl).toBeUndefined();
+      expect(service.getApiKeyCredential("anthropic")).toBeUndefined();
+      expect(NodeFS.readFileSync(authPath, "utf-8")).not.toContain("old-api-key");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(["refresh", "health"] as const)(
+    "does not let an in-flight OAuth %s replace a saved API key",
+    async (operation) => {
+      const { authPath } = fixture();
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          xai: { type: "oauth", access: "old", refresh: "old-refresh", expires: 0 },
+        }),
+      );
+      const service = new SubscriptionAuthService(authPath);
+      let completeRequest!: (response: Response) => void;
+      const response = new Promise<Response>((resolve) => {
+        completeRequest = resolve;
+      });
+      const request = vi.fn(() => response);
+      vi.stubGlobal("fetch", request);
+      try {
+        const refreshing =
+          operation === "refresh" ? service.getAccessToken("xai") : service.testHealth("xai");
+        expect(request).toHaveBeenCalledOnce();
+        const login = await service.startLogin("xai", { authMode: "api-key" });
+        await service.completeLogin(login.loginId, "replacement-key");
+        completeRequest(
+          new Response(JSON.stringify({ access_token: "late-oauth-token", expires_in: 3600 }), {
+            headers: { "content-type": "application/json" },
+          }),
+        );
+        await refreshing;
+        expect(service.getApiKeyCredential("xai")?.access).toBe("replacement-key");
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it("does not let an OAuth health check undo logout from another service", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        xai: { type: "oauth", access: "old-access", refresh: "old-refresh", expires: 0 },
+      }),
+    );
+    const checking = new SubscriptionAuthService(authPath);
+    const other = new SubscriptionAuthService(authPath);
+    let completeRequest!: (response: Response) => void;
+    const request = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          completeRequest = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", request);
+    try {
+      const pending = checking.testHealth("xai");
+      expect(request).toHaveBeenCalledOnce();
+      other.logout("xai");
+      completeRequest(
+        new Response(JSON.stringify({ access_token: "late-access", expires_in: 3600 }), {
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      await pending;
+      const status = checking.statuses().find((entry) => entry.provider === "xai");
+      expect(status?.connected).toBe(false);
+      expect(status?.oauthCheck).toBeUndefined();
+      expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8"))).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("removes pending API-key logins on logout and reads cancellations from disk", async () => {
+    const { authPath } = fixture();
+    const first = new SubscriptionAuthService(authPath);
+    const login = await first.startLogin("anthropic", { authMode: "api-key" });
+    const second = new SubscriptionAuthService(authPath);
+    first.cancelLogin(login.loginId);
+    expect(await second.completeLogin(login.loginId, "key")).toMatchObject({ status: "failed" });
+    const pending = await first.startLogin("anthropic", { authMode: "api-key" });
+    second.logout("anthropic");
+    expect(await first.completeLogin(pending.loginId, "key")).toMatchObject({ status: "failed" });
+  });
+
+  it("redacts saved API keys from provider failures recorded by an older runtime", async () => {
+    const { authPath } = fixture();
+    const runtime = new SubscriptionAuthService(authPath);
+    const auth = new SubscriptionAuthService(authPath);
+    const login = await auth.startLogin("xai", { authMode: "api-key" });
+    await auth.completeLogin(login.loginId, "private-key");
+    runtime.recordRequestFailure("xai", "Rejected private-key");
+    expect(JSON.stringify(runtime.statuses())).not.toContain("private-key");
+    expect(NodeFS.readFileSync(`${authPath}.health`, "utf-8")).not.toContain("private-key");
+  });
+  it.each(["anthropic", "openai-codex", "xai", "kimi-for-coding", "opencode-go"] as const)(
+    "saves %s API keys through complete and never returns the key",
+    async (provider) => {
+      const { authPath } = fixture();
+      const service = new SubscriptionAuthService(authPath);
+      const options = {
+        authMode: "api-key" as const,
+        ...(provider === "xai" ? {} : { baseUrl: "https://proxy.example/v1/" }),
+      };
+      const started = await service.startLogin(provider, options);
+      expect(started.completion).toBe("paste");
+      expect(NodeFS.readFileSync(`${authPath}.pending`, "utf-8")).not.toContain("test-secret");
+      const restarted = new SubscriptionAuthService(authPath);
+      expect(await restarted.pollLogin(started.loginId)).toMatchObject({ status: "pending" });
+      expect(await restarted.completeLogin(started.loginId, "  test-secret  ")).toEqual({
+        status: "connected",
+      });
+      expect(await restarted.completeLogin(started.loginId, "replacement")).toMatchObject({
+        status: "failed",
+      });
+      expect(restarted.getApiKeyCredential(provider)).toMatchObject({
+        type: "api-key",
+        access: "test-secret",
+      });
+      expect(restarted.statuses().find((status) => status.provider === provider)).toMatchObject({
+        connected: true,
+        authMode: "api-key",
+      });
+      expect(JSON.stringify(restarted.statuses())).not.toContain("test-secret");
+      expect(NodeFS.statSync(authPath).mode & 0o777).toBe(0o600);
+    },
+  );
+
+  it("rejects invalid keys without replacing OAuth and clears old health on save", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        anthropic: {
+          type: "oauth",
+          access: "oauth",
+          refresh: "refresh",
+          expires: Date.now() + 60_000,
+        },
+      }),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    service.recordRequestFailure("anthropic", "Old failure");
+    const started = await service.startLogin("anthropic", { authMode: "api-key" });
+    expect(await service.completeLogin(started.loginId, " \n ")).toMatchObject({
+      status: "failed",
+    });
+    expect(await service.getAccessToken("anthropic")).toBe("oauth");
+    expect(await service.completeLogin(started.loginId, "new-key")).toEqual({
+      status: "connected",
+    });
+    expect(service.statuses()[0]).toMatchObject({
+      health: "detected",
+      healthTest: { status: "not-run" },
+    });
+    expect(service.statuses()[0]?.lastFailedRequest).toBeUndefined();
+    const oauth = await service.startLogin("anthropic");
+    expect(oauth.url).toContain("https://");
+    service.cancelLogin(oauth.loginId);
+    expect(await service.getAccessToken("anthropic")).toBe("new-key");
+    service.logout("anthropic");
+    expect(service.statuses()[0]).toMatchObject({ connected: false });
+    expect(service.statuses()[0]?.authMode).toBeUndefined();
+  });
+
+  it("rejects unsupported modes and base URLs before creating pending state", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    await expect(service.startLogin("cursor", { authMode: "api-key" })).rejects.toThrow(
+      "not supported",
+    );
+    await expect(
+      service.startLogin("xai", { authMode: "api-key", baseUrl: "https://example.com" }),
+    ).rejects.toThrow("does not support");
+    await expect(
+      service.startLogin("anthropic", { baseUrl: "https://example.com" }),
+    ).rejects.toThrow("require API-key");
+    await expect(
+      service.startLogin("anthropic", {
+        authMode: "api-key",
+        baseUrl: "https://user:secret@example.com",
+      }),
+    ).rejects.toThrow();
+    expect(NodeFS.existsSync(`${authPath}.pending`)).toBe(false);
+  });
+
+  it("checks custom API endpoints without exposing network errors or using OAuth refresh", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const started = await service.startLogin("anthropic", {
+      authMode: "api-key",
+      baseUrl: "https://proxy.example/v1",
+    });
+    await service.completeLogin(started.loginId, "private-key");
+    const request = vi.fn().mockRejectedValue(new Error("private-key"));
+    vi.stubGlobal("fetch", request);
+    try {
+      await service.testHealth("anthropic");
+      expect(request).toHaveBeenCalledWith(
+        "https://proxy.example/v1/models",
+        expect.objectContaining({
+          redirect: "error",
+          headers: expect.objectContaining({ "x-api-key": "private-key" }),
+        }),
+      );
+      expect(JSON.stringify(service.statuses())).not.toContain("private-key");
+      expect(service.statuses()[0]?.oauthCheck).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns API-key Kimi access without an OAuth device identity", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const started = await service.startLogin("kimi-for-coding", {
+      authMode: "api-key",
+      baseUrl: "http://localhost:8888/v1",
+    });
+    await service.completeLogin(started.loginId, "kimi-key");
+    expect(await service.getKimiForCodingAccess()).toEqual({
+      accessToken: "kimi-key",
+      baseUrl: "http://localhost:8888/v1",
+    });
+  });
   it("loads provider status without exposing tokens", () => {
     const { authPath } = fixture();
     NodeFS.writeFileSync(
@@ -37,6 +315,7 @@ describe("subscription auth storage", () => {
     expect(anthropic).toEqual({
       provider: "anthropic",
       connected: true,
+      authMode: "oauth",
       expiresAt: 1_800_000_000_000,
       health: "detected",
       reconnectAction: "Reconnect account",

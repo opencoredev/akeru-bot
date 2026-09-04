@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { MastraModelConfig } from "@mastra/core/llm";
+import { subscriptionRequestUrl } from "../subscription-auth/runtime.ts";
 
 const OPEN_CODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
 const OPEN_CODE_GO_USER_AGENT = "akeru-bot/0.0.37";
@@ -30,6 +31,7 @@ export function buildAkeruOpenCodeGoFetch(
   protocol: OpenCodeGoProtocol,
   getApiKey: () => Promise<string | undefined>,
   request: AkeruOpenCodeGoFetch = globalThis.fetch,
+  getBaseUrl: () => string | undefined = () => undefined,
 ): AkeruOpenCodeGoFetch {
   return async (input, init) => {
     const apiKey = await getApiKey();
@@ -48,18 +50,26 @@ export function buildAkeruOpenCodeGoFetch(
     } else {
       headers.set("Authorization", `Bearer ${apiKey}`);
     }
-    return request(input, { ...init, headers });
+    return request(subscriptionRequestUrl(input, OPEN_CODE_GO_BASE_URL, getBaseUrl()), {
+      ...init,
+      headers,
+      redirect: "error",
+    });
   };
 }
 
 export function akeruOpenCodeGoProvider(
   modelId: string,
   getApiKey: () => Promise<string | undefined>,
+  getBaseUrl?: () => string | undefined,
 ): MastraModelConfig {
   const protocol = openCodeGoProtocol(modelId);
-  const fetch = buildAkeruOpenCodeGoFetch(protocol, getApiKey) as NonNullable<
-    NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
-  >;
+  const fetch = buildAkeruOpenCodeGoFetch(
+    protocol,
+    getApiKey,
+    globalThis.fetch,
+    getBaseUrl,
+  ) as NonNullable<NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]>;
   if (protocol === "responses") {
     return createOpenAI({
       name: "opencode-go",

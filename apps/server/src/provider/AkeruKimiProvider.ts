@@ -2,13 +2,15 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import type { MastraModelConfig } from "@mastra/core/llm";
 
 import { getKimiCodingDeviceHeaders } from "../subscription-auth/providers/kimi.ts";
+import { subscriptionRequestUrl } from "../subscription-auth/runtime.ts";
 
 const KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/v1";
 type AkeruKimiFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export interface AkeruKimiAccess {
   readonly accessToken: string;
-  readonly deviceId: string;
+  readonly deviceId?: string;
+  readonly baseUrl?: string;
 }
 
 export function buildAkeruKimiFetch(
@@ -25,10 +27,16 @@ export function buildAkeruKimiFetch(
     headers.delete("authorization");
     headers.delete("x-api-key");
     headers.set("Authorization", `Bearer ${access.accessToken}`);
-    for (const [key, value] of Object.entries(getKimiCodingDeviceHeaders(access.deviceId))) {
-      headers.set(key, value);
+    if (access.deviceId !== undefined) {
+      for (const [key, value] of Object.entries(getKimiCodingDeviceHeaders(access.deviceId))) {
+        headers.set(key, value);
+      }
     }
-    return request(input, { ...init, headers });
+    return request(subscriptionRequestUrl(input, KIMI_CODING_BASE_URL, access.baseUrl), {
+      ...init,
+      headers,
+      redirect: "error",
+    });
   };
 }
 

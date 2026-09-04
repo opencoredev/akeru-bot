@@ -115,6 +115,8 @@ function LocalSettingsRouteScreen({
           />
         </SettingsSection>
 
+        <ProviderSettingsSection environmentId={settingsEnvironmentId} />
+
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
         <GeneralSettingsSection />
@@ -132,6 +134,37 @@ function LocalSettingsRouteScreen({
         <AppSettingsSection />
       </ScrollView>
     </View>
+  );
+}
+
+function ProviderSettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
+  const navigation = useNavigation();
+  return (
+    <SettingsSection title="Providers">
+      {environmentId === null ? (
+        <Text className="text-sm text-foreground-muted">
+          Open Settings from an environment to connect a provider.
+        </Text>
+      ) : (
+        <SettingsRow
+          icon="key"
+          label="Provider connections"
+          onPress={() =>
+            navigation.navigate("SettingsSheet", {
+              screen: "SettingsContent",
+              params: {
+                screen: "SettingsProviderHealth",
+                params: { environmentId, target: "providers" },
+              },
+            })
+          }
+        />
+      )}
+    </SettingsSection>
   );
 }
 

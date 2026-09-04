@@ -21,9 +21,34 @@ export const SubscriptionProviderId = Schema.Literals([
 ]);
 export type SubscriptionProviderId = typeof SubscriptionProviderId.Type;
 
+export const SubscriptionAuthMode = Schema.Literals(["oauth", "api-key"]);
+export type SubscriptionAuthMode = typeof SubscriptionAuthMode.Type;
+
+export const SubscriptionBaseUrl = TrimmedNonEmptyString.check(
+  Schema.makeFilter(
+    (value) => {
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "https:" || url.protocol === "http:") &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash
+        );
+      } catch {
+        return false;
+      }
+    },
+    { message: "Use an HTTP or HTTPS base URL without credentials, a query, or a fragment." },
+  ),
+);
+
 export const SubscriptionProviderStatus = Schema.Struct({
   provider: SubscriptionProviderId,
   connected: Schema.Boolean,
+  authMode: Schema.optional(SubscriptionAuthMode),
+  baseUrl: Schema.optional(SubscriptionBaseUrl),
   /** ms epoch when the current access token expires. Absent when disconnected. */
   expiresAt: Schema.optional(Schema.Number),
   health: Schema.optional(
@@ -151,6 +176,9 @@ export type SubscriptionAuthHealthTestInput = typeof SubscriptionAuthHealthTestI
 
 export const SubscriptionAuthStartInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  authMode: Schema.optional(SubscriptionAuthMode),
+  /** Custom endpoints apply to API-key authentication only. */
+  baseUrl: Schema.optional(SubscriptionBaseUrl),
 });
 export type SubscriptionAuthStartInput = typeof SubscriptionAuthStartInput.Type;
 

@@ -17,6 +17,7 @@ import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { extractJsonObject } from "@t3tools/shared/schemaJson";
 
 import * as ServerConfig from "../config.ts";
+import { subscriptionRuntimeEnvironment } from "../subscription-auth/runtime.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 import {
   buildBranchNamePrompt,
@@ -301,7 +302,11 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                 openCodeRuntime
                   .startOpenCodeServerProcess({
                     binaryPath: input.binaryPath,
-                    environment: resolvedEnvironment,
+                    environment: subscriptionRuntimeEnvironment(
+                      serverConfig.secretsDir,
+                      "opencode-go",
+                      resolvedEnvironment,
+                    ),
                   })
                   .pipe(
                     Effect.provideService(Scope.Scope, serverScope),

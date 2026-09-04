@@ -105,14 +105,17 @@ export function buildProviderAccessCapabilities(
     return {
       id: entry.id,
       label: entry.label,
-      accessMethod: "subscription-oauth" as const,
+      accessMethod:
+        status?.authMode === "api-key" ? ("api-key" as const) : ("subscription-oauth" as const),
       health: status?.health ?? ("missing" as const),
       apiAccess: "separate" as const,
       nextAction:
         status?.health === "healthy" || status?.health === "recovered"
           ? "Send a provider request after the provider changes access."
           : status?.connected
-            ? "Check OAuth, then send a provider request to verify access."
+            ? status.authMode === "api-key"
+              ? "Check the API key, then send a provider request to verify access."
+              : "Check OAuth, then send a provider request to verify access."
             : `Connect ${entry.label} in Settings.`,
       ...(status?.lastSuccessfulRequestAt
         ? { lastSuccessfulRequestAt: status.lastSuccessfulRequestAt }
@@ -207,7 +210,10 @@ export function buildProviderAccessCapabilities(
     {
       id: "xai-subscription",
       label: "xAI subscription login",
-      accessMethod: "subscription-oauth" as const,
+      accessMethod:
+        subscriptionById.get("xai")?.authMode === "api-key"
+          ? ("api-key" as const)
+          : ("subscription-oauth" as const),
       health: subscriptionById.get("xai")?.health ?? ("missing" as const),
       apiAccess: "separate" as const,
       nextAction: "Send a Grok request to verify the shared xAI login.",

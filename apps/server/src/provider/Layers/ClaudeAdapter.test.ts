@@ -34,6 +34,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderAdapterProcessError, ProviderAdapterValidationError } from "../Errors.ts";
 import type { ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
@@ -267,6 +268,34 @@ const THREAD_ID = ThreadId.make("thread-claude-1");
 const RESUME_THREAD_ID = ThreadId.make("thread-claude-resume");
 
 describe("ClaudeAdapterLive", () => {
+  it.effect("passes a newly saved API key and endpoint to the Claude SDK", () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-claude-api-key-"));
+    const harness = makeHarness({ baseDir: directory });
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const config = yield* ServerConfig;
+      const auth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+      const login = yield* Effect.promise(() =>
+        auth.startLogin("anthropic", { authMode: "api-key", baseUrl: "https://proxy.example/v1" }),
+      );
+      yield* Effect.promise(() => auth.completeLogin(login.loginId, "sdk-api-key"));
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      const environment = harness.getLastCreateQueryInput()?.options.env;
+      assert.equal(environment?.ANTHROPIC_API_KEY, "sdk-api-key");
+      assert.equal(environment?.ANTHROPIC_BASE_URL, "https://proxy.example");
+      assert.isUndefined(environment?.CLAUDE_CODE_OAUTH_TOKEN);
+      assert.isUndefined(environment?.ANTHROPIC_AUTH_TOKEN);
+    }).pipe(
+      Effect.provide(harness.layer),
+      Effect.ensuring(
+        Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true })),
+      ),
+    );
+  });
   it.effect("returns validation error for non-claude provider on startSession", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

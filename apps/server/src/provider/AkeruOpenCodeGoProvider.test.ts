@@ -7,6 +7,28 @@ import {
 } from "./AkeruOpenCodeGoProvider.ts";
 
 describe("AkeruOpenCodeGoProvider", () => {
+  it.each(["responses", "anthropic", "chat-completions"] as const)(
+    "routes %s to the custom endpoint",
+    async (protocol) => {
+      const request = vi.fn(
+        async (_input: string | URL | Request, _init?: RequestInit) => new Response("{}"),
+      );
+      await buildAkeruOpenCodeGoFetch(
+        protocol,
+        async () => "custom-key",
+        request,
+        () => "http://localhost:8080/v1",
+      )("https://opencode.ai/zen/go/v1/messages", { method: "POST", body: "{}" });
+      expect(request).toHaveBeenCalledWith(
+        "http://localhost:8080/v1/messages",
+        expect.objectContaining({ body: "{}", redirect: "error" }),
+      );
+      const headers = new Headers(request.mock.calls[0]?.[1]?.headers);
+      expect(headers.get(protocol === "anthropic" ? "x-api-key" : "authorization")).toBe(
+        protocol === "anthropic" ? "custom-key" : "Bearer custom-key",
+      );
+    },
+  );
   it("selects the protocol required by each model family", () => {
     expect(openCodeGoProtocol("gpt-5.6-luna")).toBe("responses");
     expect(openCodeGoProtocol("muse-spark-1.3-contributor")).toBe("responses");

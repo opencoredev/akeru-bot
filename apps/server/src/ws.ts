@@ -79,6 +79,7 @@ import {
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
+import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
 import {
   buildProviderAccessCapabilities,
   subscriptionDependentBots,
@@ -537,6 +538,7 @@ const makeWsRpcLayer = (
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
       const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+      const resetChangedApiKeySessions = makeApiKeySessionReset(subscriptionAuth, agentController);
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -2478,11 +2480,11 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "bot" },
           ),
-        [WS_METHODS.subscriptionAuthStart]: ({ provider }) =>
+        [WS_METHODS.subscriptionAuthStart]: ({ provider, ...options }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthStart,
             Effect.tryPromise({
-              try: () => subscriptionAuth.startLogin(provider),
+              try: () => subscriptionAuth.startLogin(provider, options),
               catch: (cause) =>
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
@@ -2499,7 +2501,7 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }),
+            }).pipe(resetChangedApiKeySessions),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthComplete]: ({ loginId, code }) =>
@@ -2511,7 +2513,7 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }),
+            }).pipe(resetChangedApiKeySessions),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthCancel]: ({ loginId }) =>
@@ -2528,7 +2530,7 @@ const makeWsRpcLayer = (
             WS_METHODS.subscriptionAuthLogout,
             Effect.sync(() => {
               subscriptionAuth.logout(provider);
-            }).pipe(Effect.andThen(getAccessHealthSnapshot())),
+            }).pipe(resetChangedApiKeySessions, Effect.andThen(getAccessHealthSnapshot())),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthHealthTest]: ({ provider }) =>

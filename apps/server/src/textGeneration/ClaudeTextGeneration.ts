@@ -44,6 +44,7 @@ import {
   resolveClaudeEffort,
 } from "../provider/Layers/ClaudeProvider.ts";
 import { makeClaudeEnvironment } from "../provider/Drivers/ClaudeHome.ts";
+import { subscriptionRuntimeEnvironment } from "../subscription-auth/runtime.ts";
 
 const CLAUDE_TIMEOUT_MS = 180_000;
 
@@ -61,6 +62,7 @@ const decodeClaudeOutputEnvelope = Schema.decodeEffect(Schema.fromJsonString(Cla
 export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(function* (
   claudeSettings: ClaudeSettings,
   environment?: NodeJS.ProcessEnv,
+  secretsDir?: string,
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
@@ -157,6 +159,9 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         : undefined;
 
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
+      const requestEnvironment = secretsDir
+        ? subscriptionRuntimeEnvironment(secretsDir, "anthropic", claudeEnvironment)
+        : claudeEnvironment;
       const spawnCommand = yield* resolveSpawnCommand(
         claudeSettings.binaryPath || "claude",
         [
@@ -171,10 +176,10 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           ...(settingsJson ? ["--settings", settingsJson] : []),
           "--dangerously-skip-permissions",
         ],
-        { env: claudeEnvironment },
+        { env: requestEnvironment },
       );
       const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
-        env: claudeEnvironment,
+        env: requestEnvironment,
         cwd,
         shell: spawnCommand.shell,
         stdin: {
