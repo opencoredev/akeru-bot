@@ -41,7 +41,11 @@ the Apple Silicon macOS and Windows runners. The Tenki Runner GitHub App must ha
 
 ## macOS secrets
 
-Add these GitHub Actions secrets before running the workflow:
+The stable release builds a sealed, ad-hoc-signed DMG when all macOS secrets are absent. Users
+must approve that build through the macOS Gatekeeper installation flow. If any macOS secret is
+present, the workflow requires the complete set and stops on a partial configuration.
+
+Add these GitHub Actions secrets to publish a Developer ID signed and notarized DMG:
 
 - `MACOS_CERTIFICATE_P12` contains the base64-encoded `.p12` export of the Developer ID Application
   certificate and its private key.

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { parse } from "yaml";
 
 type Step = {
+  readonly name?: string;
   readonly id?: string;
   readonly if?: string;
   readonly run?: string;
@@ -143,5 +144,29 @@ describe("CI workflow budget", () => {
     expect(text).toContain("if: needs.preflight.outputs.publish == 'true'");
     expect(text).toContain('if test "$EVENT_NAME" != workflow_dispatch');
     expect(text).toContain("gh workflow run version-packages.yml --ref main");
+  });
+
+  it("builds an ad-hoc-signed macOS release when Apple credentials are absent", () => {
+    const release = workflow(".github/workflows/release.yml");
+    const steps = release.jobs.desktop?.steps ?? [];
+
+    expect(steps.find((step) => step.name === "Validate macOS signing credentials")?.run).toContain(
+      "present != 0 && present != ${#values[@]}",
+    );
+    expect(steps.find((step) => step.name === "Build signed macOS artifact")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+    );
+    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
+    );
+    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")?.run).not.toContain(
+      "--signed",
+    );
+    expect(steps.find((step) => step.name === "Notarize and verify macOS DMG")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+    );
+    expect(steps.find((step) => step.name === "Verify unsigned macOS app signature")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
+    );
   });
 });
