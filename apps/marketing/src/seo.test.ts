@@ -1,10 +1,29 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import * as JPEG from "jpeg-js";
 import { describe, expect, it } from "vite-plus/test";
 
 const sourceFile = (path: string) =>
   NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, path), "utf8");
+
+const jpegFrameMarker = (image: Buffer) => {
+  let offset = 2;
+
+  while (offset < image.byteLength) {
+    while (image[offset] === 0xff) offset += 1;
+    const marker = image[offset];
+    offset += 1;
+
+    if (marker >= 0xc0 && marker <= 0xc3) return marker;
+    if (marker === 0xda || marker === undefined) break;
+
+    const segmentLength = image.readUInt16BE(offset);
+    offset += segmentLength;
+  }
+
+  return undefined;
+};
 
 describe("marketing search metadata", () => {
   it("keeps search metadata while preserving the original home page", () => {
@@ -111,13 +130,16 @@ describe("marketing search metadata", () => {
     const socialImage = NodeFS.readFileSync(
       NodePath.resolve(import.meta.dirname, "../public/og-v2.jpg"),
     );
+    const decoded = JPEG.decode(socialImage, { formatAsRGBA: false, useTArray: true });
 
     expect(layout).toContain('new URL("/og-v2.jpg", siteOrigin)');
     expect(layout).toContain('<meta property="og:image:type" content="image/jpeg" />');
     expect(layout).toContain('<meta property="og:image:width" content="1200" />');
     expect(layout).toContain('<meta property="og:image:height" content="630" />');
     expect(layout).toContain('<meta name="twitter:image:alt"');
-    expect(socialImage.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+    expect(jpegFrameMarker(socialImage)).toBe(0xc0);
+    expect(decoded).toMatchObject({ width: 1200, height: 630 });
+    expect(decoded.data.byteLength).toBe(1200 * 630 * 3);
     expect(socialImage.byteLength).toBeLessThan(5_000_000);
   });
 
