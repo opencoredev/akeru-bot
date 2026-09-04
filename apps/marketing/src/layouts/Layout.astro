@@ -33,7 +33,8 @@ const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
 const canonicalPath =
   Astro.url.pathname === "/" ? "/" : Astro.url.pathname.replace(/\/+$/, "");
 const canonicalUrl = new URL(canonicalPath, siteOrigin);
-const socialImageUrl = new URL("/og.png", siteOrigin);
+const socialImageUrl = new URL("/og-v2.jpg", siteOrigin);
+const socialImageAlt = "Meet Akeru Bot. Each bot keeps its own tools and its own memory.";
 const year = new Date().getFullYear();
 const softwareDescription =
   "Open-source desktop and web application for running coding agents with separate tools, plugins, instructions, and long-term memory.";
@@ -81,18 +82,16 @@ const structuredData = [
     <meta property="og:image" content={socialImageUrl.href} />
     {articlePublishedTime && <meta property="article:published_time" content={articlePublishedTime} />}
     {articleModifiedTime && <meta property="article:modified_time" content={articleModifiedTime} />}
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="2400" />
-    <meta property="og:image:height" content="1260" />
-    <meta
-      property="og:image:alt"
-      content="Meet Akeru Bot. Each bot keeps its own tools and its own memory."
-    />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={socialImageAlt} />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={socialTitle ?? title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={socialImageUrl.href} />
+    <meta name="twitter:image:alt" content={socialImageAlt} />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

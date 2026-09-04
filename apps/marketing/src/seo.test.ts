@@ -106,6 +106,21 @@ describe("marketing search metadata", () => {
     expect(searchPage).toContain("overflow-x: auto;");
   });
 
+  it("serves a crawler-compatible social card from a cache-busted URL", () => {
+    const layout = sourceFile("layouts/Layout.astro");
+    const socialImage = NodeFS.readFileSync(
+      NodePath.resolve(import.meta.dirname, "../public/og-v2.jpg"),
+    );
+
+    expect(layout).toContain('new URL("/og-v2.jpg", siteOrigin)');
+    expect(layout).toContain('<meta property="og:image:type" content="image/jpeg" />');
+    expect(layout).toContain('<meta property="og:image:width" content="1200" />');
+    expect(layout).toContain('<meta property="og:image:height" content="630" />');
+    expect(layout).toContain('<meta name="twitter:image:alt"');
+    expect(socialImage.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+    expect(socialImage.byteLength).toBeLessThan(5_000_000);
+  });
+
   it("keeps missing pages out of search results", () => {
     const layout = sourceFile("layouts/Layout.astro");
     const notFound = sourceFile("pages/404.astro");
