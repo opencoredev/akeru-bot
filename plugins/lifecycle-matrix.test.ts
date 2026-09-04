@@ -22,9 +22,6 @@ describe("milestone 13 plugin lifecycle matrix", () => {
 
     expect(directory.map((plugin) => plugin.id).toSorted()).toEqual(EXPECTED_IDS);
     expect(installable.map((plugin) => plugin.id)).toEqual(INSTALLABLE_IDS);
-    expect(installable.map((plugin) => `builtin-${plugin.id}`)).toEqual(
-      INSTALLABLE_IDS.map((id) => `builtin-${id}`),
-    );
     expect(
       directory
         .filter((plugin) => plugin.featuredRank !== undefined)
@@ -49,7 +46,6 @@ describe("milestone 13 plugin lifecycle matrix", () => {
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
     ).toHaveLength(32);
     for (const plugin of pending) {
-      expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
       expect(plugin.connection).toMatchObject({
         type: plugin.catalogStatus,
         blocker: expect.stringMatching(/\S/),

@@ -98,12 +98,6 @@ export function parsePersistedServerObservabilitySettings(
   return { otlpTracesUrl: undefined, otlpMetricsUrl: undefined };
 }
 
-function shouldReplaceTextGenerationModelSelection(
-  patch: ServerSettingsPatch["textGenerationModelSelection"] | undefined,
-): boolean {
-  return Boolean(patch && (patch.instanceId !== undefined || patch.model !== undefined));
-}
-
 function mergeModelSelectionOptionsById(input: {
   current: ReadonlyArray<{ readonly id: string; readonly value: string | boolean }> | undefined;
   patch: ReadonlyArray<{ readonly id: string; readonly value: string | boolean }> | undefined;
@@ -194,8 +188,6 @@ export function applyServerSettingsPatch(
     ...(patch.sourceControlWriterModelSelection !== undefined
       ? { sourceControlWriterModelSelection: patch.sourceControlWriterModelSelection }
       : {}),
-    ...(automaticGitFetchInterval !== undefined ? { automaticGitFetchInterval } : {}),
-    ...(providerHealthRefreshInterval !== undefined ? { providerHealthRefreshInterval } : {}),
   };
   const normalizedBackgroundActivity = normalizeBackgroundActivitySettings(
     nextWithReplacementsBase.backgroundActivity,
@@ -216,12 +208,13 @@ export function applyServerSettingsPatch(
 
   const instanceId = selectionPatch.instanceId ?? current.textGenerationModelSelection.instanceId;
   const model = selectionPatch.model ?? current.textGenerationModelSelection.model;
-  const options = shouldReplaceTextGenerationModelSelection(selectionPatch)
-    ? selectionPatch.options
-    : mergeModelSelectionOptionsById({
-        current: current.textGenerationModelSelection.options,
-        patch: selectionPatch.options,
-      });
+  const options =
+    selectionPatch.instanceId !== undefined || selectionPatch.model !== undefined
+      ? selectionPatch.options
+      : mergeModelSelectionOptionsById({
+          current: current.textGenerationModelSelection.options,
+          patch: selectionPatch.options,
+        });
 
   return {
     ...nextWithReplacements,

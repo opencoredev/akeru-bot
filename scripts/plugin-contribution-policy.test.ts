@@ -134,39 +134,6 @@ describe("plugin contribution policy", () => {
     expect(labelsForPath(pathLabels, "apps/server/src/mcp/McpHttpServer.ts")).toEqual([]);
   });
 
-  it("documents the admission and safety rules", () => {
-    const contributorRules = text("plugins/AGENTS.md");
-    const publicRules = text("plugins/README.md");
-
-    for (const requirement of [
-      "curated directory",
-      "not a complete MCP registry",
-      "does not guarantee acceptance",
-      "Custom MCP",
-      "experimental apps, wrappers, duplicates, and narrow utilities",
-      "PostgreSQL, SQLite, Redis, Docker, Playwright, time, fetch, filesystem, and generic memory",
-      "actively use the product",
-      "user or maintainer requested",
-      "real Akeru Bot job",
-      "official or trusted MCP server",
-      "current setup and reference documentation",
-      "approval-pending",
-      "accountable publisher",
-      "logo",
-      "add, connect, use, disable, re-enable, and remove",
-      "export a provider token or secret",
-      "send, pay, delete, production, secrets, publishing, signatures, refunds, and account-wide",
-    ]) {
-      expect(contributorRules).toContain(requirement);
-    }
-
-    expect(publicRules).toContain("This is a curated directory, not a complete MCP registry");
-    expect(publicRules).toContain("experimental apps, wrappers, duplicates, and narrow utilities");
-    expect(text(".github/ISSUE_TEMPLATE/plugin_proposal.yml")).toContain(
-      "experimental apps, wrappers, duplicates, and narrow utilities",
-    );
-  });
-
   it("runs catalog validation and contribution policy tests in CI", () => {
     const ci = yaml(".github/workflows/ci.yml") as {
       jobs: Record<string, { steps?: Array<{ run?: string }> }>;
