@@ -698,10 +698,15 @@ function rebindCheckpointAssistantMessage(
   checkpoints: ReadonlyArray<OrchestrationCheckpointSummary>,
   turnId: TurnId,
   messageId: MessageId,
-): OrchestrationCheckpointSummary[] {
-  return Arr.map(checkpoints, (entry) =>
-    entry.turnId === turnId ? { ...entry, assistantMessageId: messageId } : entry,
-  );
+): ReadonlyArray<OrchestrationCheckpointSummary> {
+  let next: OrchestrationCheckpointSummary[] | undefined;
+  for (let index = 0; index < checkpoints.length; index += 1) {
+    const entry = checkpoints[index]!;
+    if (entry.turnId !== turnId || entry.assistantMessageId === messageId) continue;
+    next ??= checkpoints.slice();
+    next[index] = { ...entry, assistantMessageId: messageId };
+  }
+  return next ?? checkpoints;
 }
 
 function retainMessagesAfterRevert(

@@ -21,6 +21,8 @@ Akeru reads transcripts from each environment. It deduplicates shared transcript
 same usage is not counted twice. A notice identifies environments that are still loading, stale, or
 unavailable.
 
+Web and desktop charts stay still when idle. Hover over a chart to inspect a value.
+
 ## Refresh usage
 
 Akeru refreshes usage every five minutes by default. Select **Refresh usage** to reload it now.

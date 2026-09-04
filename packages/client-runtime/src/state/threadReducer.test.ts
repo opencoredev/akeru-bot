@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { assert, describe, expect, it } from "vite-plus/test";
 
 import {
   AuthSessionId,
@@ -354,6 +354,108 @@ describe("applyThreadDetailEvent", () => {
   });
 
   describe("thread.message-sent", () => {
+    const boundMessageId = MessageId.make("msg-bound");
+    const boundTurnId = TurnId.make("turn-bound");
+    const boundCheckpoint = {
+      turnId: boundTurnId,
+      checkpointTurnCount: 1,
+      checkpointRef: CheckpointRef.make("ref-bound"),
+      status: "ready",
+      files: [],
+      assistantMessageId: boundMessageId,
+      completedAt: "2026-04-01T06:00:00.000Z",
+    } satisfies OrchestrationThread["checkpoints"][number];
+    const streamingEvent = {
+      ...baseEventFields,
+      sequence: 7,
+      occurredAt: "2026-04-01T06:01:00.000Z",
+      aggregateKind: "thread",
+      aggregateId: baseThread.id,
+      type: "thread.message-sent",
+      payload: {
+        threadId: baseThread.id,
+        messageId: boundMessageId,
+        role: "assistant",
+        text: "delta",
+        turnId: boundTurnId,
+        streaming: true,
+        createdAt: "2026-04-01T06:00:00.000Z",
+        updatedAt: "2026-04-01T06:01:00.000Z",
+      },
+    } as const;
+
+    it.each([
+      { name: "empty checkpoints", checkpoints: [] },
+      { name: "already-bound checkpoint", checkpoints: [boundCheckpoint] },
+      {
+        name: "unrelated checkpoint",
+        checkpoints: [{ ...boundCheckpoint, turnId: TurnId.make("other-turn") }],
+      },
+    ])("preserves collection identity for $name", ({ checkpoints }) => {
+      const result = applyThreadDetailEvent({ ...baseThread, checkpoints }, streamingEvent);
+      assert(result.kind === "updated");
+      expect(result.thread.checkpoints).toBe(checkpoints);
+    });
+
+    it("copies only checkpoints whose assistant binding changes", () => {
+      const unrelated = { ...boundCheckpoint, turnId: TurnId.make("other-turn") };
+      const unbound = { ...boundCheckpoint, assistantMessageId: null };
+      const previouslyBound = { ...boundCheckpoint, assistantMessageId: MessageId.make("old") };
+      const checkpoints = [unrelated, unbound, boundCheckpoint, previouslyBound];
+      const result = applyThreadDetailEvent({ ...baseThread, checkpoints }, streamingEvent);
+      assert(result.kind === "updated");
+      expect(result.thread.checkpoints).not.toBe(checkpoints);
+      expect(result.thread.checkpoints[0]).toBe(unrelated);
+      expect(result.thread.checkpoints[2]).toBe(boundCheckpoint);
+      expect(result.thread.checkpoints[1]).toEqual(boundCheckpoint);
+      expect(result.thread.checkpoints[1]).not.toBe(unbound);
+      expect(result.thread.checkpoints[3]).toEqual(boundCheckpoint);
+      expect(result.thread.checkpoints[3]).not.toBe(previouslyBound);
+      expect(unbound.assistantMessageId).toBeNull();
+      expect(previouslyBound.assistantMessageId).toBe("old");
+    });
+
+    it("removes 100 no-op collection and entry replacements across 500 checkpoints", () => {
+      const checkpoints = Array.from({ length: 500 }, (_, index) => ({
+        ...boundCheckpoint,
+        turnId: index === 0 ? boundTurnId : TurnId.make(`turn-${index}`),
+      }));
+      let thread: OrchestrationThread = { ...baseThread, checkpoints };
+      let previousCheckpoints: OrchestrationThread["checkpoints"] = checkpoints;
+      let oldCollectionReplacements = 0;
+      let oldEntryReplacements = 0;
+      let newCollectionReplacements = 0;
+      let newEntryReplacements = 0;
+      for (let index = 0; index < 100; index += 1) {
+        const oldNext = previousCheckpoints.map((entry) =>
+          entry.turnId === boundTurnId ? { ...entry, assistantMessageId: boundMessageId } : entry,
+        );
+        oldCollectionReplacements += Number(oldNext !== previousCheckpoints);
+        oldEntryReplacements += oldNext.filter(
+          (entry, i) => entry !== previousCheckpoints[i],
+        ).length;
+        previousCheckpoints = oldNext;
+
+        const result = applyThreadDetailEvent(thread, { ...streamingEvent, sequence: index + 1 });
+        assert(result.kind === "updated");
+        newCollectionReplacements += Number(result.thread.checkpoints !== thread.checkpoints);
+        newEntryReplacements += result.thread.checkpoints.filter(
+          (entry, i) => entry !== thread.checkpoints[i],
+        ).length;
+        thread = result.thread;
+      }
+      expect({ oldCollectionReplacements, oldEntryReplacements }).toEqual({
+        oldCollectionReplacements: 100,
+        oldEntryReplacements: 100,
+      });
+      expect({ newCollectionReplacements, newEntryReplacements }).toEqual({
+        newCollectionReplacements: 0,
+        newEntryReplacements: 0,
+      });
+      expect(thread.checkpoints).toBe(checkpoints);
+      expect(thread.messages[0]?.text).toBe("delta".repeat(100));
+    });
+
     it("appends a new message", () => {
       const result = applyThreadDetailEvent(baseThread, {
         ...baseEventFields,

@@ -1,5 +1,5 @@
 import { BotId, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   buildBotTurnStartInput,
@@ -10,6 +10,101 @@ import {
   findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
 } from "./botThreadRuntime.logic";
+
+describe.each([
+  { name: "bot", findLatest: findLatestBotThreadTarget, ownerKey: "botId" as const },
+  { name: "group", findLatest: findLatestGroupThreadTarget, ownerKey: "groupId" as const },
+])("latest $name thread selection", ({ findLatest, ownerKey }) => {
+  const thread = (id: string, updatedAt = "2026-08-27T00:00:00.000Z") => ({
+    environmentId: "env-a",
+    id,
+    botId: "owner",
+    groupId: "owner",
+    updatedAt,
+    archivedAt: null as string | null,
+    deletedAt: null as string | null | undefined,
+  });
+
+  it("returns null for empty and non-matching inputs", () => {
+    expect(findLatest("owner", "env-a", [])).toBeNull();
+    expect(
+      findLatest("owner", "env-a", [
+        { ...thread("wrong-environment"), environmentId: "env-b" },
+        { ...thread("wrong-owner"), [ownerKey]: "other" },
+        { ...thread("archived"), archivedAt: "2026-08-28T00:00:00.000Z" },
+        { ...thread("deleted"), deletedAt: "2026-08-28T00:00:00.000Z" },
+      ]),
+    ).toBeNull();
+  });
+
+  it("preserves descending timestamp and ID order without mutating the input", () => {
+    const candidates = [
+      thread("z-older", "2026-08-26T00:00:00.000Z"),
+      thread("b-newer"),
+      thread("a-newer"),
+      { ...thread("z-deleted", "2026-08-29T00:00:00.000Z"), deletedAt: "deleted" },
+      { ...thread("z-archived", "2026-08-29T00:00:00.000Z"), archivedAt: "archived" },
+      { ...thread("z-remote", "2026-08-29T00:00:00.000Z"), environmentId: "env-b" },
+      { ...thread("z-other", "2026-08-29T00:00:00.000Z"), [ownerKey]: "other" },
+    ];
+    for (const input of [candidates, candidates.toReversed()]) {
+      const original = [...input];
+      expect(findLatest("owner", "env-a", Object.freeze(input))).toEqual({
+        environmentId: "env-a",
+        threadId: "b-newer",
+      });
+      expect(input).toEqual(original);
+    }
+    expect(
+      findLatest("owner", "env-a", [{ ...thread("no-deletion-field"), deletedAt: undefined }]),
+    ).toEqual({ environmentId: "env-a", threadId: "no-deletion-field" });
+  });
+
+  it("keeps the first candidate when timestamp and ID collate equally", () => {
+    const composed = thread("é");
+    const decomposed = thread("e\u0301");
+    expect(composed.id.localeCompare(decomposed.id)).toBe(0);
+    for (const candidates of [
+      [composed, decomposed],
+      [decomposed, composed],
+    ]) {
+      expect(findLatest("owner", "env-a", candidates)?.threadId).toBe(candidates[0]?.id);
+    }
+  });
+
+  it("matches filter-sort selection with only 2,046 locale comparisons for 1,024 ties", () => {
+    const candidates = Array.from({ length: 1_024 }, (_, index) =>
+      thread(`thread-${String((index * 317) % 1_024).padStart(4, "0")}`),
+    );
+    const compare = vi.spyOn(String.prototype, "localeCompare");
+    let oldComparisons = 0;
+    let newComparisons = 0;
+    try {
+      const oldLatest = candidates
+        .filter(
+          (entry) =>
+            entry.environmentId === "env-a" &&
+            entry[ownerKey] === "owner" &&
+            entry.archivedAt === null &&
+            entry.deletedAt == null,
+        )
+        .toSorted(
+          (left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id),
+        )[0];
+      oldComparisons = compare.mock.calls.length;
+      compare.mockClear();
+      const latest = findLatest("owner", "env-a", candidates);
+      newComparisons = compare.mock.calls.length;
+      expect(latest).toEqual({ environmentId: oldLatest?.environmentId, threadId: oldLatest?.id });
+      expect(newComparisons).toBe(2 * (candidates.length - 1));
+      expect(oldComparisons).toBeGreaterThan(newComparisons);
+    } finally {
+      compare.mockRestore();
+    }
+    console.info(`Latest ${ownerKey}: locale comparisons ${oldComparisons} -> ${newComparisons}`);
+  });
+});
 
 describe("bot thread runtime", () => {
   it("finds each secure MCP authorization once and rejects unsafe URLs", () => {

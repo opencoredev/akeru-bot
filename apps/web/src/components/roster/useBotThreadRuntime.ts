@@ -7,7 +7,6 @@ import {
   EnvironmentId,
   ThreadId,
   type ModelSelection,
-  type ProviderApprovalDecision,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,7 +29,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { derivePendingApprovals, derivePendingUserInputs } from "../../session-logic";
+import { derivePendingUserInputs } from "../../session-logic";
 import {
   applyPendingUserInputSingleSelect,
   buildPendingUserInputAnswers,
@@ -131,7 +130,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     openedAuthorizationActivitiesRef.current.add(authorization.activityId);
     void ensureLocalApi().shell.openExternal(authorization.url);
   }, [activities]);
-  const pendingApprovals = useMemo(() => derivePendingApprovals(activities), [activities]);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(
     () =>
@@ -158,9 +156,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
-  const respondToApprovalCommand = useAtomCommand(threadEnvironment.respondToApproval, {
-    reportFailure: false,
-  });
   const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
@@ -173,7 +168,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
-  const [respondingToApproval, setRespondingToApproval] = useState(false);
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
   const singleSelectInFlightRef = useRef<string | null>(null);
@@ -433,23 +427,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     [appendVoiceTranscript, botId, ensureTranscriptThread],
   );
 
-  const respondToApproval = useCallback(
-    async (
-      requestId: (typeof pendingApprovals)[number]["requestId"],
-      decision: ProviderApprovalDecision,
-    ) => {
-      if (!linkedThreadRef || respondingToApproval) return;
-      setRespondingToApproval(true);
-      const result = await respondToApprovalCommand({
-        environmentId: linkedThreadRef.environmentId,
-        input: { threadId: linkedThreadRef.threadId, requestId, decision },
-      });
-      setRespondingToApproval(false);
-      if (result._tag === "Failure") setError(errorMessage(result));
-    },
-    [linkedThreadRef, pendingApprovals, respondToApprovalCommand, respondingToApproval],
-  );
-
   useEffect(() => {
     setPendingUserInputAnswers({});
     setPendingUserInputQuestionIndex(0);
@@ -533,15 +510,12 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
-    pendingApprovals,
     pendingUserInputs,
     pendingUserInputAnswers,
     pendingUserInputQuestionIndex,
     respondingRequestIds,
     selectPendingUserInputOption,
     advancePendingUserInput,
-    respondToApproval,
-    respondingToApproval,
     send,
     sending,
   };

@@ -134,18 +134,23 @@ export function findLatestBotThreadTarget(
     deletedAt?: string | null | undefined;
   }[],
 ): { environmentId: string; threadId: string } | null {
-  const latest = threads
-    .filter(
-      (thread) =>
-        thread.environmentId === environmentId &&
-        thread.botId === botId &&
-        thread.archivedAt === null &&
-        thread.deletedAt == null,
-    )
-    .toSorted(
-      (left, right) =>
-        right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id),
-    )[0];
+  let latest: (typeof threads)[number] | undefined;
+  for (const thread of threads) {
+    if (
+      thread.environmentId !== environmentId ||
+      thread.botId !== botId ||
+      thread.archivedAt !== null ||
+      thread.deletedAt != null
+    ) {
+      continue;
+    }
+    if (
+      latest === undefined ||
+      (thread.updatedAt.localeCompare(latest.updatedAt) || thread.id.localeCompare(latest.id)) > 0
+    ) {
+      latest = thread;
+    }
+  }
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
 }
 
@@ -175,18 +180,23 @@ export function findLatestGroupThreadTarget(
     deletedAt?: string | null | undefined;
   }[],
 ): { environmentId: string; threadId: string } | null {
-  const latest = threads
-    .filter(
-      (thread) =>
-        thread.environmentId === environmentId &&
-        thread.groupId === groupId &&
-        thread.archivedAt === null &&
-        thread.deletedAt == null,
-    )
-    .toSorted(
-      (left, right) =>
-        right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id),
-    )[0];
+  let latest: (typeof threads)[number] | undefined;
+  for (const thread of threads) {
+    if (
+      thread.environmentId !== environmentId ||
+      thread.groupId !== groupId ||
+      thread.archivedAt !== null ||
+      thread.deletedAt != null
+    ) {
+      continue;
+    }
+    if (
+      latest === undefined ||
+      (thread.updatedAt.localeCompare(latest.updatedAt) || thread.id.localeCompare(latest.id)) > 0
+    ) {
+      latest = thread;
+    }
+  }
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
 }
 
