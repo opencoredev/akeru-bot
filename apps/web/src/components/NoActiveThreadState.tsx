@@ -24,7 +24,7 @@ export function NoActiveThreadState() {
             <EmptyHeader className="max-w-none">
               <EmptyTitle className="text-foreground text-xl">Pick a chat to continue</EmptyTitle>
               <EmptyDescription className="mt-2 text-sm text-muted-foreground/78">
-                Select an existing thread or create a new one to get started.
+                Select an existing chat or create a new one to get started.
               </EmptyDescription>
             </EmptyHeader>
           </div>

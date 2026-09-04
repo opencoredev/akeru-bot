@@ -95,7 +95,6 @@ function childInstructions(input: {
   readonly task: string;
   readonly expectedResult: string;
   readonly deadline: string | null;
-  readonly parentThreadId: ThreadId;
 }): string {
   return [
     "This work was delegated from another bot chat.",
@@ -470,7 +469,6 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           task: request.task,
           expectedResult: request.expectedResult,
           deadline: request.deadline ?? null,
-          parentThreadId: parent.threadId,
         }),
         attachments: [],
       },
