@@ -90,6 +90,7 @@ describe("CI workflow budget", () => {
     const versionPackages = workflow(".github/workflows/version-packages.yml");
     const versionJob = versionPackages.jobs.version;
 
+    expect(Object.keys(versionPackages.on)).toEqual(["push", "workflow_dispatch"]);
     expect(versionPackages.concurrency).toEqual({
       group: "version-packages",
       "cancel-in-progress": true,
@@ -121,7 +122,7 @@ describe("CI workflow budget", () => {
 
     expect(text).not.toContain("depot-");
     expect(text).toContain("tenki-standard-medium-4c-8g");
-    expect(text).toContain("tenki-macos-15-medium");
+    expect(text).toContain("runner: macos-15");
     expect(text).toContain("windows-2025");
     expect(Object.keys(releaseSmoke.jobs).length).toBeGreaterThan(0);
   });
@@ -141,5 +142,6 @@ describe("CI workflow budget", () => {
     expect(text).toContain("if: steps.version.outputs.publish == 'true'");
     expect(text).toContain("if: needs.preflight.outputs.publish == 'true'");
     expect(text).toContain('if test "$EVENT_NAME" != workflow_dispatch');
+    expect(text).toContain("gh workflow run version-packages.yml --ref main");
   });
 });

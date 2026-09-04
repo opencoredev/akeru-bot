@@ -4,6 +4,8 @@ import {
   isRecoverableVersionRequestFailure,
   nextPatchVersion,
   renderVersionPullRequestBody,
+  stableReleaseIsPublished,
+  stableReleaseTag,
 } from "./update-version-pull-request.ts";
 
 describe("version pull request automation", () => {
@@ -19,8 +21,12 @@ describe("version pull request automation", () => {
     expect(body).toContain("`akeru-bot`: `0.0.38` → `0.0.39`");
   });
 
-  it("increments only stable patch versions", () => {
+  it("increments only published stable patch versions", () => {
+    expect(stableReleaseTag("1.2.9")).toBe("v1.2.9");
+    expect(stableReleaseIsPublished("1.2.9", ["v1.2.8", "v1.2.9"])).toBe(true);
+    expect(stableReleaseIsPublished("1.2.9", ["v1.2.8"])).toBe(false);
     expect(nextPatchVersion("1.2.9")).toBe("1.2.10");
+    expect(() => stableReleaseTag("1.2.3-beta.1")).toThrow("Stable release version is invalid");
     expect(() => nextPatchVersion("1.2.3-beta.1")).toThrow("Stable release version is invalid");
   });
 

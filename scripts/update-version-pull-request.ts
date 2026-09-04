@@ -43,6 +43,13 @@ function runOrThrow(command: string, args: ReadonlyArray<string>): string {
   return result.stdout.trim();
 }
 
+export function stableReleaseTag(version: string): string {
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+    throw new Error(`Stable release version is invalid: ${version}.`);
+  }
+  return `v${version}`;
+}
+
 export function nextPatchVersion(version: string): string {
   const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(version);
   if (!match) throw new Error(`Stable release version is invalid: ${version}.`);
@@ -121,6 +128,18 @@ function findVersionPullRequest(): number | undefined {
   return number;
 }
 
+export function stableReleaseIsPublished(version: string, tags: ReadonlyArray<string>): boolean {
+  return tags.includes(stableReleaseTag(version));
+}
+
+function currentStableReleaseIsPublished(version: string): boolean {
+  const tag = stableReleaseTag(version);
+  const result = NodeChildProcess.spawnSync("git", ["tag", "--list", tag], {
+    encoding: "utf8",
+  });
+  return result.status === 0 && stableReleaseIsPublished(version, result.stdout.trim().split("\n"));
+}
+
 function verifyVersionBranchIncludesMain(mainSha: string): void {
   runOrThrow("git", [
     "fetch",
@@ -144,13 +163,19 @@ function main(): void {
   const mainSha = process.env.GITHUB_SHA;
   if (!mainSha) throw new Error("GITHUB_SHA is required.");
 
+  const currentVersion = readCurrentVersion();
+  if (!currentStableReleaseIsPublished(currentVersion)) {
+    console.log(`Stable release ${stableReleaseTag(currentVersion)} is still pending.`);
+    return;
+  }
+
   const changes = readReleaseChanges();
   if (changes.length === 0) {
     console.log("No merged pull requests need a version pull request.");
     return;
   }
 
-  const body = renderVersionPullRequestBody(readCurrentVersion(), changes);
+  const body = renderVersionPullRequestBody(currentVersion, changes);
   const bodyPath = NodePath.join(
     process.env.RUNNER_TEMP ?? NodeOS.tmpdir(),
     "akeru-version-pull-request.md",
