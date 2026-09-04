@@ -1,4 +1,4 @@
-import type { ProviderInstanceEnvironment } from "@t3tools/contracts";
+import type { ProviderInstanceConfig, ProviderInstanceEnvironment } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 import { mergeProviderInstanceEnvironment } from "../provider/ProviderInstanceEnvironment.ts";
@@ -24,6 +24,18 @@ export function mergeSubscriptionInstanceEnvironment(
   };
 }
 
+/** Drivers call this after they add their own isolation variables to a merged environment. */
+export function withExplicitEnvironmentKeys(
+  environment: NodeJS.ProcessEnv,
+  keys: Iterable<string>,
+): SubscriptionEnvironment {
+  const existing = (environment as SubscriptionEnvironment)[explicitEnvironmentKeys];
+  return {
+    ...environment,
+    [explicitEnvironmentKeys]: new Set([...(existing ?? []), ...keys]),
+  };
+}
+
 function hasExplicitEnvironmentKey(environment: SubscriptionEnvironment, key: string): boolean {
   const keys = environment[explicitEnvironmentKeys];
   return keys ? keys.has(key) : environment !== process.env && Object.hasOwn(environment, key);
@@ -40,6 +52,25 @@ const CONNECTION_ENV_KEYS: Partial<Record<SubscriptionProviderId, ReadonlyArray<
   xai: ["XAI_API_KEY"],
   "opencode-go": ["OPENCODE_API_KEY"],
 };
+
+/** False when the instance brings its own connection, so a saved provider-wide key does not reach it. */
+export function instanceUsesSavedCredential(
+  provider: SubscriptionProviderId,
+  instance: ProviderInstanceConfig | undefined,
+): boolean {
+  if (!instance) return true;
+  const connectionKeys = CONNECTION_ENV_KEYS[provider] ?? [];
+  if (instance.environment?.some(({ name }) => connectionKeys.includes(name))) return false;
+  if (provider === "anthropic") {
+    const config = instance.config;
+    const homePath =
+      typeof config === "object" && config !== null && "homePath" in config
+        ? config.homePath
+        : undefined;
+    if (typeof homePath === "string" && homePath.trim().length > 0) return false;
+  }
+  return true;
+}
 
 const ConfigRecord = Schema.Record(Schema.String, Schema.Unknown);
 const decodeConfig = Schema.decodeUnknownSync(Schema.fromJsonString(ConfigRecord));

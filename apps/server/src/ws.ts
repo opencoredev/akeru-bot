@@ -80,6 +80,7 @@ import {
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
+import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import {
   buildProviderAccessCapabilities,
   subscriptionDependentBots,
@@ -538,10 +539,17 @@ const makeWsRpcLayer = (
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
       const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
-      const resetChangedApiKeySessions = makeApiKeySessionReset(subscriptionAuth, agentController);
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const resetChangedApiKeySessions = makeApiKeySessionReset(
+        subscriptionAuth,
+        agentController,
+        serverSettings.getSettings.pipe(
+          Effect.map(deriveProviderInstanceConfigMap),
+          Effect.orElseSucceed(() => ({})),
+        ),
+      );
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;

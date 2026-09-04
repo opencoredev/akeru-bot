@@ -25,6 +25,8 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
 
+const RETRY_POLL_MS = 5000;
+
 function commandError(result: AtomCommandResult<unknown, unknown>): string {
   if (result._tag !== "Failure") return "The request failed.";
   const error = squashAtomCommandFailure(result);
@@ -89,15 +91,25 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   useEffect(() => {
     if (!flow || flow.completion !== "poll") return;
     let cancelled = false;
+    let pollFailed = false;
     let timer: ReturnType<typeof setTimeout>;
     const check = async () => {
       const result = await poll({ environmentId, input: { loginId: flow.loginId } });
       if (cancelled) return;
-      if (result._tag === "Failure") {
-        setError(commandError(result));
+      if (result._tag !== "Success") {
+        // A dropped request must not end the login; the next check picks up the approval.
+        if (result._tag === "Failure") {
+          pollFailed = true;
+          setError(commandError(result));
+        }
+        timer = setTimeout(check, RETRY_POLL_MS);
         return;
       }
-      if (result._tag !== "Success" || settle(result.value)) return;
+      if (pollFailed) {
+        pollFailed = false;
+        setError(null);
+      }
+      if (settle(result.value)) return;
       if (result.value.status === "pending")
         timer = setTimeout(check, Math.max(1000, result.value.nextPollMs));
     };

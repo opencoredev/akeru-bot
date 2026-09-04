@@ -8,6 +8,7 @@ import {
   mergeSubscriptionInstanceEnvironment,
   subscriptionRequestUrl,
   subscriptionRuntimeEnvironment,
+  withExplicitEnvironmentKeys,
 } from "./runtime.ts";
 
 const directories: string[] = [];
@@ -48,6 +49,22 @@ describe("subscription runtime credentials", () => {
       expect(JSON.stringify(environment)).not.toContain("provider-wide-key");
     },
   );
+
+  it("keeps a home-isolated Claude instance on its own account", async () => {
+    const { secretsDir, auth } = fixture();
+    const login = await auth.startLogin("anthropic", { authMode: "api-key" });
+    await auth.completeLogin(login.loginId, "provider-wide-key");
+    const merged = mergeSubscriptionInstanceEnvironment(undefined, {
+      CLAUDE_CODE_OAUTH_TOKEN: "native-oauth",
+    });
+    const environment = withExplicitEnvironmentKeys(
+      { ...merged, CLAUDE_CONFIG_DIR: "/instance/claude" },
+      ["CLAUDE_CONFIG_DIR"],
+    );
+    expect(subscriptionRuntimeEnvironment(secretsDir, "anthropic", environment)).toBe(environment);
+    expect(environment.CLAUDE_CODE_OAUTH_TOKEN).toBe("native-oauth");
+    expect(environment.ANTHROPIC_API_KEY).toBeUndefined();
+  });
 
   it("replaces an inherited Grok key when only unrelated instance variables are explicit", async () => {
     const { secretsDir, auth } = fixture();
