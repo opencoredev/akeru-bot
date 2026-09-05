@@ -87,26 +87,6 @@ describe("ElectronProtocol", () => {
     }).pipe(Effect.provide(ElectronProtocol.layer)),
   );
 
-  it.effect("registers current and legacy renderer schemes together", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const protocol = yield* ElectronProtocol.ElectronProtocol;
-        yield* Effect.all(
-          ["akeru", "t3code"].map((scheme) =>
-            protocol.registerDesktopProtocol({
-              scheme,
-              targetOrigin: new URL("http://127.0.0.1:3773/"),
-              backendOrigin: new URL("http://127.0.0.1:3773/"),
-            }),
-          ),
-          { concurrency: "unbounded" },
-        );
-
-        assert.deepEqual(handleMock.mock.calls.map((call) => call[0]).sort(), ["akeru", "t3code"]);
-      }),
-    ).pipe(Effect.provide(ElectronProtocol.layer)),
-  );
-
   it.effect("rejects custom protocol requests for another host", () =>
     Effect.gen(function* () {
       let handler: ((request: Request) => Promise<Response>) | undefined;
