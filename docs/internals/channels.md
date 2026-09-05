@@ -61,4 +61,6 @@ Replies must match the current binding's project. Reassigning a channel to anoth
 
 The server requires the environment administrator scope, `access:write`, for every credential and assignment command. UI checks are presentation only. Secrets must not enter settings responses, orchestration events, logs, analytics, diagnostics, URLs, or client state.
 
-The selected project is explicit. Inbound work must never choose the first project in an environment. If the selected project is unavailable, the channel blocks and reports a repair state.
+`channel.attach` accepts an optional project ID. The bot-only setup omits it, so the server selects an available project from the bot's most recently updated unarchived thread. If none exists, it selects the project with the most recent environment activity. Attachment fails when no live project exists. Direct `channel.connect` requests still require an explicit project ID.
+
+The resolved project is persisted on the binding. Inbound work uses that assignment instead of resolving a new default for each message. If the assigned project becomes unavailable, the channel blocks and reports a repair state.

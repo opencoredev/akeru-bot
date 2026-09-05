@@ -1,23 +1,24 @@
 # Bot channels
 
-A channel gives one named bot an external messaging line. Messages enter the bot's normal Akeru thread. The bot uses its selected project, model, tools, memory, permission mode, usage limits, and delegation rules.
+A channel gives one named bot an external messaging line. Messages enter the bot's normal Akeru conversation. The bot uses its workspace, model, tools, memory, permission mode, usage limits, and delegation rules.
 
-Akeru does not create a separate messaging session. The Akeru thread is the durable conversation, and each external request starts a turn.
+Akeru does not create a separate messaging session. The Akeru conversation keeps the work history, and each external request starts a turn.
 
 ## Manage connections
 
 Open **Settings > Bot channels** with an environment administrator connection.
 
-1. Select a provider.
-2. Save the provider credentials under a connection name.
-3. Select the project that the bot will use.
-4. Assign the connection to one bot.
+1. Select a service and open its setup form.
+2. Enter the credentials and a connection name.
+3. Select the bot that answers and click **Connect**.
 
-Select a project before assigning a new connection. Akeru does not choose the first project for you.
+Select **Connect later** to save a connection without assigning a bot. You can assign it from the saved connection card.
+
+Akeru chooses the workspace when you connect the bot. It prefers the bot's most recently active conversation in an available workspace. If the bot has none, Akeru uses the workspace with the most recent activity. The environment needs at least one workspace.
 
 You can reconnect, disconnect, unassign, or delete a connection. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails during server restart shows a repair state instead of appearing connected.
 
-After you move a connection to another project, replies from its earlier project cannot use the new assignment.
+If reassignment changes the workspace, replies from the earlier workspace cannot use the new assignment.
 
 Credentials stay on the environment server. Web, desktop, and mobile receive safe connection and delivery state only. A standard remote client cannot change channel credentials or assignment.
 
@@ -55,11 +56,11 @@ Delegated bots do not send separate external replies. The connected bot returns 
 
 ## Telegram
 
-Create a bot with BotFather and copy its token. Save the token in the Telegram connection form, select a project, and assign the connection to a bot. Send a direct message to the Telegram bot to test it.
+Create a bot with BotFather and copy its token. Enter the token in the Telegram connection form, select a bot, and click **Connect**. Send a direct message to the Telegram bot to test it.
 
 ## iMessage
 
-Akeru uses Photon for iMessage. You can use Photon hosted credentials or a self-hosted Photon server. Save the connection, select a project, and assign it to a bot. Send a direct iMessage to the connected line.
+Akeru uses Photon for iMessage. You can use Photon hosted credentials or a self-hosted Photon server. Enter the connection details, select a bot, and click **Connect**. Send a direct iMessage to the connected line.
 
 External iMessage group chats are not supported.
 
@@ -78,7 +79,7 @@ Create a Slack app for one workspace.
 3. Install the app and copy the bot token.
 4. Subscribe the app to direct-message and mention events.
 5. Save the bot token and app-level token in Akeru.
-6. Select a project and assign the connection to a bot.
+6. Select a bot and click **Connect**.
 
 Socket Mode uses an outbound connection from the environment server. It works when Akeru runs locally, over SSH, or through Tailscale without a public webhook URL.
 
@@ -88,7 +89,7 @@ The Slack channel connection is separate from the Slack plugin. The connection r
 
 Create a Discord application and bot. Enable Message Content Intent, then copy the application ID, public key, and bot token. Invite the bot with permission to view channels, send messages, read message history, create or use threads, and add reactions.
 
-Save the credentials in Akeru, select a project, and assign the connection to a bot. Direct messages reach the bot. A direct mention in a server starts work in the linked Discord conversation.
+Enter the credentials in Akeru, select a bot, and click **Connect**. Direct messages reach the bot. A direct mention in a server starts work in the linked Discord conversation.
 
 ## Access warning
 

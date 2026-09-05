@@ -5,7 +5,7 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import { ExternalLinkIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { cn } from "../../lib/utils";
 import { botEnvironment } from "../../state/bots";
@@ -110,6 +110,12 @@ export function ChannelSetupDialog({
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const savedConnection = useRef<{
+    connectionId: ChannelConnectionId;
+    name: string;
+    mode: typeof mode;
+    values: typeof values;
+  } | null>(null);
   const value = (key: string) => values[key] ?? "";
   const setValue = (key: string, next: string) =>
     setValues((current) => ({ ...current, [key]: next }));
@@ -119,6 +125,7 @@ export function ChannelSetupDialog({
   const inviteUrl = provider === "discord" ? discordInviteUrl(value("applicationId")) : null;
 
   const reset = () => {
+    savedConnection.current = null;
     setStep(0);
     setMode("hosted");
     setName("");
@@ -132,22 +139,30 @@ export function ChannelSetupDialog({
   const save = async () => {
     if (busy || !name.trim() || !credentialsComplete) return;
     setBusy(true);
-    const random = crypto.getRandomValues(new Uint32Array(4));
-    const connectionId = ChannelConnectionId.make(`channel-${[...random].join("-")}`);
-    const result = await saveConnection({
-      environmentId,
-      input: buildChannelConnectionSaveInput({
-        connectionId,
-        name: name.trim(),
-        provider,
-        mode,
-        values,
-      }),
-    });
-    if (result._tag === "Failure") {
-      setBusy(false);
-      toastManager.add({ type: "error", title: "Could not save channel" });
-      return;
+    setConnectError(null);
+    const saved = savedConnection.current;
+    const connectionId =
+      saved?.connectionId ??
+      ChannelConnectionId.make(
+        `channel-${[...crypto.getRandomValues(new Uint32Array(4))].join("-")}`,
+      );
+    if (!saved || saved.name !== name.trim() || saved.mode !== mode || saved.values !== values) {
+      const result = await saveConnection({
+        environmentId,
+        input: buildChannelConnectionSaveInput({
+          connectionId,
+          name: name.trim(),
+          provider,
+          mode,
+          values,
+        }),
+      });
+      if (result._tag === "Failure") {
+        setBusy(false);
+        toastManager.add({ type: "error", title: "Could not save channel" });
+        return;
+      }
+      savedConnection.current = { connectionId, name: name.trim(), mode, values };
     }
     if (botId !== CONNECT_LATER) {
       const attached = await attach({
@@ -158,7 +173,7 @@ export function ChannelSetupDialog({
         setBusy(false);
         onSaved(connectionId);
         setConnectError(
-          `${meta.label} rejected these credentials. The connection was saved. Check the tokens in the ${meta.label} console, then connect ${bots.find((bot) => bot.id === botId)?.name ?? "the bot"} from the card.`,
+          `Connection saved. Could not connect ${bots.find((bot) => bot.id === botId)?.name ?? "the bot"}. Try again or check the connection settings.`,
         );
         return;
       }
@@ -173,6 +188,7 @@ export function ChannelSetupDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
+        if (busy) return;
         onOpenChange(next);
         if (!next) reset();
       }}
