@@ -671,7 +671,7 @@ export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 export const ChannelConnectionProfile = Schema.Struct({
   id: ChannelConnectionId,
   provider: ChannelProvider,
-  adapter: Schema.Literals(["telegram", "photon", "whatsapp"]),
+  adapter: Schema.Literals(["telegram", "photon", "whatsapp", "slack", "discord"]),
   name: TrimmedNonEmptyString,
   externalIdentity: Schema.optional(TrimmedNonEmptyString),
   managementUrl: Schema.optional(TrimmedNonEmptyString),

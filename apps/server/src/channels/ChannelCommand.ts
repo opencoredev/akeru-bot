@@ -4,6 +4,7 @@ import {
   connectChannel,
   attachChannelConnection,
   deleteChannelConnection,
+  detachChannelConnection,
   disconnectChannel,
   reconnectChannel,
   saveChannelConnection,
@@ -36,12 +37,15 @@ export async function executeChannelCommand(
                 dependencies,
                 command.botId,
                 command.connectionId,
+                command.projectId,
                 command.provider,
               )
             : command.type === "channel.disconnect"
               ? await disconnectChannel(dependencies, command.botId, command.provider)
-              : command.type === "channel.reconnect"
-                ? await reconnectChannel(dependencies, command.botId, command.provider)
-                : await sendChannelMessage(dependencies, command);
+              : command.type === "channel.detach"
+                ? await detachChannelConnection(dependencies, command.botId, command.provider)
+                : command.type === "channel.reconnect"
+                  ? await reconnectChannel(dependencies, command.botId, command.provider)
+                  : await sendChannelMessage(dependencies, command);
   return { sequence };
 }

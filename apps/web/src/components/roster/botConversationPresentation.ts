@@ -1,19 +1,17 @@
+import {
+  channelOriginLabel as sharedChannelOriginLabel,
+  channelProviderLabel as sharedChannelProviderLabel,
+} from "@t3tools/client-runtime/channel-presentation";
 import type { ChannelMessageOrigin, OrchestrationMessage } from "@t3tools/contracts";
 import type { RosterPresence } from "./roster.logic";
 
-export function channelProviderLabel(
-  provider: ChannelMessageOrigin["provider"] | "whatsapp",
-): string {
-  if (provider === "imessage") return "iMessage";
-  if (provider === "whatsapp") return "WhatsApp";
-  return "Telegram";
-}
+export const channelProviderLabel = sharedChannelProviderLabel;
 
-export function channelOriginLabel(origin: ChannelMessageOrigin): string {
-  const provider = channelProviderLabel(origin.provider);
-  return origin.provider === "imessage" && origin.externalSenderId
-    ? `${provider} · ${origin.externalSenderId}`
-    : provider;
+export function channelOriginLabel(
+  origin: ChannelMessageOrigin,
+  senderDisplayName?: string | null,
+): string {
+  return sharedChannelOriginLabel(origin, senderDisplayName);
 }
 
 export function channelOriginForAssistantMessage(

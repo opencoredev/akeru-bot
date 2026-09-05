@@ -1,5 +1,6 @@
 import {
   AkeruDelegationRecord,
+  AuthSessionId,
   CheckpointRef,
   EventId,
   MessageId,
@@ -415,6 +416,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               id: asMessageId("message-1"),
               role: "assistant",
               text: "hello from projection",
+              authorPersonId: AuthSessionId.make("person-1"),
+              authorDisplayName: "Leo",
               turnId: asTurnId("turn-1"),
               respondingBotId: null,
               reactions: [],
