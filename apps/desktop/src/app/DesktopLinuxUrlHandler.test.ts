@@ -107,7 +107,7 @@ describe("DesktopLinuxUrlHandler", () => {
     const entry = DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
       displayName: "Akeru Bot (Dev)",
       execTarget: '/home/al ice/Apps/T3 "100%" $HOME\\x.AppImage',
-      schemes: ["akeru", "t3code"],
+      schemes: ["akeru"],
     });
 
     assert.include(entry, "[Desktop Entry]");
@@ -122,7 +122,6 @@ describe("DesktopLinuxUrlHandler", () => {
     assert.include(entry, "NoDisplay=true");
     assert.notInclude(entry, "StartupWMClass=");
     assert.include(entry, "MimeType=x-scheme-handler/akeru;");
-    assert.include(entry, "x-scheme-handler/t3code;");
   });
 
   it("carries structured context on registration errors", () => {
@@ -169,15 +168,10 @@ describe("DesktopLinuxUrlHandler", () => {
         'Exec="/home/alice/Applications/T3-Code.AppImage" %U',
       );
       assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/akeru;");
-      assert.include(recorded.files[0]?.content, "x-scheme-handler/t3code;");
       assert.deepEqual(recorded.commands, [
         {
           command: "xdg-mime",
           args: ["default", "akeru-url-handler.desktop", "x-scheme-handler/akeru"],
-        },
-        {
-          command: "xdg-mime",
-          args: ["default", "akeru-url-handler.desktop", "x-scheme-handler/t3code"],
         },
       ]);
     });

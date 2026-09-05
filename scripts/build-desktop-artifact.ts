@@ -1865,7 +1865,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev"],
         },
       ],
       // Unsigned builds opt into identity "-" so electron-builder replaces
@@ -1919,7 +1919,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev"],
         },
       ],
       desktop: {
@@ -1936,6 +1936,15 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // installed file topology. The optimization is in the payload shape, not
     // in trading update bandwidth for install speed.
     buildConfig.nsis = { differentialPackage: true };
+    // electron-builder writes HKCU URL-protocol registry entries from this
+    // list, so the OS hands akeru:// activations to this install instead of
+    // whatever app (for example an old T3 build) registered a scheme earlier.
+    buildConfig.protocols = [
+      {
+        name: "Akeru Bot",
+        schemes: ["akeru", "akeru-dev"],
+      },
+    ];
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
