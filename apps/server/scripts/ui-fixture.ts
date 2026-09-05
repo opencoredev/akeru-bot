@@ -141,14 +141,17 @@ export const runUiFixture = Effect.fn("runUiFixture")(function* (
   yield* fs.makeDirectory(stateDir, { recursive: true });
   const result = yield* Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    // Migrating first also repairs a database left behind by a failed run.
-    yield* runMigrations();
+    // Refuse protected state before migrations or backups touch the database.
+    // A table missing from a partially migrated database counts as empty.
     for (const table of [
       "orchestration_events",
       "auth_sessions",
       "auth_pairing_links",
       "provider_session_runtime",
     ]) {
+      const present = yield* sql<{ count: number }>`SELECT COUNT(*) AS count
+        FROM sqlite_master WHERE type = 'table' AND name = ${table}`;
+      if (Number(present[0]?.count) === 0) continue;
       const rows = yield* sql.unsafe<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table}`)
         .unprepared;
       if (Number(rows[0]?.count) !== 0) {
@@ -158,6 +161,8 @@ export const runUiFixture = Effect.fn("runUiFixture")(function* (
         });
       }
     }
+    // Migrating also repairs a database left behind by an interrupted run.
+    yield* runMigrations();
     const backup = databaseExists ? yield* backupSqliteState(databasePath) : null;
     yield* sql.withTransaction(seedProjections(scenario, path.join(baseDir, "workspace")));
     return { database: databasePath, backup, scenario, kind: "projection-only" };
