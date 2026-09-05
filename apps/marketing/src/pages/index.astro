@@ -23,31 +23,52 @@ const bots = [
       <path d="M20 5V19C20 20.657 16.418 22 12 22C7.582 22 4 20.657 4 19V5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />`,
   },
   {
-    title: "Open it from any browser",
-    body: "The desktop app or a browser on your own network. Same chats either way.",
-    icon: `<path d="M20.5 3H2.5V21H20.5V3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
-      <path d="M2.5 9H20.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
-      <path d="M5.5 6H6.5M8 6H9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`,
+    title: "Its own instructions",
+    body: "Write a profile for each bot. The bot follows it in every chat.",
+    icon: `<path d="M15.5 7H8.5M12.499 11H8.499" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
+      <path d="M20 22H6C4.895 22 4 21.105 4 20M4 20C4 18.895 4.895 18 6 18H20V2H6C4.895 2 4 2.895 4 4V20Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`,
   },
 ];
 
+const steps = [
+  {
+    number: "1",
+    title: "Connect a subscription",
+    body: "Sign in with Claude, Codex, Grok, Kimi For Coding, or OpenCode. Akeru Bot adds no account of its own.",
+  },
+  {
+    number: "2",
+    title: "Create a bot",
+    body: "Name it, pick a provider, and choose the tools it can reach.",
+  },
+  {
+    number: "3",
+    title: "Hand it work",
+    body: "Chat from the desktop app, any browser on your network, or your phone. Bots keep working while you are away.",
+  },
+];
+
+
 const demos = [
   {
-    title: "Text it on iMessage",
-    body: "Add Akeru to a group chat and have your bot send you messages.",
+    title: "Text your bot on iMessage",
+    body: "Add Akeru to a group chat and your bot answers there like any other contact.",
     video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0pjOXsCaF9MvsGzD4u1Sr2o8A07X3mnNBZOfE",
+    poster: "/demo-imessage-poster.webp",
     label: "Akeru Bot responding in an iMessage conversation",
   },
   {
     title: "Hand off browser work",
     body: "A bot can manage a cloud browser and finish the work you hand off.",
     video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0gmR7JKHqJZ0fozh9cC7SvGNsk42WyFE5TDeI",
+    poster: "/demo-browser-poster.webp",
     label: "An Akeru Bot using a managed browser to finish bot work",
   },
   {
     title: "Talk instead of typing",
-    body: "Voice 1:1 with it when you don't want to type.",
+    body: "Start a voice call with your bot when you don't want to type.",
     video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0NaYbDRPrp1SNGyXcrB2LHODWvh0g5fREJQIm",
+    poster: "/demo-voice-poster.webp",
     label: "Starting a one-to-one voice call with an Akeru Bot",
   },
 ];
@@ -82,17 +103,17 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   <!-- ── Hero ─────────────────────────────────────────────────── -->
   <section class="hero">
     <div class="hero-copy">
-      <h1 class="hero-title">Meet Akeru Bot</h1>
+      <h1 class="hero-title">AI teammates that run on your machine</h1>
       <p class="hero-sub">
-        Each bot keeps its own tools and its own memory. Runs on your Claude, Codex, or Grok
-        subscription, on your machine or a cloud sandbox.
+        Akeru Bot gives each bot its own tools, instructions, and memory, and works with the
+        Claude, Codex, Grok, Kimi, or OpenCode subscription you already pay for.
       </p>
       <div class="hero-actions">
-        <a id="download-btn" class="btn-primary" data-os="mac" aria-disabled="true">
+        <a id="download-btn" class="btn-primary" href={RELEASES_URL}>
           <svg class="os-mark" data-os="mac" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={APPLE_MARK} />
           <svg class="os-mark" data-os="win" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={WINDOWS_MARK} />
           <svg class="os-mark" data-os="linux" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={LINUX_MARK} />
-          <span id="download-label">Download for macOS</span>
+          <span id="download-label">All downloads</span>
         </a>
         <a class="btn-ghost" href={docsUrl("install")} target="_blank" rel="noopener noreferrer">
           <svg width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -102,6 +123,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           <span>Read the docs</span>
         </a>
       </div>
+      <p class="hero-note">Free and MIT licensed. No Akeru account required.</p>
     </div>
     <div class="hero-shot">
       <img
@@ -131,6 +153,26 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     </div>
   </section>
 
+  <!-- ── How it works ─────────────────────────────────────────── -->
+  <section id="how-it-works" class="how">
+    <h2 class="section-title">Up and running in three steps</h2>
+    <p class="how-sub">
+      Your environment owns the chats, bot profiles, and memory. Run the environment on your
+      machine or connect it to a cloud sandbox that you control.
+    </p>
+    <ol class="steps">
+      {
+        steps.map((step) => (
+          <li class="step">
+            <span class="step-number" aria-hidden="true">{step.number}</span>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
   <!-- ── Demos ────────────────────────────────────────────────── -->
   <section id="demos" class="demos">
     <h2 class="section-title">See it work</h2>
@@ -145,11 +187,12 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
             <video
               data-demo-video
               data-src={demo.video}
+              poster={demo.poster}
               aria-label={demo.label}
               muted
               loop
               playsinline
-              preload="auto"
+              preload="metadata"
             />
           </div>
         </div>
@@ -194,7 +237,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   import {
     detectDownloadTarget,
     fetchLatestRelease,
-    RELEASES_URL,
     requiresUnsignedInstall,
     resolveAssetDownload,
   } from "../lib/releases";
@@ -210,6 +252,8 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
     // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
     // Intel build. Do NOT add arch detection here.
+    // The markup ships with href={RELEASES_URL}, so the button works before this
+    // script runs and when no platform is detected.
     const platform = detectDownloadTarget(navigator.userAgent);
     if (platform) {
       if (label) label.textContent = platform.label;
@@ -217,10 +261,8 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
         button.dataset.os = platform.os;
         button.dataset.asset = platform.assetSuffix;
       }
-    } else if (button && label) {
+    } else if (label) {
       label.textContent = "All downloads";
-      button.href = RELEASES_URL;
-      button.removeAttribute("aria-disabled");
     }
 
     const release = fetchLatestRelease();
@@ -356,6 +398,12 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     padding-top: 4px;
   }
 
+  .hero-note {
+    font-size: 14px;
+    line-height: 18px;
+    color: var(--color-muted-foreground);
+  }
+
   .hero-shot {
     width: 100%;
     aspect-ratio: 8 / 5;
@@ -485,6 +533,71 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     color: var(--color-muted-foreground);
   }
 
+  /* ── How it works ── */
+
+  .how {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-top: 1px solid var(--color-border);
+    padding: 104px 64px 112px;
+  }
+
+  .how-sub {
+    max-width: 620px;
+    margin-top: 18px;
+    font-size: 16px;
+    line-height: 26px;
+    text-align: center;
+    color: var(--color-muted-foreground);
+  }
+
+  .steps {
+    display: flex;
+    gap: 24px;
+    width: 100%;
+    margin-top: 56px;
+    list-style: none;
+  }
+
+  .step {
+    flex: 1 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 28px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-card);
+  }
+
+  .step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin-bottom: 6px;
+    border-radius: 50%;
+    background: var(--color-primary-surface);
+    color: var(--color-primary-foreground);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .step h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 24px;
+  }
+
+  .step p {
+    font-size: 14px;
+    line-height: 23px;
+    color: var(--color-muted-foreground);
+  }
+
   /* ── Demos ── */
 
   .demos {
@@ -562,7 +675,10 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     border: 1px solid var(--color-border);
     border-radius: 20px;
     background:
-      linear-gradient(rgba(10, 10, 10, 0.78), rgba(10, 10, 10, 0.78)),
+      linear-gradient(
+        color-mix(in srgb, var(--color-background) 78%, transparent),
+        color-mix(in srgb, var(--color-background) 78%, transparent)
+      ),
       url("/download-glow.webp") center / cover no-repeat,
       var(--color-background);
   }
@@ -585,7 +701,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   .download-head p {
     font-size: 16px;
     line-height: 26px;
-    color: rgba(245, 245, 245, 0.72);
+    color: color-mix(in srgb, var(--color-foreground) 72%, transparent);
   }
 
   .platform-cards {
@@ -603,7 +719,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     padding: 20px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    background: rgba(15, 15, 15, 0.8);
+    background: color-mix(in srgb, var(--color-card) 80%, transparent);
     transition:
       border-color 0.15s ease,
       background-color 0.15s ease;
@@ -611,7 +727,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 
   .platform-card:hover {
     border-color: var(--color-input);
-    background: rgba(20, 20, 20, 0.92);
+    background: color-mix(in srgb, var(--color-popover) 92%, transparent);
   }
 
   .platform-card-top {
@@ -711,6 +827,21 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     .triad-cell + .triad-cell {
       border-left: 0;
       border-top: 1px solid var(--color-border);
+    }
+
+    .how {
+      padding: 64px 24px;
+    }
+
+    .how-sub {
+      font-size: 15px;
+      line-height: 24px;
+    }
+
+    .steps {
+      flex-direction: column;
+      margin-top: 32px;
+      gap: 12px;
     }
 
     .demos {
