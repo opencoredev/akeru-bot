@@ -32,7 +32,6 @@ const watchedDirectories = [
 ];
 const forcedShutdownTimeoutMs = 1_500;
 const restartDebounceMs = 120;
-const childTreeGracePeriodMs = 1_200;
 const remoteDebuggingPort = process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone dev script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
@@ -59,22 +58,35 @@ let restartQueue = Promise.resolve();
 const expectedExits = new WeakSet();
 const watchers = [];
 
-function killChildTreeByPid(pid, signal) {
-  if (hostPlatform === "win32" || typeof pid !== "number") {
+const ownedProcessGroups = new Map();
+
+function signalApp(app, signal) {
+  if (hostPlatform === "win32") {
+    app.kill(signal);
     return;
   }
 
-  NodeChildProcess.spawnSync("pkill", [`-${signal}`, "-P", String(pid)], { stdio: "ignore" });
+  const pid = ownedProcessGroups.get(app);
+  if (pid === undefined) {
+    return;
+  }
+
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    if (error.code !== "ESRCH") {
+      throw error;
+    }
+    ownedProcessGroups.delete(app);
+  }
 }
 
-function cleanupStaleDevApps() {
-  if (hostPlatform === "win32") {
-    return;
+function releaseApp(app) {
+  // The group can outlive its leader. Clean it before releasing ownership.
+  if (hostPlatform !== "win32") {
+    signalApp(app, "SIGKILL");
+    ownedProcessGroups.delete(app);
   }
-
-  NodeChildProcess.spawnSync("pkill", ["-f", "--", `--t3code-dev-root=${desktopDir}`], {
-    stdio: "ignore",
-  });
 }
 
 function startApp() {
@@ -83,7 +95,7 @@ function startApp() {
   }
 
   const electronArgs = remoteDebuggingPort
-    ? [`--remote-debugging-port=${remoteDebuggingPort}`]
+    ? ["--remote-debugging-address=127.0.0.1", `--remote-debugging-port=${remoteDebuggingPort}`]
     : [];
   const launchArgs = devProtocolClient
     ? electronArgs
@@ -93,11 +105,16 @@ function startApp() {
     cwd: desktopDir,
     env: childEnv,
     stdio: "inherit",
+    detached: hostPlatform !== "win32",
   });
 
+  if (hostPlatform !== "win32" && Number.isInteger(app.pid) && app.pid > 0) {
+    ownedProcessGroups.set(app, app.pid);
+  }
   currentApp = app;
 
   app.once("error", () => {
+    releaseApp(app);
     if (currentApp === app) {
       currentApp = null;
     }
@@ -108,6 +125,7 @@ function startApp() {
   });
 
   app.once("exit", (code, signal) => {
+    releaseApp(app);
     if (currentApp === app) {
       currentApp = null;
     }
@@ -137,24 +155,19 @@ async function stopApp() {
       }
 
       settled = true;
+      clearTimeout(forceTimer);
+      app.removeListener("exit", finish);
       resolve();
     };
 
-    app.once("exit", finish);
-    app.kill("SIGTERM");
-    killChildTreeByPid(app.pid, "TERM");
-    cleanupStaleDevApps();
-
-    setTimeout(() => {
-      if (settled) {
-        return;
-      }
-
-      app.kill("SIGKILL");
-      killChildTreeByPid(app.pid, "KILL");
-      cleanupStaleDevApps();
+    const forceTimer = setTimeout(() => {
+      signalApp(app, "SIGKILL");
+      ownedProcessGroups.delete(app);
       finish();
-    }, forcedShutdownTimeoutMs).unref();
+    }, forcedShutdownTimeoutMs);
+
+    app.once("exit", finish);
+    signalApp(app, "SIGTERM");
   });
 }
 
@@ -198,17 +211,6 @@ function startWatchers() {
   }
 }
 
-function killChildTree(signal) {
-  if (hostPlatform === "win32") {
-    return;
-  }
-
-  // Kill direct children as a final fallback in case normal shutdown leaves stragglers.
-  NodeChildProcess.spawnSync("pkill", [`-${signal}`, "-P", String(process.pid)], {
-    stdio: "ignore",
-  });
-}
-
 async function shutdown(exitCode) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -222,18 +224,13 @@ async function shutdown(exitCode) {
     watcher.close();
   }
 
+  await restartQueue.catch(() => undefined);
   await stopApp();
-  killChildTree("TERM");
-  await new Promise((resolve) => {
-    setTimeout(resolve, childTreeGracePeriodMs);
-  });
-  killChildTree("KILL");
 
   process.exit(exitCode);
 }
 
 startWatchers();
-cleanupStaleDevApps();
 startApp();
 
 process.once("SIGINT", () => {
