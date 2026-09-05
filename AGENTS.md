@@ -88,7 +88,7 @@ The most common defect in this repo is a change that works on the path you teste
 
 ## Dev servers
 
-- `vp i` installs. Worktrees get this from the t3.json setup script; if module resolution looks broken, it probably did not run.
+- `vp i` installs. Worktree setup installs dependencies, copies optional `.env` configuration without sharing later edits, and warms the web cache. It preserves existing local `.env` files and refuses legacy symlinks. If module resolution is broken, check setup first.
 - `vp run dev` starts server and web. In a worktree, state defaults to that worktree's gitignored `.akeru`, which deliberately outranks an ambient `T3CODE_HOME` or `AKERU_HOME` so you cannot land on shared state by accident. An explicit `--home-dir` still wins.
 - Ports derive from the worktree path and are stable across restarts, but read the real ones from the `[dev-runner]` line since occupied ports shift.
 - Sharing over the tailnet is three steps: run `vp run dev --share` in the background, wait for the `pairingUrl:` line in its output, paste that full URL (token included) in your reply. Do not wire up `tailscale serve` by hand for this, and do not open the URL yourself.
@@ -97,15 +97,16 @@ The most common defect in this repo is a change that works on the path you teste
 
 ## Test data
 
-An empty database is a bad test. Seed your worktree's `.akeru` with a copy of real data instead of pointing at live state:
+Choose meaningful test data. Use deterministic visual fixtures for repeatable UI checks; see [SQLite fixtures](.agents/skills/test-t3-app/references/sqlite-fixtures.md). For a data-specific defect, seed your worktree's `.akeru` with a safe snapshot instead of pointing at live state:
 
 - Copy from `~/.akeru/userdata` or `~/.akeru/dev`. Worktree state lives at `<worktree>/.akeru/userdata`.
 - Snapshot the database with `VACUUM INTO`, which is safe even while a server has the source open and yields one consistent file:
 
   ```bash
-  mkdir -p .akeru/userdata
-  rm -f .akeru/userdata/state.sqlite*  # VACUUM INTO refuses to overwrite
-  bun -e "new (require('bun:sqlite').Database)(process.env.HOME + '/.akeru/userdata/state.sqlite', { readonly: true }).run(\"VACUUM INTO '.akeru/userdata/state.sqlite'\")"
+  SNAPSHOT_HOME=$(mktemp -d /tmp/akeru-snapshot.XXXXXX)
+  mkdir -p "$SNAPSHOT_HOME/userdata"
+  SNAPSHOT_HOME="$SNAPSHOT_HOME" node -e "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(process.env.HOME + '/.akeru/userdata/state.sqlite', { readOnly: true }); db.prepare('VACUUM INTO ?').run(process.env.SNAPSHOT_HOME + '/userdata/state.sqlite'); db.close();"
+  # Start the test server with --home-dir "$SNAPSHOT_HOME".
   ```
 
   A plain `cp` is only safe when no server has the source open, and must bring the `-wal` and `-shm` siblings along. A live file copy is a corrupt copy.
@@ -119,7 +120,7 @@ An empty database is a bad test. Seed your worktree's `.akeru` with a copy of re
 - **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
 - Backend behavior changes ship with focused tests for that behavior.
 - The server is event-sourced and its async flows emit typed receipts. Wait on receipts and worker drains, never on sleeps or polling. A test that needs a timeout to pass is wrong.
-- Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
+- Implementation requests include focused verification in isolated local clients. Follow [the verification policy](docs/internals/verification.md) for authorization, coverage, evidence, and environment lifetime. Use `test-t3-app` for web or desktop and `test-t3-mobile` for native mobile. The primary agent performs the integrated pass; subagents do not launch dev servers.
 
 ## Pull requests
 
@@ -164,5 +165,5 @@ Full glossary with file links: `docs/internals/glossary.md`
 
 ## Additional tips
 
-- Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
+- Ask before controlling the user's live desktop session or physical devices. Isolated local verification follows the policy above.
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.
