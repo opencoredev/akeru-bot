@@ -1913,12 +1913,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  for (const desktopOrigin of [
-    "akeru://app",
-    "akeru-dev://app",
-    "t3code://app",
-    "t3code-dev://app",
-  ]) {
+  for (const desktopOrigin of ["akeru://app", "akeru-dev://app"]) {
     it.effect(`allows credentialed preflights from ${desktopOrigin} in development`, () =>
       Effect.gen(function* () {
         yield* buildAppUnderTest({

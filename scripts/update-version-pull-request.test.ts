@@ -36,6 +36,21 @@ describe("version pull request automation", () => {
         'Plugin "github:version-request" failed:\nA pull request already exists',
       ),
     ).toBe(true);
+    // Tegami's boxed CLI output wraps the message across bordered lines.
+    expect(
+      isRecoverableVersionRequestFailure(
+        [
+          "◇  Error ──────────────────────────────╮",
+          "│                                      │",
+          '│  Plugin "github:version-request" failed during applyCliDraft:  │',
+          '│  Failed to create the version pull request: {"message":"Validation  │',
+          '│  Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A    │',
+          "│  pull request already exists for      │",
+          "│  opencoredev:tegami/version-packages.  │",
+          "├──────────────────────────────────────╯",
+        ].join("\n"),
+      ),
+    ).toBe(true);
     expect(
       isRecoverableVersionRequestFailure(
         'Plugin "github:version-request" failed: GitHub Actions is not permitted to create or approve pull requests',

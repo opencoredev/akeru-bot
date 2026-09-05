@@ -87,7 +87,9 @@ export function renderVersionPullRequestBody(
 }
 
 export function isRecoverableVersionRequestFailure(output: string): boolean {
-  const normalized = output.replace(/\s+/gu, " ");
+  // Tegami wraps errors in a box whose border characters split words across
+  // lines, so strip the decoration before collapsing whitespace.
+  const normalized = output.replace(/[│├┤╮╯╭╰─◇└┌]/gu, " ").replace(/\s+/gu, " ");
   return (
     normalized.includes('Plugin "github:version-request" failed') &&
     (normalized.includes("A pull request already exists") ||
