@@ -188,7 +188,7 @@ const isProcessAlive = (pid: number): boolean => {
  * wal_checkpoint(TRUNCATE) reports busy while another connection holds the
  * WAL. A leftover -shm alone is not a signal — read-only connections cannot
  * clean it up on close. */
-const ensureNotInUse = Effect.fn("ensureDevDbNotInUse")(function* (databasePath: string) {
+export const ensureNotInUse = Effect.fn("ensureDevDbNotInUse")(function* (databasePath: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
