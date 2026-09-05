@@ -1,6 +1,6 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { loadCatalog } from "../../../../../plugins";
+import { loadCatalog, loadDirectoryCatalog, type PluginDefinition } from "../../../../../plugins";
 import {
   findPluginServer,
   isBuiltinMcpServer,
@@ -13,6 +13,16 @@ const catalog = loadCatalog();
 const exa = catalog.find((plugin) => plugin.id === "exa");
 const firecrawl = catalog.find((plugin) => plugin.id === "firecrawl");
 if (!exa || !firecrawl) throw new TypeError("Required catalog plugins are missing.");
+
+const executorDirectory = loadDirectoryCatalog().find((plugin) => plugin.id === "executor");
+if (!executorDirectory || executorDirectory.kind !== "mcp-stdio") {
+  throw new TypeError("Executor is missing its local stdio recipe.");
+}
+const executor = {
+  ...executorDirectory,
+  connection: { type: "local" as const },
+  catalogStatus: "available" as const,
+} satisfies PluginDefinition;
 
 const exaServer: McpServer = {
   id: pluginMcpServerId(exa),
@@ -39,6 +49,31 @@ describe("plugin registry mapping", () => {
       name: "Exa",
       transport: "url",
       url: "https://mcp.exa.ai/mcp",
+    });
+  });
+
+  it("maps local Executor and refreshes its stale recipe before enabling", () => {
+    const existingExecutorServer: McpServer = {
+      id: pluginMcpServerId(executor),
+      name: "Executor",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "executor", "mcp"],
+      enabled: false,
+      createdAt: "2026-08-27T00:00:00.000Z",
+      updatedAt: "2026-08-27T00:00:00.000Z",
+    };
+
+    expect(pluginMcpConfiguration(executor)).toEqual({
+      name: "Executor",
+      transport: "stdio",
+      command: "executor",
+      args: ["mcp"],
+    });
+    expect(planPluginToggle(executor, [existingExecutorServer], true)).toEqual({
+      action: "refresh-and-enable",
+      mcpServerId: existingExecutorServer.id,
+      configuration: pluginMcpConfiguration(executor),
     });
   });
 

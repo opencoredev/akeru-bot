@@ -60,8 +60,11 @@ describe("milestone 13 plugin lifecycle matrix", () => {
       connection: { type: "verification-pending" },
     });
     expect(byId.get("executor")).toMatchObject({
-      transport: { type: "url", url: "https://executor.sh/mcp" },
-      authentication: "oauth",
+      kind: "mcp-stdio",
+      command: "executor",
+      args: ["mcp"],
+      transport: { type: "stdio", command: "executor", args: ["mcp"] },
+      authentication: "none",
       connection: { type: "verification-pending" },
     });
     expect(byId.get("github")).toMatchObject({

@@ -2,30 +2,34 @@
   "schemaVersion": 1,
   "id": "executor",
   "name": "Executor",
-  "description": "Use the integrations configured in your Executor account.",
+  "description": "Use the integrations configured in your local Executor account.",
   "primaryCategory": "Work",
-  "tags": ["integrations", "automation", "hosted"],
-  "capabilities": ["use configured integrations", "run integration tools"],
+  "tags": ["integrations", "automation", "local"],
+  "capabilities": ["use configured integrations", "run local integration tools"],
   "publisher": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "maintainer": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "documentationUrl": "https://executor.sh/docs",
-  "sourceUrl": "https://executor.sh/docs",
-  "license": "Proprietary",
+  "sourceUrl": "https://github.com/UsefulSoftwareCo/executor",
+  "license": "MIT",
   "logo": {
     "provenance": {
       "sourceUrl": "https://executor.sh/favicon-192.png",
       "license": "Executor brand asset"
     }
   },
-  "platforms": ["web", "desktop", "mobile"],
-  "transport": { "type": "url", "url": "https://executor.sh/mcp" },
+  "platforms": ["macos", "windows", "linux"],
+  "transport": { "type": "stdio", "command": "executor", "args": ["mcp"] },
   "connection": {
     "type": "verification-pending",
-    "blocker": "Hosted OAuth is documented, but the full add, use, disable, reconnect, and remove lifecycle still needs current verification."
+    "blocker": "The local Executor CLI recipe is documented, but the full add, use, disable, reconnect, and remove lifecycle still needs current verification."
   },
-  "authentication": "oauth",
+  "authentication": "none",
   "requiredCredentials": [],
-  "setup": ["Wait for the hosted Executor connection lifecycle to pass."],
+  "setup": [
+    "Install the Executor CLI with `npm install -g executor` on Node.js 20 or newer, and keep `executor` on PATH.",
+    "Install and start Executor with `executor install` and `executor web`, then use the local UI to add and configure the integrations you want and complete integration authentication where required.",
+    "The CLI and its configured local service must be available to the Akeru server process when it launches `executor mcp`."
+  ],
   "permissions": [
     {
       "id": "read-integrations",

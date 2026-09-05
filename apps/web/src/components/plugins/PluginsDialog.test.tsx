@@ -252,11 +252,11 @@ describe("Plugins dialog content", () => {
     );
     expect(markup).toContain("By Useful Software Co.");
     expect(markup).toContain("Authentication");
-    expect(markup).toContain("OAuth");
-    expect(markup).toContain("Hosted");
-    expect(markup).toContain("Remote URL");
+    expect(markup).not.toContain("OAuth");
+    expect(markup).toContain("Local");
+    expect(markup).toContain("Local command");
     expect(markup).toContain("Not checked");
-    expect(markup).toContain("web, desktop, mobile");
+    expect(markup).toContain("macos, windows, linux");
     expect(markup).toContain("Submit a payment.");
     expect(markup).toContain("account-wide");
     expect(markup).toContain("Documentation");
