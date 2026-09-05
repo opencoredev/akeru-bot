@@ -196,7 +196,7 @@ describe("DesktopLinuxUrlHandler", () => {
       [
         "[Default Applications]",
         "x-scheme-handler/t3code=akeru-url-handler.desktop",
-        "x-scheme-handler/t3code-dev=akeru-url-handler.desktop;",
+        "x-scheme-handler/t3code-dev=akeru-url-handler.desktop;other.desktop;",
         "x-scheme-handler/akeru=akeru-url-handler.desktop",
         "x-scheme-handler/t3code=t3code-url-handler.desktop",
         "text/html=firefox.desktop",
@@ -207,6 +207,7 @@ describe("DesktopLinuxUrlHandler", () => {
       cleaned,
       [
         "[Default Applications]",
+        "x-scheme-handler/t3code-dev=other.desktop;",
         "x-scheme-handler/akeru=akeru-url-handler.desktop",
         "x-scheme-handler/t3code=t3code-url-handler.desktop",
         "text/html=firefox.desktop",
