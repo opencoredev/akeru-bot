@@ -4,7 +4,11 @@ import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
 import type { FeedbackWorkerEnv } from "../alchemy.run.ts";
-import { makeProductFeedbackEndpoint, type ProductFeedbackRepository } from "./endpoint.ts";
+import {
+  makeProductFeedbackEndpoint,
+  productFeedbackOptionsResponse,
+  type ProductFeedbackRepository,
+} from "./endpoint.ts";
 
 interface FeedbackRow {
   readonly feedback_id: string;
@@ -165,23 +169,23 @@ export default {
     if (url.pathname !== "/v1/feedback") {
       return new Response("Not Found", { status: 404 });
     }
+    if (request.method === "OPTIONS") return productFeedbackOptionsResponse();
     if (!validHmacSecret(env.HMAC_SECRET)) {
       return Response.json(
         { reason: "disabled", message: "Product feedback is not configured." },
-        { status: 503, headers: { "Cache-Control": "no-store" } },
+        {
+          status: 503,
+          headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
+        },
       );
     }
+    // Without Turnstile keys the endpoint still runs, but the suspicious-traffic
+    // threshold becomes a hard network limit instead of a challenge.
     const turnstile = makeTurnstile(env);
-    if (!turnstile) {
-      return Response.json(
-        { reason: "disabled", message: "Product feedback is not configured." },
-        { status: 503, headers: { "Cache-Control": "no-store" } },
-      );
-    }
     return makeProductFeedbackEndpoint({
       repository: makeRepository(env.DB),
       hmacSecret: env.HMAC_SECRET,
-      turnstile,
+      ...(turnstile ? { turnstile } : {}),
     })(request);
   },
   async scheduled(

@@ -43,7 +43,7 @@ export function PrivacySettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("privacy-product-feedback")}
-          description="Send feedback you submit to feedback.akeru.bot. The service keeps submissions for up to 90 days."
+          description="Send feedback you submit to the Akeru feedback service. The service keeps submissions for up to 90 days."
           control={
             <Switch
               checked={settings.productFeedbackEnabled}
