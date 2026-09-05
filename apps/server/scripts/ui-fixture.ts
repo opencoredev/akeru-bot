@@ -141,7 +141,8 @@ export const runUiFixture = Effect.fn("runUiFixture")(function* (
   yield* fs.makeDirectory(stateDir, { recursive: true });
   const result = yield* Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    if (!databaseExists) yield* runMigrations();
+    // Migrating first also repairs a database left behind by a failed run.
+    yield* runMigrations();
     for (const table of [
       "orchestration_events",
       "auth_sessions",
@@ -158,7 +159,6 @@ export const runUiFixture = Effect.fn("runUiFixture")(function* (
       }
     }
     const backup = databaseExists ? yield* backupSqliteState(databasePath) : null;
-    if (databaseExists) yield* runMigrations();
     yield* sql.withTransaction(seedProjections(scenario, path.join(baseDir, "workspace")));
     return { database: databasePath, backup, scenario, kind: "projection-only" };
   }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: databasePath })));

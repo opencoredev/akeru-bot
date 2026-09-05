@@ -111,6 +111,24 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
     }),
   );
 
+  it.effect("repairs a partially migrated database from an interrupted run", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-ui-partial-" });
+      // A run that died mid-migration leaves the marker and an incomplete database.
+      yield* fs.writeFileString(
+        path.join(baseDir, ".ui-fixture"),
+        "akeru-ui-projection-fixture-v1\n",
+      );
+      yield* fs.makeDirectory(path.join(baseDir, "userdata"), { recursive: true });
+      yield* fs.writeFileString(path.join(baseDir, "userdata", "state.sqlite"), "");
+      const result = yield* runUiFixture({ baseDir, scenario: "populated" });
+      assert.equal(result.kind, "projection-only");
+      assert.ok(result.backup);
+    }),
+  );
+
   it.effect("refuses shared descendants, aliases, and unowned directories before writes", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
