@@ -6,7 +6,7 @@ Set these deployment values:
 
 - `AKERU_FEEDBACK_HMAC_SECRET`: required HMAC secret.
 - `AKERU_FEEDBACK_TURNSTILE_SITE_KEY`: optional Turnstile site key.
-- `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY`: optional Turnstile secret key. Both keys together enable the challenge step; without them the endpoint rejects a coarse network after four accepted submissions in one hour.
+- `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY`: optional Turnstile secret key. Both keys together enable the challenge step; without them the endpoint rejects further submissions from a coarse network after five accepted submissions in one hour.
 
 Run the focused test with `vp test run infra/feedback/src/endpoint.test.ts`. Run the typecheck with `vp run --filter akeru-feedback typecheck`. Deploy only on direct request with `vp run --filter akeru-feedback deploy`.
 

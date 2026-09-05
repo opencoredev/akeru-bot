@@ -26,7 +26,7 @@ Before storage, the Worker:
 - Applies a 30-second installation cooldown and a five-second coarse-network burst cooldown.
 - Blocks the same content from the same coarse network for 24 hours.
 - Limits a coarse network to 20 accepted submissions per hour.
-- Requires Turnstile only after five accepted submissions from the coarse network in one hour, and only when Turnstile keys are configured. Without keys the endpoint fails closed: the fifth submission in one hour from a coarse network is rejected as rate limited.
+- Requires Turnstile only after five accepted submissions from the coarse network in one hour, and only when Turnstile keys are configured. Without keys the endpoint fails closed: after five accepted submissions in one hour from a coarse network, further submissions are rejected as rate limited.
 - Normalizes IPv4 to `/24` and IPv6 to `/64`.
 - HMACs the rotating installation token, coarse IP, and content fingerprint.
 
