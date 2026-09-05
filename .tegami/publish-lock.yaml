@@ -1,5 +1,5 @@
 core:changelogs:
-  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Changes\n\n- [#141](https://github.com/opencoredev/akeru-bot/pull/141) fix(web): mute routine notices and update actions\n- [#151](https://github.com/opencoredev/akeru-bot/pull/151) feat(marketing): add feedback.md, versioned metadata API, rate-limit headers\n- [#153](https://github.com/opencoredev/akeru-bot/pull/153) fix(desktop): recover failed update installs\n- [#154](https://github.com/opencoredev/akeru-bot/pull/154) fix(release): require signed macOS builds\n- [#155](https://github.com/opencoredev/akeru-bot/pull/155) fix(desktop): package lazy server dependencies\n- [#156](https://github.com/opencoredev/akeru-bot/pull/156) fix(mcp): open OAuth authorization requests\n- [#149](https://github.com/opencoredev/akeru-bot/pull/149) feat(marketing): report page requests to Notra GEO\n- [#158](https://github.com/opencoredev/akeru-bot/pull/158) ci: migrate Depot workflows to Tenki\n- [#150](https://github.com/opencoredev/akeru-bot/pull/150) fix(settings): remove obsolete thread controls\n- [#159](https://github.com/opencoredev/akeru-bot/pull/159) fix(chat): improve bot conversation usability\n- [#157](https://github.com/opencoredev/akeru-bot/pull/157) feat(plugins): add Composio integrations\n- [#162](https://github.com/opencoredev/akeru-bot/pull/162) fix(plugins): complete OAuth connections\n- [#163](https://github.com/opencoredev/akeru-bot/pull/163) feat(marketing): add Grok search pages\n"
+  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Changes\n\n- [#176](https://github.com/opencoredev/akeru-bot/pull/176) feat(providers): add API key connections with custom endpoints\n- [#178](https://github.com/opencoredev/akeru-bot/pull/178) fix(server): keep libsql native loader external to the CLI bundle\n- [#182](https://github.com/opencoredev/akeru-bot/pull/182) fix(desktop): own dev and smoke Electron processes instead of pkill\n- [#180](https://github.com/opencoredev/akeru-bot/pull/180) feat(scripts): add dev status, worktree setup, UI fixtures, and pairing helpers\n- [#183](https://github.com/opencoredev/akeru-bot/pull/183) docs(agents): add verification policy and rewrite testing skills\n- [#184](https://github.com/opencoredev/akeru-bot/pull/184) fix(desktop): stop claiming legacy t3code:// protocol schemes\n- [#185](https://github.com/opencoredev/akeru-bot/pull/185) fix(release): recover version PR updates from Tegami's boxed errors\n- [#188](https://github.com/opencoredev/akeru-bot/pull/188) fix(feedback): send product feedback to the deployed Worker\n"
     filename: stable-release.md
     v: 0.0.0
 core:packages:
@@ -11,20 +11,6 @@ core:packages:
     updated: false
   - id: npm:akeru-feedback
     updated: false
-  - changelogIds:
-      - stable-release.md
-    id: npm:@t3tools/desktop
-    updated: true
-  - id: npm:@t3tools/marketing
-    updated: false
-  - changelogIds:
-      - stable-release.md
-    id: npm:akeru-bot
-    updated: true
-  - changelogIds:
-      - stable-release.md
-    id: npm:@t3tools/web
-    updated: true
   - id: npm:@t3tools/client-runtime
     updated: false
   - changelogIds:
@@ -41,15 +27,25 @@ core:packages:
     updated: false
   - id: npm:@t3tools/tailscale
     updated: false
+  - changelogIds:
+      - stable-release.md
+    id: npm:@t3tools/desktop
+    updated: true
+  - id: npm:@t3tools/marketing
+    updated: false
+  - changelogIds:
+      - stable-release.md
+    id: npm:akeru-bot
+    updated: true
+  - changelogIds:
+      - stable-release.md
+    id: npm:@t3tools/web
+    updated: true
 npm:packages:
   - id: npm:@t3tools/monorepo
   - id: npm:@t3tools/oxlint-plugin-t3code
   - id: npm:@t3tools/scripts
   - id: npm:akeru-feedback
-  - id: npm:@t3tools/desktop
-  - id: npm:@t3tools/marketing
-  - id: npm:akeru-bot
-  - id: npm:@t3tools/web
   - id: npm:@t3tools/client-runtime
   - id: npm:@t3tools/contracts
   - id: npm:effect-acp
@@ -57,3 +53,7 @@ npm:packages:
   - id: npm:@t3tools/shared
   - id: npm:@t3tools/ssh
   - id: npm:@t3tools/tailscale
+  - id: npm:@t3tools/desktop
+  - id: npm:@t3tools/marketing
+  - id: npm:akeru-bot
+  - id: npm:@t3tools/web
