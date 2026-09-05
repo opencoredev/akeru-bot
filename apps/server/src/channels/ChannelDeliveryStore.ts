@@ -22,6 +22,7 @@ export interface ChannelDeliveryStoreShape {
   readonly claim: (
     input: ChannelDeliveryClaim,
   ) => Effect.Effect<ChannelDeliveryClaimResult, ProjectionRepositoryError>;
+  /** Release only before transport starts or after confirmed non-delivery. */
   readonly releaseRequested: (
     messageId: MessageId,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
@@ -91,7 +92,13 @@ export function makeMemoryChannelDeliveryStore(): ChannelDeliveryStoreShape {
         status.set(input.messageId, "requested");
         return "claimed";
       }),
-    releaseRequested: (messageId) => Effect.sync(() => void status.delete(messageId)),
-    markSent: ({ messageId }) => Effect.sync(() => void status.set(messageId, "sent")),
+    releaseRequested: (messageId) =>
+      Effect.sync(() => {
+        if (status.get(messageId) === "requested") status.delete(messageId);
+      }),
+    markSent: ({ messageId }) =>
+      Effect.sync(() => {
+        if (status.has(messageId)) status.set(messageId, "sent");
+      }),
   };
 }

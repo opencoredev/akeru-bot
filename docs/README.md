@@ -4,6 +4,7 @@
 
 - [Install and first run](./user/install.md)
 - [Configure bots](./user/bots.md)
+- [Bot channels](./user/channels.md)
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
 - [Permission modes](./user/permission-modes.md)
 - [Configure sandboxes](./user/sandboxes.md)
@@ -36,6 +37,7 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Scripts](./internals/scripts.md)
 - [Connection runtime](./internals/connection-runtime.md)
 - [Providers](./internals/providers.md)
+- [External channels](./internals/channels.md)
 - [Plugin lifecycle verification](./internals/plugin-lifecycle-verification.md)
 - [Remote environments](./internals/remote.md)
 - [Server updates](./internals/server-updates.md)

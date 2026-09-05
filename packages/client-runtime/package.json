@@ -43,6 +43,10 @@
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
     },
+    "./channel-presentation": {
+      "types": "./src/channelPresentation.ts",
+      "default": "./src/channelPresentation.ts"
+    },
     "./settings-deep-link": {
       "types": "./src/settingsDeepLink.ts",
       "default": "./src/settingsDeepLink.ts"

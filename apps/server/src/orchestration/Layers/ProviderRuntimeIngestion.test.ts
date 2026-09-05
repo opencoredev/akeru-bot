@@ -15,6 +15,7 @@ import {
   AkeruUsageReservationId,
   BotId,
   CommandId,
+  DelegationId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
   MessageId,
@@ -26,6 +27,12 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
+import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
+import {
+  ChannelDeliveryStore,
+  ChannelDeliveryStoreLive,
+} from "../../channels/ChannelDeliveryStore.ts";
+import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -55,6 +62,7 @@ import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ServerConfig } from "../../config.ts";
+import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { BotInboxService } from "../../bot-inbox/service.ts";
@@ -193,7 +201,10 @@ describe("ProviderRuntimeIngestion", () => {
     | OrchestrationEngineService
     | ProviderRuntimeIngestionService
     | ProjectionSnapshotQuery
-    | BotUsageLedger,
+    | BotUsageLedger
+    | ServerSecretStore.ServerSecretStore
+    | ServerSettingsService
+    | ChannelDeliveryStore,
     unknown
   > | null = null;
   let scope: Scope.Closeable | null = null;
@@ -206,6 +217,7 @@ describe("ProviderRuntimeIngestion", () => {
   }
 
   afterEach(async () => {
+    await ChannelRuntime.shutdownAllChannels();
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
@@ -250,6 +262,8 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(BotUsageLedgerLive.pipe(Layer.provide(SqlitePersistenceMemory))),
       Layer.provideMerge(Layer.succeed(AgentController, provider.service)),
+      Layer.provideMerge(ChannelDeliveryStoreLive.pipe(Layer.provide(SqlitePersistenceMemory))),
+      Layer.provideMerge(ServerSecretStore.layer),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), workspaceRoot)),
       Layer.provideMerge(NodeServices.layer),
@@ -339,6 +353,65 @@ describe("ProviderRuntimeIngestion", () => {
     return {
       engine,
       dispatch,
+      connectChannel: async (
+        post: (externalThreadId: string, text: string) => Promise<void>,
+        channelProvider: "telegram" | "slack" | "discord" = "telegram",
+        reactions?: {
+          add: (threadId: string, messageId: string, emoji: string) => Promise<void>;
+          remove: (threadId: string, messageId: string, emoji: string) => Promise<void>;
+        },
+      ) => {
+        let nextId = 0;
+        let inbound:
+          | Parameters<NonNullable<ChannelRuntime.ChannelRuntimeDependencies["startTransport"]>>[1]
+          | undefined;
+        const dependencies: ChannelRuntime.ChannelRuntimeDependencies = {
+          engine,
+          secretStore: await runtime!.runPromise(
+            Effect.service(ServerSecretStore.ServerSecretStore),
+          ),
+          settings: await runtime!.runPromise(Effect.service(ServerSettingsService)),
+          deliveryStore: await runtime!.runPromise(Effect.service(ChannelDeliveryStore)),
+          readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
+          readThread: async (threadId) =>
+            (await Effect.runPromise(snapshotQuery.getSnapshot())).threads.find(
+              (thread) => thread.id === threadId,
+            ) ?? null,
+          nowIso: async () => createdAt,
+          randomUuid: async () => `channel-test-${++nextId}`,
+          startTransport: async (_input, onMessage) => {
+            inbound = onMessage;
+            return {
+              externalIdentity: "test-channel",
+              runtime: {
+                post,
+                shutdown: async () => {},
+                ...(reactions ? { react: reactions.add, removeReaction: reactions.remove } : {}),
+              },
+            };
+          },
+        };
+        await ChannelRuntime.connectChannel(dependencies, {
+          type: "channel.connect",
+          commandId: CommandId.make("cmd-channel-connect"),
+          botId: BotId.make("bot-akeru"),
+          targetProjectId: asProjectId("project-1"),
+          ...(channelProvider === "telegram"
+            ? ({ provider: "telegram", token: "test-token" } as const)
+            : channelProvider === "slack"
+              ? ({ provider: "slack", botToken: "test-token", appToken: "app-token" } as const)
+              : ({
+                  provider: "discord",
+                  botToken: "test-token",
+                  applicationId: "test-app",
+                  publicKey: "test-key",
+                } as const)),
+        });
+        return {
+          dependencies,
+          inbound: (message: Parameters<NonNullable<typeof inbound>>[0]) => inbound!(message),
+        };
+      },
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       emit: provider.emit,
       setProviderSession: provider.setSession,
@@ -374,6 +447,379 @@ describe("ProviderRuntimeIngestion", () => {
         ),
     };
   }
+
+  it.each(["slack", "discord"] as const)(
+    "serializes slow accepted updates before terminal %s status",
+    async (provider) => {
+      const harness = await createHarness({ botOwned: true });
+      const accepted = Promise.withResolvers<void>();
+      const releaseAccepted = Promise.withResolvers<void>();
+      const terminalPersisted = Promise.withResolvers<void>();
+      const signals = new Set<string>();
+      const channel = await harness.connectChannel(async () => {}, provider, {
+        add: async (_thread, _message, emoji) => {
+          if (emoji === "eyes") {
+            accepted.resolve();
+            await releaseAccepted.promise;
+          }
+          signals.add(emoji);
+        },
+        remove: async (_thread, _message, emoji) => {
+          signals.delete(emoji);
+        },
+      });
+      const threadId = ChannelRuntime.channelThreadId(
+        BotId.make("bot-akeru"),
+        asProjectId("project-1"),
+        provider,
+        `${provider}:race`,
+      );
+      await Effect.runPromise(
+        forkParked(
+          Stream.runForEach(harness.engine.streamDomainEvents, (event) =>
+            Effect.sync(() => {
+              if (
+                event.type === "thread.session-set" &&
+                event.payload.threadId === threadId &&
+                event.payload.session.status === "ready"
+              )
+                terminalPersisted.resolve();
+            }),
+          ),
+        ).pipe(Scope.provide(scope!)),
+      );
+      const inbound = channel.inbound({
+        externalThreadId: `${provider}:race`,
+        externalMessageId: "race-request",
+        text: "Question",
+      });
+      await accepted.promise;
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        turnId: asTurnId("race-turn"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+      };
+      try {
+        harness.emit({
+          ...base,
+          eventId: asEventId("race-started"),
+          type: "turn.started",
+          payload: {},
+        });
+        await harness.drain();
+        harness.emit({
+          ...base,
+          eventId: asEventId("race-completed"),
+          type: "turn.completed",
+          payload: { state: "completed" },
+        });
+        await terminalPersisted.promise;
+        expect([...signals]).toEqual([]);
+      } finally {
+        releaseAccepted.resolve();
+      }
+      await inbound;
+      await harness.drain();
+      expect([...signals]).toEqual(["white_check_mark"]);
+      await ChannelRuntime.shutdownAllChannels();
+      expect([...signals]).toEqual([]);
+    },
+  );
+
+  it.each(
+    (["slack", "discord", "telegram"] as const).flatMap((provider) =>
+      (["completed", "failed", "cancelled", "aborted", "exited", "error", "stopped"] as const).map(
+        (state) => ({ provider, state }),
+      ),
+    ),
+  )(
+    "clears accepted status through shipped ingestion: $provider $state",
+    async ({ provider, state }) => {
+      const harness = await createHarness({ botOwned: true });
+      const signals = new Set<string>();
+      const calls: string[] = [];
+      const posts: string[] = [];
+      const channel = await harness.connectChannel(
+        async (_target, text) => {
+          posts.push(text);
+        },
+        provider,
+        {
+          add: async (_thread, _message, emoji) => {
+            signals.add(emoji);
+            calls.push(`add:${emoji}`);
+          },
+          remove: async (_thread, _message, emoji) => {
+            signals.delete(emoji);
+            calls.push(`remove:${emoji}`);
+          },
+        },
+      );
+      const message = {
+        externalThreadId: `${provider}:owner`,
+        externalMessageId: "request-1",
+        text: "Question",
+      };
+      await channel.inbound(message);
+      expect([...signals]).toEqual(provider === "telegram" ? [] : ["eyes"]);
+      const threadId = ChannelRuntime.channelThreadId(
+        BotId.make("bot-akeru"),
+        asProjectId("project-1"),
+        provider,
+        message.externalThreadId,
+      );
+      const turnId = asTurnId("status-turn");
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        turnId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      };
+      harness.emit({
+        ...base,
+        eventId: asEventId("status-started"),
+        type: "turn.started",
+        payload: {},
+      });
+      await harness.drain();
+      const terminal =
+        state === "aborted"
+          ? {
+              ...base,
+              eventId: asEventId("status-terminal"),
+              type: "turn.aborted" as const,
+              payload: {},
+            }
+          : state === "exited"
+            ? {
+                ...base,
+                eventId: asEventId("status-terminal"),
+                type: "session.exited" as const,
+                payload: {},
+              }
+            : state === "error" || state === "stopped"
+              ? {
+                  ...base,
+                  eventId: asEventId("status-terminal"),
+                  type: "session.state.changed" as const,
+                  payload: { state },
+                }
+              : {
+                  ...base,
+                  eventId: asEventId("status-terminal"),
+                  type: "turn.completed" as const,
+                  payload: { state },
+                };
+      harness.emit(terminal);
+      await harness.drain();
+      expect([...signals]).toEqual(
+        provider === "telegram" ? [] : [state === "completed" ? "white_check_mark" : "x"],
+      );
+      expect(posts).toEqual(
+        state === "completed" ? ["I finished without a text response. Please try again."] : [],
+      );
+      const completedCalls = [...calls];
+      harness.emit({ ...terminal, eventId: asEventId("status-terminal-replay") });
+      await harness.drain();
+      await channel.inbound(message);
+      expect(calls).toEqual(completedCalls);
+      await ChannelRuntime.disconnectChannel(
+        channel.dependencies,
+        BotId.make("bot-akeru"),
+        provider,
+      );
+      expect([...signals]).toEqual([]);
+      if (provider === "telegram") expect(calls).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["completed", "completed"],
+    ["failed", "completed"],
+    ["cancelled", "completed"],
+    ["completed", "failed"],
+    ["completed", "cancelled"],
+  ] as const)(
+    "replies once only for a completed owner: child %s, owner %s",
+    async (childState, ownerState) => {
+      const harness = await createHarness({ botOwned: true });
+      const posts: Array<{ target: string; text: string }> = [];
+      await harness.connectChannel(async (target, text) => {
+        posts.push({ target, text });
+      });
+      const createdAt = "2026-01-01T00:00:01.000Z";
+      const ownerThreadId = asThreadId("thread-1");
+      const childThreadId = asThreadId("delegated-child");
+      const ownerTurnId = asTurnId("owner-turn");
+      const childTurnId = asTurnId("child-turn");
+      await harness.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-child-bot"),
+        botId: BotId.make("bot-child"),
+        name: "Child",
+        title: "Research bot",
+        avatar: { kind: "dither", seed: "child" },
+        engine: { provider: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        sandbox: null,
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt,
+      });
+      await harness.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-child-create"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: BotId.make("bot-child"),
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      });
+      await harness.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-delegation-create"),
+        delegation: {
+          delegationId: DelegationId.make("channel-delegation"),
+          parentDelegationId: null,
+          parentBotId: BotId.make("bot-akeru"),
+          childBotId: BotId.make("bot-child"),
+          parentThreadId: ownerThreadId,
+          childThreadId,
+          parentTurnId: ownerTurnId,
+          childTurnId,
+          ancestorBotIds: [BotId.make("bot-akeru")],
+          depth: 1,
+          task: "Research the answer",
+          expectedResult: "A concise answer",
+          deadline: null,
+          access: {
+            allowedToolIds: ["Read"],
+            memoryScopes: [],
+            sandbox: "local",
+            runtimeMode: "approval-required",
+            hasUserComputer: false,
+            enabledMcpServerIds: [],
+            disabledMcpServerIds: [],
+            approvalCeiling: "send",
+          },
+          state: "queued",
+          billedBotId: BotId.make("bot-child"),
+          result: null,
+          failure: null,
+          keep: false,
+          createdAt,
+          updatedAt: createdAt,
+          startedAt: null,
+          completedAt: null,
+        },
+      });
+      for (const [threadId, turnId, text] of [
+        [ownerThreadId, ownerTurnId, "Owner answer"],
+        [childThreadId, childTurnId, "Child answer"],
+      ] as const) {
+        await harness.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`request-${turnId}`),
+          threadId,
+          message: {
+            messageId: asMessageId(`request-${turnId}`),
+            role: "user",
+            text: "Research",
+            attachments: [],
+            ...(threadId === ownerThreadId
+              ? {
+                  channelOrigin: {
+                    provider: "telegram" as const,
+                    externalThreadId: "channel-owner",
+                  },
+                }
+              : {}),
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        });
+        const base = {
+          provider: ProviderDriverKind.make("codex"),
+          threadId,
+          turnId,
+          createdAt: "2026-01-01T00:00:02.000Z",
+        };
+        harness.emit({
+          ...base,
+          type: "turn.started",
+          eventId: asEventId(`start-${turnId}`),
+          payload: {},
+        });
+        harness.emit({
+          ...base,
+          type: "content.delta",
+          eventId: asEventId(`delta-${turnId}`),
+          itemId: asItemId(`item-${turnId}`),
+          payload: { streamKind: "assistant_text", delta: text },
+        });
+        harness.emit({
+          ...base,
+          type: "item.completed",
+          eventId: asEventId(`item-${turnId}`),
+          itemId: asItemId(`item-${turnId}`),
+          payload: { itemType: "assistant_message", status: "completed" },
+        });
+        await harness.drain();
+      }
+      const complete = (
+        threadId: ThreadId,
+        turnId: TurnId,
+        state: "completed" | "failed" | "cancelled",
+        suffix: string,
+      ) => {
+        harness.emit({
+          type: "turn.completed",
+          eventId: asEventId(`complete-${suffix}`),
+          provider: ProviderDriverKind.make("codex"),
+          threadId,
+          turnId,
+          createdAt: "2026-01-01T00:00:03.000Z",
+          payload: { state },
+        });
+      };
+      complete(childThreadId, childTurnId, childState, "child");
+      await harness.drain();
+      expect(posts).toEqual([]);
+      const child = (await harness.readModel()).threads.find(
+        (thread) => thread.id === childThreadId,
+      );
+      expect(child?.latestTurn?.state).toBe(childState === "failed" ? "error" : "completed");
+      complete(ownerThreadId, ownerTurnId, ownerState, "owner");
+      await harness.drain();
+      expect(
+        (await harness.readModel()).threads.find((thread) => thread.id === ownerThreadId)
+          ?.latestTurn,
+      ).toMatchObject({
+        turnId: ownerTurnId,
+        state: ownerState === "failed" ? "error" : "completed",
+        requestMessageId: asMessageId("request-owner-turn"),
+        assistantMessageId: asMessageId("assistant:item-owner-turn"),
+      });
+      const expectedPosts =
+        ownerState === "completed" ? [{ target: "channel-owner", text: "Owner answer" }] : [];
+      expect(posts).toEqual(expectedPosts);
+      complete(childThreadId, childTurnId, childState, "child-replay");
+      complete(ownerThreadId, ownerTurnId, ownerState, "owner-replay");
+      await harness.drain();
+      expect(posts).toEqual(expectedPosts);
+      expect(
+        (await harness.readModel()).bots.find((bot) => bot.id === "bot-akeru")?.channelBindings[0]
+          ?.sentMessageIds,
+      ).toEqual(ownerState === "completed" ? [asMessageId("assistant:item-owner-turn")] : []);
+    },
+  );
 
   it("opens and resolves bot inbox approval incidents from runtime requests", async () => {
     const harness = await createHarness({ botOwned: true, threadTitle: "Morning research" });
@@ -3025,91 +3471,95 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
-  it("does not duplicate assistant completion when item.completed is followed by turn.completed", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect(
+    "does not duplicate assistant completion when item.completed is followed by turn.completed",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createHarness());
+        const now = "2026-01-01T00:00:00.000Z";
 
-    harness.emit({
-      type: "turn.started",
-      eventId: asEventId("evt-turn-started-for-complete-dedup"),
-      provider: ProviderDriverKind.make("codex"),
-      createdAt: now,
-      threadId: asThreadId("thread-1"),
-      turnId: asTurnId("turn-complete-dedup"),
-    });
+        harness.emit({
+          type: "turn.started",
+          eventId: asEventId("evt-turn-started-for-complete-dedup"),
+          provider: ProviderDriverKind.make("codex"),
+          createdAt: now,
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("turn-complete-dedup"),
+        });
 
-    await waitForThread(
-      harness.readModel,
-      (thread) =>
-        thread.session?.status === "running" &&
-        thread.session?.activeTurnId === "turn-complete-dedup",
-    );
+        yield* Effect.promise(() =>
+          waitForThread(
+            harness.readModel,
+            (thread) =>
+              thread.session?.status === "running" &&
+              thread.session?.activeTurnId === "turn-complete-dedup",
+          ),
+        );
 
-    harness.emit({
-      type: "content.delta",
-      eventId: asEventId("evt-message-delta-for-complete-dedup"),
-      provider: ProviderDriverKind.make("codex"),
-      createdAt: now,
-      threadId: asThreadId("thread-1"),
-      turnId: asTurnId("turn-complete-dedup"),
-      itemId: asItemId("item-complete-dedup"),
-      payload: {
-        streamKind: "assistant_text",
-        delta: "done",
-      },
-    });
-    harness.emit({
-      type: "item.completed",
-      eventId: asEventId("evt-message-completed-for-complete-dedup"),
-      provider: ProviderDriverKind.make("codex"),
-      createdAt: now,
-      threadId: asThreadId("thread-1"),
-      turnId: asTurnId("turn-complete-dedup"),
-      itemId: asItemId("item-complete-dedup"),
-      payload: {
-        itemType: "assistant_message",
-        status: "completed",
-      },
-    });
-    harness.emit({
-      type: "turn.completed",
-      eventId: asEventId("evt-turn-completed-for-complete-dedup"),
-      provider: ProviderDriverKind.make("codex"),
-      createdAt: now,
-      threadId: asThreadId("thread-1"),
-      turnId: asTurnId("turn-complete-dedup"),
-      payload: {
-        state: "completed",
-      },
-    });
+        harness.emit({
+          type: "content.delta",
+          eventId: asEventId("evt-message-delta-for-complete-dedup"),
+          provider: ProviderDriverKind.make("codex"),
+          createdAt: now,
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("turn-complete-dedup"),
+          itemId: asItemId("item-complete-dedup"),
+          payload: {
+            streamKind: "assistant_text",
+            delta: "done",
+          },
+        });
+        harness.emit({
+          type: "item.completed",
+          eventId: asEventId("evt-message-completed-for-complete-dedup"),
+          provider: ProviderDriverKind.make("codex"),
+          createdAt: now,
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("turn-complete-dedup"),
+          itemId: asItemId("item-complete-dedup"),
+          payload: {
+            itemType: "assistant_message",
+            status: "completed",
+          },
+        });
+        harness.emit({
+          type: "turn.completed",
+          eventId: asEventId("evt-turn-completed-for-complete-dedup"),
+          provider: ProviderDriverKind.make("codex"),
+          createdAt: now,
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("turn-complete-dedup"),
+          payload: {
+            state: "completed",
+          },
+        });
 
-    await waitForThread(
-      harness.readModel,
-      (thread) =>
-        thread.session?.status === "ready" &&
-        thread.session?.activeTurnId === null &&
-        thread.messages.some(
-          (message: ProviderRuntimeTestMessage) =>
-            message.id === "assistant:item-complete-dedup" && !message.streaming,
-        ),
-    );
+        yield* Effect.promise(() =>
+          waitForThread(
+            harness.readModel,
+            (thread) =>
+              thread.session?.status === "ready" &&
+              thread.session?.activeTurnId === null &&
+              thread.messages.some(
+                (message: ProviderRuntimeTestMessage) =>
+                  message.id === "assistant:item-complete-dedup" && !message.streaming,
+              ),
+          ),
+        );
 
-    const events = await Effect.runPromise(
-      Stream.runCollect(harness.engine.readEvents(0)).pipe(
-        Effect.map((chunk) => Array.from(chunk)),
-      ),
-    );
-    const completionEvents = events.filter((event) => {
-      if (event.type !== "thread.message-sent") {
-        return false;
-      }
-      return (
-        event.payload.messageId === "assistant:item-complete-dedup" &&
-        event.payload.streaming === false
-      );
-    });
-    expect(completionEvents).toHaveLength(1);
-  });
+        const events = yield* Stream.runCollect(harness.engine.readEvents(0));
+        const completionEvents = events.filter((event) => {
+          if (event.type !== "thread.message-sent") {
+            return false;
+          }
+          return (
+            event.payload.messageId === "assistant:item-complete-dedup" &&
+            event.payload.streaming === false
+          );
+        });
+        expect(completionEvents).toHaveLength(1);
+      }),
+  );
 
   it("maps canonical request events into approval activities with requestKind", async () => {
     const harness = await createHarness();

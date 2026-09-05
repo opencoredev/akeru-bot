@@ -235,8 +235,11 @@ function BotProfileEditor({
   const enabledToolCount = tools.filter(
     (tool) => tool.workspaceEnabled && !disabledMcpServerIds.includes(tool.id),
   ).length;
-  const connectedChannelCount = (bot.channelBindings ?? []).filter(
-    (binding) => binding.status !== "disconnected",
+  const assignedChannels = (bot.channelBindings ?? []).filter(
+    (binding) => binding.connectionId || binding.projectId || binding.status !== "disconnected",
+  );
+  const connectedChannelCount = assignedChannels.filter(
+    (binding) => binding.status === "connected",
   ).length;
   const toolOverridesDirty =
     [...disabledMcpServerIds].sort().join("\u0000") !==
@@ -475,7 +478,9 @@ function BotProfileEditor({
           >
             <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Link02Icon} />
             <span className="min-w-0 flex-1 text-sm">
-              {connectedChannelCount === 0 ? "No channels" : `${connectedChannelCount} connected`}
+              {assignedChannels.length === 0
+                ? "No channels"
+                : `${connectedChannelCount} of ${assignedChannels.length} connected`}
             </span>
             <span className="text-xs text-muted-foreground">Manage</span>
           </button>

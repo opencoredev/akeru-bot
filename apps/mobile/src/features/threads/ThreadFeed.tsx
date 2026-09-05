@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
-import type { EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import type { BotId, EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import { channelOriginLabel } from "@t3tools/client-runtime/channel-presentation";
 import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
@@ -98,6 +99,7 @@ import {
   type ThreadFeedLatestTurn,
 } from "../../lib/threadActivity";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
+import { ThreadChannels } from "./ThreadChannels";
 import {
   resolveThreadFeedLiveFollow,
   type ThreadFeedLiveFollowEvent,
@@ -153,6 +155,7 @@ function isFreshTimestamp(input: string): boolean {
 export interface ThreadFeedProps {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+  readonly botId: BotId | null;
   readonly workspaceRoot?: string | null;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   readonly contentPresentation: ThreadContentPresentation;
@@ -1118,6 +1121,11 @@ function renderFeedEntry(
                   : null),
             }}
           >
+            {message.channelOrigin ? (
+              <NativeText className="font-t3-medium text-[11px] text-neutral-600 dark:text-neutral-300">
+                {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
+              </NativeText>
+            ) : null}
             {message.text.trim().length > 0 ? (
               <UserMessageContent
                 text={message.text}
@@ -2283,6 +2291,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             ListHeaderComponent={
               <>
                 {usesNativeAutomaticInsets ? null : <View style={{ height: topContentInset }} />}
+                <ThreadChannels environmentId={props.environmentId} botId={props.botId} />
                 {props.loadEarlier != null ? (
                   <Pressable
                     onPress={props.loadEarlier.onLoadEarlier}

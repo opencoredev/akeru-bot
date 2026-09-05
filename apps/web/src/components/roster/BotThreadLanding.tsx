@@ -42,6 +42,7 @@ import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import {
   channelOriginForAssistantMessage,
+  channelOriginLabel,
   channelProviderLabel,
   isBotConversationWorking,
   visibleBotChatMessages,
@@ -397,6 +398,11 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     </div>
                     <div className="flex max-w-[78%] flex-col items-end">
                       <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+                        {message.channelOrigin ? (
+                          <div className="mb-1 text-xs font-medium text-muted-foreground">
+                            {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
+                          </div>
+                        ) : null}
                         {message.text ? (
                           <p className="whitespace-pre-wrap">{message.text}</p>
                         ) : null}

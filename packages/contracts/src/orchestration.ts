@@ -395,22 +395,93 @@ export const BotUsageCap = Schema.Struct({
 });
 export type BotUsageCap = typeof BotUsageCap.Type;
 
-export const ChannelProvider = Schema.Literals(["telegram", "imessage", "whatsapp"]);
+export const CHANNEL_PROVIDERS = ["telegram", "imessage", "whatsapp", "slack", "discord"] as const;
+export const ChannelProvider = Schema.Literals(CHANNEL_PROVIDERS);
 export type ChannelProvider = typeof ChannelProvider.Type;
+
+export const ChannelTransportCapabilities = Schema.Struct({
+  directMessages: Schema.Boolean,
+  mentions: Schema.Boolean,
+  threads: Schema.Boolean,
+  reactions: Schema.Boolean,
+  typing: Schema.Boolean,
+  messageEdits: Schema.Boolean,
+  attachments: Schema.Boolean,
+  interactiveActions: Schema.Boolean,
+});
+export type ChannelTransportCapabilities = typeof ChannelTransportCapabilities.Type;
+
+export const CHANNEL_TRANSPORT_CAPABILITIES = {
+  telegram: {
+    directMessages: true,
+    mentions: false,
+    threads: false,
+    reactions: false,
+    typing: false,
+    messageEdits: false,
+    attachments: false,
+    interactiveActions: false,
+  },
+  imessage: {
+    directMessages: true,
+    mentions: false,
+    threads: false,
+    reactions: false,
+    typing: false,
+    messageEdits: false,
+    attachments: false,
+    interactiveActions: false,
+  },
+  whatsapp: {
+    directMessages: true,
+    mentions: false,
+    threads: false,
+    reactions: false,
+    typing: false,
+    messageEdits: false,
+    attachments: false,
+    interactiveActions: false,
+  },
+  slack: {
+    directMessages: true,
+    mentions: true,
+    threads: true,
+    reactions: true,
+    typing: false,
+    messageEdits: false,
+    attachments: false,
+    interactiveActions: false,
+  },
+  discord: {
+    directMessages: true,
+    mentions: true,
+    threads: true,
+    reactions: true,
+    typing: false,
+    messageEdits: false,
+    attachments: false,
+    interactiveActions: false,
+  },
+} as const satisfies Record<ChannelProvider, ChannelTransportCapabilities>;
+
 export const ChannelBindingStatus = Schema.Literals([
   "disconnected",
   "connected",
   "needs-reconnect",
+  "failed",
   "not-live",
 ]);
 export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
 export const ChannelBinding = Schema.Struct({
   botId: BotId,
   connectionId: Schema.optional(ChannelConnectionId),
+  projectId: Schema.optional(ProjectId),
   provider: ChannelProvider,
   status: ChannelBindingStatus,
   externalIdentity: Schema.NullOr(TrimmedNonEmptyString),
   connectedAt: Schema.NullOr(IsoDateTime),
+  lastAttemptAt: Schema.optional(IsoDateTime),
+  lastError: Schema.optional(TrimmedNonEmptyString),
   sentMessageIds: Schema.Array(MessageId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type ChannelBinding = typeof ChannelBinding.Type;
@@ -486,6 +557,7 @@ export type OrchestrationGroup = typeof OrchestrationGroup.Type;
 export const ChannelMessageOrigin = Schema.Struct({
   provider: ChannelProvider,
   externalThreadId: TrimmedNonEmptyString,
+  externalMessageId: Schema.optional(TrimmedNonEmptyString),
   externalSenderId: Schema.optional(TrimmedNonEmptyString),
 });
 export type ChannelMessageOrigin = typeof ChannelMessageOrigin.Type;
@@ -1089,6 +1161,7 @@ const ChannelConnectCommand = Schema.Union([
     type: Schema.Literal("channel.connect"),
     commandId: CommandId,
     botId: BotId,
+    targetProjectId: ProjectId,
     provider: Schema.Literal("telegram"),
     token: TrimmedNonEmptyString,
   }),
@@ -1096,6 +1169,7 @@ const ChannelConnectCommand = Schema.Union([
     type: Schema.Literal("channel.connect"),
     commandId: CommandId,
     botId: BotId,
+    targetProjectId: ProjectId,
     provider: Schema.Literal("imessage"),
     mode: Schema.Literal("hosted"),
     projectId: TrimmedNonEmptyString,
@@ -1105,6 +1179,7 @@ const ChannelConnectCommand = Schema.Union([
     type: Schema.Literal("channel.connect"),
     commandId: CommandId,
     botId: BotId,
+    targetProjectId: ProjectId,
     provider: Schema.Literal("imessage"),
     mode: Schema.Literal("self-hosted"),
     serverUrl: TrimmedNonEmptyString,
@@ -1115,11 +1190,31 @@ const ChannelConnectCommand = Schema.Union([
     type: Schema.Literal("channel.connect"),
     commandId: CommandId,
     botId: BotId,
+    targetProjectId: ProjectId,
     provider: Schema.Literal("whatsapp"),
     accessToken: TrimmedNonEmptyString,
     appSecret: TrimmedNonEmptyString,
     phoneNumberId: TrimmedNonEmptyString,
     verifyToken: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    targetProjectId: ProjectId,
+    provider: Schema.Literal("slack"),
+    botToken: TrimmedNonEmptyString,
+    appToken: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connect"),
+    commandId: CommandId,
+    botId: BotId,
+    targetProjectId: ProjectId,
+    provider: Schema.Literal("discord"),
+    botToken: TrimmedNonEmptyString,
+    applicationId: TrimmedNonEmptyString,
+    publicKey: TrimmedNonEmptyString,
   }),
 ]);
 
@@ -1164,6 +1259,25 @@ const ChannelConnectionSaveCommand = Schema.Union([
     phoneNumberId: TrimmedNonEmptyString,
     verifyToken: TrimmedNonEmptyString,
   }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("slack"),
+    botToken: TrimmedNonEmptyString,
+    appToken: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("channel.connection.save"),
+    commandId: CommandId,
+    connectionId: ChannelConnectionId,
+    name: TrimmedNonEmptyString,
+    provider: Schema.Literal("discord"),
+    botToken: TrimmedNonEmptyString,
+    applicationId: TrimmedNonEmptyString,
+    publicKey: TrimmedNonEmptyString,
+  }),
 ]);
 
 const ChannelConnectionDeleteCommand = Schema.Struct({
@@ -1177,11 +1291,20 @@ const ChannelAttachCommand = Schema.Struct({
   commandId: CommandId,
   botId: BotId,
   connectionId: ChannelConnectionId,
+  // Absent means the server uses the bot's default project, matching in-app chat.
+  projectId: Schema.optional(ProjectId),
   provider: ChannelProvider,
 });
 
 const ChannelDisconnectCommand = Schema.Struct({
   type: Schema.Literal("channel.disconnect"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: ChannelProvider,
+});
+
+const ChannelDetachCommand = Schema.Struct({
+  type: Schema.Literal("channel.detach"),
   commandId: CommandId,
   botId: BotId,
   provider: ChannelProvider,
@@ -1697,6 +1820,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ChannelConnectionDeleteCommand,
   ChannelAttachCommand,
   ChannelDisconnectCommand,
+  ChannelDetachCommand,
   ChannelReconnectCommand,
   ChannelSendCommand,
   GroupCreateCommand,
