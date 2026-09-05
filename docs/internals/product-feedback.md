@@ -26,7 +26,7 @@ Before storage, the Worker:
 - Applies a 30-second installation cooldown and a five-second coarse-network burst cooldown.
 - Blocks the same content from the same coarse network for 24 hours.
 - Limits a coarse network to 20 accepted submissions per hour.
-- Requires Turnstile only after five accepted submissions from the coarse network in one hour, and only when Turnstile keys are configured. Without keys, the hourly network limit still applies and the challenge step is skipped.
+- Requires Turnstile only after five accepted submissions from the coarse network in one hour, and only when Turnstile keys are configured. Without keys the endpoint fails closed: the fifth submission in one hour from a coarse network is rejected as rate limited.
 - Normalizes IPv4 to `/24` and IPv6 to `/64`.
 - HMACs the rotating installation token, coarse IP, and content fingerprint.
 
@@ -38,6 +38,6 @@ The Cloudflare deployment trusts only `CF-Connecting-IP`. A self-host adapter mu
 
 ## Operations and self-hosting
 
-Deploy the Worker from `infra/feedback` with `vp run --filter akeru-feedback deploy`. `AKERU_FEEDBACK_HMAC_SECRET` is required; the Worker returns `503` until it holds at least 32 bytes. `AKERU_FEEDBACK_TURNSTILE_SITE_KEY` and `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY` are optional and enable the challenge step. Alchemy state is local to the deploying machine under the gitignored `.alchemy` directory; a redeploy from another checkout must copy that directory first or it will create a second Worker and database.
+Deploy the Worker from `infra/feedback` with `vp run --filter akeru-feedback deploy`. `AKERU_FEEDBACK_HMAC_SECRET` is required; the Worker returns `503` until it holds at least 32 bytes. `AKERU_FEEDBACK_TURNSTILE_SITE_KEY` and `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY` are optional and enable the challenge step. Alchemy state is local and gitignored because the Cloudflare state store bootstrap fails on the pinned alchemy version. The Worker and D1 names are pinned, so a checkout without state recovers the existing resources with `alchemy deploy --stage production --adopt`; a plain deploy without state fails instead of creating duplicates.
 
 Maintainers inspect the inbox with authenticated local D1 tooling. Do not add a public listing route. A self-hosted Akeru Bot environment can replace the endpoint in **Settings → About**. Keep production endpoints on HTTPS.

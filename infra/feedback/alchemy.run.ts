@@ -35,8 +35,10 @@ export const FeedbackWorker = Cloudflare.Worker("FeedbackWorker", {
 
 export type FeedbackWorkerEnv = Cloudflare.InferEnv<typeof FeedbackWorker>;
 
-// State lives in the gitignored .alchemy directory. Deploy from the machine
-// that holds it; a fresh checkout must copy that directory first.
+// Alchemy's Cloudflare state store cannot be bootstrapped on this alchemy
+// version (the bootstrap command overflows the stack), so state is local. The
+// Worker and D1 names are pinned so a checkout without state recovers with
+// `alchemy deploy --stage production --adopt` instead of creating duplicates.
 export default Alchemy.Stack(
   "AkeruFeedback",
   {

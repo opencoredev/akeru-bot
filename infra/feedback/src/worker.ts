@@ -179,8 +179,8 @@ export default {
         },
       );
     }
-    // Without Turnstile keys the endpoint still runs; the IP and installation
-    // limits in the endpoint remain and only the challenge step is skipped.
+    // Without Turnstile keys the endpoint still runs, but the suspicious-traffic
+    // threshold becomes a hard network limit instead of a challenge.
     const turnstile = makeTurnstile(env);
     return makeProductFeedbackEndpoint({
       repository: makeRepository(env.DB),
