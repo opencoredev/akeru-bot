@@ -109,11 +109,11 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
         Claude, Codex, Grok, Kimi, or OpenCode subscription you already pay for.
       </p>
       <div class="hero-actions">
-        <a id="download-btn" class="btn-primary" data-os="mac" href={RELEASES_URL}>
+        <a id="download-btn" class="btn-primary" href={RELEASES_URL}>
           <svg class="os-mark" data-os="mac" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={APPLE_MARK} />
           <svg class="os-mark" data-os="win" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={WINDOWS_MARK} />
           <svg class="os-mark" data-os="linux" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={LINUX_MARK} />
-          <span id="download-label">Download for macOS</span>
+          <span id="download-label">All downloads</span>
         </a>
         <a class="btn-ghost" href={docsUrl("install")} target="_blank" rel="noopener noreferrer">
           <svg width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -123,7 +123,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           <span>Read the docs</span>
         </a>
       </div>
-      <p class="hero-note">Free and MIT licensed. No account, no hosted service.</p>
+      <p class="hero-note">Free and MIT licensed. No Akeru account required.</p>
     </div>
     <div class="hero-shot">
       <img
@@ -157,8 +157,8 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   <section id="how-it-works" class="how">
     <h2 class="section-title">Up and running in three steps</h2>
     <p class="how-sub">
-      Everything stays on your machine. Chats, bot profiles, and memory live in a local folder,
-      and there is no hosted service behind them.
+      Your environment owns the chats, bot profiles, and memory. Run the environment on your
+      machine or connect it to a cloud sandbox that you control.
     </p>
     <ol class="steps">
       {

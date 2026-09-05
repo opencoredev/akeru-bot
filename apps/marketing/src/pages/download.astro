@@ -289,6 +289,16 @@ import { RELEASES_URL } from "../lib/releases";
     text-decoration-color: var(--fg);
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .heading,
+    .subheading,
+    .platforms,
+    .releases-link {
+      opacity: 1;
+      animation: none;
+    }
+  }
+
   /* ── Mobile ── */
 
   @media (max-width: 640px) {

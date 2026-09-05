@@ -35,6 +35,18 @@ describe("marketing search metadata", () => {
     expect(home).toContain('<h2 class="section-title">Every bot has its own setup</h2>');
   });
 
+  it("keeps fallback and environment claims accurate", () => {
+    const home = sourceFile("pages/index.astro");
+    const download = sourceFile("pages/download.astro");
+
+    expect(home).toContain('<span id="download-label">All downloads</span>');
+    expect(home).not.toContain('class="btn-primary" data-os="mac"');
+    expect(home).toContain("Your environment owns the chats, bot profiles, and memory.");
+    expect(home).not.toContain("Everything stays on your machine");
+    expect(home).not.toContain("no hosted service");
+    expect(download).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none;/);
+  });
+
   it("gives each Grok search intent one page", () => {
     const openSource = sourceFile("pages/open-source-grok-bot.astro");
     const comparison = sourceFile("pages/compare/akeru-vs-grok-bot.astro");
