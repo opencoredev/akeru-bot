@@ -73,7 +73,11 @@ export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = 
     if (!pid) return;
     try {
       if (grouped) process.kill(-pid, signal);
-      else if (!closed) child.kill(signal);
+      else {
+        // Kill the captured tree so a spawned backend cannot outlive cleanup.
+        NodeChildProcess.spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"]);
+        if (!closed) child.kill(signal);
+      }
     } catch (error) {
       if (error.code !== "ESRCH") throw error;
       pid = undefined;

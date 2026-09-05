@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
+  spawnSync: vi.fn(() => ({ status: 0 })),
   mkdtempSync: vi.fn(),
   mkdirSync: vi.fn(),
   rmSync: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   platform: vi.fn(),
   resolve: vi.fn(),
 }));
-vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
+vi.mock("node:child_process", () => ({ spawn: mocks.spawn, spawnSync: mocks.spawnSync }));
 vi.mock("node:fs", () => ({ ...mocks, constants: { X_OK: 1 } }));
 vi.mock("node:os", () => ({ platform: mocks.platform, tmpdir: () => "/tmp" }));
 vi.mock("node:module", () => ({ createRequire: () => ({ resolve: mocks.resolve }) }));
@@ -286,14 +287,27 @@ describe("desktop startup evidence and cleanup", () => {
     expect(mocks.rmSync).toHaveBeenCalledOnce();
   });
 
-  it("uses only the owned child on Windows", async () => {
+  it("terminates the captured tree on Windows so a backend cannot outlive cleanup", async () => {
     mocks.platform.mockReturnValue("win32");
     const result = launch();
     app.stderr.emit("data", "fatal startup error");
     await result;
     expect(mocks.spawn.mock.calls[0][2].detached).toBe(false);
     expect(app.kill).toHaveBeenCalledExactlyOnceWith("SIGTERM");
+    expect(mocks.spawnSync).toHaveBeenCalledWith("taskkill", ["/pid", "4100", "/T", "/F"]);
     expect(kill).not.toHaveBeenCalled();
+  });
+
+  it("kills the Windows tree even after the direct child closed", async () => {
+    mocks.platform.mockReturnValue("win32");
+    const result = launch();
+    app.stdout.emit("data", ready);
+    close();
+    await result;
+    // The tree kill still runs against the captured PID after close.
+    expect(mocks.spawnSync).toHaveBeenCalledWith("taskkill", ["/pid", "4100", "/T", "/F"]);
+    expect(app.kill).not.toHaveBeenCalled();
+    expect(mocks.rmSync).toHaveBeenCalledOnce();
   });
 
   it("cleans state if directory setup fails", async () => {
