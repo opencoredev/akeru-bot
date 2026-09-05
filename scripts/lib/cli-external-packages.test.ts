@@ -10,8 +10,8 @@ import * as Schema from "effect/Schema";
 import serverPackageJson from "../../apps/server/package.json" with { type: "json" };
 
 import {
-  CLI_RUNTIME_EXTERNAL_PREFIXES,
   findInlinedExternalPackages,
+  isRuntimeExternalCliDependency,
   selectCliPackagedRuntimeDependencies,
   selectCliRuntimeExternalDependencies,
   shouldBundleCliDependency,
@@ -42,6 +42,8 @@ describe("shouldBundleCliDependency", () => {
       "@libsql/core",
       "@libsql/hrana-client",
       "@libsql/isomorphic-ws",
+      "libsqlite3",
+      "libsqlx",
     ]) {
       assert.strictEqual(shouldBundleCliDependency(id), true, id);
     }
@@ -194,8 +196,7 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
 
   // Runtime-external only. The build-only entries resolve `bun:*` and are never
   // loaded by Node, so their closure genuinely does not need to be external.
-  const isRuntimeExternal = (name: string) =>
-    CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => name.startsWith(prefix));
+  const isRuntimeExternal = (name: string) => isRuntimeExternalCliDependency(name);
 
   it.effect("finds the runtime-external packages on disk", () =>
     Effect.gen(function* () {
