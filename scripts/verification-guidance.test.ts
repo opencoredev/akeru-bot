@@ -6,6 +6,8 @@ import { assert, it } from "@effect/vitest";
 
 const root = NodeURL.fileURLToPath(new URL("../", import.meta.url));
 const guidance = [
+  "AGENTS.md",
+  "docs/internals/scripts.md",
   ".agents/skills/test-t3-app/SKILL.md",
   ".agents/skills/test-t3-app/references/sqlite-fixtures.md",
   ".agents/skills/test-t3-mobile/SKILL.md",
