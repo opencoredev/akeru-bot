@@ -2,7 +2,7 @@
 
 > For maintainers. Using Akeru Bot? See [Product feedback](../user/product-feedback.md).
 
-Product feedback uses a standalone Cloudflare Worker in `infra/feedback`. Static web clients cannot own the inbox, and each distributed Akeru Bot server belongs to one installation. The default central endpoint is `https://feedback.akeru.bot/v1/feedback`. The Worker stores no Linear issue and exposes no public inbox route.
+Product feedback uses a standalone Cloudflare Worker in `infra/feedback`. Static web clients cannot own the inbox, and each distributed Akeru Bot server belongs to one installation. The default central endpoint is `https://akeru-feedback.leoisadev.workers.dev/v1/feedback`. The `akeru-bot.com` zone is on Vercel DNS, so the Worker has no custom hostname; the contracts default points at the workers.dev URL and clients post to it directly with CORS. The Worker stores no Linear issue and exposes no public inbox route.
 
 ## Client boundary
 
@@ -26,7 +26,7 @@ Before storage, the Worker:
 - Applies a 30-second installation cooldown and a five-second coarse-network burst cooldown.
 - Blocks the same content from the same coarse network for 24 hours.
 - Limits a coarse network to 20 accepted submissions per hour.
-- Requires Turnstile only after five accepted submissions from the coarse network in one hour.
+- Requires Turnstile only after five accepted submissions from the coarse network in one hour, and only when Turnstile keys are configured. Without keys, the hourly network limit still applies and the challenge step is skipped.
 - Normalizes IPv4 to `/24` and IPv6 to `/64`.
 - HMACs the rotating installation token, coarse IP, and content fingerprint.
 
@@ -38,6 +38,6 @@ The Cloudflare deployment trusts only `CF-Connecting-IP`. A self-host adapter mu
 
 ## Operations and self-hosting
 
-Deploy the Worker from `infra/feedback`. Configure `AKERU_FEEDBACK_HMAC_SECRET`, `AKERU_FEEDBACK_TURNSTILE_SITE_KEY`, and `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY`. The central Worker returns `503` until all three values are valid.
+Deploy the Worker from `infra/feedback` with `vp run --filter akeru-feedback deploy`. `AKERU_FEEDBACK_HMAC_SECRET` is required; the Worker returns `503` until it holds at least 32 bytes. `AKERU_FEEDBACK_TURNSTILE_SITE_KEY` and `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY` are optional and enable the challenge step. Alchemy state is local to the deploying machine under the gitignored `.alchemy` directory; a redeploy from another checkout must copy that directory first or it will create a second Worker and database.
 
 Maintainers inspect the inbox with authenticated local D1 tooling. Do not add a public listing route. A self-hosted Akeru Bot environment can replace the endpoint in **Settings → About**. Keep production endpoints on HTTPS.

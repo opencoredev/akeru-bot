@@ -170,7 +170,7 @@ async function readBoundedBody(request: Request): Promise<string | null> {
   return new TextDecoder("utf-8", { fatal: true }).decode(body);
 }
 
-function optionsResponse(): Response {
+export function productFeedbackOptionsResponse(): Response {
   return new Response(null, {
     status: 204,
     headers: {
@@ -190,7 +190,7 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
 
   return async (request: Request): Promise<Response> => {
     try {
-      if (request.method === "OPTIONS") return optionsResponse();
+      if (request.method === "OPTIONS") return productFeedbackOptionsResponse();
       if (request.method !== "POST") {
         return rejection(405, { reason: "malformed", message: "Use POST for feedback." });
       }
