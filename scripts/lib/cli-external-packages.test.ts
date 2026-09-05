@@ -33,7 +33,16 @@ const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(PackageMan
 
 describe("shouldBundleCliDependency", () => {
   it("bundles ordinary runtime dependencies", () => {
-    for (const id of ["effect", "@effect/platform", "hono", "@t3tools/shared/hostProcess"]) {
+    for (const id of [
+      "effect",
+      "@effect/platform",
+      "hono",
+      "@t3tools/shared/hostProcess",
+      "@libsql/client",
+      "@libsql/core",
+      "@libsql/hrana-client",
+      "@libsql/isomorphic-ws",
+    ]) {
       assert.strictEqual(shouldBundleCliDependency(id), true, id);
     }
   });
@@ -46,6 +55,13 @@ describe("shouldBundleCliDependency", () => {
     for (const id of [
       "playwright-core",
       "node-pty",
+      "libsql",
+      "libsql/promise",
+      "@neon-rs/load",
+      "@libsql/darwin-arm64",
+      "@libsql/linux-x64-gnu",
+      "@libsql/linux-x64-musl",
+      "@libsql/win32-x64-msvc",
       "ffi-rs",
       "@yuuang/ffi-rs-win32-x64-msvc",
       "@ff-labs/fff-node",
@@ -90,13 +106,13 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("selects every external root declared by the server", () => {
     assert.deepStrictEqual(
       Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies)).sort(),
-      ["@ff-labs/fff-node", "msgpackr-extract", "node-pty", "playwright-core"],
+      ["@ff-labs/fff-node", "libsql", "msgpackr-extract", "node-pty", "playwright-core"],
     );
   });
 });
 
 describe("selectCliPackagedRuntimeDependencies", () => {
-  it("stages bundled packages that load platform-native bindings", () => {
+  it("stages external native packages and lazy runtime packages", () => {
     assert.deepStrictEqual(
       selectCliPackagedRuntimeDependencies({
         effect: "4.0.0",
@@ -189,7 +205,13 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
       // Without this the closure check below can pass vacuously: if nothing is
       // read, nothing is checked. These are the packages whose closure actually
       // broke WSL, so require them by name.
-      for (const required of ["node-pty", "node-gyp-build-optional-packages", "detect-libc"]) {
+      for (const required of [
+        "node-pty",
+        "node-gyp-build-optional-packages",
+        "detect-libc",
+        "libsql",
+        "@neon-rs/load",
+      ]) {
         assert.ok(
           found.includes(required),
           `expected ${required} in the pnpm store; the closure check is only meaningful if it can read these (found ${found.length})`,
@@ -256,6 +278,14 @@ var x = 1;
 
     assert.deepStrictEqual(result.inlined, ["detect-libc", "msgpackr-extract"]);
     assert.strictEqual(result.regionCount, 2);
+  });
+
+  it("flags an inlined libsql loader before desktop packaging", () => {
+    const result = findInlinedExternalPackages(
+      region("../../node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js") +
+        region("../../node_modules/@neon-rs/load/dist/index.js"),
+    );
+    assert.deepStrictEqual(result.inlined, ["@neon-rs/load", "libsql"]);
   });
 
   it("flags scoped external packages", () => {

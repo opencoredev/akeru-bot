@@ -30,6 +30,12 @@ export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   // Inlining it into the ESM server bundle removes that CommonJS binding.
   "playwright-core",
   "node-pty",
+  // Keep computed native imports and detect-libc resolution inside libsql.
+  "libsql",
+  "@libsql/darwin-",
+  "@libsql/linux-",
+  "@libsql/win32-",
+  "@neon-rs/load",
   "ffi-rs",
   "@yuuang/",
   "@ff-labs/",
@@ -64,11 +70,6 @@ export const CLI_BUILD_ONLY_EXTERNAL_PREFIXES = [
   "@effect/platform-bun",
   "@effect/sql-sqlite-bun",
 ] as const;
-
-// These packages stay bundled, but load target-specific native bindings with a
-// computed require. Ship their package roots so the staged install also brings
-// the correct optional binding for the target OS and architecture.
-export const CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES = ["libsql"] as const;
 
 // Mastra constructs this import at runtime to keep Node-only dependencies out
 // of Cloudflare Worker bundles. The CLI bundler cannot see it, so desktop
@@ -121,7 +122,6 @@ export function selectCliPackagedRuntimeDependencies(
     Object.entries(dependencies).filter(
       ([name]) =>
         isRuntimeExternalCliDependency(name) ||
-        CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES.some((packageName) => name === packageName) ||
         CLI_LAZY_RUNTIME_PACKAGES.some((packageName) => name === packageName),
     ),
   );
