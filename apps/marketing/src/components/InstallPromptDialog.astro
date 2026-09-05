@@ -1,8 +1,14 @@
 ---
 import {
+  LINUX_CURL_INSTALL_COMMAND,
+  LINUX_DOWNLOAD_DIALOG_BODY,
+  LINUX_DOWNLOAD_DIALOG_TITLE,
   MAC_CURL_INSTALL_COMMAND,
   MAC_DOWNLOAD_DIALOG_BODY,
   MAC_DOWNLOAD_DIALOG_TITLE,
+  WIN_DOWNLOAD_DIALOG_BODY,
+  WIN_DOWNLOAD_DIALOG_TITLE,
+  WIN_POWERSHELL_INSTALL_COMMAND,
 } from "../lib/downloadInstallPrompt";
 ---
 
@@ -31,16 +37,51 @@ import {
     </div>
   </div>
 </dialog>
-
 <script>
-  import { MAC_CURL_INSTALL_COMMAND } from "../lib/downloadInstallPrompt";
+  import {
+    LINUX_CURL_INSTALL_COMMAND,
+    LINUX_DOWNLOAD_DIALOG_BODY,
+    LINUX_DOWNLOAD_DIALOG_TITLE,
+    MAC_CURL_INSTALL_COMMAND,
+    MAC_DOWNLOAD_DIALOG_BODY,
+    MAC_DOWNLOAD_DIALOG_TITLE,
+    WIN_DOWNLOAD_DIALOG_BODY,
+    WIN_DOWNLOAD_DIALOG_TITLE,
+    WIN_POWERSHELL_INSTALL_COMMAND,
+  } from "../lib/downloadInstallPrompt";
   import { installPromptForPlatform } from "../lib/installPrompt";
+
+  const INSTALL_DIALOG_CONTENT: Record<string, { title: string; body: string; command: string }> = {
+    mac: {
+      title: MAC_DOWNLOAD_DIALOG_TITLE,
+      body: MAC_DOWNLOAD_DIALOG_BODY,
+      command: MAC_CURL_INSTALL_COMMAND,
+    },
+    win: {
+      title: WIN_DOWNLOAD_DIALOG_TITLE,
+      body: WIN_DOWNLOAD_DIALOG_BODY,
+      command: WIN_POWERSHELL_INSTALL_COMMAND,
+    },
+    linux: {
+      title: LINUX_DOWNLOAD_DIALOG_TITLE,
+      body: LINUX_DOWNLOAD_DIALOG_BODY,
+      command: LINUX_CURL_INSTALL_COMMAND,
+    },
+  };
 
   const dialog = document.getElementById("install-prompt-dialog") as HTMLDialogElement | null;
   const copyButton = dialog?.querySelector<HTMLButtonElement>("[data-copy-install-prompt]");
   const agentButton = dialog?.querySelector<HTMLButtonElement>("[data-copy-agent-prompt]");
+  const titleElement = dialog?.querySelector("#install-prompt-title");
+  const bodyElement = dialog?.querySelector("#install-prompt-description");
+  const commandElement = dialog?.querySelector("pre code");
   let platform: string | null = null;
   let trigger: HTMLAnchorElement | null = null;
+
+  function installDialogForPlatform(value: string | null) {
+    return (value ? INSTALL_DIALOG_CONTENT[value] : undefined) ?? INSTALL_DIALOG_CONTENT.mac;
+  }
+
 
   document.addEventListener("click", (event) => {
     const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
@@ -51,6 +92,10 @@ import {
     event.preventDefault();
     platform = link.dataset.installPrompt ?? null;
     trigger = link;
+    const content = installDialogForPlatform(platform);
+    if (titleElement) titleElement.textContent = content.title;
+    if (bodyElement) bodyElement.textContent = content.body;
+    if (commandElement) commandElement.textContent = content.command;
     if (copyButton) copyButton.textContent = "Copy install command";
     if (agentButton) agentButton.textContent = "Copy agent prompt";
     dialog.showModal();
@@ -58,7 +103,7 @@ import {
 
   copyButton?.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(MAC_CURL_INSTALL_COMMAND);
+      await navigator.clipboard.writeText(installDialogForPlatform(platform).command);
       copyButton.textContent = "Copied";
     } catch {
       copyButton.textContent = "Copy install command";
