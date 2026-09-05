@@ -1939,10 +1939,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // electron-builder writes HKCU URL-protocol registry entries from this
     // list, so the OS hands akeru:// activations to this install instead of
     // whatever app (for example an old T3 build) registered a scheme earlier.
+    // Only the production scheme: packaged builds never run as development,
+    // and claiming akeru-dev would steal it from a developer's local build.
     buildConfig.protocols = [
       {
         name: "Akeru Bot",
-        schemes: ["akeru", "akeru-dev"],
+        schemes: ["akeru"],
       },
     ];
     const winConfig: Record<string, unknown> = {

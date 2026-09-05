@@ -22,6 +22,27 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 // default" checkbox would record in mimeapps.list.
 export const URL_HANDLER_DESKTOP_ENTRY_NAME = "akeru-url-handler.desktop";
 
+// Schemes older releases claimed for this same handler entry. Their defaults
+// must be released on upgrade or t3code:// links keep launching Akeru.
+export const RETIRED_URL_HANDLER_SCHEMES = ["t3code", "t3code-dev"] as const;
+
+// Drops mimeapps.list association lines that point a retired scheme at our
+// handler entry, leaving every other application's claims untouched. Returns
+// null when nothing changed.
+export function removeRetiredSchemeAssociations(mimeappsContent: string): string | null {
+  const lines = mimeappsContent.split("\n");
+  const retained = lines.filter((line) => {
+    const match = /^x-scheme-handler\/([^=]+)=(.*)$/.exec(line.trim());
+    if (match === null) return true;
+    const [, scheme, handlers] = match;
+    return !(
+      (RETIRED_URL_HANDLER_SCHEMES as readonly string[]).includes(scheme!) &&
+      handlers!.split(";").includes(URL_HANDLER_DESKTOP_ENTRY_NAME)
+    );
+  });
+  return retained.length === lines.length ? null : retained.join("\n");
+}
+
 const { logInfo, logWarning } = makeComponentLogger("desktop-linux-url-handler");
 
 export class DesktopLinuxUrlHandlerRegistrationError extends Schema.TaggedErrorClass<DesktopLinuxUrlHandlerRegistrationError>()(
@@ -163,12 +184,33 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  // On Linux, appDataDirectory is XDG_CONFIG_HOME — where xdg-mime records
+  // per-user defaults. Only associations that point at our own handler entry
+  // are removed, so a real T3 install's claims stay intact.
+  const releaseRetiredSchemes = Effect.gen(function* () {
+    const mimeappsPath = environment.path.join(environment.appDataDirectory, "mimeapps.list");
+    const content = yield* fileSystem.readFileString(mimeappsPath);
+    const cleaned = removeRetiredSchemeAssociations(content);
+    if (cleaned === null) {
+      return;
+    }
+    yield* fileSystem.writeFileString(mimeappsPath, cleaned);
+    yield* logInfo("released retired URL scheme defaults", {
+      schemes: RETIRED_URL_HANDLER_SCHEMES,
+    });
+  }).pipe(
+    // Best-effort like the rest of registration; a missing mimeapps.list is
+    // the common case on fresh installs.
+    Effect.ignore,
+  );
+
   const register = Effect.gen(function* () {
     if (environment.platform !== "linux" || !environment.isPackaged) {
       return;
     }
     yield* writeDesktopEntry;
     yield* Effect.forEach(schemes, setDefaultHandler, { discard: true });
+    yield* releaseRetiredSchemes;
     yield* logInfo("registered URL scheme handlers", { schemes });
   }).pipe(
     // Registration is best-effort: a missing xdg-mime or read-only home must

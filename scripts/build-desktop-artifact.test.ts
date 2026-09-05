@@ -482,12 +482,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
       ]);
       assert.deepStrictEqual(win.nsis, { differentialPackage: true });
-      // Windows registers the akeru:// schemes through the installer so the
-      // OS routes activations here instead of an older T3 Code install.
+      // Windows registers akeru:// through the installer so the OS routes
+      // activations here instead of an older T3 Code install. Production
+      // packages never claim the development scheme.
       assert.deepStrictEqual(win.protocols, [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev"],
+          schemes: ["akeru"],
         },
       ]);
       // Native binaries and helper executables cannot load from inside an
