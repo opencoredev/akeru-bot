@@ -31,7 +31,7 @@ describe("marketing search metadata", () => {
 
     expect(home).toContain('title="Akeru Bot | Open-source AI coding bot desktop app"');
     expect(home).toContain('description="Run Claude, Codex, Grok, Kimi, and OpenCode coding bots');
-    expect(home).toContain('<h1 class="hero-title">Meet Akeru Bot</h1>');
+    expect(home).toContain('<h1 class="hero-title">AI teammates that run on your machine</h1>');
     expect(home).toContain('<h2 class="section-title">Every bot has its own setup</h2>');
   });
 
@@ -79,7 +79,9 @@ describe("marketing search metadata", () => {
     const layout = sourceFile("layouts/Layout.astro");
     const home = sourceFile("pages/index.astro");
 
-    expect(layout).toContain("family=Geist:wght@400;500;600&family=EB+Garamond:wght@500");
+    expect(layout).toContain('src: url("/fonts/geist-latin.woff2") format("woff2");');
+    expect(layout).toContain('src: url("/fonts/eb-garamond-500-latin.woff2") format("woff2");');
+    expect(layout).not.toContain("fonts.googleapis.com");
     expect(layout).toContain('--font-serif: "EB Garamond", Georgia, serif;');
     expect(layout).toContain("--color-muted-foreground: #8a8a8a;");
     expect(home).not.toContain("--color-editorial-muted-foreground");

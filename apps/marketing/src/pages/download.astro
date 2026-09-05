@@ -131,6 +131,16 @@ import { RELEASES_URL } from "../lib/releases";
 </script>
 
 <style>
+  /* One-shot reveal used by the heading, platform list, and footer link. */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   .download-page {
     flex: 1;
     display: flex;
