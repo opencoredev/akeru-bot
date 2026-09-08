@@ -485,6 +485,11 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
     let regexFallbackError: string | undefined;
 
     do {
+      if (nextCursor !== null) {
+        // Filtered pages must not monopolize the server for the full search budget.
+        yield* Effect.yieldNow;
+        if (performance.now() >= deadline) break;
+      }
       const remainingTimeBudgetMs = Math.max(1, Math.ceil(deadline - performance.now()));
       const result = yield* runSearch(input.query, input.limit, "grep", () =>
         finder.grep(searchQuery, {
