@@ -1,12 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
-  ChannelConnectionId,
+  type ChannelConnectionId,
   type ChannelConnectionProfile,
   type ChannelProvider,
   type EnvironmentId,
   type OrchestrationBot,
 } from "@t3tools/contracts";
+import { PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveChannelSettingsAccess } from "../../channelAccess";
@@ -18,51 +19,42 @@ import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
-import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { ChannelSetupDialog } from "./ChannelSetupDialog";
+import { CHANNEL_PROVIDER_META, channelProviderMeta } from "./channelProviderMeta";
+import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 const UNASSIGNED = "unassigned";
-
-const CHANNELS: ReadonlyArray<{
-  readonly provider: ChannelProvider;
-  readonly label: string;
-}> = [
-  { provider: "imessage", label: "iMessage" },
-  { provider: "whatsapp", label: "WhatsApp" },
-  { provider: "telegram", label: "Telegram" },
-];
 
 export function assignedBotForConnection(
   connectionId: ChannelConnectionId,
   bots: ReadonlyArray<Pick<OrchestrationBot, "id" | "name" | "archivedAt" | "channelBindings">>,
 ) {
   return bots.find((bot) =>
-    (bot.channelBindings ?? []).some(
-      (binding) => binding.connectionId === connectionId && binding.status !== "disconnected",
-    ),
+    (bot.channelBindings ?? []).some((binding) => binding.connectionId === connectionId),
   );
 }
 
 export function providerLabel(provider: ChannelProvider): string {
-  return provider === "imessage"
-    ? "Photon"
-    : provider === "whatsapp"
-      ? "Meta Cloud API"
-      : "Telegram Bot API";
+  if (provider === "imessage") return "Photon";
+  if (provider === "whatsapp") return "Meta Cloud API";
+  if (provider === "telegram") return "Telegram Bot API";
+  if (provider === "slack") return "Slack Socket Mode";
+  return "Discord Gateway";
 }
 
 export function channelTestInstructions(provider: ChannelProvider, botName?: string): string {
-  return provider === "imessage"
-    ? `Text the number shown in Photon. ${botName ?? "The bot"} replies automatically. Groups need a dedicated line and an exact @${botName ?? "BotName"} mention.`
-    : provider === "whatsapp"
-      ? "Send a WhatsApp message to this number to test a reply."
-      : "Send a Telegram message to this bot to test a reply.";
+  if (provider === "imessage") return "Send a direct iMessage to this line to test a reply.";
+  if (provider === "whatsapp") return "Send a direct WhatsApp message to this number.";
+  if (provider === "telegram") return "Send a direct Telegram message to this bot.";
+  if (provider === "slack") {
+    return `Send a direct message or mention ${botName ?? "the bot"} in a Slack channel thread.`;
+  }
+  return `Send a direct message or mention ${botName ?? "the bot"} in a Discord server.`;
 }
 
 export function parsePhotonHostedCredentials(input: string): {
@@ -100,9 +92,6 @@ export function BotChannelsSettingsPanel() {
     targetEnvironmentId,
     (settings) => settings.channelConnections,
   );
-  const saveConnection = useAtomCommand(botEnvironment.channels.saveConnection, {
-    reportFailure: false,
-  });
   const deleteConnection = useAtomCommand(botEnvironment.channels.deleteConnection, {
     reportFailure: false,
   });
@@ -110,11 +99,12 @@ export function BotChannelsSettingsPanel() {
   const disconnect = useAtomCommand(botEnvironment.channels.disconnect, {
     reportFailure: false,
   });
+  const detach = useAtomCommand(botEnvironment.channels.detach, { reportFailure: false });
+  const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
+    reportFailure: false,
+  });
   const [provider, setProvider] = useState<ChannelProvider>("imessage");
-  const [mode, setMode] = useState<"hosted" | "self-hosted">("hosted");
-  const [name, setName] = useState("");
-  const [photonCredentials, setPhotonCredentials] = useState("");
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [setupOpen, setSetupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyConnectionId, setBusyConnectionId] = useState<string | null>(null);
   const [pendingProfile, setPendingProfile] = useState<{
@@ -126,24 +116,7 @@ export function BotChannelsSettingsPanel() {
     isPending: session.isPending,
     session: session.data,
   });
-  const value = (key: string) => values[key] ?? "";
-  const setValue = (key: string, next: string) =>
-    setValues((current) => ({ ...current, [key]: next }));
   const providerConnections = connections.filter((connection) => connection.provider === provider);
-  const required =
-    provider === "telegram"
-      ? [value("token")]
-      : provider === "whatsapp"
-        ? [value("accessToken"), value("appSecret"), value("phoneNumberId"), value("verifyToken")]
-        : mode === "hosted"
-          ? [value("projectId"), value("projectSecret")]
-          : [value("serverUrl"), value("apiKey")];
-
-  useEffect(() => {
-    setName("");
-    setPhotonCredentials("");
-    setValues({});
-  }, [provider]);
 
   useEffect(() => {
     if (!pendingProfile) return;
@@ -153,56 +126,6 @@ export function BotChannelsSettingsPanel() {
     setBusy(false);
     setPendingProfile(null);
   }, [connections, pendingProfile]);
-
-  const addConnection = async () => {
-    if (!environmentId || mutationRef.current) return;
-    mutationRef.current = true;
-    setBusy(true);
-    const random = crypto.getRandomValues(new Uint32Array(4));
-    const connectionId = ChannelConnectionId.make(`channel-${[...random].join("-")}`);
-    const input =
-      provider === "telegram"
-        ? { connectionId, name: name.trim(), provider, token: value("token").trim() }
-        : provider === "whatsapp"
-          ? {
-              connectionId,
-              name: name.trim(),
-              provider,
-              accessToken: value("accessToken").trim(),
-              appSecret: value("appSecret").trim(),
-              phoneNumberId: value("phoneNumberId").trim(),
-              verifyToken: value("verifyToken").trim(),
-            }
-          : mode === "hosted"
-            ? {
-                connectionId,
-                name: name.trim(),
-                provider,
-                mode,
-                projectId: value("projectId").trim(),
-                projectSecret: value("projectSecret").trim(),
-              }
-            : {
-                connectionId,
-                name: name.trim(),
-                provider,
-                mode,
-                serverUrl: value("serverUrl").trim(),
-                apiKey: value("apiKey").trim(),
-                ...(value("phone").trim() ? { phone: value("phone").trim() } : {}),
-              };
-    const result = await saveConnection({ environmentId, input });
-    if (result._tag === "Failure") {
-      mutationRef.current = false;
-      setBusy(false);
-      toastManager.add({ type: "error", title: "Could not save channel" });
-      return;
-    }
-    setPendingProfile({ id: connectionId, present: true });
-    setName("");
-    setPhotonCredentials("");
-    setValues({});
-  };
 
   const removeConnection = async (connection: ChannelConnectionProfile) => {
     if (!environmentId || mutationRef.current) return;
@@ -224,11 +147,14 @@ export function BotChannelsSettingsPanel() {
   const updateAssignment = async (connection: ChannelConnectionProfile, nextBotId: string) => {
     if (!environmentId || busyConnectionId) return;
     const assignedBot = assignedBotForConnection(connection.id, bots);
+    const assignedBinding = assignedBot?.channelBindings.find(
+      (binding) => binding.connectionId === connection.id,
+    );
     if (assignedBot?.id === nextBotId) return;
     setBusyConnectionId(connection.id);
 
     if (assignedBot) {
-      const result = await disconnect({
+      const result = await detach({
         environmentId,
         input: { botId: assignedBot.id, provider: connection.provider },
       });
@@ -255,6 +181,7 @@ export function BotChannelsSettingsPanel() {
               input: {
                 botId: assignedBot.id,
                 connectionId: connection.id,
+                ...(assignedBinding?.projectId ? { projectId: assignedBinding.projectId } : {}),
                 provider: connection.provider,
               },
             })
@@ -291,21 +218,23 @@ export function BotChannelsSettingsPanel() {
     return (
       <SettingsPageContainer>
         <div className="px-4 py-8 text-sm text-muted-foreground">
-          Open this environment on its host to manage channels.
+          This client does not have permission to manage channels.
         </div>
       </SettingsPageContainer>
     );
   }
 
+  const meta = channelProviderMeta(provider);
+
   return (
     <SettingsPageContainer className="gap-8">
       <SettingsSection {...searchableSetting("bot-channels")}>
         <div
-          className="mx-3 grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1 sm:mx-4"
+          className="mx-3 flex flex-wrap gap-1 rounded-xl bg-muted/60 p-1 sm:mx-4"
           role="tablist"
           aria-label="Channel type"
         >
-          {CHANNELS.map((channel) => (
+          {CHANNEL_PROVIDER_META.map((channel) => (
             <button
               key={channel.provider}
               type="button"
@@ -313,12 +242,13 @@ export function BotChannelsSettingsPanel() {
               aria-selected={provider === channel.provider}
               onClick={() => setProvider(channel.provider)}
               className={cn(
-                "h-8 rounded-lg px-3 text-sm font-medium transition-colors",
+                "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors",
                 provider === channel.provider
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
+              <channel.icon className="size-4 shrink-0" aria-hidden />
               {channel.label}
             </button>
           ))}
@@ -326,51 +256,101 @@ export function BotChannelsSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection
-        title={CHANNELS.find((channel) => channel.provider === provider)?.label ?? "Channels"}
+        title={meta.label}
+        icon={<meta.icon className="size-5 shrink-0" aria-hidden />}
+        headerAction={
+          <Button onClick={() => setSetupOpen(true)}>
+            <PlusIcon className="size-4" />
+            Add connection
+          </Button>
+        }
       >
+        <p className="mx-3 -mt-1 mb-1 text-sm text-muted-foreground sm:mx-4">{meta.tagline}.</p>
         {providerConnections.length === 0 ? (
-          <div className="mx-3 rounded-xl border border-dashed px-4 py-6 text-sm text-muted-foreground sm:mx-4">
-            No connections.
+          <div className="mx-3 flex flex-col items-start gap-3 rounded-xl border border-dashed px-4 py-6 sm:mx-4">
+            <p className="text-sm text-muted-foreground">No {meta.label} connections yet.</p>
+            <Button variant="outline" onClick={() => setSetupOpen(true)}>
+              Set up {meta.label}
+            </Button>
           </div>
         ) : (
           providerConnections.map((connection) => {
             const assignedBot = assignedBotForConnection(connection.id, bots);
+            const binding = assignedBot?.channelBindings.find(
+              (candidate) => candidate.connectionId === connection.id,
+            );
+            const externalIdentity = binding?.externalIdentity ?? connection.externalIdentity;
             const connectionBusy = busyConnectionId === connection.id;
             return (
-              <SettingsRow
+              <div
                 key={connection.id}
-                title={connection.name}
-                description={`${providerLabel(connection.provider)}${connection.externalIdentity ? ` · ${connection.externalIdentity}` : ""}${assignedBot ? ` · ${channelTestInstructions(connection.provider, assignedBot.name)}` : ""}`}
-                status={
-                  <Badge variant={assignedBot ? "success" : "secondary"} size="sm">
-                    {assignedBot ? `Assigned to ${assignedBot.name}` : "Unassigned"}
+                className="mx-3 flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-3.5 sm:mx-4"
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <meta.icon className="size-5 shrink-0" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium tracking-[-0.005em] text-foreground">
+                      {connection.name}
+                    </h3>
+                    <p className="truncate text-[13px] text-muted-foreground/80">
+                      {providerLabel(connection.provider)}
+                      {externalIdentity ? ` · ${externalIdentity}` : ""}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      binding?.status === "failed" || binding?.status === "needs-reconnect"
+                        ? "warning"
+                        : binding?.status === "disconnected"
+                          ? "secondary"
+                          : assignedBot
+                            ? "success"
+                            : "secondary"
+                    }
+                    size="sm"
+                  >
+                    {binding?.status === "failed"
+                      ? "Connection failed"
+                      : binding?.status === "needs-reconnect"
+                        ? "Needs reconnect"
+                        : binding?.status === "disconnected"
+                          ? `Disconnected · ${assignedBot?.name ?? "Assigned"}`
+                          : assignedBot
+                            ? `Assigned to ${assignedBot.name}`
+                            : "Unassigned"}
                   </Badge>
-                }
-                control={
-                  <div className="flex items-center gap-2">
-                    {connection.managementUrl ? (
-                      <Button
-                        variant="outline"
-                        render={
-                          <a href={connection.managementUrl} target="_blank" rel="noreferrer" />
-                        }
-                      >
-                        Open Photon
-                      </Button>
-                    ) : null}
+                </div>
+                {binding?.lastError ? (
+                  <p
+                    role="status"
+                    className="break-words text-xs text-amber-600 dark:text-amber-400"
+                  >
+                    {binding.lastError}
+                  </p>
+                ) : null}
+                {assignedBot ? (
+                  <p className="text-[13px] text-muted-foreground/80">
+                    {channelTestInstructions(connection.provider, assignedBot.name)}
+                  </p>
+                ) : null}
+                <div className="flex min-w-0 flex-wrap items-end gap-x-4 gap-y-2">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Bot that answers
+                    </span>
                     <Select
                       value={assignedBot?.id ?? UNASSIGNED}
                       onValueChange={(next) => next && void updateAssignment(connection, next)}
                     >
                       <SelectTrigger
                         aria-label={`Assign ${connection.name}`}
-                        className="w-40"
+                        className="w-48"
                         disabled={connectionBusy}
                       >
-                        <SelectValue />
+                        <SelectValue>{assignedBot?.name ?? "Choose a bot"}</SelectValue>
                       </SelectTrigger>
                       <SelectPopup>
-                        <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                        <SelectItem value={UNASSIGNED}>No bot</SelectItem>
                         {assignedBot?.archivedAt ? (
                           <SelectItem value={assignedBot.id}>
                             {assignedBot.name} (archived)
@@ -383,137 +363,88 @@ export function BotChannelsSettingsPanel() {
                         ))}
                       </SelectPopup>
                     </Select>
+                  </div>
+                  {connection.managementUrl ? (
                     <Button
                       variant="outline"
-                      disabled={busy || connectionBusy || assignedBot !== undefined}
-                      onClick={() => void removeConnection(connection)}
+                      render={
+                        <a href={connection.managementUrl} target="_blank" rel="noreferrer" />
+                      }
                     >
-                      Delete
+                      Open provider
                     </Button>
-                  </div>
-                }
-              />
+                  ) : null}
+                  {assignedBot && binding?.status === "connected" ? (
+                    <Button
+                      variant="outline"
+                      disabled={busy || connectionBusy}
+                      onClick={() => {
+                        setBusyConnectionId(connection.id);
+                        void disconnect({
+                          environmentId,
+                          input: { botId: assignedBot.id, provider: connection.provider },
+                        }).then((result) => {
+                          setBusyConnectionId(null);
+                          if (result._tag === "Failure") {
+                            toastManager.add({
+                              type: "error",
+                              title: "Could not disconnect channel",
+                            });
+                          }
+                        });
+                      }}
+                    >
+                      Disconnect
+                    </Button>
+                  ) : null}
+                  {assignedBot &&
+                  (binding?.status === "failed" ||
+                    binding?.status === "needs-reconnect" ||
+                    binding?.status === "disconnected") ? (
+                    <Button
+                      variant="outline"
+                      disabled={busy || connectionBusy}
+                      onClick={() => {
+                        setBusyConnectionId(connection.id);
+                        void reconnect({
+                          environmentId,
+                          input: { botId: assignedBot.id, provider: connection.provider },
+                        }).then((result) => {
+                          setBusyConnectionId(null);
+                          if (result._tag === "Failure") {
+                            toastManager.add({
+                              type: "error",
+                              title: "Could not reconnect channel",
+                            });
+                          }
+                        });
+                      }}
+                    >
+                      Reconnect
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    disabled={busy || connectionBusy || assignedBot !== undefined}
+                    onClick={() => void removeConnection(connection)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
             );
           })
         )}
       </SettingsSection>
 
-      <SettingsSection title="Add connection">
-        <SettingsRow
-          title={provider === "imessage" ? "Photon" : providerLabel(provider)}
-          control={
-            <div className="flex w-72 flex-col gap-2">
-              <Input
-                aria-label="Name"
-                placeholder={provider === "imessage" ? "Name, e.g. Work iPhone" : "Name"}
-                value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
-              />
-              {provider === "telegram" ? (
-                <Input
-                  type="password"
-                  placeholder="BotFather token"
-                  aria-label="Telegram BotFather token"
-                  value={value("token")}
-                  onChange={(event) => setValue("token", event.currentTarget.value)}
-                />
-              ) : null}
-              {provider === "imessage" ? (
-                <>
-                  <Select value={mode} onValueChange={(next) => next && setMode(next)}>
-                    <SelectTrigger aria-label="Photon connection type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectItem value="hosted">Photon hosted</SelectItem>
-                      <SelectItem value="self-hosted">Photon self-hosted</SelectItem>
-                    </SelectPopup>
-                  </Select>
-                  {mode === "hosted" ? (
-                    <Textarea
-                      aria-label="Photon hosted credentials"
-                      className="min-h-20 font-mono text-xs"
-                      placeholder={"SPECTRUM_PROJECT_ID=...\nSPECTRUM_PROJECT_SECRET=..."}
-                      rows={2}
-                      spellCheck={false}
-                      value={photonCredentials}
-                      onChange={(event) => {
-                        const next = event.currentTarget.value;
-                        const parsed = parsePhotonHostedCredentials(next);
-                        setPhotonCredentials(next);
-                        setValues((current) => ({
-                          ...current,
-                          projectId: parsed?.projectId ?? "",
-                          projectSecret: parsed?.projectSecret ?? "",
-                        }));
-                      }}
-                    />
-                  ) : (
-                    <>
-                      <Input
-                        aria-label="Photon server"
-                        placeholder="Photon server"
-                        value={value("serverUrl")}
-                        onChange={(event) => setValue("serverUrl", event.currentTarget.value)}
-                      />
-                      <Input
-                        aria-label="Photon API key"
-                        type="password"
-                        placeholder="Photon API key"
-                        value={value("apiKey")}
-                        onChange={(event) => setValue("apiKey", event.currentTarget.value)}
-                      />
-                      <Input
-                        aria-label="Photon phone or line"
-                        placeholder="Phone or line"
-                        value={value("phone")}
-                        onChange={(event) => setValue("phone", event.currentTarget.value)}
-                      />
-                    </>
-                  )}
-                </>
-              ) : null}
-              {provider === "whatsapp" ? (
-                <>
-                  <Input
-                    aria-label="WhatsApp access token"
-                    type="password"
-                    placeholder="Access token"
-                    value={value("accessToken")}
-                    onChange={(event) => setValue("accessToken", event.currentTarget.value)}
-                  />
-                  <Input
-                    aria-label="WhatsApp app secret"
-                    type="password"
-                    placeholder="App secret"
-                    value={value("appSecret")}
-                    onChange={(event) => setValue("appSecret", event.currentTarget.value)}
-                  />
-                  <Input
-                    aria-label="WhatsApp phone number ID"
-                    placeholder="Phone number ID"
-                    value={value("phoneNumberId")}
-                    onChange={(event) => setValue("phoneNumberId", event.currentTarget.value)}
-                  />
-                  <Input
-                    aria-label="WhatsApp verify token"
-                    type="password"
-                    placeholder="Verify token"
-                    value={value("verifyToken")}
-                    onChange={(event) => setValue("verifyToken", event.currentTarget.value)}
-                  />
-                </>
-              ) : null}
-              <Button
-                disabled={busy || !name.trim() || required.some((item) => !item.trim())}
-                onClick={() => void addConnection()}
-              >
-                Add connection
-              </Button>
-            </div>
-          }
-        />
-      </SettingsSection>
+      <ChannelSetupDialog
+        environmentId={environmentId}
+        provider={provider}
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        bots={activeBots}
+        onSaved={(connectionId) => setPendingProfile({ id: connectionId, present: true })}
+      />
     </SettingsPageContainer>
   );
 }

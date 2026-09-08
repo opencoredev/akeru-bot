@@ -69,6 +69,35 @@ describe("marketing search metadata", () => {
     );
   });
 
+  it("connects Grok discovery to setup without inventing product evidence", () => {
+    const home = sourceFile("pages/index.astro");
+    const openSource = sourceFile("pages/open-source-grok-bot.astro");
+    const selfHosted = sourceFile("pages/guides/self-hosted-grok-bot.astro");
+    const sitemap = sourceFile("../public/sitemap.xml");
+
+    expect(home).toContain('href="/open-source-grok-bot"');
+    expect(openSource).toContain("Looking for an OSS Grok bot?");
+    expect(openSource).toContain('src="/app-screenshot.webp"');
+    expect(openSource).toContain("not a benchmark or a recorded Grok result");
+    expect(openSource).toContain('href="/guides/self-hosted-grok-bot#first-task"');
+    expect(openSource).toContain("Does self-hosting keep my prompts offline?");
+    expect(openSource).toContain("Your Grok subscription and any server you rent");
+    for (const page of [openSource, selfHosted]) {
+      expect(page).toContain("<code>~/.akeru</code> by default");
+      expect(page).not.toContain("under Subscriptions");
+    }
+    expect(selfHosted).toContain('id="first-task"');
+    expect(selfHosted).toContain("A prompt is not a permission boundary");
+    expect(selfHosted).toContain("Do not edit files, install dependencies, or run commands.");
+    for (const path of ["/", "/open-source-grok-bot", "/guides/self-hosted-grok-bot"]) {
+      expect(sitemap).toContain(
+        `<loc>https://www.akeru-bot.com${path}</loc><lastmod>2026-09-07</lastmod>`,
+      );
+    }
+    expect(openSource).toContain('dateModified="2026-09-07"');
+    expect(selfHosted).toContain('dateModified="2026-09-07"');
+  });
+
   it("publishes an editorial blog index that links every Grok article", () => {
     const blog = sourceFile("pages/blog/index.astro");
     const layout = sourceFile("layouts/Layout.astro");

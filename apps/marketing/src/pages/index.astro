@@ -160,6 +160,11 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       Your environment owns the chats, bot profiles, and memory. Run the environment on your
       machine or connect it to a cloud sandbox that you control.
     </p>
+    <p class="how-sub">
+      Looking for an <a href="/open-source-grok-bot">open-source Grok Bot alternative</a>?
+      See how Akeru works with your Grok subscription, or follow the{" "}
+      <a href="/guides/self-hosted-grok-bot">self-hosted Grok bot setup guide</a>.
+    </p>
     <ol class="steps">
       {
         steps.map((step) => (
@@ -550,6 +555,17 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     line-height: 26px;
     text-align: center;
     color: var(--color-muted-foreground);
+  }
+
+  .how-sub a {
+    color: var(--color-foreground);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .how-sub a:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
   }
 
   .steps {

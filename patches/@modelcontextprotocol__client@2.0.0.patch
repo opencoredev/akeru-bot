@@ -1,0 +1,78 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 635f1c0134274c89e7efbcae2adf3d9ecba575ee..76ccc3a0f027ecd3f31182cdc41c208467a4e88e 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -611,20 +611,21 @@ async function parseErrorResponse(input) {
+ * instead of linking together the other lower-level functions in this module.
+ */
+ async function auth(provider, options) {
+-	try {
+-		return await authInternal(provider, options);
+-	} catch (error) {
+-		if (error instanceof require_src.OAuthError) {
+-			if (error.code === require_src.OAuthErrorCode.InvalidClient || error.code === require_src.OAuthErrorCode.UnauthorizedClient) {
+-				await provider.invalidateCredentials?.("client");
+-				await provider.invalidateCredentials?.("tokens");
+-				return await authInternal(provider, options);
+-			} else if (error.code === require_src.OAuthErrorCode.InvalidGrant) {
+-				await provider.invalidateCredentials?.("tokens");
+-				return await authInternal(provider, options);
+-			}
++	const recoveredCredentials = new Set();
++	for (;;) {
++		try {
++			return await authInternal(provider, options);
++		} catch (error) {
++			if (!(error instanceof require_src.OAuthError)) throw error;
++			const recovery = error.code === require_src.OAuthErrorCode.InvalidClient || error.code === require_src.OAuthErrorCode.UnauthorizedClient
++				? "client"
++				: error.code === require_src.OAuthErrorCode.InvalidGrant ? "tokens" : void 0;
++			if (!recovery || recoveredCredentials.has(recovery)) throw error;
++			// An expired token must not consume the stale client's registration retry.
++			recoveredCredentials.add(recovery);
++			if (recovery === "client") await provider.invalidateCredentials?.("client");
++			await provider.invalidateCredentials?.("tokens");
+ 		}
+-		throw error;
+ 	}
+ }
+ /**
+diff --git a/dist/index.mjs b/dist/index.mjs
+index f02ce3ca394e826fc27c9848dbe9a214bf6ba7a9..ebca1ee168c609501cfe8dc51cb0b80a64faac3b 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -608,20 +608,21 @@ async function parseErrorResponse(input) {
+ * instead of linking together the other lower-level functions in this module.
+ */
+ async function auth(provider, options) {
+-	try {
+-		return await authInternal(provider, options);
+-	} catch (error) {
+-		if (error instanceof OAuthError) {
+-			if (error.code === OAuthErrorCode.InvalidClient || error.code === OAuthErrorCode.UnauthorizedClient) {
+-				await provider.invalidateCredentials?.("client");
+-				await provider.invalidateCredentials?.("tokens");
+-				return await authInternal(provider, options);
+-			} else if (error.code === OAuthErrorCode.InvalidGrant) {
+-				await provider.invalidateCredentials?.("tokens");
+-				return await authInternal(provider, options);
+-			}
++	const recoveredCredentials = new Set();
++	for (;;) {
++		try {
++			return await authInternal(provider, options);
++		} catch (error) {
++			if (!(error instanceof OAuthError)) throw error;
++			const recovery = error.code === OAuthErrorCode.InvalidClient || error.code === OAuthErrorCode.UnauthorizedClient
++				? "client"
++				: error.code === OAuthErrorCode.InvalidGrant ? "tokens" : void 0;
++			if (!recovery || recoveredCredentials.has(recovery)) throw error;
++			// An expired token must not consume the stale client's registration retry.
++			recoveredCredentials.add(recovery);
++			if (recovery === "client") await provider.invalidateCredentials?.("client");
++			await provider.invalidateCredentials?.("tokens");
+ 		}
+-		throw error;
+ 	}
+ }
+ /**

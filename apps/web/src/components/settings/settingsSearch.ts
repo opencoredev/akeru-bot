@@ -296,7 +296,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "bot-channels",
     title: "Bot channels",
     to: "/settings/channels",
-    keywords: ["Telegram", "iMessage", "Photon", "WhatsApp"],
+    keywords: ["Telegram", "iMessage", "Photon", "WhatsApp", "Slack", "Discord"],
   },
   {
     id: "source-control",
