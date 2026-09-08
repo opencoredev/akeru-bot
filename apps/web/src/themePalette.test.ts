@@ -527,17 +527,48 @@ describe("theme files", () => {
     expect(themeAllowsSidebarArtwork("my-custom-theme")).toBe(false);
   });
 
-  it("reserves the Akeru Paper id for the built-in theme", () => {
-    expect(isKnownThemePreference(AKERU_PAPER_THEME.id)).toBe(true);
+  it.each(BUILT_IN_THEME_IDS)("reserves %s for the built-in theme", (id) => {
+    expect(isKnownThemePreference(id)).toBe(true);
     expect(() =>
       parseThemeFile({
         version: THEME_FILE_VERSION,
-        id: AKERU_PAPER_THEME.id,
-        name: "Akeru Paper copy",
+        id,
+        name: "Built-in theme copy",
         appearance: "light",
         colors: {},
       }),
-    ).toThrow('The theme id "akeru-paper" is reserved.');
+    ).toThrow(`The theme id "${id}" is reserved.`);
+  });
+
+  it("filters persisted built-in ID collisions without deleting stored palettes", () => {
+    const customTheme = {
+      id: "my-custom-theme",
+      label: "My custom theme",
+      appearance: "light",
+      colors: { canvas: "#f8fbff" },
+    };
+    const storedThemes = JSON.stringify([
+      ...BUILT_IN_THEME_IDS.map((id) => ({ ...customTheme, id })),
+      customTheme,
+    ]);
+    const setItem = vi.fn();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => (key === CUSTOM_THEMES_STORAGE_KEY ? storedThemes : null),
+        setItem,
+      },
+    });
+    invalidateCustomThemes();
+    try {
+      expect(getCustomThemes().map((theme) => theme.id)).toEqual([customTheme.id]);
+      for (const theme of BUILT_IN_THEMES) {
+        expect(getThemeDefinition(theme.id)).toEqual(theme);
+      }
+      expect(setItem).not.toHaveBeenCalled();
+    } finally {
+      invalidateCustomThemes();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("rejects a variant that repeats the base appearance", () => {
