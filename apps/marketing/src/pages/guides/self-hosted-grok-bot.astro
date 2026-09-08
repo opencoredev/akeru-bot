@@ -11,7 +11,7 @@ import SearchPage from "../../components/SearchPage.astro";
   path="/guides/self-hosted-grok-bot"
   kind="TechArticle"
   datePublished="2026-09-03"
-  dateModified="2026-09-03"
+  dateModified="2026-09-07"
 >
   <p class="note">
     Self-hosted refers to the Akeru application, environment server, and stored state. Grok is not a
@@ -33,7 +33,7 @@ import SearchPage from "../../components/SearchPage.astro";
   <h2>2. Connect your Grok subscription</h2>
   <ol>
     <li>Open Settings, then Providers.</li>
-    <li>Find Grok under Subscriptions.</li>
+    <li>Find Grok in the provider list.</li>
     <li>Select Connect and complete the device-code flow.</li>
     <li>Select Check OAuth to test the stored login.</li>
   </ol>
@@ -47,6 +47,25 @@ import SearchPage from "../../components/SearchPage.astro";
     Add a bot, select the Grok provider and model, then give the bot clear work. Set its
     instructions, enabled tools, and workspace mode in the bot panel. Akeru stores that profile on
     the connected environment so the same bot appears on every connected client.
+  </p>
+
+  <h2 id="first-task">Try a read-only first task</h2>
+  <p>
+    Choose a repository you are comfortable sharing with your provider. Start a chat with your
+    Grok bot in that project and send this prompt:
+  </p>
+  <pre><code>Read the README and package scripts in this repository. Do not edit files, install dependencies, or run commands. Summarize what the project does, list the documented test commands, and cite the files you used. If something is unclear, say so.</code></pre>
+  <p>
+    Check the response against the cited files. The test commands should match the repository,
+    and the bot should distinguish documented facts from guesses. Inspect any tool activity and
+    changes before giving it a follow-up task. This is a suggested task to try, not a claim that
+    every model will produce the same answer. A prompt is not a permission boundary; keep enabled
+    tools and approval settings appropriate for the repository.
+  </p>
+  <p>
+    If the chat cannot start, return to Settings, then Providers, and use Check OAuth. Confirm
+    that the environment server can reach the provider and that your account has access to the
+    selected model. A connected client alone does not prove the provider is available.
   </p>
 
   <h2>4. Add plugins and MCP servers</h2>
@@ -71,7 +90,7 @@ import SearchPage from "../../components/SearchPage.astro";
 
   <h2>Where Akeru stores data</h2>
   <p>
-    Chats, settings, secrets, and logs live under <code>~/.akeru</code> on the environment server.
+    Chats, settings, secrets, and logs live under <code>~/.akeru</code> by default on the environment server.
     Projects and provider sessions belong to that environment. Akeru does not host an account that
     copies this state to its own service.
   </p>
