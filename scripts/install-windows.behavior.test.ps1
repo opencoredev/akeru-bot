@@ -17,6 +17,7 @@ $testState = @{
   scenario = ''
   unblocked = $false
   started = $false
+  lockedFile = $null
 }
 
 function Assert-True {
@@ -75,8 +76,11 @@ function Start-Process {
   Assert-True ($Wait -and $PassThru -and $testState.unblocked) 'Installer must be unblocked and run with -Wait -PassThru.'
   $testState.started = $true
   if ($testState.scenario -eq 'launch') { throw 'fixture launch failed' }
+  if ($testState.scenario -like 'cleanup-*') {
+    $testState.lockedFile = [IO.File]::Open($FilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+  }
   $code = 0
-  if ($testState.scenario -eq 'exit') { $code = 37 }
+  if ($testState.scenario -in @('exit', 'cleanup-exit')) { $code = 37 }
   [pscustomobject]@{ ExitCode = $code }
 }
 
@@ -90,6 +94,12 @@ function Test-Payload {
   $failure = $null
   $output = @()
   try { $output = @(& $installerScript -Tag v1.2.3) } catch { $failure = $_ }
+  if ($Scenario -like 'cleanup-*') {
+    Assert-True (Test-Path -LiteralPath $testState.installerFile) 'Fixture did not keep the installer locked during cleanup.'
+    $testState.lockedFile.Dispose()
+    $testState.lockedFile = $null
+    Remove-Item -LiteralPath (Split-Path -Parent $testState.installerFile) -Recurse -Force
+  }
   if ($ExpectedError) {
     Assert-True ($null -ne $failure) "$Scenario unexpectedly succeeded."
     Assert-True ($failure.Exception.Message.Contains($ExpectedError)) "$Scenario failed for the wrong reason: $failure"
@@ -197,8 +207,10 @@ try {
   Test-Payload 'unblock' 'fixture unblock failed' $true
   Test-Payload 'launch' 'fixture launch failed' $true $true
   Test-Payload 'exit' 'installer exited with code 37' $true $true
-  Assert-True ($testState.downloadDirectories.Count -eq 10) 'Missing payload runs.'
-  Assert-True (@($testState.downloadDirectories | Select-Object -Unique).Count -eq 10) 'Payload runs reused a temporary directory.'
+  Test-Payload 'cleanup-success' '' $true $true
+  Test-Payload 'cleanup-exit' 'installer exited with code 37' $true $true
+  Assert-True ($testState.downloadDirectories.Count -eq 12) 'Missing payload runs.'
+  Assert-True (@($testState.downloadDirectories | Select-Object -Unique).Count -eq 12) 'Payload runs reused a temporary directory.'
   foreach ($directory in $testState.downloadDirectories) {
     Assert-True ((Split-Path -Leaf $directory) -match '^akeru-install-[0-9a-f-]{36}$') 'Payload did not use a GUID directory.'
   }
@@ -211,6 +223,7 @@ try {
   Assert-True ($bootstrapPaths.Count -eq 4 -and @($bootstrapPaths | Select-Object -Unique).Count -eq 4) 'Bootstrap runs reused a temporary filename.'
   Write-Output 'PASS all Windows installer behavioral tests'
 } finally {
+  if ($null -ne $testState.lockedFile) { $testState.lockedFile.Dispose() }
   $env:TEMP = $originalTemp
   $env:PROCESSOR_ARCHITECTURE = $originalArchitecture
   Remove-Item -LiteralPath $scratch -Recurse -Force

@@ -66,5 +66,5 @@ try {
   }
   Write-Output "Installed Akeru Bot $Tag."
 } finally {
-  Remove-Item -LiteralPath $tempDirectory -Recurse -Force
+  Remove-Item -LiteralPath $tempDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }

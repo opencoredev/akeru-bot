@@ -83,7 +83,7 @@ describe("install-windows.ps1", () => {
     NodeAssert.match(script, /\$checksumPath = Join-Path \$tempDirectory 'SHA256SUMS'/);
     NodeAssert.match(
       script,
-      /\} finally \{\r?\n\s+Remove-Item -LiteralPath \$tempDirectory -Recurse -Force\r?\n\}/,
+      /\} finally \{\r?\n\s+Remove-Item -LiteralPath \$tempDirectory -Recurse -Force -ErrorAction SilentlyContinue\r?\n\}/,
     );
   });
 
