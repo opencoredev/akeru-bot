@@ -24,7 +24,8 @@ describe("ComposerPendingApprovalActions", () => {
     expect(markup).toContain("h-7");
     expect(markup).toContain("sm:h-6");
     expect(markup).toContain("bg-primary");
-    expect(markup).toContain("border-input");
+    expect(markup).toContain("bg-secondary");
+    expect(markup).not.toContain("border-input");
   });
 
   it("shows only the approval choices advertised by an MCP server", () => {
