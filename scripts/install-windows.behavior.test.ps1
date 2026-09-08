@@ -10,7 +10,14 @@ $scratch = Join-Path ([IO.Path]::GetTempPath()) "akeru-windows-tests-$([Guid]::N
 $originalTemp = $env:TEMP
 $originalArchitecture = $env:PROCESSOR_ARCHITECTURE
 $null = New-Item -ItemType Directory -Path $scratch
-$script:downloadDirectories = @()
+$testState = @{
+  downloadDirectories = @()
+  requests = @()
+  installerFile = ''
+  scenario = ''
+  unblocked = $false
+  started = $false
+}
 
 function Assert-True {
   param([bool]$Condition, [string]$Message)
@@ -33,53 +40,53 @@ function Invoke-WebRequest {
   $directory = Split-Path -Parent $OutFile
   Assert-True ((Split-Path -Parent $directory) -eq $env:TEMP) 'Download escaped the private TEMP directory.'
   Assert-True (Test-Path -LiteralPath $directory -PathType Container) 'Download directory does not exist.'
-  $script:requests += $Uri
+  $testState.requests += $Uri
   if ($Uri -eq 'https://github.com/opencoredev/akeru-bot/releases/download/v1.2.3/Akeru-Bot-1.2.3-x64.exe') {
-    $script:downloadDirectories += $directory
-    $script:installerFile = $OutFile
+    $testState.downloadDirectories += $directory
+    $testState.installerFile = $OutFile
     [IO.File]::WriteAllText($OutFile, 'Harmless installer fixture, never executed.')
-    if ($script:scenario -eq 'exe-download') { throw 'fixture exe download failed' }
+    if ($testState.scenario -eq 'exe-download') { throw 'fixture exe download failed' }
     return
   }
   Assert-True ($Uri -eq 'https://github.com/opencoredev/akeru-bot/releases/download/v1.2.3/SHA256SUMS') "Unexpected URL: $Uri"
-  Assert-True ($directory -eq (Split-Path -Parent $script:installerFile)) 'Downloads used different directories.'
-  $hash = (Get-FileHash -LiteralPath $script:installerFile -Algorithm SHA256).Hash.ToLowerInvariant()
+  Assert-True ($directory -eq (Split-Path -Parent $testState.installerFile)) 'Downloads used different directories.'
+  $hash = (Get-FileHash -LiteralPath $testState.installerFile -Algorithm SHA256).Hash.ToLowerInvariant()
   $entry = "$hash *Akeru-Bot-1.2.3-x64.exe"
-  switch ($script:scenario) {
+  switch ($testState.scenario) {
     'mismatch' { $entry = "$('0' * 64)  Akeru-Bot-1.2.3-x64.exe" }
     'missing' { $entry = "$hash  another.exe" }
     'duplicate' { $entry = "$entry`r`n$entry" }
   }
   [IO.File]::WriteAllText($OutFile, "$entry`r`n")
-  if ($script:scenario -eq 'checksum-download') { throw 'fixture checksum download failed' }
+  if ($testState.scenario -eq 'checksum-download') { throw 'fixture checksum download failed' }
 }
 
 function Unblock-File {
   param([string]$Path)
-  Assert-True ($Path -eq $script:installerFile) 'Unblocked the wrong file.'
+  Assert-True ($Path -eq $testState.installerFile) 'Unblocked the wrong file.'
   Assert-True (Test-Path -LiteralPath $Path -PathType Leaf) 'Installer disappeared before unblock.'
-  $script:unblocked = $true
-  if ($script:scenario -eq 'unblock') { throw 'fixture unblock failed' }
+  $testState.unblocked = $true
+  if ($testState.scenario -eq 'unblock') { throw 'fixture unblock failed' }
 }
 
 function Start-Process {
   param([string]$FilePath, [switch]$Wait, [switch]$PassThru)
-  Assert-True ($FilePath -eq $script:installerFile) 'Started the wrong file.'
-  Assert-True ($Wait -and $PassThru -and $script:unblocked) 'Installer must be unblocked and run with -Wait -PassThru.'
-  $script:started = $true
-  if ($script:scenario -eq 'launch') { throw 'fixture launch failed' }
+  Assert-True ($FilePath -eq $testState.installerFile) 'Started the wrong file.'
+  Assert-True ($Wait -and $PassThru -and $testState.unblocked) 'Installer must be unblocked and run with -Wait -PassThru.'
+  $testState.started = $true
+  if ($testState.scenario -eq 'launch') { throw 'fixture launch failed' }
   $code = 0
-  if ($script:scenario -eq 'exit') { $code = 37 }
+  if ($testState.scenario -eq 'exit') { $code = 37 }
   [pscustomobject]@{ ExitCode = $code }
 }
 
 function Test-Payload {
   param([string]$Scenario, [string]$ExpectedError = '', [bool]$Unblocked = $false, [bool]$Started = $false)
-  $script:scenario = $Scenario
-  $script:requests = @()
-  $script:installerFile = ''
-  $script:unblocked = $false
-  $script:started = $false
+  $testState.scenario = $Scenario
+  $testState.requests = @()
+  $testState.installerFile = ''
+  $testState.unblocked = $false
+  $testState.started = $false
   $failure = $null
   $output = @()
   try { $output = @(& $installerScript -Tag v1.2.3) } catch { $failure = $_ }
@@ -92,9 +99,9 @@ function Test-Payload {
   }
   $requestCount = 2
   if ($Scenario -eq 'exe-download') { $requestCount = 1 }
-  Assert-True ($script:requests.Count -eq $requestCount) "$Scenario made unexpected downloads."
-  Assert-True ($script:unblocked -eq $Unblocked) "$Scenario had unexpected unblock behavior."
-  Assert-True ($script:started -eq $Started) "$Scenario had unexpected launch behavior."
+  Assert-True ($testState.requests.Count -eq $requestCount) "$Scenario made unexpected downloads."
+  Assert-True ($testState.unblocked -eq $Unblocked) "$Scenario had unexpected unblock behavior."
+  Assert-True ($testState.started -eq $Started) "$Scenario had unexpected launch behavior."
   Assert-Empty $env:TEMP
   Write-Output "PASS payload: $Scenario"
 }
@@ -190,9 +197,9 @@ try {
   Test-Payload 'unblock' 'fixture unblock failed' $true
   Test-Payload 'launch' 'fixture launch failed' $true $true
   Test-Payload 'exit' 'installer exited with code 37' $true $true
-  Assert-True ($script:downloadDirectories.Count -eq 10) 'Missing payload runs.'
-  Assert-True (@($script:downloadDirectories | Select-Object -Unique).Count -eq 10) 'Payload runs reused a temporary directory.'
-  foreach ($directory in $script:downloadDirectories) {
+  Assert-True ($testState.downloadDirectories.Count -eq 10) 'Missing payload runs.'
+  Assert-True (@($testState.downloadDirectories | Select-Object -Unique).Count -eq 10) 'Payload runs reused a temporary directory.'
+  foreach ($directory in $testState.downloadDirectories) {
     Assert-True ((Split-Path -Leaf $directory) -match '^akeru-install-[0-9a-f-]{36}$') 'Payload did not use a GUID directory.'
   }
   $bootstrapPaths = @(
