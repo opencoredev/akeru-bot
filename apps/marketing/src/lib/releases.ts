@@ -4,6 +4,10 @@ export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const CACHE_KEY = "akeru-latest-release";
+export const RELEASE_REQUEST_TIMEOUT_MS = 5_000;
+
+let latestRelease: Release | undefined;
+let releaseRequest: Promise<Release> | undefined;
 
 export interface ReleaseAsset {
   name: string;
@@ -101,27 +105,72 @@ export async function resolveAssetDownload(
   }
 }
 
-export async function fetchLatestRelease(): Promise<Release> {
-  const cached = sessionStorage.getItem(CACHE_KEY);
+export function fetchLatestRelease(): Promise<Release> {
+  if (latestRelease) return Promise.resolve(latestRelease);
+  if (releaseRequest) return releaseRequest;
+
+  const cached = readCachedRelease();
   if (cached) {
+    latestRelease = cached;
+    return Promise.resolve(cached);
+  }
+
+  releaseRequest = requestLatestRelease()
+    .then((data) => {
+      latestRelease = data;
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      } catch {
+        // Downloads still work when session storage is unavailable or full.
+      }
+      return data;
+    })
+    .finally(() => {
+      releaseRequest = undefined;
+    });
+  return releaseRequest;
+}
+
+function readCachedRelease(): Release | undefined {
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (!cached) return undefined;
     try {
       const data: unknown = JSON.parse(cached);
       if (isRelease(data)) return data;
-      sessionStorage.removeItem(CACHE_KEY);
     } catch {
-      sessionStorage.removeItem(CACHE_KEY);
+      // Invalid cached data is replaced by the next successful request.
     }
+    sessionStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Storage access can be denied independently of network access.
   }
+  return undefined;
+}
 
-  const response = await fetch(API_URL);
-  if (!response.ok) throw new Error(`GitHub release request failed: ${response.status}`);
+async function requestLatestRelease(): Promise<Release> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("GitHub release request timed out"));
+      controller.abort();
+    }, RELEASE_REQUEST_TIMEOUT_MS);
+  });
+  const request = async () => {
+    const response = await fetch(API_URL, { signal: controller.signal });
+    if (!response.ok) throw new Error(`GitHub release request failed: ${response.status}`);
+    const data: unknown = await response.json();
+    if (!isRelease(data)) throw new Error("GitHub returned an invalid release");
+    return data;
+  };
 
-  const data: unknown = await response.json();
-  if (!isRelease(data)) throw new Error("GitHub returned an invalid release");
-
-  sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-
-  return data;
+  try {
+    // The deadline covers the response body as well as headers, even if abort is ignored.
+    return await Promise.race([request(), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function isRelease(value: unknown): value is Release {
