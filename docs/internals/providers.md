@@ -60,6 +60,29 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+## Raw protocol observation
+
+The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
+[Codex app-server protocol](../../packages/effect-codex-app-server/src/protocol.ts) retain raw
+observations only when configured before connection. `AcpClientOptions` and `AcpAgentOptions` expose
+`rawNotificationBufferSize` for `raw.notifications`. `CodexAppServerClientOptions` exposes that option
+and `rawRequestBufferSize` for `raw.requests`. Pass them to the package's `make` or layer constructor.
+
+- `0`, the default, retains nothing and completes the raw stream immediately.
+- A positive safe integer `N` keeps the newest `N` unread events in a sliding queue. Overflow drops
+  the oldest observation, including when a reader starts late or falls behind.
+- `"unbounded"` explicitly restores the legacy lossless FIFO within the connection scope. An absent
+  or slow reader can then retain the whole session.
+
+These are work-sharing streams, not broadcasts. Enabled streams drain when input ends; closing the
+connection scope discards the buffer and interrupts readers. Observation never blocks callback
+dispatch. Notification callbacks, request handlers, and replies keep their existing behavior even
+when raw observation is disabled or drops events. Reading `raw.requests` does not send a reply.
+Use handlers for required protocol work, not a lossy observation stream.
+
+This bounds optional transport observations, not provider transcripts or the Mastra Codex/Kimi turn
+path described above.
+
 ## Composio runtime
 
 Composio is an integration provider. Its toolkits appear as named plugins such as Gmail, but Akeru

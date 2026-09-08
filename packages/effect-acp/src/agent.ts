@@ -22,7 +22,10 @@ import {
 } from "./_internal/shared.ts";
 import * as AcpTerminal from "./terminal.ts";
 
-export interface AcpAgentOptions {
+export interface AcpAgentOptions extends Pick<
+  AcpProtocol.AcpPatchedProtocolOptions,
+  "rawNotificationBufferSize"
+> {
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
   readonly logger?: (event: AcpProtocol.AcpProtocolLogEvent) => Effect.Effect<void, never>;
@@ -33,7 +36,9 @@ export class AcpAgent extends Context.Service<
   {
     readonly raw: {
       /**
-       * Stream of inbound ACP notifications observed on the connection.
+       * Opt-in, work-sharing stream of inbound ACP notifications, not a broadcast.
+       * Configure rawNotificationBufferSize before connecting; disabled streams end immediately.
+       * Enabled streams drain on input termination and are interrupted when the connection scope closes.
        */
       readonly notifications: Stream.Stream<AcpProtocol.AcpIncomingNotification>;
       /**
@@ -280,6 +285,7 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
   const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
     stdio,
     serverRequestMethods: new Set(AcpRpcs.AgentRpcs.requests.keys()),
+    rawNotificationBufferSize: options.rawNotificationBufferSize ?? 0,
     ...(options.logIncoming !== undefined ? { logIncoming: options.logIncoming } : {}),
     ...(options.logOutgoing !== undefined ? { logOutgoing: options.logOutgoing } : {}),
     ...(options.logger ? { logger: options.logger } : {}),

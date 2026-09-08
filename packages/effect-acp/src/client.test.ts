@@ -1,6 +1,7 @@
 import * as Path from "effect/Path";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -31,6 +32,10 @@ const ExtRequest = jsonRpcRequest("x/test", Schema.Struct({ hello: Schema.String
 const ExtResponse = jsonRpcResponse(Schema.Struct({ ok: Schema.Boolean }));
 const PromptRequest = jsonRpcRequest("session/prompt", AcpSchema.PromptRequest);
 const PromptResponse = jsonRpcResponse(AcpSchema.PromptResponse);
+const SessionUpdateNotification = jsonRpcNotification(
+  "session/update",
+  AcpSchema.SessionNotification,
+);
 const decodePromptRequestLine = Schema.decodeEffect(Schema.fromJsonString(PromptRequest));
 const XAiPromptCompleteNotification = jsonRpcNotification(
   "_x.ai/session/prompt_complete",
@@ -71,6 +76,43 @@ function concatBytes(chunks: ReadonlyArray<Uint8Array>): Uint8Array {
 }
 
 it.layer(NodeServices.layer)("effect-acp client", (it) => {
+  it.effect("handles callback-only session traffic without retaining raw notifications", () =>
+    Effect.gen(function* () {
+      const { stdio, input } = yield* makeInMemoryStdio();
+      const acp = yield* AcpClient.make(stdio);
+      const handled = yield* Deferred.make<void>();
+      const count = 10_000;
+      let updates = 0;
+      yield* acp.handleSessionUpdate(() =>
+        Effect.suspend(() => {
+          updates++;
+          return updates === count
+            ? Deferred.succeed(handled, undefined).pipe(Effect.asVoid)
+            : Effect.void;
+        }),
+      );
+      for (let index = 0; index < count; index++) {
+        yield* Queue.offer(
+          input,
+          yield* encodeJsonl(SessionUpdateNotification, {
+            jsonrpc: "2.0",
+            method: "session/update",
+            params: {
+              sessionId: "stress-session",
+              update: {
+                sessionUpdate: "agent_message_chunk",
+                content: { type: "text", text: `${index}:${"x".repeat(1024)}` },
+              },
+            },
+          }),
+        );
+      }
+      yield* Deferred.await(handled);
+      assert.equal(updates, count);
+      assert.deepEqual(yield* Stream.runCollect(acp.raw.notifications), []);
+    }),
+  );
+
   const makeHandle = (env?: Record<string, string>) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -90,7 +132,9 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
       const typedNotifications = yield* Ref.make<Array<unknown>>([]);
       const handle = yield* makeHandle();
       const scope = yield* Scope.make();
-      const acpLayer = AcpClient.layerChildProcess(handle);
+      const acpLayer = AcpClient.layerChildProcess(handle, {
+        rawNotificationBufferSize: "unbounded",
+      });
       const context = yield* Layer.buildWithScope(acpLayer, scope);
 
       const ext = yield* Effect.gen(function* () {
