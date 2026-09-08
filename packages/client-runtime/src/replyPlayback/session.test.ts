@@ -94,6 +94,30 @@ describe("reply playback session", () => {
     expect(prepare).toHaveBeenCalledOnce();
   });
 
+  it("clears only the owning chat so a stacked route can restore the revealed one", async () => {
+    const { session } = setup(true);
+    session.setContext({ ...context, threadId: "other", provider: "speech", voice: "voice" });
+    await session.controller.start({
+      identity: {
+        ...context,
+        threadId: "other",
+        provider: "speech",
+        voice: "voice",
+        messageId: "reply-1",
+        contentVersion: message.updatedAt,
+      },
+      text: "Stored answer",
+      automatic: false,
+    });
+    session.clearContextIf(context.environmentId, context.threadId);
+    expect(session.controller.getSnapshot()).toMatchObject({
+      status: "playing",
+      identity: { threadId: "other" },
+    });
+    session.clearContextIf(context.environmentId, "other");
+    expect(session.controller.getSnapshot().status).toBe("idle");
+  });
+
   it("stops playback when the active chat changes", async () => {
     const { session } = setup(true);
     await session.controller.start({

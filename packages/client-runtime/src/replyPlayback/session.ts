@@ -107,6 +107,17 @@ export function createReplyPlaybackSession(options: {
         tracker.reset(scope, 0);
       }
     },
+    clearContextIf: (environmentId: string, threadId: string) => {
+      if (context?.environmentId === environmentId && context.threadId === threadId) {
+        context = null;
+        controller.setContext(null);
+        scope = null;
+        seen = new Set();
+        sequence = 0;
+        baseline = null;
+        tracker.reset(null, 0);
+      }
+    },
     observe: (messages: ReadonlyArray<ReplyPlaybackMessage>) => {
       const versions = new Map<string, string>();
       const live: CompletedReply[] = [];

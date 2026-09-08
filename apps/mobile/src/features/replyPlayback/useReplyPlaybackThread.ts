@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import type {
   ReplyPlaybackMessage,
   ReplyPlaybackSession,
@@ -30,24 +31,28 @@ export function useReplyPlaybackThread(options: {
   const signature = options.messages
     .map((message) => `${message.id}:${message.updatedAt}:${message.streaming}`)
     .join("|");
-  useEffect(() => {
-    if (!session) return;
-    if (!options.environmentId || !options.threadId) {
-      session.setContext(null);
-      return;
-    }
-    session.setContext({
-      environmentId: options.environmentId,
-      threadId: options.threadId,
-      provider: session.synthesis.provider,
-      voice: session.synthesis.voice,
-      connected: options.connected === true,
-      mediaBlocked: false,
-    });
-    return () => {
-      session.setContext(null);
-    };
-  }, [session, options.environmentId, options.threadId, options.connected]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!session) return;
+      if (!options.environmentId || !options.threadId) {
+        session.setContext(null);
+        return;
+      }
+      const environmentId = options.environmentId;
+      const threadId = options.threadId;
+      session.setContext({
+        environmentId,
+        threadId,
+        provider: session.synthesis.provider,
+        voice: session.synthesis.voice,
+        connected: options.connected === true,
+        mediaBlocked: false,
+      });
+      return () => {
+        session.clearContextIf(environmentId, threadId);
+      };
+    }, [session, options.environmentId, options.threadId, options.connected]),
+  );
   useEffect(() => {
     session?.observe(options.messages);
   }, [session, options.messages, signature]);

@@ -40,16 +40,18 @@ export function useReplyPlaybackThread(options: {
       session.setContext(null);
       return;
     }
+    const environmentId = options.environmentId;
+    const threadId = options.threadId;
     session.setContext({
-      environmentId: options.environmentId,
-      threadId: options.threadId,
+      environmentId,
+      threadId,
       provider: session.synthesis.provider,
       voice: session.synthesis.voice,
       connected: !voiceEnvironmentConnectionLost(connection.data),
       mediaBlocked: options.mediaBlocked,
     });
     return () => {
-      session.setContext(null);
+      session.clearContextIf(environmentId, threadId);
     };
   }, [session, options.environmentId, options.threadId, options.mediaBlocked, connection.data]);
   useEffect(() => {
