@@ -34,6 +34,18 @@ export interface CodexAppServerIncomingRequest {
 export interface CodexAppServerPatchedProtocolOptions {
   readonly stdio: Stdio.Stdio;
   readonly terminationError?: Effect.Effect<CodexError.CodexAppServerError>;
+  /**
+   * Enables raw notification observation. Zero (the default) returns an empty stream.
+   * A positive integer retains the newest N unread events, dropping the oldest on overflow.
+   * "unbounded" preserves the legacy lossless FIFO, including all events before a late reader.
+   * Buffers never block callback dispatch; finite buffers can also drop events for slow readers.
+   */
+  readonly rawNotificationBufferSize?: number | "unbounded";
+  /**
+   * Enables raw request observation with the same buffering rules as rawNotificationBufferSize.
+   * Observation does not replace onRequest or send replies; finite buffers can drop requests.
+   */
+  readonly rawRequestBufferSize?: number | "unbounded";
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
   readonly logger?: (event: CodexAppServerProtocolLogEvent) => Effect.Effect<void, never>;
@@ -47,7 +59,15 @@ export interface CodexAppServerPatchedProtocolOptions {
 }
 
 export interface CodexAppServerPatchedProtocol {
+  /**
+   * Opt-in FIFO shared by readers, not a broadcast. Disabled streams end immediately.
+   * Enabled streams drain on input termination; scope closure discards the buffer and interrupts readers.
+   */
   readonly incomingNotifications: Stream.Stream<CodexAppServerIncomingNotification>;
+  /**
+   * Opt-in request observation with the same stream lifecycle as incomingNotifications.
+   * Reading does not send a reply or disable onRequest.
+   */
   readonly incomingRequests: Stream.Stream<CodexAppServerIncomingRequest>;
   readonly request: (
     method: string,
@@ -148,13 +168,34 @@ const toProtocolMessage = (
   ...(fields.error !== undefined ? { error: fields.error } : {}),
 });
 
+const makeRawQueue = Effect.fn("makeRawQueue")(function* <A>(bufferSize: number | "unbounded" = 0) {
+  if (bufferSize === 0) {
+    return undefined;
+  }
+  if (bufferSize !== "unbounded" && (!Number.isSafeInteger(bufferSize) || bufferSize < 0)) {
+    return yield* Effect.die(
+      new RangeError("Raw buffer size must be a non-negative safe integer or 'unbounded'."),
+    );
+  }
+  return yield* Effect.acquireRelease(
+    Queue.sliding<A, Cause.Done<void>>(
+      bufferSize === "unbounded" ? Number.POSITIVE_INFINITY : bufferSize,
+    ),
+    Queue.shutdown,
+  );
+});
+
 export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPatchedProtocol")(
   function* (
     options: CodexAppServerPatchedProtocolOptions,
   ): Effect.fn.Return<CodexAppServerPatchedProtocol, never, Scope.Scope> {
     const outgoing = yield* Queue.unbounded<string, Cause.Done<void>>();
-    const incomingNotifications = yield* Queue.unbounded<CodexAppServerIncomingNotification>();
-    const incomingRequests = yield* Queue.unbounded<CodexAppServerIncomingRequest>();
+    const incomingNotifications = yield* makeRawQueue<CodexAppServerIncomingNotification>(
+      options.rawNotificationBufferSize,
+    );
+    const incomingRequests = yield* makeRawQueue<CodexAppServerIncomingRequest>(
+      options.rawRequestBufferSize,
+    );
     const pending = yield* Ref.make(new Map<string, CodexAppServerPendingRequest>());
     const nextRequestId = yield* Ref.make(1);
     const remainder = yield* Ref.make("");
@@ -190,6 +231,12 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         }
         return [
           Effect.gen(function* () {
+            if (incomingNotifications) {
+              yield* Queue.end(incomingNotifications);
+            }
+            if (incomingRequests) {
+              yield* Queue.end(incomingRequests);
+            }
             const error = yield* classify();
             yield* failAllPending(error);
             yield* Queue.end(outgoing);
@@ -270,7 +317,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
     };
 
     const handleRequest = (request: CodexAppServerIncomingRequest) =>
-      Queue.offer(incomingRequests, request).pipe(
+      (incomingRequests ? Queue.offer(incomingRequests, request) : Effect.void).pipe(
         Effect.andThen(
           options.onRequest
             ? options.onRequest(request).pipe(
@@ -292,7 +339,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       );
 
     const handleNotification = (notification: CodexAppServerIncomingNotification) =>
-      Queue.offer(incomingNotifications, notification).pipe(
+      (incomingNotifications ? Queue.offer(incomingNotifications, notification) : Effect.void).pipe(
         Effect.andThen(options.onNotification ? options.onNotification(notification) : Effect.void),
         Effect.asVoid,
       );
@@ -412,8 +459,10 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       });
 
     return {
-      incomingNotifications: Stream.fromQueue(incomingNotifications),
-      incomingRequests: Stream.fromQueue(incomingRequests),
+      incomingNotifications: incomingNotifications
+        ? Stream.fromQueue(incomingNotifications)
+        : Stream.empty,
+      incomingRequests: incomingRequests ? Stream.fromQueue(incomingRequests) : Stream.empty,
       request,
       notify,
       respond,
