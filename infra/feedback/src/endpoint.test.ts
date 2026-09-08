@@ -240,13 +240,19 @@ describe("product feedback endpoint", () => {
     });
     expect(await reason(await limited(request(baseSubmission())))).toBe("rate_limited");
 
+    // Without Turnstile the suspicious threshold is the hard network limit.
     const noChallengeMemory = makeRepository();
-    noChallengeMemory.setIpCount(5);
+    noChallengeMemory.setIpCount(4);
     const noChallenge = makeProductFeedbackEndpoint({
       repository: noChallengeMemory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
     });
     expect((await noChallenge(request(baseSubmission()))).status).toBe(201);
+    noChallengeMemory.setIpCount(5);
+    const closed = await noChallenge(request(baseSubmission()));
+    expect(closed.status).toBe(429);
+    expect(closed.headers.get("retry-after")).toBe("3600");
+    expect(await closed.json()).toMatchObject({ reason: "rate_limited" });
   });
 
   it("turns repository failures into a bounded honest response", async () => {
