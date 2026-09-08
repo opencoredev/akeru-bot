@@ -123,12 +123,41 @@ function updateGroup(
   return groups.map((group) => (group.id === groupId ? { ...group, ...patch } : group));
 }
 
+const threadIndexes = new WeakMap<
+  ReadonlyArray<OrchestrationThread>,
+  ReadonlyMap<ThreadId, number>
+>();
+
+function threadIndex(threads: ReadonlyArray<OrchestrationThread>) {
+  let index = threadIndexes.get(threads);
+  if (!index) {
+    index = new Map(threads.map((thread, offset) => [thread.id, offset]));
+    threadIndexes.set(threads, index);
+  }
+  return index;
+}
+
+export function findProjectedThread(
+  threads: ReadonlyArray<OrchestrationThread>,
+  threadId: ThreadId,
+): OrchestrationThread | undefined {
+  const offset = threadIndex(threads).get(threadId);
+  return offset === undefined ? undefined : threads[offset];
+}
+
 function updateThread(
   threads: ReadonlyArray<OrchestrationThread>,
   threadId: ThreadId,
   patch: ThreadPatch,
-): OrchestrationThread[] {
-  return threads.map((thread) => (thread.id === threadId ? { ...thread, ...patch } : thread));
+): ReadonlyArray<OrchestrationThread> {
+  const index = threadIndex(threads);
+  const offset = index.get(threadId);
+  if (offset === undefined) return threads;
+  const next = threads.slice();
+  next[offset] = { ...threads[offset]!, ...patch };
+  // A patch preserves both identity and ordering, including archived/deleted rows.
+  threadIndexes.set(next, index);
+  return next;
 }
 
 function decodeForEvent<A>(
@@ -840,7 +869,7 @@ export function projectEvent(
     case "thread.unsettled":
       return decodeForEvent(ThreadUnsettledPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
-          const existing = nextBase.threads.find((thread) => thread.id === payload.threadId);
+          const existing = findProjectedThread(nextBase.threads, payload.threadId);
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
@@ -977,7 +1006,7 @@ export function projectEvent(
           event.type,
           "payload",
         );
-        const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+        const thread = findProjectedThread(nextBase.threads, payload.threadId);
         if (!thread) {
           return nextBase;
         }
@@ -1053,7 +1082,7 @@ export function projectEvent(
         "payload",
       ).pipe(
         Effect.map((payload) => {
-          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          const thread = findProjectedThread(nextBase.threads, payload.threadId);
           if (!thread) return nextBase;
           const messages = thread.messages.map((message) => {
             if (message.id !== payload.messageId) return message;
@@ -1113,7 +1142,7 @@ export function projectEvent(
           event.type,
           "payload",
         );
-        const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+        const thread = findProjectedThread(nextBase.threads, payload.threadId);
         if (!thread) {
           return nextBase;
         }
@@ -1177,7 +1206,7 @@ export function projectEvent(
           event.type,
           "payload",
         );
-        const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+        const thread = findProjectedThread(nextBase.threads, payload.threadId);
         if (!thread) {
           return nextBase;
         }
@@ -1209,7 +1238,7 @@ export function projectEvent(
           event.type,
           "payload",
         );
-        const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+        const thread = findProjectedThread(nextBase.threads, payload.threadId);
         if (!thread) {
           return nextBase;
         }
@@ -1280,7 +1309,7 @@ export function projectEvent(
     case "thread.reverted":
       return decodeForEvent(ThreadRevertedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
-          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          const thread = findProjectedThread(nextBase.threads, payload.threadId);
           if (!thread) {
             return nextBase;
           }
@@ -1336,7 +1365,7 @@ export function projectEvent(
         "payload",
       ).pipe(
         Effect.map((payload) => {
-          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          const thread = findProjectedThread(nextBase.threads, payload.threadId);
           if (!thread) {
             return nextBase;
           }
