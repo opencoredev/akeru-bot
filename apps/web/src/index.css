@@ -342,6 +342,25 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   border: 1px solid color-mix(in srgb, var(--contrast-foreground) 10%, transparent);
 }
 
+/* Akeru Noir popovers read as elevated panels, Linear-style: a surface one
+   step above the canvas, a whisper of light at the edge, and rounder corners
+   than the classic chassis. */
+html[data-theme-id="akeru-noir"] :is([data-slot] .dropdown-glass, .dropdown-glass) {
+  background: var(--popover);
+  border-color: color-mix(in srgb, var(--contrast-foreground) 7%, transparent);
+  border-radius: 0.75rem;
+}
+
+/* Noir dialogs are solid elevated panels: the surface itself carries the
+   elevation, so the edge light and inset highlight go away. */
+html[data-theme-id="akeru-noir"] .dialog-glass {
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--contrast-foreground) 6%, transparent);
+  box-shadow: 0 32px 80px -24px rgb(0 0 0 / 80%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 @utility topbar-scroll-fade {
   --topbar-scroll-fade-height: 2.5rem;
   -webkit-mask-image:
@@ -557,6 +576,15 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   body {
     @apply text-foreground relative;
   }
+}
+
+/* Akeru Noir is a chassis, not just a palette: fully rounded pill controls
+   and rounder cards on neutral near-black surfaces. Scoped to the theme id
+   so the classic geometry stays untouched for every other theme. Lives
+   outside @layer so it wins over the unlayered :root defaults. */
+html[data-theme-id="akeru-noir"] {
+  --control-radius: 999px;
+  --radius: 0.875rem;
 }
 
 @layer components {

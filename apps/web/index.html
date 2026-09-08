@@ -52,6 +52,20 @@
         // Keep this small boot-time copy in sync with the built-in palettes so
         // the selected theme is visible before the app has mounted.
         const BUILT_IN_THEME_PALETTES = {
+          "akeru-noir": {
+            light: {
+              background: "oklch(0.99 0.001 286.375)",
+              foreground: "oklch(0.21 0.006 285.885)",
+              accent: "oklch(0.607447 0.134946 296.512)",
+              chrome: "oklch(0.975 0.0015 286.375)",
+            },
+            dark: {
+              background: "oklch(0.105 0 0)",
+              foreground: "oklch(0.97 0.0013 286.375)",
+              accent: "oklch(0.607447 0.134946 296.512)",
+              chrome: "oklch(0.135 0 0)",
+            },
+          },
           "akeru-paper": {
             light: {
               background: "oklch(0.958531 0.009845 87.471)",
@@ -149,6 +163,7 @@
           "system",
           "light",
           "dark",
+          "akeru-noir",
           "akeru-paper",
           "t3-chat",
           "grove",
