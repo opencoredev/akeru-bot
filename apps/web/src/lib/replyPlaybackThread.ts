@@ -48,14 +48,11 @@ export function useReplyPlaybackThread(options: {
       connected: !voiceEnvironmentConnectionLost(connection.data),
       mediaBlocked: options.mediaBlocked,
     });
-    session.observe(options.messages);
-  }, [
-    session,
-    options.environmentId,
-    options.threadId,
-    options.mediaBlocked,
-    options.messages,
-    signature,
-    connection.data,
-  ]);
+    return () => {
+      session.setContext(null);
+    };
+  }, [session, options.environmentId, options.threadId, options.mediaBlocked, connection.data]);
+  useEffect(() => {
+    session?.observe(options.messages);
+  }, [session, options.messages, signature]);
 }

@@ -70,6 +70,7 @@ import {
   useReplyPlaybackThread,
 } from "../replyPlayback/useReplyPlaybackThread";
 import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
+import { useEnvironmentPresentation } from "../../state/presentation";
 import {
   parseReviewCommentMessageSegments,
   type ReviewInlineComment,
@@ -1575,6 +1576,7 @@ function ThreadFeedPlaceholder(props: {
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const navigation = useNavigation();
   const replyPlayback = useOptionalReplyPlayback();
+  const environment = useEnvironmentPresentation(props.environmentId);
   const playbackMessages = useMemo(
     () => props.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : [])),
     [props.feed],
@@ -1583,6 +1585,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     environmentId: props.environmentId,
     threadId: props.threadId,
     messages: playbackMessages,
+    connected: environment.presentation?.connection.phase === "connected",
   });
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foldSettleFrameRef = useRef<number | null>(null);

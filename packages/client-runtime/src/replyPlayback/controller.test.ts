@@ -140,6 +140,16 @@ describe("reply playback ownership", () => {
     expect(controller.getSnapshot().status).toBe("playing");
   });
 
+  it("still goes idle when native disposal throws", async () => {
+    const { controller, handles } = setup();
+    await controller.start(request);
+    handles[0]?.dispose.mockImplementation(() => {
+      throw new Error("Native player already released.");
+    });
+    controller.stop();
+    expect(controller.getSnapshot()).toEqual({ status: "idle" });
+  });
+
   it.each(["onEnded", "onInterrupted"] as const)("releases media on %s", async (event) => {
     const { controller, events, handles } = setup();
     await controller.start(request);

@@ -80,7 +80,11 @@ export function createReplyPlaybackController(
     abort = null;
     const previous = audio;
     audio = null;
-    previous?.dispose();
+    try {
+      previous?.dispose();
+    } catch {
+      // Native disposal must not leave this client reporting playing audio.
+    }
   };
   const stop = () => {
     release();

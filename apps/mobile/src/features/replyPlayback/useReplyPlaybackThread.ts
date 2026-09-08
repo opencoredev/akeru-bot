@@ -41,16 +41,14 @@ export function useReplyPlaybackThread(options: {
       threadId: options.threadId,
       provider: session.synthesis.provider,
       voice: session.synthesis.voice,
-      connected: options.connected !== false,
+      connected: options.connected === true,
       mediaBlocked: false,
     });
-    session.observe(options.messages);
-  }, [
-    session,
-    options.environmentId,
-    options.threadId,
-    options.connected,
-    options.messages,
-    signature,
-  ]);
+    return () => {
+      session.setContext(null);
+    };
+  }, [session, options.environmentId, options.threadId, options.connected]);
+  useEffect(() => {
+    session?.observe(options.messages);
+  }, [session, options.messages, signature]);
 }
