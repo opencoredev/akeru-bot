@@ -87,11 +87,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     setReplyTarget(null);
   }, [groupId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
-  if (!group) return null;
-  const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
-  const boss = resolveAvailableGroupBoss(members, group.bossBotId);
-  const working =
-    runtime.sending || runtime.respondingRequestIds.length > 0 || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages);
   useReplyPlaybackThread({
     environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
@@ -99,6 +94,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     messages,
     mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
   });
+
+  if (!group) return null;
+  const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
+  const boss = resolveAvailableGroupBoss(members, group.bossBotId);
+  const working =
+    runtime.sending || runtime.respondingRequestIds.length > 0 || presence === "working";
   const pendingApproval = approvalState.pendingApproval;
   const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
