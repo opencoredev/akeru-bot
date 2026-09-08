@@ -19,6 +19,7 @@ import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as Effect from "effect/Effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
+import { findProjectedThread } from "./projector.ts";
 import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
 
 function invariantError(commandType: string, detail: string): OrchestrationCommandInvariantError {
@@ -32,7 +33,7 @@ export function findThreadById(
   readModel: OrchestrationReadModel,
   threadId: ThreadId,
 ): OrchestrationThread | undefined {
-  return readModel.threads.find((thread) => thread.id === threadId);
+  return findProjectedThread(readModel.threads, threadId);
 }
 
 export function findProjectById(
