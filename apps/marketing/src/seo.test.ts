@@ -82,6 +82,10 @@ describe("marketing search metadata", () => {
     expect(openSource).toContain('href="/guides/self-hosted-grok-bot#first-task"');
     expect(openSource).toContain("Does self-hosting keep my prompts offline?");
     expect(openSource).toContain("Your Grok subscription and any server you rent");
+    for (const page of [openSource, selfHosted]) {
+      expect(page).toContain("<code>~/.akeru</code> by default");
+      expect(page).not.toContain("under Subscriptions");
+    }
     expect(selfHosted).toContain('id="first-task"');
     expect(selfHosted).toContain("A prompt is not a permission boundary");
     expect(selfHosted).toContain("Do not edit files, install dependencies, or run commands.");

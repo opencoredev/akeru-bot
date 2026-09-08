@@ -124,7 +124,7 @@ import SearchPage from "../components/SearchPage.astro";
   <h2>How do I start?</h2>
   <ol>
     <li><a href="/download">Download Akeru Bot</a>, or run <code>npx akeru-bot@latest</code> with a supported Node.js version.</li>
-    <li>Open Settings, then Providers. Find Grok under Subscriptions and select Connect.</li>
+    <li>Open Settings, then Providers. Find Grok and select Connect.</li>
     <li>Complete the device-code login, then select Check OAuth to verify the connection.</li>
     <li>Create a bot, choose Grok and a model, and set its instructions and tools.</li>
   </ol>
@@ -148,8 +148,8 @@ import SearchPage from "../components/SearchPage.astro";
 
   <h2>Does self-hosting keep my prompts offline?</h2>
   <p>
-    Your environment stores the chats, bot profiles, settings, secrets, and logs under
-    <code>~/.akeru</code>. Prompts and the context needed for a task still go to the connected
+    Your environment stores the chats, bot profiles, settings, secrets, and logs under{" "}
+    <code>~/.akeru</code> by default. Prompts and the context needed for a task still go to the connected
     provider. Plugins and MCP servers can also send data to their services when you enable and
     use them. Review those connections before giving a bot sensitive work.
   </p>
