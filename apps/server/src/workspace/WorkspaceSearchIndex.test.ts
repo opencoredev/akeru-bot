@@ -7,8 +7,10 @@ import {
 } from "@ff-labs/fff-node";
 import { afterEach, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import { vi } from "vite-plus/test";
 
 import * as WorkspaceSearchIndex from "./WorkspaceSearchIndex.ts";
@@ -27,6 +29,17 @@ function fileItem(relativePath: string): FileItem {
     modificationFrecencyScore: 0,
     totalFrecencyScore: 0,
     gitStatus: "clean",
+  };
+}
+
+function emptyGrepPage(): GrepResult {
+  return {
+    items: [],
+    totalMatched: 0,
+    totalFilesSearched: 1,
+    totalFiles: 2,
+    filteredFileCount: 2,
+    nextCursor: { __brand: "GrepCursor", _offset: 1 } as GrepCursor,
   };
 }
 
@@ -306,14 +319,19 @@ it.effect("continues whole-word searches after a filtered grep page", () =>
         filteredFileCount: 1,
         nextCursor: cursor,
       });
-      const grep = vi.fn((_query: string, options?: GrepOptions) =>
-        options?.cursor
-          ? { ok: true as const, value: grepResult("needle", [[0, 6]], null) }
-          : {
-              ok: true as const,
-              value: grepResult("needleSuffix", [[0, 6]], nextCursor),
-            },
-      );
+      const pageEvents: string[] = [];
+      const grep = vi.fn((_query: string, options?: GrepOptions) => {
+        if (options?.cursor) {
+          pageEvents.push("next page");
+          return { ok: true as const, value: grepResult("needle", [[0, 6]], null) };
+        }
+        pageEvents.push("first page");
+        setImmediate(() => pageEvents.push("other work"));
+        return {
+          ok: true as const,
+          value: grepResult("needleSuffix", [[0, 6]], nextCursor),
+        };
+      });
       const finder = {
         destroy: vi.fn(),
         waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
@@ -343,6 +361,82 @@ it.effect("continues whole-word searches after a filtered grep page", () =>
       });
       expect(grep).toHaveBeenCalledTimes(2);
       expect(grep.mock.calls[1]?.[1]?.cursor).toBe(nextCursor);
+      expect(pageEvents).toEqual(["first page", "other work", "next page"]);
     }),
   ),
+);
+
+it.effect("does not start another grep page when the budget expires while yielding", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      let now = 0;
+      vi.spyOn(performance, "now").mockImplementation(() => now);
+      const grep = vi
+        .fn<FileFinder["grep"]>(() => {
+          throw new Error("Unexpected grep after the search budget expired");
+        })
+        .mockImplementationOnce(() => {
+          setImmediate(() => {
+            now = 250;
+          });
+          return { ok: true as const, value: emptyGrepPage() };
+        });
+      const finder = {
+        destroy: vi.fn(),
+        waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
+        grep,
+      } as unknown as FileFinder;
+      vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+
+      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", "content");
+      const result = yield* searchIndex.searchContents({
+        query: "needle",
+        limit: 1,
+        caseSensitive: true,
+        wholeWord: true,
+        useRegex: false,
+      });
+
+      expect(result).toEqual({ matches: [], truncated: true });
+      expect(grep).toHaveBeenCalledTimes(1);
+    }),
+  ),
+);
+
+it.effect("interrupts a paginated search before another native call and releases its finder", () =>
+  Effect.gen(function* () {
+    const firstPage = yield* Deferred.make<void>();
+    const grep = vi.fn(() => {
+      Deferred.doneUnsafe(firstPage, Effect.void);
+      return { ok: true as const, value: emptyGrepPage() };
+    });
+    const destroy = vi.fn();
+    const finder = {
+      destroy,
+      waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
+      grep,
+    } as unknown as FileFinder;
+    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", "content");
+        const fiber = yield* searchIndex
+          .searchContents({
+            query: "needle",
+            limit: 1,
+            caseSensitive: true,
+            wholeWord: true,
+            useRegex: false,
+          })
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(firstPage);
+        yield* Fiber.interrupt(fiber);
+
+        expect(grep).toHaveBeenCalledTimes(1);
+        expect(destroy).not.toHaveBeenCalled();
+      }),
+    );
+    expect(destroy).toHaveBeenCalledTimes(1);
+  }),
 );
