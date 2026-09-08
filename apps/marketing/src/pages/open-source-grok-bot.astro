@@ -10,7 +10,7 @@ import SearchPage from "../components/SearchPage.astro";
   lede="Akeru Bot gives you named AI teammates without locking the app or its data inside one hosted service. Connect your Grok subscription, choose where the environment runs, and inspect the MIT-licensed source."
   path="/open-source-grok-bot"
   datePublished="2026-09-03"
-  dateModified="2026-09-03"
+  dateModified="2026-09-07"
 >
   <p class="note">
     Akeru Bot is an independent open-source project. It is not affiliated with xAI, Cursor, or the
@@ -20,6 +20,34 @@ import SearchPage from "../components/SearchPage.astro";
     This page covers the Grok Bot open source alternative. It does not describe Grok Build, the
     separate coding agent and terminal interface that xAI{" "}
     <a href="https://x.ai/news/grok-build-open-source">released as open source</a>.
+  </p>
+
+  <h2>Run Grok bots without a closed-source app</h2>
+  <p>
+    Looking for an OSS Grok bot? Akeru Bot is an MIT-licensed application for named AI teammates.
+    Run the app on your own computer or server, connect your Grok subscription, and give each bot
+    its own instructions and tools. You can inspect, modify, and self-host the application.
+    Model access comes from your provider, not from Akeru.
+  </p>
+  <figure class="product-preview">
+    <a href="/app-screenshot.webp" aria-label="Open the full-size Akeru Bot screenshot">
+      <img
+        src="/app-screenshot.webp"
+        width="1440"
+        height="900"
+        alt="Akeru Bot showing Atlas, Mira, and Relay in a shared Launch crew conversation"
+        loading="lazy"
+        decoding="async"
+      />
+    </a>
+    <figcaption>
+      The Akeru interface with a demonstration conversation. This illustrates named bots and a
+      shared workspace, not a benchmark or a recorded Grok result.
+    </figcaption>
+  </figure>
+  <p>
+    <a href="/#demos">Watch the product demos</a> for browser work, iMessage, and voice, or{" "}
+    <a href="/guides/self-hosted-grok-bot">follow the Grok setup guide</a> to try your own task.
   </p>
 
   <h2>What makes Akeru an open-source Grok Bot alternative?</h2>
@@ -93,10 +121,43 @@ import SearchPage from "../components/SearchPage.astro";
     and does not remove the network connection required by the provider.
   </p>
 
-  <h2>Is Akeru Bot a Grok Bot OSS project?</h2>
+  <h2>How do I start?</h2>
+  <ol>
+    <li><a href="/download">Download Akeru Bot</a>, or run <code>npx akeru-bot@latest</code> with a supported Node.js version.</li>
+    <li>Open Settings, then Providers. Find Grok under Subscriptions and select Connect.</li>
+    <li>Complete the device-code login, then select Check OAuth to verify the connection.</li>
+    <li>Create a bot, choose Grok and a model, and set its instructions and tools.</li>
+  </ol>
   <p>
-    Yes, if Grok Bot OSS means an open-source application for running named Grok bots. Akeru Bot
-    publishes its application source and accepts contributions on GitHub. It does not publish or
-    replace Grok model weights.
+    The <a href="/guides/self-hosted-grok-bot#first-task">first-task walkthrough</a> includes a
+    read-only repository review you can try before letting a bot edit files.
+  </p>
+
+  <h2>Is Akeru Bot free?</h2>
+  <p>
+    The Akeru application is free and MIT licensed. You still need supported provider access.
+    Your Grok subscription and any server you rent have their own costs and limits. Akeru does not
+    include unlimited model usage or bypass your provider's terms.
+  </p>
+
+  <h2>Can I use providers other than Grok?</h2>
+  <p>
+    Yes. Akeru includes drivers for Codex, Claude, Grok, Kimi For Coding, and OpenCode.
+    Choose a provider for each bot. Connecting Grok does not require moving every bot to Grok.
+  </p>
+
+  <h2>Does self-hosting keep my prompts offline?</h2>
+  <p>
+    Your environment stores the chats, bot profiles, settings, secrets, and logs under
+    <code>~/.akeru</code>. Prompts and the context needed for a task still go to the connected
+    provider. Plugins and MCP servers can also send data to their services when you enable and
+    use them. Review those connections before giving a bot sensitive work.
   </p>
 </SearchPage>
+
+<style>
+  .product-preview { margin: 32px 0; }
+  .product-preview a { display: block; }
+  .product-preview img { display: block; width: 100%; height: auto; border: 1px solid var(--color-input); }
+  .product-preview figcaption { margin-top: 12px; font-size: 14px; line-height: 21px; }
+</style>
