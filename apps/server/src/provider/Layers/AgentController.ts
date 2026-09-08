@@ -103,7 +103,11 @@ import {
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
 } from "../AkeruCatalogToolHandlers.ts";
-import { getMcpRuntimeHeaders, sameMcpServerConfigurations } from "../McpServerConfig.ts";
+import {
+  getMcpRuntimeHeaders,
+  mcpServerNeedsBrowserAttachment,
+  sameMcpServerConfigurations,
+} from "../McpServerConfig.ts";
 import {
   createAkeruToolRuntime,
   isMemoryToolId,
@@ -318,8 +322,6 @@ function mastraModeId(mode: "default" | "plan"): string {
   return mode === "plan" ? PLAN_MODE_ID : DEFAULT_MODE_ID;
 }
 
-const BROWSER_AWARE_MCP_SERVER_IDS = new Set(["builtin-executor", "builtin-tinyfish"]);
-
 export function toMcpServerConfigs(
   servers: readonly McpServer[],
   browser?: BotBrowserAttachment,
@@ -342,9 +344,10 @@ export function toMcpServerConfigs(
               ? { headers: getMcpRuntimeHeaders(server) }
               : {}),
             ...(browser?.availableToHostedPlugins &&
-            BROWSER_AWARE_MCP_SERVER_IDS.has(String(server.id))
+            mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
               ? {
                   headers: {
+                    ...getMcpRuntimeHeaders(server),
                     "x-akeru-browser-mcp-url": browser.browserUrl,
                     "x-akeru-browser-mcp-session-id": browser.mcpSessionId,
                     "x-akeru-browser-mcp-headers": browserRequestHeaders!,
@@ -355,7 +358,9 @@ export function toMcpServerConfigs(
         : {
             command: server.command,
             ...(server.args ? { args: [...server.args] } : {}),
-            ...(browserEnvironment && BROWSER_AWARE_MCP_SERVER_IDS.has(String(server.id))
+            ...(browserEnvironment &&
+            browser &&
+            mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
               ? { env: browserEnvironment }
               : {}),
           },
