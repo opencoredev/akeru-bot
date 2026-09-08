@@ -1,5 +1,5 @@
 diff --git a/dist/client/client.d.ts b/dist/client/client.d.ts
-index a0b93c5ad5d7f0d62c2fb2798b28ca2ffa6ead0d..f52cc4235ad06dc247b6b3649db2f47b390b1bb6 100644
+index a0b93c5ad5d7f0d62c2fb2798b28ca2ffa6ead0d..29952876bb2402017afdef7f57dc67da300c93c6 100644
 --- a/dist/client/client.d.ts
 +++ b/dist/client/client.d.ts
 @@ -187,7 +187,7 @@ export declare class InternalMastraMCPClient extends MastraBase {
@@ -12,7 +12,7 @@ index a0b93c5ad5d7f0d62c2fb2798b28ca2ffa6ead0d..f52cc4235ad06dc247b6b3649db2f47b
      private reconnectPromise;
      private lifecycleGeneration;
 diff --git a/dist/client/oauth-callback-server.d.ts b/dist/client/oauth-callback-server.d.ts
-index 1a724587cf4f4ca4383e005423afda2bc178b8bc..cd89f063b6d8953a8411476a4b2f641a53bf1e26 100644
+index 1a724587cf4f4ca4383e005423afda2bc178b8bc..01a54efeae4c9fceb33bf7a1ed43b926536aa7a8 100644
 --- a/dist/client/oauth-callback-server.d.ts
 +++ b/dist/client/oauth-callback-server.d.ts
 @@ -44,6 +44,10 @@ export interface OAuthCallbackResult {
@@ -26,8 +26,20 @@ index 1a724587cf4f4ca4383e005423afda2bc178b8bc..cd89f063b6d8953a8411476a4b2f641a
  }
  /**
   * A running loopback OAuth callback server.
+diff --git a/dist/client/oauth-provider.d.ts b/dist/client/oauth-provider.d.ts
+index 254aca0a8e959a84f0ee9e6807850f7e491616eb..d5126bae9a27144eb97b52fdb7e0fec66650f558 100644
+--- a/dist/client/oauth-provider.d.ts
++++ b/dist/client/oauth-provider.d.ts
+@@ -131,6 +131,7 @@ export declare class MCPOAuthClientProvider implements OAuthClientProvider {
+     private readonly onRedirect?;
+     private readonly generateState;
+     private _clientInfo?;
++    private readonly _hasConfiguredClientInformation;
+     private _sessionState?;
+     private _sessionRedirectUrl?;
+     constructor(options: MCPOAuthClientProviderOptions);
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 38a6c5e70d3fb6603ce6c40b443088eaeb8cf695..65821cdff5135c8f7e7dfa0590f52e3fb0da0e39 100644
+index 38a6c5e70d3fb6603ce6c40b443088eaeb8cf695..e9e3b511d8effb268dfaf80c19a2bfa499b35320 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -21759,12 +21759,12 @@ var InternalMastraMCPClient = class extends _mastra_core_base.MastraBase {
@@ -55,7 +67,40 @@ index 38a6c5e70d3fb6603ce6c40b443088eaeb8cf695..65821cdff5135c8f7e7dfa0590f52e3f
  		} });
  	});
  	const hostname = candidates[0].hostname.replace(/^\[|\]$/g, "");
-@@ -23646,8 +23647,8 @@ onListChanged: async (serverName, handler) => {
+@@ -22587,12 +22588,14 @@ var MCPOAuthClientProvider = class {
+ 	onRedirect;
+ 	generateState;
+ 	_clientInfo;
++	_hasConfiguredClientInformation;
+ 	_sessionState;
+ 	_sessionRedirectUrl;
+ 	constructor(options) {
+ 		this._redirectUrl = options.redirectUrl;
+ 		this._clientMetadata = options.clientMetadata;
+ 		this._clientInfo = options.clientInformation;
++		this._hasConfiguredClientInformation = options.clientInformation !== void 0;
+ 		this.storage = options.storage ?? new InMemoryOAuthStorage();
+ 		this.onRedirect = options.onRedirectToAuthorization;
+ 		this.generateState = options.stateGenerator ?? (() => crypto.randomUUID());
+@@ -22701,6 +22704,17 @@ var MCPOAuthClientProvider = class {
+ 	* Invoked to redirect the user agent to the authorization URL.
+ 	*/
+ 	async redirectToAuthorization(authorizationUrl) {
++		if (!this._hasConfiguredClientInformation) {
++			const clientInfo = await this.clientInformation();
++			const requestedScope = authorizationUrl.searchParams.get("scope");
++			if (typeof clientInfo?.scope === "string" && requestedScope) {
++				const registeredScopes = new Set(clientInfo.scope.split(/\s+/).filter(Boolean));
++				if (requestedScope.split(/\s+/).filter(Boolean).some((scope) => !registeredScopes.has(scope))) {
++					// The SDK retries invalid_client once with fresh registration and tokens.
++					throw new _modelcontextprotocol_client.OAuthError(_modelcontextprotocol_client.OAuthErrorCode.InvalidClient, "OAuth client registered scopes do not include the requested scopes. Reconnect to register this client again.");
++				}
++			}
++		}
+ 		if (this.onRedirect) await this.onRedirect(authorizationUrl);
+ 		else console.info(`Authorization required. Please visit: ${authorizationUrl.toString()}`);
+ 	}
+@@ -23646,8 +23660,8 @@ onListChanged: async (serverName, handler) => {
  			} catch (error) {
  				if (!(error instanceof _modelcontextprotocol_client.UnauthorizedError)) throw this.handleConnectError(serverName, error);
  			}
@@ -67,9 +112,18 @@ index 38a6c5e70d3fb6603ce6c40b443088eaeb8cf695..65821cdff5135c8f7e7dfa0590f52e3f
  				await client.connect();
  			} catch (error) {
 diff --git a/dist/index.js b/dist/index.js
-index 5d71441f80773dc594cfd49a8d7bf6159629edd7..dde1b30b13d2be892c8c72d05b9bfc43e98d14c0 100644
+index 5d71441f80773dc594cfd49a8d7bf6159629edd7..4f92927e6b2d90319cb7eaf54ab64f97d4115046 100644
 --- a/dist/index.js
 +++ b/dist/index.js
+@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "async_hooks";
+ import { MastraBase } from "@mastra/core/base";
+ import { ErrorCategory, ErrorDomain, MastraError } from "@mastra/core/error";
+ import { createTool, isValidationError } from "@mastra/core/tools";
+-import { Client, DEFAULT_REQUEST_TIMEOUT_MSEC, ProtocolErrorCode, SSEClientTransport, SdkHttpError, StreamableHTTPClientTransport, UnauthorizedError, auth, buildDiscoveryUrls, discoverAuthorizationServerMetadata, discoverOAuthMetadata, discoverOAuthProtectedResourceMetadata, exchangeAuthorization, extractResourceMetadataUrl, parseErrorResponse, refreshAuthorization, registerClient, selectResourceURL, startAuthorization } from "@modelcontextprotocol/client";
++import { Client, DEFAULT_REQUEST_TIMEOUT_MSEC, OAuthError, OAuthErrorCode, ProtocolErrorCode, SSEClientTransport, SdkHttpError, StreamableHTTPClientTransport, UnauthorizedError, auth, buildDiscoveryUrls, discoverAuthorizationServerMetadata, discoverOAuthMetadata, discoverOAuthProtectedResourceMetadata, exchangeAuthorization, extractResourceMetadataUrl, parseErrorResponse, refreshAuthorization, registerClient, selectResourceURL, startAuthorization } from "@modelcontextprotocol/client";
+ import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/client/stdio";
+ import { asyncExitHook, gracefulExit } from "exit-hook";
+ import { createHash, randomUUID, timingSafeEqual } from "crypto";
 @@ -21738,12 +21738,12 @@ var InternalMastraMCPClient = class extends MastraBase {
  	*
  	* @internal
@@ -95,7 +149,40 @@ index 5d71441f80773dc594cfd49a8d7bf6159629edd7..dde1b30b13d2be892c8c72d05b9bfc43
  		} });
  	});
  	const hostname = candidates[0].hostname.replace(/^\[|\]$/g, "");
-@@ -23625,8 +23626,8 @@ onListChanged: async (serverName, handler) => {
+@@ -22566,12 +22567,14 @@ var MCPOAuthClientProvider = class {
+ 	onRedirect;
+ 	generateState;
+ 	_clientInfo;
++	_hasConfiguredClientInformation;
+ 	_sessionState;
+ 	_sessionRedirectUrl;
+ 	constructor(options) {
+ 		this._redirectUrl = options.redirectUrl;
+ 		this._clientMetadata = options.clientMetadata;
+ 		this._clientInfo = options.clientInformation;
++		this._hasConfiguredClientInformation = options.clientInformation !== void 0;
+ 		this.storage = options.storage ?? new InMemoryOAuthStorage();
+ 		this.onRedirect = options.onRedirectToAuthorization;
+ 		this.generateState = options.stateGenerator ?? (() => crypto.randomUUID());
+@@ -22680,6 +22683,17 @@ var MCPOAuthClientProvider = class {
+ 	* Invoked to redirect the user agent to the authorization URL.
+ 	*/
+ 	async redirectToAuthorization(authorizationUrl) {
++		if (!this._hasConfiguredClientInformation) {
++			const clientInfo = await this.clientInformation();
++			const requestedScope = authorizationUrl.searchParams.get("scope");
++			if (typeof clientInfo?.scope === "string" && requestedScope) {
++				const registeredScopes = new Set(clientInfo.scope.split(/\s+/).filter(Boolean));
++				if (requestedScope.split(/\s+/).filter(Boolean).some((scope) => !registeredScopes.has(scope))) {
++					// The SDK retries invalid_client once with fresh registration and tokens.
++					throw new OAuthError(OAuthErrorCode.InvalidClient, "OAuth client registered scopes do not include the requested scopes. Reconnect to register this client again.");
++				}
++			}
++		}
+ 		if (this.onRedirect) await this.onRedirect(authorizationUrl);
+ 		else console.info(`Authorization required. Please visit: ${authorizationUrl.toString()}`);
+ 	}
+@@ -23625,8 +23639,8 @@ onListChanged: async (serverName, handler) => {
  			} catch (error) {
  				if (!(error instanceof UnauthorizedError)) throw this.handleConnectError(serverName, error);
  			}

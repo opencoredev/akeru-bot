@@ -14,6 +14,7 @@ import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings"
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import BotRosterSidebar from "./roster/BotRosterSidebar";
+import { useServerRosterSync } from "./roster/useServerRoster";
 import { openSettings } from "~/settingsDialogStore";
 import { openProductFeedback } from "~/productFeedbackStore";
 import {
@@ -140,6 +141,7 @@ function ProjectProjectionRetention() {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  useServerRosterSync();
   const stageArtworkVisible = false;
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
