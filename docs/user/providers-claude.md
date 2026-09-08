@@ -1,7 +1,7 @@
 # Claude
 
-Connect a Claude Pro or Max subscription from Akeru. Claude threads run through Akeru's Claude
-adapter, which keeps Claude-specific session behavior behind the same thread controls as other
+Connect a Claude Pro or Max subscription from Akeru. Claude chats run through Akeru's Claude
+adapter, which keeps Claude-specific session behavior behind the same chat controls as other
 providers.
 
 ## Connect Claude
@@ -27,18 +27,18 @@ real provider request succeeds.
 Sign-in state belongs to one environment. Connect Claude again on each separate Akeru server that
 should use the account.
 
-## Continue a Claude thread
+## Continue a Claude chat
 
-Akeru keeps Claude's provider-specific session identity when a thread continues. Changing to an
+Akeru keeps Claude's provider-specific session identity when a chat continues. Changing to an
 incompatible provider starts a new provider session instead of reusing Claude's resume state.
 
-Installed plugins and MCP servers stay attached to the Akeru thread. A provider change restarts the
+Installed plugins and MCP servers stay attached to the Akeru chat. A provider change restarts the
 provider session with the same enabled plugin set.
 
 ## Permissions
 
-Claude maps Akeru's thread mode to its own permission behavior. Protected actions still ask even when
-the thread uses **Full access**.
+Claude maps Akeru's chat mode to its own permission behavior. Protected actions still ask even when
+the chat uses **Full access**.
 
 See [Permission modes](./permission-modes.md) for the four modes and the actions that always need
 approval.

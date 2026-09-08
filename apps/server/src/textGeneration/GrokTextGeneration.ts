@@ -1,3 +1,4 @@
+import { subscriptionRuntimeEnvironment } from "../subscription-auth/runtime.ts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -37,6 +38,7 @@ const isTextGenerationError = Schema.is(TextGenerationError);
 export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(function* (
   grokSettings: GrokSettings,
   environment: NodeJS.ProcessEnv = process.env,
+  secretsDir?: string,
 ) {
   const crypto = yield* Crypto.Crypto;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -63,7 +65,9 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       const outputRef = yield* Ref.make("");
       const runtime = yield* makeGrokAcpRuntime({
         grokSettings,
-        environment,
+        environment: secretsDir
+          ? subscriptionRuntimeEnvironment(secretsDir, "xai", environment)
+          : environment,
         childProcessSpawner: commandSpawner,
         cwd,
         clientInfo: { name: "t3-code-git-text", version: "0.0.0" },

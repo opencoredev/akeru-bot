@@ -46,6 +46,8 @@ import {
   createAkeruAgentInstructions,
   createAkeruBotInstructions,
 } from "./AkeruAgentInstructions.ts";
+import type { SubscriptionAuthService } from "../subscription-auth/service.ts";
+import { akeruOpenAIProvider } from "./AkeruOpenAIProvider.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
 import { akeruOpenCodeGoProvider } from "./AkeruOpenCodeGoProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
@@ -188,6 +190,7 @@ export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
   readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
   readonly getOpenCodeGoApiKey?: () => Promise<string | undefined>;
+  readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
   readonly memoryDbPath: string;
   readonly startMemoryCall?: (input: {
     readonly threadId: string;
@@ -367,7 +370,11 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
 export async function createAkeruMastraMemory(
   options: Pick<
     AkeruMastraHarnessOptions,
-    "authStorage" | "getKimiAccess" | "getOpenCodeGoApiKey" | "memoryDbPath"
+    | "authStorage"
+    | "getKimiAccess"
+    | "getOpenCodeGoApiKey"
+    | "getSubscriptionApiKey"
+    | "memoryDbPath"
   >,
 ) {
   const storage = new LibSQLStore({
@@ -382,6 +389,8 @@ export async function createAkeruMastraMemory(
       options.authStorage,
       options.getKimiAccess,
       options.getOpenCodeGoApiKey,
+      undefined,
+      options.getSubscriptionApiKey,
     );
   const memory = new Memory({
     storage,
@@ -450,9 +459,15 @@ export function resolveAkeruMastraModel(
   getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
   getOpenCodeGoApiKey?: () => Promise<string | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
+  getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
 ) {
   const trimmed = modelId.trim();
   if (trimmed.startsWith("openai/")) {
+    if (getSubscriptionApiKey?.("openai-codex")) {
+      return akeruOpenAIProvider(trimmed.slice("openai/".length), () =>
+        getSubscriptionApiKey("openai-codex"),
+      );
+    }
     const reasoningEffort = modelOptions?.reasoningEffort;
     return openaiCodexProvider(trimmed.slice("openai/".length), {
       authStorage,
@@ -465,7 +480,11 @@ export function resolveAkeruMastraModel(
   }
   if (trimmed.startsWith("opencode-go/")) {
     if (!getOpenCodeGoApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
-    return akeruOpenCodeGoProvider(trimmed.slice("opencode-go/".length), getOpenCodeGoApiKey);
+    return akeruOpenCodeGoProvider(
+      trimmed.slice("opencode-go/".length),
+      getOpenCodeGoApiKey,
+      () => getSubscriptionApiKey?.("opencode-go")?.baseUrl,
+    );
   }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
 }
@@ -859,6 +878,7 @@ export async function createAkeruMastraHarness(
         options.getKimiAccess,
         options.getOpenCodeGoApiKey,
         controllerModelOptions(requestContext),
+        options.getSubscriptionApiKey,
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,

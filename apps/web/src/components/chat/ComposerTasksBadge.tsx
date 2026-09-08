@@ -74,7 +74,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
   if (progress.totalSteps <= 0) return null;
 
   const allDone = progress.completedSteps >= progress.totalSteps;
-  const label = `Tasks: ${progress.completedSteps} of ${progress.totalSteps} complete. Current task: ${progress.step}`;
+  const label = `Bot work: ${progress.completedSteps} of ${progress.totalSteps} complete. Current step: ${progress.step}`;
   if (placement === "inline") {
     return (
       <span className="inline-flex shrink-0 items-center gap-0.5" data-composer-tasks-badge="true">
@@ -88,7 +88,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
           onPointerDown={(event) => event.preventDefault()}
         >
           <ListTodoIcon aria-hidden className="size-3 shrink-0" />
-          <span>Tasks</span>
+          <span>Bot work</span>
           <TaskSegments steps={steps} />
           <span
             className={cn(
@@ -102,7 +102,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
         <Button
           size="icon-micro"
           variant="ghost-muted"
-          aria-label="Dismiss tasks for this turn"
+          aria-label="Dismiss bot work for this turn"
           className="shrink-0"
           onClick={onDismiss}
           onPointerDown={(event) => event.preventDefault()}
@@ -131,7 +131,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
         onPointerDown={(event) => event.preventDefault()}
       >
         <ListTodoIcon aria-hidden className="size-3.5 shrink-0" />
-        <span className="shrink-0">Tasks</span>
+        <span className="shrink-0">Bot work</span>
         <span
           className="min-w-0 flex-1 truncate text-left font-medium text-foreground/80"
           data-composer-task-current="true"
@@ -151,7 +151,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
       <Button
         size="icon-micro"
         variant="ghost-muted"
-        aria-label="Dismiss tasks for this turn"
+        aria-label="Dismiss bot work for this turn"
         className="shrink-0"
         onClick={onDismiss}
         onPointerDown={(event) => event.preventDefault()}
@@ -184,7 +184,7 @@ export const ComposerTasksDrawer = memo(function ComposerTasksDrawer({
           onPointerDown={(event) => event.preventDefault()}
         >
           <ListTodoIcon aria-hidden className="size-3.5 shrink-0" />
-          <span className="font-medium text-foreground">Tasks</span>
+          <span className="font-medium text-foreground">Bot work</span>
           <span className="tabular-nums">
             {progress.completedSteps}/{progress.totalSteps}
           </span>
@@ -192,7 +192,7 @@ export const ComposerTasksDrawer = memo(function ComposerTasksDrawer({
         <Button
           size="icon-micro"
           variant="ghost-muted"
-          aria-label="Dismiss tasks for this turn"
+          aria-label="Dismiss bot work for this turn"
           className="shrink-0"
           onClick={onDismiss}
           onPointerDown={(event) => event.preventDefault()}

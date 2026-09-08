@@ -396,6 +396,26 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("routes Codex API keys through OpenAI Responses instead of the OAuth transport", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-api-key-auth.json");
+    const getCredential = vi.fn(() => ({
+      type: "api-key" as const,
+      access: "key",
+      baseUrl: "https://proxy.example/v1",
+    }));
+    expect(
+      resolveAkeruMastraModel(
+        "openai/gpt-5.6",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+      ),
+    ).toMatchObject({ modelId: "gpt-5.6", provider: "openai.responses" });
+    expect(getCredential).toHaveBeenCalledWith("openai-codex");
+  });
+
   it("keeps Kimi model names on the Kimi subscription transport", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
     assert.equal(

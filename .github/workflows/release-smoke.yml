@@ -53,7 +53,7 @@ jobs:
       matrix:
         include:
           - label: macOS arm64 DMG
-            runner: tenki-macos-15-medium
+            runner: macos-15
             platform: mac
             target: dmg
             arch: arm64

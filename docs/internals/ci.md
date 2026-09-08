@@ -19,11 +19,14 @@ Issue-label, PR-vouch, and PR-size jobs also use Tenki Linux runners through Git
 
 The repository ruleset requires the `Repository checks` result before a pull request can
 merge. Direct pushes to `main` cannot bypass this gate. Release workflows start after the validated
-revision lands on `main`; version packaging is separate from pull-request CI.
+revision lands on `main`; version packaging is separate from pull-request CI. The version workflow
+updates the pull request body after Tegami updates its branch, then dispatches CI for that branch.
+This explicit dispatch is required because pushes made with the GitHub Actions token do not start
+another pull-request workflow.
 
 [`.github/workflows/release-smoke.yml`](../../.github/workflows/release-smoke.yml) is a manual,
-non-publishing artifact smoke workflow. It uses 4-vCPU Tenki runners for Linux and Apple Silicon
-macOS, plus a GitHub-hosted Windows runner. It builds a Developer ID signed macOS arm64 app.
+non-publishing artifact smoke workflow. It uses a 4-vCPU Tenki runner for Linux and GitHub-hosted
+Apple Silicon macOS and Windows runners. It builds a Developer ID signed macOS arm64 app.
 Electron-builder notarizes and staples the
 app before it packages the DMG. The workflow then submits and staples the DMG as a separate object.
 It checks both objects with Apple's verification tools. Windows and Linux artifacts stay unsigned.
@@ -32,9 +35,13 @@ desktop artifacts for seven days. It does not create a GitHub release, publish a
 a site.
 
 Merging a stable version change to `main` starts
-[the stable release workflow](../../.github/workflows/release.yml). Tenki macOS and Linux runners
-plus a GitHub-hosted Windows runner build the advertised desktop targets before the workflow creates
-the `vX.Y.Z` tag and GitHub Release. The final job verifies the exact asset names and `SHA256SUMS`.
+[the stable release workflow](../../.github/workflows/release.yml). A push that changes a watched
+manifest without changing the stable version exits successfully before any release build starts.
+A manual dispatch for an existing stable tag still fails. A Tenki Linux runner plus GitHub-hosted
+Apple Silicon macOS and Windows runners build the advertised desktop targets before the workflow
+creates the `vX.Y.Z` tag and GitHub Release. The final job verifies the exact asset names and
+`SHA256SUMS`, then starts the next Version Packages update. Version automation waits for the current
+stable tag before it prepares another version.
 Missing signing credentials produce unsigned macOS and Windows artifacts.
 Unsigned macOS builds still replace Electron's linker-signed stub with a sealed ad-hoc signature
 and fail the release if `codesign --verify` fails or the identifier is not `dev.leodoes.akeru`.

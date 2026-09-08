@@ -22,10 +22,10 @@ The slash menu includes skills by default. Turn off **Show skills in slash menu*
 `/skill:Skill Name` label and insert the same `$name` token. Akeru hides duplicate native provider
 commands when the same skill is already available.
 
-## Start work in the background
+## Start bot work in the background
 
-From a new thread on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux. Akeru
-starts the thread, opens another new thread, and shows an **Open** action for the work in progress.
+From a new chat on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux. Akeru
+starts the chat, opens another new chat, and shows an **Open** action for the bot work in progress.
 
-The background thread keeps the selected workspace mode and base branch. If **New worktree** is
-selected, each background thread creates a separate worktree.
+The background chat keeps the selected workspace mode and base branch. If **New worktree** is
+selected, each background chat creates a separate worktree.

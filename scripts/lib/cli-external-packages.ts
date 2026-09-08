@@ -30,6 +30,14 @@ export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   // Inlining it into the ESM server bundle removes that CommonJS binding.
   "playwright-core",
   "node-pty",
+  // Keep computed native imports and detect-libc resolution inside libsql.
+  // The trailing slash keeps unrelated names such as libsqlite3 bundled;
+  // the bare package name is matched exactly below.
+  "libsql/",
+  "@libsql/darwin-",
+  "@libsql/linux-",
+  "@libsql/win32-",
+  "@neon-rs/load",
   "ffi-rs",
   "@yuuang/",
   "@ff-labs/",
@@ -65,11 +73,6 @@ export const CLI_BUILD_ONLY_EXTERNAL_PREFIXES = [
   "@effect/sql-sqlite-bun",
 ] as const;
 
-// These packages stay bundled, but load target-specific native bindings with a
-// computed require. Ship their package roots so the staged install also brings
-// the correct optional binding for the target OS and architecture.
-export const CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES = ["libsql"] as const;
-
 // Mastra constructs this import at runtime to keep Node-only dependencies out
 // of Cloudflare Worker bundles. The CLI bundler cannot see it, so desktop
 // packaging must stage the package and its production dependency closure.
@@ -80,8 +83,16 @@ export const CLI_EXTERNAL_PACKAGE_PREFIXES = [
   ...CLI_BUILD_ONLY_EXTERNAL_PREFIXES,
 ] as const;
 
+function matchesExternalPrefix(id: string, prefixes: ReadonlyArray<string>): boolean {
+  return prefixes.some((prefix) =>
+    prefix.endsWith("/")
+      ? id === prefix.slice(0, -1) || id.startsWith(prefix)
+      : id.startsWith(prefix),
+  );
+}
+
 export function isRuntimeExternalCliDependency(id: string): boolean {
-  return CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix));
+  return matchesExternalPrefix(id, CLI_RUNTIME_EXTERNAL_PREFIXES);
 }
 
 /**
@@ -95,7 +106,7 @@ export function isRuntimeExternalCliDependency(id: string): boolean {
  * inlined while node-pty (a declared dependency) stayed external.
  */
 export function isExternalCliDependency(id: string): boolean {
-  return CLI_EXTERNAL_PACKAGE_PREFIXES.some((prefix) => id.startsWith(prefix));
+  return matchesExternalPrefix(id, CLI_EXTERNAL_PACKAGE_PREFIXES);
 }
 
 /** True when the CLI bundle should inline `id` rather than leave it external. */
@@ -121,7 +132,6 @@ export function selectCliPackagedRuntimeDependencies(
     Object.entries(dependencies).filter(
       ([name]) =>
         isRuntimeExternalCliDependency(name) ||
-        CLI_BUNDLED_NATIVE_RUNTIME_PACKAGES.some((packageName) => name === packageName) ||
         CLI_LAZY_RUNTIME_PACKAGES.some((packageName) => name === packageName),
     ),
   );

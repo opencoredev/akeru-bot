@@ -157,12 +157,12 @@ const PAIRING_SCOPE_OPTIONS: ReadonlyArray<{
   {
     scope: AuthOrchestrationReadScope,
     title: "View environment",
-    description: "Read threads, status, diffs, and configuration.",
+    description: "Read conversations, status, diffs, and configuration.",
   },
   {
     scope: AuthOrchestrationOperateScope,
-    title: "Operate tasks",
-    description: "Start tasks and perform changes in the environment.",
+    title: "Operate bot work",
+    description: "Start bot work and perform changes in the environment.",
   },
   {
     scope: AuthTerminalOperateScope,
@@ -2953,8 +2953,8 @@ export function ConnectionsSettings() {
                 <AlertDialogDescription>
                   {pendingWslChange?.kind === "disable"
                     ? pendingWslChange.wasWslOnly
-                      ? "Akeru Bot will restart on the Windows backend. Threads and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."
-                      : "The WSL backend will stop. Threads and projects opened against WSL stay safe inside the distro, but they'll be unavailable in Akeru Bot until you re-enable WSL."
+                      ? "Akeru Bot will restart on the Windows backend. Chats and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."
+                      : "The WSL backend will stop. Chats and projects opened against WSL stay safe inside the distro, but they'll be unavailable in Akeru Bot until you re-enable WSL."
                     : pendingWslChange?.kind === "distro"
                       ? "Akeru Bot will restart the WSL backend on the new distro. Sessions still running on the current distro will be interrupted."
                       : pendingWslChange?.kind === "enable"

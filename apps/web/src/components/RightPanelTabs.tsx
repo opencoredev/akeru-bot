@@ -84,10 +84,10 @@ interface RightPanelTabsProps {
 
 const SURFACE_DISABLED_REASONS = {
   browser: "Browser previews are only available in the Akeru Bot desktop app.",
-  terminal: "Terminal surfaces are only available from a project thread.",
+  terminal: "Terminal surfaces are only available from a project chat.",
   files: "Files are only available when a project is open.",
-  diff: "Diff is only available for server threads in Git repositories.",
-  agents: "Agents are only available from a thread.",
+  diff: "Diff is only available for chats in Git projects.",
+  agents: "Bot work is only available from a chat.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -108,7 +108,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   terminal: "Available when a project is open.",
   files: "Available when a project is open.",
   diff: "Available for Git repositories.",
-  agents: "Available from a thread.",
+  agents: "Available from a chat.",
 } as const;
 
 type TabContextMenuAction =
@@ -280,7 +280,7 @@ function RightPanelEmptyState(props: {
     },
     {
       label: "Diff",
-      description: "Review changes in this thread.",
+      description: "Review changes in this chat.",
       icon: FileDiff,
       shortcut: "D",
       available: props.diffAvailable,
@@ -289,8 +289,8 @@ function RightPanelEmptyState(props: {
       badgeCount: 0,
     },
     {
-      label: "Agents",
-      description: "Follow subagents and workflows.",
+      label: "Bot work",
+      description: "Follow delegated work and workflows.",
       icon: Bot,
       shortcut: "A",
       available: props.agentsAvailable,
@@ -481,7 +481,7 @@ function surfaceTitle(
     case "pull-request":
       return `#${surface.number}`;
     case "agents":
-      return "Agents";
+      return "Bot work";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -596,7 +596,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       onClick: props.onAddDiff,
     },
     {
-      label: "Agents",
+      label: "Bot work",
       icon: Bot,
       shortcut: "A",
       available: props.agentsAvailable,

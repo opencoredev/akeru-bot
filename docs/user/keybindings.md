@@ -51,31 +51,31 @@ successful pick; its hover glow and badge preview the element and color family t
 `rightPanel.toggleMaximized` maximizes or restores the open right panel. It has no default shortcut,
 so add one in **Settings > Keybindings** if you want to use it.
 
-`thread.settle` settles the active thread or restores it when it is already settled. Its default
+`thread.settle` settles the active chat or restores it when it is already settled. Its default
 shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
 
 `thread.jump.1` through `thread.jump.9` switch to the matching bot and default to `mod+1` through
 `mod+9`. Pinned bots come first. Other bots follow their section and roster order. Groups do not
 take a shortcut number.
 
-The command palette searches active thread titles, projects, branches, user messages, and final
-agent responses across connected environments. Message matches show one labeled excerpt while
-keeping the thread's project, branch, and machine context visible. Message search begins after two
+The command palette searches active chat titles, projects, branches, user messages, and final bot
+responses across connected environments. Message matches show one labeled excerpt while keeping
+the conversation's project, branch, and machine context visible. Message search begins after two
 characters and uses SQLite's ASCII case-insensitive matching.
 
 The full command list and the current defaults are shown in **Settings > Keybindings**, which
 always matches the build you are running. Use that rather than a copied list.
 
-Note that `chat.new` and `chat.newLocal` both create a thread through the same path. A new thread
-inherits the project you were in, along with model and mode selections. Branch, worktree, and
-environment mode always come from your configured defaults, not from the thread you were looking
-at. To keep a worktree, use the explicit "new thread in this worktree" action in the branch
-toolbar. The only difference between the two commands: with the current sidebar and more than one
-project, `chat.new` opens a project chooser first.
+Note that `chat.new` and `chat.newLocal` both create a chat through the same path. A new chat inherits
+the project you were in, along with model and mode selections. Branch, worktree, and environment mode
+always come from your configured defaults, not from the chat you were looking at. To keep a worktree,
+use the explicit "new chat in this worktree" action in the branch toolbar. The only difference between
+the two commands is that `chat.new` opens a project chooser first when the current sidebar has more
+than one project.
 
-Background submission from a new thread is the exception. `mod+enter` starts that thread and opens
-another new thread with the same workspace mode and base branch. **New worktree** remains selected,
-but the new thread does not reuse the worktree created for the thread that just started.
+Background submission from a new chat is the exception. `mod+enter` starts that chat and opens
+another new chat with the same workspace mode and base branch. **New worktree** remains selected, but
+the new chat does not reuse the worktree created for the chat that just started.
 
 ## `when` conditions
 

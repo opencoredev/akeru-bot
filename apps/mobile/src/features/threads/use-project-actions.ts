@@ -80,7 +80,7 @@ export function useCreateProjectThread() {
       if (AsyncResult.isFailure(result)) {
         const error = Cause.squash(result.cause);
         setPendingConnectionError(
-          error instanceof Error ? error.message : "The task could not be started.",
+          error instanceof Error ? error.message : "The chat could not be started.",
         );
         return AsyncResult.failure(result.cause);
       }

@@ -72,7 +72,7 @@ function actionFailureMessage(action: ThreadListAction, cause: Cause.Cause<unkno
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
-  return `The thread could not be ${ACTION_VERBS[action]}.`;
+  return `The chat could not be ${ACTION_VERBS[action]}.`;
 }
 
 function selectionHaptic(): void {
@@ -80,11 +80,11 @@ function selectionHaptic(): void {
 }
 
 function actionFailureTitle(action: ThreadListAction): string {
-  if (action === "archive") return "Could not archive thread";
-  if (action === "unarchive") return "Could not unarchive thread";
-  if (action === "settle") return "Could not settle thread";
-  if (action === "unsettle") return "Could not un-settle thread";
-  return "Could not delete thread";
+  if (action === "archive") return "Could not archive chat";
+  if (action === "unarchive") return "Could not unarchive chat";
+  if (action === "settle") return "Could not settle chat";
+  if (action === "unsettle") return "Could not un-settle chat";
+  return "Could not delete chat";
 }
 
 /** Resolves to true iff the action was dispatched and succeeded. */
@@ -124,7 +124,7 @@ function useThreadActionExecutor(
         if (action === "settle" && !canSettle(thread, { now: new Date().toISOString() })) {
           Alert.alert(
             actionFailureTitle(action),
-            "This thread still needs attention. Resolve or interrupt it first, then try again.",
+            "This chat still needs attention. Resolve or interrupt it first, then try again.",
           );
           return false;
         }
@@ -137,7 +137,7 @@ function useThreadActionExecutor(
         ) {
           Alert.alert(
             actionFailureTitle(action),
-            "This thread is working. Interrupt it first, then try again.",
+            "This chat is working. Interrupt it first, then try again.",
           );
           return false;
         }
@@ -192,7 +192,7 @@ function useConfirmDeleteThread(
 ) {
   return useCallback(
     (thread: EnvironmentThreadShell) => {
-      const title = "Delete thread?";
+      const title = "Delete chat?";
       const message = `“${thread.title}” will be permanently deleted, including its terminal history.`;
       if (process.env.EXPO_OS === "ios") {
         Alert.alert(title, message, [
@@ -267,17 +267,17 @@ export function useThreadListActions(): {
       try {
         if (!environmentSupportsSnooze(thread.environmentId)) {
           Alert.alert(
-            "Could not snooze thread",
+            "Could not snooze chat",
             "This environment's server does not support snoozing yet. Update the server to use Snooze.",
           );
           return false;
         }
         if (!canSnooze(thread, { now: new Date().toISOString() })) {
           Alert.alert(
-            "Could not snooze thread",
+            "Could not snooze chat",
             thread.hasPendingApprovals || thread.hasPendingUserInput
-              ? "This thread is waiting on you. Respond to the pending request before snoozing it."
-              : "This thread is still starting a turn. Try again once it's running.",
+              ? "This chat is waiting on you. Respond to the pending request before snoozing it."
+              : "This chat is still starting a turn. Try again once it's running.",
           );
           return false;
         }
@@ -293,10 +293,10 @@ export function useThreadListActions(): {
         if (result._tag === "Failure") {
           const error = Cause.squash(result.cause);
           Alert.alert(
-            "Could not snooze thread",
+            "Could not snooze chat",
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : "The thread could not be snoozed.",
+              : "The chat could not be snoozed.",
           );
           return false;
         }
@@ -317,8 +317,8 @@ export function useThreadListActions(): {
       try {
         if (!environmentSupportsSnooze(thread.environmentId)) {
           Alert.alert(
-            "Could not wake thread",
-            "This environment's server does not support snoozing yet. Update the server to wake this thread.",
+            "Could not wake chat",
+            "This environment's server does not support snoozing yet. Update the server to wake this chat.",
           );
           return false;
         }
@@ -331,10 +331,10 @@ export function useThreadListActions(): {
         if (result._tag === "Failure") {
           const error = Cause.squash(result.cause);
           Alert.alert(
-            "Could not wake thread",
+            "Could not wake chat",
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : "The thread could not be woken.",
+              : "The chat could not be woken.",
           );
           return false;
         }
@@ -353,7 +353,7 @@ export function useThreadListActions(): {
     async (thread: EnvironmentThreadShell) => {
       if (!environmentSupportsPinning(thread.environmentId)) {
         Alert.alert(
-          "Could not pin thread",
+          "Could not pin chat",
           "This environment's server does not support pinning yet. Update the server to use Pin.",
         );
         return false;
@@ -378,10 +378,10 @@ export function useThreadListActions(): {
       if (result._tag === "Failure") {
         const error = Cause.squash(result.cause);
         Alert.alert(
-          "Could not pin thread",
+          "Could not pin chat",
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : "The thread could not be pinned.",
+            : "The chat could not be pinned.",
         );
         return false;
       }
@@ -393,7 +393,7 @@ export function useThreadListActions(): {
     async (thread: EnvironmentThreadShell) => {
       if (!environmentSupportsPinning(thread.environmentId)) {
         Alert.alert(
-          "Could not unpin thread",
+          "Could not unpin chat",
           "This environment's server does not support pinning yet. Update the server to use Pin.",
         );
         return false;
@@ -406,10 +406,10 @@ export function useThreadListActions(): {
       if (result._tag === "Failure") {
         const error = Cause.squash(result.cause);
         Alert.alert(
-          "Could not unpin thread",
+          "Could not unpin chat",
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : "The thread could not be unpinned.",
+            : "The chat could not be unpinned.",
         );
         return false;
       }
@@ -429,7 +429,7 @@ export function useThreadListActions(): {
       if (!environmentSupportsTitleRegeneration(thread.environmentId)) {
         Alert.alert(
           "Could not regenerate title",
-          "This environment's server does not support title regeneration yet. Update the server to regenerate thread titles.",
+          "This environment's server does not support title regeneration yet. Update the server to regenerate chat titles.",
         );
         return false;
       }
@@ -447,7 +447,7 @@ export function useThreadListActions(): {
             "Could not regenerate title",
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : "The thread title could not be regenerated.",
+              : "The chat title could not be regenerated.",
           );
           return false;
         }
@@ -476,7 +476,7 @@ export function useThreadListActions(): {
       if (movePinnedInFlightRef.current) return false;
       if (!environmentSupportsPinReorder(thread.environmentId)) {
         Alert.alert(
-          "Could not move thread",
+          "Could not move chat",
           "This environment's server does not support pinned reordering yet. Update the server to reorder pins.",
         );
         return false;
@@ -519,10 +519,10 @@ export function useThreadListActions(): {
           if (result._tag === "Failure") {
             const error = Cause.squash(result.cause);
             Alert.alert(
-              "Could not move thread",
+              "Could not move chat",
               error instanceof Error && error.message.trim().length > 0
                 ? error.message
-                : "The pinned thread could not be moved.",
+                : "The pinned chat could not be moved.",
             );
             // No rollback: keys already written are valid orderings on their
             // own (each write is a complete, consistent placement), so a

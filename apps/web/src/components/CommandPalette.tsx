@@ -2315,7 +2315,7 @@ function OpenCommandPaletteDialog(props: {
                     emptyStateMessage: "Press Enter to create this folder and add it as a project.",
                   }
                 : threadSearch.isPending
-                  ? { emptyStateMessage: "Searching thread messages…" }
+                  ? { emptyStateMessage: "Searching conversations…" }
                   : {})}
       />
     </CommandPaletteContent>

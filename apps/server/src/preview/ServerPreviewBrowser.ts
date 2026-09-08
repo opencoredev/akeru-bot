@@ -125,7 +125,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     const tabId = request.tabId ?? activeByThread.get(request.threadId);
     const tab = tabId ? tabs.get(tabId) : undefined;
     if (!tab || tab.threadId !== request.threadId) {
-      throw new Error("No active browser tab exists for this thread.");
+      throw new Error("No active browser tab exists for this chat.");
     }
     return tab;
   };

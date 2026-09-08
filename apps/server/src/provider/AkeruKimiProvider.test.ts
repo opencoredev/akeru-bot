@@ -8,6 +8,26 @@ const access = {
 };
 
 describe("AkeruKimiProvider", () => {
+  it("uses API keys and custom endpoints without OAuth device headers", async () => {
+    const request = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) => new Response("{}"),
+    );
+    const fetch = buildAkeruKimiFetch(
+      async () => ({ accessToken: "api-key", baseUrl: "https://proxy.example/v1" }),
+      request,
+    );
+    await fetch("https://api.kimi.com/coding/v1/messages?beta=true", {
+      method: "POST",
+      body: "{}",
+    });
+    expect(request).toHaveBeenCalledWith(
+      "https://proxy.example/v1/messages?beta=true",
+      expect.objectContaining({ method: "POST", body: "{}", redirect: "error" }),
+    );
+    const headers = new Headers(request.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("authorization")).toBe("Bearer api-key");
+    expect(headers.get("x-msh-device-id")).toBeNull();
+  });
   it("builds the Kimi Anthropic model without changing the saved model", () => {
     expect(akeruKimiProvider("k3-256k", async () => access)).toMatchObject({
       provider: "anthropic.messages",

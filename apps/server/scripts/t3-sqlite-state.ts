@@ -176,6 +176,39 @@ function normalizeSqliteRow(row: RawSqliteRow): typeof SqliteStateRow.Type {
   );
 }
 
+export const guardSqliteStateHome = Effect.fn("guardSqliteStateHome")(function* (
+  baseDir: string,
+  sharedHome = NodeOS.homedir() + "/" + PRODUCT_HOME_DIRNAME,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const canonicalBase = yield* fs.realPath(baseDir);
+  const canonicalShared = yield* fs
+    .realPath(sharedHome)
+    .pipe(Effect.orElseSucceed(() => path.resolve(sharedHome)));
+  const relative = path.relative(canonicalShared, canonicalBase);
+  if (
+    relative === "" ||
+    (!relative.startsWith(".." + path.sep) && relative !== ".." && !path.isAbsolute(relative))
+  ) {
+    return yield* new SqliteStateSharedHomeMutationError();
+  }
+});
+
+export const backupSqliteState = Effect.fn("backupSqliteState")(function* (databasePath: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const sql = yield* SqlClient.SqlClient;
+  const timestamp = DateTime.formatIso(yield* DateTime.now).replaceAll(":", "-");
+  let backupPath = `${databasePath}.backup-${timestamp}`;
+  let suffix = 0;
+  while (yield* fs.exists(backupPath)) {
+    backupPath = `${databasePath}.backup-${timestamp}-${++suffix}`;
+  }
+  yield* sql`VACUUM INTO ${backupPath}`;
+  yield* fs.chmod(backupPath, 0o600);
+  return backupPath;
+});
+
 export const runSqliteState = Effect.fn("runSqliteState")(function* (
   input: RunSqliteStateInput,
   options: RunSqliteStateOptions = {},
@@ -193,13 +226,7 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
     return yield* new SqliteStateDatabaseMissingError({ databasePath });
   }
   if (input.operation === "exec") {
-    const [canonicalBaseDir, canonicalSharedHome] = yield* Effect.all([
-      fs.realPath(baseDir),
-      fs.realPath(sharedHome).pipe(Effect.orElseSucceed(() => sharedHome)),
-    ]);
-    if (canonicalBaseDir === canonicalSharedHome) {
-      return yield* new SqliteStateSharedHomeMutationError();
-    }
+    yield* guardSqliteStateHome(baseDir, sharedHome);
   }
 
   const program = Effect.gen(function* () {
@@ -218,10 +245,7 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
       } as const;
     }
 
-    const timestamp = DateTime.formatIso(yield* DateTime.now).replaceAll(":", "-");
-    const backupPath = `${databasePath}.backup-${timestamp}`;
-    yield* sql`VACUUM INTO ${backupPath}`;
-    yield* fs.chmod(backupPath, 0o600);
+    const backupPath = yield* backupSqliteState(databasePath);
     yield* sql.withTransaction(sql.unsafe(source).unprepared);
 
     return {

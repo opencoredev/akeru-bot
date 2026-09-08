@@ -525,6 +525,18 @@ describe("EnvironmentThreads", () => {
     }),
   );
 
+  it.effect("uses a chat fallback when a stream failure has no message", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      yield* Queue.offer(harness.inputs, new Error("   "));
+
+      const failed = yield* awaitThreadState(harness.observed, (value) =>
+        Option.isSome(value.error),
+      );
+      expect(Option.getOrThrow(failed.error)).toBe("Could not synchronize the chat.");
+    }),
+  );
+
   it.effect("recovers from a transient domain failure without replacing the session", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();

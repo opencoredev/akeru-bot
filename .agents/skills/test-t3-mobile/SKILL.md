@@ -1,188 +1,103 @@
 ---
 name: test-t3-mobile
-description: Launch and test T3 Code Mobile on an iOS Simulator or Android Emulator against disposable local T3 environments, including Metro and dev-client reuse, native rebuild decisions, per-client pairing, seeded projects, semantic UI control, screenshots, and iOS serve-sim streaming. Use after mobile UI or native changes, when reproducing phone or tablet behavior, pairing an emulator to isolated state, or verifying mobile behavior on macOS, Linux, or Windows.
+description: Verify Akeru Bot mobile on iOS or Android with an isolated environment, reusable development clients, deterministic pairing, semantic UI control, and focused evidence.
 ---
 
-# Test T3 Mobile
+# Test Akeru Bot mobile
 
-Run one focused, end-to-end mobile verification pass against disposable T3 state. Use the sibling [`test-t3-app`](../test-t3-app/SKILL.md) skill as the detailed reference for pairing-token semantics and SQLite fixtures.
+Read [the verification policy](../../../docs/internals/verification.md) for authorization, coverage, evidence, and environment lifetime. Use [`test-t3-app`](../test-t3-app/SKILL.md) for shared environment discovery, browser pairing, and SQLite fixtures.
 
-Command examples use POSIX shell syntax. On Windows, use PowerShell equivalents: set variables with `$env:NAME = "value"`, use an explicit temporary directory from `[System.IO.Path]::GetTempPath()`, and run multiline examples on one line or with PowerShell backticks. Use `$env:ANDROID_HOME\platform-tools\adb.exe` when `adb` is not already on `PATH`.
+## Select the platform and client
 
-## Select a viable platform
+1. On macOS with Xcode, use one representative iOS Simulator for cross-platform changes. Load [`ios-debugger-agent`](../ios-debugger-agent/SKILL.md). Load [`ios-simulator-browser`](../ios-simulator-browser/SKILL.md) when a live visual feed is needed.
+2. Use Android when the change is Android-specific or iOS tooling is unavailable. Select one emulator serial with `adb devices`.
+3. Reuse a compatible installed development client for JavaScript, TypeScript, and asset changes. Rebuild only when native source, dependencies, entitlements, config plugins, or generated projects changed.
+4. Resolve identity with `node .agents/skills/test-t3-mobile/scripts/app-identity.mjs <scheme|ios-bundle-id|android-package>`. The helper reads the development app configuration, including personal-team overrides. For the full config, run `vp run --filter @t3tools/mobile config:dev`. Use the resolved values below instead of copied identifiers.
+5. Find the actual generated Xcode workspace and scheme rather than assuming a historical name. If generated native projects are absent, first check for a compatible installed client or existing artifact.
 
-Inspect the host and the affected code before launching processes:
+`ios:dev` and `android:dev` run clean Expo prebuilds. Use them only when regeneration is required. If the user forbids a rebuild and no compatible client exists, report that blocker. Do not create or download simulator runtimes without permission.
 
-- On macOS with Xcode, prefer one representative iOS Simulator when the change is cross-platform so the user can watch through serve-sim. Load and follow [`ios-debugger-agent`](../ios-debugger-agent/SKILL.md), and load [`ios-simulator-browser`](../ios-simulator-browser/SKILL.md) when live streaming is available.
-- On macOS, Linux, or Windows with the Android SDK, use one Android Emulator when Android is the affected surface or iOS tooling is unavailable.
-- When the change is platform-specific, test that platform. When neither platform is viable, report the missing SDK, emulator, or dev-client prerequisite rather than claiming verification.
+## Start one isolated environment
 
-Do not treat unavailable iOS tooling as a blocker when Android is a valid representative target.
+Run backend commands from the repository root. Use the worktree-local `.akeru` or a deliberately created temporary home. Explicit homes store runtime state under `<home>/userdata`.
 
-## Choose the lightest valid launch path
+Use `vp run dev:status` to inspect an existing environment. Reuse a healthy owned server. When testing web and mobile together, run `vp run dev --home-dir <home>` once and connect both clients to that backend.
 
-- For JavaScript, TypeScript, or asset-only changes, reuse a compatible installed development client and start Metro. Do not rebuild native code merely to load a new bundle.
-- For native source, native dependencies, entitlements, config plugins, or generated project changes, rebuild the affected platform.
-- Use `vp run ios:dev` or `vp run android:dev` only when an Expo clean prebuild is actually required; both commands regenerate the native project.
-- If the user requested no native rebuild and no compatible app is installed, reuse an existing compatible `.app` or `.apk` artifact when available. Otherwise report the missing dev client instead of silently rebuilding.
-
-The development identity on both platforms is:
-
-- App: `T3 Code Dev`
-- Bundle/package identifier: `com.t3tools.t3code.dev`
-- URL scheme: `t3code-dev`
-
-Bundle or package presence proves the correct variant, not native compatibility. Reuse it only when the current changes did not alter its Expo SDK, native dependencies, config plugins, entitlements, generated project, or native source.
-
-## Start one disposable T3 environment
-
-Run backend commands from the repository root. Use the ignored, worktree-local `.t3` directory or create a fresh directory with the host OS's temporary-directory mechanism. An explicit base directory stores state in `<base-dir>/userdata`; never point testing at shared `~/.t3` state.
-
-Seed a small number of meaningful Git projects before starting the backend:
+For a mobile-only backend:
 
 ```bash
-node apps/server/src/bin.ts project add <git-workspace> \
-  --base-dir <base-dir> \
-  --title <project-title>
+node apps/server/src/bin.ts serve --host 127.0.0.1 --port <server-port> --base-dir <home> --no-browser
 ```
 
-Running `project add` before the backend starts gives it exclusive offline database access. If a backend is already running, wait until it is ready so the CLI dispatches through the live server; never run offline mutations concurrently with the server.
+Run it in the background and retain its handle and output. Seed meaningful projects through `project add`, or use the visual fixture recipe in [SQLite fixtures](../test-t3-app/references/sqlite-fixtures.md). Offline writes require the backend to be stopped. `project add` can use a running ready server; never race its startup with offline mutation.
 
-Use direct SQLite mutation only for disposable projection fixtures. Follow `test-t3-app` and stop the backend before writing.
+Use the complete HTTP origin:
 
-Start a headless backend after seeding:
+- iOS Simulator: `http://127.0.0.1:<server-port>`.
+- Android Emulator: `http://10.0.2.2:<server-port>`.
+- A requested physical-device test: bind to a reachable interface and use the host's LAN origin.
+
+## Start or reuse Metro
+
+Run Metro from `apps/mobile`. Check the intended port and `/status`. Reuse it only when its owner, worktree, development variant, and scheme match this task. A healthy Metro from another worktree is not interchangeable.
+
+Use `vp run dev:client`. For a different free port, retain the development identity:
 
 ```bash
-node apps/server/src/bin.ts serve \
-  --host 127.0.0.1 \
-  --port <server-port> \
-  --base-dir <base-dir> \
-  --no-browser
+APP_VARIANT=development vp exec expo start --dev-client --scheme <resolved-scheme> --clear --lan --port <metro-port>
 ```
 
-Use these client origins:
-
-- iOS Simulator: `http://127.0.0.1:<server-port>`
-- Android Emulator: `http://10.0.2.2:<server-port>`
-- Physical device: bind the backend to `0.0.0.0` and use the host's reachable LAN origin
-
-Enter the complete `http://` origin to make the test transport explicit. Bare IP addresses default to HTTP, while bare hostnames default to HTTPS. When testing web and mobile together, run `vp run dev --home-dir <base-dir> --host 127.0.0.1` instead and do not launch a second backend over the same base directory.
-
-## Start or reuse Metro safely
-
-Run Metro from `apps/mobile`.
-
-1. Inspect any process on the intended Metro port and its `/status` response. Reuse it only when it is healthy, belongs to this worktree, and matches `APP_VARIANT=development`, `--dev-client`, and scheme `t3code-dev`.
-2. Never kill another worktree's Metro. Use a free explicit port when necessary.
-3. Run `vp run dev:client` on the standard port. For another port, retain the complete development identity:
-
-   ```bash
-   APP_VARIANT=development vp exec expo start \
-     --dev-client \
-     --scheme t3code-dev \
-     --clear \
-     --lan \
-     --port <metro-port>
-   ```
-
-   In PowerShell, set `$env:APP_VARIANT = "development"` first and then run the `vp exec expo start ...` command without the leading assignment.
-
-4. Open the exact development-client URL for the selected device and confirm the loaded bundle belongs to this worktree and Metro port.
-
-### iOS launch
-
-Use `ios-debugger-agent` to select one UDID and set these XcodeBuildMCP session defaults:
-
-- Workspace: `<repo>/apps/mobile/ios/T3CodeDev.xcworkspace`
-- Scheme: `T3CodeDev`
-- Configuration: `Debug`
-- Simulator ID: the selected UDID
-- Bundle ID: `com.t3tools.t3code.dev`
-
-Check the installed client with:
-
-```bash
-xcrun simctl get_app_container <simulator-udid> com.t3tools.t3code.dev app
-xcrun simctl openurl <simulator-udid> <printed-dev-client-url>
-```
-
-Accept the iOS confirmation prompt and dismiss the developer menu when it obscures the app.
-
-### Android launch
-
-Select one running emulator serial from `adb devices` and check the installed client:
-
-```bash
-adb -s <emulator-serial> shell pm path com.t3tools.t3code.dev
-adb -s <emulator-serial> reverse tcp:<metro-port> tcp:<metro-port>
-adb -s <emulator-serial> shell am start -W \
-  -a android.intent.action.VIEW \
-  -d '<printed-dev-client-url>' \
-  com.t3tools.t3code.dev
-```
-
-Do not start, stop, erase, or reconfigure an emulator owned by another task. Track and later stop only processes owned by this test.
-
-## Pair each client once
-
-Use the bundled helper from the repository root. It issues a fresh credential against the running backend's exact base directory, opens the existing Add Environment route with the credential in an encoded query parameter, and asks that route to connect once:
-
-```bash
-.agents/skills/test-t3-mobile/scripts/pair-client.sh \
-  ios <simulator-udid> <server-port> <base-dir>
-
-.agents/skills/test-t3-mobile/scripts/pair-client.sh \
-  android <emulator-serial> <server-port> <base-dir>
-```
-
-Run only the command for the selected platform. The helper uses `http://127.0.0.1:<server-port>` for iOS and `http://10.0.2.2:<server-port>` for Android. Pass a fifth argument only when testing a non-development URL scheme.
-
-The helper opens this registered route:
-
-```text
-t3code-dev://connections/new?pairingUrl=<encoded-pairing-url>&autoConnect=1
-```
-
-The Add Environment route owns the behavior: `pairingUrl` prefills its normal host and token inputs, while `autoConnect=1` submits once in development builds and returns to Home after success. Without `autoConnect`, the same route only prefills the form for manual inspection.
-
-Do not enter pairing hosts or tokens through simulator keyboard automation. Xcode's semantic typer sends HID-style key events through the simulator's active keyboard state, which can corrupt uppercase tokens and punctuation even when the host Mac uses a U.S. input source. The one-shot route is the deterministic pairing path. Use the visible form only as a fallback, and paste credentials rather than typing them character by character.
-
-Verify the expected seeded projects appear before exercising the affected flow.
-
-Pairing credentials are secret, short-lived, and single-use. Create a different credential for every simulator, emulator, physical device, or browser. If an attempt fails, issue a new credential rather than retrying the old one. Do not expose tokens in screenshots, commits, or final responses.
-
-## Drive and observe the affected flow
+On Windows, set `APP_VARIANT` through PowerShell before running the command. Open the exact printed development-client URL and confirm that the loaded bundle belongs to this worktree.
 
 ### iOS
 
-Use `snapshot_ui` and current element references from XcodeBuildMCP for taps and typing. Stream the same UDID through `ios-simulator-browser` so the user can watch in T3 Code when the host supports it. Use the stream as a visual feed rather than a reason to switch to fragile browser coordinates.
+Set XcodeBuildMCP session defaults to the selected simulator UDID, actual workspace/scheme when building, Debug configuration, and resolved bundle ID. For an installed client:
+
+```bash
+xcrun simctl get_app_container <udid> <resolved-bundle-id> app
+xcrun simctl openurl <udid> <printed-dev-client-url>
+```
+
+Accept the launch prompt and dismiss a developer menu if it obscures the app.
 
 ### Android
 
-Prefer semantic Android automation exposed by the current agent host. Otherwise inspect the current hierarchy with `adb shell uiautomator dump`, target stable resource IDs, content descriptions, text, or bounds, and use scoped `adb shell input` actions. Refresh the hierarchy after navigation. Capture the final state with `adb exec-out screencap -p`.
+```bash
+adb -s <serial> shell pm path <resolved-package>
+adb -s <serial> reverse tcp:<metro-port> tcp:<metro-port>
+adb -s <serial> shell am start -W -a android.intent.action.VIEW -d '<printed-dev-client-url>' <resolved-package>
+```
 
-Android does not use serve-sim. Use a browser-compatible Android mirror when the host already provides one; otherwise return focused emulator screenshots as evidence rather than installing unrelated streaming infrastructure during verification.
+Track any port-forwarding rule you add. Leave devices and processes owned by other tasks alone.
 
-## Verify and clean up
+## Pair once per client
 
-Exercise only the affected flow on one representative device unless the change specifically concerns platform, OS version, or screen size. Before finishing:
+Use the helper from the repository root. It resolves development identity and opens the existing Add Environment route:
 
-1. Confirm the app connected to the intended disposable environment instead of merely rendering an empty disconnected state.
-2. Capture the relevant final state.
-3. Remove the disposable environment from T3 Code Dev.
-4. Remove any `adb reverse` rule created for this test with `adb -s <emulator-serial> reverse --remove tcp:<metro-port>`.
-5. Stop only the serve-sim, Metro, backend, emulator, and log processes started by this test.
-6. Remove only base directories and temporary Git repositories deliberately created for this test. Preserve them when they contain useful reproduction evidence.
+```bash
+.agents/skills/test-t3-mobile/scripts/pair-client.sh ios <udid> <server-port> <home>
+.agents/skills/test-t3-mobile/scripts/pair-client.sh android <serial> <server-port> <home>
+```
 
-Keep local verification focused. Do not turn this workflow into a full repository test run.
+Run only the command for the selected device. A fifth argument overrides the URL scheme when explicitly testing another variant.
 
-## Troubleshoot predictable failures
+The route prefills the normal pairing form and submits once through development-only `autoConnect=1`. Without that flag it only prefills the form. Verify the intended projects appear after connection.
 
-- **Old UI or an old error appears:** verify Metro's worktree, variant, URL, and port before diagnosing the app.
-- **The environment remains empty:** verify the platform-specific HTTP origin, use a fresh token, and confirm project seeding used the identical base directory.
-- **A second client cannot pair:** pairing tokens are single-use; issue another token.
-- **The pairing form opens but does not connect:** confirm the deep link uses the existing `connections/new` route, includes `autoConnect=1`, and carries a freshly minted encoded `pairingUrl`.
-- **Pairing text changes case or punctuation:** do not retry semantic typing. Use `scripts/pair-client.sh`; the simulator keyboard layout and HID input path are not reliable for credentials.
-- **iOS semantic actions fail:** set explicit XcodeBuildMCP defaults and refresh with `snapshot_ui`.
-- **Android cannot reach Metro:** verify `adb reverse` for the exact Metro port and relaunch the development-client URL.
-- **Android cannot reach the backend:** use `10.0.2.2`, not `127.0.0.1`, for the Android Emulator.
+Use a fresh credential for each client and each failed attempt. Simulator keyboard input can corrupt token case and punctuation; use the helper instead. Test the manual form separately when pairing UI is the feature under test. Keep credentials out of screenshots and durable evidence.
+
+## Drive and observe
+
+On iOS, use current XcodeBuildMCP `snapshot_ui` element references. Refresh after navigation. Keep screenshots, semantic actions, and any simulator stream pinned to the same UDID.
+
+On Android, prefer available semantic automation. Otherwise refresh `uiautomator dump` and use stable resource IDs, descriptions, or current bounds for scoped input. Capture evidence with `adb exec-out screencap -p`.
+
+Exercise the affected flow and surrounding cases from the verification policy. Confirm the intended environment, not merely an empty screen. A deep link that bypasses a form proves connection behavior, not the form's typing and validation behavior.
+
+## Diagnose and finish
+
+- Old UI: confirm Metro's worktree, variant, URL, and port before changing app code.
+- Connection failure: confirm the platform-specific origin and home, then mint a fresh token.
+- Missing iOS references: refresh the snapshot and session defaults; report inaccessible controls rather than using guessed coordinates.
+- Android bundle failure: check the exact Metro port and the forwarding rule.
+
+Follow the shared retention policy while the user reviews. At final teardown, remove the disposable app connection and owned `adb reverse` rules, stop only owned processes, and remove only deliberately created temporary data. Preserve useful reproduction evidence.

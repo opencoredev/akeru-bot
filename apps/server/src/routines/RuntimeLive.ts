@@ -197,7 +197,7 @@ const make = Effect.gen(function* () {
           ? `Routine checkpoint ended with status '${event.payload.status}'.`
           : (event.payload.session.lastError ??
             `Routine session ended with status '${event.payload.session.status}'.`),
-      nextAction: "Review the routine thread, then resume the routine.",
+      nextAction: "Review the routine chat, then resume the routine.",
     } satisfies RoutineDependencyFailure;
     yield* adapter.recordFailed(run, failure, completedAt);
     yield* adapter.openFailureIncident(routine, failure);
@@ -264,8 +264,8 @@ const make = Effect.gen(function* () {
           } else {
             const failure = {
               kind: "execution",
-              reason: `Routine thread ended with state '${claim.terminalState}'.`,
-              nextAction: "Review the routine thread, then resume the routine.",
+              reason: `Routine chat ended with state '${claim.terminalState}'.`,
+              nextAction: "Review the routine chat, then resume the routine.",
             } satisfies RoutineDependencyFailure;
             yield* adapter.recordFailed(run, failure, completedAt);
             yield* adapter.openFailureIncident(routine, failure);
@@ -290,7 +290,7 @@ const make = Effect.gen(function* () {
           const failure = {
             kind: "execution",
             reason: `Routine session ended with state '${claim.sessionState}'.`,
-            nextAction: "Review the routine thread, then resume the routine.",
+            nextAction: "Review the routine chat, then resume the routine.",
           } satisfies RoutineDependencyFailure;
           yield* adapter.recordFailed(run, failure, completedAt);
           yield* adapter.openFailureIncident(routine, failure);

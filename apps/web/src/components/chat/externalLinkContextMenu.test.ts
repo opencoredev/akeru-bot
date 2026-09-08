@@ -82,8 +82,8 @@ describe("external chat link context menu", () => {
   });
 
   it.each([
-    ["link-to-thread", "Link to thread", true],
-    ["unlink-from-thread", "Unlink from thread", false],
+    ["link-to-thread", "Link to chat", true],
+    ["unlink-from-thread", "Unlink from chat", false],
   ] as const)("offers and runs the %s action", async (action, label, linked) => {
     const harness = createHarness(action);
     const href = "https://github.com/pingdotgg/t3code/pull/42";

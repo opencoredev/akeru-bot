@@ -37,13 +37,13 @@ describe("ComposerTasksBadge", () => {
     expect(markup).toContain('data-composer-task-current="true"');
     expect(markup).toContain("min-w-0 flex-1 truncate");
     expect(markup).toContain("w-20");
-    expect(markup).toContain("Tasks");
+    expect(markup).toContain("Bot work");
     expect(markup).toContain("Attach task progress");
     expect(markup).not.toContain("·");
     expect(markup).toContain("1/3");
-    expect(markup).toContain("Current task: Attach task progress");
+    expect(markup).toContain("Current step: Attach task progress");
     expect(markup).toContain("lucide-list-todo");
-    expect(markup).toContain('aria-label="Dismiss tasks for this turn"');
+    expect(markup).toContain('aria-label="Dismiss bot work for this turn"');
     expect(markup).toContain("lucide-x");
     expect(markup).not.toContain("lucide-chevron");
     expect(markup).toContain("bg-success");
@@ -107,7 +107,7 @@ describe("ComposerTasksBadge", () => {
     expect(markup).toContain("Attach task progress");
     expect(markup).toContain("Verify the result");
     expect(markup).toContain("lucide-list-todo");
-    expect(markup).toContain('aria-label="Dismiss tasks for this turn"');
+    expect(markup).toContain('aria-label="Dismiss bot work for this turn"');
     expect(markup).not.toContain("lucide-chevron");
     expect(markup).not.toContain("bg-success");
     expect(markup).not.toContain("bg-primary");

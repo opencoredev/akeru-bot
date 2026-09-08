@@ -464,7 +464,7 @@ const make = Effect.gen(function* () {
     if (thread.messages.some((message) => message.id === messageId)) return;
     const turnId = thread.session?.activeTurnId ?? undefined;
     const text =
-      "I could not continue that request because the agent session restarted. Send it again.";
+      "I could not continue that request because the bot session restarted. Send it again.";
 
     const deltaCommandId = yield* serverCommandId("user-input-failure-reply-delta");
     yield* orchestrationEngine.dispatch({
@@ -500,7 +500,7 @@ const make = Effect.gen(function* () {
     if (thread.messages.some((message) => message.id === messageId)) return;
     const turnId = thread.session?.activeTurnId ?? undefined;
     const text =
-      "I could not continue that approval because the agent session restarted. Send it again.";
+      "I could not continue that approval because the bot session restarted. Send it again.";
 
     yield* orchestrationEngine.dispatch({
       type: "thread.message.assistant.delta",
@@ -771,7 +771,7 @@ const make = Effect.gen(function* () {
         modelSelectionInstanceId: String(input.currentModelSelection.instanceId),
       }),
       method: "thread.turn.start",
-      detail: `Thread '${input.threadId}' cannot switch models after the conversation has started. Start a new thread to use '${requestedModelSelection.model}'.`,
+      detail: `Thread '${input.threadId}' cannot switch models after the conversation has started. Start a new chat to use '${requestedModelSelection.model}'.`,
     });
   });
 
@@ -1280,7 +1280,11 @@ const make = Effect.gen(function* () {
       ...(attachments.length > 0 ? { attachments } : {}),
       modelSelection,
     });
-    if (generated.title === DEFAULT_THREAD_TITLE || generated.title === previousTitle) {
+    if (
+      generated.title === DEFAULT_THREAD_TITLE ||
+      generated.title === "New chat" ||
+      generated.title === previousTitle
+    ) {
       return { _tag: "Completed", title: undefined } as const;
     }
 
@@ -1623,7 +1627,7 @@ const make = Effect.gen(function* () {
         threadId: event.payload.threadId,
         kind: "provider.turn.interrupt.failed",
         summary: "Provider turn interrupt failed",
-        detail: "No active provider session is bound to this thread.",
+        detail: "No active provider session is bound to this chat.",
         turnId: event.payload.turnId ?? null,
         createdAt: event.payload.createdAt,
       });

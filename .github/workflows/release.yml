@@ -13,6 +13,7 @@ on:
       - packages/contracts/package.json
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -25,6 +26,7 @@ jobs:
     runs-on: tenki-standard-small-2c-4g
     timeout-minutes: 15
     outputs:
+      publish: ${{ steps.version.outputs.publish }}
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
@@ -36,6 +38,8 @@ jobs:
       - name: Read stable version
         id: version
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           version="$(node -p "require('./apps/server/package.json').version")"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -49,13 +53,29 @@ jobs:
               exit 1
             fi
           done
+          if test "$EVENT_NAME" != workflow_dispatch; then
+            previous_version="$(git show "HEAD^:apps/server/package.json" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk).on('end', () => console.log(JSON.parse(data).version))")"
+            for manifest in apps/desktop/package.json apps/web/package.json packages/contracts/package.json; do
+              previous="$(git show "HEAD^:$manifest" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk).on('end', () => console.log(JSON.parse(data).version))")"
+              if test "$previous" != "$previous_version"; then
+                printf 'Previous package versions were not synchronized.\n' >&2
+                exit 1
+              fi
+            done
+            if test "$previous_version" = "$version"; then
+              printf 'publish=false\n' >> "$GITHUB_OUTPUT"
+              printf 'Stable version did not change; this push is not a release.\n'
+              exit 0
+            fi
+          fi
           if git rev-parse --verify --quiet "refs/tags/v$version"; then
             printf 'Stable tag v%s already exists.\n' "$version" >&2
             exit 1
           fi
-          printf 'version=%s\ntag=v%s\n' "$version" "$version" >> "$GITHUB_OUTPUT"
+          printf 'publish=true\nversion=%s\ntag=v%s\n' "$version" "$version" >> "$GITHUB_OUTPUT"
 
       - name: Setup Vite+
+        if: steps.version.outputs.publish == 'true'
         uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
@@ -63,6 +83,7 @@ jobs:
           run-install: true
 
       - name: Run release checks
+        if: steps.version.outputs.publish == 'true'
         run: |
           vp run check:public-dependencies
           vp run release:smoke
@@ -71,6 +92,7 @@ jobs:
   desktop:
     name: ${{ matrix.label }}
     needs: preflight
+    if: needs.preflight.outputs.publish == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
@@ -81,7 +103,7 @@ jobs:
       matrix:
         include:
           - label: macOS arm64 DMG
-            runner: tenki-macos-15-medium
+            runner: macos-15
             platform: mac
             target: dmg
             arch: arm64
@@ -135,12 +157,15 @@ jobs:
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
         run: |
           values=("$MACOS_CERTIFICATE_P12" "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_SIGNING_IDENTITY" "$APPSTORE_API_KEY_P8" "$APPSTORE_API_KEY_ID" "$APPSTORE_ISSUER_ID")
-          for value in "${values[@]}"; do
-            if test -z "$value"; then
-              printf 'Stable macOS releases require complete signing and notarization credentials.\n' >&2
-              exit 1
-            fi
-          done
+          present=0
+          for value in "${values[@]}"; do test -n "$value" && present=$((present + 1)); done
+          if (( present != 0 && present != ${#values[@]} )); then
+            printf 'macOS signing credentials must be either complete or absent.\n' >&2
+            exit 1
+          fi
+          signed=false
+          if (( present > 0 )); then signed=true; fi
+          printf 'MACOS_SIGNED=%s\n' "$signed" >> "$GITHUB_ENV"
 
       - name: Validate Windows signing credentials
         if: matrix.platform == 'win'
@@ -166,14 +191,14 @@ jobs:
           printf 'SIGNED=%s\n' "$signed" >> "$GITHUB_ENV"
 
       - name: Import macOS signing certificate
-        if: matrix.platform == 'mac'
+        if: matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'
         uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
       - name: Configure macOS notarization
-        if: matrix.platform == 'mac'
+        if: matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'
         shell: bash
         env:
           MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -187,7 +212,7 @@ jobs:
           chmod 600 "$RUNNER_TEMP/notarytool-api-key.p8"
 
       - name: Build signed macOS artifact
-        if: matrix.platform == 'mac'
+        if: matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'
         shell: bash
         env:
           APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
@@ -201,6 +226,17 @@ jobs:
             --arch arm64 \
             --build-version "$RELEASE_VERSION" \
             --signed \
+            --verbose
+
+      - name: Build unsigned macOS artifact
+        if: matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'
+        shell: bash
+        run: |
+          vp run dist:desktop:artifact \
+            --platform mac \
+            --target dmg \
+            --arch arm64 \
+            --build-version "$RELEASE_VERSION" \
             --verbose
 
       - name: Build Windows artifact
@@ -225,7 +261,7 @@ jobs:
         run: vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 --build-version "$RELEASE_VERSION" --verbose
 
       - name: Notarize and verify macOS DMG
-        if: matrix.platform == 'mac'
+        if: matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'
         shell: bash
         env:
           APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
@@ -247,6 +283,29 @@ jobs:
           xcrun stapler validate "${apps[0]}"
           spctl --assess --type execute --verbose=2 "${apps[0]}"
 
+      - name: Verify unsigned macOS app signature
+        if: matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'
+        shell: bash
+        run: |
+          dmg="release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
+          mount_point="$RUNNER_TEMP/akeru-unsigned-dmg"
+          mkdir -p "$mount_point"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
+          trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
+          apps=("$mount_point"/*.app)
+          test "${#apps[@]}" -eq 1
+          codesign --verify --deep --strict --verbose=2 "${apps[0]}"
+          signature="$(codesign -dv --verbose=4 "${apps[0]}" 2>&1)"
+          printf '%s\n' "$signature"
+          if ! printf '%s\n' "$signature" | grep -q '^Signature=adhoc$'; then
+            printf 'Packaged app does not use an ad-hoc signature.\n' >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$signature" | grep -Fqx 'Identifier=dev.leodoes.akeru'; then
+            printf 'Packaged app is missing the Akeru bundle identifier.\n' >&2
+            exit 1
+          fi
+
       - name: Launch macOS DMG
         if: matrix.platform == 'mac'
         run: vp run test:desktop-packaged-mac -- "release/Akeru-Bot-$RELEASE_VERSION-arm64.dmg"
@@ -264,6 +323,7 @@ jobs:
   release:
     name: Publish stable release
     needs: [preflight, desktop]
+    if: needs.preflight.outputs.publish == 'true'
     runs-on: tenki-standard-small-2c-4g
     timeout-minutes: 15
     env:
@@ -281,3 +341,5 @@ jobs:
         run: node scripts/verify-release-assets.ts release "$RELEASE_VERSION"
       - name: Create stable tag and GitHub Release
         run: gh release create "$RELEASE_TAG" release/* --target "$GITHUB_SHA" --title "Akeru Bot $RELEASE_TAG" --generate-notes
+      - name: Update the next version PR
+        run: gh workflow run version-packages.yml --ref main

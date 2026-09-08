@@ -2,6 +2,14 @@
 
 Open a bot, then use the panel beside the conversation to edit it.
 
+## Skip initial setup
+
+Select **Skip setup** on any setup step, then confirm **Skip setup** in the dialog.
+Select **Cancel** to stay in setup. Skipping keeps any connected subscriptions and bots you already
+created. Setup will not open again after a restart.
+
+You can connect a subscription in Settings and use **Create** to add a bot later.
+
 ## Profile
 
 You can change the bot's avatar, name, label, description, model, voice access, and enabled tools.
@@ -29,8 +37,8 @@ cloud sandbox do not show the local computer prompt.
 
 ## Run a routine
 
-Open **Routines** in the bot panel. Add a job, procedure, schedule, timezone, required skills, and
-connectors. Run a dry run and approve the procedure before you enable its schedule.
+Open **Routines** in the bot panel. Add a routine, procedure, schedule, timezone, required skills,
+and connectors. Run a dry run and approve the procedure before you enable its schedule.
 
 The panel shows the next and last run, latest result or failure, and five recent attempts. You can
 run, pause, resume, edit, or delete the routine. A procedure change needs approval again.
@@ -52,7 +60,7 @@ Use the panel button to collapse or reopen the bot editor. The default shortcut 
 can change **Right Panel: Toggle** in keybinding settings. Narrow screens open the editor as a sheet.
 
 Bot replies support headings, links, tables, task lists, code blocks, math, and Mermaid diagrams.
-During longer work, the bot posts short status notes after meaningful progress.
+During longer bot work, the bot posts short status notes after meaningful progress.
 
 ## Voice calls
 

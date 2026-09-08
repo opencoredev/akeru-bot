@@ -10,7 +10,6 @@ import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
-import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
 import { VoiceCallProvider } from "../components/voice/VoiceCall";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
@@ -140,7 +139,6 @@ function RootRouteView() {
         <HostedStaticEnvironmentBootstrap />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
-        {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
         <VoiceCallProvider>{appShell}</VoiceCallProvider>
         <SettingsDialog />
         <PluginsDialog />

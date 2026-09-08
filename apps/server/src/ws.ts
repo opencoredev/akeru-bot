@@ -79,6 +79,8 @@ import {
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
+import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
+import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import {
   buildProviderAccessCapabilities,
   subscriptionDependentBots,
@@ -540,6 +542,14 @@ const makeWsRpcLayer = (
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const resetChangedApiKeySessions = makeApiKeySessionReset(
+        subscriptionAuth,
+        agentController,
+        serverSettings.getSettings.pipe(
+          Effect.map(deriveProviderInstanceConfigMap),
+          Effect.orElseSucceed(() => ({})),
+        ),
+      );
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -636,13 +646,13 @@ const makeWsRpcLayer = (
             .getThreadShellById(threadId)
             .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
           if (Option.isNone(thread)) {
-            return yield* memoryOperationError(operation, "The thread does not exist.");
+            return yield* memoryOperationError(operation, "The chat does not exist.");
           }
           const project = yield* projectionSnapshotQuery
             .getProjectShellById(thread.value.projectId)
             .pipe(Effect.mapError((cause) => memoryOperationError(operation, cause)));
           if (Option.isNone(project)) {
-            return yield* memoryOperationError(operation, "The thread project does not exist.");
+            return yield* memoryOperationError(operation, "The chat project does not exist.");
           }
           const legacyWorkspaceOwnerProjectId = yield* projectionSnapshotQuery
             .getOriginalProjectIdByWorkspaceRoot(project.value.workspaceRoot)
@@ -656,7 +666,7 @@ const makeWsRpcLayer = (
                     Option.match({
                       onNone: () =>
                         Effect.fail(
-                          memoryOperationError(operation, "The thread group does not exist."),
+                          memoryOperationError(operation, "The chat group does not exist."),
                         ),
                       onSome: (group) =>
                         Effect.succeed(
@@ -869,8 +879,7 @@ const makeWsRpcLayer = (
         return isOrchestrationDispatchCommandError(error)
           ? error
           : new OrchestrationDispatchCommandError({
-              message:
-                error instanceof Error ? error.message : "Failed to bootstrap thread turn start.",
+              message: error instanceof Error ? error.message : "Failed to start the chat.",
               cause,
             });
       };
@@ -1801,7 +1810,7 @@ const makeWsRpcLayer = (
               Effect.mapError(
                 (cause) =>
                   new OrchestrationGetFullThreadDiffError({
-                    message: "Failed to load full thread diff",
+                    message: "Failed to load the full chat diff",
                     cause,
                   }),
               ),
@@ -1815,7 +1824,7 @@ const makeWsRpcLayer = (
               Effect.mapError(
                 (cause) =>
                   new OrchestrationSearchThreadsError({
-                    message: "Failed to search threads",
+                    message: "Failed to search conversations",
                     cause,
                   }),
               ),
@@ -2036,7 +2045,7 @@ const makeWsRpcLayer = (
                       Stream.mapError(
                         (cause) =>
                           new OrchestrationGetSnapshotError({
-                            message: `Failed to replay thread ${input.threadId} events`,
+                            message: `Failed to restore chat ${input.threadId}`,
                             cause,
                           }),
                       ),
@@ -2072,7 +2081,7 @@ const makeWsRpcLayer = (
                   Effect.mapError(
                     (cause) =>
                       new OrchestrationGetSnapshotError({
-                        message: `Failed to load thread ${input.threadId}`,
+                        message: `Failed to load chat ${input.threadId}`,
                         cause,
                       }),
                   ),
@@ -2080,7 +2089,7 @@ const makeWsRpcLayer = (
 
               if (Option.isNone(snapshot)) {
                 return yield* new OrchestrationGetSnapshotError({
-                  message: `Thread ${input.threadId} was not found`,
+                  message: `Chat ${input.threadId} was not found`,
                   cause: input.threadId,
                 });
               }
@@ -2479,11 +2488,11 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "bot" },
           ),
-        [WS_METHODS.subscriptionAuthStart]: ({ provider }) =>
+        [WS_METHODS.subscriptionAuthStart]: ({ provider, ...options }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthStart,
             Effect.tryPromise({
-              try: () => subscriptionAuth.startLogin(provider),
+              try: () => subscriptionAuth.startLogin(provider, options),
               catch: (cause) =>
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
@@ -2500,7 +2509,7 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }),
+            }).pipe(resetChangedApiKeySessions),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthComplete]: ({ loginId, code }) =>
@@ -2512,7 +2521,7 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }),
+            }).pipe(resetChangedApiKeySessions),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthCancel]: ({ loginId }) =>
@@ -2529,7 +2538,7 @@ const makeWsRpcLayer = (
             WS_METHODS.subscriptionAuthLogout,
             Effect.sync(() => {
               subscriptionAuth.logout(provider);
-            }).pipe(Effect.andThen(getAccessHealthSnapshot())),
+            }).pipe(resetChangedApiKeySessions, Effect.andThen(getAccessHealthSnapshot())),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthHealthTest]: ({ provider }) =>

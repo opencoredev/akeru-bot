@@ -22,6 +22,34 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 // default" checkbox would record in mimeapps.list.
 export const URL_HANDLER_DESKTOP_ENTRY_NAME = "akeru-url-handler.desktop";
 
+// Schemes older releases claimed for this same handler entry. Their defaults
+// must be released on upgrade or t3code:// links keep launching Akeru.
+export const RETIRED_URL_HANDLER_SCHEMES = ["t3code", "t3code-dev"] as const;
+
+// Removes our handler entry from mimeapps.list associations for retired
+// schemes, keeping any other application's handlers on the same line and
+// dropping the line only when ours was the last one. Returns null when
+// nothing changed.
+export function removeRetiredSchemeAssociations(mimeappsContent: string): string | null {
+  let changed = false;
+  const retained = mimeappsContent.split("\n").flatMap((line) => {
+    const match = /^x-scheme-handler\/([^=]+)=(.*)$/.exec(line.trim());
+    if (match === null) return [line];
+    const [, scheme, handlers] = match;
+    if (!(RETIRED_URL_HANDLER_SCHEMES as readonly string[]).includes(scheme!)) {
+      return [line];
+    }
+    const entries = handlers!.split(";").filter((handler) => handler.length > 0);
+    const others = entries.filter((handler) => handler !== URL_HANDLER_DESKTOP_ENTRY_NAME);
+    if (others.length === entries.length) {
+      return [line];
+    }
+    changed = true;
+    return others.length === 0 ? [] : [`x-scheme-handler/${scheme}=${others.join(";")};`];
+  });
+  return changed ? retained.join("\n") : null;
+}
+
 const { logInfo, logWarning } = makeComponentLogger("desktop-linux-url-handler");
 
 export class DesktopLinuxUrlHandlerRegistrationError extends Schema.TaggedErrorClass<DesktopLinuxUrlHandlerRegistrationError>()(
@@ -98,7 +126,7 @@ export const make = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
   const scheme = ElectronProtocol.getDesktopScheme(environment.isDevelopment);
-  const schemes = [scheme, ElectronProtocol.getLegacyDesktopScheme(environment.isDevelopment)];
+  const schemes = [scheme];
   const desktopEntryPath = environment.path.join(
     environment.linuxApplicationsDir,
     URL_HANDLER_DESKTOP_ENTRY_NAME,
@@ -163,12 +191,33 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  // On Linux, appDataDirectory is XDG_CONFIG_HOME — where xdg-mime records
+  // per-user defaults. Only associations that point at our own handler entry
+  // are removed, so a real T3 install's claims stay intact.
+  const releaseRetiredSchemes = Effect.gen(function* () {
+    const mimeappsPath = environment.path.join(environment.appDataDirectory, "mimeapps.list");
+    const content = yield* fileSystem.readFileString(mimeappsPath);
+    const cleaned = removeRetiredSchemeAssociations(content);
+    if (cleaned === null) {
+      return;
+    }
+    yield* fileSystem.writeFileString(mimeappsPath, cleaned);
+    yield* logInfo("released retired URL scheme defaults", {
+      schemes: RETIRED_URL_HANDLER_SCHEMES,
+    });
+  }).pipe(
+    // Best-effort like the rest of registration; a missing mimeapps.list is
+    // the common case on fresh installs.
+    Effect.ignore,
+  );
+
   const register = Effect.gen(function* () {
     if (environment.platform !== "linux" || !environment.isPackaged) {
       return;
     }
     yield* writeDesktopEntry;
     yield* Effect.forEach(schemes, setDefaultHandler, { discard: true });
+    yield* releaseRetiredSchemes;
     yield* logInfo("registered URL scheme handlers", { schemes });
   }).pipe(
     // Registration is best-effort: a missing xdg-mime or read-only home must

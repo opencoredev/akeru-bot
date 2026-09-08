@@ -178,19 +178,11 @@ const bootstrap = Effect.gen(function* () {
   const rendererTarget = environment.isDevelopment
     ? Option.getOrThrow(environment.devServerUrl)
     : backendConfig.httpBaseUrl;
-  yield* Effect.all(
-    [
-      ElectronProtocol.getDesktopScheme(environment.isDevelopment),
-      ElectronProtocol.getLegacyDesktopScheme(environment.isDevelopment),
-    ].map((scheme) =>
-      electronProtocol.registerDesktopProtocol({
-        scheme,
-        targetOrigin: rendererTarget,
-        backendOrigin: backendConfig.httpBaseUrl,
-      }),
-    ),
-    { concurrency: "unbounded" },
-  );
+  yield* electronProtocol.registerDesktopProtocol({
+    scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
+    targetOrigin: rendererTarget,
+    backendOrigin: backendConfig.httpBaseUrl,
+  });
   yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
     baseUrl: backendConfig.httpBaseUrl.href,
   });

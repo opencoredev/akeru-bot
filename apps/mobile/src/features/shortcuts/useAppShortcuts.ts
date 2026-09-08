@@ -18,7 +18,7 @@ import {
 
 /**
  * Owns the launcher app shortcuts (Android long-press menu): keeps the
- * static "New task" entry plus the recently opened threads in sync, and
+ * static "New chat" entry plus the recently opened threads in sync, and
  * routes shortcut taps — cold start included — to their in-app screens.
  * Mounted once in the root stack layout.
  */
@@ -67,7 +67,7 @@ function useRecentThreadShortcutSync(state: NavigationState): void {
   // thread opened after a cold start cannot clobber older entries.
   const [recents, setRecents] = useState<ReadonlyArray<RecentThreadShortcut> | null>(null);
   // Gates storage writes: a failed load falls back to an empty in-memory
-  // list (so the launcher still gets the "New task" item), but persisting
+  // list (so the launcher still gets the "New chat" item), but persisting
   // that fallback would erase valid history over a transient read error.
   // Real thread opens flip this on — by then the list is the new truth.
   const persistableRef = useRef(false);

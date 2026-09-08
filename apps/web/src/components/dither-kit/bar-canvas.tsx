@@ -58,10 +58,31 @@ export function BarCanvas() {
   // mid-render tears under Strict Mode / concurrent rendering.
   const state = useRef(ctx);
   const targetsRef = useRef(targets);
+  const invalidateRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     state.current = ctx;
     targetsRef.current = targets;
-  });
+  }, [ctx, targets]);
+
+  useEffect(() => {
+    invalidateRef.current?.();
+  }, [
+    targets,
+    ctx.ready,
+    ctx.revision,
+    ctx.stackType,
+    ctx.seriesSpecs,
+    ctx.seedOf,
+    ctx.barSlot,
+    ctx.dataLength,
+    ctx.selectedDataKey,
+    ctx.focusDataKey,
+    ctx.hoverIndex,
+    ctx.isMouseInChart,
+    ctx.hovered,
+    ctx.bloom,
+    ctx.bloomOnHover,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -138,16 +159,9 @@ export function BarCanvas() {
     let lastHover: number | null | undefined = Symbol() as never;
 
     const draw = (now: number) => {
-      raf = requestAnimationFrame(draw);
+      raf = animate ? requestAnimationFrame(draw) : 0;
       const s = state.current;
       if (!s.ready) return;
-      if (bloomCtx) {
-        const on = s.bloom !== "off" && (!s.bloomOnHover || s.isMouseInChart || s.hovered);
-        if (on) {
-          bloomCtx.clearRect(0, 0, cols, rows);
-          bloomCtx.drawImage(canvas, 0, 0);
-        }
-      }
       if (s.revision !== lastRevision) {
         lastRevision = s.revision;
         animStart = 0; // re-play the wave on data change / replay
@@ -171,7 +185,7 @@ export function BarCanvas() {
       }
       const itTarget = s.isMouseInChart || s.hovered ? 1 : 0;
       if (Math.abs(intensity - itTarget) > 0.001) {
-        intensity += (itTarget - intensity) * (reduce ? 1 : 0.16);
+        intensity += (itTarget - intensity) * (animate ? 0.16 : 1);
         needsFill = true;
       } else intensity = itTarget;
 
@@ -187,11 +201,22 @@ export function BarCanvas() {
       if (!needsFill) return;
       paint(prog);
       needsFill = false;
+      if (bloomCtx && s.bloom !== "off" && (!s.bloomOnHover || s.isMouseInChart || s.hovered)) {
+        bloomCtx.clearRect(0, 0, cols, rows);
+        bloomCtx.drawImage(canvas, 0, 0);
+      }
     };
 
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [cols, rows, width]);
+    invalidateRef.current = () => {
+      needsFill = true;
+      if (!raf) raf = requestAnimationFrame(draw);
+    };
+    invalidateRef.current();
+    return () => {
+      cancelAnimationFrame(raf);
+      invalidateRef.current = null;
+    };
+  }, [cols, rows, width, ctx.animate, ctx.animationDuration]);
 
   const bloomActive = ctx.bloomOnHover ? ctx.isMouseInChart || ctx.hovered : true;
   const bloom = bloomLayerStyle(ctx.bloom, bloomActive);

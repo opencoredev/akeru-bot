@@ -203,7 +203,7 @@ function FilesUnavailable() {
       <NativeStackScreenOptions options={{ title: "Files" }} />
       <EmptyState
         title="Files unavailable"
-        detail="This thread does not have an active workspace path."
+        detail="This chat does not have an active workspace path."
       />
     </View>
   );
@@ -430,7 +430,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
           {layout.usesSplitView ? (
             <NativeHeaderToolbar placement="left">
               <NativeHeaderToolbar.Button
-                accessibilityLabel={panes.primarySidebarVisible ? "Maximize files" : "Show threads"}
+                accessibilityLabel={panes.primarySidebarVisible ? "Maximize files" : "Show chats"}
                 icon={
                   panes.primarySidebarVisible
                     ? "arrow.up.left.and.arrow.down.right"

@@ -688,7 +688,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         api.dialogs.confirm(
           [
             projectThreads.length > 0
-              ? `Remove project "${targetLabel}" and delete its ${projectThreads.length} thread${projectThreads.length === 1 ? "" : "s"}?`
+              ? `Remove project "${targetLabel}" and delete its ${projectThreads.length} chat${projectThreads.length === 1 ? "" : "s"}?`
               : `Remove project "${targetLabel}"?`,
             ...(singleMember
               ? [
@@ -699,7 +699,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                 ]
               : [`This removes ${members.length} grouped project entries.`]),
             ...(projectThreads.length > 0
-              ? ["This permanently clears conversation history for those threads."]
+              ? ["This permanently clears those conversation histories."]
               : []),
             isWholeGroup
               ? "This removes only the project entries, not the files on disk."
@@ -769,7 +769,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         <SettingsSection title="Project">
           <SettingsRow
             title="Name"
-            description="The shared name for this project group in the sidebar and thread lists."
+            description="The shared name for this project group in the sidebar and conversation lists."
             control={
               <Input
                 key={`${group.projectKey}:${group.displayName}`}
@@ -825,10 +825,10 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           />
         </SettingsSection>
 
-        <SettingsSection title="New threads">
+        <SettingsSection title="New chats">
           <SettingsRow
             title="Model"
-            description="New threads in this project start with this model. Applies to every checkout in this group."
+            description="New chats in this project start with this model. Applies to every checkout in this group."
             resetAction={
               storedSelection !== null ? (
                 <SettingResetButton
@@ -881,7 +881,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           />
           <SettingsRow
             title="Workspace"
-            description="Where new threads in this project start. Overrides t3.json and the global default; applies to every checkout in this group."
+            description="Where new chats in this project start. Overrides t3.json and the global default; applies to every checkout in this group."
             resetAction={
               storedEnvMode !== null ? (
                 <SettingResetButton
@@ -901,7 +901,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                   }
                 }}
               >
-                <SelectTrigger aria-label="New-thread workspace">
+                <SelectTrigger aria-label="New-chat workspace">
                   <SelectValue>
                     {storedEnvMode === null
                       ? group.memberProjects.length > 1
@@ -974,8 +974,8 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
               </Tooltip>
               <div className="shrink-0 border-l border-border/60 px-2 tabular-nums">
                 {selectedCheckoutThreadCount === 1
-                  ? "1 thread"
-                  : `${selectedCheckoutThreadCount} threads`}
+                  ? "1 chat"
+                  : `${selectedCheckoutThreadCount} chats`}
               </div>
             </div>
           </div>
@@ -1023,7 +1023,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           {group.memberProjects.length > 1 ? (
             <SettingsRow
               title="Remove checkout"
-              description="Removes this checkout and its threads from the project group. Files on disk are not touched."
+              description="Removes this checkout and its chats from the project group. Files on disk are not touched."
               control={
                 <Button
                   size="xs"
@@ -1167,8 +1167,8 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
             }
             description={
               group.memberProjects.length > 1
-                ? `Deletes all ${group.memberProjects.length} checkout entries and their threads on every machine. Files on disk are not touched.`
-                : "Deletes the project entry and its threads. Files on disk are not touched."
+                ? `Deletes all ${group.memberProjects.length} checkout entries and their chats on every machine. Files on disk are not touched.`
+                : "Deletes the project entry and its chats. Files on disk are not touched."
             }
             control={
               <Button

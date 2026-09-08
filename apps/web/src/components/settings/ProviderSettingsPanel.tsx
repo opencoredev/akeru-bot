@@ -60,7 +60,7 @@ import {
   hasOneClickUpdateProviderCandidate,
   isProviderUpdateActive,
   type ProviderUpdateCandidate,
-} from "../ProviderUpdateLaunchNotification.logic";
+} from "../providerUpdates.logic";
 import { Button } from "../ui/button";
 import {
   NumberField,

@@ -67,7 +67,7 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: tenki-macos-15-medium", "Tenki macOS runner"],
+  ["runner: macos-15", "GitHub-hosted Apple Silicon macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: tenki-standard-medium-4c-8g", "4-vCPU Tenki Linux runner"],
   [
@@ -109,31 +109,27 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: tenki-macos-15-medium", "Tenki macOS runner"],
+  ["runner: macos-15", "GitHub-hosted Apple Silicon macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: tenki-standard-medium-4c-8g", "Tenki Linux runner"],
-  [
-    "Stable macOS releases require complete signing and notarization credentials.",
-    "required macOS signing credentials",
-  ],
+  ["macOS signing credentials must be either complete or absent.", "macOS signing mode"],
+  ["Build unsigned macOS artifact", "unsigned macOS fallback"],
+  ["Verify unsigned macOS app signature", "unsigned macOS signature verification"],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
   ["verify-release-assets.ts", "asset name and hash verification"],
   ["gh release create", "stable GitHub Release"],
+  ["actions: write", "next version workflow dispatch permission"],
+  ["gh workflow run version-packages.yml --ref main", "next version workflow dispatch"],
 ] as const) {
   assertContains(releaseWorkflow, needle, `Stable release workflow is missing ${label}.`);
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
-assertOmits(
-  releaseWorkflow,
-  "Verify unsigned macOS app signature",
-  "stable unsigned macOS artifact path",
-);
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["vp run release:changelog", "merged pull request changelog"],
-  ["vp run tegami version --no-checks", "Tegami version command"],
+  ["vp run release:version-pr", "version pull request command"],
+  ["actions: write", "CI dispatch permission"],
   ["contents: write", "version branch permission"],
   ["pull-requests: write", "version pull request permission"],
 ] as const) {
@@ -171,9 +167,13 @@ const parsedReleaseWorkflow = parse(releaseWorkflow) as {
     };
   };
 };
+const macOSConditions = new Set([
+  "matrix.platform == 'mac'",
+  "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+]);
 for (const step of parsedReleaseWorkflow.jobs?.desktop?.steps ?? []) {
   const secretInputs = JSON.stringify({ env: step.env, with: step.with });
-  if (/MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) && step.if !== "matrix.platform == 'mac'") {
+  if (/MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) && !macOSConditions.has(step.if ?? "")) {
     throw new Error(`${step.name ?? "Unnamed step"} exposes macOS secrets outside the macOS job.`);
   }
   if (/AZURE_/u.test(secretInputs) && step.if !== "matrix.platform == 'win'") {

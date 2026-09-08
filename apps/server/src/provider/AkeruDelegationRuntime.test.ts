@@ -379,8 +379,17 @@ describe("AkeruDelegationRuntime", () => {
       ThreadId.make("child"),
     );
     const create = test.commands.find((command) => command.type === "thread.create");
-    expect(create).toMatchObject({ worktreePath: null });
+    expect(create).toMatchObject({ title: "Bot work for bot-child", worktreePath: null });
     expect(create && "threadId" in create ? create.threadId : null).not.toBe(PARENT_THREAD_ID);
+    const start = test.commands.find((command) => command.type === "thread.turn.start");
+    expect(start && "message" in start ? start.message.text : null).toBe(
+      [
+        "This work was delegated from another bot chat.",
+        "Task: Research the answer.",
+        "Expected result: A concise answer.",
+        "Return a concise final result to the parent chat. Report a concrete blocker or failure.",
+      ].join("\n"),
+    );
     expect(test.usage).toEqual([
       expect.objectContaining({ botId: CHILD_BOT_ID, category: "delegated", inputTokens: 12 }),
     ]);

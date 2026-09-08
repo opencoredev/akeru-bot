@@ -449,7 +449,7 @@ export const make = Effect.gen(function* () {
     const finishedAtMs = yield* Clock.currentTimeMillis;
     subscriptionAuth.reload();
     const planLimits = yield* Effect.promise(() =>
-      readPlanLimits((provider) => subscriptionAuth.getAccessToken(provider)),
+      readPlanLimits((provider) => subscriptionAuth.getPlanAccessToken(provider)),
     ).pipe(Effect.catchCause(() => Effect.succeed([])));
 
     return {

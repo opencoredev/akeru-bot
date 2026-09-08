@@ -579,7 +579,7 @@ function ThreadNavigationSidebarPane(
           {
             id: "environment:all",
             title: "All environments",
-            subtitle: "Show threads from every environment",
+            subtitle: "Show chats from every environment",
             state: options.selectedEnvironmentId === null ? "on" : "off",
           },
           ...environments.map((environment) => ({
@@ -602,7 +602,7 @@ function ThreadNavigationSidebarPane(
                 {
                   id: "project:all",
                   title: "All projects",
-                  subtitle: "Show threads from every project",
+                  subtitle: "Show chats from every project",
                   state: selectedProjectKey === null ? "on" : "off",
                 },
                 ...projectFilterOptions.map((project) => ({
@@ -630,7 +630,7 @@ function ThreadNavigationSidebarPane(
             },
             {
               id: "thread-sort",
-              title: "Sort threads",
+              title: "Sort chats",
               subactions: THREAD_SORT_OPTIONS.map((option) => ({
                 id: `thread-sort:${option.value}`,
                 title: option.label,
@@ -934,7 +934,7 @@ function ThreadNavigationSidebarPane(
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Show ${Math.min(item.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled threads`}
+              accessibilityLabel={`Show ${Math.min(item.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled chats`}
               onPress={showMoreSettled}
               className="mx-4 mt-2 items-center rounded-lg border border-dashed border-border py-2.5"
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -1113,14 +1113,14 @@ function ThreadNavigationSidebarPane(
   const listEmpty = (
     <Text className="px-2 py-4 text-sm text-foreground-muted">
       {catalogState.isLoadingConnections
-        ? "Loading threads…"
+        ? "Loading chats…"
         : props.searchQuery.trim().length > 0
           ? threadSearch.isPending
-            ? "Searching thread messages…"
-            : "No matching threads"
+            ? "Searching conversations…"
+            : "No matching conversations"
           : selectedProjectScope !== null
-            ? `No threads in ${selectedProjectScope.title}`
-            : "No threads yet"}
+            ? `No chats in ${selectedProjectScope.title}`
+            : "No chats yet"}
     </Text>
   );
 
@@ -1268,7 +1268,7 @@ function ThreadNavigationSidebarPane(
           />
           <View className="flex-row items-center gap-2.5">
             <ControlPillMenu actions={listMenuActions} onPressAction={handleListMenuAction}>
-              <SidebarFilterButton accessibilityLabel="Filter and sort threads" icon={filterIcon} />
+              <SidebarFilterButton accessibilityLabel="Filter and sort chats" icon={filterIcon} />
             </ControlPillMenu>
             <SidebarHeaderActions onOpenSettings={props.onOpenSettings} />
           </View>
@@ -1278,7 +1278,7 @@ function ThreadNavigationSidebarPane(
           <SymbolView name="magnifyingglass" size={15} tintColor={mutedColor} type="monochrome" />
           <TextInput
             ref={searchInputRef}
-            accessibilityLabel="Search threads"
+            accessibilityLabel="Search conversations"
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"

@@ -13,7 +13,12 @@ platform="$1"
 device_id="$2"
 server_port="$3"
 base_dir="$4"
-url_scheme="${5:-t3code-dev}"
+url_scheme="${5:-}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+[[ "$server_port" =~ ^[0-9]{1,5}$ ]] || usage
+(( 10#$server_port >= 1 && 10#$server_port <= 65535 )) || usage
+[[ -n "$device_id" && -n "$base_dir" ]] || usage
 
 case "$platform" in
   ios)
@@ -27,8 +32,17 @@ case "$platform" in
     ;;
 esac
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(cd "$script_dir/../../../.." && pwd)"
 cd "$repo_root"
+
+if [[ -z "$url_scheme" ]]; then
+  url_scheme="$(node "$script_dir/app-identity.mjs" scheme)"
+fi
+[[ "$url_scheme" =~ ^[A-Za-z][A-Za-z0-9+.-]*$ ]] || usage
+android_package=""
+if [[ "$platform" == android ]]; then
+  android_package="$(node "$script_dir/app-identity.mjs" android-package)"
+fi
 
 if ! pairing_output="$({
   T3CODE_PORT="$server_port" node apps/server/src/bin.ts auth pairing create \
@@ -64,7 +78,7 @@ case "$platform" in
     # adb shell re-joins its arguments and evaluates them through the device
     # shell, so the deep link's `?`/`&` must be quoted once more for that shell.
     adb -s "$device_id" shell \
-      "am start -W -a android.intent.action.VIEW -d '$deep_link' com.t3tools.t3code.dev" \
+      "am start -W -a android.intent.action.VIEW -d '$deep_link' $android_package" \
       >/dev/null
     ;;
 esac

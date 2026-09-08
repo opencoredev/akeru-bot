@@ -13,10 +13,11 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
 import { SettingsSection } from "./components/SettingsSection";
+import { ProviderConnections } from "./ProviderConnections";
 
 export type SettingsProviderHealthParams = {
   readonly environmentId: EnvironmentId;
-  readonly target: "local-execution" | "bot-inbox";
+  readonly target: "local-execution" | "bot-inbox" | "providers";
 } & Record<string, unknown>;
 
 function Field(props: { readonly label: string; readonly value: string }) {
@@ -47,7 +48,7 @@ function BotInbox({
             className={index === 0 ? "gap-2 p-4" : "gap-2 border-t border-border-subtle p-4"}
           >
             <Text className="text-base font-t3-medium text-foreground">{item.botName}</Text>
-            <Field label="Task or routine" value={item.taskOrRoutine} />
+            <Field label="Bot work or routine" value={item.taskOrRoutine} />
             <Field label="Last failure" value={item.lastFailure} />
             <Field label="Next action" value={item.nextAction} />
             {canResolveInboxItem(item) ? (
@@ -119,7 +120,7 @@ export function SettingsProviderHealthRouteScreen({
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const query = useEnvironmentQuery(
-    route.params.target === "local-execution"
+    route.params.target !== "bot-inbox"
       ? null
       : botInboxEnvironment.list({
           environmentId: route.params.environmentId,
@@ -151,9 +152,19 @@ export function SettingsProviderHealthRouteScreen({
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-        refreshControl={<RefreshControl refreshing={query.isPending} onRefresh={query.refresh} />}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          route.params.target === "bot-inbox" ? (
+            <RefreshControl refreshing={query.isPending} onRefresh={query.refresh} />
+          ) : undefined
+        }
       >
-        {route.params.target === "local-execution" ? (
+        {route.params.target === "providers" ? (
+          <ProviderConnections
+            key={route.params.environmentId}
+            environmentId={route.params.environmentId}
+          />
+        ) : route.params.target === "local-execution" ? (
           section
         ) : inboxView?.kind === "error" ? (
           <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>

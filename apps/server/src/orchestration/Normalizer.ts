@@ -192,7 +192,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
               Effect.mapError(
                 (cause) =>
                   new OrchestrationDispatchCommandError({
-                    message: `Failed to claim attachment '${attachment.name}' for this thread.`,
+                    message: `Failed to claim attachment '${attachment.name}' for this chat.`,
                     cause,
                   }),
               ),

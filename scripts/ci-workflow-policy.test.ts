@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { parse } from "yaml";
 
 type Step = {
+  readonly name?: string;
   readonly id?: string;
   readonly if?: string;
   readonly run?: string;
@@ -18,6 +19,7 @@ type Job = {
 
 type Workflow = {
   readonly on: Record<string, unknown>;
+  readonly permissions?: Readonly<Record<string, string>>;
   readonly concurrency?: {
     readonly group?: string;
     readonly "cancel-in-progress"?: boolean;
@@ -89,14 +91,27 @@ describe("CI workflow budget", () => {
     const versionPackages = workflow(".github/workflows/version-packages.yml");
     const versionJob = versionPackages.jobs.version;
 
+    expect(Object.keys(versionPackages.on)).toEqual(["push", "workflow_dispatch"]);
     expect(versionPackages.concurrency).toEqual({
       group: "version-packages",
       "cancel-in-progress": true,
     });
+    expect(versionPackages.permissions).toEqual({
+      actions: "write",
+      contents: "write",
+      "pull-requests": "write",
+    });
     expect(versionJob?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
-    expect(versionJob?.steps.find((step) => step.run)?.run).toContain(
-      "vp run tegami version --no-checks",
+    expect(versionJob?.steps.find((step) => step.run)?.run).toBe("vp run release:version-pr");
+
+    const updater = NodeFS.readFileSync(
+      new URL("../scripts/update-version-pull-request.ts", import.meta.url),
+      "utf8",
     );
+    expect(updater).toContain('"merge-base",');
+    expect(updater).toContain('"--is-ancestor",');
+    expect(updater).toContain('"pr",\n    "edit",');
+    expect(updater).toContain('"workflow", "run", "ci.yml"');
   });
 
   it("uses 4-vCPU Linux runners in the manual release smoke workflow", () => {
@@ -108,8 +123,56 @@ describe("CI workflow budget", () => {
 
     expect(text).not.toContain("depot-");
     expect(text).toContain("tenki-standard-medium-4c-8g");
-    expect(text).toContain("tenki-macos-15-medium");
+    expect(text).toContain("runner: macos-15");
     expect(text).toContain("windows-2025");
     expect(Object.keys(releaseSmoke.jobs).length).toBeGreaterThan(0);
+  });
+
+  it("skips stable release builds for non-version manifest pushes", () => {
+    const text = NodeFS.readFileSync(
+      new URL("../.github/workflows/release.yml", import.meta.url),
+      "utf8",
+    );
+
+    expect(text).toContain("printf 'publish=false\\n'");
+    expect(text).toContain('git show "HEAD^:apps/server/package.json"');
+    const unchangedVersion = text.indexOf('if test "$previous_version" = "$version"');
+    const existingTag = text.indexOf('if git rev-parse --verify --quiet "refs/tags/v$version"');
+    expect(unchangedVersion).toBeGreaterThan(-1);
+    expect(existingTag).toBeGreaterThan(unchangedVersion);
+    expect(text).toContain("if: steps.version.outputs.publish == 'true'");
+    expect(text).toContain("if: needs.preflight.outputs.publish == 'true'");
+    expect(text).toContain('if test "$EVENT_NAME" != workflow_dispatch');
+    expect(text).toContain("gh workflow run version-packages.yml --ref main");
+  });
+
+  it("builds an ad-hoc-signed macOS release when Apple credentials are absent", () => {
+    const release = workflow(".github/workflows/release.yml");
+    const steps = release.jobs.desktop?.steps ?? [];
+
+    expect(steps.find((step) => step.name === "Validate macOS signing credentials")?.run).toContain(
+      "present != 0 && present != ${#values[@]}",
+    );
+    expect(steps.find((step) => step.name === "Build signed macOS artifact")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+    );
+    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
+    );
+    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")?.run).not.toContain(
+      "--signed",
+    );
+    expect(steps.find((step) => step.name === "Notarize and verify macOS DMG")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+    );
+    expect(steps.find((step) => step.name === "Verify unsigned macOS app signature")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
+    );
+    expect(
+      steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
+    ).toContain("^Signature=adhoc$");
+    expect(
+      steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
+    ).toContain("grep -Fqx 'Identifier=dev.leodoes.akeru'");
   });
 });

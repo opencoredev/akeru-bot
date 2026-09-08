@@ -8,7 +8,7 @@ import { openSettings } from "../../settingsDialogStore";
 import {
   getProviderUpdateSidebarPillView,
   type ProviderUpdateSidebarPillView,
-} from "../ProviderUpdateLaunchNotification.logic";
+} from "../providerUpdates.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 

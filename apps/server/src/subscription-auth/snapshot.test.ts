@@ -52,6 +52,22 @@ function providerFixture(
 }
 
 describe("provider access capabilities", () => {
+  it("reports API-key authentication instead of asking for an OAuth check", () => {
+    const capabilities = buildProviderAccessCapabilities(
+      [
+        { ...baseSubscription, provider: "anthropic", authMode: "api-key" },
+        { ...baseSubscription, provider: "xai", authMode: "api-key" },
+      ],
+      [],
+    );
+    expect(capabilities.find((entry) => entry.id === "claude-max")).toMatchObject({
+      accessMethod: "api-key",
+      nextAction: "Check the API key, then send a provider request to verify access.",
+    });
+    expect(capabilities.find((entry) => entry.id === "xai-subscription")?.accessMethod).toBe(
+      "api-key",
+    );
+  });
   it("maps Kimi bots to the Kimi subscription", () => {
     expect(
       subscriptionDependentBots(

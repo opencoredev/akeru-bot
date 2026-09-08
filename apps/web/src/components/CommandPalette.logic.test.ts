@@ -5,13 +5,38 @@ import {
   browseInputEndPaddingClass,
   buildBrowseGroups,
   buildModelPickerCommandPaletteAction,
+  buildRootGroups,
   buildThreadActionItems,
   enumerateCommandPaletteItems,
   filterPinnedBrowseEntries,
   filterCommandPaletteGroups,
+  getCommandPaletteInputPlaceholder,
   reduceCommandPaletteUiState,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
+
+describe("command palette product language", () => {
+  it("uses conversation language for history and search", () => {
+    expect(
+      buildRootGroups({
+        actionItems: [],
+        recentThreadItems: [
+          {
+            kind: "action",
+            value: "thread:one",
+            searchTerms: [],
+            title: "Example",
+            icon: null,
+            run: async () => undefined,
+          },
+        ],
+      })[0]?.label,
+    ).toBe("Recent conversations");
+    expect(getCommandPaletteInputPlaceholder("root")).toBe(
+      "Search commands, projects, and conversations...",
+    );
+  });
+});
 
 describe("browseInputEndPaddingClass", () => {
   it("reserves the widest space for the create action", () => {
@@ -296,7 +321,7 @@ describe("buildThreadActionItems", () => {
   it("preserves thread project-name matches when there is no stronger title match", () => {
     const group: CommandPaletteGroup = {
       value: "threads-search",
-      label: "Threads",
+      label: "Conversations",
       items: [
         {
           kind: "action",

@@ -1,90 +1,61 @@
 ---
 name: test-t3-app
-description: Launch, retain, and test the T3 Code web app in isolated development environments, including first-try browser authentication with one-time pairing URLs, pairing-token recovery, worktree-safe state directories, cross-turn dev server lifecycle, and direct SQLite inspection or fixture seeding. Use when an agent needs to run T3 locally, iteratively test UI behavior with a human, recover from an expired or consumed pairing token, isolate dev state, or prepare test data in state.sqlite.
+description: Launch and verify Akeru Bot web and desktop in isolated development environments. Use for browser testing, Electron-specific checks, pairing recovery, debug access, and fixture setup.
 ---
 
-# Test T3 App
+# Test Akeru Bot web and desktop
 
-Use this skill for the web client. For iOS Simulator, Android Emulator, or physical-device testing against an isolated T3 backend, use the sibling [`test-t3-mobile`](../test-t3-mobile/SKILL.md) skill.
+Read [the verification policy](../../../docs/internals/verification.md) before launching a client. It defines authorization, coverage, evidence, and environment lifetime. For native mobile testing, use [`test-t3-mobile`](../test-t3-mobile/SKILL.md).
 
-## Start an isolated web environment
+## Find or start the environment
 
-1. Run commands from the repository root.
-2. Choose a base directory that belongs only to the current worktree or test:
-   - Use the repository's ignored `.t3` directory for reusable worktree-local state.
-   - Use `mktemp -d /tmp/t3code-test.XXXXXX` for disposable state and retain the printed absolute path.
-3. Start the full web stack with `vp run dev`. Add `--share` when the user needs to open it from another tailnet device. In a linked worktree it defaults to that worktree's gitignored `.t3`; pass `--home-dir <base-dir>` only when the test needs a different isolated directory.
-4. Keep the terminal session alive and read the selected server port, web port, base directory, and pairing URL from its output.
+1. Run commands from the repository root. Run `vp run dev:status` to inspect the current environment without starting it. Reuse an owned healthy environment and its authenticated browser context.
+2. Use the worktree-local `.akeru` home. For a separate test, create a temporary directory and retain its absolute path. An explicit home stores runtime state in `<home>/userdata`.
+3. Run `vp run dev` in the background. Use `--home-dir <path>` only for a deliberately selected isolated home. Add `--share` only when the user requests access from another tailnet device.
+4. Retain the task handle, selected ports, home, and startup output. Read actual ports from `[dev-runner]`; occupied ports can shift them.
+5. Confirm the selected home before loading fixtures or pairing. Worktree defaults outrank ambient home settings. Never start a test server against the live `~/.akeru/userdata` database.
 
-Treat a base directory as disposable only when it was created or deliberately selected for the current test. Never delete or directly seed the shared `~/.t3` directory. Prefer starting with a new temporary base directory over clearing state of uncertain ownership.
+The setup script copies optional project `.env` configuration into each new worktree. Existing `.env` files are preserved. If setup reports a legacy symlink, replace it with a private copy before editing configuration. Keep secrets out of test evidence.
 
-The worktree-local default deliberately outranks an ambient `T3CODE_HOME`; do not pass the shared home through to a worktree dev server.
+Browser dev is single-origin. Vite proxies backend requests; leave `VITE_HTTP_URL` and `VITE_WS_URL` unset. Automated runs leave browser auto-open disabled so an uncontrolled tab cannot consume the startup token.
 
-Ports are derived from the worktree path but can shift when occupied. Always read the actual values from the `[dev-runner]` line.
+## Pair the controlled browser
 
-Shared browser dev is single-origin: Vite proxies the backend paths, so never set `VITE_HTTP_URL` or `VITE_WS_URL` for `dev`/`dev:web`.
+1. Load the browser skill for the tool available in the current harness. With `agent-browser`, read its skill and run `agent-browser skills get core --full` before the first browser action. Keep one background browser session for this task.
+2. Open the complete startup URL ending in `/pair#token=...` once. Preserve the fragment exactly.
+3. Wait for the pairing exchange and redirect. Verify that the intended environment and projects appear.
+4. Continue in the same browser context. A pairing page or disconnected empty view does not prove a connection.
 
-The dev runner disables browser auto-open by default. Do not pass `--browser` during automated testing: an automatically opened page can consume the one-time bootstrap token before the controlled browser uses it.
+Recover an expired or consumed token with `node apps/server/src/bin.ts pair`. If the server uses an explicit home, pass `--base-dir <same-absolute-path>`. Discovery reads the running server's origin, including its shared origin.
 
-### Verify a shared environment before human handoff
+Recovery tokens have standard client scopes. The startup URL has admin scopes needed for Settings → Connections management. For that flow, restart only the owned test server and use its new startup URL.
 
-When another person will use the printed pairing URL, first open the shared origin without the pairing path or fragment in the controlled browser and confirm the T3 Code app loads. This browser navigation is required even when curl succeeds because browsers block some otherwise reachable ports before making a network request.
+Keep tokens out of screenshots and durable evidence. A human and an agent need separate tokens. When handing over shared access, first check the shared bare origin in the browser without consuming the human's token. Then provide the full fresh pairing URL to the user.
 
-Do not open the other person's complete pairing URL during this reachability check; doing so consumes its one-time token. If the agent also needs an authenticated browser, create and consume a separate pairing token, then leave a fresh token for the other person.
+## Prepare data and verify behavior
 
-## Preserve the environment while iterating
+Read [SQLite fixtures](references/sqlite-fixtures.md) when preparing data or inspecting state. Prefer deterministic fixtures for repeatable visual checks. Use a safe snapshot of real data when reproducing a data-specific defect.
 
-Treat the overall testing or implementation loop—not an assistant turn or one verification pass—as the environment lifecycle boundary.
+Exercise the affected flow using clicks, typing, submission, and navigation. Apply the coverage and evidence checks in the verification policy. A screenshot alone is not a behavior test.
 
-- Keep the dev process, base directory, selected ports, authenticated browser tab, registered projects, and seeded fixtures alive while the user may inspect the result or request follow-up changes.
-- Do not stop the server merely because one verification pass completed or because you are yielding a response to the user.
-- Before starting another environment, check whether the existing process and browser tab still serve the task. Reuse them when healthy instead of discarding useful state.
-- On a later turn, verify that the existing process is alive and reuse its printed ports and base directory. If it exited, restart with the same base directory; create a new pairing token only when the browser session is no longer valid.
-- Tell the user when a test environment remains available, including its non-secret web URL when useful. Include a pairing token only when the user still needs to pair (see below).
+## Desktop-specific verification
 
-## Authenticate the browser on the first navigation
+Use a web pass for shared renderer-only changes. Run Electron when a change touches the desktop shell, IPC, native menus, protocol links, preload, packaged origins, startup, or process cleanup.
 
-1. Wait for the server log that says authentication is required and includes a URL ending in `/pair#token=...`.
-2. Use the controlled in-app browser or browser-automation surface available to the agent. Do not use a system-browser launch command during automated testing.
-3. Open that complete URL exactly once as the controlled browser's first navigation. Preserve the fragment and token verbatim.
-4. Wait for the pairing exchange and redirect to finish before navigating elsewhere.
-5. Continue in the same browser context so its stored bearer session remains available.
+1. Build with `vp run build:desktop`. For an automated startup check, run `vp run test:desktop-smoke`. The smoke script creates private application and OS home directories and stops its captured Electron process group.
+2. For interactive inspection, use the installed raw Electron executable with `apps/desktop/dist-electron/main.cjs`. Resolve the executable and create its private environment with `resolveSmokeElectronPath` and `createSmokeEnvironment` from `apps/desktop/scripts/smoke-test.mjs`. Create the returned home, temporary, and config directories before spawning. Retain the temporary root and captured process group.
+3. Set `T3CODE_HOME` and `AKERU_HOME` to the same isolated fixture home. Use a different home from any running backend. Pass `--remote-debugging-address=127.0.0.1 --remote-debugging-port=<free-port>` to that Electron process.
+4. Attach the supported browser tool to that exact Electron instance. With `agent-browser`, use a named session and `connect <port>` after loading its version-matched guidance. Confirm the app and environment before acting.
+5. Exercise the Electron behavior itself, then recheck after the relevant reload or restart. A successful external web tab does not prove shell behavior. Use native automation only when browser tools cannot reach the control, within the verification policy's authorization boundary.
 
-Keep pairing URLs out of screenshots, committed files, and durable logs. When the user asked for a shared environment, the deliverable IS the full pairing URL — paste it in your reply, token and all; a bare origin is useless to them. A pairing token is short-lived and single-use; opening the URL in another browser or opening it twice can consume it, so never open a URL you handed to the user.
+`--home-dir` isolates server data, not Electron's OS profile. The branded development launcher can also register OS protocol handlers. Use the raw runtime for isolated checks; test the branded launcher only when its OS integration is in scope and authorized. Startup log markers prove less than renderer content and interaction. Packaged-artifact tests must also isolate the OS home; `--user-data-dir` alone can be overridden by the app.
 
-## Recover a consumed or expired pairing token
+The debug port is local test access. Do not expose it through a tunnel. If attaching is unavailable, report the missing tool and what focused tests could prove instead.
 
-Run `node apps/server/src/bin.ts pair` from the repository root. It discovers the running dev server (worktree `.t3` first, same precedence as the dev runner) and prints a fresh `Pair URL` against the server's current web origin, including a `--share` tailnet origin. Pass `--base-dir <base-dir>` only when the server was started with `--home-dir`, using the identical path.
+## Diagnose and finish
 
-Tokens from `pair` carry standard client scopes. The startup pairing URL carries admin scopes; if the user needs Settings → Connections management (`access:write`), restart the server and hand over the new startup URL instead.
-
-## Inspect or seed SQLite state
-
-Read [references/sqlite-fixtures.md](references/sqlite-fixtures.md) before changing the database.
-
-- Use `node apps/server/scripts/t3-sqlite-state.ts query` for schema discovery and read-only checks.
-- Stop the dev server before using `node apps/server/scripts/t3-sqlite-state.ts exec`, then restart it with the same base directory.
-- Seed projection tables only for disposable UI fixtures. Use application commands and APIs when testing business behavior or projection correctness.
-- Use the auth CLI, not direct `auth_*` table edits, for pairing and sessions.
-
-The helper refuses to write to the shared `~/.t3` directory by default and creates a database backup before each mutation.
-
-## Tear down only when the testing loop is finished
-
-Tear down when the user explicitly asks, confirms the iteration is finished, or the overall task is genuinely complete with no pending human review. Do not infer completion from the end of an assistant turn.
-
-When teardown is appropriate:
-
-1. Stop the dev process with its terminal interrupt.
-2. Preserve the isolated base directory when it contains useful reproduction evidence or state for a likely follow-up.
-3. Otherwise remove only a path created for this test after resolving and verifying the exact target.
-
-If completion is uncertain, keep the environment alive and mention that it is retained for further iteration. A fresh isolated base directory remains the safest reset when authentication, migrations, or fixture state becomes ambiguous.
-
-## Troubleshoot predictably
-
-- If the browser shows an unauthenticated pairing screen, issue a new token instead of retrying the consumed URL.
-- If the pairing URL is no longer visible, create a replacement token with both `--dev-url` and `--base-url`.
-- If the replacement token is rejected, verify that the CLI and server use the identical absolute base directory and web URL.
-- If the UI shows unexpected data, verify that every command uses the identical explicit base directory before editing anything.
-- If ports move because another instance is running, trust the current dev-runner output rather than assuming ports `13773` and `5733`.
+- Run `vp run dev:status` to confirm the selected home and runtime state before diagnosing an unexpected screen.
+- Inspect `<home>/userdata/logs/server.trace.ndjson` for explicitly selected or worktree homes. See [observability](../../../docs/operations/observability.md) for trace fields and provider logs.
+- Preserve background stdout/stderr for startup failures. Share only the errors relevant to the failed action.
+- If pairing fails, mint a fresh token and confirm home and origin rather than retrying the same URL.
+- Retain or tear down the environment according to the verification policy. Stop only the task or process group captured at launch.

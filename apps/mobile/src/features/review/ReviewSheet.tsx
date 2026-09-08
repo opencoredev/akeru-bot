@@ -840,7 +840,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
               <View className="border-b border-border bg-card px-4 py-5">
                 <Text className="text-sm font-t3-bold text-foreground">No review diffs</Text>
                 <Text className="text-xs leading-normal text-foreground-muted">
-                  This thread has no ready turn diffs and the worktree diff is empty.
+                  This chat has no ready turn diffs and the worktree diff is empty.
                 </Text>
               </View>
             ) : selectedSection.isLoading && selectedSection.diff === null ? (

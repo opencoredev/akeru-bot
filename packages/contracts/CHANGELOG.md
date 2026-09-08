@@ -1,3 +1,21 @@
+## @t3tools/contracts@0.0.39
+
+### Changes
+
+- [#141](https://github.com/opencoredev/akeru-bot/pull/141) fix(web): mute routine notices and update actions
+- [#151](https://github.com/opencoredev/akeru-bot/pull/151) feat(marketing): add feedback.md, versioned metadata API, rate-limit headers
+- [#153](https://github.com/opencoredev/akeru-bot/pull/153) fix(desktop): recover failed update installs
+- [#154](https://github.com/opencoredev/akeru-bot/pull/154) fix(release): require signed macOS builds
+- [#155](https://github.com/opencoredev/akeru-bot/pull/155) fix(desktop): package lazy server dependencies
+- [#156](https://github.com/opencoredev/akeru-bot/pull/156) fix(mcp): open OAuth authorization requests
+- [#149](https://github.com/opencoredev/akeru-bot/pull/149) feat(marketing): report page requests to Notra GEO
+- [#158](https://github.com/opencoredev/akeru-bot/pull/158) ci: migrate Depot workflows to Tenki
+- [#150](https://github.com/opencoredev/akeru-bot/pull/150) fix(settings): remove obsolete thread controls
+- [#159](https://github.com/opencoredev/akeru-bot/pull/159) fix(chat): improve bot conversation usability
+- [#157](https://github.com/opencoredev/akeru-bot/pull/157) feat(plugins): add Composio integrations
+- [#162](https://github.com/opencoredev/akeru-bot/pull/162) fix(plugins): complete OAuth connections
+- [#163](https://github.com/opencoredev/akeru-bot/pull/163) feat(marketing): add Grok search pages
+
 ## @t3tools/contracts@0.0.38
 
 ### Changes

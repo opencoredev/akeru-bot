@@ -482,6 +482,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
       ]);
       assert.deepStrictEqual(win.nsis, { differentialPackage: true });
+      // Windows registers akeru:// through the installer so the OS routes
+      // activations here instead of an older T3 Code install. Production
+      // packages never claim the development scheme.
+      assert.deepStrictEqual(win.protocols, [
+        {
+          name: "Akeru Bot",
+          schemes: ["akeru"],
+        },
+      ]);
       // Native binaries and helper executables cannot load from inside an
       // asar; everything else stays packed. The Claude SDK platform packages
       // and .bin shims never ship.
@@ -511,7 +520,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev"],
         },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
@@ -1097,7 +1106,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(mac.protocols, [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev"],
         },
       ]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),

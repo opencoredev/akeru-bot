@@ -5,8 +5,8 @@ files.
 
 To choose another file:
 
-1. Open **Settings > Projects**.
-2. Select the project.
+1. Open the project menu in the sidebar.
+2. Select the project's **Project settings** button.
 3. Open the **Project** section.
 4. Select **Choose file**.
 5. Search for an image and select it.

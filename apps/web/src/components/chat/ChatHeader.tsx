@@ -181,7 +181,7 @@ export const ChatHeader = memo(function ChatHeader({
       setRenaming(null);
       const resolution = resolveRenameCommit({ title, originalTitle: activeThreadTitle });
       if (resolution.action === "reject-empty") {
-        toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+        toastManager.add({ type: "warning", title: "Chat title cannot be empty" });
         return;
       }
       if (resolution.action === "noop") return;
@@ -193,7 +193,7 @@ export const ChatHeader = memo(function ChatHeader({
           const error = squashAtomCommandFailure(result);
           toastManager.add({
             type: "error",
-            title: "Failed to rename thread",
+            title: "Failed to rename chat",
             description: error instanceof Error ? error.message : "An error occurred.",
           });
         }
@@ -291,7 +291,7 @@ export const ChatHeader = memo(function ChatHeader({
       onContextMenu={handleHeaderContextMenu}
     >
       <ActiveBotHeaderChip />
-      <WorkspaceBreadcrumb ariaLabel="Thread breadcrumb" className="flex-1">
+      <WorkspaceBreadcrumb ariaLabel="Chat breadcrumb" className="flex-1">
         {/* The project always leads the header: knowing which project a
             thread lives in is priority zero, and the thread title alone
             doesn't answer it. */}
@@ -303,7 +303,7 @@ export const ChatHeader = memo(function ChatHeader({
                   render={
                     <button
                       type="button"
-                      aria-label={`New thread in ${activeProjectName}`}
+                      aria-label={`New chat in ${activeProjectName}`}
                       onClick={onNewThreadInProject}
                       className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     />
@@ -317,7 +317,7 @@ export const ChatHeader = memo(function ChatHeader({
                   />
                   <span className="max-w-40 truncate">{activeProjectName}</span>
                 </TooltipTrigger>
-                <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
+                <TooltipPopup side="top">New chat in {activeProjectName}</TooltipPopup>
               </Tooltip>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator />
@@ -327,7 +327,7 @@ export const ChatHeader = memo(function ChatHeader({
           {renamingTitle !== null ? (
             <input
               autoFocus
-              aria-label="Thread title"
+              aria-label="Chat title"
               className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring"
               defaultValue={renamingTitle}
               onBlur={(event) => {
@@ -344,7 +344,7 @@ export const ChatHeader = memo(function ChatHeader({
                   <button
                     ref={titleButtonRef}
                     type="button"
-                    aria-label={`Thread actions for ${activeThreadTitle}`}
+                    aria-label={`Chat actions for ${activeThreadTitle}`}
                     aria-haspopup="menu"
                     onClick={openMenuFromTitle}
                     onDoubleClick={handleTitleDoubleClick}
@@ -398,8 +398,8 @@ export const ChatHeader = memo(function ChatHeader({
           </TooltipTrigger>
           <TooltipPopup side="top">
             {presentationMode === "quiet"
-              ? "Show tool activity in this thread"
-              : "Hide tool activity in this thread"}
+              ? "Show tool activity in this chat"
+              : "Hide tool activity in this chat"}
           </TooltipPopup>
         </Tooltip>
         {activeProjectScripts && (

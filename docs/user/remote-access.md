@@ -69,7 +69,7 @@ The desktop app can start or reuse an Akeru server on an SSH host.
 5. Confirm the launch.
 
 The desktop app starts the remote server and opens a local port forward. The remote machine owns its
-projects, threads, files, terminals, Git state, subscriptions, and provider sessions.
+projects, chats, files, terminals, Git state, subscriptions, and provider sessions.
 
 The remote host needs Node.js `^22.16 || ^23.11 || >=24.10`. Check the non-interactive shell when
 startup fails:
