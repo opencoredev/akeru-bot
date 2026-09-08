@@ -1,7 +1,7 @@
 # One-line Windows installer for Akeru Bot (x64).
 #
-#   $t = (Invoke-RestMethod https://api.github.com/repos/opencoredev/akeru-bot/releases/latest -ErrorAction Stop).tag_name; if ($t -match '^v\d+\.\d+\.\d+$') { $f = Join-Path $env:TEMP $("akeru-install-$([Guid]::NewGuid()).ps1"); Invoke-WebRequest "https://raw.githubusercontent.com/opencoredev/akeru-bot/$t/scripts/install-windows.ps1" -OutFile $f -ErrorAction Stop; try { & $f -Tag $t } finally { Remove-Item $f } } else { throw "Could not resolve the latest Akeru Bot release." }
-#   install-windows.ps1 -Tag v1.2.3
+#   $t = (Invoke-RestMethod https://api.github.com/repos/opencoredev/akeru-bot/releases/latest -ErrorAction Stop).tag_name; if ($t -match '^v\d+\.\d+\.\d+$') { $f = Join-Path $env:TEMP $("akeru-install-$([Guid]::NewGuid()).ps1"); try { Invoke-WebRequest "https://raw.githubusercontent.com/opencoredev/akeru-bot/$t/scripts/install-windows.ps1" -OutFile $f -UseBasicParsing -ErrorAction Stop; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $f -Tag $t; if ($LASTEXITCODE -ne 0) { throw "Akeru Bot installer failed with exit code $LASTEXITCODE." } } finally { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } } else { throw "Could not resolve the latest Akeru Bot release." }
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install-windows.ps1 -Tag v1.2.3
 #
 # Downloads the GitHub exe for the latest stable tag (or -Tag), checks
 # SHA256SUMS, unblocks the file, then runs the self-installer.
@@ -38,27 +38,33 @@ Write-Output "Installing Akeru Bot $Tag for Windows (x64)..."
 
 $asset = "Akeru-Bot-$version-x64.exe"
 $base = "https://github.com/opencoredev/akeru-bot/releases/download/$Tag"
-$installerPath = Join-Path $env:TEMP $asset
-$checksumPath = Join-Path $env:TEMP 'SHA256SUMS'
-Invoke-WebRequest -Uri "$base/$asset" -OutFile $installerPath
-Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile $checksumPath
+$tempDirectory = Join-Path $env:TEMP "akeru-install-$([Guid]::NewGuid())"
+$null = New-Item -ItemType Directory -Path $tempDirectory
+try {
+  $installerPath = Join-Path $tempDirectory $asset
+  $checksumPath = Join-Path $tempDirectory 'SHA256SUMS'
+  Invoke-WebRequest -Uri "$base/$asset" -OutFile $installerPath -UseBasicParsing
+  Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile $checksumPath -UseBasicParsing
 
-Write-Output 'Verifying checksum...'
-$entries = @(Select-String -Path $checksumPath -Pattern ('^[a-fA-F0-9]{64}\s+\*?' + [regex]::Escape($asset) + '$'))
-if ($entries.Count -ne 1) {
-  throw "install-windows.ps1: SHA256SUMS must contain exactly one entry for '$asset'."
-}
-$expected = ($entries[0].Line -split '\s+')[0]
-$actual = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash
-if ($actual -ne $expected) {
-  throw "install-windows.ps1: checksum mismatch for '$asset'."
-}
+  Write-Output 'Verifying checksum...'
+  $entries = @(Select-String -Path $checksumPath -Pattern ('^[a-fA-F0-9]{64}\s+\*?' + [regex]::Escape($asset) + '$'))
+  if ($entries.Count -ne 1) {
+    throw "install-windows.ps1: SHA256SUMS must contain exactly one entry for '$asset'."
+  }
+  $expected = ($entries[0].Line -split '\s+')[0]
+  $actual = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash
+  if ($actual -ne $expected) {
+    throw "install-windows.ps1: checksum mismatch for '$asset'."
+  }
 
-Unblock-File -Path $installerPath
+  Unblock-File -Path $installerPath
 
-Write-Output 'Installing...'
-$proc = Start-Process -FilePath $installerPath -Wait -PassThru
-if ($proc.ExitCode -ne 0) {
-  throw "install-windows.ps1: installer exited with code $($proc.ExitCode)."
+  Write-Output 'Installing...'
+  $proc = Start-Process -FilePath $installerPath -Wait -PassThru
+  if ($proc.ExitCode -ne 0) {
+    throw "install-windows.ps1: installer exited with code $($proc.ExitCode)."
+  }
+  Write-Output "Installed Akeru Bot $Tag."
+} finally {
+  Remove-Item -LiteralPath $tempDirectory -Recurse -Force
 }
-Write-Output "Installed Akeru Bot $Tag."

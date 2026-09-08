@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests pin installer script text; PowerShell cannot run here.
+// @effect-diagnostics nodeBuiltinImport:off - Tests pin installer script text; behavior runs separately on Windows.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -61,7 +61,7 @@ describe("install-windows.ps1", () => {
   });
 
   it("unblocks the installer, checks its exit code, and runs it without silent flags", () => {
-    NodeAssert.match(script, /^Unblock-File -Path \$installerPath$/m);
+    NodeAssert.match(script, /^\s+Unblock-File -Path \$installerPath$/m);
     NodeAssert.match(script, /\$proc = Start-Process -FilePath \$installerPath -Wait -PassThru/);
     NodeAssert.match(script, /if \(\$proc\.ExitCode -ne 0\)/);
     NodeAssert.match(script, /installer exited with code/);
@@ -71,6 +71,41 @@ describe("install-windows.ps1", () => {
     NodeAssert.doesNotMatch(script, /\/quiet/i);
     NodeAssert.doesNotMatch(script, / --silent/i);
     NodeAssert.doesNotMatch(script, / --quiet/i);
+  });
+
+  it("isolates payload downloads and removes them in finally", () => {
+    NodeAssert.match(
+      script,
+      /\$tempDirectory = Join-Path \$env:TEMP "akeru-install-\$\(\[Guid\]::NewGuid\(\)\)"/,
+    );
+    NodeAssert.match(script, /New-Item -ItemType Directory -Path \$tempDirectory\r?\ntry \{/);
+    NodeAssert.match(script, /\$installerPath = Join-Path \$tempDirectory \$asset/);
+    NodeAssert.match(script, /\$checksumPath = Join-Path \$tempDirectory 'SHA256SUMS'/);
+    NodeAssert.match(
+      script,
+      /\} finally \{\r?\n\s+Remove-Item -LiteralPath \$tempDirectory -Recurse -Force\r?\n\}/,
+    );
+  });
+
+  it("bootstraps in a Bypass child and always removes the downloaded script", () => {
+    const bootstrap = script.split(/\r?\n/).find((line) => line.startsWith("#   $t = "));
+    NodeAssert.ok(bootstrap);
+    NodeAssert.match(bootstrap, /akeru-install-\$\(\[Guid\]::NewGuid\(\)\)\.ps1/);
+    NodeAssert.match(bootstrap, /Invoke-RestMethod .* -ErrorAction Stop/);
+    NodeAssert.match(
+      bootstrap,
+      /try \{ Invoke-WebRequest .* -OutFile \$f -UseBasicParsing -ErrorAction Stop;/,
+    );
+    NodeAssert.match(
+      bootstrap,
+      /& powershell\.exe -NoProfile -ExecutionPolicy Bypass -File \$f -Tag \$t;/,
+    );
+    NodeAssert.match(bootstrap, /if \(\$LASTEXITCODE -ne 0\) \{ throw /);
+    NodeAssert.match(
+      bootstrap,
+      /finally \{ Remove-Item -LiteralPath \$f -Force -ErrorAction SilentlyContinue \}/,
+    );
+    NodeAssert.doesNotMatch(bootstrap, /& \$f/);
   });
 
   it("never changes system-wide security settings", () => {

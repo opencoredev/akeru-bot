@@ -1,8 +1,12 @@
 // @effect-diagnostics nodeBuiltinImport:off - Tests pin installer shell text and exercise its arg parsing.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
+import * as NodeOS from "node:os";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
+import * as Context from "effect/Context";
+import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { describe, it } from "vite-plus/test";
 
 const scriptPath = NodePath.resolve(import.meta.dirname, "./install-linux.sh");
@@ -30,6 +34,99 @@ function tryBash(args: string[]): { status: number; stdout: string; stderr: stri
     };
   }
 }
+
+describe.runIf(
+  Context.get(Context.empty(), HostProcessPlatform) === "linux" &&
+    Context.get(Context.empty(), HostProcessArchitecture) === "x64",
+)("install-linux.sh installation", () => {
+  for (const scenario of [
+    "fresh",
+    "replacement",
+    "checksum",
+    "missing-entry",
+    "download",
+    "directory",
+  ]) {
+    it(`handles ${scenario} without leaving staging files`, () => {
+      const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-install-test-"));
+      try {
+        const bin = NodePath.join(root, "bin");
+        const home = NodePath.join(root, "home");
+        const temp = NodePath.join(root, "tmp");
+        const destination = NodePath.join(home, ".local/bin/akeru-bot");
+        for (const directory of [bin, temp, NodePath.dirname(destination)]) {
+          NodeFS.mkdirSync(directory, { recursive: true });
+        }
+        const payload = "fixture AppImage bytes\n";
+        const asset = "Akeru-Bot-1.2.3-x64.AppImage";
+        const digest = NodeCrypto.createHash("sha256").update(payload).digest("hex");
+        NodeFS.writeFileSync(NodePath.join(root, "payload"), payload);
+        NodeFS.writeFileSync(
+          NodePath.join(root, "checksums"),
+          `${scenario === "checksum" ? "0".repeat(64) : digest}  ${scenario === "missing-entry" ? "other.AppImage" : asset}\n`,
+        );
+        NodeFS.writeFileSync(
+          NodePath.join(bin, "curl"),
+          `#!/usr/bin/env bash
+set -euo pipefail
+out=""
+url=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    -*) shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+case "$url" in
+  https://github.com/opencoredev/akeru-bot/releases/download/v1.2.3/SHA256SUMS) cp "$FIXTURE_ROOT/checksums" "$out" ;;
+  https://github.com/opencoredev/akeru-bot/releases/download/v1.2.3/Akeru-Bot-1.2.3-x64.AppImage)
+    [ "$FIXTURE_SCENARIO" != download ] || exit 22
+    cp "$FIXTURE_ROOT/payload" "$out" ;;
+  *) exit 99 ;;
+esac
+`,
+          { mode: 0o755 },
+        );
+        if (scenario === "directory") {
+          NodeFS.mkdirSync(destination);
+        } else if (scenario !== "fresh") {
+          NodeFS.writeFileSync(destination, "previous installation");
+        }
+        const result = NodeChildProcess.spawnSync("bash", [scriptPath, "--tag", "v1.2.3"], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            HOME: home,
+            TMPDIR: temp,
+            PATH: `${bin}${NodePath.delimiter}${process.env.PATH}`,
+            FIXTURE_ROOT: root,
+            FIXTURE_SCENARIO: scenario,
+          },
+        });
+        NodeAssert.ifError(result.error);
+        if (scenario === "fresh" || scenario === "replacement") {
+          NodeAssert.equal(result.status, 0, result.stderr);
+          NodeAssert.equal(NodeFS.readFileSync(destination, "utf8"), payload);
+          NodeAssert.ok(NodeFS.statSync(destination).mode & 0o111);
+          NodeAssert.match(result.stdout, /Installed Akeru Bot v1.2.3\./);
+        } else {
+          NodeAssert.notEqual(result.status, 0);
+          NodeAssert.doesNotMatch(result.stdout, /Installed Akeru Bot/);
+          if (scenario === "directory") {
+            NodeAssert.ok(NodeFS.statSync(destination).isDirectory());
+          } else {
+            NodeAssert.equal(NodeFS.readFileSync(destination, "utf8"), "previous installation");
+          }
+        }
+        NodeAssert.deepEqual(NodeFS.readdirSync(NodePath.dirname(destination)), ["akeru-bot"]);
+        NodeAssert.deepEqual(NodeFS.readdirSync(temp), []);
+      } finally {
+        NodeFS.rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+});
 
 describe("install-linux.sh", () => {
   it("starts in strict bash mode", () => {
