@@ -71,7 +71,8 @@ patchedDependencies:
   '@expo/metro-config@56.0.14': 8cb08b5bb7051ed9d2dbe46a2c293c5a1e17f1bd6ddf30de27909e18c921ff46
   '@ff-labs/fff-node@0.9.4': ab9ff544009e1891cfe3930105862d3699007f38922a79f3c98d90018deca368
   '@legendapp/list@3.3.5': 064530db83875fa671559a81ae42dc159726dc2dd6ec4c982da44ff7c7a74706
-  '@mastra/mcp@1.17.2': 016edd26ea06f6ebcde74dc84648bb45937a3dc5c6876407c2474c4525f91871
+  '@mastra/mcp@1.17.2': 9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4
+  '@modelcontextprotocol/client@2.0.0': 26c067f6d379f934223521f228d8db1557c64cf2a9206d9dc020a0fa59013ebc
   '@pierre/diffs@1.3.0-beta.10': 7ef7cb0cbabb17c15cdb137554068b36f15f6f5265e73fb51452aa3380db91aa
   '@react-native-menu/menu@2.0.0': c7f66d121c726ade4f5c4e1aed11a691e5711d244c544084e289ac26132a0045
   '@react-native/gradle-plugin@0.85.3': c1b594a16e682d621b6a960926f8ce13fc92edfb397884cfe7fcb0518996a784
@@ -1020,6 +1021,12 @@ importers:
       '@effect/vitest':
         specifier: 4.0.0-beta.103
         version: 4.0.0-beta.103(patch_hash=a16b1e870d8c29e4a98b17cc4c638a4ff471753d8ca3487f78a22b759caf951b)(effect@4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6))
+      '@mastra/mcp':
+        specifier: 1.17.2
+        version: 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
+      '@modelcontextprotocol/client':
+        specifier: 2.0.0
+        version: 2.0.0(patch_hash=26c067f6d379f934223521f228d8db1557c64cf2a9206d9dc020a0fa59013ebc)
       '@types/pngjs':
         specifier: 6.0.5
         version: 6.0.5
@@ -16960,7 +16967,7 @@ snapshots:
       '@mastra/fastembed': 1.3.0
       '@mastra/github-signals': 0.3.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
       '@mastra/libsql': 1.22.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@mastra/mcp': 1.17.2(patch_hash=016edd26ea06f6ebcde74dc84648bb45937a3dc5c6876407c2474c4525f91871)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
+      '@mastra/mcp': 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
       '@mastra/memory': 1.28.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))
       '@mastra/observability': 1.17.3(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
       '@mastra/parallel': 0.1.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
@@ -17073,10 +17080,10 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@mastra/mcp@1.17.2(patch_hash=016edd26ea06f6ebcde74dc84648bb45937a3dc5c6876407c2474c4525f91871)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
+  '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3)
-      '@modelcontextprotocol/client': 2.0.0
+      '@modelcontextprotocol/client': 2.0.0(patch_hash=26c067f6d379f934223521f228d8db1557c64cf2a9206d9dc020a0fa59013ebc)
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
       '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.27)
@@ -17173,7 +17180,7 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@modelcontextprotocol/client@2.0.0':
+  '@modelcontextprotocol/client@2.0.0(patch_hash=26c067f6d379f934223521f228d8db1557c64cf2a9206d9dc020a0fa59013ebc)':
     dependencies:
       '@modelcontextprotocol/core': 2.0.0
       cross-spawn: 7.0.6

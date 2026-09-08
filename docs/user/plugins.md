@@ -24,6 +24,11 @@ connection works. A routine can require an enabled connector.
 A plugin waiting for publisher approval stays visible, but **Connect** remains disabled. A plugin
 removed from the public directory stays under **Installed** until you remove it.
 
+If a service adds permissions after you first connected, select **Reconnect**. Akeru renews an
+outdated automatic OAuth client registration before opening sign-in, so services such as Hoplite
+can request their current permissions. You may need to approve those permissions again. Manually
+configured OAuth clients keep their existing registration.
+
 ## Enable tools for a bot
 
 Akeru enables a new plugin for every bot by default. Open the bot's **Tools** setting to disable it
