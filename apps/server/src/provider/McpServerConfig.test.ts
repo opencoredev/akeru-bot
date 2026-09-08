@@ -2,6 +2,7 @@ import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  mcpServerNeedsBrowserAttachment,
   sameMcpServerConfigurations,
   toAcpMcpServers,
   toClaudeMcpServers,
@@ -31,6 +32,27 @@ const servers: readonly McpServer[] = [
 ];
 
 describe("provider MCP configuration", () => {
+  it("declares browser attachment dependencies independently of connector count", () => {
+    for (const transport of ["stdio", "url"] as const) {
+      for (const hosted of [false, true]) {
+        const base = servers.find((server) => server.transport === transport)!;
+        for (const id of ["builtin-executor", "builtin-tinyfish"]) {
+          const server = { ...base, id: McpServerId.make(id) };
+          expect(mcpServerNeedsBrowserAttachment(server, hosted)).toBe(
+            transport === "stdio" || hosted,
+          );
+          expect(mcpServerNeedsBrowserAttachment({ ...server, enabled: false }, hosted)).toBe(
+            false,
+          );
+        }
+        for (const id of ["builtin-exa", "composio-session", "raw-mcp", "builtin-computer-use"]) {
+          expect(
+            mcpServerNeedsBrowserAttachment({ ...base, id: McpServerId.make(id) }, hosted),
+          ).toBe(false);
+        }
+      }
+    }
+  });
   it("converts filtered servers for ACP adapters", () => {
     expect(toAcpMcpServers(servers)).toEqual([
       { type: "http", name: "Search", url: "https://mcp.example.com", headers: [] },
