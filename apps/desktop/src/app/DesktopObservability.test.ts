@@ -3,12 +3,14 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import * as DesktopConfig from "./DesktopConfig.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopObservability from "./DesktopObservability.ts";
+import * as DesktopShutdown from "./DesktopShutdown.ts";
 
 const DesktopBackendChildLogRecord = Schema.Struct({
   message: Schema.String,
@@ -127,6 +129,57 @@ describe("DesktopObservability", () => {
         true,
       );
       assert.isFalse(yield* fileSystem.exists(logPath));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerUndici)),
+    ),
+  );
+
+  it.effect("acknowledges the actual observability layer after the app span reaches disk", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "desktop-quit-trace-" });
+      const environmentLayer = makeEnvironmentLayer(baseDir);
+      yield* Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const shutdown = yield* DesktopShutdown.DesktopShutdown;
+        const nativeQuit = yield* shutdown.awaitComplete.pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              const text = yield* fileSystem.readFileString(
+                environment.path.join(environment.logDir, "desktop.trace.ndjson"),
+              );
+              const records = text
+                .trim()
+                .split("\n")
+                .map((line) => decodeTraceRecordLine(line));
+              assert.isTrue(records.some((record) => record.name === "desktop.app"));
+              assert.isTrue(records.some((record) => record.name === "desktop.backend.stop.test"));
+            }),
+          ),
+          Effect.forkScoped,
+        );
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            yield* Effect.addFinalizer(() =>
+              Effect.void.pipe(Effect.withSpan("desktop.backend.stop.test")),
+            );
+            yield* shutdown.request;
+            yield* shutdown.awaitRequest;
+          }),
+        ).pipe(
+          Effect.withSpan("desktop.app"),
+          Effect.ensuring(DesktopShutdown.acknowledgeShutdown),
+        );
+        yield* Fiber.join(nativeQuit);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            DesktopShutdown.layer,
+            DesktopObservability.layer.pipe(Layer.provideMerge(environmentLayer)),
+          ),
+        ),
+      );
     }).pipe(
       Effect.scoped,
       Effect.provide(Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerUndici)),
