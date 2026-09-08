@@ -24,7 +24,10 @@ import {
   selectedReactionForPerson,
 } from "../chat/MessageControls";
 import { MessageReactions } from "../chat/MessageReactions";
+import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
+import { replyPlaybackControlProps, useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
@@ -63,6 +66,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  const replyPlayback = useOptionalReplyPlayback();
+  const voiceCall = useOptionalVoiceCall();
   const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
     reportFailure: false,
   });
@@ -88,6 +93,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const working =
     runtime.sending || runtime.respondingRequestIds.length > 0 || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages);
+  useReplyPlaybackThread({
+    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
+    threadId: runtime.linkedThreadRef?.threadId,
+    messages,
+    mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
+  });
   const pendingApproval = approvalState.pendingApproval;
   const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
@@ -185,6 +196,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                       <div className="mt-1">
                         <MessageControls
                           copyText={message.text || "Attachment"}
+                          {...(() => {
+                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
+                            return readAloud ? { readAloud } : {};
+                          })()}
                           onReply={() =>
                             setReplyTarget({
                               messageId: message.id,
@@ -222,6 +237,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                       <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
+                          {...(() => {
+                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
+                            return readAloud ? { readAloud } : {};
+                          })()}
                           selectedReaction={selectedReactionForPerson(
                             message.reactions,
                             peopleIdentity.current?.id,

@@ -73,6 +73,8 @@ import { PluginSearchResultCard } from "./PluginSearchResultCard";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
 import { keepTimelineEndVisibleAfterOverlayGrowth } from "./timelineScrollAnchoring";
 import { MessageControls } from "./MessageControls";
+import { useOptionalReplyPlayback } from "./ReplyPlaybackProvider";
+import { replyPlaybackControlProps } from "~/lib/replyPlaybackThread";
 import { MessageImageAttachments } from "./MessageImageAttachments";
 import {
   computeStableMessagesTimelineRows,
@@ -1201,6 +1203,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 }
 
 function AssistantMessageControls({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const replyPlayback = useOptionalReplyPlayback();
   const assistantCopyState = resolveAssistantMessageCopyState({
     text: row.message.text ?? null,
     showCopyButton: row.showAssistantCopyButton,
@@ -1211,7 +1214,13 @@ function AssistantMessageControls({ row }: { row: Extract<TimelineRow, { kind: "
     return null;
   }
 
-  return <MessageControls copyText={assistantCopyState.text ?? ""} />;
+  const readAloud = replyPlaybackControlProps(replyPlayback, row.message);
+  return (
+    <MessageControls
+      copyText={assistantCopyState.text ?? ""}
+      {...(readAloud ? { readAloud } : {})}
+    />
+  );
 }
 
 function ProposedPlanTimelineRow({

@@ -13,6 +13,7 @@ import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
 import { MobilePolicyNotice } from "./features/settings/MobilePolicyNotice";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
 import { IncomingShareProvider } from "./features/sharing/IncomingShareProvider";
+import { ReplyPlaybackProvider } from "./features/replyPlayback/ReplyPlaybackProvider";
 import {
   AppearancePreferencesProvider,
   useAppearancePreferences,
@@ -62,7 +63,9 @@ export default function App() {
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
       <AppearancePreferencesProvider>
-        <AppContent />
+        <ReplyPlaybackProvider>
+          <AppContent />
+        </ReplyPlaybackProvider>
       </AppearancePreferencesProvider>
     </RegistryContext.Provider>
   );

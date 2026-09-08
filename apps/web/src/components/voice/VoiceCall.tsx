@@ -717,6 +717,10 @@ export function useVoiceCall() {
   return value;
 }
 
+export function useOptionalVoiceCall() {
+  return useContext(VoiceCallContext);
+}
+
 export function BotVoiceCallButtonView({
   bot,
   active,

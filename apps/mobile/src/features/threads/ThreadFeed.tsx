@@ -64,6 +64,12 @@ import {
 
 import { AppText as Text } from "../../components/AppText";
 import { CopyTextButton } from "../../components/CopyTextButton";
+import { ReplyPlaybackControls } from "../replyPlayback/ReplyPlaybackControls";
+import {
+  replyPlaybackControlProps,
+  useReplyPlaybackThread,
+} from "../replyPlayback/useReplyPlaybackThread";
+import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import {
   parseReviewCommentMessageSegments,
   type ReviewInlineComment,
@@ -1033,6 +1039,7 @@ function renderFeedEntry(
     readonly reviewCommentColors: ReviewCommentColors;
     readonly reviewCommentBubbleWidth: number;
     readonly userBubbleMaxWidth: number;
+    readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;
   },
 ) {
   const entry = info.item;
@@ -1217,17 +1224,23 @@ function renderFeedEntry(
           );
         })}
         {showAssistantMeta ? (
-          <View className="mt-1 flex-row items-center gap-1">
-            <CopyTextButton
-              accessibilityLabel="Copy message"
-              text={message.text}
-              tintColor={iconSubtleColor}
-              buttonSize={28}
-              iconSize={13}
-            />
-            <Text className="font-t3-medium text-xs tabular-nums text-neutral-600 dark:text-neutral-400">
-              {timestampLabel}
-            </Text>
+          <View className="mt-1 gap-1">
+            <View className="flex-row flex-wrap items-center gap-1">
+              <CopyTextButton
+                accessibilityLabel="Copy message"
+                text={message.text}
+                tintColor={iconSubtleColor}
+                buttonSize={28}
+                iconSize={13}
+              />
+              <Text className="font-t3-medium text-xs tabular-nums text-neutral-600 dark:text-neutral-400">
+                {timestampLabel}
+              </Text>
+            </View>
+            {(() => {
+              const readAloud = replyPlaybackControlProps(props.replyPlayback, message);
+              return readAloud ? <ReplyPlaybackControls {...readAloud} /> : null;
+            })()}
           </View>
         ) : null}
       </Animated.View>
@@ -1561,6 +1574,16 @@ function ThreadFeedPlaceholder(props: {
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const navigation = useNavigation();
+  const replyPlayback = useOptionalReplyPlayback();
+  const playbackMessages = useMemo(
+    () => props.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : [])),
+    [props.feed],
+  );
+  useReplyPlaybackThread({
+    environmentId: props.environmentId,
+    threadId: props.threadId,
+    messages: playbackMessages,
+  });
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foldSettleFrameRef = useRef<number | null>(null);
   const foldSettleSecondFrameRef = useRef<number | null>(null);
@@ -2122,6 +2145,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         reviewCommentBubbleWidth,
         userBubbleMaxWidth,
         skills: props.skills,
+        replyPlayback,
       }),
     [
       copiedRowId,
@@ -2143,6 +2167,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       props.environmentId,
       props.skills,
       renderMarkdownImage,
+      replyPlayback,
     ],
   );
 

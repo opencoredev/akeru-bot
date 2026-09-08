@@ -12,6 +12,9 @@ server uses that worktree's `.akeru` directory instead.
   the Akeru feedback service. The service can retain accepted feedback for up to 90 days.
 - Voice calls send microphone audio and call state to the ChatGPT Realtime service while a call is
   active.
+- Reading a stored reply aloud will send the spoken form of that reply to the selected speech
+  service when stored-reply speech is connected. Temporary audio stays on this device for the
+  current playback only. See [Voice and spoken replies](voice.md).
 - Provider update checks contact the release source for configured providers. Signed desktop builds
   contact the configured Akeru release host.
 - Anonymous analytics send fixed aggregate counters and app, platform, architecture, and client

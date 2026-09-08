@@ -28,6 +28,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
+import { ReplyReadoutPreference } from "../replyPlayback/ReplyReadoutPreference";
+import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import {
   privacyControlPatch,
   type PrivacyControl,
@@ -194,6 +196,16 @@ function ErrorsSettingsSection({
   );
 }
 
+function AutomaticReadoutSettingsRow() {
+  const session = useOptionalReplyPlayback();
+  if (!session) return null;
+  return (
+    <View className="px-4 py-3">
+      <ReplyReadoutPreference preference={session.preference} />
+    </View>
+  );
+}
+
 function PrivacySettingsSection({
   environmentId,
 }: {
@@ -239,6 +251,7 @@ function EnvironmentPrivacySettingsSection({
         value={settings.voice.enabled}
         onValueChange={(enabled) => updateControl("voice", enabled)}
       />
+      <AutomaticReadoutSettingsRow />
       <SettingsSwitchRow
         icon="arrow.clockwise"
         label="Provider update checks"
