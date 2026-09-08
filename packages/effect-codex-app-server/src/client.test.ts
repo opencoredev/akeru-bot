@@ -4,12 +4,20 @@ import * as Path from "effect/Path";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
+import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 
 import * as CodexClient from "./client.ts";
+import { makeInMemoryStdio } from "./_internal/stdio.ts";
+
+const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
+const encoder = new TextEncoder();
 
 const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(import.meta.dirname, "../test/fixtures/codex-app-server-mock-peer.ts"),
@@ -17,6 +25,72 @@ const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
 const mockPeerArgs = (path: string) => [path];
 
 it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
+  for (const [rawNotificationBufferSize, rawRequestBufferSize] of [
+    [2, 0],
+    [0, 2],
+    ["unbounded", "unbounded"],
+  ] as const) {
+    it.effect(
+      `opts into raw buffers independently (${rawNotificationBufferSize}, ${rawRequestBufferSize})`,
+      () =>
+        Effect.gen(function* () {
+          const { stdio, input, output } = yield* makeInMemoryStdio();
+          const client = yield* CodexClient.make(stdio, {
+            rawNotificationBufferSize,
+            rawRequestBufferSize,
+          });
+          let notifications = 0;
+          let requests = 0;
+          yield* client.handleUnknownServerNotification(() =>
+            Effect.sync(() => {
+              notifications++;
+            }),
+          );
+          yield* client.handleUnknownServerRequest(() =>
+            Effect.sync(() => {
+              requests++;
+              return { ok: true };
+            }),
+          );
+          for (const index of [0, 1, 2]) {
+            yield* Queue.offer(
+              input,
+              encoder.encode(`${encodeJson({ method: "x/notify", params: index })}\n`),
+            );
+            yield* Queue.offer(
+              input,
+              encoder.encode(`${encodeJson({ id: index, method: "x/request" })}\n`),
+            );
+            assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
+              id: index,
+              result: { ok: true },
+            });
+          }
+          const notificationCount =
+            rawNotificationBufferSize === "unbounded" ? 3 : rawNotificationBufferSize;
+          const requestCount = rawRequestBufferSize === "unbounded" ? 3 : rawRequestBufferSize;
+          const rawNotifications = yield* client.raw.notifications.pipe(
+            Stream.take(notificationCount),
+            Stream.runCollect,
+          );
+          const rawRequests = yield* client.raw.requests.pipe(
+            Stream.take(requestCount),
+            Stream.runCollect,
+          );
+          assert.deepEqual(
+            rawNotifications.map((notification) => notification.params),
+            [0, 1, 2].slice(3 - notificationCount),
+          );
+          assert.deepEqual(
+            rawRequests.map((request) => request.id),
+            [0, 1, 2].slice(3 - requestCount),
+          );
+          assert.equal(notifications, 3);
+          assert.equal(requests, 3);
+        }),
+    );
+  }
+
   const makeHandle = (env?: Record<string, string>) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -85,6 +159,8 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
         const skills = yield* client.request("skills/list", { cwds: [peerCwd] });
         assert.equal(skills.data.length, 1);
         assert.equal(skills.data[0]?.cwd, peerCwd);
+        assert.deepEqual(yield* Stream.runCollect(client.raw.notifications), []);
+        assert.deepEqual(yield* Stream.runCollect(client.raw.requests), []);
 
         return {
           account,
