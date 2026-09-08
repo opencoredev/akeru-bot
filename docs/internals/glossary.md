@@ -12,6 +12,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
 - [Checkpointing](#checkpointing)
+- [Stored-reply playback](#stored-reply-playback)
 
 ## Concepts
 
@@ -88,6 +89,10 @@ A typed signal emitted when an async milestone completes, such as `checkpoint.ba
 #### Quiesced
 
 "Quiesced" means a turn has gone quiet and stable: follow-up work such as [CheckpointReactor.ts][6] has settled. It appears in [the receipt schema][13], so in practice it is something tests wait on rather than a production signal.
+
+### Stored-reply playback
+
+Reading an existing assistant message on the current client speaker. Identity, spoken-text conversion, playback ownership, and the client-local automatic-readout preference live in `packages/client-runtime/src/replyPlayback`. Synthesis credentials and the speech operation belong to the live-call voice work, not this module. See [reply-playback.md](./reply-playback.md).
 
 ### Subscription provider
 

@@ -30,6 +30,11 @@ menu to remove it. Linked review state appears with the chat.
 Open the chat menu and select **Regenerate title**. The action changes to **Regenerating…** until the
 new title is ready. Akeru hides this action when the environment server is too old to support it.
 
+## Read a reply aloud
+
+Completed bot replies include **Read aloud**. That speaks the stored reply on this device. It does
+not start a live call or generate another answer. See [Voice and spoken replies](voice.md).
+
 ## Environment identification
 
 Development environments can show **Artwork**, a **Version pill**, or **None** at the top of the

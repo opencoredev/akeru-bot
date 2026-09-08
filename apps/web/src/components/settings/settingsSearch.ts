@@ -186,6 +186,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/voice",
   },
   {
+    id: "voice-read-aloud",
+    title: "Read new replies aloud",
+    to: "/settings/voice",
+    keywords: ["read aloud", "speech", "playback", "automatic readout"],
+  },
+  {
     id: "add-project-starts-in",
     title: "Add project starts in",
     to: "/settings/general",

@@ -63,6 +63,8 @@ import {
   selectedReactionForPerson,
 } from "../chat/MessageControls";
 import { MessageReactions } from "../chat/MessageReactions";
+import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
+import { replyPlaybackControlProps, useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
@@ -181,6 +183,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     return results;
   }, [activities]);
   const voiceCall = useVoiceCall();
+  const replyPlayback = useOptionalReplyPlayback();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
@@ -208,6 +211,12 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  useReplyPlaybackThread({
+    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
+    threadId: runtime.linkedThreadRef?.threadId,
+    messages,
+    mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
+  });
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
@@ -316,6 +325,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                       <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
+                          {...(() => {
+                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
+                            return readAloud ? { readAloud } : {};
+                          })()}
                           selectedReaction={selectedReactionForPerson(
                             message.reactions,
                             currentPersonId,
