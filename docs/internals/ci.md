@@ -24,6 +24,11 @@ updates the pull request body after Tegami updates its branch, then dispatches C
 This explicit dispatch is required because pushes made with the GitHub Actions token do not start
 another pull-request workflow.
 
+[`.github/workflows/installer-tests.yml`](../../.github/workflows/installer-tests.yml) runs focused
+Windows PowerShell 5.1 tests when the Windows installer changes. It checks checksum rejection,
+per-invocation temporary files, failure cleanup, and the bootstrap under Restricted execution policy.
+Downloads and installer launches use fixtures; this job does not install Akeru Bot.
+
 [`.github/workflows/release-smoke.yml`](../../.github/workflows/release-smoke.yml) is a manual,
 non-publishing artifact smoke workflow. It uses a 4-vCPU Tenki runner for Linux and GitHub-hosted
 Apple Silicon macOS and Windows runners. It builds a Developer ID signed macOS arm64 app.
