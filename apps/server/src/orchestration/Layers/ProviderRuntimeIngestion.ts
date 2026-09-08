@@ -148,10 +148,7 @@ function boundedApprovalArgs(toolName: string | undefined, args: unknown): unkno
   return undefined;
 }
 
-type TurnStartRequestedDomainEvent = Extract<
-  OrchestrationEvent,
-  { type: "thread.turn-start-requested" }
->;
+type ChannelSessionDomainEvent = Extract<OrchestrationEvent, { type: "thread.session-set" }>;
 
 type RuntimeIngestionInput =
   | {
@@ -160,7 +157,7 @@ type RuntimeIngestionInput =
     }
   | {
       source: "domain";
-      event: TurnStartRequestedDomainEvent;
+      event: ChannelSessionDomainEvent;
     };
 
 function toTurnId(value: TurnId | string | undefined): TurnId | undefined {
@@ -996,6 +993,25 @@ const make = Effect.gen(function* () {
           randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
         }
       : null;
+  const channelStatusWorker = yield* makeDrainableWorker(
+    (input: {
+      threadId: ThreadId;
+      turnId: TurnId | undefined;
+      requestMessageId?: MessageId;
+      state: "completed" | "failed" | "cancelled";
+    }) =>
+      channelRuntimeDependencies
+        ? Effect.promise(() =>
+            ChannelRuntime.finishChannelTurn(
+              channelRuntimeDependencies,
+              input.threadId,
+              input.turnId,
+              input.state,
+              input.requestMessageId,
+            ),
+          ).pipe(Effect.catchCause(() => Effect.logWarning("failed to update channel turn status")))
+        : Effect.void,
+  );
   const automaticChannelReplyWorker = yield* makeDrainableWorker(
     (input: AutomaticChannelReplyTarget) => {
       if (!channelRuntimeDependencies) {
@@ -1670,6 +1686,7 @@ const make = Effect.gen(function* () {
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
       const needsPendingTurnStart =
+        event.type === "session.exited" ||
         event.type === "session.started" ||
         event.type === "session.state.changed" ||
         event.type === "thread.started" ||
@@ -2308,6 +2325,34 @@ const make = Effect.gen(function* () {
       ).pipe(Effect.asVoid);
 
       if (
+        shouldApplyThreadLifecycle &&
+        !conflictsWithActiveTurn &&
+        (event.type === "turn.completed" ||
+          event.type === "turn.aborted" ||
+          event.type === "session.exited" ||
+          (event.type === "session.state.changed" &&
+            (event.payload.state === "error" || event.payload.state === "stopped")))
+      ) {
+        yield* channelStatusWorker.enqueue({
+          threadId: thread.id,
+          turnId: eventTurnId ?? activeTurnId ?? undefined,
+          ...(activeTurnId === null && Option.isSome(pendingTurnStart)
+            ? { requestMessageId: pendingTurnStart.value.messageId }
+            : {}),
+          state:
+            event.type === "turn.completed"
+              ? event.payload.state === "completed"
+                ? "completed"
+                : event.payload.state === "failed"
+                  ? "failed"
+                  : "cancelled"
+              : event.type === "session.state.changed" && event.payload.state === "error"
+                ? "failed"
+                : "cancelled",
+        });
+      }
+
+      if (
         event.type === "turn.completed" &&
         event.payload.state === "completed" &&
         shouldApplyThreadLifecycle &&
@@ -2325,7 +2370,27 @@ const make = Effect.gen(function* () {
       }
     });
 
-  const processDomainEvent = (_event: TurnStartRequestedDomainEvent) => Effect.void;
+  const processDomainEvent = Effect.fn("ProviderRuntimeIngestion.processChannelSession")(function* (
+    event: ChannelSessionDomainEvent,
+  ) {
+    const { session, threadId } = event.payload;
+    if (!channelRuntimeDependencies || (session.status !== "error" && session.status !== "stopped"))
+      return;
+    const thread = yield* resolveThreadDetail(threadId);
+    if (
+      thread?.session?.updatedAt !== session.updatedAt ||
+      thread.session.status !== session.status
+    )
+      return;
+    const request = thread.messages.findLast((message) => message.role === "user");
+    if (!request?.channelOrigin) return;
+    yield* channelStatusWorker.enqueue({
+      threadId,
+      turnId: undefined,
+      requestMessageId: request.id,
+      state: session.status === "error" ? "failed" : "cancelled",
+    });
+  });
 
   const processInput = (input: RuntimeIngestionInput) =>
     input.source === "runtime" ? processRuntimeEvent(input.event) : processDomainEvent(input.event);
@@ -2356,7 +2421,7 @@ const make = Effect.gen(function* () {
       );
       yield* forkParked(
         Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
-          if (event.type !== "thread.turn-start-requested") {
+          if (event.type !== "thread.session-set") {
             return Effect.void;
           }
           return worker.enqueue({ source: "domain", event });
@@ -2366,7 +2431,10 @@ const make = Effect.gen(function* () {
 
   return {
     start,
-    drain: worker.drain.pipe(Effect.andThen(automaticChannelReplyWorker.drain)),
+    drain: worker.drain.pipe(
+      Effect.andThen(channelStatusWorker.drain),
+      Effect.andThen(automaticChannelReplyWorker.drain),
+    ),
   } satisfies ProviderRuntimeIngestionShape;
 });
 
