@@ -81,6 +81,20 @@ describe("writeTextToClipboard", () => {
     },
   );
 
+  it("reports unavailable clipboard support when document has no body", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("document", { execCommand: vi.fn(), body: null });
+
+    const error = await writeTextToClipboard("remote command", "command").then(
+      () => undefined,
+      (cause: unknown) => cause,
+    );
+
+    expect(error).toBeInstanceOf(ClipboardApiUnavailableError);
+    expect(error).toMatchObject({ target: "command" });
+  });
+
   it("uses the Clipboard API without touching the fallback when it is available", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const execCommand = vi.fn();

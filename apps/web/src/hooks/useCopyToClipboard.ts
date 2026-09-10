@@ -49,7 +49,13 @@ export class ClipboardReadError extends Schema.TaggedErrorClass<ClipboardReadErr
 
 /** Copy fallback for remote web pages served over plain HTTP. */
 function writeTextWithExecCommand(value: string): boolean {
-  if (typeof document === "undefined" || typeof document.execCommand !== "function") return false;
+  if (
+    typeof document === "undefined" ||
+    typeof document.execCommand !== "function" ||
+    document.body == null
+  ) {
+    return false;
+  }
 
   const textarea = document.createElement("textarea");
   textarea.value = value;
