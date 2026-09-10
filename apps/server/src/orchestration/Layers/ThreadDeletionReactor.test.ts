@@ -140,7 +140,7 @@ describe("ThreadDeletionReactor.start", () => {
                 Layer.mock(TerminalManager.TerminalManager)({
                   close: (input) =>
                     Effect.sync(() => {
-                      closedThreadIds.push(input.threadId);
+                      closedThreadIds.push(ThreadId.make(input.threadId));
                     }),
                 }),
               ),
