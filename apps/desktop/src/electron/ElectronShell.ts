@@ -18,14 +18,31 @@ const REMOTE_EDITOR_PROTOCOLS = new Set(
 );
 
 // Zed's host sits in the first path segment, so it needs its own userinfo ban.
-const ZED_SSH_PATHNAME = /^\/[^/@:]+\/.+$/;
+const ZED_SSH_HOST = /^[^/@:]+$/;
+
+function isZedSshUrl(url: URL): boolean {
+  if (url.host !== "ssh") {
+    return false;
+  }
+  const encodedHost = url.pathname.split("/")[1];
+  if (!encodedHost) {
+    return false;
+  }
+  let host: string;
+  try {
+    host = decodeURIComponent(encodedHost);
+  } catch {
+    return false;
+  }
+  return ZED_SSH_HOST.test(host) && url.pathname.length > encodedHost.length + 1;
+}
 
 const isRemoteEditorUrl = (url: URL) =>
   REMOTE_EDITOR_PROTOCOLS.has(url.protocol) &&
   url.username.length === 0 &&
   url.password.length === 0 &&
   (url.protocol === "zed:"
-    ? url.host === "ssh" && ZED_SSH_PATHNAME.test(url.pathname)
+    ? isZedSshUrl(url)
     : url.host === "vscode-remote" &&
       url.pathname.startsWith("/ssh-remote+") &&
       url.pathname.length > "/ssh-remote+".length);

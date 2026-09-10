@@ -79,6 +79,22 @@ describe("ElectronShell", () => {
     }).pipe(Effect.provide(ElectronShell.layer)),
   );
 
+  it.effect("does not open Zed ssh links with encoded host delimiters", () =>
+    Effect.gen(function* () {
+      openExternalMock.mockResolvedValue(undefined);
+
+      const electronShell = yield* ElectronShell.ElectronShell;
+      const results = yield* Effect.all([
+        electronShell.openExternal("zed://ssh/user%40host/workspace"),
+        electronShell.openExternal("zed://ssh/host%3A22/workspace"),
+        electronShell.openExternal("zed://ssh/host%2Fevil/workspace"),
+      ]);
+
+      assert.deepEqual(results, [false, false, false]);
+      assert.equal(openExternalMock.mock.calls.length, 0);
+    }).pipe(Effect.provide(ElectronShell.layer)),
+  );
+
   it.effect("does not open remote editor URLs with userinfo", () =>
     Effect.gen(function* () {
       openExternalMock.mockResolvedValue(undefined);
