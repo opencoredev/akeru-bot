@@ -60,6 +60,12 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+The legacy OpenCode adapter owns child sessions created for subagents. Permission and question events
+from a descendant session are routed onto the parent thread after ancestry is verified. Stop and
+interrupt walk the child tree and abort every descendant, not only the parent. Unrelated OpenCode
+sessions are left alone. OpenCode Go stays on the Mastra controller and does not use this adapter
+path.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
