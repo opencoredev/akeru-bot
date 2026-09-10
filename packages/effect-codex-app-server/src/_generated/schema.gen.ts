@@ -16295,6 +16295,8 @@ export type V2ThreadListResponse__CodexErrorInfo =
   | "badRequest"
   | "threadRollbackFailed"
   | "sandboxError"
+  | "rateLimitExceeded"
+  | "misalignmentPolicyViolation"
   | "other"
   | { readonly httpConnectionFailed: { readonly httpStatusCode?: number | null } }
   | { readonly responseStreamConnectionFailed: { readonly httpStatusCode?: number | null } }
@@ -16318,6 +16320,8 @@ export const V2ThreadListResponse__CodexErrorInfo = Schema.Union(
       "badRequest",
       "threadRollbackFailed",
       "sandboxError",
+      "rateLimitExceeded",
+      "misalignmentPolicyViolation",
       "other",
     ]),
     Schema.Struct({

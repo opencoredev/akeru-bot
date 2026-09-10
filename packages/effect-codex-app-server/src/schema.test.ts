@@ -8,6 +8,7 @@ const isThreadReadResponse = Schema.is(CodexSchema.V2ThreadReadResponse);
 const isThreadResumeResponse = Schema.is(CodexSchema.V2ThreadResumeResponse);
 const isThreadRollbackResponse = Schema.is(CodexSchema.V2ThreadRollbackResponse);
 const isThreadForkResponse = Schema.is(CodexSchema.V2ThreadForkResponse);
+const isThreadListResponse = Schema.is(CodexSchema.V2ThreadListResponse);
 const isTurnCompletedNotification = Schema.is(CodexSchema.V2TurnCompletedNotification);
 const isServerCollabTool = Schema.is(CodexSchema.ServerNotification__CollabAgentTool);
 const isResumeCollabTool = Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentTool);
@@ -142,6 +143,7 @@ it("accepts Codex rate limit errors for thread responses", () => {
   assert.equal(isThreadReadResponse({ thread }), true);
   assert.equal(isThreadResumeResponse(resumeLikeResponse(thread)), true);
   assert.equal(isThreadRollbackResponse({ thread }), true);
+  assert.equal(isThreadListResponse({ data: [thread] }), true);
 });
 
 it("accepts Codex misalignment policy errors for thread responses", () => {
@@ -151,6 +153,7 @@ it("accepts Codex misalignment policy errors for thread responses", () => {
   assert.equal(isThreadResumeResponse(resumeResponse), true);
   assert.equal(isThreadRollbackResponse({ thread }), true);
   assert.equal(isThreadForkResponse(resumeResponse), true);
+  assert.equal(isThreadListResponse({ data: [thread] }), true);
   const decodedResume = decodeThreadResumeResponse(resumeResponse);
   assert.equal(decodedResume.thread.turns[0]?.error?.codexErrorInfo, "misalignmentPolicyViolation");
   assert.equal(

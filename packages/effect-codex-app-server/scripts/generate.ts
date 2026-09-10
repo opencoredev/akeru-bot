@@ -206,6 +206,7 @@ const CodexErrorInfoCompatibilityExports = new Set([
   "V2ThreadResumeResponse",
   "V2ThreadRollbackResponse",
   "V2ThreadForkResponse",
+  "V2ThreadListResponse",
   "V2TurnCompletedNotification",
 ]);
 
