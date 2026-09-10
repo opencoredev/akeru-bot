@@ -38,6 +38,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -413,6 +414,12 @@ describe("ProviderRuntimeIngestion", () => {
         };
       },
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
+      readThreadShell: () =>
+        runtime!.runPromise(
+          snapshotQuery
+            .getThreadShellById(asThreadId("thread-1"))
+            .pipe(Effect.map(Option.getOrThrow)),
+        ),
       emit: provider.emit,
       setProviderSession: provider.setSession,
       drain,
@@ -4576,6 +4583,152 @@ describe("ProviderRuntimeIngestion", () => {
     expect(resolvedPayload?.answers).toEqual({
       sandbox_mode: "workspace-write",
     });
+  });
+
+  function userInputEvent(
+    turnId: string,
+    requestId: string,
+    responseMode?: "message",
+  ): ProviderRuntimeEvent {
+    return {
+      type: "user-input.requested",
+      eventId: asEventId(`requested:${requestId}`),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId(turnId),
+      requestId: RuntimeRequestId.make(requestId),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      payload: {
+        ...(responseMode ? { responseMode } : {}),
+        questions: ["first", "second"].map((id) => ({
+          id,
+          header: id,
+          question: `Choose ${id}`,
+          options: [{ label: "yes", description: "Continue" }],
+          multiSelect: false,
+        })),
+      },
+    };
+  }
+
+  it.each(["completed", "interrupted", "failed"] as const)(
+    "resolves native questions when their turn is %s",
+    async (state) => {
+      const harness = await createHarness();
+      const request = userInputEvent("question-turn", "question-request");
+      harness.emit({
+        type: "turn.started",
+        eventId: asEventId("question-started"),
+        provider: request.provider,
+        threadId: request.threadId,
+        turnId: request.turnId,
+        createdAt: request.createdAt,
+      });
+      harness.emit(request);
+      await harness.drain();
+      expect((await harness.readThreadShell()).hasPendingUserInput).toBe(true);
+      harness.emit({
+        type: "turn.completed",
+        eventId: asEventId("question-completed"),
+        provider: request.provider,
+        threadId: request.threadId,
+        turnId: request.turnId,
+        createdAt: "2026-01-01T00:00:03.000Z",
+        payload: { state },
+      });
+      await harness.drain();
+      const thread = (await harness.readModel()).threads[0]!;
+      expect(thread.session?.activeTurnId).toBeNull();
+      expect((await harness.readThreadShell()).hasPendingUserInput).toBe(false);
+      expect(
+        thread.activities.filter((activity) => activity.kind === "user-input.resolved"),
+      ).toMatchObject([{ turnId: request.turnId, payload: { requestId: request.requestId } }]);
+    },
+  );
+
+  it("resolves native questions when their turn is aborted", async () => {
+    const harness = await createHarness();
+    const request = userInputEvent("abort-turn", "abort-question");
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("abort-started"),
+      provider: request.provider,
+      threadId: request.threadId,
+      turnId: request.turnId,
+      createdAt: request.createdAt,
+    });
+    harness.emit(request);
+    await harness.drain();
+    harness.emit({
+      type: "turn.aborted",
+      eventId: asEventId("abort-completed"),
+      provider: request.provider,
+      threadId: request.threadId,
+      turnId: request.turnId,
+      createdAt: "2026-01-01T00:00:03.000Z",
+      payload: { reason: "Interrupted by user." },
+    });
+    await harness.drain();
+    expect((await harness.readThreadShell()).hasPendingUserInput).toBe(false);
+    expect(
+      (await harness.readModel()).threads[0]!.activities.filter(
+        (activity) => activity.kind === "user-input.resolved",
+      ),
+    ).toMatchObject([{ payload: { requestId: request.requestId } }]);
+  });
+
+  it("preserves answered questions and leaves newer and message-mode questions pending", async () => {
+    const harness = await createHarness();
+    const answered = userInputEvent("old-turn", "answered-question");
+    const unresolved = userInputEvent("old-turn", "old-question");
+    const newer = userInputEvent("new-turn", "new-question");
+    const asynchronous = userInputEvent("old-turn", "async-question", "message");
+    harness.emit(answered);
+    harness.emit(unresolved);
+    harness.emit(newer);
+    harness.emit(asynchronous);
+    harness.emit({
+      type: "user-input.resolved",
+      eventId: asEventId("normal-answer"),
+      provider: answered.provider,
+      threadId: answered.threadId,
+      turnId: answered.turnId,
+      requestId: answered.requestId,
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: { answers: { first: "yes", second: "yes" } },
+    });
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("new-turn-started"),
+      provider: newer.provider,
+      threadId: newer.threadId,
+      turnId: newer.turnId,
+      createdAt: "2026-01-01T00:00:03.000Z",
+    });
+    await harness.drain();
+    expect((await harness.readThreadShell()).hasPendingUserInput).toBe(true);
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("old-turn-completed"),
+      provider: answered.provider,
+      threadId: answered.threadId,
+      turnId: answered.turnId,
+      createdAt: "2026-01-01T00:00:04.000Z",
+      payload: { state: "interrupted" },
+    });
+    await harness.drain();
+    const thread = (await harness.readModel()).threads[0]!;
+    expect(thread.session?.activeTurnId).toBe(newer.turnId);
+    expect((await harness.readThreadShell()).hasPendingUserInput).toBe(true);
+    expect(
+      thread.activities.filter((activity) => activity.kind === "user-input.resolved"),
+    ).toMatchObject([
+      {
+        id: "normal-answer",
+        payload: { requestId: answered.requestId, answers: { first: "yes", second: "yes" } },
+      },
+      { turnId: unresolved.turnId, payload: { requestId: unresolved.requestId } },
+    ]);
   });
 
   it("continues processing runtime events after a single event handler failure", async () => {
