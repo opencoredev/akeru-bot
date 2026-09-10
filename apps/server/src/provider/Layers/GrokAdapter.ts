@@ -191,26 +191,38 @@ function parseGrokResume(raw: unknown): { sessionId: string } | undefined {
   return { sessionId: raw.sessionId.trim() };
 }
 
-function selectPermissionOptionId(
+export function selectGrokPermissionOptionId(
   request: EffectAcpSchema.RequestPermissionRequest,
   decision: Exclude<ProviderApprovalDecision, "cancel">,
 ): string | undefined {
-  const kind =
+  const preferredKind =
     decision === "acceptForSession"
       ? "allow_always"
       : decision === "accept"
         ? "allow_once"
         : "reject_once";
-  const option = request.options.find((entry) => entry.kind === kind);
-  return option?.optionId.trim() || undefined;
+  const preferred = request.options.find((entry) => entry.kind === preferredKind);
+  const preferredId = preferred?.optionId.trim();
+  if (preferredId) {
+    return preferredId;
+  }
+  // Grok 4.6 often omits allow_always. The UI still offers "Always allow this session".
+  if (decision === "acceptForSession") {
+    const once = request.options.find((entry) => entry.kind === "allow_once");
+    const onceId = once?.optionId.trim();
+    if (onceId) {
+      return onceId;
+    }
+  }
+  return undefined;
 }
 
 function selectAutoApprovedPermissionOption(
   request: EffectAcpSchema.RequestPermissionRequest,
 ): string | undefined {
   return (
-    selectPermissionOptionId(request, "acceptForSession") ??
-    selectPermissionOptionId(request, "accept")
+    selectGrokPermissionOptionId(request, "acceptForSession") ??
+    selectGrokPermissionOptionId(request, "accept")
   );
 }
 
@@ -829,7 +841,9 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                     }),
                   );
                   const selectedOptionId =
-                    resolved === "cancel" ? undefined : selectPermissionOptionId(params, resolved);
+                    resolved === "cancel"
+                      ? undefined
+                      : selectGrokPermissionOptionId(params, resolved);
                   return {
                     outcome: selectedOptionId
                       ? {
