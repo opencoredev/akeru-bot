@@ -20,7 +20,7 @@ const clientSettings: ClientSettings = {
   browserDefaultZoomFactor: 1.25,
   browserDefaultAppearance: "dark",
   browserAutoShowFloatingPreview: false,
-  confirmQuit: true,
+  confirmQuit: "hold",
   confirmThreadArchive: true,
   confirmThreadDelete: false,
   dismissedProviderUpdateNotificationKeys: [],

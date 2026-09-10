@@ -198,8 +198,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "quit-confirmation",
-    title: "Hold to quit",
+    title: "Quit shortcut",
     to: "/settings/general",
+    keywords: ["confirmation", "desktop", "exit", "direct", "hold", "double click", "press twice"],
     desktopOnly: true,
   },
   {
