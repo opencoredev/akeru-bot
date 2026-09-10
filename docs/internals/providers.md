@@ -76,6 +76,12 @@ in-session model change reaches ACP `session/set_model`.
 Cursor and OpenCode still start sessions through `AcpSessionRuntime.start()`. The new
 `initialize()` method is additive and unused by those adapters.
 
+Grok skill discovery uses `grok inspect --json`. Machine-level health checks recover probe
+failures to an empty skill list. `ProviderInstance.snapshotForCwd` re-runs inspect in the
+thread workspace so a failed probe is not cached as empty. Composer cwd refresh still uses the
+machine snapshot until a client calls `snapshotForCwd`. Cursor composer wiring from the same
+upstream PR is not in this change.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
