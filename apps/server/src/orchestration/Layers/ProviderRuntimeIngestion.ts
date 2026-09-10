@@ -74,7 +74,7 @@ const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${t
 // Fallback when the in-memory description cache no longer has the task name
 // (server restart, session-exit sweep, TTL/capacity eviction): earlier
 // task.started/task.progress activities for the task are persisted with it.
-function findTaskTitleInActivities(
+export function findTaskTitleInActivities(
   activities:
     | ReadonlyArray<{
         readonly kind: string;

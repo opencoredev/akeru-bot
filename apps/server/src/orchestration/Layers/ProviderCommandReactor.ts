@@ -14,7 +14,6 @@ import {
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
-  type OrchestrationThread,
   type OrchestrationThreadShell,
   ThreadId,
   type ProviderSession,
@@ -81,8 +80,16 @@ const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
 const isComposioOperationError = Schema.is(ComposioOperationError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
+export type ControllerThreadIdentity = Pick<
+  OrchestrationThreadShell,
+  "id" | "botId" | "groupId" | "respondingBotId"
+>;
+
+export type ControllerEngineThread = ControllerThreadIdentity &
+  Pick<OrchestrationThreadShell, "interactionMode">;
+
 export function resolveControllerBotId(
-  thread: Pick<OrchestrationThread, "botId" | "respondingBotId">,
+  thread: Pick<OrchestrationThreadShell, "botId" | "respondingBotId">,
 ) {
   return thread.respondingBotId ?? thread.botId ?? null;
 }
@@ -713,7 +720,7 @@ const make = Effect.gen(function* () {
     agentController.inspectEngine(modelSelection);
 
   const resolveControllerEngine = Effect.fnUntraced(function* (
-    thread: OrchestrationThreadShell,
+    thread: ControllerEngineThread,
     fallback: ModelSelection,
   ) {
     const respondingBotId = resolveControllerBotId(thread);
@@ -735,7 +742,7 @@ const make = Effect.gen(function* () {
   });
 
   const resolveControllerMcpServers = Effect.fnUntraced(function* (
-    thread: OrchestrationThreadShell,
+    thread: ControllerThreadIdentity,
   ) {
     const respondingBotId = resolveControllerBotId(thread);
     const bot =
