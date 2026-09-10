@@ -60,6 +60,11 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+Legacy OpenCode rollback targets the first removed assistant message and then reads the native
+revert boundary. OpenCode keeps reverted messages in the transcript until the next prompt, so
+`readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
+stays on Mastra and does not use this adapter path.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
