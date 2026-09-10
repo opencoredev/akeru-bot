@@ -180,9 +180,19 @@ describe("makeQuitShortcutHandler", () => {
     harness.preventDefault.mockClear();
     await harness.send(makeInput({ meta: false, isAutoRepeat: true }));
     expect(harness.preventDefault).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(QUIT_HOLD_RELEASE_GRACE_MS * 2);
     expect(harness.quit).not.toHaveBeenCalled();
     await harness.send(makeInput({ type: "keyUp", meta: false }));
+    expect(harness.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("still quits after Cmd-first release when the final Q key-up is omitted", async () => {
+    const harness = makeHarness();
+    await harness.send(makeInput({}));
+    await harness.holdFor(QUIT_HOLD_DURATION_MS + 200);
+    await harness.send(makeInput({ type: "keyUp", key: "Meta", meta: false }));
+    await harness.send(makeInput({ meta: false, isAutoRepeat: true }));
+    expect(harness.quit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(QUIT_HOLD_RELEASE_GRACE_MS);
     expect(harness.quit).toHaveBeenCalledTimes(1);
   });
 

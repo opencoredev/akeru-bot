@@ -126,11 +126,10 @@ export function makeQuitShortcutHandler(
     if (quitOnRelease) {
       event.preventDefault();
       if (key === "q") {
-        if (modifierDown) {
-          quitAfterQuietPeriod();
-        } else {
-          clearWatchdog();
-        }
+        // Keep the quiet-period fallback even after the modifier is released.
+        // A later Q auto-repeat must not cancel it: macOS can omit the final
+        // Q key-up, and the concealed window would otherwise stay running.
+        quitAfterQuietPeriod();
       }
       return;
     }

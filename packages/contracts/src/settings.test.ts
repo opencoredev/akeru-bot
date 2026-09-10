@@ -197,6 +197,33 @@ describe("ClientSettings appearance contrast", () => {
   });
 });
 
+describe("ClientSettings quit confirmation", () => {
+  const encodeClientSettings = Schema.encodeSync(ClientSettingsSchema);
+
+  it("defaults to hold and accepts each confirmation mode", () => {
+    expect(decodeClientSettings({}).confirmQuit).toBe("hold");
+
+    for (const mode of ["direct", "hold", "double-click"] as const) {
+      expect(decodeClientSettings({ confirmQuit: mode }).confirmQuit).toBe(mode);
+      expect(decodeClientSettingsPatch({ confirmQuit: mode }).confirmQuit).toBe(mode);
+      expect(encodeClientSettings(decodeClientSettings({ confirmQuit: mode })).confirmQuit).toBe(
+        mode,
+      );
+    }
+  });
+
+  it("migrates persisted booleans to hold or direct", () => {
+    expect(decodeClientSettings({ confirmQuit: true }).confirmQuit).toBe("hold");
+    expect(decodeClientSettings({ confirmQuit: false }).confirmQuit).toBe("direct");
+  });
+
+  it("rejects unsupported confirmation modes", () => {
+    expect(() => decodeClientSettings({ confirmQuit: "maybe" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ confirmQuit: "maybe" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ confirmQuit: true })).toThrow();
+  });
+});
+
 describe("ClientSettings environment identification", () => {
   it("defaults to artwork and accepts each presentation mode", () => {
     expect(decodeClientSettings({}).environmentIdentificationMode).toBe("artwork");
