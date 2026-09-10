@@ -3,6 +3,10 @@
 Messages can contain up to 120,000 characters. Akeru keeps an oversized draft in the composer and
 shows how many characters you must remove. Shorten the draft or send it as several messages.
 
+On mobile, unsent drafts and queued messages stay on the device. If Akeru cannot read that store, it
+leaves the saved work in place instead of treating it as empty. A send that fails because the
+connection dropped stays queued and retries when the environment is reachable again.
+
 ## Attach images
 
 On servers with direct uploads, an image starts uploading when you add it. Akeru enables **Send**

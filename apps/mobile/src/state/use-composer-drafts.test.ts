@@ -3,7 +3,8 @@ import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 import { vi } from "vite-plus/test";
 
 const composerDraftFileMocks = vi.hoisted(() => {
-  let document = "";
+  let document = JSON.stringify({ schemaVersion: 1, drafts: {} });
+  let readError: Error | null = null;
   let writeError: Error | null = null;
   let releaseRead: (() => void) | null = null;
   let readBarrier = Promise.resolve();
@@ -24,6 +25,9 @@ const composerDraftFileMocks = vi.hoisted(() => {
     setDocument(value: unknown) {
       document = JSON.stringify(value);
     },
+    setReadError(error: Error | null) {
+      readError = error;
+    },
     setWriteError(error: Error | null) {
       writeError = error;
     },
@@ -40,6 +44,7 @@ const composerDraftFileMocks = vi.hoisted(() => {
 
       async text() {
         await readBarrier;
+        if (readError) throw readError;
         return document;
       }
 
@@ -72,6 +77,7 @@ import {
   getComposerDraftSnapshot,
   mergeComposerDraftContentState,
   removeComposerDraftsForEnvironment,
+  resetComposerDraftsLoadState,
   restoreComposerDraftSnapshotState,
   setComposerDraftText,
 } from "./use-composer-drafts";
@@ -82,6 +88,11 @@ const DRAFT: ComposerDraft = {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
+  resetComposerDraftsLoadState();
+  composerDraftFileMocks.setDocument({ schemaVersion: 1, drafts: {} });
+  composerDraftFileMocks.setReadError(null);
+  composerDraftFileMocks.setWriteError(null);
   appAtomRegistry.set(composerDraftsAtom, {});
 });
 
@@ -431,5 +442,46 @@ describe("mobile composer drafts", () => {
     } finally {
       composerDraftFileMocks.setWriteError(null);
     }
+  });
+
+  it.each(["read", "decode"] as const)(
+    "preserves saved drafts when the draft %s fails",
+    async (failure) => {
+      vi.useFakeTimers();
+      composerDraftFileMocks.setDocument({
+        schemaVersion: failure === "decode" ? 999 : 1,
+        drafts: { "environment-1:saved": DRAFT },
+      });
+      const original = composerDraftFileMocks.getDocument();
+      if (failure === "read") {
+        composerDraftFileMocks.setReadError(new Error("storage unavailable"));
+      }
+
+      setComposerDraftText("environment-1:new", "Keep my new edits too");
+      await expect(flushComposerDrafts()).rejects.toMatchObject({ operation: failure });
+
+      expect(composerDraftFileMocks.getDocument()).toBe(original);
+    },
+  );
+
+  it("retries a failed debounced read on final flush without dropping saved drafts or new edits", async () => {
+    vi.useFakeTimers();
+    composerDraftFileMocks.setDocument({
+      schemaVersion: 1,
+      drafts: { "environment-1:saved": DRAFT },
+    });
+    const original = composerDraftFileMocks.getDocument();
+    composerDraftFileMocks.setReadError(new Error("storage unavailable"));
+    setComposerDraftText("environment-1:new", "New edits");
+    await vi.advanceTimersByTimeAsync(200);
+    expect(composerDraftFileMocks.getDocument()).toBe(original);
+
+    composerDraftFileMocks.setReadError(null);
+    await flushComposerDrafts();
+
+    expect(JSON.parse(composerDraftFileMocks.getDocument()).drafts).toEqual({
+      "environment-1:saved": DRAFT,
+      "environment-1:new": { text: "New edits", attachments: [] },
+    });
   });
 });
