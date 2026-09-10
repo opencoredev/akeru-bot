@@ -2,6 +2,7 @@ import * as NodeAssert from "node:assert/strict";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -9,6 +10,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -48,6 +50,8 @@ class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterSh
 
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
 
+class WaitForPermissionReplyError extends Data.TaggedError("WaitForPermissionReplyError") {}
+
 type MessageEntry = {
   info: {
     id: string;
@@ -82,6 +86,8 @@ const runtimeMock = {
     sessionUpdateCalls: [] as Array<{ sessionID: string; permission: unknown }>,
     forkCalls: [] as Array<{ sessionID: string; directory?: string }>,
     mcpAddCalls: [] as Array<{ name: string; config: unknown }>,
+    permissionReplyCalls: [] as Array<{ requestID: string; reply: string }>,
+    permissionReplyError: null as Error | null,
   },
   reset() {
     this.state.startCalls.length = 0;
@@ -108,6 +114,8 @@ const runtimeMock = {
     this.state.sessionUpdateCalls.length = 0;
     this.state.forkCalls.length = 0;
     this.state.mcpAddCalls.length = 0;
+    this.state.permissionReplyCalls.length = 0;
+    this.state.permissionReplyError = null;
   },
 };
 
@@ -238,6 +246,14 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
             }
           })(),
         }),
+      },
+      permission: {
+        reply: async ({ requestID, reply }: { requestID: string; reply: string }) => {
+          runtimeMock.state.permissionReplyCalls.push({ requestID, reply });
+          if (runtimeMock.state.permissionReplyError) {
+            throw runtimeMock.state.permissionReplyError;
+          }
+        },
       },
       mcp: {
         add: async (input: { name: string; config: unknown }) => {
@@ -1785,6 +1801,91 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       );
       NodeAssert.equal(events[0]?.requestId, "per_child");
       NodeAssert.equal(events[1]?.requestId, "per_child");
+
+      yield* adapter.stopSession(threadId);
+    }).pipe(TestClock.withLive),
+  );
+
+  it.effect("auto-replies full-access permission asks once without opening a dialog", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-full-access-auto-reply");
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "permission.asked",
+          properties: {
+            id: "per_full",
+            sessionID: "http://127.0.0.1:9999/session",
+            permission: "bash",
+            patterns: ["git status"],
+            metadata: {},
+            always: [],
+          },
+        },
+      ];
+      const openedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
+        Stream.runHead,
+        Effect.timeoutOption("50 millis"),
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* Effect.sync(() => runtimeMock.state.permissionReplyCalls.length > 0).pipe(
+        Effect.filterOrFail(
+          (done) => done,
+          () => new WaitForPermissionReplyError(),
+        ),
+        Effect.retry(Schedule.spaced("10 millis")),
+        Effect.timeoutOption("1 second"),
+      );
+      NodeAssert.deepEqual(runtimeMock.state.permissionReplyCalls, [
+        { requestID: "per_full", reply: "once" },
+      ]);
+      const opened = yield* Fiber.join(openedFiber);
+      NodeAssert.equal(Option.isNone(opened), true);
+
+      yield* adapter.stopSession(threadId);
+    }).pipe(TestClock.withLive),
+  );
+
+  it.effect("falls back to a permission dialog when full-access auto-reply fails", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-full-access-auto-reply-fail");
+      runtimeMock.state.permissionReplyError = new Error("reply failed");
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "permission.asked",
+          properties: {
+            id: "per_fail",
+            sessionID: "http://127.0.0.1:9999/session",
+            permission: "edit",
+            patterns: ["src/app.ts"],
+            metadata: {},
+            always: [],
+          },
+        },
+      ];
+      const openedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const opened = Option.getOrThrow(
+        yield* Fiber.join(openedFiber).pipe(Effect.timeout("1 second")),
+      );
+      NodeAssert.equal(opened.requestId, "per_fail");
 
       yield* adapter.stopSession(threadId);
     }).pipe(TestClock.withLive),
