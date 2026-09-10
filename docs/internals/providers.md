@@ -76,6 +76,13 @@ in-session model change reaches ACP `session/set_model`.
 Cursor and OpenCode still start sessions through `AcpSessionRuntime.start()`. The new
 `initialize()` method is additive and unused by those adapters.
 
+ACP outbound notifications (`session/cancel` included) encode as JSON-RPC with no `id` or
+`headers`. The previous Request encoder emitted `id: ""`, which Grok CLI treats as a malformed
+request and drops, so Stop did not stop. Cursor and OpenCode share this protocol path; the mock
+agent was previously lenient and hid the bug. `AcpSessionRuntime.cancel` now waits for the cancel
+write before returning so a replacement prompt cannot race ahead of it. Grok mid-turn sends cancel
+the in-flight prompt and continue the same turn instead of queueing.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
