@@ -437,13 +437,15 @@ function ensureRuntimeError(
     : new OpenCodeRuntimeError({ operation, detail, cause });
 }
 
+// OpenCode CLI commands share one SQLite database per machine. The lock is
+// process-wide so concurrent provider checks, snapshots, and separately
+// constructed OpenCodeRuntime instances cannot overlap inventory sequences.
+const openCodeInventoryCliLock = Semaphore.makeUnsafe(1);
+
 const makeOpenCodeRuntime = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const netService = yield* NetService.NetService;
   const hostPlatform = yield* HostProcessPlatform;
-  // Every OpenCode CLI command opens the same shared SQLite database. Inventory
-  // refreshes from provider checks, snapshots, and retries must not overlap.
-  const inventoryCliLock = yield* Semaphore.make(1);
   const resolveCommand = (command: string, args: ReadonlyArray<string>, env?: NodeJS.ProcessEnv) =>
     resolveSpawnCommand(command, args, env ? { env } : {});
 
@@ -843,7 +845,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         agents,
         skills,
       };
-    }).pipe(inventoryCliLock.withPermits(1));
+    }).pipe(openCodeInventoryCliLock.withPermits(1));
 
   return {
     startOpenCodeServerProcess,

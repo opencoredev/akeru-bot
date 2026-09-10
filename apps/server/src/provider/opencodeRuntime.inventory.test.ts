@@ -255,19 +255,16 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const isWindows = hostPlatform === "win32";
       const binaryPath = path.join(tempDir, isWindows ? "opencode.cmd" : "opencode");
       const scriptPath = path.join(tempDir, "opencode.mjs");
-      const lockPath = path.join(tempDir, "lock");
-      const overlapPath = path.join(tempDir, "overlap");
+      const intervalPath = path.join(tempDir, "intervals");
 
       yield* fs.writeFileString(
         scriptPath,
         [
           'import * as fs from "node:fs";',
-          "const lock = process.env.T3_TEST_OPENCODE_LOCK;",
-          "const overlap = process.env.T3_TEST_OPENCODE_OVERLAP;",
-          "if (lock && overlap && fs.existsSync(lock)) fs.writeFileSync(overlap, process.pid.toString());",
-          "if (lock) fs.writeFileSync(lock, process.pid.toString());",
+          "const intervals = process.env.T3_TEST_OPENCODE_INTERVALS;",
+          "const started = Date.now();",
           "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 80);",
-          "if (lock) fs.unlinkSync(lock);",
+          "if (intervals) fs.appendFileSync(intervals, `${started} ${Date.now()}\\n`);",
           'if (process.argv[2] === "models") {',
           '  process.stdout.write(`openai/gpt-test\\n{"id":"gpt-test","providerID":"openai","name":"GPT Test"}\\n`);',
           "} else {",
@@ -291,23 +288,36 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       }
 
       const runtime = yield* OpenCodeRuntime;
-      const load = runtime.loadInventoryFromCli({
+      const loadInventory = runtime.loadInventoryFromCli({
         binaryPath,
         cwd: tempDir,
         environment: {
           ...hostEnvironment,
           T3_TEST_NODE_BINARY: executablePath,
           T3_TEST_OPENCODE_SCRIPT: scriptPath,
-          T3_TEST_OPENCODE_LOCK: lockPath,
-          T3_TEST_OPENCODE_OVERLAP: overlapPath,
+          T3_TEST_OPENCODE_INTERVALS: intervalPath,
         },
       });
-      const [first, second] = yield* Effect.all([load, load], { concurrency: "unbounded" });
+
+      const [first, second] = yield* Effect.all([loadInventory, loadInventory], {
+        concurrency: "unbounded",
+      });
       NodeAssert.deepEqual(first.providerList.connected, ["openai"]);
       NodeAssert.deepEqual(second.providerList.connected, ["openai"]);
-      const overlapExists = yield* fs.exists(overlapPath);
-      NodeAssert.equal(overlapExists, false);
-    }),
+
+      const intervals = (yield* fs.readFileString(intervalPath))
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const [startText, endText] = line.split(" ");
+          return { start: Number(startText), end: Number(endText) };
+        })
+        .toSorted((left, right) => left.start - right.start);
+      NodeAssert.equal(intervals.length, 6);
+      for (let index = 1; index < intervals.length; index += 1) {
+        NodeAssert.ok(intervals[index - 1]!.end <= intervals[index]!.start);
+      }
+    }).pipe(TestClock.withLive),
   );
 
   it.effect("kills a hanging command process group when the command is interrupted", () =>
