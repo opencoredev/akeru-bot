@@ -64,7 +64,8 @@ a Mastra session is absent.
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
 [Codex app-server protocol](../../packages/effect-codex-app-server/src/protocol.ts) retain raw
-observations only when configured before connection. `AcpClientOptions` and `AcpAgentOptions` expose
+observations only when configured before connection. Incoming Codex JSONL is framed from
+per-chunk fragments so large messages are scanned once. `AcpClientOptions` and `AcpAgentOptions` expose
 `rawNotificationBufferSize` for `raw.notifications`. `CodexAppServerClientOptions` exposes that option
 and `rawRequestBufferSize` for `raw.requests`. Pass them to the package's `make` or layer constructor.
 
