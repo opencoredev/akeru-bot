@@ -27,6 +27,10 @@ real provider request succeeds.
 Sign-in state belongs to one environment. Connect Claude again on each separate Akeru server that
 should use the account.
 
+Claude Code's verbose mode can stay enabled when you use Claude for text generation, including
+thread titles, branch names, commit messages, and pull request descriptions. On a remote connection,
+Akeru uses the Claude configuration on the connected server.
+
 ## Continue a Claude chat
 
 Akeru keeps Claude's provider-specific session identity when a chat continues. Changing to an
