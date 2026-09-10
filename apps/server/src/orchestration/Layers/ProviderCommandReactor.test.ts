@@ -456,6 +456,8 @@ describe("ProviderCommandReactor", () => {
         const engine = yield* OrchestrationEngineService;
         return {
           readEvents: engine.readEvents,
+          readThreadEvents: engine.readThreadEvents,
+          getThreadReplayStats: engine.getThreadReplayStats,
           dispatch: (command) => {
             if (command.type === "thread.title.regeneration.complete") {
               titleRegenerationCompletionDispatchAttempts += 1;

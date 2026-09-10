@@ -440,6 +440,8 @@ function makeHarness(input: {
     });
   const engine = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused thread replay stats"),
     dispatch,
     streamDomainEvents: Stream.empty,
     latestSequence: Effect.sync(() => sequence),

@@ -33,6 +33,11 @@ export interface ProjectionSnapshotCounts {
   readonly threadCount: number;
 }
 
+export interface ProjectionEventReplayStats {
+  readonly eventCount: number;
+  readonly payloadBytes: number;
+}
+
 export interface ProjectionSnapshotSequence {
   readonly snapshotSequence: number;
 }
@@ -118,6 +123,14 @@ export interface ProjectionSnapshotQueryShape {
    * Read aggregate projection counts without hydrating the full read model.
    */
   readonly getCounts: () => Effect.Effect<ProjectionSnapshotCounts, ProjectionRepositoryError>;
+
+  /**
+   * Measure a persisted event range without decoding its payload bodies.
+   */
+  readonly getEventReplayStats: (input: {
+    readonly fromSequenceExclusive: number;
+    readonly toSequenceInclusive: number;
+  }) => Effect.Effect<ProjectionEventReplayStats, ProjectionRepositoryError>;
 
   /**
    * Read the active project for an exact workspace root match.
