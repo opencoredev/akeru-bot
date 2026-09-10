@@ -10,7 +10,7 @@ function keyEvent(overrides: {
   return {
     key: overrides.key ?? "Enter",
     keyCode: overrides.keyCode ?? 13,
-    nativeEvent: { isComposing: overrides.isComposing ?? false } as KeyboardEvent["nativeEvent"],
+    nativeEvent: { isComposing: overrides.isComposing ?? false },
   };
 }
 

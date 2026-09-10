@@ -15,9 +15,11 @@ import { type ChangeEvent, type KeyboardEvent, useState } from "react";
  *   const bag = useCommitOnBlur(instance.displayName ?? "", (next) => {...});
  *   <Input {...bag} placeholder="e.g. Work" />
  */
-export function shouldBlurCommitOnKeyDown(
-  event: Pick<KeyboardEvent<HTMLInputElement>, "key" | "keyCode" | "nativeEvent">,
-): boolean {
+export function shouldBlurCommitOnKeyDown(event: {
+  readonly key: string;
+  readonly keyCode: number;
+  readonly nativeEvent: { readonly isComposing?: boolean };
+}): boolean {
   if (event.nativeEvent.isComposing || event.keyCode === 229) return false;
   return event.key === "Enter";
 }
