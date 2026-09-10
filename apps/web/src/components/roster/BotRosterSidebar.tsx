@@ -1,4 +1,14 @@
-import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
+import {
+  DndContext,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { SortableContext, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
@@ -9,12 +19,22 @@ import {
   ChevronRightIcon,
   FolderInputIcon,
   PinIcon,
+  PinOffIcon,
   PlusIcon,
   SearchIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
@@ -54,23 +74,44 @@ import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
 import {
+  buildRosterListItems,
   filterRosterBots,
   filterRosterGroups,
   formatRosterTimestamp,
   isRecordableChatPath,
   parseChatPath,
+  parseRosterEntryId,
+  parseRosterSectionHeaderId,
+  planRosterDrop,
+  planRosterSectionDrop,
   resolveLatestRosterMessage,
+  resolveRosterDropTarget,
+  resolveRosterDropVerb,
   resolveRosterIndicator,
-  parseRosterBotDragId,
-  parseRosterGroupDropId,
+  rosterItemKey,
+  rosterListItemId,
+  rosterMarkerId,
+  rosterSectionItems,
+  rosterZoneHasVisibleEntries,
+  rosterZonesEqual,
   orderRosterBotsForShortcuts,
-  rosterBotDragId,
-  rosterGroupDropId,
   resolveRosterShortcutBot,
+  type RosterDropVerb,
+  type RosterItemRef,
   type RosterLastMessage,
+  type RosterListMarker,
   type RosterPresence,
+  type RosterZone,
 } from "./roster.logic";
-import { useRosterStore, type RosterItemRef, type RosterSection } from "./rosterStore";
+import {
+  animateRosterLayoutChanges,
+  createRosterCollisionDetection,
+  createRosterSortingStrategy,
+  restrictBelowRosterLabel,
+} from "./roster.drag";
+import { createRosterListMotion } from "./roster.motion";
+import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
+import { useRosterStore, type RosterSection } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useBotThreadRef } from "./useBotThreadRef";
 
@@ -200,123 +241,180 @@ function useLatestBotMessage(
   );
 }
 
+type SortableRosterRowBag = Pick<
+  ReturnType<typeof useSortable>,
+  "listeners" | "setNodeRef" | "transform" | "transition" | "isDragging"
+>;
+
+function SortableRosterRow(props: {
+  id: string;
+  disabled: boolean;
+  children: (bag: SortableRosterRowBag) => ReactNode;
+}) {
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.id,
+    disabled: { draggable: props.disabled },
+    animateLayoutChanges: animateRosterLayoutChanges,
+  });
+  const bag = useMemo(
+    () => ({ listeners, setNodeRef, transform, transition, isDragging }),
+    [listeners, setNodeRef, transform, transition, isDragging],
+  );
+  return props.children(bag);
+}
+
+function sortableRootProps(sortable: SortableRosterRowBag) {
+  return {
+    ref: sortable.setNodeRef,
+    style: {
+      transform: CSS.Translate.toString(sortable.transform),
+      transition: sortable.transition,
+      visibility:
+        !sortable.isDragging && sortable.transform?.scaleY === 0 ? ("hidden" as const) : undefined,
+    },
+    ...sortable.listeners,
+  };
+}
+
+const dropVerbBadge: Record<RosterDropVerb, ReactNode> = {
+  pin: (
+    <>
+      <PinIcon aria-hidden className="size-3" />
+      Pin
+    </>
+  ),
+  unpin: (
+    <>
+      <PinOffIcon aria-hidden className="size-3" />
+      Unpin
+    </>
+  ),
+  move: (
+    <>
+      <FolderInputIcon aria-hidden className="size-3" />
+      Move
+    </>
+  ),
+};
+
+const ROSTER_DRAG_LABEL_HEIGHT = 24;
+
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
   isActive,
   onSelect,
-  index,
   pinned,
   sections,
   onPin,
   onMove,
-  dragDisabled,
+  sortable,
+  dropVerb,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
   onSelect: (bot: Bot) => void;
-  index: number;
   pinned: boolean;
   sections: readonly RosterSection[];
   onPin: (pinned: boolean) => void;
   onMove: (sectionId: string | null) => void;
-  dragDisabled: boolean;
+  sortable: SortableRosterRowBag;
+  dropVerb: RosterDropVerb | null;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage);
   return (
-    <Draggable
-      draggableId={rosterBotDragId(bot.id)}
-      index={index}
-      isDragDisabled={dragDisabled}
-      disableInteractiveElementBlocking
+    <li
+      role="listitem"
+      data-roster-item
+      className={cn("list-none touch-pan-y", sortable.isDragging && "z-50")}
+      {...sortableRootProps(sortable)}
     >
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          role="listitem"
-          className={cn("list-none touch-pan-y", snapshot.isDragging && "z-50")}
-          {...provided.draggableProps}
+      <div
+        data-testid="roster-bot-row"
+        data-bot-hover
+        onContextMenu={(event) => {
+          event.preventDefault();
+          menuTriggerRef.current?.click();
+        }}
+        className={cn(
+          "relative flex w-full items-center rounded-lg outline-none select-none",
+          sortable.isDragging
+            ? "bg-[linear-gradient(var(--sidebar-row-active),var(--sidebar-row-active)),linear-gradient(var(--sidebar),var(--sidebar))] text-sidebar-foreground shadow-lg"
+            : isActive
+              ? "bg-sidebar-row-active text-sidebar-foreground"
+              : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+        )}
+      >
+        <button
+          type="button"
+          aria-current={isActive || undefined}
+          onClick={() => onSelect(bot)}
+          className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
         >
-          <div
-            data-testid="roster-bot-row"
-            data-bot-hover
-            onContextMenu={(event) => {
-              event.preventDefault();
-              menuTriggerRef.current?.click();
-            }}
-            className={cn(
-              "relative flex w-full items-center rounded-lg outline-none select-none",
-              snapshot.isDragging
-                ? "bg-sidebar-row-active text-sidebar-foreground shadow-xl"
-                : isActive
-                  ? "bg-sidebar-row-active text-sidebar-foreground"
-                  : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
-            )}
-          >
-            <button
-              type="button"
-              aria-current={isActive || undefined}
-              onClick={() => onSelect(bot)}
-              className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-              {...provided.dragHandleProps}
-            >
-              <RosterAvatar bot={bot} presence={presence} className="size-10" />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="flex items-baseline gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
-                  {latestMessage ? (
-                    <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-                      {formatRosterTimestamp(latestMessage.at, timestampFormat)}
-                    </span>
-                  ) : null}
+          <RosterAvatar bot={bot} presence={presence} className="size-10" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="flex items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+              {latestMessage ? (
+                <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+                  {formatRosterTimestamp(latestMessage.at, timestampFormat)}
                 </span>
-                {latestMessage ? (
-                  <span className="truncate text-[13px] text-sidebar-muted-foreground">
-                    {latestMessage.text}
-                  </span>
-                ) : null}
+              ) : null}
+            </span>
+            {latestMessage ? (
+              <span className="truncate text-[13px] text-sidebar-muted-foreground">
+                {latestMessage.text}
               </span>
-            </button>
-            <Menu>
-              <MenuTrigger
-                render={
-                  <button
-                    ref={menuTriggerRef}
-                    type="button"
-                    aria-label={`Actions for ${bot.name}`}
-                    className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                }
+            ) : null}
+          </span>
+          {sortable.isDragging && dropVerb !== null ? (
+            <span
+              role="status"
+              data-testid="roster-drop-verb"
+              className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
+            >
+              {dropVerbBadge[dropVerb]}
+            </span>
+          ) : null}
+        </button>
+        <Menu>
+          <MenuTrigger
+            render={
+              <button
+                ref={menuTriggerRef}
+                type="button"
+                aria-label={`Actions for ${bot.name}`}
+                className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
               />
-              <MenuPopup align="end">
-                <MenuItem onClick={() => onPin(!pinned)}>
-                  <PinIcon />
-                  {pinned ? "Unpin" : "Pin"}
-                </MenuItem>
-                <MenuSub>
-                  <MenuSubTrigger>
-                    <FolderInputIcon />
-                    Move to
-                  </MenuSubTrigger>
-                  <MenuSubPopup>
-                    {sections.map((section) => (
-                      <MenuItem key={section.id} onClick={() => onMove(section.id)}>
-                        {section.name}
-                      </MenuItem>
-                    ))}
-                    <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
-                  </MenuSubPopup>
-                </MenuSub>
-              </MenuPopup>
-            </Menu>
-          </div>
-        </div>
-      )}
-    </Draggable>
+            }
+          />
+          <MenuPopup align="end">
+            <MenuItem onClick={() => onPin(!pinned)}>
+              <PinIcon />
+              {pinned ? "Unpin" : "Pin"}
+            </MenuItem>
+            <MenuSub>
+              <MenuSubTrigger>
+                <FolderInputIcon />
+                Move to
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {sections.map((section) => (
+                  <MenuItem key={section.id} onClick={() => onMove(section.id)}>
+                    {section.name}
+                  </MenuItem>
+                ))}
+                <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
+              </MenuSubPopup>
+            </MenuSub>
+          </MenuPopup>
+        </Menu>
+      </div>
+    </li>
   );
 });
 
@@ -366,10 +464,10 @@ function GroupRosterRow({
   onSelect,
   pinned,
   onPin,
-  index,
   sections,
   onMove,
-  dragDisabled,
+  sortable,
+  dropVerb,
 }: {
   group: Group;
   bots: readonly Bot[];
@@ -377,10 +475,10 @@ function GroupRosterRow({
   onSelect: () => void;
   pinned: boolean;
   onPin: (pinned: boolean) => void;
-  index: number;
   sections: readonly RosterSection[];
   onMove: (sectionId: string | null) => void;
-  dragDisabled: boolean;
+  sortable: SortableRosterRowBag;
+  dropVerb: RosterDropVerb | null;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const members = group.members.filter(
@@ -388,142 +486,168 @@ function GroupRosterRow({
       member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
   ).length;
   return (
-    <Draggable
-      draggableId={rosterGroupDropId(group.id)}
-      index={index}
-      isDragDisabled={dragDisabled}
-    >
-      {(dragProvided, dragSnapshot) => (
-        <div
-          ref={dragProvided.innerRef}
-          {...dragProvided.draggableProps}
-          role="listitem"
-          data-testid="roster-group-card"
-          onContextMenu={(event) => {
-            event.preventDefault();
-            menuTriggerRef.current?.click();
-          }}
-          className={cn(
-            "relative flex touch-pan-y items-center rounded-lg",
-            dragSnapshot.isDragging && "z-50 bg-sidebar shadow-xl",
-            isActive && "bg-sidebar-row-active",
-          )}
-        >
-          <button
-            type="button"
-            aria-current={isActive || undefined}
-            onClick={onSelect}
-            {...dragProvided.dragHandleProps}
-            className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-          >
-            <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
-            <span className="text-xs text-sidebar-muted-foreground">{members}</span>
-          </button>
-          <Menu>
-            <MenuTrigger
-              render={
-                <button
-                  ref={menuTriggerRef}
-                  type="button"
-                  aria-label={`Actions for ${group.name}`}
-                  className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              }
-            />
-            <MenuPopup align="end">
-              <MenuItem onClick={() => onPin(!pinned)}>
-                <PinIcon />
-                {pinned ? "Unpin" : "Pin"}
-              </MenuItem>
-              <MenuSub>
-                <MenuSubTrigger>
-                  <FolderInputIcon />
-                  Move to
-                </MenuSubTrigger>
-                <MenuSubPopup>
-                  {sections.map((section) => (
-                    <MenuItem key={section.id} onClick={() => onMove(section.id)}>
-                      {section.name}
-                    </MenuItem>
-                  ))}
-                  <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
-                </MenuSubPopup>
-              </MenuSub>
-            </MenuPopup>
-          </Menu>
-        </div>
-      )}
-    </Draggable>
-  );
-}
-
-function PinnedRosterItem({
-  item,
-  bots,
-  groups,
-  onSelectBot,
-  onSelectGroup,
-}: {
-  item: RosterItemRef;
-  bots: readonly Bot[];
-  groups: readonly Group[];
-  onSelectBot: (bot: Bot) => void;
-  onSelectGroup: (group: Group) => void;
-}) {
-  const menuTriggerRef = useRef<HTMLButtonElement>(null);
-  const bot = item.kind === "bot" ? bots.find((candidate) => candidate.id === item.id) : null;
-  const group = item.kind === "group" ? groups.find((candidate) => candidate.id === item.id) : null;
-  if (!bot && !group) return null;
-  const label = bot?.name ?? group!.name;
-  return (
-    <div
-      className="relative w-20 shrink-0"
+    <li
+      role="listitem"
+      data-roster-item
+      data-testid="roster-group-card"
       onContextMenu={(event) => {
         event.preventDefault();
         menuTriggerRef.current?.click();
       }}
+      className={cn(
+        "relative flex touch-pan-y items-center rounded-lg",
+        sortable.isDragging && "z-50 bg-sidebar shadow-xl",
+        isActive && "bg-sidebar-row-active",
+      )}
+      {...sortableRootProps(sortable)}
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              onClick={() => (bot ? onSelectBot(bot) : onSelectGroup(group!))}
-              className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-sidebar-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {bot ? (
-                <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-12" />
-              ) : (
-                <span className="flex size-14 items-center justify-center">
-                  <GroupMemberStack group={group!} bots={bots} sizeClassName="size-14" />
-                </span>
-              )}
-              <span className="w-full truncate text-[11px] font-medium">{label}</span>
-            </button>
-          }
-        />
-        <TooltipPopup>{label}</TooltipPopup>
-      </Tooltip>
+      <button
+        type="button"
+        aria-current={isActive || undefined}
+        onClick={onSelect}
+        className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+      >
+        <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
+        <span className="text-xs text-sidebar-muted-foreground">{members}</span>
+        {sortable.isDragging && dropVerb !== null ? (
+          <span
+            role="status"
+            data-testid="roster-drop-verb"
+            className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
+          >
+            {dropVerbBadge[dropVerb]}
+          </span>
+        ) : null}
+      </button>
       <Menu>
         <MenuTrigger
           render={
             <button
               ref={menuTriggerRef}
               type="button"
-              aria-label={`Actions for pinned ${label}`}
-              className="absolute right-2 top-2 size-px overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`Actions for ${group.name}`}
+              className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
         />
-        <MenuPopup align="center">
-          <MenuItem onClick={() => useRosterStore.getState().setItemPinned(item, false)}>
+        <MenuPopup align="end">
+          <MenuItem onClick={() => onPin(!pinned)}>
             <PinIcon />
-            Unpin
+            {pinned ? "Unpin" : "Pin"}
           </MenuItem>
+          <MenuSub>
+            <MenuSubTrigger>
+              <FolderInputIcon />
+              Move to
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              {sections.map((section) => (
+                <MenuItem key={section.id} onClick={() => onMove(section.id)}>
+                  {section.name}
+                </MenuItem>
+              ))}
+              <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
+            </MenuSubPopup>
+          </MenuSub>
         </MenuPopup>
       </Menu>
-    </div>
+    </li>
+  );
+}
+
+function SortableRosterMarker(props: {
+  marker: RosterListMarker;
+  className?: string;
+  children?: ReactNode;
+  draggable?: boolean;
+  "data-testid"?: string;
+}) {
+  const { setNodeRef, transform, transition, listeners } = useSortable({
+    id: rosterMarkerId(props.marker),
+    disabled: { draggable: props.draggable !== true },
+    animateLayoutChanges: animateRosterLayoutChanges,
+  });
+  return (
+    <li
+      ref={setNodeRef}
+      data-testid={props["data-testid"]}
+      className={cn("list-none", props.className)}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition:
+          typeof props.marker !== "string" && props.marker.kind === "section-placeholder"
+            ? "none"
+            : props.marker === "unassigned-placeholder"
+              ? "none"
+              : transition,
+        visibility: transform?.scaleY === 0 ? "hidden" : undefined,
+      }}
+      {...(props.draggable ? listeners : {})}
+    >
+      {props.children}
+    </li>
+  );
+}
+
+function RosterDragBoundary(props: {
+  marker: "pinned-header" | "pinned-divider";
+  label: string;
+  visible: boolean;
+  isDropTarget: boolean;
+}) {
+  return (
+    <SortableRosterMarker
+      marker={props.marker}
+      data-testid={`roster-${props.marker}`}
+      className="pointer-events-none relative mx-0.5 -mb-px h-0"
+    >
+      {props.visible ? (
+        <div className="roster-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2">
+          <span
+            className={cn(
+              "shrink-0 text-xs font-medium",
+              props.isDropTarget ? "text-primary" : "text-sidebar-foreground/80",
+            )}
+          >
+            {props.label}
+          </span>
+          <span
+            aria-hidden
+            className={cn(
+              "h-px flex-1",
+              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-foreground/25",
+            )}
+          />
+        </div>
+      ) : null}
+    </SortableRosterMarker>
+  );
+}
+
+function RosterSectionPlaceholder(props: {
+  marker: RosterListMarker;
+  label: string;
+  showHint: boolean;
+  isDropTarget: boolean;
+}) {
+  return (
+    <SortableRosterMarker
+      marker={props.marker}
+      data-testid="roster-section-placeholder"
+      className="relative mx-0.5 -mb-px h-0"
+    >
+      {props.showHint ? (
+        <div
+          className={cn(
+            "absolute inset-x-0 top-0 flex h-9 items-center justify-center rounded-md border border-dashed border-sidebar-foreground/25 text-xs text-sidebar-foreground/80",
+            props.isDropTarget && "border-primary/40 bg-primary/5 text-primary",
+          )}
+        >
+          {props.label}
+        </div>
+      ) : null}
+    </SortableRosterMarker>
   );
 }
 
@@ -538,7 +662,15 @@ export default function BotRosterSidebar() {
     reportFailure: false,
   });
   const pathname = useLocation({ select: (location) => location.pathname });
-  const { bots, groups, lastMessageByBotId, selectedBotId, sections, pinnedItems } = useRosterStore(
+  const {
+    bots,
+    groups,
+    lastMessageByBotId,
+    selectedBotId,
+    sections,
+    pinnedItems,
+    unassignedItems,
+  } = useRosterStore(
     useShallow((state) => ({
       bots: state.bots,
       groups: state.groups,
@@ -546,6 +678,7 @@ export default function BotRosterSidebar() {
       selectedBotId: state.selectedBotId,
       sections: state.sections,
       pinnedItems: state.pinnedItems,
+      unassignedItems: state.unassignedItems,
     })),
   );
   const [query, setQuery] = useState("");
@@ -573,93 +706,250 @@ export default function BotRosterSidebar() {
     [bots, groups, query],
   );
   const groupRouteActive = pathname.startsWith("/groups/");
-  const pinnedBotIds = useMemo(
-    () => new Set(pinnedItems.filter((item) => item.kind === "bot").map((item) => item.id)),
+  const searching = query.trim().length > 0;
+  const pinnedKeys = useMemo(
+    () => new Set(pinnedItems.map((item) => rosterItemKey(item))),
     [pinnedItems],
   );
-  const assignedBotIds = useMemo(
-    () => new Set(sections.flatMap((section) => section.botIds)),
+  const liveItem = useCallback(
+    (item: RosterItemRef) => {
+      if (item.kind === "bot") return visibleBots.some((bot) => bot.id === item.id);
+      return visibleGroups.some((group) => group.id === item.id);
+    },
+    [visibleBots, visibleGroups],
+  );
+  const visiblePinnedItems = useMemo(() => pinnedItems.filter(liveItem), [liveItem, pinnedItems]);
+  const visibleSectionLayouts = useMemo(
+    () =>
+      sections.map((section) => ({
+        id: section.id,
+        name: section.name,
+        collapsed: !searching && section.collapsed,
+        items: rosterSectionItems(section).filter(
+          (item) => liveItem(item) && !pinnedKeys.has(rosterItemKey(item)),
+        ),
+      })),
+    [liveItem, pinnedKeys, searching, sections],
+  );
+  const assignedKeys = useMemo(
+    () => new Set(sections.flatMap((section) => rosterSectionItems(section).map(rosterItemKey))),
     [sections],
   );
-  const botsBySection = useMemo(
-    () =>
-      new Map(
-        sections.map((section) => [
-          section.id,
-          section.botIds
-            .map((id) => visibleBots.find((bot) => bot.id === id))
-            .filter((bot): bot is Bot => bot !== undefined && !pinnedBotIds.has(bot.id)),
-        ]),
-      ),
-    [pinnedBotIds, sections, visibleBots],
-  );
-  const unassignedBots = useMemo(
-    () => visibleBots.filter((bot) => !assignedBotIds.has(bot.id) && !pinnedBotIds.has(bot.id)),
-    [assignedBotIds, pinnedBotIds, visibleBots],
-  );
-  const pinnedGroupIds = useMemo(
-    () => new Set(pinnedItems.filter((item) => item.kind === "group").map((item) => item.id)),
-    [pinnedItems],
-  );
-  const assignedGroupIds = useMemo(
-    () => new Set(sections.flatMap((section) => section.groupIds ?? [])),
-    [sections],
-  );
-  const groupsBySection = useMemo(
-    () =>
-      new Map(
-        sections.map((section) => [
-          section.id,
-          (section.groupIds ?? [])
-            .map((id) => visibleGroups.find((group) => group.id === id))
-            .filter(
-              (group): group is Group => group !== undefined && !pinnedGroupIds.has(group.id),
-            ),
-        ]),
-      ),
-    [pinnedGroupIds, sections, visibleGroups],
-  );
-  const unassignedGroups = useMemo(
-    () =>
-      visibleGroups.filter(
-        (group) => !assignedGroupIds.has(group.id) && !pinnedGroupIds.has(group.id),
-      ),
-    [assignedGroupIds, pinnedGroupIds, visibleGroups],
-  );
-  const handleDragEnd = ({ draggableId, source, destination, type }: DropResult) => {
-    if (!destination) return;
-    if (type === "roster-section") {
-      useRosterStore.getState().reorderSections(source.index, destination.index);
-      return;
-    }
-    if (type === "roster-group") {
-      const groupId = parseRosterGroupDropId(draggableId);
-      if (!groupId) return;
-      if (destination.droppableId.startsWith("section-groups:")) {
-        useRosterStore
-          .getState()
-          .moveGroupToSection(
-            groupId,
-            destination.droppableId.slice("section-groups:".length),
-            destination.index,
-          );
-      } else if (destination.droppableId === "roster-unassigned-groups") {
-        useRosterStore.getState().moveGroupToSection(groupId, null, destination.index);
+  const visibleUnassignedItems = useMemo(() => {
+    const remaining = (item: RosterItemRef) =>
+      liveItem(item) &&
+      !pinnedKeys.has(rosterItemKey(item)) &&
+      !assignedKeys.has(rosterItemKey(item));
+    if (unassignedItems.length > 0) {
+      const ordered = unassignedItems.filter(remaining);
+      const seen = new Set(ordered.map(rosterItemKey));
+      for (const group of visibleGroups) {
+        const item = { kind: "group" as const, id: group.id };
+        if (remaining(item) && !seen.has(rosterItemKey(item))) ordered.push(item);
       }
-      return;
+      for (const bot of visibleBots) {
+        const item = { kind: "bot" as const, id: bot.id };
+        if (remaining(item) && !seen.has(rosterItemKey(item))) ordered.push(item);
+      }
+      return ordered;
     }
-    const botId = parseRosterBotDragId(draggableId);
-    if (botId && destination.droppableId.startsWith("section:")) {
-      useRosterStore
-        .getState()
-        .moveBotToSection(
-          botId,
-          destination.droppableId.slice("section:".length),
-          destination.index,
+    return [
+      ...visibleGroups.map((group) => ({ kind: "group" as const, id: group.id })),
+      ...visibleBots.map((bot) => ({ kind: "bot" as const, id: bot.id })),
+    ].filter(remaining);
+  }, [assignedKeys, liveItem, pinnedKeys, unassignedItems, visibleBots, visibleGroups]);
+  const rosterListItems = useMemo(
+    () =>
+      buildRosterListItems({
+        pinnedItems: visiblePinnedItems,
+        sections: visibleSectionLayouts,
+        unassignedItems: visibleUnassignedItems,
+      }),
+    [visiblePinnedItems, visibleSectionLayouts, visibleUnassignedItems],
+  );
+  const firstSectionId = sections[0]?.id ?? null;
+  const zoneByEntryId = useMemo(() => {
+    const map = new Map<string, RosterZone>();
+    for (const item of rosterListItems) {
+      if (item.kind === "entry") map.set(rosterListItemId(item), item.zone);
+    }
+    return map;
+  }, [rosterListItems]);
+  const [dragState, setDragState] = useState<{
+    readonly activeId: string;
+    readonly from: RosterZone | "section";
+    readonly targetZone: RosterZone | null;
+    readonly activationY: number | null;
+  } | null>(null);
+  const listMotionRef = useRef<ReturnType<typeof createRosterListMotion> | null>(null);
+  const rosterListRef = useRef<HTMLUListElement | null>(null);
+  const dragLabelOffsetRef = useRef(0);
+  const dragSensorRef = useRef<RosterPointerSensor | null>(null);
+  const attachListMotionRef = useCallback((node: HTMLUListElement | null) => {
+    rosterListRef.current = node;
+    listMotionRef.current?.dispose();
+    listMotionRef.current = node === null ? null : createRosterListMotion(node);
+    listMotionRef.current?.update(false);
+  }, []);
+  const finishRosterDrag = useCallback((started: boolean) => {
+    dragSensorRef.current = null;
+    if (started) {
+      listMotionRef.current?.release();
+      setDragState(null);
+    }
+  }, []);
+  const attachDragSensor = useCallback((sensor: RosterPointerSensor) => {
+    dragSensorRef.current = sensor;
+  }, []);
+  const cancelRosterDrag = useCallback(() => {
+    dragSensorRef.current?.cancel();
+  }, []);
+  const dndSensors = useSensors(
+    useSensor(RosterPointerSensor, {
+      distance: 6,
+      onAttach: attachDragSensor,
+      onFinish: finishRosterDrag,
+    }),
+  );
+  const restrictBelowPins = useCallback(
+    (args: Parameters<typeof restrictBelowRosterLabel>[0]) =>
+      restrictBelowRosterLabel(args, dragLabelOffsetRef.current),
+    [],
+  );
+  const handleRosterDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const activeId = String(event.active.id);
+      const sectionId = parseRosterSectionHeaderId(activeId);
+      const from = sectionId ? ("section" as const) : zoneByEntryId.get(activeId);
+      if (from === undefined) return;
+      listMotionRef.current?.suspend();
+      const list = rosterListRef.current;
+      const header = list?.querySelector<HTMLElement>('[data-testid="roster-pinned-header"]');
+      if (list && header) {
+        const listRect = list.getBoundingClientRect();
+        const scale = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1;
+        dragLabelOffsetRef.current =
+          header.getBoundingClientRect().top - listRect.top + ROSTER_DRAG_LABEL_HEIGHT * scale;
+      } else {
+        dragLabelOffsetRef.current = 0;
+      }
+      setDragState({
+        activeId,
+        from,
+        targetZone: from === "section" ? null : from,
+        activationY:
+          event.activatorEvent instanceof PointerEvent ? event.activatorEvent.clientY : null,
+      });
+    },
+    [zoneByEntryId],
+  );
+  const handleRosterDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const activeId = String(event.active.id);
+      if (parseRosterSectionHeaderId(activeId)) return;
+      const target = event.over
+        ? resolveRosterDropTarget(rosterListItems, activeId, String(event.over.id), firstSectionId)
+        : null;
+      setDragState((current) =>
+        current === null || current.activeId !== activeId
+          ? current
+          : { ...current, targetZone: target?.zone ?? null },
+      );
+    },
+    [firstSectionId, rosterListItems],
+  );
+  const handleRosterDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const activeId = String(event.active.id);
+      const overId = event.over ? String(event.over.id) : null;
+      if (overId === null) return;
+      const sectionId = parseRosterSectionHeaderId(activeId);
+      if (sectionId) {
+        useRosterStore.getState().applyRosterDrop(
+          planRosterSectionDrop({
+            sectionIds: sections.map((section) => section.id),
+            activeSectionId: sectionId,
+            overId,
+          }),
         );
-    } else if (botId && destination.droppableId === "roster-unassigned") {
-      useRosterStore.getState().moveBotToSection(botId, null, destination.index);
+        return;
+      }
+      const from = zoneByEntryId.get(activeId);
+      const target = resolveRosterDropTarget(rosterListItems, activeId, overId, firstSectionId);
+      if (from === undefined || target === null) return;
+      useRosterStore.getState().applyRosterDrop(
+        planRosterDrop({
+          activeId,
+          from,
+          target,
+          pinnedOrder: visiblePinnedItems,
+        }),
+      );
+    },
+    [firstSectionId, rosterListItems, sections, visiblePinnedItems, zoneByEntryId],
+  );
+  useEffect(() => {
+    if (
+      dragState !== null &&
+      !rosterListItems.some((item) => rosterListItemId(item) === dragState.activeId)
+    ) {
+      cancelRosterDrag();
     }
+  }, [cancelRosterDrag, dragState, rosterListItems]);
+  const listMotionPaused = dragState !== null;
+  const rosterListOrderKey = useMemo(
+    () =>
+      rosterListItems
+        .map((item) =>
+          item.kind === "entry"
+            ? `${rosterItemKey(item.item)}:${rosterListItemId(item)}`
+            : rosterListItemId(item),
+        )
+        .join("\0"),
+    [rosterListItems],
+  );
+  useLayoutEffect(() => {
+    void rosterListOrderKey;
+    listMotionRef.current?.update(!listMotionPaused && rosterListItems.length > 0);
+  }, [listMotionPaused, rosterListItems.length, rosterListOrderKey]);
+  const sortableIds = useMemo(() => rosterListItems.map(rosterListItemId), [rosterListItems]);
+  const rosterSortingStrategy = useMemo(
+    () =>
+      createRosterSortingStrategy({
+        items: rosterListItems,
+        firstSectionId,
+        boundaryLabelHeight: ROSTER_DRAG_LABEL_HEIGHT,
+      }),
+    [firstSectionId, rosterListItems],
+  );
+  const dndCollisionDetection = useMemo(
+    () =>
+      createRosterCollisionDetection(
+        (id) => {
+          if (dragState === null) return true;
+          if (dragState.from === "section") {
+            return (
+              parseRosterSectionHeaderId(id) !== null || id === rosterMarkerId("unassigned-header")
+            );
+          }
+          return (
+            resolveRosterDropTarget(rosterListItems, dragState.activeId, id, firstSectionId) !==
+            null
+          );
+        },
+        {
+          items: rosterListItems,
+          activationY: dragState?.activationY ?? null,
+          firstSectionId,
+        },
+      ),
+    [dragState, firstSectionId, rosterListItems],
+  );
+  const dragTargetZone = dragState?.targetZone ?? null;
+  const dropVerbFor = (id: string): RosterDropVerb | null => {
+    if (dragState === null || dragState.activeId !== id || dragState.from === "section")
+      return null;
+    return resolveRosterDropVerb(dragState.from, dragTargetZone);
   };
 
   // Remember the chat route the selected bot lands on, so re-selecting the
@@ -786,9 +1076,6 @@ export default function BotRosterSidebar() {
     void navigate({ to: "/groups/$groupId", params: { groupId: group.id } });
   };
 
-  const isPinned = (item: RosterItemRef) =>
-    pinnedItems.some((candidate) => candidate.kind === item.kind && candidate.id === item.id);
-
   useEffect(() => {
     if (pendingCreatedBotId === null) return;
     const bot = bots.find((candidate) => candidate.id === pendingCreatedBotId);
@@ -879,50 +1166,195 @@ export default function BotRosterSidebar() {
                 ))}
               </ul>
             </SidebarGroup>
-            <DragDropContext onDragEnd={handleDragEnd}>
-              {pinnedItems.length > 0 ? (
-                <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-3 pt-3 group-data-[collapsible=icon]:hidden">
-                  <div
-                    className="flex justify-center gap-2 overflow-x-auto px-2 py-1"
+            <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={dndCollisionDetection}
+                modifiers={[
+                  restrictToVerticalAxis,
+                  restrictBelowPins,
+                  restrictToFirstScrollableAncestor,
+                ]}
+                onDragStart={handleRosterDragStart}
+                onDragOver={handleRosterDragOver}
+                onDragEnd={handleRosterDragEnd}
+              >
+                <RosterDragLifecycle onUnmount={cancelRosterDrag} />
+                <SortableContext items={sortableIds} strategy={rosterSortingStrategy}>
+                  <ul
+                    ref={attachListMotionRef}
                     role="list"
-                    aria-label="Pinned bots and groups"
+                    aria-label="Bots and groups"
+                    className="relative flex flex-col gap-px"
                   >
-                    {pinnedItems.map((item) => (
-                      <PinnedRosterItem
-                        key={`${item.kind}:${item.id}`}
-                        item={item}
-                        bots={bots}
-                        groups={groups}
-                        onSelectBot={handleSelect}
-                        onSelectGroup={handleSelectGroup}
-                      />
-                    ))}
-                  </div>
-                </SidebarGroup>
-              ) : null}
-              <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
-                <Droppable droppableId="roster-sections" type="roster-section">
-                  {(sectionsProvided) => (
-                    <div ref={sectionsProvided.innerRef} {...sectionsProvided.droppableProps}>
-                      {sections.map((section, sectionIndex) => {
-                        const sectionBots = botsBySection.get(section.id) ?? [];
-                        const sectionGroups = groupsBySection.get(section.id) ?? [];
-                        const collapsed = query.length === 0 && section.collapsed;
+                    {rosterListItems.map((item) => {
+                      if (item.kind === "entry") {
+                        const dropVerb = dropVerbFor(rosterListItemId(item));
+                        const pinned = pinnedKeys.has(rosterItemKey(item.item));
                         return (
-                          <Draggable
-                            key={section.id}
-                            draggableId={`section:${section.id}`}
-                            index={sectionIndex}
-                            isDragDisabled={query.length > 0}
+                          <SortableRosterRow
+                            key={rosterListItemId(item)}
+                            id={rosterListItemId(item)}
+                            disabled={searching}
                           >
-                            {(sectionProvided, sectionSnapshot) => (
-                              <section
-                                ref={sectionProvided.innerRef}
+                            {(bag) =>
+                              item.item.kind === "bot"
+                                ? (() => {
+                                    const bot = bots.find(
+                                      (candidate) => candidate.id === item.item.id,
+                                    );
+                                    if (!bot) return null;
+                                    return (
+                                      <BotRosterRow
+                                        bot={bot}
+                                        lastMessage={lastMessageByBotId[bot.id] ?? null}
+                                        isActive={!groupRouteActive && selectedBotId === bot.id}
+                                        onSelect={handleSelect}
+                                        pinned={pinned}
+                                        sections={sections}
+                                        onPin={(nextPinned) =>
+                                          useRosterStore
+                                            .getState()
+                                            .setItemPinned({ kind: "bot", id: bot.id }, nextPinned)
+                                        }
+                                        onMove={(sectionId) =>
+                                          useRosterStore
+                                            .getState()
+                                            .moveBotToSection(bot.id, sectionId)
+                                        }
+                                        sortable={bag}
+                                        dropVerb={dropVerb}
+                                      />
+                                    );
+                                  })()
+                                : (() => {
+                                    const group = groups.find(
+                                      (candidate) => candidate.id === item.item.id,
+                                    );
+                                    if (!group) return null;
+                                    return (
+                                      <GroupRosterRow
+                                        group={group}
+                                        bots={bots}
+                                        isActive={pathname === `/groups/${group.id}`}
+                                        onSelect={() => handleSelectGroup(group)}
+                                        pinned={pinned}
+                                        sections={sections}
+                                        onPin={(nextPinned) =>
+                                          useRosterStore
+                                            .getState()
+                                            .setItemPinned(
+                                              { kind: "group", id: group.id },
+                                              nextPinned,
+                                            )
+                                        }
+                                        onMove={(sectionId) =>
+                                          useRosterStore
+                                            .getState()
+                                            .moveGroupToSection(group.id, sectionId)
+                                        }
+                                        sortable={bag}
+                                        dropVerb={dropVerb}
+                                      />
+                                    );
+                                  })()
+                            }
+                          </SortableRosterRow>
+                        );
+                      }
+                      const from = dragState?.from ?? null;
+                      const dragging = from !== null;
+                      switch (item.marker) {
+                        case "pinned-header":
+                          return (
+                            <RosterDragBoundary
+                              key="pinned-header"
+                              marker="pinned-header"
+                              label="Pinned"
+                              visible={dragging}
+                              isDropTarget={dragTargetZone === "pinned"}
+                            />
+                          );
+                        case "pinned-divider":
+                          return (
+                            <RosterDragBoundary
+                              key="pinned-divider"
+                              marker="pinned-divider"
+                              label={sections[0]?.name ?? "Unassigned"}
+                              visible={dragging}
+                              isDropTarget={dragTargetZone !== null && dragTargetZone !== "pinned"}
+                            />
+                          );
+                        case "unassigned-header":
+                          return (
+                            <SortableRosterMarker
+                              key="unassigned-header"
+                              marker="unassigned-header"
+                              data-testid="roster-unassigned-header"
+                              className="relative"
+                            >
+                              <div
                                 className={cn(
-                                  "mb-1 rounded-lg",
-                                  sectionSnapshot.isDragging && "bg-sidebar shadow-xl",
+                                  "flex h-8 items-center gap-1.5 px-2 text-xs font-medium text-sidebar-muted-foreground",
+                                  dragging && "text-sidebar-foreground/80",
+                                  dragTargetZone === "unassigned" && "text-primary",
                                 )}
-                                {...sectionProvided.draggableProps}
+                              >
+                                <ChevronDownIcon className="size-3.5" />
+                                <span>Unassigned</span>
+                                <span className="tabular-nums">
+                                  {visibleUnassignedItems.length}
+                                </span>
+                                <span
+                                  aria-hidden
+                                  className={cn(
+                                    "h-px min-w-2 flex-1",
+                                    dragTargetZone === "unassigned"
+                                      ? "bg-primary/50"
+                                      : "bg-sidebar-border/60",
+                                  )}
+                                />
+                              </div>
+                            </SortableRosterMarker>
+                          );
+                        case "unassigned-placeholder":
+                          return (
+                            <RosterSectionPlaceholder
+                              key="unassigned-placeholder"
+                              marker="unassigned-placeholder"
+                              label="Unassigned"
+                              showHint={
+                                dragging &&
+                                (visibleUnassignedItems.length === 0 ||
+                                  (dragState?.from === "unassigned" &&
+                                    visibleUnassignedItems.length === 1 &&
+                                    dragTargetZone !== null &&
+                                    dragTargetZone !== "unassigned"))
+                              }
+                              isDropTarget={dragTargetZone === "unassigned"}
+                            />
+                          );
+                        default: {
+                          if (typeof item.marker !== "object") return null;
+                          const marker = item.marker;
+                          if (marker.kind === "section-header") {
+                            const section = sections.find(
+                              (candidate) => candidate.id === marker.sectionId,
+                            );
+                            if (!section) return null;
+                            const layout = visibleSectionLayouts.find(
+                              (candidate) => candidate.id === section.id,
+                            );
+                            const collapsed = layout?.collapsed ?? section.collapsed;
+                            const count = layout?.items.length ?? 0;
+                            const zone = { sectionId: section.id };
+                            return (
+                              <SortableRosterMarker
+                                key={rosterMarkerId(item.marker)}
+                                marker={item.marker}
+                                draggable={!searching}
+                                data-testid="roster-section-header"
+                                className="relative"
                               >
                                 <div
                                   className="relative flex h-8 items-center rounded-md hover:bg-sidebar-row-hover"
@@ -939,8 +1371,11 @@ export default function BotRosterSidebar() {
                                     onClick={() =>
                                       useRosterStore.getState().toggleSection(section.id)
                                     }
-                                    className="flex min-w-0 flex-1 cursor-grab items-center gap-1.5 px-2 text-left text-xs font-medium text-sidebar-muted-foreground active:cursor-grabbing"
-                                    {...sectionProvided.dragHandleProps}
+                                    className={cn(
+                                      "flex min-w-0 flex-1 cursor-grab items-center gap-1.5 px-2 text-left text-xs font-medium text-sidebar-muted-foreground active:cursor-grabbing",
+                                      rosterZonesEqual(dragTargetZone ?? "pinned", zone) &&
+                                        "text-primary",
+                                    )}
                                   >
                                     {collapsed ? (
                                       <ChevronRightIcon className="size-3.5" />
@@ -948,9 +1383,7 @@ export default function BotRosterSidebar() {
                                       <ChevronDownIcon className="size-3.5" />
                                     )}
                                     <span className="truncate">{section.name}</span>
-                                    <span className="tabular-nums">
-                                      {sectionBots.length + sectionGroups.length}
-                                    </span>
+                                    <span className="tabular-nums">{count}</span>
                                   </button>
                                   <Menu>
                                     <MenuTrigger
@@ -976,202 +1409,52 @@ export default function BotRosterSidebar() {
                                     </MenuPopup>
                                   </Menu>
                                 </div>
-                                <Droppable
-                                  droppableId={`section-groups:${section.id}`}
-                                  type="roster-group"
-                                >
-                                  {(provided, snapshot) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      role="list"
-                                      aria-label={`${section.name} groups`}
-                                      data-drag-over={snapshot.isDraggingOver || undefined}
-                                      className={cn(
-                                        "rounded-lg data-[drag-over=true]:bg-sidebar-row-hover",
-                                        collapsed
-                                          ? "min-h-2"
-                                          : sectionGroups.length > 0
-                                            ? "min-h-10"
-                                            : "min-h-1",
-                                      )}
-                                      {...provided.droppableProps}
-                                    >
-                                      {!collapsed
-                                        ? sectionGroups.map((group, index) => (
-                                            <GroupRosterRow
-                                              key={group.id}
-                                              group={group}
-                                              bots={bots}
-                                              index={index}
-                                              sections={sections}
-                                              dragDisabled={query.length > 0}
-                                              isActive={pathname === `/groups/${group.id}`}
-                                              onSelect={() => handleSelectGroup(group)}
-                                              pinned={false}
-                                              onPin={(pinned) =>
-                                                useRosterStore.getState().setItemPinned(
-                                                  {
-                                                    kind: "group",
-                                                    id: group.id,
-                                                  },
-                                                  pinned,
-                                                )
-                                              }
-                                              onMove={(sectionId) =>
-                                                useRosterStore
-                                                  .getState()
-                                                  .moveGroupToSection(group.id, sectionId)
-                                              }
-                                            />
-                                          ))
-                                        : null}
-                                      {provided.placeholder}
-                                    </div>
-                                  )}
-                                </Droppable>
-                                <Droppable droppableId={`section:${section.id}`} type="roster-bot">
-                                  {(provided, snapshot) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      role="list"
-                                      aria-label={section.name}
-                                      data-drag-over={snapshot.isDraggingOver || undefined}
-                                      className={cn(
-                                        "rounded-lg data-[drag-over=true]:bg-sidebar-row-hover",
-                                        collapsed ? "min-h-2" : "min-h-10",
-                                      )}
-                                      {...provided.droppableProps}
-                                    >
-                                      {!collapsed
-                                        ? sectionBots.map((bot, index) => (
-                                            <BotRosterRow
-                                              key={bot.id}
-                                              bot={bot}
-                                              index={index}
-                                              lastMessage={lastMessageByBotId[bot.id] ?? null}
-                                              isActive={
-                                                !groupRouteActive && selectedBotId === bot.id
-                                              }
-                                              onSelect={handleSelect}
-                                              pinned={isPinned({
-                                                kind: "bot",
-                                                id: bot.id,
-                                              })}
-                                              sections={sections}
-                                              onPin={(pinned) =>
-                                                useRosterStore
-                                                  .getState()
-                                                  .setItemPinned(
-                                                    { kind: "bot", id: bot.id },
-                                                    pinned,
-                                                  )
-                                              }
-                                              onMove={(sectionId) =>
-                                                useRosterStore
-                                                  .getState()
-                                                  .moveBotToSection(bot.id, sectionId)
-                                              }
-                                              dragDisabled={query.length > 0}
-                                            />
-                                          ))
-                                        : null}
-                                      {provided.placeholder}
-                                    </div>
-                                  )}
-                                </Droppable>
-                              </section>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {sectionsProvided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-                <div className="flex h-8 items-center gap-1.5 px-2 text-xs font-medium text-sidebar-muted-foreground">
-                  <ChevronDownIcon className="size-3.5" />
-                  <span>Unassigned</span>
-                  <span className="tabular-nums">
-                    {unassignedBots.length + unassignedGroups.length}
-                  </span>
+                              </SortableRosterMarker>
+                            );
+                          }
+                          const zone = { sectionId: marker.sectionId };
+                          const layout = visibleSectionLayouts.find(
+                            (candidate) => candidate.id === marker.sectionId,
+                          );
+                          const activeEntry = dragState && parseRosterEntryId(dragState.activeId);
+                          return (
+                            <RosterSectionPlaceholder
+                              key={rosterMarkerId(item.marker)}
+                              marker={item.marker}
+                              label={layout?.name ?? "Section"}
+                              showHint={
+                                dragging &&
+                                (layout?.items.length === 0 ||
+                                  layout?.collapsed === true ||
+                                  (activeEntry !== null &&
+                                    dragState?.from !== "section" &&
+                                    dragState !== null &&
+                                    rosterZonesEqual(dragState.from, zone) &&
+                                    !rosterZoneHasVisibleEntries(
+                                      rosterListItems,
+                                      zone,
+                                      activeEntry ?? undefined,
+                                    ) &&
+                                    dragTargetZone !== null &&
+                                    !rosterZonesEqual(dragTargetZone, zone)))
+                              }
+                              isDropTarget={
+                                dragTargetZone !== null && rosterZonesEqual(dragTargetZone, zone)
+                              }
+                            />
+                          );
+                        }
+                      }
+                    })}
+                  </ul>
+                </SortableContext>
+              </DndContext>
+              {visibleBots.length === 0 && visibleGroups.length === 0 ? (
+                <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
+                  No bots match
                 </div>
-                <Droppable droppableId="roster-unassigned-groups" type="roster-group">
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      role="list"
-                      aria-label="Unassigned groups"
-                      data-drag-over={snapshot.isDraggingOver || undefined}
-                      className="min-h-1 rounded-lg data-[drag-over=true]:bg-sidebar-row-hover"
-                      {...provided.droppableProps}
-                    >
-                      {unassignedGroups.map((group, index) => (
-                        <GroupRosterRow
-                          key={group.id}
-                          group={group}
-                          bots={bots}
-                          index={index}
-                          sections={sections}
-                          dragDisabled={query.length > 0}
-                          isActive={pathname === `/groups/${group.id}`}
-                          onSelect={() => handleSelectGroup(group)}
-                          pinned={false}
-                          onPin={(pinned) =>
-                            useRosterStore
-                              .getState()
-                              .setItemPinned({ kind: "group", id: group.id }, pinned)
-                          }
-                          onMove={(sectionId) =>
-                            useRosterStore.getState().moveGroupToSection(group.id, sectionId)
-                          }
-                        />
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-                <Droppable droppableId="roster-unassigned" type="roster-bot">
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      role="list"
-                      aria-label="Unassigned"
-                      data-drag-over={snapshot.isDraggingOver || undefined}
-                      className="min-h-10 rounded-lg data-[drag-over=true]:bg-sidebar-row-hover"
-                      {...provided.droppableProps}
-                    >
-                      {unassignedBots.map((bot, index) => (
-                        <BotRosterRow
-                          key={bot.id}
-                          bot={bot}
-                          index={index}
-                          lastMessage={lastMessageByBotId[bot.id] ?? null}
-                          isActive={!groupRouteActive && selectedBotId === bot.id}
-                          onSelect={handleSelect}
-                          pinned={isPinned({ kind: "bot", id: bot.id })}
-                          sections={sections}
-                          onPin={(pinned) =>
-                            useRosterStore
-                              .getState()
-                              .setItemPinned({ kind: "bot", id: bot.id }, pinned)
-                          }
-                          onMove={(sectionId) =>
-                            useRosterStore.getState().moveBotToSection(bot.id, sectionId)
-                          }
-                          dragDisabled={query.length > 0}
-                        />
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-                {visibleBots.length === 0 && visibleGroups.length === 0 ? (
-                  <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-                    No bots match
-                  </div>
-                ) : null}
-              </SidebarGroup>
-            </DragDropContext>
+              ) : null}
+            </SidebarGroup>
           </>
         )}
       </SidebarContent>

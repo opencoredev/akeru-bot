@@ -1,8 +1,18 @@
 import { create } from "zustand";
 
 import { randomUUID } from "../../lib/utils";
-import type { RosterLastMessage } from "./roster.logic";
+import {
+  rosterItemKey,
+  rosterItemsEqual,
+  rosterSectionItems,
+  splitRosterSectionItems,
+  type RosterDropPlan,
+  type RosterItemRef,
+  type RosterLastMessage,
+} from "./roster.logic";
 import type { Bot, BotAvatar, Group } from "./types";
+
+export type { RosterItemRef };
 
 const PERSISTED_ROSTER_KEY = "akeru:roster:v1";
 const persistedRosterMemory = new Map<string, PersistedRoster>();
@@ -17,6 +27,7 @@ interface PersistedRoster {
   botLayout?: Array<{ id: string; pinned: boolean }>;
   sections?: RosterSection[];
   pinnedItems?: RosterItemRef[];
+  unassignedItems?: RosterItemRef[];
 }
 
 export interface RosterSection {
@@ -24,13 +35,67 @@ export interface RosterSection {
   name: string;
   botIds: string[];
   groupIds?: string[];
+  items?: RosterItemRef[];
   collapsed: boolean;
 }
 
-export type RosterItemRef = { kind: "bot"; id: string } | { kind: "group"; id: string };
-
 function firstAvailableBotId(bots: readonly Bot[]): string | null {
   return bots.find((bot) => bot.archivedAt === null)?.id ?? null;
+}
+
+function isRosterItemList(value: unknown): value is RosterItemRef[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        ((item as { kind?: unknown }).kind === "bot" ||
+          (item as { kind?: unknown }).kind === "group") &&
+        typeof (item as { id?: unknown }).id === "string",
+    )
+  );
+}
+
+function withSectionItems(section: RosterSection, items: readonly RosterItemRef[]): RosterSection {
+  const split = splitRosterSectionItems(items);
+  return {
+    ...section,
+    items: [...items],
+    botIds: split.botIds,
+    groupIds: split.groupIds,
+  };
+}
+
+function removeItemFromSections(
+  sections: readonly RosterSection[],
+  item: RosterItemRef,
+): RosterSection[] {
+  return sections.map((section) =>
+    withSectionItems(
+      section,
+      rosterSectionItems(section).filter((candidate) => !rosterItemsEqual(candidate, item)),
+    ),
+  );
+}
+
+/** Insert `moved` into `previous` using the visible drop order, keeping
+ * hidden (pinned) members in place so pin state is not a membership change. */
+function mergeVisibleOrder(
+  previous: readonly RosterItemRef[],
+  visibleOrder: readonly RosterItemRef[],
+  moved: RosterItemRef,
+): RosterItemRef[] {
+  const withoutMoved = previous.filter((item) => !rosterItemsEqual(item, moved));
+  const movedIndex = visibleOrder.findIndex((item) => rosterItemsEqual(item, moved));
+  const after = movedIndex >= 0 ? visibleOrder[movedIndex + 1] : undefined;
+  const insertAt =
+    after === undefined
+      ? withoutMoved.length
+      : withoutMoved.findIndex((item) => rosterItemsEqual(item, after));
+  const next = [...withoutMoved];
+  next.splice(insertAt < 0 ? next.length : insertAt, 0, moved);
+  return next;
 }
 
 function readPersistedRoster(environmentId: string | null = null): PersistedRoster | null {
@@ -43,13 +108,15 @@ function readPersistedRoster(environmentId: string | null = null): PersistedRost
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
-    const { selectedBotId, chatPathByBotId, botLayout, sections, pinnedItems } = parsed as {
-      selectedBotId?: unknown;
-      chatPathByBotId?: unknown;
-      botLayout?: unknown;
-      sections?: unknown;
-      pinnedItems?: unknown;
-    };
+    const { selectedBotId, chatPathByBotId, botLayout, sections, pinnedItems, unassignedItems } =
+      parsed as {
+        selectedBotId?: unknown;
+        chatPathByBotId?: unknown;
+        botLayout?: unknown;
+        sections?: unknown;
+        pinnedItems?: unknown;
+        unassignedItems?: unknown;
+      };
     return {
       ...(typeof selectedBotId === "string" ? { selectedBotId } : {}),
       ...(typeof chatPathByBotId === "object" && chatPathByBotId !== null
@@ -79,28 +146,36 @@ function readPersistedRoster(environmentId: string | null = null): PersistedRost
               (section as { groupIds: unknown[] }).groupIds.every(
                 (id) => typeof id === "string",
               ))) &&
+          ((section as { items?: unknown }).items === undefined ||
+            isRosterItemList((section as { items?: unknown }).items)) &&
           typeof (section as { collapsed?: unknown }).collapsed === "boolean",
       )
         ? {
             sections: (
-              sections as Array<Omit<RosterSection, "groupIds"> & { groupIds?: string[] }>
-            ).map((section) => ({
-              ...section,
-              groupIds: section.groupIds ?? [],
-            })),
+              sections as Array<
+                Omit<RosterSection, "groupIds" | "items"> & {
+                  groupIds?: string[];
+                  items?: RosterItemRef[];
+                }
+              >
+            ).map((section) => {
+              const items = rosterSectionItems({
+                botIds: section.botIds,
+                groupIds: section.groupIds ?? [],
+                items: section.items,
+              });
+              const split = splitRosterSectionItems(items);
+              return {
+                ...section,
+                botIds: split.botIds,
+                groupIds: split.groupIds,
+                items,
+              };
+            }),
           }
         : {}),
-      ...(Array.isArray(pinnedItems) &&
-      pinnedItems.every(
-        (item) =>
-          typeof item === "object" &&
-          item !== null &&
-          ((item as { kind?: unknown }).kind === "bot" ||
-            (item as { kind?: unknown }).kind === "group") &&
-          typeof (item as { id?: unknown }).id === "string",
-      )
-        ? { pinnedItems: pinnedItems as RosterItemRef[] }
-        : {}),
+      ...(isRosterItemList(pinnedItems) ? { pinnedItems } : {}),
+      ...(isRosterItemList(unassignedItems) ? { unassignedItems } : {}),
     };
   } catch {
     return null;
@@ -126,6 +201,7 @@ interface RosterStore {
   chatPathByBotId: Record<string, string>;
   sections: RosterSection[];
   pinnedItems: RosterItemRef[];
+  unassignedItems: RosterItemRef[];
   environmentId: string | null;
   selectBot: (botId: string) => void;
   setBotAvatar: (botId: string, avatar: BotAvatar) => boolean;
@@ -135,8 +211,10 @@ interface RosterStore {
   deleteSection: (sectionId: string) => void;
   moveGroupToSection: (groupId: string, sectionId: string | null, index?: number) => void;
   moveBotToSection: (botId: string, sectionId: string | null, index?: number) => void;
+  moveItemToSection: (item: RosterItemRef, sectionId: string | null, index?: number) => void;
   reorderSections: (sourceIndex: number, destinationIndex: number) => void;
   setItemPinned: (item: RosterItemRef, pinned: boolean) => void;
+  applyRosterDrop: (plan: RosterDropPlan) => void;
   recordLastMessage: (botId: string, message: RosterLastMessage) => void;
   recordChatPath: (botId: string, path: string) => void;
   forgetChatPath: (botId: string) => void;
@@ -179,7 +257,13 @@ export function reorderVisibleRosterBots(
 function saveState(
   state: Pick<
     RosterStore,
-    "bots" | "selectedBotId" | "chatPathByBotId" | "sections" | "pinnedItems" | "environmentId"
+    | "bots"
+    | "selectedBotId"
+    | "chatPathByBotId"
+    | "sections"
+    | "pinnedItems"
+    | "unassignedItems"
+    | "environmentId"
   >,
 ) {
   persistRoster(
@@ -189,6 +273,7 @@ function saveState(
       botLayout: state.bots.map((bot) => ({ id: bot.id, pinned: bot.pinned })),
       sections: state.sections,
       pinnedItems: state.pinnedItems,
+      unassignedItems: state.unassignedItems,
     },
     state.environmentId,
   );
@@ -204,6 +289,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
   chatPathByBotId: persisted?.chatPathByBotId ?? {},
   sections: persisted?.sections ?? [],
   pinnedItems: persisted?.pinnedItems ?? [],
+  unassignedItems: persisted?.unassignedItems ?? [],
   environmentId: null,
 
   selectBot: (botId) => {
@@ -258,6 +344,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
           name: trimmed,
           botIds: [],
           groupIds: [],
+          items: [],
           collapsed: false,
         },
       ],
@@ -283,30 +370,64 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
   },
 
   moveBotToSection: (botId, sectionId, index) => {
-    if (!get().bots.some((bot) => bot.id === botId && bot.archivedAt === null)) return;
+    get().moveItemToSection({ kind: "bot", id: botId }, sectionId, index);
+  },
+
+  moveGroupToSection: (groupId, sectionId, index) => {
+    get().moveItemToSection({ kind: "group", id: groupId }, sectionId, index);
+  },
+
+  moveItemToSection: (item, sectionId, index) => {
+    if (
+      item.kind === "bot" &&
+      !get().bots.some((bot) => bot.id === item.id && bot.archivedAt === null)
+    ) {
+      return;
+    }
+    if (item.kind === "group" && !get().groups.some((group) => group.id === item.id)) return;
     if (sectionId !== null && !get().sections.some((section) => section.id === sectionId)) return;
     set((state) => {
-      const sections = state.sections.map((section) => {
-        const botIds = section.botIds.filter((id) => id !== botId);
-        if (section.id !== sectionId) return { ...section, botIds };
-        botIds.splice(Math.min(Math.max(index ?? botIds.length, 0), botIds.length), 0, botId);
-        return { ...section, botIds };
+      const sections = removeItemFromSections(state.sections, item).map((section) => {
+        if (section.id !== sectionId) return section;
+        const items = rosterSectionItems(section);
+        items.splice(Math.min(Math.max(index ?? items.length, 0), items.length), 0, item);
+        return withSectionItems(section, items);
       });
-      if (sectionId !== null) return { sections };
-      const assigned = new Set(sections.flatMap((section) => section.botIds));
+      const assignedKeys = new Set(
+        sections.flatMap((section) => rosterSectionItems(section).map(rosterItemKey)),
+      );
+      const remainingUnassigned = state.unassignedItems.filter(
+        (candidate) =>
+          !rosterItemsEqual(candidate, item) && !assignedKeys.has(rosterItemKey(candidate)),
+      );
+      if (sectionId !== null) {
+        return { sections, unassignedItems: remainingUnassigned };
+      }
+      remainingUnassigned.splice(
+        Math.min(Math.max(index ?? remainingUnassigned.length, 0), remainingUnassigned.length),
+        0,
+        item,
+      );
+      if (item.kind !== "bot") {
+        return { sections, unassignedItems: remainingUnassigned };
+      }
+      const assignedBotIds = new Set(sections.flatMap((section) => section.botIds));
       const unassignedIds = state.bots
-        .filter((bot) => bot.archivedAt === null && !assigned.has(bot.id) && bot.id !== botId)
+        .filter(
+          (bot) => bot.archivedAt === null && !assignedBotIds.has(bot.id) && bot.id !== item.id,
+        )
         .map((bot) => bot.id);
       unassignedIds.splice(
         Math.min(Math.max(index ?? unassignedIds.length, 0), unassignedIds.length),
         0,
-        botId,
+        item.id,
       );
       const unassigned = new Set(unassignedIds);
       const botsById = new Map(state.bots.map((bot) => [bot.id, bot] as const));
       let botIndex = 0;
       return {
         sections,
+        unassignedItems: remainingUnassigned,
         bots: state.bots.map((bot) =>
           unassigned.has(bot.id) ? (botsById.get(unassignedIds[botIndex++]!) ?? bot) : bot,
         ),
@@ -315,21 +436,59 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     saveState(get());
   },
 
-  moveGroupToSection: (groupId, sectionId, index) => {
-    if (!get().groups.some((group) => group.id === groupId)) return;
-    if (sectionId !== null && !get().sections.some((section) => section.id === sectionId)) return;
-    set((state) => ({
-      sections: state.sections.map((section) => {
-        const groupIds = (section.groupIds ?? []).filter((id) => id !== groupId);
-        if (section.id !== sectionId) return { ...section, groupIds };
-        groupIds.splice(
-          Math.min(Math.max(index ?? groupIds.length, 0), groupIds.length),
-          0,
-          groupId,
+  applyRosterDrop: (plan) => {
+    if (plan.kind === "none") return;
+    if (plan.kind === "reorder-section") {
+      get().reorderSections(plan.fromIndex, plan.toIndex);
+      return;
+    }
+    if (plan.kind === "reorder-pinned") {
+      set({ pinnedItems: [...plan.order] });
+      saveState(get());
+      return;
+    }
+    if (plan.kind === "pin") {
+      set({ pinnedItems: [...plan.order] });
+      saveState(get());
+      return;
+    }
+    set((state) => {
+      const pinnedItems = plan.unpin
+        ? state.pinnedItems.filter((candidate) => !rosterItemsEqual(candidate, plan.item))
+        : state.pinnedItems;
+      const sectionId = typeof plan.zone === "object" ? plan.zone.sectionId : null;
+      const sections = removeItemFromSections(state.sections, plan.item).map((section) => {
+        if (section.id !== sectionId) return section;
+        return withSectionItems(
+          section,
+          mergeVisibleOrder(rosterSectionItems(section), plan.order, plan.item),
         );
-        return { ...section, groupIds };
-      }),
-    }));
+      });
+      const unassignedItems =
+        sectionId === null
+          ? [...plan.order]
+          : state.unassignedItems.filter((candidate) => !rosterItemsEqual(candidate, plan.item));
+      if (plan.item.kind !== "bot" || sectionId !== null) {
+        return { pinnedItems, sections, unassignedItems };
+      }
+      const assignedBotIds = new Set(sections.flatMap((section) => section.botIds));
+      const unassignedIds = plan.order
+        .filter((entry) => entry.kind === "bot")
+        .map((entry) => entry.id);
+      const unassigned = new Set(unassignedIds);
+      const botsById = new Map(state.bots.map((bot) => [bot.id, bot] as const));
+      let botIndex = 0;
+      return {
+        pinnedItems,
+        sections,
+        unassignedItems,
+        bots: state.bots.map((bot) =>
+          unassigned.has(bot.id) && !assignedBotIds.has(bot.id)
+            ? (botsById.get(unassignedIds[botIndex++]!) ?? bot)
+            : bot,
+        ),
+      };
+    });
     saveState(get());
   },
 
@@ -416,6 +575,16 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     const targetPinnedItems = switchingEnvironment
       ? (targetPersisted?.pinnedItems ?? [])
       : get().pinnedItems;
+    const targetUnassignedItems = switchingEnvironment
+      ? (targetPersisted?.unassignedItems ?? [])
+      : get().unassignedItems;
+    const liveItem = (item: RosterItemRef) =>
+      item.kind === "bot"
+        ? bots.some((bot) => bot.id === item.id && bot.archivedAt === null)
+        : input.groups.some((group) => group.id === item.id);
+    const sections = targetSections.map((section) =>
+      withSectionItems(section, rosterSectionItems(section).filter(liveItem)),
+    );
     set({
       environmentId: input.environmentId,
       bots,
@@ -423,18 +592,9 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
       chatPathByBotId: switchingEnvironment
         ? (targetPersisted?.chatPathByBotId ?? {})
         : get().chatPathByBotId,
-      sections: targetSections.map((section) => ({
-        ...section,
-        botIds: section.botIds.filter((id) => bots.some((bot) => bot.id === id)),
-        groupIds: (section.groupIds ?? []).filter((id) =>
-          input.groups.some((group) => group.id === id),
-        ),
-      })),
-      pinnedItems: targetPinnedItems.filter((item) =>
-        item.kind === "bot"
-          ? bots.some((bot) => bot.id === item.id && bot.archivedAt === null)
-          : input.groups.some((group) => group.id === item.id),
-      ),
+      sections,
+      pinnedItems: targetPinnedItems.filter(liveItem),
+      unassignedItems: targetUnassignedItems.filter(liveItem),
       selectedBotId,
       ...(input.lastMessageByBotId ? { lastMessageByBotId: input.lastMessageByBotId } : {}),
     });

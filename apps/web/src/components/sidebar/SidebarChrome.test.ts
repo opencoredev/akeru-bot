@@ -226,14 +226,14 @@ describe("sidebar footer", () => {
     expect(source).not.toContain("touch-none");
   });
 
-  it("keeps group membership out of roster drag and centers pinned items", () => {
+  it("keeps group membership out of roster drag and treats pins as a drop target", () => {
     const source = NodeFS.readFileSync(
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
       "utf8",
     );
 
     expect(source).not.toContain("botEnvironment.groups.assignMember");
-    expect(source).toContain('className="flex justify-center gap-2 overflow-x-auto px-2 py-1"');
+    expect(source).toContain("roster-pinned-header");
     expect(source).toContain("onContextMenu={(event) => {");
   });
 

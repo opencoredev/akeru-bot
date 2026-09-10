@@ -47,6 +47,7 @@ beforeEach(() => {
     chatPathByBotId: {},
     sections: [],
     pinnedItems: [],
+    unassignedItems: [],
     environmentId: null,
   });
 });
@@ -60,6 +61,7 @@ afterEach(() => {
     chatPathByBotId: initialState.chatPathByBotId,
     sections: initialState.sections,
     pinnedItems: initialState.pinnedItems,
+    unassignedItems: initialState.unassignedItems,
     environmentId: initialState.environmentId,
   });
   if (typeof window !== "undefined") {
@@ -263,8 +265,57 @@ describe("roster sections and pins", () => {
         name: "Work",
         botIds: ["one"],
         groupIds: [],
+        items: [{ kind: "bot", id: "one" }],
         collapsed: true,
       },
     ]);
+  });
+
+  it("applies pin, unpin, and mixed-section drops without changing group membership", () => {
+    const crew = group("crew");
+    useRosterStore.setState({
+      bots: [bot("akeru"), bot("mori")],
+      groups: [crew],
+      sections: [
+        {
+          id: "news",
+          name: "News",
+          botIds: ["akeru"],
+          groupIds: ["crew"],
+          items: [
+            { kind: "group", id: "crew" },
+            { kind: "bot", id: "akeru" },
+          ],
+          collapsed: false,
+        },
+      ],
+    });
+
+    useRosterStore.getState().applyRosterDrop({
+      kind: "pin",
+      item: { kind: "bot", id: "mori" },
+      order: [{ kind: "bot", id: "mori" }],
+    });
+    expect(useRosterStore.getState().pinnedItems).toEqual([{ kind: "bot", id: "mori" }]);
+    expect(useRosterStore.getState().groups).toEqual([crew]);
+
+    useRosterStore.getState().applyRosterDrop({
+      kind: "move",
+      item: { kind: "bot", id: "mori" },
+      zone: { sectionId: "news" },
+      order: [
+        { kind: "group", id: "crew" },
+        { kind: "bot", id: "akeru" },
+        { kind: "bot", id: "mori" },
+      ],
+      unpin: true,
+    });
+    expect(useRosterStore.getState().pinnedItems).toEqual([]);
+    expect(useRosterStore.getState().sections[0]?.items).toEqual([
+      { kind: "group", id: "crew" },
+      { kind: "bot", id: "akeru" },
+      { kind: "bot", id: "mori" },
+    ]);
+    expect(useRosterStore.getState().groups[0]?.members).toEqual([]);
   });
 });
