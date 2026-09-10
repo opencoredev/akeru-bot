@@ -15,6 +15,7 @@ import {
   type ProjectId,
   type OrchestrationSession,
   type OrchestrationThread,
+  type OrchestrationThreadShell,
   ThreadId,
   type ProviderSession,
   resolveBotMcpServers,
@@ -712,7 +713,7 @@ const make = Effect.gen(function* () {
     agentController.inspectEngine(modelSelection);
 
   const resolveControllerEngine = Effect.fnUntraced(function* (
-    thread: OrchestrationThread,
+    thread: OrchestrationThreadShell,
     fallback: ModelSelection,
   ) {
     const respondingBotId = resolveControllerBotId(thread);
@@ -733,7 +734,9 @@ const make = Effect.gen(function* () {
     return { ...selection, configured: engine !== null };
   });
 
-  const resolveControllerMcpServers = Effect.fnUntraced(function* (thread: OrchestrationThread) {
+  const resolveControllerMcpServers = Effect.fnUntraced(function* (
+    thread: OrchestrationThreadShell,
+  ) {
     const respondingBotId = resolveControllerBotId(thread);
     const bot =
       respondingBotId === null

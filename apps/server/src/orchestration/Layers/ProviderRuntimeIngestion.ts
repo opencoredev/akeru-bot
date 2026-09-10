@@ -75,7 +75,12 @@ const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${t
 // (server restart, session-exit sweep, TTL/capacity eviction): earlier
 // task.started/task.progress activities for the task are persisted with it.
 function findTaskTitleInActivities(
-  activities: ReadonlyArray<OrchestrationThreadActivity> | undefined,
+  activities:
+    | ReadonlyArray<{
+        readonly kind: string;
+        readonly payload: unknown;
+      }>
+    | undefined,
   taskId: string,
 ): string | undefined {
   if (!activities) {
