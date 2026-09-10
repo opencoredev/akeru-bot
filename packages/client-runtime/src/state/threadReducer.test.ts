@@ -1005,6 +1005,71 @@ describe("applyThreadDetailEvent", () => {
         expect(result.thread.latestTurn?.state).toBe("completed");
       }
     });
+
+    it("keeps an interrupted turn interrupted when its checkpoint becomes ready", () => {
+      const interrupted: OrchestrationThread = {
+        ...baseThread,
+        latestTurn: {
+          turnId: TurnId.make("turn-1"),
+          state: "interrupted",
+          requestedAt: "2026-04-01T11:00:00.000Z",
+          startedAt: "2026-04-01T11:00:00.000Z",
+          completedAt: "2026-04-01T11:30:00.000Z",
+          assistantMessageId: MessageId.make("msg-3"),
+        },
+      };
+
+      const result = applyThreadDetailEvent(interrupted, {
+        ...baseEventFields,
+        sequence: 14,
+        occurredAt: "2026-04-01T12:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.turn-diff-completed",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          turnId: TurnId.make("turn-1"),
+          checkpointTurnCount: 1,
+          checkpointRef: CheckpointRef.make("ref-1"),
+          status: "ready",
+          files: [],
+          assistantMessageId: MessageId.make("msg-3"),
+          completedAt: "2026-04-01T12:00:00.000Z",
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.latestTurn?.state).toBe("interrupted");
+        expect(result.thread.checkpoints[0]?.status).toBe("ready");
+      }
+    });
+
+    it("does not treat a missing checkpoint as an interruption", () => {
+      const result = applyThreadDetailEvent(baseThread, {
+        ...baseEventFields,
+        sequence: 15,
+        occurredAt: "2026-04-01T12:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.turn-diff-completed",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          turnId: TurnId.make("turn-1"),
+          checkpointTurnCount: 1,
+          checkpointRef: CheckpointRef.make("provider-diff:placeholder"),
+          status: "missing",
+          files: [],
+          assistantMessageId: MessageId.make("msg-3"),
+          completedAt: "2026-04-01T12:00:00.000Z",
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.latestTurn?.state).toBe("completed");
+      }
+    });
   });
 
   describe("thread.reverted", () => {
