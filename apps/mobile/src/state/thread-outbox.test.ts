@@ -47,6 +47,7 @@ vi.mock("expo-file-system", () => {
 import {
   decodeQueuedThreadMessage,
   encodeQueuedThreadMessage,
+  flattenQueuedThreadMessages,
   groupQueuedThreadMessages,
   isQueuedThreadCreationSendable,
   modelSelectionsEqual,
@@ -153,6 +154,59 @@ describe("thread outbox", () => {
     expect(warnings).toEqual([
       { message: "[thread-outbox] left unreadable persisted message on disk", error: unread },
     ]);
+  });
+
+  it("makes a readable pending task visible to drain after a mixed valid/corrupt load", async () => {
+    onTestFinished(() => outboxFiles.clear());
+    const registry = AtomRegistry.make();
+    onTestFinished(() => registry.dispose());
+    const pendingTask = {
+      ...queuedMessage({
+        messageId: "message-1",
+        createdAt: "2026-06-08T10:00:01.000Z",
+      }),
+      text: "Retry the upload worker",
+      creation: {
+        projectId: ProjectId.make("project-1"),
+        workspaceMode: "local" as const,
+        branch: null,
+        worktreePath: null,
+      },
+    };
+    outboxFiles.set("message-1.json", JSON.stringify(encodeQueuedThreadMessage(pendingTask)));
+    outboxFiles.set("message-2.json", "{");
+
+    const manager = createThreadOutboxManager({
+      registry,
+      warn: () => {},
+      storage: expoThreadOutboxStorage,
+    });
+    await manager.load();
+
+    const visible = flattenQueuedThreadMessages(
+      registry.get(manager.queuedMessagesByThreadKeyAtom),
+    );
+    expect(visible).toEqual([pendingTask]);
+    expect(
+      resolveThreadOutboxDeliveryAction({
+        isCreation: true,
+        threadExists: false,
+        shellStatus: "live",
+        environmentConnected: true,
+        threadBusy: false,
+      }),
+    ).toBe("send");
+    expect(outboxFiles.get("message-2.json")).toBe("{");
+    expect(outboxFiles.has("message-1.json")).toBe(true);
+
+    await expect(manager.clearEnvironment(pendingTask.environmentId)).rejects.toMatchObject({
+      operation: "clear-environment-load",
+    });
+    expect(outboxFiles.get("message-2.json")).toBe("{");
+    expect(JSON.parse(outboxFiles.get("message-1.json") as string)).toMatchObject({
+      messageId: pendingTask.messageId,
+      text: pendingTask.text,
+    });
   });
 
   it("preserves queued messages when environment cleanup cannot read the outbox", async () => {
