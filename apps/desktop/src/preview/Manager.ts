@@ -464,28 +464,35 @@ interface ExpectedAgentInput {
   readonly expiresAt: number;
 }
 
-const APP_FORWARDED_SHORTCUTS: ReadonlyArray<{
-  key: string;
-  meta: boolean;
-  shift: boolean;
-  control: boolean;
-}> = Object.freeze([
-  // mod+shift+J → preview.toggle
-  { key: "j", meta: true, shift: true, control: false },
-  // mod+K → command palette
-  { key: "k", meta: true, shift: false, control: false },
-  // mod+, → settings (macOS convention)
-  { key: ",", meta: true, shift: false, control: false },
-  // mod+W → close tab/panel
-  { key: "w", meta: true, shift: false, control: false },
-]);
-
 export const isPreviewRefreshShortcut = (input: Electron.Input): boolean =>
   input.type === "keyDown" &&
   input.key.toLowerCase() === "r" &&
   (input.meta || input.control) &&
   !input.shift &&
   !input.alt;
+
+export const isPreviewEditingShortcut = (
+  input: Electron.Input,
+  platform: NodeJS.Platform,
+): boolean => {
+  const isMac = platform === "darwin";
+  if (isMac ? !input.meta || input.control : !input.control || input.meta) return false;
+
+  const key = input.key.toLowerCase();
+  // Option changes the DOM key for macOS Paste and Match Style (for example, to ◊).
+  if (isMac && input.alt && input.shift && input.code === "KeyV") return true;
+  if (key === "v" && input.shift) return input.alt === isMac;
+  if (input.alt) return false;
+  if (key === "z") return !input.shift || platform !== "win32";
+  if (input.shift) return false;
+  return (
+    key === "a" ||
+    key === "c" ||
+    key === "v" ||
+    key === "x" ||
+    (key === "y" && platform === "win32")
+  );
+};
 
 const isPreviewInputSignal = (value: unknown): value is PreviewInputSignal => {
   if (typeof value !== "object" || value === null || !("kind" in value)) return false;
@@ -1408,16 +1415,6 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     }
   });
 
-  const isAppShortcut = (input: Electron.Input): boolean =>
-    input.type === "keyDown" &&
-    APP_FORWARDED_SHORTCUTS.some(
-      (shortcut) =>
-        shortcut.key.toLowerCase() === input.key.toLowerCase() &&
-        shortcut.meta === input.meta &&
-        shortcut.shift === input.shift &&
-        shortcut.control === input.control,
-    );
-
   const computeNavStatus = (wc: Electron.WebContents): PreviewNavStatus => {
     const url = wc.getURL();
     const title = wc.getTitle();
@@ -1692,27 +1689,26 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         }).pipe(Effect.ignore),
       );
     };
-    const forwardShortcut = Effect.fn("PreviewManager.forwardShortcut")(function* (
-      event: Electron.Event,
-      input: Electron.Input,
-    ) {
-      const mainWindow = yield* Ref.get(mainWindowRef);
-      if (!isAppShortcut(input) || Option.isNone(mainWindow) || mainWindow.value.isDestroyed()) {
-        return;
-      }
-      event.preventDefault();
-      mainWindow.value.webContents.sendInputEvent({
-        type: "keyDown",
-        keyCode: input.key,
-        modifiers: [
-          ...(input.meta ? (["meta"] as const) : []),
-          ...(input.shift ? (["shift"] as const) : []),
-          ...(input.control ? (["control"] as const) : []),
-          ...(input.alt ? (["alt"] as const) : []),
-        ],
+    const syncMenuShortcuts = (contents: Electron.WebContents, input: Electron.Input): void => {
+      if (input.type !== "keyDown") return;
+      // Native editing roles must remain available after the page handles the key.
+      // Background automation must not edit whichever other renderer has focus.
+      contents.setIgnoreMenuShortcuts(
+        !isPreviewEditingShortcut(input, hostPlatform) ||
+          webContents.getFocusedWebContents() !== contents,
+      );
+    };
+    // Akeru currently denies window.open and loads the URL in the same guest.
+    // If a popup is created anyway, keep its shortcuts isolated from the host.
+    const windowCreated = (window: Electron.BrowserWindow): void => {
+      window.webContents.setIgnoreMenuShortcuts(true);
+      window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+      window.webContents.on("before-input-event", (_event, input) => {
+        syncMenuShortcuts(window.webContents, input);
       });
-    });
+    };
     const beforeInput = (event: Electron.Event, input: Electron.Input): void => {
+      syncMenuShortcuts(wc, input);
       if (isPreviewRefreshShortcut(input)) {
         event.preventDefault();
         runFork(
@@ -1720,9 +1716,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             wc.reload(),
           ).pipe(Effect.ignore),
         );
-        return;
       }
-      runFork(forwardShortcut(event, input));
     };
     yield* Scope.addFinalizer(
       scope,
@@ -1737,6 +1731,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.off("did-stop-loading", sync);
         wc.off("did-fail-load", failed as never);
         wc.off("audio-state-changed", audioStateChanged);
+        wc.off("did-create-window", windowCreated);
         wc.off("before-input-event", beforeInput);
         wc.ipc.off(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.off(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
@@ -1744,6 +1739,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     );
     const install = Effect.fn("PreviewManager.installWebContentsListeners")(function* () {
       yield* attempt({ operation: "attachListeners", tabId, webContentsId: wc.id }, () => {
+        // Only focused native editing shortcuts may reach the application menu.
+        // Other preview input, including CDP keys, belongs to the page.
+        wc.setIgnoreMenuShortcuts(true);
         wc.on("did-start-navigation", navigationStarted);
         wc.on("did-navigate", syncNavigation);
         wc.on("did-navigate-in-page", syncInPageNavigation);
@@ -1763,6 +1761,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           );
           return { action: "deny" };
         });
+        wc.on("did-create-window", windowCreated);
         wc.on("before-input-event", beforeInput);
       });
       yield* Ref.update(attachedRef, (attached) =>
