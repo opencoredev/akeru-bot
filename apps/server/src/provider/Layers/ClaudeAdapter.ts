@@ -14,7 +14,7 @@ import {
   type PermissionResult,
   type PermissionUpdate,
   type SDKMessage,
-  type SDKControlGetContextUsageResponse,
+  type SDKRateLimitInfo,
   type SDKResultMessage,
   type SettingSource,
   type SDKUserMessage,
@@ -69,7 +69,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
-import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -86,7 +85,7 @@ import {
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { toClaudeMcpServers } from "../McpServerConfig.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
-import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
+import { claudeSignedOutMessage, makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
   getClaudeModelCapabilities,
   isClaudeUltracodeEffort,
@@ -151,7 +150,34 @@ interface ClaudeTurnState {
   readonly assistantTextBlocks: Map<number, AssistantTextBlockState>;
   readonly assistantTextBlockOrder: Array<AssistantTextBlockState>;
   readonly capturedProposedPlanKeys: Set<string>;
+  latestAssistantUsage: unknown | undefined;
+  compactedSinceLatestAssistantUsage: boolean;
   nextSyntheticAssistantBlockIndex: number;
+  authenticationFailureMessage: string | undefined;
+  rejectedRateLimitTypes: Set<string>;
+  latestAssistantRateLimited: boolean;
+}
+
+function createClaudeTurnState(
+  turnId: TurnId,
+  startedAt: string,
+  extra?: { readonly synthetic?: true },
+): ClaudeTurnState {
+  return {
+    turnId,
+    startedAt,
+    ...(extra?.synthetic ? { synthetic: true } : {}),
+    items: [],
+    assistantTextBlocks: new Map(),
+    assistantTextBlockOrder: [],
+    capturedProposedPlanKeys: new Set(),
+    latestAssistantUsage: undefined,
+    compactedSinceLatestAssistantUsage: false,
+    nextSyntheticAssistantBlockIndex: -1,
+    authenticationFailureMessage: undefined,
+    rejectedRateLimitTypes: new Set(),
+    latestAssistantRateLimited: false,
+  };
 }
 
 interface AssistantTextBlockState {
@@ -320,6 +346,7 @@ interface ClaudeSessionContext {
   lastKnownTotalProcessedTokens: number | undefined;
   lastAssistantUuid: string | undefined;
   lastThreadStartedId: string | undefined;
+  announcedUsageLimits: { turnId: string; keys: Set<string> } | undefined;
   stopped: boolean;
 }
 
@@ -327,7 +354,6 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly setModel: (model?: string) => Promise<void>;
   readonly setPermissionMode: (mode: PermissionMode) => Promise<void>;
   readonly setMaxThinkingTokens: (maxThinkingTokens: number | null) => Promise<void>;
-  readonly getContextUsage?: () => Promise<SDKControlGetContextUsageResponse>;
   readonly close: () => void;
 }
 
@@ -421,16 +447,37 @@ function resultErrorsText(result: SDKResultMessage): string {
     : "";
 }
 
-/**
- * First user-facing error from a non-success result. "[ede_diagnostic] ..."
- * entries are CLI-internal telemetry (the CLI hides them from its own UI too),
- * so they must never become the error banner.
- */
-function resultUserFacingError(result: SDKResultMessage): string | undefined {
-  if (result.subtype === "success" || !Array.isArray(result.errors)) {
-    return undefined;
+/** Failure text for structured terminal reasons, including success-tagged failures. */
+function terminalResultError(
+  reason: SDKResultMessage["terminal_reason"] | string | undefined,
+  failureHint?: string,
+): string | undefined {
+  switch (reason) {
+    case "api_error":
+      return failureHint ?? "Claude gave up after repeated API errors.";
+    case "malformed_tool_use_exhausted":
+      return "Claude gave up after repeated malformed tool calls.";
+    case "budget_exhausted":
+      return "Claude stopped: the turn's token budget was exhausted.";
+    case "structured_output_retry_exhausted":
+      return "Claude could not produce the requested structured output.";
+    case "tool_deferred_unavailable":
+      return "Claude could not resume a deferred tool call: the tool is no longer available.";
+    case "turn_setup_failed":
+      return "Claude could not start the turn.";
+    case "blocking_limit":
+      return "Claude stopped: a usage limit blocked the request.";
+    case "rapid_refill_breaker":
+      return "Claude stopped: the context refilled too quickly after compaction.";
+    case "prompt_too_long":
+      return "Claude stopped: the prompt exceeds the model's context window.";
+    case "image_error":
+      return "Claude stopped: an image in the conversation could not be processed.";
+    case "model_error":
+      return "Claude stopped: the model returned an error.";
+    default:
+      return undefined;
   }
-  return result.errors.find((error) => !error.startsWith("[ede_diagnostic]"));
 }
 
 function isInterruptedResult(result: SDKResultMessage): boolean {
@@ -456,6 +503,45 @@ function isInterruptedResult(result: SDKResultMessage): boolean {
       errors.includes("interrupted by user") ||
       errors.includes("aborted"))
   );
+}
+
+const CLAUDE_USAGE_LIMIT_WINDOWS = {
+  five_hour: "5-hour",
+  seven_day: "7-day",
+  seven_day_opus: "7-day Opus",
+  seven_day_sonnet: "7-day Sonnet",
+  overage: "overage",
+} satisfies Record<NonNullable<SDKRateLimitInfo["rateLimitType"]>, string>;
+
+/** Beyond this the reset time is not credible, so the row ships without a wait. */
+const CLAUDE_USAGE_LIMIT_MAX_WAIT_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * `resetsAt` is epoch seconds. The row states the remaining wait rather than a
+ * wall-clock time: this renders on the server, while the row is read on clients
+ * that may sit in another timezone and locale, and that carry their own
+ * timestamp preference. A wait reads the same everywhere.
+ */
+function describeClaudeUsageLimit(info: SDKRateLimitInfo, nowMs: number): string {
+  const label = info.rateLimitType ? CLAUDE_USAGE_LIMIT_WINDOWS[info.rateLimitType] : undefined;
+  const resetsAtMs = info.resetsAt === undefined ? undefined : info.resetsAt * 1000;
+  const waitMs =
+    resetsAtMs === undefined || !Number.isFinite(nowMs) ? undefined : resetsAtMs - nowMs;
+  const wait =
+    waitMs !== undefined && waitMs > 0 && waitMs <= CLAUDE_USAGE_LIMIT_MAX_WAIT_MS
+      ? formatClaudeUsageLimitWait(waitMs)
+      : undefined;
+  return `Claude usage limit reached. This turn is paused until the ${
+    label ? `${label} ` : ""
+  }limit resets${wait ? ` in ${wait}` : ""}.`;
+}
+
+function formatClaudeUsageLimitWait(waitMs: number): string {
+  const totalMinutes = Math.ceil(waitMs / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${totalMinutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
 function asRuntimeItemId(value: string): RuntimeItemId {
@@ -611,20 +697,6 @@ function normalizeClaudeActiveTokenUsage(
     outputTokens,
     ...(contextWindow !== undefined ? { contextWindow } : {}),
     ...(totalProcessedTokens !== undefined ? { totalProcessedTokens } : {}),
-  });
-}
-
-function normalizeClaudeContextUsageApiSnapshot(
-  value: SDKControlGetContextUsageResponse,
-  totalProcessedTokens?: number,
-): ThreadTokenUsageSnapshot | undefined {
-  const autoCompactThreshold = finitePositiveInteger(value.autoCompactThreshold);
-  return makeClaudeTokenUsageSnapshot({
-    activeTokens: value.totalTokens,
-    contextWindow: value.maxTokens,
-    ...(totalProcessedTokens !== undefined ? { totalProcessedTokens } : {}),
-    compactsAutomatically: value.isAutoCompactEnabled,
-    ...(autoCompactThreshold !== undefined ? { autoCompactThreshold } : {}),
   });
 }
 
@@ -1359,19 +1431,49 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
   return buildUserMessage({ sdkContent });
 });
 
-function turnStatusFromResult(result: SDKResultMessage): ProviderRuntimeTurnStatus {
-  if (result.subtype === "success") {
-    return "completed";
-  }
+/**
+ * The CLI reports repeated 529 overload failures as a success-subtype result
+ * with api_error_status 529 and an empty error list; the status code is the
+ * only structured signal.
+ */
+function isOverloadedResult(result: SDKResultMessage): boolean {
+  return result.subtype === "success" && result.api_error_status === 529;
+}
 
-  const errors = resultErrorsText(result);
-  if (isInterruptedResult(result)) {
-    return "interrupted";
-  }
-  if (errors.includes("cancel")) {
-    return "cancelled";
-  }
-  return "failed";
+/** Derives turn status and its error from the same provider result. */
+function resultOutcome(
+  result: SDKResultMessage,
+  failureHint?: string,
+): {
+  status: ProviderRuntimeTurnStatus;
+  errorMessage: string | undefined;
+} {
+  // A success result flagged is_error only fails when the turn already
+  // reported its cause (expired login, rejected usage window).
+  const successTaggedFailure = result.subtype === "success" && result.is_error === true;
+  const structuredError = isOverloadedResult(result)
+    ? "Claude API is overloaded (529). Try again shortly."
+    : (terminalResultError(result.terminal_reason, failureHint) ??
+      (successTaggedFailure ? failureHint : undefined));
+  // CLI diagnostic entries must not become the error banner. Success results
+  // carry no typed error list, but a success-tagged failure may still list one.
+  const listedErrors: ReadonlyArray<unknown> =
+    "errors" in result && Array.isArray(result.errors) ? result.errors : [];
+  const listedError =
+    result.subtype === "success" && !successTaggedFailure
+      ? undefined
+      : listedErrors.find(
+          (error): error is string =>
+            typeof error === "string" && !error.startsWith("[ede_diagnostic]"),
+        );
+  const errorMessage = listedError || structuredError;
+  if (structuredError !== undefined) return { status: "failed", errorMessage };
+  if (result.subtype === "success") return { status: "completed", errorMessage };
+  if (isInterruptedResult(result)) return { status: "interrupted", errorMessage };
+  return {
+    status: resultErrorsText(result).includes("cancel") ? "cancelled" : "failed",
+    errorMessage,
+  };
 }
 
 function streamKindFromDeltaType(deltaType: string): ClaudeTextStreamKind {
@@ -2137,29 +2239,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     });
   });
 
-  const queryCurrentContextUsage = Effect.fn("queryCurrentContextUsage")(function* (
-    context: ClaudeSessionContext,
-    totalProcessedTokens?: number,
-  ) {
-    if (!context.query.getContextUsage) {
-      return undefined;
-    }
-
-    const usage = yield* Effect.promise(async () => {
-      try {
-        return await context.query.getContextUsage?.();
-      } catch {
-        return undefined;
-      }
-    }).pipe(Effect.timeoutOption("1 second"));
-    if (Option.isNone(usage) || !usage.value) {
-      return undefined;
-    }
-
-    context.lastKnownContextWindow = usage.value.maxTokens;
-    return normalizeClaudeContextUsageApiSnapshot(usage.value, totalProcessedTokens);
-  });
-
   const emitProposedPlanCompleted = Effect.fn("emitProposedPlanCompleted")(function* (
     context: ClaudeSessionContext,
     input: {
@@ -2260,10 +2339,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       context.lastKnownTotalProcessedTokens = accumulatedTotalProcessedTokens;
     }
 
-    const contextUsageSnapshot = yield* queryCurrentContextUsage(
-      context,
-      accumulatedTotalProcessedTokens ?? context.lastKnownTotalProcessedTokens,
-    );
+    // Avoid getContextUsage because its token-count fallback can make extra model requests.
     const resultUsageRecord =
       result?.usage && typeof result.usage === "object" && !Array.isArray(result.usage)
         ? (result.usage as Record<string, unknown>)
@@ -2285,24 +2361,31 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           accumulatedTotalProcessedTokens ?? context.lastKnownTotalProcessedTokens,
         )
       : undefined;
+    const latestAssistantSnapshot = normalizeClaudeActiveTokenUsage(
+      context.turnState?.latestAssistantUsage,
+      maxTokens,
+      accumulatedTotalProcessedTokens ?? context.lastKnownTotalProcessedTokens,
+    );
     const lastGoodUsage = context.lastKnownTokenUsage;
     const usageSnapshot: ThreadTokenUsageSnapshot | undefined =
-      contextUsageSnapshot ??
-      (resultTotalOnly && lastGoodUsage
-        ? {
-            ...lastGoodUsage,
-            ...(typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0
-              ? { maxTokens }
-              : {}),
-            ...(typeof accumulatedTotalProcessedTokens === "number" &&
-            Number.isFinite(accumulatedTotalProcessedTokens) &&
-            accumulatedTotalProcessedTokens > lastGoodUsage.usedTokens
-              ? {
-                  totalProcessedTokens: accumulatedTotalProcessedTokens,
-                }
-              : {}),
-          }
-        : resultIterationSnapshot) ??
+      latestAssistantSnapshot ??
+      (context.turnState?.compactedSinceLatestAssistantUsage
+        ? undefined
+        : resultTotalOnly && lastGoodUsage
+          ? {
+              ...lastGoodUsage,
+              ...(typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0
+                ? { maxTokens }
+                : {}),
+              ...(typeof accumulatedTotalProcessedTokens === "number" &&
+              Number.isFinite(accumulatedTotalProcessedTokens) &&
+              accumulatedTotalProcessedTokens > lastGoodUsage.usedTokens
+                ? {
+                    totalProcessedTokens: accumulatedTotalProcessedTokens,
+                  }
+                : {}),
+            }
+          : resultIterationSnapshot) ??
       (lastGoodUsage
         ? {
             ...lastGoodUsage,
@@ -2946,16 +3029,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     if (!context.turnState) {
       const turnId = TurnId.make(yield* randomUUIDv4);
       const startedAt = yield* nowIso;
-      context.turnState = {
-        turnId,
-        startedAt,
-        synthetic: true,
-        items: [],
-        assistantTextBlocks: new Map(),
-        assistantTextBlockOrder: [],
-        capturedProposedPlanKeys: new Set(),
-        nextSyntheticAssistantBlockIndex: -1,
-      };
+      context.turnState = createClaudeTurnState(turnId, startedAt, { synthetic: true });
       context.session = {
         ...context.session,
         status: "running",
@@ -3013,7 +3087,28 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     }
 
     if (context.turnState) {
+      // Limited retries may only carry an assistant error, without a new window
+      // event. Later parent responses replace this evidence if the turn recovers.
+      context.turnState.latestAssistantRateLimited = message.error === "rate_limit";
+      // The CLI can report authentication failure before ending the turn as a
+      // generic API error, so retain that evidence for the result fallback.
+      if (message.error === "authentication_failed") {
+        context.turnState.authenticationFailureMessage = claudeSignedOutMessage({
+          configDir: claudeEnvironment.CLAUDE_CONFIG_DIR,
+          cwd: path.resolve(context.session.cwd ?? "."),
+        });
+      }
       context.turnState.items.push(message.message);
+      if (
+        normalizeClaudeActiveTokenUsage(
+          message.message.usage,
+          context.lastKnownContextWindow,
+          context.lastKnownTotalProcessedTokens,
+        )
+      ) {
+        context.turnState.latestAssistantUsage = message.message.usage;
+        context.turnState.compactedSinceLatestAssistantUsage = false;
+      }
       yield* backfillAssistantTextBlocksFromSnapshot(context, message);
     }
 
@@ -3029,8 +3124,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       return;
     }
 
-    const status = turnStatusFromResult(message);
-    const errorMessage = resultUserFacingError(message);
+    const turn = context.turnState;
+    const failureHint =
+      turn?.authenticationFailureMessage ??
+      (turn && (turn.rejectedRateLimitTypes.size > 0 || turn.latestAssistantRateLimited)
+        ? "Claude usage limit reached. Send the message again once the limit resets."
+        : undefined);
+    const { status, errorMessage } = resultOutcome(message, failureHint);
 
     if (status === "failed") {
       yield* emitRuntimeError(context, errorMessage ?? "Claude turn failed.");
@@ -3178,6 +3278,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         });
         return;
       case "compact_boundary":
+        if (context.turnState) {
+          context.turnState.latestAssistantUsage = undefined;
+          context.turnState.compactedSinceLatestAssistantUsage = true;
+        }
         yield* emitThreadTokenUsage(
           context,
           compactBoundaryTokenUsageSnapshot(
@@ -3575,6 +3679,45 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           rateLimits: message,
         },
       });
+      const rateLimitInfo = message.rate_limit_info;
+      if (!rateLimitInfo) return;
+      // A rejected window parks the turn inside the SDK: no further messages
+      // arrive and no result lands, so without a row the thread just spins.
+      // Warnings (allowed_warning) still have headroom and stay quiet, an
+      // account spending provisioned overage keeps running despite the reject,
+      // and between turns there is no turn to report as paused.
+      const overageAllowed =
+        rateLimitInfo.overageStatus === "allowed" ||
+        rateLimitInfo.overageStatus === "allowed_warning" ||
+        rateLimitInfo.isUsingOverage === true ||
+        rateLimitInfo.overageInUse === true;
+      const blocked = rateLimitInfo.status === "rejected" && !overageAllowed;
+      const limitType = rateLimitInfo.rateLimitType ?? "unknown";
+      const limitKey = `${limitType}:${rateLimitInfo.resetsAt ?? "unknown"}`;
+      if (context.turnState) {
+        // Current blocking evidence is independent of whether its warning has
+        // already been shown. A recovery can omit or advance the reset time;
+        // its window type remains stable without clearing another window.
+        if (blocked) context.turnState.rejectedRateLimitTypes.add(limitType);
+        else if (
+          rateLimitInfo.status === "allowed" ||
+          rateLimitInfo.status === "allowed_warning" ||
+          overageAllowed
+        ) {
+          context.turnState.rejectedRateLimitTypes.delete(limitType);
+        }
+      }
+      if (blocked && context.turnState !== undefined) {
+        const turnId = context.turnState.turnId;
+        if (context.announcedUsageLimits?.turnId !== turnId) {
+          context.announcedUsageLimits = { turnId, keys: new Set() };
+        }
+        if (!context.announcedUsageLimits.keys.has(limitKey)) {
+          context.announcedUsageLimits.keys.add(limitKey);
+          const notice = describeClaudeUsageLimit(rateLimitInfo, Date.parse(stamp.createdAt));
+          yield* emitRuntimeWarning(context, notice, rateLimitInfo);
+        }
+      }
       return;
     }
   });
@@ -4441,6 +4584,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         lastKnownTotalProcessedTokens: undefined,
         lastAssistantUuid: resumeState?.resumeSessionAt,
         lastThreadStartedId: undefined,
+        announcedUsageLimits: undefined,
         stopped: false,
       };
       yield* Ref.set(contextRef, context);
@@ -4578,15 +4722,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
     const turnId = steeringTurnState?.turnId ?? TurnId.make(yield* randomUUIDv4);
     if (steeringTurnState === null) {
-      const turnState: ClaudeTurnState = {
-        turnId,
-        startedAt: yield* nowIso,
-        items: [],
-        assistantTextBlocks: new Map(),
-        assistantTextBlockOrder: [],
-        capturedProposedPlanKeys: new Set(),
-        nextSyntheticAssistantBlockIndex: -1,
-      };
+      const turnState: ClaudeTurnState = createClaudeTurnState(turnId, yield* nowIso);
 
       const updatedAt = yield* nowIso;
       context.turnState = turnState;
