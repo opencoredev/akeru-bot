@@ -1003,7 +1003,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const sql = yield* SqlClient.SqlClient;
 
       yield* sql`DELETE FROM orchestration_events`;
-      yield* sql`
+      const rows = yield* sql<{ readonly sequence: number }>`
         INSERT INTO orchestration_events (
           event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
           command_id, causation_event_id, correlation_id, actor_kind, payload_json, metadata_json
@@ -1029,12 +1029,15 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             '2026-03-01T00:00:03.000Z', NULL, NULL, NULL, 'provider',
             json_object('output', '😀'), '{}'
           )
+        RETURNING sequence
       `;
 
       // Bytes, not code points: the 4-byte emoji row is {"output":"😀"}, 17 bytes.
+      // Shared-layer AUTOINCREMENT does not reset after DELETE, so bound the
+      // query to the inserted sequences rather than assuming 1..4.
       const stats = yield* snapshotQuery.getEventReplayStats({
-        fromSequenceExclusive: 1,
-        toSequenceInclusive: 4,
+        fromSequenceExclusive: rows[0]!.sequence,
+        toSequenceInclusive: rows[3]!.sequence,
       });
       assert.deepStrictEqual(stats, {
         eventCount: 3,
