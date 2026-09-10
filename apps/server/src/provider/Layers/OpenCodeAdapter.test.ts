@@ -72,6 +72,7 @@ const runtimeMock = {
     messages: [] as MessageEntry[],
     subscribedEvents: [] as unknown[],
     sessionGetIds: [] as string[],
+    sessionGetHold: null as ((sessionID: string) => Promise<void>) | null,
     missingSessionIds: new Set<string>(),
     transientErrorSessionIds: new Set<string>(),
     sessionDirectoryById: new Map<string, string>(),
@@ -97,6 +98,7 @@ const runtimeMock = {
     this.state.messages = [];
     this.state.subscribedEvents = [];
     this.state.sessionGetIds.length = 0;
+    this.state.sessionGetHold = null;
     this.state.missingSessionIds.clear();
     this.state.transientErrorSessionIds.clear();
     this.state.sessionDirectoryById.clear();
@@ -160,6 +162,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         },
         get: async ({ sessionID }: { sessionID: string }) => {
           runtimeMock.state.sessionGetIds.push(sessionID);
+          await runtimeMock.state.sessionGetHold?.(sessionID);
           // The real client is `throwOnError: true`: non-2xx rejects rather
           // than resolving, so missing → 404 throw, transient → 500 throw.
           if (runtimeMock.state.transientErrorSessionIds.has(sessionID)) {
@@ -1720,5 +1723,70 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 
       yield* adapter.stopSession(threadId);
     }),
+  );
+
+  it.effect("forwards a child permission reply that arrives while ancestry is still unknown", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-child-reply-during-retry");
+      const rootSessionId = "http://127.0.0.1:9999/session";
+      let releaseChildGet: (() => void) | undefined;
+      const childGetGate = new Promise<void>((resolve) => {
+        releaseChildGet = resolve;
+      });
+      runtimeMock.state.sessionParentById.set("ses_child", rootSessionId);
+      runtimeMock.state.sessionGetHold = async (sessionID) => {
+        if (sessionID === "ses_child") {
+          await childGetGate;
+        }
+      };
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "permission.asked",
+          properties: {
+            id: "per_child",
+            sessionID: "ses_child",
+            permission: "bash",
+            patterns: ["git status"],
+            metadata: {},
+            always: [],
+          },
+        },
+        {
+          type: "permission.replied",
+          properties: {
+            sessionID: "ses_child",
+            requestID: "per_child",
+            reply: "once",
+          },
+        },
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "request.opened" || event.type === "request.resolved"),
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "approval-required",
+      });
+      releaseChildGet?.();
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
+      NodeAssert.deepEqual(
+        events.map((event) => event.type),
+        ["request.opened", "request.resolved"],
+      );
+      NodeAssert.equal(events[0]?.requestId, "per_child");
+      NodeAssert.equal(events[1]?.requestId, "per_child");
+
+      yield* adapter.stopSession(threadId);
+    }).pipe(TestClock.withLive),
   );
 });

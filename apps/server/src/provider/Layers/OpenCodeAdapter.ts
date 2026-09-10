@@ -251,6 +251,8 @@ type OpenCodeRoutedRequestEvent = OpenCodeAskedRequestEvent | OpenCodeTerminalRe
 interface OpenCodeRequestRelationRetry {
   warned: boolean;
   fiber?: Fiber.Fiber<void, never>;
+  event: OpenCodeRoutedRequestEvent;
+  terminalEvent?: OpenCodeTerminalRequestEvent;
 }
 
 interface OpenCodeSessionContext {
@@ -1071,13 +1073,21 @@ export function makeOpenCodeAdapter(
     ) {
       const isAskedEvent = event.type === "permission.asked" || event.type === "question.asked";
       const requestId = isAskedEvent ? event.properties.id : event.properties.requestID;
-      if (context.requestRelationRetries.has(requestId)) {
+      const existing = context.requestRelationRetries.get(requestId);
+      if (existing) {
+        if (!isAskedEvent) {
+          existing.terminalEvent = event;
+        }
         return;
       }
       if (isAskedEvent && context.resolvedRequestIds.has(requestId)) {
         return;
       }
-      const retry: OpenCodeRequestRelationRetry = { warned: false };
+      const retry: OpenCodeRequestRelationRetry = {
+        warned: false,
+        event,
+        ...(!isAskedEvent ? { terminalEvent: event } : {}),
+      };
       context.requestRelationRetries.set(requestId, retry);
       const run = Effect.gen(function* () {
         let retryCount = 0;
@@ -1097,7 +1107,10 @@ export function makeOpenCodeAdapter(
           if (relation.type === "known") {
             context.requestRelationRetries.delete(requestId);
             if (relation.related) {
-              yield* emitOpenCodeRequestEvent(context, event);
+              yield* emitOpenCodeRequestEvent(context, retry.event);
+              if (retry.terminalEvent && retry.terminalEvent !== retry.event) {
+                yield* emitOpenCodeRequestEvent(context, retry.terminalEvent);
+              }
             }
             return;
           }
