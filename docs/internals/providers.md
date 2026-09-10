@@ -60,6 +60,22 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+### Grok health check
+
+`checkGrokProviderStatus` never opens an ACP session. It runs `grok --version`, then `grok models`
+for login state and model slugs, then a single ACP `initialize` and reads models from
+`_meta.modelState`. `authenticate` and `session/new` are skipped on purpose: `authenticate` can open
+a browser login and `session/new` boots every configured MCP server, both of which made background
+probes hang or surprise the user. A failed `initialize` degrades to `warning` with the CLI's model
+list instead of persisting `error` over a working install. `XAI_API_KEY` counts as authenticated.
+The built-in `grok-build` slug is the CLI's product name, not an ACP model id.
+`applyGrokAcpModelSelection` treats it as "keep the session's current model" and never sends it in
+`session/set_model`. Grok snapshots no longer advertise `requiresNewThreadForModelChange`, so an
+in-session model change reaches ACP `session/set_model`.
+
+Cursor and OpenCode still start sessions through `AcpSessionRuntime.start()`. The new
+`initialize()` method is additive and unused by those adapters.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
