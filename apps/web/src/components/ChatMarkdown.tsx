@@ -1201,6 +1201,15 @@ const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceImage(prop
       />
     );
   }
+  const knownSize = assetUrl.imageDimensions;
+  const sizeStyle = knownSize
+    ? {
+        width: knownSize.width,
+        height: "auto" as const,
+        aspectRatio: `${knownSize.width} / ${knownSize.height}`,
+        maxWidth: `min(100%, 30rem, ${(30 * knownSize.width) / knownSize.height}rem)`,
+      }
+    : undefined;
   return (
     <img
       src={assetUrl.url}
@@ -1208,6 +1217,7 @@ const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceImage(prop
       loading="lazy"
       draggable={false}
       className={CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME}
+      style={sizeStyle}
       onError={() => setFailedUrl(assetUrl.url)}
     />
   );
