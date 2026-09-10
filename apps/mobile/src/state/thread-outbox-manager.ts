@@ -95,6 +95,11 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
       const persisted = await options.storage.load();
       reportUnreadOutboxRecords(persisted);
       setMessages([...persisted.messages, ...currentMessages()]);
+      // A mixed load is not complete. Drop the cache so a later load, such as
+      // drain after reconnect, can hydrate a file that becomes readable.
+      if (persisted.unreadRecords.length > 0) {
+        loadPromise = null;
+      }
     }).catch((cause) => {
       loadPromise = null;
       warn(

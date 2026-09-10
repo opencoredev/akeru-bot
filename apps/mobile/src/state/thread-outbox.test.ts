@@ -156,6 +156,58 @@ describe("thread outbox", () => {
     ]);
   });
 
+  it("retries a mixed load so a later-readable record can join the drain queue", async () => {
+    const registry = AtomRegistry.make();
+    onTestFinished(() => registry.dispose());
+    const first = queuedMessage({
+      messageId: "message-1",
+      createdAt: "2026-06-08T10:00:01.000Z",
+    });
+    const second = queuedMessage({
+      messageId: "message-2",
+      createdAt: "2026-06-08T10:00:02.000Z",
+    });
+    const unread = new ThreadOutboxStorageError({
+      operation: "read-message",
+      environmentId: null,
+      threadId: null,
+      messageId: null,
+      fileName: "message-2.json",
+      cause: new Error("{"),
+    });
+    let loadCalls = 0;
+    const manager = createThreadOutboxManager({
+      registry,
+      warn: () => {},
+      storage: {
+        load: async () => {
+          loadCalls += 1;
+          if (loadCalls === 1) {
+            return { messages: [first], unreadRecords: [unread] };
+          }
+          return { messages: [first, second], unreadRecords: [] };
+        },
+        write: async () => undefined,
+        remove: async () => undefined,
+      },
+    });
+
+    await manager.load();
+    expect(
+      flattenQueuedThreadMessages(registry.get(manager.queuedMessagesByThreadKeyAtom)),
+    ).toEqual([first]);
+    expect(loadCalls).toBe(1);
+
+    await manager.load();
+    expect(loadCalls).toBe(2);
+    expect(
+      flattenQueuedThreadMessages(registry.get(manager.queuedMessagesByThreadKeyAtom)),
+    ).toEqual([first, second]);
+
+    await manager.load();
+    expect(loadCalls).toBe(2);
+  });
+
   it("makes a readable pending task visible to drain after a mixed valid/corrupt load", async () => {
     onTestFinished(() => outboxFiles.clear());
     const registry = AtomRegistry.make();
