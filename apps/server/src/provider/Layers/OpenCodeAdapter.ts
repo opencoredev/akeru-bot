@@ -263,6 +263,7 @@ interface OpenCodeSessionContext {
   readonly openCodeSessionId: string;
   readonly relatedSessionIds: Set<string>;
   readonly resolvedRequestIds: Set<string>;
+  readonly autoRepliedRequestIds: Set<string>;
   readonly requestRelationRetries: Map<string, OpenCodeRequestRelationRetry>;
   readonly pendingPermissions: Map<string, PermissionRequest>;
   readonly pendingQuestions: Map<string, QuestionRequest>;
@@ -972,6 +973,47 @@ export function makeOpenCodeAdapter(
           if (context.pendingPermissions.has(event.properties.id)) {
             return;
           }
+          if (context.session.runtimeMode === "full-access") {
+            // Reply "once", not "always": OpenCode stores "always" grants per
+            // directory, so an always from a full-access thread would widen a
+            // supervised thread on the same directory.
+            context.resolvedRequestIds.add(event.properties.id);
+            context.autoRepliedRequestIds.add(event.properties.id);
+            yield* runOpenCodeSdk("permission.reply", () =>
+              context.client.permission.reply({
+                requestID: event.properties.id,
+                reply: "once",
+              }),
+            ).pipe(
+              Effect.timeout("10 seconds"),
+              Effect.matchEffect({
+                onSuccess: () => Effect.void,
+                onFailure: () =>
+                  Effect.gen(function* () {
+                    context.autoRepliedRequestIds.delete(event.properties.id);
+                    context.pendingPermissions.set(event.properties.id, event.properties);
+                    yield* emit({
+                      ...(yield* buildEventBase({
+                        threadId: context.session.threadId,
+                        turnId,
+                        requestId: event.properties.id,
+                        raw: event,
+                      })),
+                      type: "request.opened",
+                      payload: {
+                        requestType: mapPermissionToRequestType(event.properties.permission),
+                        detail:
+                          event.properties.patterns.length > 0
+                            ? event.properties.patterns.join("\n")
+                            : event.properties.permission,
+                      },
+                    });
+                  }),
+              }),
+              Effect.forkIn(context.sessionScope),
+            );
+            return;
+          }
           context.pendingPermissions.set(event.properties.id, event.properties);
           yield* emit({
             ...(yield* buildEventBase({
@@ -994,6 +1036,9 @@ export function makeOpenCodeAdapter(
         case "permission.replied": {
           context.pendingPermissions.delete(event.properties.requestID);
           context.resolvedRequestIds.add(event.properties.requestID);
+          if (context.autoRepliedRequestIds.delete(event.properties.requestID)) {
+            return;
+          }
           yield* emit({
             ...(yield* buildEventBase({
               threadId: context.session.threadId,
@@ -1727,6 +1772,7 @@ export function makeOpenCodeAdapter(
           openCodeSessionId: started.openCodeSession.id,
           relatedSessionIds: new Set([started.openCodeSession.id]),
           resolvedRequestIds: new Set(),
+          autoRepliedRequestIds: new Set(),
           requestRelationRetries: new Map(),
           pendingPermissions: new Map(),
           pendingQuestions: new Map(),

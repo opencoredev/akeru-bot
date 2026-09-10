@@ -63,8 +63,9 @@ a Mastra session is absent.
 The legacy OpenCode adapter owns child sessions created for subagents. Permission and question events
 from a descendant session are routed onto the parent thread after ancestry is verified. Stop and
 interrupt walk the child tree and abort every descendant, not only the parent. Unrelated OpenCode
-sessions are left alone. OpenCode Go stays on the Mastra controller and does not use this adapter
-path.
+sessions are left alone. Full-access threads auto-reply permission asks once, without a dialog, and
+fall back to the dialog if that reply fails. OpenCode Go stays on the Mastra controller and does not
+use this adapter path.
 
 ## Raw protocol observation
 
