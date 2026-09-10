@@ -27,6 +27,14 @@ export interface ThreadDeletionReactorShape {
    * Intended for test use to replace timing-sensitive sleeps.
    */
   readonly drain: Effect.Effect<void>;
+
+  /**
+   * Resolves once every thread.deleted at or before the supplied event
+   * sequence has been handed to the worker and the worker is empty and idle.
+   * A successful thread.create sequence is the fence callers use before the
+   * new incarnation can own runtime resources.
+   */
+  readonly drainThrough: (sequence: number) => Effect.Effect<void>;
 }
 
 /**
