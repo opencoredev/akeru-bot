@@ -1502,32 +1502,32 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       ...sshTargetLogFields(target),
       issuePairingToken: requestOptions?.issuePairingToken === true,
     });
-    const baseResolved = yield* resolveSshTarget(target.alias || target.hostname);
-    const resolvedTarget: DesktopSshEnvironmentTarget = {
-      ...baseResolved,
-      ...(target.username !== null ? { username: target.username } : {}),
-      ...(target.port !== null ? { port: target.port } : {}),
-    };
-    const key = targetConnectionKey(resolvedTarget);
-    yield* Effect.logDebug("ssh.environment.target.resolved", {
-      ...sshTargetLogFields(resolvedTarget),
-      key,
-    });
-    const packageSpec = options.resolveCliPackageSpec?.();
-    const runner =
-      options.resolveCliRunner === undefined
-        ? packageSpec === undefined
-          ? undefined
-          : { packageSpec }
-        : yield* options.resolveCliRunner;
-    yield* Effect.logDebug("ssh.environment.runner.resolved", {
-      ...sshTargetLogFields(resolvedTarget),
-      ...sshRunnerLogFields(runner),
-      key,
-    });
     return yield* withTargetLock(
-      key,
+      targetConnectionKey(target),
       Effect.gen(function* () {
+        const baseResolved = yield* resolveSshTarget(target.alias || target.hostname);
+        const resolvedTarget: DesktopSshEnvironmentTarget = {
+          ...baseResolved,
+          ...(target.username !== null ? { username: target.username } : {}),
+          ...(target.port !== null ? { port: target.port } : {}),
+        };
+        const key = targetConnectionKey(resolvedTarget);
+        yield* Effect.logDebug("ssh.environment.target.resolved", {
+          ...sshTargetLogFields(resolvedTarget),
+          key,
+        });
+        const packageSpec = options.resolveCliPackageSpec?.();
+        const runner =
+          options.resolveCliRunner === undefined
+            ? packageSpec === undefined
+              ? undefined
+              : { packageSpec }
+            : yield* options.resolveCliRunner;
+        yield* Effect.logDebug("ssh.environment.runner.resolved", {
+          ...sshTargetLogFields(resolvedTarget),
+          ...sshRunnerLogFields(runner),
+          key,
+        });
         const entry = yield* ensureTunnelEntry(key, resolvedTarget, runner);
 
         const pairingResult = requestOptions?.issuePairingToken
@@ -1564,16 +1564,16 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     target: DesktopSshEnvironmentTarget,
   ): Effect.fn.Return<void, SshEnvironmentEffectError, SshEnvironmentEffectContext> {
     yield* Effect.logInfo("ssh.environment.disconnect.start", sshTargetLogFields(target));
-    const baseResolved = yield* resolveSshTarget(target.alias || target.hostname);
-    const resolvedTarget: DesktopSshEnvironmentTarget = {
-      ...baseResolved,
-      ...(target.username !== null ? { username: target.username } : {}),
-      ...(target.port !== null ? { port: target.port } : {}),
-    };
-    const key = targetConnectionKey(resolvedTarget);
     yield* withTargetLock(
-      key,
+      targetConnectionKey(target),
       Effect.gen(function* () {
+        const baseResolved = yield* resolveSshTarget(target.alias || target.hostname);
+        const resolvedTarget: DesktopSshEnvironmentTarget = {
+          ...baseResolved,
+          ...(target.username !== null ? { username: target.username } : {}),
+          ...(target.port !== null ? { port: target.port } : {}),
+        };
+        const key = targetConnectionKey(resolvedTarget);
         const entry = tunnels.get(key) ?? null;
         yield* Effect.logDebug("ssh.environment.disconnect.targetResolved", {
           ...sshTargetLogFields(resolvedTarget),

@@ -494,11 +494,9 @@ describe("ssh tunnel scripts", () => {
       Effect.gen(function* () {
         const shutdownStarted = yield* Deferred.make<void>();
         const finishShutdown = yield* Deferred.make<void>();
-        const reconnectsStarted = yield* Deferred.make<void>();
         const pauseShutdown = Deferred.succeed(shutdownStarted, undefined).pipe(
           Effect.andThen(Deferred.await(finishShutdown)),
         );
-        let resolutions = 0;
         let launches = 0;
         let tunnels = 0;
         let stops = 0;
@@ -509,9 +507,6 @@ describe("ssh tunnel scripts", () => {
             const args = commandArgs(command);
             const isTarget = args.includes(target.alias);
             if (args.includes("-G")) {
-              if (isTarget && ++resolutions === 4) {
-                yield* Deferred.succeed(reconnectsStarted, undefined);
-              }
               return makeSuccessfulProcess("");
             }
             if (args.includes("-N")) {
@@ -563,7 +558,6 @@ describe("ssh tunnel scripts", () => {
           yield* Deferred.await(shutdownStarted);
           const firstReconnect = yield* Effect.forkChild(manager.ensureEnvironment(target));
           const secondReconnect = yield* Effect.forkChild(manager.ensureEnvironment(target));
-          yield* Deferred.await(reconnectsStarted);
 
           yield* manager.ensureEnvironment({
             alias: "other",
