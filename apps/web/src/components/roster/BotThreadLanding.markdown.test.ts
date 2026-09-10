@@ -3,6 +3,20 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
+function messageBlocks(source: string, testId: string): string[] {
+  const marker = `data-testid="${testId}"`;
+  const blocks: string[] = [];
+  let from = 0;
+  while (true) {
+    const start = source.indexOf(marker, from);
+    if (start < 0) break;
+    const nextTestId = source.indexOf('data-testid="', start + marker.length);
+    blocks.push(source.slice(start, nextTestId < 0 ? source.length : nextTestId));
+    from = start + marker.length;
+  }
+  return blocks;
+}
+
 describe("BotThreadLanding message formatting", () => {
   it("renders assistant messages with the shared rich markdown component", () => {
     const entries = [
@@ -64,13 +78,29 @@ describe("BotThreadLanding message formatting", () => {
   });
 
   it("keeps message actions visible for coarse pointers without dropping reply controls", () => {
-    for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
+    const cases = [
+      ["BotThreadLanding.tsx", "bot-provider-message"],
+      ["BotThreadLanding.tsx", "bot-user-message"],
+      ["GroupThreadLanding.tsx", "group-provider-message"],
+      ["GroupThreadLanding.tsx", "group-user-message"],
+    ] as const;
+
+    for (const [file, testId] of cases) {
       const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
-      expect(source).toContain("pointer-coarse:opacity-100");
-      expect(source).toContain("<MessageControls");
-      expect(source).toContain("onReply=");
-      expect(source).toContain("onReactionChange=");
-      expect(source).toContain("readAloud");
+      const blocks = messageBlocks(source, testId);
+      expect(blocks.length).toBeGreaterThan(0);
+
+      for (const block of blocks) {
+        expect(block).toContain("<MessageControls");
+        expect(block).toContain("pointer-coarse:opacity-100");
+        expect(block).toContain("onReply=");
+        if (testId.endsWith("-provider-message")) {
+          expect(block).toContain("readAloud");
+        }
+        if (!block.includes("Unavailable bot")) {
+          expect(block).toContain("onReactionChange=");
+        }
+      }
     }
   });
 
