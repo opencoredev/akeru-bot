@@ -1,5 +1,6 @@
 import {
   DndContext,
+  KeyboardSensor,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -7,7 +8,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { SortableContext, useSortable } from "@dnd-kit/sortable";
+import { SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -809,6 +810,9 @@ export default function BotRosterSidebar() {
       distance: 6,
       onAttach: attachDragSensor,
       onFinish: finishRosterDrag,
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
   const restrictBelowPins = useCallback(

@@ -53,6 +53,7 @@ export class RosterPointerSensor {
   private clearClickSuppression = () => {
     this.document.removeEventListener("click", this.suppressClick, { capture: true });
     this.document.removeEventListener("pointerdown", this.clearClickSuppression, { capture: true });
+    this.document.removeEventListener("keydown", this.clearClickSuppression, { capture: true });
   };
   private suppressClick = (event: Event) => {
     event.stopPropagation();
@@ -127,6 +128,9 @@ export class RosterPointerSensor {
     // happened outside the document. Ordinary clicks never install this guard.
     if (!aborted) {
       this.document.addEventListener("pointerdown", this.clearClickSuppression, { capture: true });
+      // Blur/hide/resize can cancel without a release click. A following
+      // keyboard activation must not inherit that capture-phase suppressor.
+      this.document.addEventListener("keydown", this.clearClickSuppression, { capture: true });
     }
     try {
       // Release the roster preview before dnd-kit clears its transforms.

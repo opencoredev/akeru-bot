@@ -127,6 +127,17 @@ describe("roster pointer lifecycle", () => {
     expect(nextPropagation).not.toHaveBeenCalled();
   });
 
+  it("does not suppress a keyboard click after a cancelled drag", () => {
+    const drag = gesture();
+    document.dispatchEvent(pointer("pointermove", { clientY: 20 }));
+    drag.sensor.cancel();
+    document.dispatchEvent(Object.assign(new Event("keydown"), { code: "Enter" }));
+    const click = new Event("click");
+    const propagation = vi.spyOn(click, "stopPropagation");
+    document.dispatchEvent(click);
+    expect(propagation).not.toHaveBeenCalled();
+  });
+
   it("allows the next click when the cancelled release happened outside the document", () => {
     const drag = gesture();
     document.dispatchEvent(pointer("pointermove", { clientY: 20 }));
