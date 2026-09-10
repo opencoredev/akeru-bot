@@ -1,6 +1,5 @@
 import {
   DndContext,
-  KeyboardSensor,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -8,13 +7,15 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   BotIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -90,6 +91,8 @@ import {
   resolveRosterDropVerb,
   resolveRosterIndicator,
   rosterItemKey,
+  rosterItemsEqual,
+  rosterItemsForZone,
   rosterListItemId,
   rosterMarkerId,
   rosterSectionItems,
@@ -309,6 +312,9 @@ const BotRosterRow = memo(function BotRosterRow({
   sections,
   onPin,
   onMove,
+  canMoveUp,
+  canMoveDown,
+  onNudge,
   sortable,
   dropVerb,
 }: {
@@ -320,6 +326,9 @@ const BotRosterRow = memo(function BotRosterRow({
   sections: readonly RosterSection[];
   onPin: (pinned: boolean) => void;
   onMove: (sectionId: string | null) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
   dropVerb: RosterDropVerb | null;
 }) {
@@ -398,6 +407,14 @@ const BotRosterRow = memo(function BotRosterRow({
               <PinIcon />
               {pinned ? "Unpin" : "Pin"}
             </MenuItem>
+            <MenuItem disabled={!canMoveUp} onClick={() => onNudge(-1)}>
+              <ArrowUpIcon />
+              Move up
+            </MenuItem>
+            <MenuItem disabled={!canMoveDown} onClick={() => onNudge(1)}>
+              <ArrowDownIcon />
+              Move down
+            </MenuItem>
             <MenuSub>
               <MenuSubTrigger>
                 <FolderInputIcon />
@@ -467,6 +484,9 @@ function GroupRosterRow({
   onPin,
   sections,
   onMove,
+  canMoveUp,
+  canMoveDown,
+  onNudge,
   sortable,
   dropVerb,
 }: {
@@ -478,6 +498,9 @@ function GroupRosterRow({
   onPin: (pinned: boolean) => void;
   sections: readonly RosterSection[];
   onMove: (sectionId: string | null) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
   dropVerb: RosterDropVerb | null;
 }) {
@@ -536,6 +559,14 @@ function GroupRosterRow({
           <MenuItem onClick={() => onPin(!pinned)}>
             <PinIcon />
             {pinned ? "Unpin" : "Pin"}
+          </MenuItem>
+          <MenuItem disabled={!canMoveUp} onClick={() => onNudge(-1)}>
+            <ArrowUpIcon />
+            Move up
+          </MenuItem>
+          <MenuItem disabled={!canMoveDown} onClick={() => onNudge(1)}>
+            <ArrowDownIcon />
+            Move down
           </MenuItem>
           <MenuSub>
             <MenuSubTrigger>
@@ -810,9 +841,6 @@ export default function BotRosterSidebar() {
       distance: 6,
       onAttach: attachDragSensor,
       onFinish: finishRosterDrag,
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
   const restrictBelowPins = useCallback(
@@ -1195,6 +1223,19 @@ export default function BotRosterSidebar() {
                       if (item.kind === "entry") {
                         const dropVerb = dropVerbFor(rosterListItemId(item));
                         const pinned = pinnedKeys.has(rosterItemKey(item.item));
+                        const zoneOrder = rosterItemsForZone(item.zone, {
+                          pinnedItems: visiblePinnedItems,
+                          sections: visibleSectionLayouts,
+                          unassignedItems: visibleUnassignedItems,
+                        });
+                        const zoneIndex = zoneOrder.findIndex((candidate) =>
+                          rosterItemsEqual(candidate, item.item),
+                        );
+                        const canMoveUp = !searching && zoneIndex > 0;
+                        const canMoveDown =
+                          !searching && zoneIndex >= 0 && zoneIndex < zoneOrder.length - 1;
+                        const onNudge = (delta: -1 | 1) =>
+                          useRosterStore.getState().nudgeRosterItem(item.item, delta);
                         return (
                           <SortableRosterRow
                             key={rosterListItemId(item)}
@@ -1226,6 +1267,9 @@ export default function BotRosterSidebar() {
                                             .getState()
                                             .moveBotToSection(bot.id, sectionId)
                                         }
+                                        canMoveUp={canMoveUp}
+                                        canMoveDown={canMoveDown}
+                                        onNudge={onNudge}
                                         sortable={bag}
                                         dropVerb={dropVerb}
                                       />
@@ -1257,6 +1301,9 @@ export default function BotRosterSidebar() {
                                             .getState()
                                             .moveGroupToSection(group.id, sectionId)
                                         }
+                                        canMoveUp={canMoveUp}
+                                        canMoveDown={canMoveDown}
+                                        onNudge={onNudge}
                                         sortable={bag}
                                         dropVerb={dropVerb}
                                       />
@@ -1352,6 +1399,9 @@ export default function BotRosterSidebar() {
                             const collapsed = layout?.collapsed ?? section.collapsed;
                             const count = layout?.items.length ?? 0;
                             const zone = { sectionId: section.id };
+                            const sectionIndex = sections.findIndex(
+                              (candidate) => candidate.id === section.id,
+                            );
                             return (
                               <SortableRosterMarker
                                 key={rosterMarkerId(item.marker)}
@@ -1401,6 +1451,28 @@ export default function BotRosterSidebar() {
                                       }
                                     />
                                     <MenuPopup align="end">
+                                      <MenuItem
+                                        disabled={searching || sectionIndex <= 0}
+                                        onClick={() =>
+                                          useRosterStore
+                                            .getState()
+                                            .reorderSections(sectionIndex, sectionIndex - 1)
+                                        }
+                                      >
+                                        <ArrowUpIcon />
+                                        Move up
+                                      </MenuItem>
+                                      <MenuItem
+                                        disabled={searching || sectionIndex >= sections.length - 1}
+                                        onClick={() =>
+                                          useRosterStore
+                                            .getState()
+                                            .reorderSections(sectionIndex, sectionIndex + 1)
+                                        }
+                                      >
+                                        <ArrowDownIcon />
+                                        Move down
+                                      </MenuItem>
                                       <MenuItem
                                         variant="destructive"
                                         onClick={() =>

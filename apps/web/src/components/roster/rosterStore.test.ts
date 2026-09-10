@@ -318,4 +318,62 @@ describe("roster sections and pins", () => {
     ]);
     expect(useRosterStore.getState().groups[0]?.members).toEqual([]);
   });
+
+  it("nudges unassigned bots with Move up without changing group membership", () => {
+    useRosterStore.setState({
+      bots: [bot("akeru"), bot("mori"), bot("scout")],
+      groups: [group("crew")],
+      unassignedItems: [
+        { kind: "bot", id: "akeru" },
+        { kind: "bot", id: "mori" },
+        { kind: "bot", id: "scout" },
+      ],
+    });
+
+    useRosterStore.getState().nudgeRosterItem({ kind: "bot", id: "mori" }, -1);
+
+    expect(useRosterStore.getState().unassignedItems.map((item) => item.id)).toEqual([
+      "mori",
+      "akeru",
+      "scout",
+    ]);
+    expect(useRosterStore.getState().groups[0]?.members).toEqual([]);
+  });
+
+  it("nudges pinned and section items without crossing zones", () => {
+    useRosterStore.setState({
+      bots: [bot("akeru"), bot("mori"), bot("scout")],
+      groups: [group("crew")],
+      pinnedItems: [
+        { kind: "bot", id: "akeru" },
+        { kind: "group", id: "crew" },
+      ],
+      sections: [
+        {
+          id: "news",
+          name: "News",
+          botIds: ["mori", "scout"],
+          groupIds: [],
+          items: [
+            { kind: "bot", id: "mori" },
+            { kind: "bot", id: "scout" },
+          ],
+          collapsed: false,
+        },
+      ],
+    });
+
+    useRosterStore.getState().nudgeRosterItem({ kind: "group", id: "crew" }, -1);
+    expect(useRosterStore.getState().pinnedItems.map((item) => item.id)).toEqual(["crew", "akeru"]);
+
+    useRosterStore.getState().nudgeRosterItem({ kind: "bot", id: "scout" }, -1);
+    expect(useRosterStore.getState().sections[0]?.items?.map((item) => item.id)).toEqual([
+      "scout",
+      "mori",
+    ]);
+    expect(useRosterStore.getState().pinnedItems.map((item) => item.id)).toEqual(["crew", "akeru"]);
+
+    useRosterStore.getState().nudgeRosterItem({ kind: "group", id: "crew" }, -1);
+    expect(useRosterStore.getState().pinnedItems.map((item) => item.id)).toEqual(["crew", "akeru"]);
+  });
 });

@@ -131,8 +131,18 @@ describe("roster pointer lifecycle", () => {
     const drag = gesture();
     document.dispatchEvent(pointer("pointermove", { clientY: 20 }));
     drag.sensor.cancel();
+    const keyboardClick = Object.assign(new Event("click"), { detail: 0 });
+    const keyboardPropagation = vi.spyOn(keyboardClick, "stopPropagation");
+    document.dispatchEvent(keyboardClick);
+    expect(keyboardPropagation).not.toHaveBeenCalled();
+  });
+
+  it("clears click suppression on the next keydown after a cancelled drag", () => {
+    const drag = gesture();
+    document.dispatchEvent(pointer("pointermove", { clientY: 20 }));
+    drag.sensor.cancel();
     document.dispatchEvent(Object.assign(new Event("keydown"), { code: "Enter" }));
-    const click = new Event("click");
+    const click = Object.assign(new Event("click"), { detail: 1 });
     const propagation = vi.spyOn(click, "stopPropagation");
     document.dispatchEvent(click);
     expect(propagation).not.toHaveBeenCalled();

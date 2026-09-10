@@ -325,6 +325,22 @@ export function rosterItemsEqual(left: RosterItemRef, right: RosterItemRef): boo
   return left.kind === right.kind && left.id === right.id;
 }
 
+/** Shift an item by one slot in a visible zone. Null when it cannot move. */
+export function moveRosterItemInOrder(
+  order: readonly RosterItemRef[],
+  item: RosterItemRef,
+  delta: -1 | 1,
+): RosterItemRef[] | null {
+  const index = order.findIndex((candidate) => rosterItemsEqual(candidate, item));
+  const destination = index + delta;
+  if (index < 0 || destination < 0 || destination >= order.length) return null;
+  const next = [...order];
+  const [moved] = next.splice(index, 1);
+  if (!moved) return null;
+  next.splice(destination, 0, moved);
+  return next;
+}
+
 export function rosterBotDragId(botId: string): string {
   return `${BOT_DRAG_PREFIX}${botId}`;
 }
@@ -377,6 +393,19 @@ export function splitRosterSectionItems(items: readonly RosterItemRef[]): {
 }
 
 export type RosterZone = "pinned" | "unassigned" | { readonly sectionId: string };
+
+export function rosterItemsForZone(
+  zone: RosterZone,
+  layout: {
+    readonly pinnedItems: readonly RosterItemRef[];
+    readonly sections: readonly { readonly id: string; readonly items: readonly RosterItemRef[] }[];
+    readonly unassignedItems: readonly RosterItemRef[];
+  },
+): readonly RosterItemRef[] {
+  if (zone === "pinned") return layout.pinnedItems;
+  if (zone === "unassigned") return layout.unassignedItems;
+  return layout.sections.find((section) => section.id === zone.sectionId)?.items ?? [];
+}
 
 export function rosterZoneId(zone: RosterZone): string {
   return zone === "pinned" || zone === "unassigned" ? zone : zone.sectionId;

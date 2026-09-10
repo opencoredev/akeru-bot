@@ -56,6 +56,12 @@ export class RosterPointerSensor {
     this.document.removeEventListener("keydown", this.clearClickSuppression, { capture: true });
   };
   private suppressClick = (event: Event) => {
+    // Keyboard-generated clicks report detail 0. Do not consume those; they
+    // are a later activation, not the pointer release from this gesture.
+    if ("detail" in event && (event as MouseEvent).detail === 0) {
+      this.clearClickSuppression();
+      return;
+    }
     event.stopPropagation();
     this.clearClickSuppression();
   };

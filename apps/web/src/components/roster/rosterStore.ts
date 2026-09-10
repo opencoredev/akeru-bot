@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { randomUUID } from "../../lib/utils";
 import {
+  moveRosterItemInOrder,
   rosterItemKey,
   rosterItemsEqual,
   rosterSectionItems,
@@ -213,6 +214,7 @@ interface RosterStore {
   moveBotToSection: (botId: string, sectionId: string | null, index?: number) => void;
   moveItemToSection: (item: RosterItemRef, sectionId: string | null, index?: number) => void;
   reorderSections: (sourceIndex: number, destinationIndex: number) => void;
+  nudgeRosterItem: (item: RosterItemRef, delta: -1 | 1) => void;
   setItemPinned: (item: RosterItemRef, pinned: boolean) => void;
   applyRosterDrop: (plan: RosterDropPlan) => void;
   recordLastMessage: (botId: string, message: RosterLastMessage) => void;
@@ -507,6 +509,46 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     if (!moved) return;
     sections.splice(destinationIndex, 0, moved);
     set({ sections });
+    saveState(get());
+  },
+
+  nudgeRosterItem: (item, delta) => {
+    const state = get();
+    const pinned = moveRosterItemInOrder(state.pinnedItems, item, delta);
+    if (pinned) {
+      set({ pinnedItems: pinned });
+      saveState(get());
+      return;
+    }
+    for (const section of state.sections) {
+      const moved = moveRosterItemInOrder(rosterSectionItems(section), item, delta);
+      if (!moved) continue;
+      set({
+        sections: state.sections.map((candidate) =>
+          candidate.id === section.id ? withSectionItems(candidate, moved) : candidate,
+        ),
+      });
+      saveState(get());
+      return;
+    }
+    const assigned = new Set(
+      state.sections.flatMap((section) => rosterSectionItems(section).map(rosterItemKey)),
+    );
+    const pinnedKeys = new Set(state.pinnedItems.map(rosterItemKey));
+    const remaining = (candidate: RosterItemRef) =>
+      !assigned.has(rosterItemKey(candidate)) && !pinnedKeys.has(rosterItemKey(candidate));
+    const unassigned =
+      state.unassignedItems.length > 0
+        ? state.unassignedItems.filter(remaining)
+        : [
+            ...state.groups.map((group) => ({ kind: "group" as const, id: group.id })),
+            ...state.bots
+              .filter((bot) => bot.archivedAt === null)
+              .map((bot) => ({ kind: "bot" as const, id: bot.id })),
+          ].filter(remaining);
+    const movedUnassigned = moveRosterItemInOrder(unassigned, item, delta);
+    if (!movedUnassigned) return;
+    set({ unassignedItems: movedUnassigned });
     saveState(get());
   },
 

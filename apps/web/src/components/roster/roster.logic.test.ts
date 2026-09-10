@@ -26,6 +26,8 @@ import {
   parseRosterGroupDropId,
   planRosterDrop,
   planRosterSectionDrop,
+  moveRosterItemInOrder,
+  rosterItemsForZone,
   buildRosterListItems,
   resolveRosterDropTarget,
   resolveRosterDropVerb,
@@ -645,5 +647,28 @@ describe("roster drag drop planning", () => {
       }).kind,
     ).toBe("none");
     expect(resolveRosterDropVerb("pinned", "pinned")).toBeNull();
+  });
+
+  it("nudges an item one slot without wrapping past the ends", () => {
+    const order = [akeru, mori, crew];
+    expect(moveRosterItemInOrder(order, mori, -1)?.map((item) => item.id)).toEqual([
+      "mori",
+      "akeru",
+      "crew",
+    ]);
+    expect(moveRosterItemInOrder(order, akeru, -1)).toBeNull();
+    expect(moveRosterItemInOrder(order, crew, 1)).toBeNull();
+  });
+
+  it("resolves the visible order for each roster zone", () => {
+    const layout = {
+      pinnedItems: [akeru],
+      sections: [{ id: "news", items: [mori] }],
+      unassignedItems: [crew],
+    };
+    expect(rosterItemsForZone("pinned", layout)).toEqual([akeru]);
+    expect(rosterItemsForZone("unassigned", layout)).toEqual([crew]);
+    expect(rosterItemsForZone({ sectionId: "news" }, layout)).toEqual([mori]);
+    expect(rosterItemsForZone({ sectionId: "missing" }, layout)).toEqual([]);
   });
 });

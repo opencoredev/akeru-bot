@@ -234,7 +234,9 @@ describe("sidebar footer", () => {
 
     expect(source).not.toContain("botEnvironment.groups.assignMember");
     expect(source).toContain("roster-pinned-header");
-    expect(source).toContain("KeyboardSensor");
+    expect(source).not.toContain("KeyboardSensor");
+    expect(source).toContain("Move up");
+    expect(source).toContain("Move down");
     expect(source).toContain("onContextMenu={(event) => {");
   });
 
