@@ -24,6 +24,7 @@ import * as Option from "effect/Option";
 import * as P from "effect/Predicate";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -436,6 +437,11 @@ function ensureRuntimeError(
     : new OpenCodeRuntimeError({ operation, detail, cause });
 }
 
+// OpenCode CLI commands share one SQLite database per machine. The lock is
+// process-wide so concurrent provider checks, snapshots, and separately
+// constructed OpenCodeRuntime instances cannot overlap inventory sequences.
+const openCodeInventoryCliLock = Semaphore.makeUnsafe(1);
+
 const makeOpenCodeRuntime = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const netService = yield* NetService.NetService;
@@ -448,11 +454,23 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       const spawnCommand = yield* resolveCommand(input.binaryPath, input.args, input.environment);
       const child = yield* spawner.spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+          detached: hostPlatform !== "win32",
           shell: spawnCommand.shell,
           ...(input.cwd ? { cwd: input.cwd } : {}),
           ...(input.environment ? { env: input.environment } : { extendEnv: true }),
         }),
       );
+      const terminateCommandGroup =
+        hostPlatform === "win32"
+          ? child.kill({ killSignal: "SIGKILL" }).pipe(Effect.asVoid)
+          : Effect.sync(() => {
+              try {
+                process.kill(-Number(child.pid), "SIGKILL");
+              } catch {
+                // The command and its process group may already have exited.
+              }
+            });
+      yield* Effect.addFinalizer(() => terminateCommandGroup.pipe(Effect.ignore));
       const collectOptions =
         input.maxOutputBytes === undefined ? undefined : { maxBytes: input.maxOutputBytes };
       const [stdout, stderr, code] = yield* Effect.all(
@@ -754,10 +772,11 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           ...commandContext,
         }).pipe(Effect.exit);
 
-      // First attempt — run all inventory commands in parallel.
+      // Every OpenCode CLI command opens the same shared SQLite database. Running them
+      // concurrently causes "database is locked" failures, so run them one at a time.
       const [initialModelsResult, initialAgentsResult, initialSkillsResult] = yield* Effect.all(
         [runModelsCli(), runAgentsCli(), runSkillsCli()],
-        { concurrency: "unbounded" },
+        { concurrency: 1 },
       );
       let modelsResult = initialModelsResult;
       let agentsResult = initialAgentsResult;
@@ -775,7 +794,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
             needsAgentsRetry ? runAgentsCli() : Effect.succeed(agentsResult),
             needsSkillsRetry ? runSkillsCli() : Effect.succeed(skillsResult),
           ],
-          { concurrency: "unbounded" },
+          { concurrency: 1 },
         );
         modelsResult = m2;
         agentsResult = a2;
@@ -826,7 +845,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         agents,
         skills,
       };
-    });
+    }).pipe(openCodeInventoryCliLock.withPermits(1));
 
   return {
     startOpenCodeServerProcess,
