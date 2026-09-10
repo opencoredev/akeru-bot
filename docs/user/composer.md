@@ -22,6 +22,9 @@ The slash menu includes skills by default. Turn off **Show skills in slash menu*
 `/skill:Skill Name` label and insert the same `$name` token. Akeru hides duplicate native provider
 commands when the same skill is already available.
 
+On Claude, picking a skill from the `$` menu is sent as a trailing `/name` command so Claude Code
+runs that skill. Codex still reads `$name` natively. The message you see in the chat stays `$name`.
+
 ## Start bot work in the background
 
 From a new chat on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux. Akeru
