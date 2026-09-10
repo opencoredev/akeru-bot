@@ -27,7 +27,7 @@ describe("usage pricing", () => {
       expect(lookupRate(table, "deepinfra/anthropic/claude-fable-5")?.cacheReadCostPerToken).toBe(
         1e-5,
       );
-      expect(lookupRate(table, "other/claude-fable-5")).toBeNull();
+      expect(lookupRate(table, "other/claude-fable-5")?.cacheReadCostPerToken).toBe(1e-6);
     }
   });
 
@@ -51,5 +51,14 @@ describe("usage pricing", () => {
     expect(lookupRate(table, "provider-a/example-model")?.inputCostPerToken).toBe(1);
     expect(lookupRate(table, "provider-b/example-model")?.inputCostPerToken).toBe(3);
     expect(lookupRate(table, "example-model")).toBeNull();
+    expect(lookupRate(table, "other/example-model")).toBeNull();
+  });
+
+  it("falls back to a canonical bare rate when the transcript is provider-qualified", () => {
+    const table = parseRateTable({
+      "claude-fable-5": rate(1e-5, 1e-6),
+    });
+
+    expect(lookupRate(table, "anthropic/claude-fable-5")?.cacheReadCostPerToken).toBe(1e-6);
   });
 });

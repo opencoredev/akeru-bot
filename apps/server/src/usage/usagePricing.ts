@@ -139,7 +139,7 @@ export function lookupRate(table: RateTable, model: string): ModelRate | null {
   const key = normalizeRateKey(model);
   const bareName = bareModelName(key);
   if (bareName.length === 0 || UNPRICEABLE_MODELS.has(bareName)) return null;
-  return table.get(key) ?? null;
+  return table.get(key) ?? table.get(bareName) ?? null;
 }
 
 export interface PricedUsage {
