@@ -14,6 +14,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import type * as EffectAcpSchema from "effect-acp/schema";
 
 import {
   ApprovalRequestId,
@@ -101,7 +102,7 @@ it("falls back to allow_once when Grok omits allow_always", () => {
       { optionId: "allow-once", name: "Allow once", kind: "allow_once" },
       { optionId: "reject-once", name: "Reject", kind: "reject_once" },
     ],
-  };
+  } satisfies EffectAcpSchema.RequestPermissionRequest;
   assert.equal(selectGrokPermissionOptionId(request, "acceptForSession"), "allow-once");
   assert.equal(selectGrokPermissionOptionId(request, "accept"), "allow-once");
 });
