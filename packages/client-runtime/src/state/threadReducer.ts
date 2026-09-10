@@ -371,10 +371,7 @@ export function applyThreadDetailEvent(
                   ? (thread.latestTurn.completedAt ?? null)
                   : null,
               assistantMessageId: event.payload.messageId,
-              ...(thread.latestTurn?.turnId === event.payload.turnId &&
-              thread.latestTurn.sourceProposedPlan !== undefined
-                ? { sourceProposedPlan: thread.latestTurn.sourceProposedPlan }
-                : {}),
+              ...copyLatestTurnIdentities(thread.latestTurn, event.payload.turnId),
             }
           : thread.latestTurn,
       );
@@ -462,10 +459,7 @@ export function applyThreadDetailEvent(
                 thread.latestTurn?.turnId === event.payload.session.activeTurnId
                   ? thread.latestTurn.assistantMessageId
                   : null,
-              ...(thread.latestTurn?.turnId === event.payload.session.activeTurnId &&
-              thread.latestTurn.sourceProposedPlan !== undefined
-                ? { sourceProposedPlan: thread.latestTurn.sourceProposedPlan }
-                : {}),
+              ...copyLatestTurnIdentities(thread.latestTurn, event.payload.session.activeTurnId),
             }
           : thread.latestTurn !== null &&
               thread.latestTurn.state === "running" &&
@@ -712,6 +706,26 @@ function checkpointStatusToTurnState(
  * Streaming cases recompute the latest turn on every delta, and keeping the
  * old reference lets selectors and memos keyed on `latestTurn` skip work.
  */
+function copyLatestTurnIdentities(
+  previous: OrchestrationLatestTurn | null,
+  turnId: TurnId,
+): Pick<OrchestrationLatestTurn, "requestMessageId" | "respondingBotId" | "sourceProposedPlan"> {
+  if (previous?.turnId !== turnId) {
+    return {};
+  }
+  return {
+    ...(previous.requestMessageId !== undefined
+      ? { requestMessageId: previous.requestMessageId }
+      : {}),
+    ...(previous.respondingBotId !== undefined
+      ? { respondingBotId: previous.respondingBotId }
+      : {}),
+    ...(previous.sourceProposedPlan !== undefined
+      ? { sourceProposedPlan: previous.sourceProposedPlan }
+      : {}),
+  };
+}
+
 function reuseLatestTurn(
   previous: OrchestrationLatestTurn | null,
   next: OrchestrationLatestTurn | null,
@@ -725,6 +739,8 @@ function reuseLatestTurn(
     previous.startedAt === next.startedAt &&
     previous.completedAt === next.completedAt &&
     previous.assistantMessageId === next.assistantMessageId &&
+    previous.requestMessageId === next.requestMessageId &&
+    previous.respondingBotId === next.respondingBotId &&
     previous.sourceProposedPlan?.threadId === next.sourceProposedPlan?.threadId &&
     previous.sourceProposedPlan?.planId === next.sourceProposedPlan?.planId
     ? previous

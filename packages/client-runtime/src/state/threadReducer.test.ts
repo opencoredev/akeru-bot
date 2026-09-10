@@ -2,6 +2,7 @@ import { assert, describe, expect, it } from "vite-plus/test";
 
 import {
   AuthSessionId,
+  BotId,
   CheckpointRef,
   CommandId,
   EventId,
@@ -586,6 +587,8 @@ describe("applyThreadDetailEvent", () => {
           startedAt: "2026-04-01T06:59:00.000Z",
           completedAt: null,
           assistantMessageId: MessageId.make("msg-2"),
+          requestMessageId: MessageId.make("msg-1"),
+          respondingBotId: BotId.make("bot-scout"),
         },
         messages: [
           {
@@ -635,6 +638,8 @@ describe("applyThreadDetailEvent", () => {
         expect(result.thread.messages).not.toBe(streamingThread.messages);
         expect(result.thread.messages[0]?.text).toBe("Hello, world");
         expect(result.thread.latestTurn).toBe(streamingThread.latestTurn);
+        expect(result.thread.latestTurn?.requestMessageId).toBe("msg-1");
+        expect(result.thread.latestTurn?.respondingBotId).toBe("bot-scout");
         expect(result.thread.checkpoints).toBe(streamingThread.checkpoints);
       }
     });
