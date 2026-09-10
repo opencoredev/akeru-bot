@@ -63,6 +63,17 @@ describe("BotThreadLanding message formatting", () => {
     }
   });
 
+  it("keeps message actions visible for coarse pointers without dropping reply controls", () => {
+    for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
+      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+      expect(source).toContain("pointer-coarse:opacity-100");
+      expect(source).toContain("<MessageControls");
+      expect(source).toContain("onReply=");
+      expect(source).toContain("onReactionChange=");
+      expect(source).toContain("readAloud");
+    }
+  });
+
   it("mounts the voice action in the live bot chat header", () => {
     const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
 
