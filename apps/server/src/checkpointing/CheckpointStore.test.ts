@@ -273,6 +273,51 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
       }),
     );
 
+    it.effect("scopes nested workspace numstat away from sibling parent commits", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir();
+        yield* initRepoWithCommit(tmp);
+        const fileSystem = yield* FileSystem.FileSystem;
+        const workspace = NodePath.join(tmp, "apps", "server");
+        const sibling = NodePath.join(tmp, "apps", "web");
+        yield* fileSystem.makeDirectory(workspace, { recursive: true });
+        yield* fileSystem.makeDirectory(sibling, { recursive: true });
+        yield* writeTextFile(NodePath.join(workspace, "index.ts"), "export const value = 1;\n");
+        yield* writeTextFile(NodePath.join(sibling, "page.ts"), "export const page = 1;\n");
+        yield* git(tmp, ["add", "."]);
+        yield* git(tmp, ["commit", "-m", "add workspaces"]);
+
+        const checkpointStore = yield* CheckpointStore.CheckpointStore;
+        const threadId = ThreadId.make("nested-workspace-summary");
+        const fromCheckpointRef = checkpointRefForThreadTurn(threadId, 0);
+        const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
+
+        yield* checkpointStore.captureCheckpoint({
+          cwd: workspace,
+          checkpointRef: fromCheckpointRef,
+        });
+        yield* writeTextFile(NodePath.join(workspace, "index.ts"), "export const value = 2;\n");
+        yield* writeTextFile(NodePath.join(sibling, "page.ts"), "export const page = 2;\n");
+        yield* git(tmp, ["add", "apps/web/page.ts"]);
+        yield* git(tmp, ["commit", "-m", "sibling commit"]);
+        yield* checkpointStore.captureCheckpoint({
+          cwd: workspace,
+          checkpointRef: toCheckpointRef,
+        });
+
+        const numstat = yield* checkpointStore.diffCheckpoints({
+          cwd: workspace,
+          fromCheckpointRef,
+          toCheckpointRef,
+          ignoreWhitespace: false,
+          format: "numstat",
+        });
+        expect(parseTurnDiffFilesFromNumstat(numstat)).toEqual([
+          { path: "apps/server/index.ts", additions: 1, deletions: 1 },
+        ]);
+      }),
+    );
+
     it.effect("preserves file paths and turn ranges without changing the user index", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();
