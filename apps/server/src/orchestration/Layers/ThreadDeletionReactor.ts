@@ -90,17 +90,17 @@ const make = Effect.gen(function* () {
     SubscriptionRef.update(seenSequence, (seen) => Math.max(seen, sequence));
 
   const start: ThreadDeletionReactorShape["start"] = Effect.fn("start")(function* () {
+    // Subscribe before returning, even while event handling waits for server
+    // activation. A hot stream started after forkParked would miss a delete
+    // and recreate that land in that window, and onStart would then advance
+    // the watermark to the engine head without queuing that cleanup.
+    const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
+    yield* orchestrationEngine.latestSequence.pipe(Effect.flatMap(noteSeen));
     yield* forkParked(
-      Stream.runForEach(
-        orchestrationEngine.streamDomainEvents.pipe(
-          // Events that landed before the subscription are not replayed, so
-          // start the watermark at the current head instead of zero.
-          Stream.onStart(orchestrationEngine.latestSequence.pipe(Effect.flatMap(noteSeen))),
+      Stream.runForEach(domainEvents, (event) =>
+        (event.type === "thread.deleted" ? worker.enqueue(event) : Effect.void).pipe(
+          Effect.andThen(noteSeen(event.sequence)),
         ),
-        (event) =>
-          (event.type === "thread.deleted" ? worker.enqueue(event) : Effect.void).pipe(
-            Effect.andThen(noteSeen(event.sequence)),
-          ),
       ),
     );
   });
