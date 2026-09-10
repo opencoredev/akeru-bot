@@ -881,6 +881,11 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
           `${fromRevision}^{commit}`,
           `${input.toCheckpointRef}^{commit}`,
+          // Numstat summaries are turn file lists. Nested workspaces capture
+          // with `git add -A -- .`, but a sibling commit on the parent HEAD
+          // still appears in a full-tree comparison. Restrict automatic
+          // summaries to this cwd; on-demand patches stay whole-tree.
+          ...(input.format === "numstat" ? ["--", "."] : []),
         ],
         allowNonZeroExit: true,
         maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,

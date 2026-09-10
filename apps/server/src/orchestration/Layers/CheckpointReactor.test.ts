@@ -1205,6 +1205,75 @@ describe("CheckpointReactor", () => {
     }),
   );
 
+  effectIt.effect("keeps nested workspace summaries free of sibling parent commits", () =>
+    Effect.gen(function* () {
+      const repositoryRoot = createGitRepository();
+      tempDirs.push(repositoryRoot);
+      const workspaceRoot = NodePath.join(repositoryRoot, "apps", "server");
+      const siblingRoot = NodePath.join(repositoryRoot, "apps", "web");
+      NodeFS.mkdirSync(workspaceRoot, { recursive: true });
+      NodeFS.mkdirSync(siblingRoot, { recursive: true });
+      const filePath = NodePath.join(workspaceRoot, "index.ts");
+      NodeFS.writeFileSync(filePath, "export const value = 1;\n");
+      NodeFS.writeFileSync(NodePath.join(siblingRoot, "page.ts"), "export const page = 1;\n");
+      runGit(repositoryRoot, ["add", "."]);
+      runGit(repositoryRoot, ["commit", "-m", "Add nested workspaces"]);
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          seedFilesystemCheckpoints: false,
+          projectWorkspaceRoot: workspaceRoot,
+          threadWorktreePath: workspaceRoot,
+          providerSessionCwd: workspaceRoot,
+        }),
+      );
+      const threadId = ThreadId.make("thread-1");
+      const turnId = asTurnId("turn-nested-sibling");
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      harness.provider.emit({
+        type: "turn.started",
+        eventId: EventId.make("evt-nested-sibling-start"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt,
+        threadId,
+        turnId,
+      });
+      yield* Effect.promise(harness.drain);
+      expect(yield* harness.nextReceipt).toMatchObject({
+        type: "checkpoint.baseline.captured",
+      });
+
+      NodeFS.writeFileSync(filePath, "export const value = 2;\n");
+      NodeFS.writeFileSync(NodePath.join(siblingRoot, "page.ts"), "export const page = 2;\n");
+      runGit(repositoryRoot, ["add", "apps/web/page.ts"]);
+      runGit(repositoryRoot, ["commit", "-m", "Sibling commit"]);
+      harness.provider.emit({
+        type: "turn.completed",
+        eventId: EventId.make("evt-nested-sibling-complete"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt,
+        threadId,
+        turnId,
+        payload: { state: "completed" },
+      });
+      yield* Effect.promise(harness.drain);
+      const thread = (yield* Effect.promise(harness.readModel)).threads.find(
+        (entry) => entry.id === threadId,
+      );
+      expect(thread?.checkpoints[0]).toMatchObject({
+        status: "ready",
+        files: [{ path: "apps/server/index.ts", additions: 1, deletions: 1 }],
+      });
+      expect(thread?.checkpoints[0]?.files.some((file) => file.path.includes("apps/web"))).toBe(
+        false,
+      );
+      expect(yield* harness.nextReceipt).toMatchObject({
+        type: "checkpoint.diff.finalized",
+        turnId,
+      });
+      expect(yield* harness.nextReceipt).toMatchObject({ type: "turn.processing.quiesced" });
+    }),
+  );
+
   it("captures pre-turn baseline from project workspace root when thread worktree is unset", async () => {
     const harness = await createHarness({
       hasSession: false,
