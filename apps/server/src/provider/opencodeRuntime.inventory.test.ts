@@ -244,6 +244,72 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
     }),
   );
 
+  it.effect("serializes concurrent inventory CLI refreshes against the shared database", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const hostEnvironment = yield* HostProcessEnvironment;
+      const executablePath = yield* HostProcessExecutablePath;
+      const hostPlatform = yield* HostProcessPlatform;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-opencode-singleflight-" });
+      const isWindows = hostPlatform === "win32";
+      const binaryPath = path.join(tempDir, isWindows ? "opencode.cmd" : "opencode");
+      const scriptPath = path.join(tempDir, "opencode.mjs");
+      const lockPath = path.join(tempDir, "lock");
+      const overlapPath = path.join(tempDir, "overlap");
+
+      yield* fs.writeFileString(
+        scriptPath,
+        [
+          'import * as fs from "node:fs";',
+          "const lock = process.env.T3_TEST_OPENCODE_LOCK;",
+          "const overlap = process.env.T3_TEST_OPENCODE_OVERLAP;",
+          "if (lock && overlap && fs.existsSync(lock)) fs.writeFileSync(overlap, process.pid.toString());",
+          "if (lock) fs.writeFileSync(lock, process.pid.toString());",
+          "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 80);",
+          "if (lock) fs.unlinkSync(lock);",
+          'if (process.argv[2] === "models") {',
+          '  process.stdout.write(`openai/gpt-test\\n{"id":"gpt-test","providerID":"openai","name":"GPT Test"}\\n`);',
+          "} else {",
+          '  process.stdout.write("[]\\n");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      yield* fs.writeFileString(
+        binaryPath,
+        [
+          ...(isWindows ? ["@echo off"] : ["#!/bin/sh"]),
+          isWindows
+            ? '"%T3_TEST_NODE_BINARY%" "%T3_TEST_OPENCODE_SCRIPT%" %*'
+            : 'exec "$T3_TEST_NODE_BINARY" "$T3_TEST_OPENCODE_SCRIPT" "$@"',
+          "",
+        ].join("\n"),
+      );
+      if (!isWindows) {
+        yield* fs.chmod(binaryPath, 0o755);
+      }
+
+      const runtime = yield* OpenCodeRuntime;
+      const load = runtime.loadInventoryFromCli({
+        binaryPath,
+        cwd: tempDir,
+        environment: {
+          ...hostEnvironment,
+          T3_TEST_NODE_BINARY: executablePath,
+          T3_TEST_OPENCODE_SCRIPT: scriptPath,
+          T3_TEST_OPENCODE_LOCK: lockPath,
+          T3_TEST_OPENCODE_OVERLAP: overlapPath,
+        },
+      });
+      const [first, second] = yield* Effect.all([load, load], { concurrency: "unbounded" });
+      NodeAssert.deepEqual(first.providerList.connected, ["openai"]);
+      NodeAssert.deepEqual(second.providerList.connected, ["openai"]);
+      const overlapExists = yield* fs.exists(overlapPath);
+      NodeAssert.equal(overlapExists, false);
+    }),
+  );
+
   it.effect("kills a hanging command process group when the command is interrupted", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

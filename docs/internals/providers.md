@@ -62,7 +62,8 @@ a Mastra session is absent.
 
 Standard OpenCode discovery probes `opencode --version` for at most four seconds. The probe command
 runs in its own process group so a hanging wrapper cannot keep provider status running after the
-timeout. Inventory CLI commands (`models --verbose`, `agent list`, `debug skill`) run one at a time
+timeout. Inventory CLI commands (`models --verbose`, `agent list`, `debug skill`) run one at a time,
+and the whole inventory sequence including its retry is serialized across concurrent refreshes,
 because they share OpenCode's SQLite database. OpenCode Go stays on the Mastra controller and does
 not use this CLI probe path.
 

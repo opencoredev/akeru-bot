@@ -24,6 +24,7 @@ import * as Option from "effect/Option";
 import * as P from "effect/Predicate";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -440,6 +441,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const netService = yield* NetService.NetService;
   const hostPlatform = yield* HostProcessPlatform;
+  // Every OpenCode CLI command opens the same shared SQLite database. Inventory
+  // refreshes from provider checks, snapshots, and retries must not overlap.
+  const inventoryCliLock = yield* Semaphore.make(1);
   const resolveCommand = (command: string, args: ReadonlyArray<string>, env?: NodeJS.ProcessEnv) =>
     resolveSpawnCommand(command, args, env ? { env } : {});
 
@@ -839,7 +843,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         agents,
         skills,
       };
-    });
+    }).pipe(inventoryCliLock.withPermits(1));
 
   return {
     startOpenCodeServerProcess,
