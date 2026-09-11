@@ -20,7 +20,7 @@ const clientSettings: ClientSettings = {
   browserDefaultZoomFactor: 1.25,
   browserDefaultAppearance: "dark",
   browserAutoShowFloatingPreview: false,
-  confirmQuit: true,
+  confirmQuit: "hold",
   confirmThreadArchive: true,
   confirmThreadDelete: false,
   dismissedProviderUpdateNotificationKeys: [],
@@ -186,7 +186,8 @@ describe("DesktopClientSettings", () => {
           environment.clientSettingsPath,
           `{
             "settings": {
-              "timestampFormat": "12-hour"
+              "timestampFormat": "12-hour",
+              "confirmQuit": false
             }
           }\n`,
         );
@@ -195,6 +196,32 @@ describe("DesktopClientSettings", () => {
         assert.isTrue(Option.isSome(persisted));
         if (Option.isSome(persisted)) {
           assert.equal(persisted.value.timestampFormat, "12-hour");
+          assert.equal(persisted.value.confirmQuit, "direct");
+        }
+      }),
+    ),
+  );
+
+  it.effect("migrates a wrapped boolean confirmQuit true to hold", () =>
+    withClientSettings(
+      Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const settings = yield* DesktopClientSettings.DesktopClientSettings;
+        yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+        yield* fileSystem.writeFileString(
+          environment.clientSettingsPath,
+          `{
+            "settings": {
+              "confirmQuit": true
+            }
+          }\n`,
+        );
+
+        const persisted = yield* settings.get;
+        assert.isTrue(Option.isSome(persisted));
+        if (Option.isSome(persisted)) {
+          assert.equal(persisted.value.confirmQuit, "hold");
         }
       }),
     ),
