@@ -19,6 +19,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DelegationId,
+  GroupId,
   EventId,
   MessageId,
   ProjectId,
@@ -62,6 +63,7 @@ import {
   providerErrorLabel,
   providerErrorLabelFromInstanceHint,
   ProviderCommandReactorLive,
+  type ControllerEngineThread,
   resolveControllerBotId,
 } from "./ProviderCommandReactor.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -113,6 +115,21 @@ describe("ProviderCommandReactor", () => {
     expect(resolveControllerBotId({ botId: BotId.make("bot-owner"), respondingBotId: null })).toBe(
       "bot-owner",
     );
+  });
+
+  it("accepts a thread shell without messages, activities, or checkpoints", () => {
+    const shell: ControllerEngineThread = {
+      id: ThreadId.make("thread-shell"),
+      botId: BotId.make("bot-owner"),
+      groupId: GroupId.make("group-1"),
+      respondingBotId: BotId.make("bot-specialist"),
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+    };
+    expect(resolveControllerBotId(shell)).toBe("bot-specialist");
+    expect("messages" in shell).toBe(false);
+    expect("activities" in shell).toBe(false);
+    expect("checkpoints" in shell).toBe(false);
+    expect("deletedAt" in shell).toBe(false);
   });
   let runtime: ManagedRuntime.ManagedRuntime<
     OrchestrationEngineService | ProviderCommandReactor | ProjectionSnapshotQuery | BotUsageLedger,
