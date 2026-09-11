@@ -104,6 +104,13 @@ Runtime receipts are a test-only mechanism. `RuntimeReceiptBusLive` in
 [`RuntimeReceiptBus.ts`][receipts] publishes nothing; only the test layer is PubSub-backed. Do not
 build production behavior on receipts.
 
+Provider event logs in [`EventNdjsonLogger.ts`][event-log] drop canonical deltas and native
+streaming chunks (Codex item/realtime methods, Claude content-block deltas, ACP
+`agent_message_chunk`/`agent_thought_chunk`, OpenCode text/reasoning part updates) before
+serialization. ACP request diagnostics stay on by default; full protocol logging is opt-in and
+filters the same transient session updates. Async drain/close behavior for this file is owned
+separately by the desktop log-drain work and is not changed here.
+
 ## Provider drivers
 
 Six drivers ship built in, registered in [`builtInDrivers.ts`][drivers] as `BUILT_IN_DRIVERS`:
@@ -146,6 +153,7 @@ already dispatch.
 [projector]: ../../apps/server/src/orchestration/projector.ts
 [worker]: ../../packages/shared/src/DrainableWorker.ts
 [ingest]: ../../apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts
+[event-log]: ../../apps/server/src/provider/Layers/EventNdjsonLogger.ts
 [cmd]: ../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts
 [checkpoint]: ../../apps/server/src/orchestration/Layers/CheckpointReactor.ts
 [receipts]: ../../apps/server/src/orchestration/Layers/RuntimeReceiptBus.ts
