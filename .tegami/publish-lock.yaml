@@ -1,5 +1,5 @@
 core:changelogs:
-  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Changes\n\n- [#176](https://github.com/opencoredev/akeru-bot/pull/176) feat(providers): add API key connections with custom endpoints\n- [#178](https://github.com/opencoredev/akeru-bot/pull/178) fix(server): keep libsql native loader external to the CLI bundle\n- [#182](https://github.com/opencoredev/akeru-bot/pull/182) fix(desktop): own dev and smoke Electron processes instead of pkill\n- [#180](https://github.com/opencoredev/akeru-bot/pull/180) feat(scripts): add dev status, worktree setup, UI fixtures, and pairing helpers\n- [#183](https://github.com/opencoredev/akeru-bot/pull/183) docs(agents): add verification policy and rewrite testing skills\n- [#184](https://github.com/opencoredev/akeru-bot/pull/184) fix(desktop): stop claiming legacy t3code:// protocol schemes\n- [#185](https://github.com/opencoredev/akeru-bot/pull/185) fix(release): recover version PR updates from Tegami's boxed errors\n- [#188](https://github.com/opencoredev/akeru-bot/pull/188) fix(feedback): send product feedback to the deployed Worker\n- [#191](https://github.com/opencoredev/akeru-bot/pull/191) feat(web): add Akeru Noir and flatten shared controls\n- [#189](https://github.com/opencoredev/akeru-bot/pull/189) feat(install): add release-pinned installer scripts\n- [#192](https://github.com/opencoredev/akeru-bot/pull/192) fix(plugins): renew stale Hoplite OAuth registrations\n- [#190](https://github.com/opencoredev/akeru-bot/pull/190) feat(channels): connect external conversations to bots\n"
+  - content: "---\npackages:\n  group:akeru:\n    type: patch\n---\n\n### Changes\n\n- [#193](https://github.com/opencoredev/akeru-bot/pull/193) fix(marketing): connect Grok discovery pages to setup\n- [#194](https://github.com/opencoredev/akeru-bot/pull/194) feat(web): add Read aloud for stored bot replies\n- [#196](https://github.com/opencoredev/akeru-bot/pull/196) fix(marketing): recover downloads from stalled release requests\n- [#197](https://github.com/opencoredev/akeru-bot/pull/197) perf(server): yield between filtered workspace search pages\n- [#198](https://github.com/opencoredev/akeru-bot/pull/198) perf(protocol): make raw event retention opt-in\n- [#201](https://github.com/opencoredev/akeru-bot/pull/201) perf(server): acquire browser attachments only for consuming connectors\n- [#199](https://github.com/opencoredev/akeru-bot/pull/199) perf(server): index projected thread lookups\n- [#204](https://github.com/opencoredev/akeru-bot/pull/204) fix(server): prefer origin for project repository identity\n- [#205](https://github.com/opencoredev/akeru-bot/pull/205) fix(server): bound OpenCode CLI probes and serialize inventory\n- [#207](https://github.com/opencoredev/akeru-bot/pull/207) fix(server): stop Windows terminal processes when closing\n- [#211](https://github.com/opencoredev/akeru-bot/pull/211) fix(server): stop Windows terminal polling from spiking CPU\n- [#219](https://github.com/opencoredev/akeru-bot/pull/219) fix(web): stop highlighter freezes by using Oniguruma WASM\n- [#234](https://github.com/opencoredev/akeru-bot/pull/234) fix(mcp): allow text-only preview snapshots\n- [#236](https://github.com/opencoredev/akeru-bot/pull/236) fix(server): bound session listing and keep a full idle window after turns\n- [#238](https://github.com/opencoredev/akeru-bot/pull/238) fix(web): show bot and group message actions on touch\n- [#249](https://github.com/opencoredev/akeru-bot/pull/249) fix(server): skip disabled provider instances for text generation fallback\n- [#250](https://github.com/opencoredev/akeru-bot/pull/250) fix(server): preserve inline provider secrets on redacted saves\n- [#231](https://github.com/opencoredev/akeru-bot/pull/231) fix(web): copy text over plain HTTP\n- [#244](https://github.com/opencoredev/akeru-bot/pull/244) fix(server): stop overpricing cached Claude tokens\n- [#246](https://github.com/opencoredev/akeru-bot/pull/246) perf(web): stop rendering hidden terminals\n- [#233](https://github.com/opencoredev/akeru-bot/pull/233) fix(web): keep settings inputs focused during IME composition\n- [#206](https://github.com/opencoredev/akeru-bot/pull/206) perf(server): bound terminal history incrementally\n- [#255](https://github.com/opencoredev/akeru-bot/pull/255) perf(web): keep chat markdown mounted while text streams\n- [#230](https://github.com/opencoredev/akeru-bot/pull/230) perf(server): skip full thread loads on projection and ingestion\n- [#209](https://github.com/opencoredev/akeru-bot/pull/209) fix(codex): keep app-server protocol decode current\n- [#226](https://github.com/opencoredev/akeru-bot/pull/226) feat(server): report image dimensions with signed asset URLs\n- [#208](https://github.com/opencoredev/akeru-bot/pull/208) fix(server): isolate remote web session cookies\n- [#227](https://github.com/opencoredev/akeru-bot/pull/227) perf(client): keep latestTurn and checkpoint refs stable while streaming\n"
     filename: stable-release.md
     v: 0.0.0
 core:packages:
@@ -9,12 +9,12 @@ core:packages:
     updated: false
   - id: npm:@t3tools/scripts
     updated: false
+  - id: npm:@t3tools/marketing
+    updated: false
   - changelogIds:
       - stable-release.md
     id: npm:@t3tools/desktop
     updated: true
-  - id: npm:@t3tools/marketing
-    updated: false
   - changelogIds:
       - stable-release.md
     id: npm:akeru-bot
@@ -37,16 +37,16 @@ core:packages:
     updated: false
   - id: npm:@t3tools/shared
     updated: false
-  - id: npm:@t3tools/ssh
-    updated: false
   - id: npm:@t3tools/tailscale
+    updated: false
+  - id: npm:@t3tools/ssh
     updated: false
 npm:packages:
   - id: npm:@t3tools/monorepo
   - id: npm:@t3tools/oxlint-plugin-t3code
   - id: npm:@t3tools/scripts
-  - id: npm:@t3tools/desktop
   - id: npm:@t3tools/marketing
+  - id: npm:@t3tools/desktop
   - id: npm:akeru-bot
   - id: npm:@t3tools/web
   - id: npm:akeru-feedback
@@ -55,5 +55,5 @@ npm:packages:
   - id: npm:effect-acp
   - id: npm:effect-codex-app-server
   - id: npm:@t3tools/shared
-  - id: npm:@t3tools/ssh
   - id: npm:@t3tools/tailscale
+  - id: npm:@t3tools/ssh
