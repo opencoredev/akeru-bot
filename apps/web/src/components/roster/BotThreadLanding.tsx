@@ -204,7 +204,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     useRosterStore.getState().selectBot(bot.id);
   }, [bot, navigate]);
 
-  if (!bot || bot.archivedAt !== null) return null;
   const working = isBotConversationWorking({
     sending: runtime.sending,
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
@@ -217,6 +216,8 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     messages,
     mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
   });
+
+  if (!bot || bot.archivedAt !== null) return null;
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
