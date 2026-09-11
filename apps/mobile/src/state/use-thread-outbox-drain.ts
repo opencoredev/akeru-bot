@@ -283,6 +283,7 @@ export function useThreadOutboxDrain(): void {
   );
 
   useEffect(() => {
+    ensureThreadOutboxLoaded();
     if (dispatchingQueuedMessageId !== null) {
       return;
     }
