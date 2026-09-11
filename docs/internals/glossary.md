@@ -8,6 +8,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 
 - [Project and workspace](#project-and-workspace)
 - [Thread timeline](#thread-timeline)
+- [Roster organization](#roster-organization)
 - [Orchestration](#orchestration)
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
@@ -39,6 +40,10 @@ The internal durable record for one user-facing chat and its workspace history. 
 #### Turn
 
 A single user-to-assistant work cycle inside a thread. It starts with user input and ends when the session leaves `running` status, which [projector.ts][4] treats as the authoritative completion signal (`settledTurnStateForSessionStatus`). Checkpoint and diff work may settle afterward without changing when the turn ended. See [the contracts][1] and [ProviderRuntimeIngestion.ts][5].
+
+### Roster organization
+
+The live sidebar is `BotRosterSidebar`. Pins, named sections, and Unassigned are a client layout over bots and groups. They must not assign or remove group members, and they must not settle chats. Drag planning lives in `roster.logic.ts`; pointer cleanup, insertion-gap projection, and list motion live beside it in `roster.pointer.ts`, `roster.drag.ts`, and `roster.motion.ts`.
 
 #### Activity
 
