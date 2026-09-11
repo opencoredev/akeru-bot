@@ -6,8 +6,9 @@ import * as Option from "effect/Option";
 
 import * as Electron from "electron";
 
-// Remote open-in-editor deep links (`vscode://vscode-remote/ssh-remote+…`)
-// must reach the OS handler; every other non-web scheme stays blocked.
+// Remote open-in-editor deep links (`vscode://vscode-remote/ssh-remote+…`,
+// `zed://ssh/<host>/<path>`) must reach the OS handler; every other non-web
+// scheme stays blocked.
 const SAFE_WEB_PROTOCOLS = new Set(["http:", "https:"]);
 const REMOTE_EDITOR_PROTOCOLS = new Set(
   REMOTE_CAPABLE_EDITOR_IDS.flatMap((id) => {
@@ -16,13 +17,35 @@ const REMOTE_EDITOR_PROTOCOLS = new Set(
   }),
 );
 
+// Zed's host sits in the first path segment, so it needs its own userinfo ban.
+const ZED_SSH_HOST = /^[^/@:]+$/;
+
+function isZedSshUrl(url: URL): boolean {
+  if (url.host !== "ssh") {
+    return false;
+  }
+  const encodedHost = url.pathname.split("/")[1];
+  if (!encodedHost) {
+    return false;
+  }
+  let host: string;
+  try {
+    host = decodeURIComponent(encodedHost);
+  } catch {
+    return false;
+  }
+  return ZED_SSH_HOST.test(host) && url.pathname.length > encodedHost.length + 1;
+}
+
 const isRemoteEditorUrl = (url: URL) =>
   REMOTE_EDITOR_PROTOCOLS.has(url.protocol) &&
   url.username.length === 0 &&
   url.password.length === 0 &&
-  url.host === "vscode-remote" &&
-  url.pathname.startsWith("/ssh-remote+") &&
-  url.pathname.length > "/ssh-remote+".length;
+  (url.protocol === "zed:"
+    ? isZedSshUrl(url)
+    : url.host === "vscode-remote" &&
+      url.pathname.startsWith("/ssh-remote+") &&
+      url.pathname.length > "/ssh-remote+".length);
 
 export function parseSafeExternalUrl(rawUrl: unknown): Option.Option<string> {
   if (typeof rawUrl !== "string") {
