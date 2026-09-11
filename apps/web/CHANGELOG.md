@@ -1,3 +1,36 @@
+## @t3tools/web@0.0.41
+
+### Changes
+
+- [#193](https://github.com/opencoredev/akeru-bot/pull/193) fix(marketing): connect Grok discovery pages to setup
+- [#194](https://github.com/opencoredev/akeru-bot/pull/194) feat(web): add Read aloud for stored bot replies
+- [#196](https://github.com/opencoredev/akeru-bot/pull/196) fix(marketing): recover downloads from stalled release requests
+- [#197](https://github.com/opencoredev/akeru-bot/pull/197) perf(server): yield between filtered workspace search pages
+- [#198](https://github.com/opencoredev/akeru-bot/pull/198) perf(protocol): make raw event retention opt-in
+- [#201](https://github.com/opencoredev/akeru-bot/pull/201) perf(server): acquire browser attachments only for consuming connectors
+- [#199](https://github.com/opencoredev/akeru-bot/pull/199) perf(server): index projected thread lookups
+- [#204](https://github.com/opencoredev/akeru-bot/pull/204) fix(server): prefer origin for project repository identity
+- [#205](https://github.com/opencoredev/akeru-bot/pull/205) fix(server): bound OpenCode CLI probes and serialize inventory
+- [#207](https://github.com/opencoredev/akeru-bot/pull/207) fix(server): stop Windows terminal processes when closing
+- [#211](https://github.com/opencoredev/akeru-bot/pull/211) fix(server): stop Windows terminal polling from spiking CPU
+- [#219](https://github.com/opencoredev/akeru-bot/pull/219) fix(web): stop highlighter freezes by using Oniguruma WASM
+- [#234](https://github.com/opencoredev/akeru-bot/pull/234) fix(mcp): allow text-only preview snapshots
+- [#236](https://github.com/opencoredev/akeru-bot/pull/236) fix(server): bound session listing and keep a full idle window after turns
+- [#238](https://github.com/opencoredev/akeru-bot/pull/238) fix(web): show bot and group message actions on touch
+- [#249](https://github.com/opencoredev/akeru-bot/pull/249) fix(server): skip disabled provider instances for text generation fallback
+- [#250](https://github.com/opencoredev/akeru-bot/pull/250) fix(server): preserve inline provider secrets on redacted saves
+- [#231](https://github.com/opencoredev/akeru-bot/pull/231) fix(web): copy text over plain HTTP
+- [#244](https://github.com/opencoredev/akeru-bot/pull/244) fix(server): stop overpricing cached Claude tokens
+- [#246](https://github.com/opencoredev/akeru-bot/pull/246) perf(web): stop rendering hidden terminals
+- [#233](https://github.com/opencoredev/akeru-bot/pull/233) fix(web): keep settings inputs focused during IME composition
+- [#206](https://github.com/opencoredev/akeru-bot/pull/206) perf(server): bound terminal history incrementally
+- [#255](https://github.com/opencoredev/akeru-bot/pull/255) perf(web): keep chat markdown mounted while text streams
+- [#230](https://github.com/opencoredev/akeru-bot/pull/230) perf(server): skip full thread loads on projection and ingestion
+- [#209](https://github.com/opencoredev/akeru-bot/pull/209) fix(codex): keep app-server protocol decode current
+- [#226](https://github.com/opencoredev/akeru-bot/pull/226) feat(server): report image dimensions with signed asset URLs
+- [#208](https://github.com/opencoredev/akeru-bot/pull/208) fix(server): isolate remote web session cookies
+- [#227](https://github.com/opencoredev/akeru-bot/pull/227) perf(client): keep latestTurn and checkpoint refs stable while streaming
+
 ## @t3tools/web@0.0.40
 
 ### Changes
