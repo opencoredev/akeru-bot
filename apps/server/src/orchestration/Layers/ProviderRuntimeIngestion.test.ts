@@ -57,7 +57,10 @@ import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
-import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
+import {
+  findTaskTitleInActivities,
+  ProviderRuntimeIngestionLive,
+} from "./ProviderRuntimeIngestion.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
@@ -71,6 +74,44 @@ import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.t
 function makeTestServerSettingsLayer(overrides: Partial<ServerSettings> = {}) {
   return ServerSettingsService.layerTest(overrides);
 }
+
+describe("findTaskTitleInActivities", () => {
+  it("reads a title from a projection activity record that uses activityId instead of id", () => {
+    expect(
+      findTaskTitleInActivities(
+        [
+          {
+            kind: "task.started",
+            payload: { taskId: "task-1", title: "Typecheck mobile app" },
+          },
+        ],
+        "task-1",
+      ),
+    ).toBe("Typecheck mobile app");
+  });
+
+  it("prefers the latest matching progress title and ignores other tasks", () => {
+    expect(
+      findTaskTitleInActivities(
+        [
+          {
+            kind: "task.started",
+            payload: { taskId: "task-1", title: "first name" },
+          },
+          {
+            kind: "task.progress",
+            payload: { taskId: "task-2", title: "other task" },
+          },
+          {
+            kind: "task.progress",
+            payload: { taskId: "task-1", title: "latest name" },
+          },
+        ],
+        "task-1",
+      ),
+    ).toBe("latest name");
+  });
+});
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);

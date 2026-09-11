@@ -944,6 +944,8 @@ const buildAppUnderTest = (options?: {
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getProjectShellById: () => Effect.succeed(Option.none()),
             getThreadShellById: () => Effect.succeed(Option.none()),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
             getThreadDetailById: () => Effect.succeed(Option.none()),
             getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
@@ -5407,6 +5409,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 shellFetches.push(threadId);
                 return Option.some(makeDefaultOrchestrationThreadShell({ id: threadId }));
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5485,6 +5489,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 shellFetches.push(threadId);
                 return Option.some(makeDefaultOrchestrationThreadShell({ id: threadId }));
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5575,6 +5581,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
           projectionSnapshotQuery: {
             getThreadShellById: () => Effect.succeed(Option.none()),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5636,6 +5644,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                       Option.some(makeDefaultOrchestrationThreadShell({ id: threadId })),
                     );
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5757,6 +5767,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5835,6 +5847,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                       }),
                     );
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5891,6 +5905,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.succeed(
                 Option.some(makeDefaultOrchestrationThreadShell({ id: threadId, session: null })),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5959,6 +5975,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                     }),
                   ),
                 ),
+              getThreadRuntimeContext: () => Effect.die("unused"),
+              getTurnStartMessage: () => Effect.die("unused"),
             },
           },
         });
@@ -6025,6 +6043,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -6079,6 +6099,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.succeed(
                 Option.some(makeDefaultOrchestrationThreadShell({ id: threadId, session: null })),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -6152,6 +6174,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -6224,6 +6248,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
