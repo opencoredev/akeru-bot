@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 const testState = vi.hoisted(() => ({
   resources: [] as Array<unknown>,
   assetState: "success" as "success" | "loading",
+  imageDimensions: undefined as { width: number; height: number } | undefined,
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
@@ -13,7 +14,11 @@ vi.mock("../assets/assetUrls", () => ({
     testState.resources.push(resource);
     return testState.assetState === "loading"
       ? { _tag: "Loading" }
-      : { _tag: "Success", url: "https://signed.test/workspace-image.svg" };
+      : {
+          _tag: "Success",
+          url: "https://signed.test/workspace-image.svg",
+          ...(testState.imageDimensions ? { imageDimensions: testState.imageDimensions } : {}),
+        };
   },
 }));
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
@@ -62,6 +67,7 @@ describe("ChatMarkdown workspace images", () => {
   beforeEach(() => {
     testState.resources = [];
     testState.assetState = "success";
+    testState.imageDimensions = undefined;
   });
 
   it("loads every Windows workspace path form through a signed asset URL", () => {
@@ -115,6 +121,15 @@ describe("ChatMarkdown workspace images", () => {
 
     expect(html).toContain('aria-label="Loading image"');
     expect(html).not.toContain("animate-pulse");
+  });
+
+  it("sizes the slot from server-reported dimensions so a portrait image never grows", () => {
+    testState.imageDimensions = { width: 720, height: 1400 };
+
+    const html = render("![shot](.t3/workspace-image.svg)");
+
+    expect(html).toContain("width:720px");
+    expect(html).toContain("aspect-ratio:720 / 1400");
   });
 
   it("never passes a workspace source to a raw image when thread context is unavailable", () => {
