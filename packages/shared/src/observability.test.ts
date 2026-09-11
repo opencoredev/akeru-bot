@@ -2,7 +2,9 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Arr from "effect/Array";
 import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
@@ -202,6 +204,137 @@ describe("observability", () => {
           assert.equal(lines[1]?.name, "beta");
         }),
       ),
+    );
+
+    it.effect("drains trace records when the owning fiber is interrupted", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const tempDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-trace-interrupt-",
+        });
+        for (const count of [0, 1, 256]) {
+          const tracePath = path.join(tempDir, `${count}.ndjson`);
+          const ready = yield* Deferred.make<void>();
+          const owner = yield* Effect.gen(function* () {
+            const sink = yield* makeTraceSink({
+              filePath: tracePath,
+              maxBytes: 1024 * 1024,
+              maxFiles: 2,
+              batchWindowMs: 10_000,
+            });
+            for (let index = 0; index < count; index++) sink.push(makeRecord(`record-${index}`));
+            yield* Deferred.succeed(ready, undefined);
+            return yield* Effect.never;
+          }).pipe(Effect.scoped, Effect.forkChild);
+          yield* Deferred.await(ready);
+          yield* Fiber.interrupt(owner);
+          if (count > 0) assert.equal((yield* readTraceRecords(tracePath)).length, count);
+        }
+      }),
+    );
+
+    it.effect("bounds queued trace bytes, reports drops, and rejects pushes after close", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-trace-bound-" });
+          const tracePath = path.join(dir, "trace.ndjson");
+          const messages: unknown[] = [];
+          const capture = Logger.make<unknown, void>(({ message }) => {
+            messages.push(message);
+          });
+          yield* Effect.gen(function* () {
+            const sink = yield* makeTraceSink({
+              filePath: tracePath,
+              maxBytes: 1024,
+              maxFiles: 2,
+              maxBufferedBytes: 1024,
+              batchWindowMs: 10_000,
+            });
+            for (let index = 0; index < 1000; index++) sink.push(makeRecord("bounded"));
+            yield* sink.close();
+            const records = yield* readTraceRecords(tracePath);
+            assert.isAbove(records.length, 0);
+            assert.isBelow(records.length, 1000);
+            assert.isAtMost(Number((yield* fs.stat(tracePath)).size), 1024);
+            sink.push(makeRecord("after-close"));
+            yield* sink.flush;
+            assert.equal((yield* readTraceRecords(tracePath)).length, records.length);
+          }).pipe(Effect.provide(Logger.layer([capture], { mergeWithExisting: false })));
+          assert.isAbove(messages.length, 0);
+        }),
+      ),
+    );
+
+    it.effect(
+      "reports asynchronous write failures without retrying records or claiming attribution",
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const fs = yield* FileSystem.FileSystem;
+            const path = yield* Path.Path;
+            const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-trace-error-" });
+            const tracePath = path.join(dir, "not-a-file");
+            yield* fs.makeDirectory(tracePath);
+            const messages: unknown[] = [];
+            const stats: TraceSinkFlushStats[] = [];
+            const capture = Logger.make<unknown, void>(({ message }) => {
+              messages.push(message);
+            });
+            yield* Effect.gen(function* () {
+              const sink = yield* makeTraceSink({
+                filePath: tracePath,
+                maxBytes: 1024 * 1024,
+                maxFiles: 2,
+                batchWindowMs: 10_000,
+                onFlush: (entry) =>
+                  Effect.sync(() => {
+                    stats.push(entry);
+                  }),
+              });
+              sink.push(makeRecord("failed"));
+              yield* sink.flush;
+              yield* sink.close();
+              yield* sink.close();
+            }).pipe(Effect.provide(Logger.layer([capture], { mergeWithExisting: false })));
+            assert.equal(messages.length, 1);
+            assert.deepEqual(stats, []);
+          }),
+        ),
+    );
+
+    it.effect(
+      "honors the local tracer buffer limit and flushes its owned sink on scope close",
+      () =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-local-tracer-bound-" });
+          const tracePath = path.join(dir, "trace.ndjson");
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const tracer = yield* makeLocalFileTracer({
+                filePath: tracePath,
+                maxBytes: 1024 * 1024,
+                maxFiles: 2,
+                maxBufferedBytes: 1024,
+                batchWindowMs: 10_000,
+              });
+              for (let index = 0; index < 100; index++) {
+                yield* Effect.void.pipe(
+                  Effect.withSpan("bounded"),
+                  Effect.provideService(Tracer.Tracer, tracer),
+                );
+              }
+            }),
+          );
+          const records = yield* readTraceRecords(tracePath);
+          assert.isAbove(records.length, 0);
+          assert.isBelow(records.length, 100);
+          assert.isAtMost(Number((yield* fs.stat(tracePath)).size), 1024);
+        }),
     );
 
     it.effect("reports successful logical trace writes", () =>

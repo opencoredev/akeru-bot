@@ -1,9 +1,13 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeStream from "node:stream";
 
 import { it } from "@effect/vitest";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -15,6 +19,7 @@ import {
   type DesktopTelemetryReceiverHealth,
   initialDesktopTelemetryContactAt,
   isDesktopTelemetryContactStale,
+  openDesktopTelemetryReadable,
   recordDesktopTelemetrySampleHealth,
   requireDesktopTelemetryWriteProgress,
   resolveDesktopTelemetrySnapshotStaleAfterMs,
@@ -22,6 +27,122 @@ import {
 } from "./DesktopTelemetryReceiver.ts";
 
 describe("DesktopTelemetryReceiver", () => {
+  it("reads and closes an owned regular-file descriptor", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-telemetry-file-"));
+    const path = NodePath.join(directory, "telemetry.ndjson");
+    const payload = '{"type":"desktopTelemetryHello","version":1}\n';
+    NodeFS.writeFileSync(path, payload);
+    const fd = NodeFS.openSync(path, "r");
+    const readable = openDesktopTelemetryReadable(fd);
+    try {
+      expect(readable).toBeInstanceOf(NodeFS.ReadStream);
+      const closed = new Promise<void>((resolve, reject) => {
+        readable.once("close", resolve);
+        readable.once("error", reject);
+      });
+      let received = "";
+      readable.setEncoding("utf8");
+      for await (const chunk of readable) received += chunk;
+      await closed;
+      expect(received).toBe(payload);
+      expect(() => NodeFS.fstatSync(fd)).toThrow();
+    } finally {
+      readable.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(Context.get(Context.empty(), HostProcessPlatform) === "win32")(
+    "closes an inherited socket and exits with its writer still open without filesystem reads",
+    async ({ onTestFinished }) => {
+      const sourceUrl = new URL("./DesktopTelemetryReceiver.ts", import.meta.url).href;
+      const child = NodeChildProcess.spawn(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `
+            import assert from "node:assert/strict";
+            import fs from "node:fs";
+            import * as NodeNet from "node:net";
+            import * as NodeEvents from "node:events";
+            import { syncBuiltinESMExports } from "node:module";
+            import { openDesktopTelemetryReadable } from ${JSON.stringify(sourceUrl)};
+
+            assert.equal(fs.fstatSync(3).isSocket(), true);
+            const originalRead = fs.read;
+            fs.read = (fd, ...args) => {
+              assert.notEqual(fd, 3, "telemetry must not queue a blocking filesystem read");
+              return originalRead(fd, ...args);
+            };
+            syncBuiltinESMExports();
+            const readable = openDesktopTelemetryReadable(3);
+            if (!(readable instanceof NodeNet.Socket)) {
+              process.send("filesystem-reader");
+              readable.destroy();
+              process.disconnect();
+            } else {
+              let received = "";
+              readable.on("data", (chunk) => {
+                received += chunk.toString();
+                if (!received.endsWith("\\n")) return;
+                assert.equal(received, "telemetry\\n");
+                process.send("read");
+              });
+              process.once("message", async (message) => {
+                assert.equal(message, "close");
+                const closed = NodeEvents.once(readable, "close");
+                readable.destroy();
+                await closed;
+                await fs.promises.stat(new URL(${JSON.stringify(sourceUrl)}));
+                process.send("closed");
+                process.disconnect();
+              });
+            }
+          `,
+        ],
+        {
+          env: { ...process.env, UV_THREADPOOL_SIZE: "1" },
+          stdio: ["ignore", "ignore", "pipe", "pipe", "ipc"],
+        },
+      );
+      const writer = child.stdio[3];
+      assert.instanceOf(writer, NodeStream.Duplex);
+      if (!(writer instanceof NodeStream.Duplex)) throw new Error("Missing telemetry writer");
+      writer.allowHalfOpen = true;
+      onTestFinished(() => {
+        writer.destroy();
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+      });
+      let stderr = "";
+      child.stderr?.setEncoding("utf8").on("data", (chunk: string) => {
+        stderr += chunk;
+      });
+      const exited = new Promise<readonly [number | null, NodeJS.Signals | null]>(
+        (resolve, reject) => {
+          child.once("exit", (code, signal) => resolve([code, signal]));
+          child.once("error", reject);
+        },
+      );
+      const nextMessage = () =>
+        Promise.race([
+          new Promise<unknown>((resolve) => child.once("message", resolve)),
+          exited.then(([code, signal]) => {
+            throw new Error(`Telemetry fixture exited early (${code}, ${signal}): ${stderr}`);
+          }),
+        ]);
+      const read = nextMessage();
+      writer.write("telemetry\n");
+      expect(await read).toBe("read");
+      expect(writer.writableEnded).toBe(false);
+      const closed = nextMessage();
+      child.send("close");
+      expect(await closed).toBe("closed");
+      expect(await exited).toEqual([0, null]);
+      expect(writer.writableEnded).toBe(false);
+    },
+  );
+
   it("degrades a hello-only stream after the first-sample deadline", () => {
     expect(isDesktopTelemetryContactStale(Option.some(1_000), 90_999)).toBe(false);
     expect(isDesktopTelemetryContactStale(Option.some(1_000), 91_000)).toBe(true);

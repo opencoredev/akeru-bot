@@ -1,6 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+
+import { DesktopTraceShutdown } from "./DesktopObservability.ts";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
@@ -145,7 +148,7 @@ describe("DesktopLifecycle", () => {
     });
   }
 
-  it.effect("destroys windows before waiting for backend shutdown", () =>
+  it.effect("keeps windows alive until shutdown acknowledgement", () =>
     Effect.gen(function* () {
       const appListeners = new Map<string, (...args: readonly unknown[]) => void>();
       const shutdownRequested = yield* Deferred.make<void>();
@@ -201,12 +204,120 @@ describe("DesktopLifecycle", () => {
           yield* Deferred.succeed(allowShutdown, undefined);
           yield* Deferred.await(quitRequested);
 
-          assert.deepEqual(eventsBeforeCleanup, ["flush", "destroy", "request"]);
-          assert.deepEqual(events, ["flush", "destroy", "request", "quit"]);
+          assert.deepEqual(eventsBeforeCleanup, ["flush", "request"]);
+          assert.deepEqual(events, ["flush", "request", "destroy", "quit"]);
         }),
       ).pipe(Effect.provide(layer));
     }),
   );
+
+  for (const destroyFails of [false, true]) {
+    it.effect(
+      `completes nested app shutdown before native quit (destroyFails=${destroyFails})`,
+      () =>
+        Effect.gen(function* () {
+          const appListeners = new Map<string, (...args: readonly unknown[]) => void>();
+          const registered = yield* Deferred.make<void>();
+          const boundsEntered = yield* Deferred.make<void>();
+          const allowBounds = yield* Deferred.make<void>();
+          const stopEntered = yield* Deferred.make<void>();
+          const allowStop = yield* Deferred.make<void>();
+          const closeEntered = yield* Deferred.make<void>();
+          const allowClose = yield* Deferred.make<void>();
+          const nativeQuit = yield* Deferred.make<void>();
+          const events: string[] = [];
+          const quit = Effect.sync(() => {
+            events.push("native-quit");
+          }).pipe(Effect.andThen(Deferred.succeed(nativeQuit, undefined)), Effect.asVoid);
+          const layer = Layer.mergeAll(
+            DesktopLifecycle.layer,
+            makeElectronAppLayer(appListeners, quit),
+            electronThemeLayer,
+            makeElectronWindowLayer(
+              Effect.sync(() => {
+                events.push("destroy");
+                if (destroyFails) throw new Error("invalid guest");
+              }),
+            ),
+            makeDesktopWindowLayer({
+              flushMainWindowBounds: Effect.gen(function* () {
+                events.push("bounds");
+                yield* Deferred.succeed(boundsEntered, undefined);
+                yield* Deferred.await(allowBounds);
+              }),
+            }),
+            Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
+              platform: "linux",
+              isDevelopment: false,
+            } as DesktopEnvironment.DesktopEnvironment["Service"]),
+            DesktopShutdown.layer,
+            DesktopState.layer,
+            Layer.succeed(DesktopTraceShutdown, {
+              close: Effect.gen(function* () {
+                events.push("trace-close");
+                assert.isFalse(appListeners.has("before-quit"));
+                yield* Deferred.succeed(closeEntered, undefined);
+                yield* Deferred.await(allowClose);
+                events.push("trace-ack");
+              }),
+            }),
+            Layer.effectDiscard(Effect.addFinalizer(() => Deferred.await(nativeQuit))),
+          );
+          const main = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const shutdown = yield* DesktopShutdown.DesktopShutdown;
+              yield* Effect.addFinalizer(() =>
+                Effect.gen(function* () {
+                  events.push("backend-stop");
+                  yield* Deferred.succeed(stopEntered, undefined);
+                  yield* Deferred.await(allowStop);
+                }),
+              );
+              const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+              yield* lifecycle.register;
+              yield* Deferred.succeed(registered, undefined);
+              yield* shutdown.awaitRequest;
+            }),
+          ).pipe(
+            Effect.withSpan("desktop.app"),
+            Effect.ensuring(DesktopShutdown.acknowledgeShutdown),
+            Effect.provide(layer),
+            Effect.forkChild,
+          );
+          yield* Deferred.await(registered);
+          let prevented = false;
+          appListeners.get("before-quit")?.({
+            preventDefault: () => {
+              prevented = true;
+            },
+          });
+          yield* Deferred.await(boundsEntered);
+          assert.isTrue(prevented);
+          assert.isFalse(yield* Deferred.isDone(stopEntered));
+          yield* Deferred.succeed(allowBounds, undefined);
+          yield* Deferred.await(stopEntered);
+          const beforeBackendAcknowledgement = [...events];
+          assert.isFalse(yield* Deferred.isDone(closeEntered));
+          yield* Deferred.succeed(allowStop, undefined);
+          yield* Deferred.await(closeEntered);
+          const beforeTraceAcknowledgement = [...events];
+          assert.isFalse(yield* Deferred.isDone(nativeQuit));
+          yield* Deferred.succeed(allowClose, undefined);
+          yield* Deferred.await(nativeQuit);
+          yield* Fiber.join(main);
+          assert.deepEqual(beforeBackendAcknowledgement, ["bounds", "backend-stop"]);
+          assert.deepEqual(beforeTraceAcknowledgement, ["bounds", "backend-stop", "trace-close"]);
+          assert.deepEqual(events, [
+            "bounds",
+            "backend-stop",
+            "trace-close",
+            "trace-ack",
+            "destroy",
+            "native-quit",
+          ]);
+        }),
+    );
+  }
 
   it.effect("ignores app activation while quitting", () =>
     Effect.gen(function* () {

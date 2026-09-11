@@ -82,13 +82,14 @@ function addScopedListener<Args extends ReadonlyArray<unknown>>(
 }
 
 const requestDesktopShutdownAndWait = Effect.fn("desktop.lifecycle.requestShutdownAndWait")(
-  function* (
-    afterBoundsFlush: Effect.Effect<void> = Effect.void,
-  ): Effect.fn.Return<void, never, DesktopShutdown.DesktopShutdown | DesktopWindow.DesktopWindow> {
+  function* (): Effect.fn.Return<
+    void,
+    never,
+    DesktopShutdown.DesktopShutdown | DesktopWindow.DesktopWindow
+  > {
     const shutdown = yield* DesktopShutdown.DesktopShutdown;
     const desktopWindow = yield* DesktopWindow.DesktopWindow;
     yield* desktopWindow.flushMainWindowBounds;
-    yield* afterBoundsFlush;
     yield* shutdown.request;
     yield* shutdown.awaitComplete;
   },
@@ -120,23 +121,27 @@ function handleBeforeQuit(
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       yield* Ref.set(state.quitting, true);
       yield* logLifecycleInfo("before-quit received");
-      yield* requestDesktopShutdownAndWait(
-        electronWindow.destroyAll.pipe(
-          Effect.catchCause((cause) =>
-            logLifecycleError("failed to destroy windows before shutdown", { cause }),
-          ),
+      // Keep Electron windows alive until backend and trace I/O have drained.
+      yield* requestDesktopShutdownAndWait();
+      yield* electronWindow.destroyAll.pipe(
+        Effect.catchCause((cause) =>
+          logLifecycleError("failed to destroy windows after shutdown", { cause }),
         ),
       );
     }).pipe(Effect.withSpan("desktop.lifecycle.beforeQuit")),
-  ).finally(() => {
-    markQuitAllowed();
-    void runEffect(
-      Effect.gen(function* () {
-        const electronApp = yield* ElectronApp.ElectronApp;
-        yield* electronApp.quit;
-      }).pipe(Effect.withSpan("desktop.lifecycle.quitAfterShutdown")),
-    );
-  });
+  )
+    .then(() => {
+      markQuitAllowed();
+      void runEffect(
+        Effect.gen(function* () {
+          const electronApp = yield* ElectronApp.ElectronApp;
+          yield* electronApp.quit;
+        }).pipe(Effect.withSpan("desktop.lifecycle.quitAfterShutdown")),
+      );
+    })
+    .catch((cause: unknown) => {
+      void runEffect(logLifecycleError("desktop shutdown failed before quit", { cause }));
+    });
 }
 
 function quitFromSignal(
