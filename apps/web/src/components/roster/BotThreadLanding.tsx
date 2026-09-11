@@ -322,7 +322,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                             ?.map(({ id, result }) => (
                               <PluginSearchResultCard className="mt-3" key={id} result={result} />
                             ))}
-                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
                           {...(() => {
@@ -376,7 +376,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     className="group/message flex items-end justify-end gap-1"
                     data-testid="bot-user-message"
                   >
-                    <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                    <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                       <MessageControls
                         align="end"
                         copyText={
