@@ -41,6 +41,8 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { AgentController } from "../../provider/Services/AgentController.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
+import { ProjectionThreadActivityRepository } from "../../persistence/Services/ProjectionThreadActivities.ts";
+import { ProjectionThreadActivityRepositoryLive } from "../../persistence/Layers/ProjectionThreadActivities.ts";
 import { isGitRepository } from "../../git/Utils.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
@@ -573,6 +575,10 @@ export function runtimeEventToActivities(
           payload: {
             ...(event.requestId ? { requestId: event.requestId } : {}),
             questions: event.payload.questions,
+            ...("responseMode" in event.payload &&
+            (event.payload as { responseMode?: unknown }).responseMode === "message"
+              ? { responseMode: "message" as const }
+              : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -969,6 +975,7 @@ const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const agentController = yield* AgentController;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
+  const projectionThreadActivityRepository = yield* ProjectionThreadActivityRepository;
   const botUsageLedger = yield* BotUsageLedger;
   const serverSettingsService = yield* ServerSettingsService;
   const channelSecretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
@@ -1036,6 +1043,60 @@ const make = Effect.gen(function* () {
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
     );
+
+  const resolveNativeUserInputForTerminalTurn = (input: {
+    readonly event: ProviderRuntimeEvent;
+    readonly threadId: ThreadId;
+    readonly turnId: TurnId;
+    readonly now: string;
+  }) =>
+    Effect.gen(function* () {
+      const userInputActivities =
+        yield* projectionThreadActivityRepository.listUserInputLifecycleByThreadId({
+          threadId: input.threadId,
+        });
+      const pendingRequestIds = new Set<string>();
+      for (const activity of userInputActivities) {
+        const payload =
+          typeof activity.payload === "object" && activity.payload !== null
+            ? (activity.payload as Record<string, unknown>)
+            : null;
+        const requestId = payload?.requestId;
+        if (typeof requestId !== "string") continue;
+        if (
+          activity.kind === "user-input.requested" &&
+          activity.turnId !== null &&
+          sameId(activity.turnId, input.turnId) &&
+          payload?.responseMode !== "message"
+        ) {
+          pendingRequestIds.add(requestId);
+        } else if (
+          activity.kind === "user-input.resolved" ||
+          activity.kind === "provider.user-input.respond.failed"
+        ) {
+          pendingRequestIds.delete(requestId);
+        }
+      }
+      // A terminal turn cannot accept native callback answers. Message-mode
+      // questions may outlive that turn and still accept a later user message.
+      for (const requestId of pendingRequestIds) {
+        yield* orchestrationEngine.dispatch({
+          type: "thread.activity.append",
+          commandId: yield* providerCommandId(input.event, "terminal-user-input-resolved"),
+          threadId: input.threadId,
+          activity: {
+            id: EventId.make(`${input.event.eventId}:user-input-resolved:${requestId}`),
+            createdAt: input.now,
+            tone: "info",
+            kind: "user-input.resolved",
+            summary: "User input dismissed",
+            payload: { requestId },
+            turnId: input.turnId,
+          },
+          createdAt: input.now,
+        });
+      }
+    });
 
   const turnMessageIdsByTurnKey = yield* Cache.make<string, Set<MessageId>>({
     capacity: TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY,
@@ -2114,6 +2175,18 @@ const make = Effect.gen(function* () {
         });
       }
 
+      if (event.type === "turn.completed" || event.type === "turn.aborted") {
+        const turnId = toTurnId(event.turnId);
+        if (turnId) {
+          yield* resolveNativeUserInputForTerminalTurn({
+            event,
+            threadId: thread.id,
+            turnId,
+            now,
+          });
+        }
+      }
+
       if (event.type === "turn.completed") {
         const detailedThread = yield* getLoadedThreadDetail();
         const messages = detailedThread?.messages ?? [];
@@ -2441,4 +2514,7 @@ const make = Effect.gen(function* () {
 export const ProviderRuntimeIngestionLive = Layer.effect(
   ProviderRuntimeIngestionService,
   make,
-).pipe(Layer.provide(ProjectionTurnRepositoryLive));
+).pipe(
+  Layer.provide(ProjectionTurnRepositoryLive),
+  Layer.provide(ProjectionThreadActivityRepositoryLive),
+);
