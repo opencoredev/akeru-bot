@@ -1,3 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off - Source guard reads this module's renderer map.
+import * as NodeFS from "node:fs";
+
 import { EnvironmentId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -34,6 +37,30 @@ import ChatMarkdown, {
   orderedListGutterStyle,
   shouldUseMarkdownFileBrowserPrimaryAction,
 } from "./ChatMarkdown";
+
+describe("ChatMarkdown streaming renderers", () => {
+  it("keeps one renderer map instead of recreating types when text streams", () => {
+    const source = NodeFS.readFileSync(new URL("./ChatMarkdown.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("const ChatMarkdownRendererContext");
+    expect(source).toContain("const CHAT_MARKDOWN_COMPONENTS: Components");
+    expect(source).toContain("components={CHAT_MARKDOWN_COMPONENTS}");
+    expect(source).toContain("pre: function MarkdownPre");
+    expect(source).toContain("details: function MarkdownDetailsRenderer");
+    expect(source).not.toMatch(/useMemo<Components>/);
+  });
+
+  it("still renders streamed fences and details after extra trailing text", () => {
+    const fence = ["```text", "First code block", "```", "", "Streaming reply"].join("\n");
+    const html = renderToStaticMarkup(
+      <ChatMarkdown cwd="/tmp/project" text={`${fence} 9`} isStreaming />,
+    );
+
+    expect(html).toContain('data-language="text"');
+    expect(html).toContain("First code block");
+    expect(html).toContain("Streaming reply 9");
+  });
+});
 
 describe("canUseMarkdownFileShellActions", () => {
   const environmentId = EnvironmentId.make("environment-1");
