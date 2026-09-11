@@ -471,6 +471,7 @@ describe("ProviderCommandReactor", () => {
           get streamDomainEvents() {
             return engine.streamDomainEvents;
           },
+          subscribeDomainEvents: engine.subscribeDomainEvents,
           latestSequence: engine.latestSequence,
         } satisfies OrchestrationEngineService["Service"];
       }),

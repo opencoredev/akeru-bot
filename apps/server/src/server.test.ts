@@ -112,6 +112,7 @@ import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
+import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import { OrchestrationListenerCallbackError } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
@@ -468,6 +469,7 @@ const buildAppUnderTest = (options?: {
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
+    threadDeletionReactor?: Partial<ThreadDeletionReactor["Service"]>;
     routineRepository?: Partial<RoutineRepositoryShape>;
     routineRuntime?: Partial<RoutineRuntimeShape>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
@@ -848,8 +850,15 @@ const buildAppUnderTest = (options?: {
             readEvents: () => Stream.empty,
             dispatch: () => Effect.succeed({ sequence: 0 }),
             streamDomainEvents: Stream.empty,
+            subscribeDomainEvents: Effect.succeed(Stream.empty),
             latestSequence: Effect.succeed(0),
             ...options?.layers?.orchestrationEngine,
+          }),
+          Layer.mock(ThreadDeletionReactor)({
+            start: () => Effect.void,
+            drain: Effect.void,
+            drainThrough: () => Effect.void,
+            ...options?.layers?.threadDeletionReactor,
           }),
           Layer.succeed(
             RoutineRepository,
@@ -4920,6 +4929,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           orchestrationEngine: {
             streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.succeed(Stream.fromPubSub(liveEvents)),
           },
           projectionSnapshotQuery: {
             getShellSnapshot: () =>
@@ -4985,6 +4995,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           orchestrationEngine: {
             streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.succeed(Stream.fromPubSub(liveEvents)),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -5021,6 +5032,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           orchestrationEngine: {
             streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.succeed(Stream.fromPubSub(liveEvents)),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -5431,6 +5443,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           orchestrationEngine: {
             streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.succeed(Stream.fromPubSub(liveEvents)),
           },
           projectionSnapshotQuery: {
             getThreadShellById: (threadId) =>
