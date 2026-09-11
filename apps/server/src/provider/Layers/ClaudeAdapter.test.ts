@@ -899,16 +899,16 @@ describe("ClaudeAdapterLive", () => {
       assert.isDefined(promptMessage);
       assert.deepEqual(promptMessage?.message.content, [
         {
-          type: "text",
-          text: "What's in this image?",
-        },
-        {
           type: "image",
           source: {
             type: "base64",
             media_type: "image/png",
             data: "AQIDBA==",
           },
+        },
+        {
+          type: "text",
+          text: "What's in this image?",
         },
       ]);
     }).pipe(
