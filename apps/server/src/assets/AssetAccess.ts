@@ -19,6 +19,11 @@ import {
   WORKSPACE_BROWSER_PREVIEW_EXTENSIONS,
   WORKSPACE_IMAGE_PREVIEW_EXTENSIONS,
 } from "@t3tools/shared/filePreview";
+import {
+  IMAGE_DIMENSIONS_HEADER_BYTES,
+  readImageDimensions,
+  type ImageDimensions,
+} from "@t3tools/shared/imageDimensions";
 import { PROJECT_FAVICON_FALLBACK_MARKER } from "@t3tools/shared/projectFavicon";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
@@ -183,6 +188,28 @@ const resolveCanonicalWorkspaceFileForRequest = (input: {
     Effect.orElseSucceed(() => null),
   );
 
+const HEADER_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
+
+/**
+ * Reads pixel dimensions from an image's header so clients can reserve the
+ * exact box before the bytes arrive. Best effort: an unreadable or unsupported
+ * file just leaves the field out, and the client measures after decode.
+ */
+const readImageDimensionsFromHeader = (filePath: string) =>
+  Effect.gen(function* () {
+    const path = yield* Path.Path;
+    if (!HEADER_IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+      return null;
+    }
+    const fileSystem = yield* FileSystem.FileSystem;
+    const bytes = yield* fileSystem.open(filePath).pipe(
+      Effect.flatMap((file) => file.readAlloc(IMAGE_DIMENSIONS_HEADER_BYTES)),
+      Effect.scoped,
+      Effect.map((chunk) => Option.getOrElse(chunk, () => new Uint8Array())),
+    );
+    return readImageDimensions(bytes);
+  }).pipe(Effect.orElseSucceed((): ImageDimensions | null => null));
+
 export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (input: {
   readonly resource: AssetResource;
   readonly workspaceRoot?: string;
@@ -195,6 +222,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
   let claims: AssetClaims;
   let fileName: string;
   let sourcePath: string | undefined;
+  let imageDimensions: ImageDimensions | null = null;
 
   switch (input.resource._tag) {
     case "workspace-file": {
@@ -248,6 +276,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
           resource: input.resource,
         });
       }
+      imageDimensions = yield* readImageDimensionsFromHeader(canonicalFile);
       const canonicalWorkspaceRoot = yield* fileSystem.realPath(workspaceRoot).pipe(
         Effect.mapError(
           (cause) =>
@@ -286,6 +315,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
           resource: input.resource,
         });
       }
+      imageDimensions = yield* readImageDimensionsFromHeader(attachmentPath);
       claims = {
         version: 1,
         kind: "attachment",
@@ -424,6 +454,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
     relativeUrl: `${ASSET_ROUTE_PREFIX}/${token}/${encodeURIComponent(fileName)}`,
     expiresAt,
     ...(sourcePath !== undefined ? { sourcePath } : {}),
+    ...(imageDimensions !== null ? { imageDimensions } : {}),
   };
 });
 
