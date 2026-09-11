@@ -15,6 +15,15 @@ import { type ChangeEvent, type KeyboardEvent, useState } from "react";
  *   const bag = useCommitOnBlur(instance.displayName ?? "", (next) => {...});
  *   <Input {...bag} placeholder="e.g. Work" />
  */
+export function shouldBlurCommitOnKeyDown(event: {
+  readonly key: string;
+  readonly keyCode: number;
+  readonly nativeEvent: { readonly isComposing?: boolean };
+}): boolean {
+  if (event.nativeEvent.isComposing || event.keyCode === 229) return false;
+  return event.key === "Enter";
+}
+
 export function useCommitOnBlur(value: string, onCommit: (next: string) => void) {
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -34,10 +43,9 @@ export function useCommitOnBlur(value: string, onCommit: (next: string) => void)
       }
     },
     onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        (event.target as HTMLInputElement).blur();
-      }
+      if (!shouldBlurCommitOnKeyDown(event)) return;
+      event.preventDefault();
+      (event.target as HTMLInputElement).blur();
     },
   };
 }
