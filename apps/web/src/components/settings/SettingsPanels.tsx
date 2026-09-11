@@ -2166,7 +2166,7 @@ export function GeneralSettingsPanel() {
 
         <SettingsRow
           {...searchableSetting("text-generation-model")}
-          description="Used when bot work or source control work does not have its own model."
+          description="Used for thread titles and other generated text on connected environments that have this provider enabled. Bot work and source control can still pick their own model."
           resetAction={
             isTextGenerationModelDirty ? (
               <SettingResetButton
