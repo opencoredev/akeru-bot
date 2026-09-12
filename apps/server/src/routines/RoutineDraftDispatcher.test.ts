@@ -171,6 +171,8 @@ function deleteHarness(input: {
     getThreadCheckpointContext: () => Effect.succeed(Option.none()),
     getFullThreadDiffContext: () => Effect.succeed(Option.none()),
     getThreadShellById: () => Effect.succeed(Option.none()),
+    getThreadRuntimeContext: () => Effect.die("unused"),
+    getTurnStartMessage: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
   };
   const layer = RoutineDraftDispatcherLive.pipe(

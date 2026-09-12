@@ -79,6 +79,16 @@ Because persistence and projection share a transaction, the read model cannot du
 the event log. On dispatch failure the engine rereads persisted events past the starting sequence and
 reconciles.
 
+[`ProjectionSnapshotQuery.ts`][snapshot] is the persisted read model. Client thread snapshots load
+activity payloads in 25-row primary-key batches and project each batch before the next read. Shell
+summary refresh uses SQL aggregates for latest user-message time, pending approval count, and
+actionable-plan status, plus user-input lifecycle rows only. Provider command metadata paths use
+thread shells; turn start uses a single-message query. Runtime ingestion uses a joined thread
+context and keyed message, plan, and task-activity lookups instead of hydrating a full thread.
+`upsertMany` exists for projector cursors. Runtime `projectEvent` still commits each projector
+separately because attachment cleanup runs after each projector transaction. Combining those
+commits is shared with checkpoint attachment-transaction work and is not done here.
+
 Command and event names live in [`orchestration.ts`][contracts]. Some commands are client
 dispatchable (`thread.create`, `thread.turn.start`, `thread.approval.respond`); others are internal
 and produced only by server-side reactors (`thread.message.assistant.delta`,
@@ -142,6 +152,7 @@ already dispatch.
 [session]: ../../packages/client-runtime/src/rpc/session.ts
 [startup]: ../../apps/server/src/serverRuntimeStartup.ts
 [engine]: ../../apps/server/src/orchestration/Layers/OrchestrationEngine.ts
+[snapshot]: ../../apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts
 [decider]: ../../apps/server/src/orchestration/decider.ts
 [projector]: ../../apps/server/src/orchestration/projector.ts
 [worker]: ../../packages/shared/src/DrainableWorker.ts
