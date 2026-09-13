@@ -48,7 +48,9 @@ function parseRemoteFetchUrls(stdout: string): Map<string, string> {
 function pickPrimaryRemote(
   remotes: ReadonlyMap<string, string>,
 ): { readonly remoteName: string; readonly remoteUrl: string } | null {
-  for (const preferredRemoteName of ["upstream", "origin"] as const) {
+  // Origin is the project's hosting remote. An `upstream` remote is often a
+  // separate product kept for porting and must not replace this repo's identity.
+  for (const preferredRemoteName of ["origin", "upstream"] as const) {
     const remoteUrl = remotes.get(preferredRemoteName);
     if (remoteUrl) {
       return { remoteName: preferredRemoteName, remoteUrl };

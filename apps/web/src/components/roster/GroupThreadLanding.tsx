@@ -184,7 +184,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   return (
                     <div
                       key={message.id}
-                      className="max-w-[85%]"
+                      className="group/message max-w-[85%]"
                       data-testid="group-provider-message"
                     >
                       <div className="text-sm font-medium">Unavailable bot</div>
@@ -194,7 +194,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
-                      <div className="mt-1">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
                           {...(() => {
@@ -235,7 +235,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
-                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
                           {...(() => {
@@ -281,7 +281,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   className="group/message flex items-end justify-end gap-1"
                   data-testid="group-user-message"
                 >
-                  <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                  <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                     <MessageControls
                       align="end"
                       copyText={
