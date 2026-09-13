@@ -2,6 +2,7 @@ import * as NodeAssert from "node:assert/strict";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -47,6 +48,10 @@ class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterSh
 ) {}
 
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
+
+class OpenCodePermissionReplyTimeoutError extends Data.TaggedError(
+  "OpenCodePermissionReplyTimeoutError",
+)<{ readonly message: string }> {}
 
 type MessageEntry = {
   info: {
@@ -1853,7 +1858,12 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       yield* Effect.promise(() => replyCompleted).pipe(
         Effect.timeoutOrElse({
           duration: "1 second",
-          orElse: () => Effect.fail(new Error("OpenCode permission reply did not complete")),
+          orElse: () =>
+            Effect.fail(
+              new OpenCodePermissionReplyTimeoutError({
+                message: "OpenCode permission reply did not complete",
+              }),
+            ),
         }),
         TestClock.withLive,
       );
