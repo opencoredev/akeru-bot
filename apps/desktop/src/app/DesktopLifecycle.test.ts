@@ -211,6 +211,55 @@ describe("DesktopLifecycle", () => {
     }),
   );
 
+  it.effect("allows native quit after shutdown setup fails", () =>
+    Effect.gen(function* () {
+      const appListeners = new Map<string, (...args: readonly unknown[]) => void>();
+      const quitRequested = yield* Deferred.make<void>();
+      const quit = Deferred.succeed(quitRequested, undefined).pipe(Effect.asVoid);
+      const layer = DesktopLifecycle.layer.pipe(
+        Layer.provideMerge(makeElectronAppLayer(appListeners, quit)),
+        Layer.provideMerge(electronThemeLayer),
+        Layer.provideMerge(makeElectronWindowLayer()),
+        Layer.provideMerge(
+          makeDesktopWindowLayer({
+            flushMainWindowBounds: Effect.die("bounds write failed"),
+          }),
+        ),
+        Layer.provideMerge(
+          Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
+            platform: "darwin",
+            isDevelopment: false,
+          } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        ),
+        Layer.provideMerge(DesktopShutdown.layer),
+        Layer.provideMerge(DesktopState.layer),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+          yield* lifecycle.register;
+          let prevented = false;
+          appListeners.get("before-quit")?.({
+            preventDefault: () => {
+              prevented = true;
+            },
+          });
+          yield* Deferred.await(quitRequested);
+          assert.isTrue(prevented);
+
+          let retryPrevented = false;
+          appListeners.get("before-quit")?.({
+            preventDefault: () => {
+              retryPrevented = true;
+            },
+          });
+          assert.isFalse(retryPrevented);
+        }),
+      ).pipe(Effect.provide(layer));
+    }),
+  );
+
   for (const destroyFails of [false, true]) {
     it.effect(
       `completes nested app shutdown before native quit (destroyFails=${destroyFails})`,

@@ -140,7 +140,16 @@ function handleBeforeQuit(
       );
     })
     .catch((cause: unknown) => {
-      void runEffect(logLifecycleError("desktop shutdown failed before quit", { cause }));
+      // The original event was already prevented. Release the guard before
+      // retrying native quit so a failed drain cannot strand the application.
+      markQuitAllowed();
+      void runEffect(
+        Effect.gen(function* () {
+          yield* logLifecycleError("desktop shutdown failed before quit", { cause });
+          const electronApp = yield* ElectronApp.ElectronApp;
+          yield* electronApp.quit;
+        }).pipe(Effect.withSpan("desktop.lifecycle.quitAfterShutdownFailure")),
+      );
     });
 }
 
