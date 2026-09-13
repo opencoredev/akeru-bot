@@ -7,6 +7,7 @@ import {
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
+  resolveDesktopOnboardingCreationReadiness,
   resolveDesktopOnboardingEngine,
   resolveDesktopOnboardingUseCase,
   shouldShowDesktopOnboarding,
@@ -236,6 +237,32 @@ describe("desktop onboarding", () => {
     expect(
       desktopOnboardingModelSelection({ provider: "claudeAgent", model: "claude-default" }),
     ).toEqual({ instanceId: "claudeAgent", model: "claude-default" });
+  });
+
+  it("keeps bot creation pending while the provider catalog is still loading", () => {
+    expect(resolveDesktopOnboardingCreationReadiness("openai-codex", null)).toEqual({
+      status: "loading",
+    });
+  });
+
+  it("separates an unavailable provider from a provider catalog that is still loading", () => {
+    expect(resolveDesktopOnboardingCreationReadiness("openai-codex", [])).toEqual({
+      status: "unavailable",
+    });
+    expect(
+      resolveDesktopOnboardingCreationReadiness("openai-codex", [
+        {
+          instanceId: "codex",
+          driver: "codex",
+          enabled: true,
+          installed: true,
+          models: [{ slug: "gpt-default", isDefault: true }],
+        },
+      ]),
+    ).toEqual({
+      status: "ready",
+      engine: { provider: "codex", model: "gpt-default" },
+    });
   });
 
   it.each([
