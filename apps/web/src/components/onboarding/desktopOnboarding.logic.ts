@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 
 import type { BotAvatar, BotBlobShape } from "../roster/types";
-import { BLOB_COLORS, BLOB_SHAPES } from "../roster/roster.logic";
+import { BLOB_SHAPES, isBotAvatarColor } from "../roster/roster.logic";
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
 export const DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY = "akeru:desktop-onboarding-completed:v1";
@@ -96,7 +96,7 @@ function isBlobShape(value: unknown): value is BotBlobShape {
 }
 
 function isBlobColor(value: unknown): value is string {
-  return typeof value === "string" && BLOB_COLORS.includes(value);
+  return isBotAvatarColor(value);
 }
 
 const providerIds: readonly SubscriptionProviderId[] = [
