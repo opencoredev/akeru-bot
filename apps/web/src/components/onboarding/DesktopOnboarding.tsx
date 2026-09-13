@@ -19,14 +19,15 @@ import {
   LoaderIcon,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 
 import { isElectron } from "../../env";
 import { randomUUID } from "../../lib/utils";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
-import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { serverEnvironment } from "../../state/server";
 import { environmentShell } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
 import {
@@ -65,7 +66,7 @@ import {
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
-  resolveDesktopOnboardingEngine,
+  resolveDesktopOnboardingCreationReadiness,
   resolveDesktopOnboardingUseCase,
   shouldShowDesktopOnboarding,
   stepNumber,
@@ -74,6 +75,14 @@ import {
 const NO_ENVIRONMENT = "" as EnvironmentId;
 const EASE = [0.23, 1, 0.32, 1] as const;
 const LEAVE = [0.4, 0, 1, 1] as const;
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
 
 function readDraft(): DesktopOnboardingDraft | null {
   return parseDesktopOnboardingDraft(window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY));
@@ -88,7 +97,7 @@ function commandError(result: Parameters<typeof squashAtomCommandFailure>[0]): s
   return error instanceof Error ? error.message : "The request failed.";
 }
 
-function useCaptureMode(): boolean {
+function readCaptureMode(): boolean {
   return (
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).get("akeru-onboarding-capture") === "1"
@@ -103,15 +112,16 @@ interface ActiveLogin {
 export function SubscriptionStep({
   environmentId,
   draft,
+  captureMode = false,
   onChange,
   onContinue,
 }: {
   readonly environmentId: EnvironmentId;
   readonly draft: DesktopOnboardingDraft;
+  readonly captureMode?: boolean;
   readonly onChange: (draft: DesktopOnboardingDraft) => void;
   readonly onContinue: () => void;
 }) {
-  const captureMode = useCaptureMode();
   const statusQuery = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
@@ -269,7 +279,10 @@ export function SubscriptionStep({
       environmentId,
       input: { loginId: activeLogin.flow.loginId, code },
     });
-    if (isAtomCommandInterrupted(result)) return;
+    if (isAtomCommandInterrupted(result)) {
+      setBusy(false);
+      return;
+    }
     if (result._tag === "Failure") {
       setActiveLogin((current) =>
         current ? { ...current, error: commandError(result) } : current,
@@ -462,6 +475,7 @@ export function SubscriptionStep({
 function IdentityStep({
   draft,
   creating,
+  providerReadiness,
   error,
   onChange,
   onBack,
@@ -469,6 +483,7 @@ function IdentityStep({
 }: {
   readonly draft: DesktopOnboardingDraft;
   readonly creating: boolean;
+  readonly providerReadiness: ReturnType<typeof resolveDesktopOnboardingCreationReadiness>;
   readonly error: string | null;
   readonly onChange: (draft: DesktopOnboardingDraft) => void;
   readonly onBack: () => void;
@@ -544,14 +559,25 @@ function IdentityStep({
           </div>
         </div>
       </section>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {providerReadiness.status === "loading" ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
+          Preparing your provider…
+        </p>
+      ) : providerReadiness.status === "unavailable" ? (
+        <p className="text-sm text-destructive">
+          This provider is not ready. Go back and reconnect it.
+        </p>
+      ) : error ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : null}
       <div className="flex gap-2">
         <Button size="icon" variant="ghost-muted" aria-label="Back" onClick={onBack}>
           <ArrowLeftIcon className="size-4" />
         </Button>
         <Button
           className="h-10 flex-1 rounded-xl"
-          disabled={!draft.name.trim() || creating}
+          disabled={!draft.name.trim() || creating || providerReadiness.status !== "ready"}
           onClick={onContinue}
         >
           {creating ? (
@@ -676,16 +702,17 @@ function ConversationPreview({
   draft,
   message,
   createdBotReady,
+  captureMode,
   modelSelection,
   onMessageSent,
 }: {
   readonly draft: DesktopOnboardingDraft;
   readonly message: string | null;
   readonly createdBotReady: boolean;
+  readonly captureMode: boolean;
   readonly modelSelection: ReturnType<typeof desktopOnboardingModelSelection>;
   readonly onMessageSent: (message: string) => void;
 }) {
-  const captureMode = useCaptureMode();
   const messageStep = draft.step === "message";
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
@@ -758,16 +785,18 @@ function ConversationPreview({
 function OnboardingSurface({
   initialDraft,
   environmentId,
+  captureMode,
   onFinished,
 }: {
   readonly initialDraft: DesktopOnboardingDraft;
   readonly environmentId: EnvironmentId;
+  readonly captureMode: boolean;
   readonly onFinished: () => void;
 }) {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
   const createBot = useAtomCommand(botEnvironment.create, { reportFailure: false });
-  const providers = useAtomValue(primaryServerProvidersAtom);
+  const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
   const [draft, setDraft] = useState(initialDraft);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -779,6 +808,59 @@ function OnboardingSurface({
   const rosterBot = useRosterStore((state) =>
     draft.botId ? state.bots.find((bot) => bot.id === draft.botId) : undefined,
   );
+  const providerReadiness = useMemo(
+    () => resolveDesktopOnboardingCreationReadiness(draft.providerId, providers),
+    [draft.providerId, providers],
+  );
+
+  useEffect(() => {
+    const appRoot = document.getElementById("root");
+    if (!appRoot) return;
+    const wasInert = appRoot.inert;
+    const previousAriaHidden = appRoot.getAttribute("aria-hidden");
+    appRoot.inert = true;
+    appRoot.setAttribute("aria-hidden", "true");
+    surfaceRef.current?.focus();
+
+    const focusableElements = () => {
+      const surface = surfaceRef.current;
+      if (!surface) return [];
+      return Array.from(surface.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (element) =>
+          !element.matches(":disabled") &&
+          element.tabIndex >= 0 &&
+          element.closest('[inert],[aria-hidden="true"]') === null,
+      );
+    };
+    const containFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const surface = surfaceRef.current;
+      if (!surface) return;
+      const focusable = focusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        surface.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      const active = document.activeElement;
+      if (!surface.contains(active) || (event.shiftKey && active === first)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", containFocus, true);
+    return () => {
+      document.removeEventListener("keydown", containFocus, true);
+      appRoot.inert = wasInert;
+      if (previousAriaHidden === null) appRoot.removeAttribute("aria-hidden");
+      else appRoot.setAttribute("aria-hidden", previousAriaHidden);
+    };
+  }, []);
 
   useEffect(() => {
     if (draft.step !== "message" || draft.botId === null) {
@@ -797,6 +879,7 @@ function OnboardingSurface({
   }, [draft, rosterBot]);
 
   const updateDraft = (next: DesktopOnboardingDraft) => {
+    setCreateError(null);
     setDraft(next);
     writeDraft(next);
   };
@@ -806,10 +889,8 @@ function OnboardingSurface({
     setCreateError(null);
     const botId = BotId.make(`bot-${randomUUID()}`);
     const useCase = resolveDesktopOnboardingUseCase(draft.useCaseId, draft.customUseCase);
-    const engine = resolveDesktopOnboardingEngine(draft.providerId, providers);
-    if (!engine) {
+    if (providerReadiness.status !== "ready") {
       setCreating(false);
-      setCreateError("The selected subscription is still loading. Try again.");
       return;
     }
     const result = await createBot({
@@ -821,7 +902,7 @@ function OnboardingSurface({
         label: null,
         description: useCase.description,
         avatar: draft.avatar,
-        engine,
+        engine: providerReadiness.engine,
         sandbox: null,
         runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
         usageCap: null,
@@ -859,10 +940,14 @@ function OnboardingSurface({
   };
 
   const step = stepNumber(draft.step);
-  return (
+  return createPortal(
     <motion.div
       ref={surfaceRef}
       data-testid="desktop-onboarding"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Set up Akeru Bot"
+      tabIndex={-1}
       className="fixed inset-0 z-[10000] flex overflow-hidden bg-background text-foreground"
       initial={reducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -876,7 +961,15 @@ function OnboardingSurface({
       >
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold tracking-[-0.015em]">Akeru Bot</span>
-          <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 4`}>
+          <div
+            className="flex items-center gap-1.5"
+            role="progressbar"
+            aria-label="Setup progress"
+            aria-valuemin={1}
+            aria-valuemax={4}
+            aria-valuenow={step}
+            aria-valuetext={`Step ${step} of 4`}
+          >
             {[1, 2, 3, 4].map((value) => (
               <span
                 key={value}
@@ -901,6 +994,7 @@ function OnboardingSurface({
                 <SubscriptionStep
                   environmentId={environmentId}
                   draft={draft}
+                  captureMode={captureMode}
                   onChange={updateDraft}
                   onContinue={() => updateDraft({ ...draft, step: "use-case" })}
                 />
@@ -915,6 +1009,7 @@ function OnboardingSurface({
                 <IdentityStep
                   draft={draft}
                   creating={creating}
+                  providerReadiness={providerReadiness}
                   error={createError}
                   onChange={updateDraft}
                   onBack={() => updateDraft({ ...draft, step: "use-case" })}
@@ -940,7 +1035,7 @@ function OnboardingSurface({
           </AnimatePresence>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground/65">Step {step} of 4</p>
+          <p className="text-xs text-muted-foreground">Step {step} of 4</p>
           <Button
             size="xs"
             variant="ghost-muted"
@@ -960,6 +1055,7 @@ function OnboardingSurface({
           draft={draft}
           message={message}
           createdBotReady={rosterBot !== undefined}
+          captureMode={captureMode}
           modelSelection={desktopOnboardingModelSelection(rosterBot?.engine ?? null)}
           onMessageSent={finish}
         />
@@ -978,11 +1074,23 @@ function OnboardingSurface({
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 
-export function DesktopOnboarding() {
+interface DesktopOnboardingSurfaceProps {
+  readonly initialDraft: DesktopOnboardingDraft;
+  readonly environmentId: EnvironmentId;
+  readonly captureMode: boolean;
+  readonly onFinished: () => void;
+}
+
+export function DesktopOnboarding({
+  Surface = OnboardingSurface,
+}: {
+  readonly Surface?: ComponentType<DesktopOnboardingSurfaceProps>;
+} = {}) {
   const environmentId = usePrimaryEnvironmentId();
   const atomKey = environmentId ?? NO_ENVIRONMENT;
   const rosterLoaded = useAtomValue(environmentShell.stateValueAtom(atomKey)).status === "live";
@@ -993,7 +1101,7 @@ export function DesktopOnboarding() {
   );
   const [finished, setFinished] = useState(false);
   const initialDraftRef = useRef<DesktopOnboardingDraft | null>(draft);
-  const captureMode = useCaptureMode();
+  const [captureMode] = useState(readCaptureMode);
   if (rosterLoaded && initialDraftRef.current) {
     const currentDraft = initialDraftRef.current;
     const recoveredDraft = recoverMissingDesktopOnboardingBot(
@@ -1033,10 +1141,11 @@ export function DesktopOnboarding() {
   return (
     <AnimatePresence>
       {show && initialDraftRef.current && environmentId ? (
-        <OnboardingSurface
+        <Surface
           key="desktop-onboarding"
           initialDraft={initialDraftRef.current}
           environmentId={environmentId}
+          captureMode={captureMode}
           onFinished={() => setFinished(true)}
         />
       ) : null}

@@ -652,6 +652,7 @@ export function BotPromptComposer({
       <input
         ref={fileInputRef}
         type="file"
+        aria-label="Attach files"
         accept="image/*,.txt,.md,.markdown,.csv,.json,.yaml,.yml,.toml,.xml,.pdf"
         multiple
         disabled={readOnly}
