@@ -373,7 +373,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             },
           });
 
-          expect(generated.title).toBe("New thread");
+          expect(generated.title).toBe("New chat");
         }),
     ),
   );

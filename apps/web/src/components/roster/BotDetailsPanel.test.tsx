@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - The route contract reads its source.
 import * as NodeFS from "node:fs";
 
+import { BotId, ProjectId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -68,6 +69,32 @@ describe("BotDetailsPanel", () => {
     expect(markup).not.toContain("border-b border-border");
     expect(markup).toContain("border-t border-border");
   });
+
+  it.each(["disconnected", "failed", "needs-reconnect"] as const)(
+    "shows an assigned %s channel without claiming it is connected",
+    (status) => {
+      const markup = renderToStaticMarkup(
+        <BotDetailsPanel
+          bot={{
+            ...bot,
+            channelBindings: [
+              {
+                botId: BotId.make(bot.id),
+                provider: "slack",
+                projectId: ProjectId.make("project-1"),
+                status,
+                externalIdentity: null,
+                connectedAt: null,
+                sentMessageIds: [],
+              },
+            ],
+          }}
+        />,
+      );
+      expect(markup).toContain("0 of 1 connected");
+      expect(markup).not.toContain("No channels");
+    },
+  );
 
   it("sets, clears, and rejects invalid hard stops", () => {
     expect(parseBotUsageCapInput("50000")).toEqual({

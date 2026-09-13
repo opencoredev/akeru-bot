@@ -396,7 +396,7 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Usage refresh"]
         : []),
       ...(settings.sidebarThreadPreviewCount !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount
-        ? ["Visible threads"]
+        ? ["Visible chats"]
         : []),
       ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
       ...getChangedTypographySettingLabels(settings),
@@ -430,7 +430,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(isTextGenerationModelDirty ? ["Text generation model"] : []),
       ...getChangedBrowserSettingLabels(settings),
       ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
-        ? ["Agent browser access"]
+        ? ["Bot browser access"]
         : []),
       ...(!Equal.equals(settings.voice, DEFAULT_UNIFIED_SETTINGS.voice) ? ["Voice"] : []),
     ],
@@ -1615,7 +1615,7 @@ function LegacyFeaturesSection() {
           <div className="relative space-y-1 overflow-visible pt-3 text-foreground">
             <SettingsRow
               {...searchableSetting("legacy-plan-mode")}
-              description="Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every thread runs in build mode."
+              description="Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode."
               control={
                 <Switch
                   checked={settings.planModeEnabled}
@@ -1733,8 +1733,8 @@ export function BotSandboxBrowserSharingSettings({
             <DialogTitle>Change bot workspace mode?</DialogTitle>
             <DialogDescription>
               {pendingValue === "shared"
-                ? "Active tasks keep their current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move."
-                : "Active tasks keep their current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace."}
+                ? "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move."
+                : "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -2166,7 +2166,7 @@ export function GeneralSettingsPanel() {
 
         <SettingsRow
           {...searchableSetting("text-generation-model")}
-          description="Used when a bot or source control task does not have its own model."
+          description="Used when bot work or source control work does not have its own model."
           resetAction={
             isTextGenerationModelDirty ? (
               <SettingResetButton
@@ -2391,7 +2391,7 @@ export function ArchivedThreadsPanel() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to unarchive thread",
+              title: "Failed to unarchive chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2408,7 +2408,7 @@ export function ArchivedThreadsPanel() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to delete thread",
+              title: "Failed to delete chat",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -2434,16 +2434,16 @@ export function ArchivedThreadsPanel() {
                   <ArchiveIcon className="size-3.5 text-muted-foreground" />
                 )}
                 {isLoadingArchive
-                  ? "Loading archived threads"
+                  ? "Loading archived chats"
                   : archiveError
-                    ? "Could not load archived threads"
-                    : "No archived threads"}
+                    ? "Could not load archived chats"
+                    : "No archived chats"}
               </span>
             }
             description={
               isLoadingArchive
                 ? "Checking connected environments."
-                : (archiveError ?? "Archived threads will appear here.")
+                : (archiveError ?? "Archived chats will appear here.")
             }
           />
         </SettingsSection>
@@ -2481,7 +2481,7 @@ export function ArchivedThreadsPanel() {
                       toastManager.add(
                         stackedThreadToast({
                           type: "error",
-                          title: "Archived thread action failed",
+                          title: "Archived chat action failed",
                           description:
                             error instanceof Error ? error.message : "An error occurred.",
                         }),
@@ -2517,7 +2517,7 @@ export function ArchivedThreadsPanel() {
                           toastManager.add(
                             stackedThreadToast({
                               type: "error",
-                              title: "Failed to unarchive thread",
+                              title: "Failed to unarchive chat",
                               description:
                                 error instanceof Error ? error.message : "An error occurred.",
                             }),

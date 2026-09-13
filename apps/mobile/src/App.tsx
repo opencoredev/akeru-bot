@@ -13,6 +13,7 @@ import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
 import { MobilePolicyNotice } from "./features/settings/MobilePolicyNotice";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
 import { IncomingShareProvider } from "./features/sharing/IncomingShareProvider";
+import { ReplyPlaybackProvider } from "./features/replyPlayback/ReplyPlaybackProvider";
 import {
   AppearancePreferencesProvider,
   useAppearancePreferences,
@@ -35,7 +36,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 const appLinking = {
-  prefixes: [Linking.createURL("/"), "akeru://", "akeru-dev://", "t3code://", "t3code-dev://"],
+  prefixes: [Linking.createURL("/"), "akeru://", "akeru-dev://"],
   // The Expo dev client launches the app via
   // <scheme>://expo-development-client/?url=<packager> — that URL addresses
   // the launcher, not app navigation. Without this filter it falls through
@@ -62,7 +63,9 @@ export default function App() {
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
       <AppearancePreferencesProvider>
-        <AppContent />
+        <ReplyPlaybackProvider>
+          <AppContent />
+        </ReplyPlaybackProvider>
       </AppearancePreferencesProvider>
     </RegistryContext.Provider>
   );

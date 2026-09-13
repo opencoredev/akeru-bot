@@ -24,6 +24,7 @@ import {
   type CreateRemoteBotWorkspaceInput,
 } from "./botWorkspace.ts";
 import { BotWorkspacePool, type BotWorkspaceLease } from "./botWorkspacePool.ts";
+import { mcpServerNeedsBrowserAttachment } from "./McpServerConfig.ts";
 import {
   CODEX_COMPUTER_USE_SERVER_ID,
   isCodexComputerUseServer,
@@ -213,7 +214,11 @@ export class AkeruSessionResources {
 
       const previewMcpServerConfig = this.options.getPreviewMcpServerConfig?.(key);
       if (input.mcpServers.length > 0 || previewMcpServerConfig) {
-        const attachment = input.mcpServers.length > 0 ? await browser.attachment() : undefined;
+        const attachment = input.mcpServers.some((server) =>
+          mcpServerNeedsBrowserAttachment(server, remote),
+        )
+          ? await browser.attachment()
+          : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
         if (previewMcpServerConfig) {
           configs[T3_CODE_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;

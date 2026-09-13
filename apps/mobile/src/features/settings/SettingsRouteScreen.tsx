@@ -28,6 +28,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
+import { ReplyReadoutPreference } from "../replyPlayback/ReplyReadoutPreference";
+import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import {
   privacyControlPatch,
   type PrivacyControl,
@@ -115,6 +117,8 @@ function LocalSettingsRouteScreen({
           />
         </SettingsSection>
 
+        <ProviderSettingsSection environmentId={settingsEnvironmentId} />
+
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
         <GeneralSettingsSection />
@@ -132,6 +136,37 @@ function LocalSettingsRouteScreen({
         <AppSettingsSection />
       </ScrollView>
     </View>
+  );
+}
+
+function ProviderSettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
+  const navigation = useNavigation();
+  return (
+    <SettingsSection title="Providers">
+      {environmentId === null ? (
+        <Text className="text-sm text-foreground-muted">
+          Open Settings from an environment to connect a provider.
+        </Text>
+      ) : (
+        <SettingsRow
+          icon="key"
+          label="Provider connections"
+          onPress={() =>
+            navigation.navigate("SettingsSheet", {
+              screen: "SettingsContent",
+              params: {
+                screen: "SettingsProviderHealth",
+                params: { environmentId, target: "providers" },
+              },
+            })
+          }
+        />
+      )}
+    </SettingsSection>
   );
 }
 
@@ -158,6 +193,16 @@ function ErrorsSettingsSection({
         }
       />
     </SettingsSection>
+  );
+}
+
+function AutomaticReadoutSettingsRow() {
+  const session = useOptionalReplyPlayback();
+  if (!session) return null;
+  return (
+    <View className="px-4 py-3">
+      <ReplyReadoutPreference preference={session.preference} />
+    </View>
   );
 }
 
@@ -206,6 +251,7 @@ function EnvironmentPrivacySettingsSection({
         value={settings.voice.enabled}
         onValueChange={(enabled) => updateControl("voice", enabled)}
       />
+      <AutomaticReadoutSettingsRow />
       <SettingsSwitchRow
         icon="arrow.clockwise"
         label="Provider update checks"
@@ -242,7 +288,7 @@ function LegacySettingsSection() {
       <SettingsSection title="Legacy">
         <SettingsSwitchRow
           icon="sidebar.left"
-          label="Legacy Thread List"
+          label="Legacy Chat List"
           value={!threadListV2Enabled}
           onValueChange={(value) => savePreferences({ legacyThreadListEnabled: value })}
         />
@@ -372,8 +418,8 @@ function capitalize(value: string): string {
 
 function ArchivedThreadsSettingsSection() {
   return (
-    <SettingsSection title="Threads">
-      <SettingsRow icon="archivebox" label="Archived Threads" target="SettingsArchive" />
+    <SettingsSection title="Chats">
+      <SettingsRow icon="archivebox" label="Archived conversations" target="SettingsArchive" />
     </SettingsSection>
   );
 }

@@ -49,12 +49,52 @@ authenticated.
   `<path>/userdata`; the base directory remains available for caches, worktrees, and other shared
   data.
 
+### Dev status
+
+Run `vp run dev:status` for a read-only status report. Use
+`vp run dev:status --home-dir <path>` to inspect an explicit Akeru home.
+The command uses the existing `server-runtime.json`; it does not scan ports or create a registry.
+
+- Reports the checkout root, linked worktree, Akeru home, data directory, recorded server and web
+  origins, trace path, and missing local prerequisites.
+- Uses the same worktree home helper as the dev runner. An explicit `--home-dir` wins, then the
+  worktree home, then `T3CODE_HOME`. The implicit main-checkout fallback is `~/.akeru/dev`.
+  Explicit and worktree homes use `userdata`. `AKERU_HOME` is not a dev-runner override.
+- Checks the recorded PID without sending a signal. Missing or stale runtime files remain unchanged.
+  Recorded origins from stale files are historical, not proof that a server is running.
+- Makes credential-free HTTP HEAD checks only on loopback. It does not follow redirects or contact
+  remote origins. HTTP responses show availability, not verified application readiness.
+- Reports desktop debug-port configuration and the command that resolves current mobile identity
+  from app configuration. It does not duplicate bundle IDs or infer installed clients from settings.
+  Provider credentials, native toolchains, and installed mobile apps are not checked.
+- Does not print pairing URLs, URL credentials, queries, fragments, or arbitrary environment values.
+  It does not read the database, start a server or browser, or change state, including in live homes.
+
+### Worktree setup and verification
+
+Worktree setup runs `scripts/setup-worktree-env.ts` after dependency installation. It copies optional
+project `.env` configuration with private permissions, preserves an existing regular file, and
+refuses a legacy symlink. Changes to the worktree copy do not change the source checkout.
+
+Use `vp run dev:fixture --base-dir <empty-home> --case <empty|populated|edge>` for repeatable,
+offline visual data. The command runs migrations, guards the home and database, and backs up repeated
+fixture writes. After pairing or business activity, create a fresh fixture home. See
+[the fixture recipe](../../.agents/skills/test-t3-app/references/sqlite-fixtures.md).
+
+Follow [local verification](verification.md) for client coverage, evidence, and environment lifetime.
+The app testing skill includes Electron debug attachment; mobile testing resolves development identity
+from app configuration rather than copied identifiers.
+
 ## Build, check, test
 
 - `vp run build`: Fans out over `apps/*`, `packages/*`, `oxlint-plugin-t3code`, and `scripts`.
   Workspaces that define a build task run one: desktop, marketing, server (which depends on web), and
   web. Shared packages are consumed and bundled transitively rather than built separately.
 - `vp run build:desktop`: Builds the desktop pipeline (desktop plus server).
+- `vp run test:desktop-smoke`: Launches the built app with the installed raw Electron runtime in
+  temporary application and OS homes. Requires backend-ready and main-window-created logs without
+  a fatal error or early exit, then stops its captured process group and removes its temporary data.
+  This proves startup, not renderer interaction. See the desktop testing skill for that check.
 - `vp run start`: Runs the production server (serves the built web app as static files).
 - `vp check`: Vite+ format, lint, and type checks. This repo sets `typeCheck: false` in its lint
   options, so workspace type checking runs separately.

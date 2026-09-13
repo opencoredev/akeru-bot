@@ -33,6 +33,7 @@ import {
   connectChannel,
   createMcpServer,
   createProject,
+  detachChannel,
   disconnectChannel,
   reconnectChannel,
   sendChannelMessage,
@@ -201,9 +202,12 @@ describe("environment commands", () => {
       const supervisor = yield* makeSupervisor(dispatched);
       const botId = BotId.make("bot-1");
 
-      yield* connectChannel({ botId, provider: "telegram", token: "token" }).pipe(
-        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
-      );
+      yield* connectChannel({
+        botId,
+        targetProjectId: ProjectId.make("project-1"),
+        provider: "telegram",
+        token: "token",
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
       yield* reconnectChannel({ botId, provider: "telegram" }).pipe(
         Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
       );
@@ -215,12 +219,16 @@ describe("environment commands", () => {
       yield* disconnectChannel({ botId, provider: "telegram" }).pipe(
         Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
       );
+      yield* detachChannel({ botId, provider: "telegram" }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+      );
 
       expect(dispatched.map((command) => command.type)).toEqual([
         "channel.connect",
         "channel.reconnect",
         "channel.send",
         "channel.disconnect",
+        "channel.detach",
       ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );

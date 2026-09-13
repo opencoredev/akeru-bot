@@ -2,6 +2,21 @@ import type { McpServer } from "@t3tools/contracts";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
 const runtimeHeaders = new WeakMap<McpServer, Readonly<Record<string, string>>>();
+const BROWSER_ATTACHMENT_CONNECTORS: ReadonlySet<string> = new Set([
+  "builtin-executor",
+  "builtin-tinyfish",
+]);
+
+export function mcpServerNeedsBrowserAttachment(
+  server: McpServer,
+  availableToHostedPlugins: boolean,
+): boolean {
+  return (
+    server.enabled &&
+    BROWSER_ATTACHMENT_CONNECTORS.has(String(server.id)) &&
+    (server.transport === "stdio" || availableToHostedPlugins)
+  );
+}
 
 export function withMcpRuntimeHeaders<T extends McpServer>(
   server: T,

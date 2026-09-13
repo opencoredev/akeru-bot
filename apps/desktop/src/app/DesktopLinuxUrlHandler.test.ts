@@ -25,6 +25,7 @@ const makeEnvironment = (overrides: Record<string, unknown> = {}) =>
     displayName: "Akeru Bot (Alpha)",
     linuxWmClass: "akeru-bot",
     linuxApplicationsDir: "/home/alice/.local/share/applications",
+    appDataDirectory: "/home/alice/.config",
     appImagePath: Option.some("/home/alice/Applications/T3-Code.AppImage"),
     path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
     ...overrides,
@@ -51,6 +52,7 @@ const makeHandlerLayer = (
     readonly environment?: Record<string, unknown>;
     readonly xdgMimeExitCode?: number;
     readonly writeError?: PlatformError.PlatformError;
+    readonly mimeappsContent?: string;
   } = {},
 ) =>
   DesktopLinuxUrlHandler.layer.pipe(
@@ -62,6 +64,18 @@ const makeHandlerLayer = (
             Effect.sync(() => {
               recorded.directories.push(path);
             }),
+          readFileString: (path) =>
+            input.mimeappsContent === undefined
+              ? Effect.fail(
+                  PlatformError.systemError({
+                    _tag: "NotFound",
+                    module: "FileSystem",
+                    method: "readFileString",
+                    description: "no mimeapps.list",
+                    pathOrDescriptor: path,
+                  }),
+                )
+              : Effect.succeed(input.mimeappsContent),
           writeFileString: (path, content) =>
             input.writeError
               ? Effect.fail(input.writeError)
@@ -107,7 +121,7 @@ describe("DesktopLinuxUrlHandler", () => {
     const entry = DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
       displayName: "Akeru Bot (Dev)",
       execTarget: '/home/al ice/Apps/T3 "100%" $HOME\\x.AppImage',
-      schemes: ["akeru", "t3code"],
+      schemes: ["akeru"],
     });
 
     assert.include(entry, "[Desktop Entry]");
@@ -122,7 +136,6 @@ describe("DesktopLinuxUrlHandler", () => {
     assert.include(entry, "NoDisplay=true");
     assert.notInclude(entry, "StartupWMClass=");
     assert.include(entry, "MimeType=x-scheme-handler/akeru;");
-    assert.include(entry, "x-scheme-handler/t3code;");
   });
 
   it("carries structured context on registration errors", () => {
@@ -169,17 +182,77 @@ describe("DesktopLinuxUrlHandler", () => {
         'Exec="/home/alice/Applications/T3-Code.AppImage" %U',
       );
       assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/akeru;");
-      assert.include(recorded.files[0]?.content, "x-scheme-handler/t3code;");
       assert.deepEqual(recorded.commands, [
         {
           command: "xdg-mime",
           args: ["default", "akeru-url-handler.desktop", "x-scheme-handler/akeru"],
         },
-        {
-          command: "xdg-mime",
-          args: ["default", "akeru-url-handler.desktop", "x-scheme-handler/t3code"],
-        },
       ]);
+    });
+  });
+
+  it("releases only retired schemes that point at our handler entry", () => {
+    const cleaned = DesktopLinuxUrlHandler.removeRetiredSchemeAssociations(
+      [
+        "[Default Applications]",
+        "x-scheme-handler/t3code=akeru-url-handler.desktop",
+        "x-scheme-handler/t3code-dev=akeru-url-handler.desktop;other.desktop;",
+        "x-scheme-handler/akeru=akeru-url-handler.desktop",
+        "x-scheme-handler/t3code=t3code-url-handler.desktop",
+        "text/html=firefox.desktop",
+      ].join("\n"),
+    );
+
+    assert.equal(
+      cleaned,
+      [
+        "[Default Applications]",
+        "x-scheme-handler/t3code-dev=other.desktop;",
+        "x-scheme-handler/akeru=akeru-url-handler.desktop",
+        "x-scheme-handler/t3code=t3code-url-handler.desktop",
+        "text/html=firefox.desktop",
+      ].join("\n"),
+    );
+    assert.isNull(
+      DesktopLinuxUrlHandler.removeRetiredSchemeAssociations(
+        "x-scheme-handler/akeru=akeru-url-handler.desktop\n",
+      ),
+    );
+  });
+
+  it.effect("rewrites mimeapps.list when a retired scheme still points at Akeru", () => {
+    const recorded = emptyRecording();
+
+    return Effect.gen(function* () {
+      yield* runRegister(recorded, {
+        mimeappsContent: [
+          "[Default Applications]",
+          "x-scheme-handler/t3code=akeru-url-handler.desktop",
+          "x-scheme-handler/akeru=akeru-url-handler.desktop",
+        ].join("\n"),
+      });
+
+      const mimeappsWrite = recorded.files.find(
+        (file) => file.path === "/home/alice/.config/mimeapps.list",
+      );
+      assert.equal(
+        mimeappsWrite?.content,
+        ["[Default Applications]", "x-scheme-handler/akeru=akeru-url-handler.desktop"].join("\n"),
+      );
+    });
+  });
+
+  it.effect("leaves mimeapps.list alone when no retired scheme points at Akeru", () => {
+    const recorded = emptyRecording();
+
+    return Effect.gen(function* () {
+      yield* runRegister(recorded, {
+        mimeappsContent: "x-scheme-handler/t3code=t3code-url-handler.desktop\n",
+      });
+
+      assert.isUndefined(
+        recorded.files.find((file) => file.path === "/home/alice/.config/mimeapps.list"),
+      );
     });
   });
 

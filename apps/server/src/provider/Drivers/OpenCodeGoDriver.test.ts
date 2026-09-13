@@ -45,6 +45,7 @@ describe("OpenCodeGoDriver", () => {
             models: expect.arrayContaining([
               expect.objectContaining({ slug: "gpt-5.6-luna", isDefault: true }),
               expect.objectContaining({ slug: "grok-4.5" }),
+              expect.objectContaining({ slug: "muse-spark-1.3-contributor" }),
               expect.objectContaining({ slug: "qwen3.8-max" }),
             ]),
           });

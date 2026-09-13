@@ -1,5 +1,6 @@
 import {
   AkeruDelegationRecord,
+  AuthSessionId,
   CheckpointRef,
   EventId,
   MessageId,
@@ -415,6 +416,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               id: asMessageId("message-1"),
               role: "assistant",
               text: "hello from projection",
+              authorPersonId: AuthSessionId.make("person-1"),
+              authorDisplayName: "Leo",
               turnId: asTurnId("turn-1"),
               respondingBotId: null,
               reactions: [],
@@ -566,6 +569,17 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.equal(threadDetail._tag, "Some");
       if (threadDetail._tag === "Some") {
         assert.deepEqual(threadDetail.value, snapshot.threads[0]);
+      }
+
+      const turnStart = yield* snapshotQuery.getTurnStartMessage({
+        threadId: ThreadId.make("thread-1"),
+        messageId: MessageId.make("message-1"),
+      });
+      assert.equal(turnStart._tag, "Some");
+      if (turnStart._tag === "Some") {
+        assert.equal(turnStart.value.message.role, "assistant");
+        assert.equal(turnStart.value.message.text, "hello from projection");
+        assert.equal(turnStart.value.hasOtherUserMessages, false);
       }
     }),
   );

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "alchemy deploy",
+    "deploy": "alchemy deploy --stage production",
     "test": "vp test run",
     "typecheck": "tsgo --noEmit"
   },

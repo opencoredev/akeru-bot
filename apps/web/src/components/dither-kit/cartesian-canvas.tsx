@@ -24,6 +24,7 @@ type LoopArgs = {
   state: RefObject<ChartContextValue>;
   targets: RefObject<Record<string, Surface>>;
   stars: RefObject<Star[]>;
+  invalidate: RefObject<(() => void) | null>;
 };
 
 /**
@@ -41,6 +42,7 @@ function startCartesianLoop({
   state,
   targets,
   stars,
+  invalidate,
 }: LoopArgs): (() => void) | undefined {
   const c = canvas.getContext("2d");
   if (!c || cols <= 0 || rows <= 0) return undefined;
@@ -61,8 +63,8 @@ function startCartesianLoop({
   }
 
   const reduce = prefersReducedMotion();
-  const EASE = reduce ? 1 : 0.18;
   const animate = state.current.animate && !reduce;
+  const EASE = animate ? 0.18 : 1;
   const duration = state.current.animationDuration;
   const current: Record<string, Surface> = {};
 
@@ -115,17 +117,9 @@ function startCartesianLoop({
   let lastSelected: string | null | undefined = Symbol() as never;
 
   const draw = (now: number) => {
-    raf = requestAnimationFrame(draw);
+    raf = animate ? requestAnimationFrame(draw) : 0;
     const s = state.current;
     if (!s.ready) return;
-    // Keep the bloom layer in sync with the crisp canvas while it's active.
-    if (bloomCtx) {
-      const on = s.bloom !== "off" && (!s.bloomOnHover || s.isMouseInChart || s.hovered);
-      if (on) {
-        bloomCtx.clearRect(0, 0, cols, rows);
-        bloomCtx.drawImage(canvas, 0, 0);
-      }
-    }
     const tgt = targets.current;
     if (s.revision !== lastRevision) {
       lastRevision = s.revision;
@@ -181,7 +175,7 @@ function startCartesianLoop({
     const itTarget = s.isMouseInChart || s.hovered ? 1 : 0;
     let settling = false;
     if (Math.abs(intensity - itTarget) > 0.001) {
-      intensity += (itTarget - intensity) * 0.16;
+      intensity += (itTarget - intensity) * (animate ? 0.16 : 1);
       settling = true;
       needsFill = true;
     } else intensity = itTarget;
@@ -189,7 +183,7 @@ function startCartesianLoop({
     // Live hover wins; the controlled markerIndex (e.g. a committed point)
     // is the fallback shown when nothing is hovered.
     const marker = s.hoverIndex != null ? s.hoverIndex : s.markerIndex;
-    const winkDue = !reduce && now - last >= 100;
+    const winkDue = animate && now - last >= 100;
     // Repaint when a tweak-driven paint input changes (variant, stacking) so
     // the panel updates the fill live — without resetting the entrance reveal.
     const paintSig = `${s.stackType}|${s.configKeys
@@ -200,7 +194,10 @@ function startCartesianLoop({
       lastPaintSig = paintSig;
       needsFill = true;
     }
-    if (!(moving || settling || winkDue || marker != null || progChanged || sigChanged)) return;
+    if (
+      !(needsFill || moving || settling || winkDue || marker != null || progChanged || sigChanged)
+    )
+      return;
     if (progChanged) {
       lastProg = prog;
       needsFill = true;
@@ -249,7 +246,7 @@ function startCartesianLoop({
       const top = cur.top[sx] ?? 0;
       const floor = cur.floor[sx] ?? rows - 1;
       const sy = Math.round(top + star.depth * (floor - top));
-      const tw = reduce ? 0.85 : (Math.sin((tick + star.phase) * 0.35) + 1) / 2;
+      const tw = animate ? (Math.sin((tick + star.phase) * 0.35) + 1) / 2 : 0.85;
       const lift = tw * (0.7 + 0.3 * intensity);
       if (lift < 0.55 || sy < 0 || sy >= rows) continue;
       // Sparkles glint in the series colour via opacity (the `lift` wink)
@@ -267,10 +264,21 @@ function startCartesianLoop({
         c.fillRect(sx, sy + 1, 1, 1);
       }
     }
+    if (bloomCtx && s.bloom !== "off" && (!s.bloomOnHover || s.isMouseInChart || s.hovered)) {
+      bloomCtx.clearRect(0, 0, cols, rows);
+      bloomCtx.drawImage(canvas, 0, 0);
+    }
   };
 
-  raf = requestAnimationFrame(draw);
-  return () => cancelAnimationFrame(raf);
+  invalidate.current = () => {
+    needsFill = true;
+    if (!raf) raf = requestAnimationFrame(draw);
+  };
+  invalidate.current();
+  return () => {
+    cancelAnimationFrame(raf);
+    invalidate.current = null;
+  };
 }
 
 /**
@@ -338,11 +346,32 @@ export function CartesianCanvas() {
   const stateRef = useRef(ctx);
   const targetsRef = useRef(targets);
   const starsRef = useRef(stars);
+  const invalidateRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     stateRef.current = ctx;
     targetsRef.current = targets;
     starsRef.current = stars;
-  });
+  }, [ctx, targets, stars]);
+
+  useEffect(() => {
+    invalidateRef.current?.();
+  }, [
+    targets,
+    stars,
+    ctx.ready,
+    ctx.revision,
+    ctx.stackType,
+    ctx.seriesSpecs,
+    ctx.seedOf,
+    ctx.selectedDataKey,
+    ctx.focusDataKey,
+    ctx.hoverIndex,
+    ctx.markerIndex,
+    ctx.isMouseInChart,
+    ctx.hovered,
+    ctx.bloom,
+    ctx.bloomOnHover,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -355,8 +384,9 @@ export function CartesianCanvas() {
       state: stateRef,
       targets: targetsRef,
       stars: starsRef,
+      invalidate: invalidateRef,
     });
-  }, [cols, rows]);
+  }, [cols, rows, ctx.animate, ctx.animationDuration]);
 
   const bloomActive = ctx.bloomOnHover ? ctx.isMouseInChart || ctx.hovered : true;
   const bloom = bloomLayerStyle(ctx.bloom, bloomActive);

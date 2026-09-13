@@ -97,7 +97,7 @@ export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: read
   return {
     type: "warning" as const,
     title: `${pluginTitle} connected with a session issue`,
-    description: `${recoveryFailures.join(" ")} Restart the affected agent session to retry.`,
+    description: `${recoveryFailures.join(" ")} Restart the affected bot session to retry.`,
   };
 }
 

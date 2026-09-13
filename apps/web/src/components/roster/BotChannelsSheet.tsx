@@ -30,16 +30,18 @@ const providerLabel = (provider: ChannelProvider) =>
     ? "Photon"
     : provider === "whatsapp"
       ? "Meta Cloud API"
-      : "Telegram Bot API";
+      : provider === "telegram"
+        ? "Telegram Bot API"
+        : provider === "slack"
+          ? "Slack Socket Mode"
+          : "Discord Gateway";
 
 const assignedBotForConnection = (
   connectionId: ChannelConnectionId,
   bots: ReadonlyArray<Pick<OrchestrationBot, "id" | "name" | "channelBindings">>,
 ) =>
   bots.find((candidate) =>
-    (candidate.channelBindings ?? []).some(
-      (binding) => binding.connectionId === connectionId && binding.status !== "disconnected",
-    ),
+    (candidate.channelBindings ?? []).some((binding) => binding.connectionId === connectionId),
   );
 
 export function BotChannelsSheet({
@@ -60,6 +62,7 @@ export function BotChannelsSheet({
   const disconnect = useAtomCommand(botEnvironment.channels.disconnect, {
     reportFailure: false,
   });
+  const detach = useAtomCommand(botEnvironment.channels.detach, { reportFailure: false });
   const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
     reportFailure: false,
   });
@@ -78,12 +81,14 @@ export function BotChannelsSheet({
     );
     setBusyId(connection.id);
     const result =
-      binding?.status === "needs-reconnect"
+      binding?.status === "needs-reconnect" ||
+      binding?.status === "failed" ||
+      binding?.status === "disconnected"
         ? await reconnect({
             environmentId,
             input: { botId: BotId.make(bot.id), provider: connection.provider },
           })
-        : binding && binding.status !== "disconnected"
+        : binding
           ? await disconnect({
               environmentId,
               input: { botId: BotId.make(bot.id), provider: connection.provider },
@@ -99,6 +104,19 @@ export function BotChannelsSheet({
     setBusyId(null);
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: "Could not update channel" });
+    }
+  };
+
+  const unassign = async (connection: ChannelConnectionProfile) => {
+    if (!environmentId) return;
+    setBusyId(connection.id);
+    const result = await detach({
+      environmentId,
+      input: { botId: BotId.make(bot.id), provider: connection.provider },
+    });
+    setBusyId(null);
+    if (result._tag === "Failure") {
+      toastManager.add({ type: "error", title: "Could not unassign channel" });
     }
   };
 
@@ -122,13 +140,11 @@ export function BotChannelsSheet({
             </div>
           ) : access === "denied" ? (
             <div className="py-8 text-sm text-muted-foreground">
-              Open this environment on its host to manage channels.
+              This client does not have permission to manage channels.
             </div>
           ) : connections.length === 0 ? (
             <div className="space-y-3 py-4">
-              <p className="text-sm text-muted-foreground">
-                Set up Telegram, iMessage, or WhatsApp first.
-              </p>
+              <p className="text-sm text-muted-foreground">Set up a channel connection first.</p>
               <Button onClick={openChannelSettings}>Set up channels</Button>
             </div>
           ) : (
@@ -142,44 +158,60 @@ export function BotChannelsSheet({
                 const action =
                   owner && !ownedByCurrentBot
                     ? "Assigned"
-                    : binding?.status === "needs-reconnect"
+                    : binding?.status === "needs-reconnect" ||
+                        binding?.status === "failed" ||
+                        binding?.status === "disconnected"
                       ? "Reconnect"
-                      : binding && binding.status !== "disconnected"
+                      : binding
                         ? "Disconnect"
                         : "Connect";
                 return (
                   <div
                     key={connection.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5"
+                    className="flex flex-col gap-3 rounded-xl border px-3 py-2.5"
                   >
                     <div className="min-w-0 space-y-1">
                       <div className="truncate text-sm font-medium">{connection.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {providerLabel(connection.provider)}
-                        {connection.externalIdentity ? ` · ${connection.externalIdentity}` : ""}
+                        {(binding?.externalIdentity ?? connection.externalIdentity)
+                          ? ` · ${binding?.externalIdentity ?? connection.externalIdentity}`
+                          : ""}
                       </div>
+                      {binding?.lastError ? (
+                        <p
+                          role="status"
+                          className="break-words text-xs text-amber-600 dark:text-amber-400"
+                        >
+                          {binding.lastError}
+                        </p>
+                      ) : null}
                       {owner ? (
                         <Badge
-                          variant={binding?.status === "needs-reconnect" ? "warning" : "success"}
+                          variant={
+                            binding?.status === "needs-reconnect" ||
+                            binding?.status === "failed" ||
+                            binding?.status === "disconnected"
+                              ? "warning"
+                              : "success"
+                          }
                           size="sm"
                         >
-                          {binding?.status === "needs-reconnect"
-                            ? "Needs reconnect"
-                            : `Assigned to ${owner.name}`}
+                          {binding?.status === "failed"
+                            ? "Connection failed"
+                            : binding?.status === "needs-reconnect"
+                              ? "Needs reconnect"
+                              : binding?.status === "disconnected"
+                                ? `Disconnected · ${owner.name}`
+                                : `Assigned to ${owner.name}`}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" size="sm">
                           Unassigned
                         </Badge>
                       )}
-                      {ownedByCurrentBot && connection.provider === "imessage" ? (
-                        <p className="text-xs text-muted-foreground">
-                          Text the number shown in Photon. {bot.name} replies automatically. Groups
-                          need a dedicated line and an exact @{bot.name} mention.
-                        </p>
-                      ) : null}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {connection.managementUrl ? (
                         <Button
                           variant="outline"
@@ -187,7 +219,16 @@ export function BotChannelsSheet({
                             <a href={connection.managementUrl} target="_blank" rel="noreferrer" />
                           }
                         >
-                          Open Photon
+                          Open provider
+                        </Button>
+                      ) : null}
+                      {ownedByCurrentBot ? (
+                        <Button
+                          variant="outline"
+                          disabled={busyId !== null}
+                          onClick={() => void unassign(connection)}
+                        >
+                          Unassign
                         </Button>
                       ) : null}
                       <Button

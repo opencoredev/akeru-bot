@@ -11,15 +11,9 @@ import * as Electron from "electron";
 export const DESKTOP_HOST = "app";
 export const DESKTOP_PRODUCTION_SCHEME = "akeru";
 export const DESKTOP_DEVELOPMENT_SCHEME = "akeru-dev";
-export const LEGACY_DESKTOP_PRODUCTION_SCHEME = "t3code";
-export const LEGACY_DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
-}
-
-export function getLegacyDesktopScheme(isDevelopment: boolean): string {
-  return isDevelopment ? LEGACY_DESKTOP_DEVELOPMENT_SCHEME : LEGACY_DESKTOP_PRODUCTION_SCHEME;
 }
 
 export function getDesktopOrigin(isDevelopment: boolean): string {
@@ -116,24 +110,6 @@ export function registerDesktopSchemePrivilegesSync(): void {
     },
     {
       scheme: DESKTOP_DEVELOPMENT_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-      },
-    },
-    {
-      scheme: LEGACY_DESKTOP_PRODUCTION_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-      },
-    },
-    {
-      scheme: LEGACY_DESKTOP_DEVELOPMENT_SCHEME,
       privileges: {
         standard: true,
         secure: true,

@@ -18,6 +18,7 @@
     "@astrojs/check": "^0.9.7",
     "@effect/vitest": "catalog:",
     "@vercel/config": "^0.3.0",
+    "jpeg-js": "0.4.4",
     "typescript": "catalog:"
   }
 }

@@ -186,6 +186,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/voice",
   },
   {
+    id: "voice-read-aloud",
+    title: "Read new replies aloud",
+    to: "/settings/voice",
+    keywords: ["read aloud", "speech", "playback", "automatic readout"],
+  },
+  {
     id: "add-project-starts-in",
     title: "Add project starts in",
     to: "/settings/general",
@@ -258,7 +264,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "agent-browser-access",
-    title: "Agent browser access",
+    title: "Bot browser access",
     to: "/settings/browser",
     targetId: "browser",
   },
@@ -290,7 +296,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "bot-channels",
     title: "Bot channels",
     to: "/settings/channels",
-    keywords: ["Telegram", "iMessage", "Photon", "WhatsApp"],
+    keywords: ["Telegram", "iMessage", "Photon", "WhatsApp", "Slack", "Discord"],
   },
   {
     id: "source-control",
@@ -304,7 +310,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "archive",
-    title: "Archived threads",
+    title: "Archived chats",
     to: "/settings/archived",
   },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;

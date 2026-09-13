@@ -1,6 +1,7 @@
 import { CopyIcon, ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
+  EnvironmentId,
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
@@ -11,6 +12,13 @@ import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
+
+import {
+  apiKeyStartInput,
+  apiKeyValidationError,
+  providerUsesApiKey,
+  providerSupportsBaseUrl,
+} from "@t3tools/client-runtime/provider-auth";
 
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { serverEnvironment } from "../../state/server";
@@ -70,16 +78,20 @@ export function ProviderLoginCard({
   definition,
   status,
   busy,
+  disabled = false,
   onConnect,
   onDisconnect,
   onTest,
+  onApiKey,
 }: {
   readonly definition: SubscriptionProviderDefinition;
   readonly status: SubscriptionProviderStatus | undefined;
   readonly busy: boolean;
+  readonly disabled?: boolean;
   readonly onConnect: () => void;
   readonly onDisconnect: () => void;
   readonly onTest: () => void;
+  readonly onApiKey?: () => void;
 }) {
   const connected = status?.connected === true;
   const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
@@ -103,40 +115,135 @@ export function ProviderLoginCard({
           </Badge>
         </span>
       }
-      description={definition.description}
-      status={definition.subscription}
+      description={providerUsesApiKey(status) ? undefined : definition.description}
+      status={
+        status?.authMode === "api-key"
+          ? `API key saved${status.baseUrl ? ` · ${status.baseUrl}` : ""}`
+          : definition.subscription
+      }
       control={
-        connected ? (
-          <div className="flex items-center gap-1.5">
-            <Button size="xs" variant="outline" disabled={busy} onClick={onTest}>
-              {busy ? (
-                <LoaderIcon className="size-3.5 animate-spin" />
-              ) : (
-                <RefreshCwIcon className="size-3.5" />
-              )}
-              {definition.id === "opencode-go" ? "Check key" : "Check OAuth"}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {definition.id !== "opencode-go" && onApiKey ? (
+            <Button size="xs" variant="ghost-muted" disabled={busy || disabled} onClick={onApiKey}>
+              {providerUsesApiKey(status) ? "Reconnect key" : "API key"}
             </Button>
-            <Button size="xs" variant="ghost-muted" disabled={busy} onClick={onConnect}>
-              Reconnect
+          ) : null}
+          {connected ? (
+            <div className="flex items-center gap-1.5">
+              <Button size="xs" variant="outline" disabled={busy || disabled} onClick={onTest}>
+                {busy ? (
+                  <LoaderIcon className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCwIcon className="size-3.5" />
+                )}
+                {providerUsesApiKey(status) ? "Check key" : "Check OAuth"}
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost-muted"
+                disabled={busy || disabled}
+                onClick={onConnect}
+              >
+                {providerUsesApiKey(status) && definition.id !== "opencode-go"
+                  ? "Use OAuth"
+                  : "Reconnect"}
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost-muted"
+                aria-label={`Disconnect ${definition.label}`}
+                disabled={busy || disabled}
+                onClick={onDisconnect}
+              >
+                <LogOutIcon className="size-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <Button size="xs" variant="outline" disabled={busy || disabled} onClick={onConnect}>
+              {busy ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
+              Connect
             </Button>
-            <Button
-              size="icon-xs"
-              variant="ghost-muted"
-              aria-label={`Disconnect ${definition.label}`}
-              disabled={busy}
-              onClick={onDisconnect}
-            >
-              <LogOutIcon className="size-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <Button size="xs" variant="outline" disabled={busy} onClick={onConnect}>
-            {busy ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
-            Connect
-          </Button>
-        )
+          )}
+        </div>
       }
     />
+  );
+}
+
+export function ProviderApiKeyForm({
+  supportsBaseUrl = true,
+  apiKey,
+  baseUrl,
+  busy,
+  error,
+  onKeyChange,
+  onBaseUrlChange,
+  onSave,
+  onCancel,
+}: {
+  readonly supportsBaseUrl?: boolean;
+  readonly apiKey: string;
+  readonly baseUrl: string;
+  readonly busy: boolean;
+  readonly error: string | null;
+  readonly onKeyChange: (value: string) => void;
+  readonly onBaseUrlChange: (value: string) => void;
+  readonly onSave: () => void;
+  readonly onCancel: () => void;
+}) {
+  return (
+    <form
+      className="space-y-3 px-3 pb-3 sm:px-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+    >
+      <label className="block space-y-1 text-sm">
+        <span>API key</span>
+        <Input
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={apiKey}
+          disabled={busy}
+          onChange={(event) => onKeyChange(event.currentTarget.value)}
+        />
+      </label>
+      {supportsBaseUrl ? (
+        <label className="block space-y-1 text-sm">
+          <span>Base URL (optional)</span>
+          <Input
+            type="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Provider default"
+            value={baseUrl}
+            disabled={busy}
+            onChange={(event) => onBaseUrlChange(event.currentTarget.value)}
+          />
+        </label>
+      ) : null}
+      <p className="text-[13px] text-muted-foreground">
+        {supportsBaseUrl
+          ? "The environment sends this key to the selected endpoint."
+          : "Grok uses its default endpoint."}{" "}
+        API billing can be separate from your subscription.
+      </p>
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        <Button type="submit" size="xs" disabled={busy || !apiKey.trim()}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+        <Button type="button" size="xs" variant="ghost-muted" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -190,6 +297,8 @@ function ActiveLoginPanel({
       {flow.completion === "paste" ? (
         <div className="flex gap-2">
           <Input
+            type={isApiKey ? "password" : "text"}
+            autoComplete="off"
             value={pastedCode}
             onChange={(event) => onPastedCodeChange(event.currentTarget.value)}
             placeholder={isApiKey ? "Paste the API key" : "Paste the authorization code"}
@@ -205,16 +314,20 @@ function ActiveLoginPanel({
             Connect
           </Button>
         </div>
-      ) : (
+      ) : !login.error ? (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <LoaderIcon className="size-3.5 animate-spin" />
           Waiting for approval…
         </div>
-      )}
+      ) : null}
 
-      {login.error ? <p className="text-[13px] text-destructive">{login.error}</p> : null}
+      {login.error ? (
+        <p role="alert" className="text-[13px] text-destructive">
+          {login.error}
+        </p>
+      ) : null}
 
-      <Button size="xs" variant="ghost-muted" onClick={onCancel}>
+      <Button size="xs" variant="ghost-muted" disabled={completing} onClick={onCancel}>
         Cancel
       </Button>
     </div>
@@ -223,6 +336,10 @@ function ActiveLoginPanel({
 
 export function ProvidersPanel() {
   const environmentId = useSettingsEnvironmentId();
+  return <ProviderConnections key={environmentId ?? "none"} environmentId={environmentId} />;
+}
+
+function ProviderConnections({ environmentId }: { readonly environmentId: EnvironmentId | null }) {
   const statusQuery = useEnvironmentQuery(
     environmentId === null
       ? null
@@ -251,6 +368,9 @@ export function ProvidersPanel() {
   const [busyProvider, setBusyProvider] = useState<SubscriptionProviderId | null>(null);
   const [pastedCode, setPastedCode] = useState("");
   const [completing, setCompleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [keyProvider, setKeyProvider] = useState<SubscriptionProviderDefinition | null>(null);
+  const [baseUrl, setBaseUrl] = useState("");
 
   const statusByProvider = useMemo(
     () => new Map(statusQuery.data?.providers.map((status) => [status.provider, status]) ?? []),
@@ -305,8 +425,62 @@ export function ProvidersPanel() {
     };
   }, [activeLogin, environmentId, pollAuth, settleLogin]);
 
+  const openApiKey = (definition: SubscriptionProviderDefinition) => {
+    setError(null);
+    setPastedCode("");
+    setBaseUrl(
+      providerSupportsBaseUrl(definition.id)
+        ? (statusByProvider.get(definition.id)?.baseUrl ?? "")
+        : "",
+    );
+    setKeyProvider(definition);
+  };
+
+  const saveApiKey = async () => {
+    if (environmentId === null || !keyProvider || completing) return;
+    const validationError = apiKeyValidationError(pastedCode, baseUrl);
+    setError(validationError);
+    if (validationError) return;
+    setCompleting(true);
+    const started = await startAuth({
+      environmentId,
+      input: apiKeyStartInput(keyProvider.id, baseUrl),
+    });
+    if (started._tag !== "Success") {
+      setCompleting(false);
+      if (started._tag === "Failure") setError(commandError(started));
+      return;
+    }
+    const result = await completeAuth({
+      environmentId,
+      input: { loginId: started.value.loginId, code: pastedCode.trim() },
+    });
+    setCompleting(false);
+    if (result._tag === "Success" && result.value.status === "connected") {
+      setKeyProvider(null);
+      setPastedCode("");
+      setBaseUrl("");
+      statusQuery.refresh();
+    } else {
+      if (result._tag === "Failure") setError(commandError(result));
+      else if (result._tag === "Success")
+        setError(
+          result.value.status === "failed"
+            ? result.value.error
+            : "The key was not saved. Try again.",
+        );
+      await cancelAuth({ environmentId, input: { loginId: started.value.loginId } });
+    }
+  };
+
   const connect = async (definition: SubscriptionProviderDefinition) => {
     if (environmentId === null) return;
+    if (definition.id === "opencode-go") {
+      openApiKey(definition);
+      return;
+    }
+    setError(null);
+    setPastedCode("");
     setBusyProvider(definition.id);
     const result = await startAuth({
       environmentId,
@@ -314,6 +488,7 @@ export function ProvidersPanel() {
     });
     if (isAtomCommandInterrupted(result)) return;
     if (result._tag === "Failure") {
+      setError(commandError(result));
       setBusyProvider(null);
       return;
     }
@@ -345,24 +520,62 @@ export function ProvidersPanel() {
     setBusyProvider(null);
     setPastedCode("");
     if (environmentId === null || !login) return;
-    await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
+    const result = await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
+    if (result._tag === "Failure") setError(commandError(result));
   };
 
   const disconnect = async (provider: SubscriptionProviderId) => {
     if (environmentId === null) return;
+    setError(null);
     setBusyProvider(provider);
     const result = await logoutAuth({ environmentId, input: { provider } });
     setBusyProvider(null);
     if (result._tag === "Success") statusQuery.refresh();
+    else if (result._tag === "Failure") setError(commandError(result));
   };
 
   const testHealth = async (provider: SubscriptionProviderId) => {
     if (environmentId === null) return;
+    setError(null);
     setBusyProvider(provider);
     const result = await testAuth({ environmentId, input: { provider } });
     setBusyProvider(null);
-    if (result._tag === "Success") statusQuery.refresh();
+    if (result._tag === "Success") {
+      statusQuery.refresh();
+      const status = result.value.providers.find((entry) => entry.provider === provider);
+      if (status?.oauthCheck?.status === "failed" || status?.healthTest?.status === "failed") {
+        setError(
+          status.lastFailedRequest?.message ??
+            "The provider check failed. Reconnect and try again.",
+        );
+      }
+    } else if (result._tag === "Failure") setError(commandError(result));
   };
+
+  if (keyProvider) {
+    return (
+      <SettingsPageContainer>
+        <SettingsSection title={`Connect ${keyProvider.label} with an API key`}>
+          <ProviderApiKeyForm
+            supportsBaseUrl={providerSupportsBaseUrl(keyProvider.id)}
+            apiKey={pastedCode}
+            baseUrl={baseUrl}
+            busy={completing}
+            error={error}
+            onKeyChange={setPastedCode}
+            onBaseUrlChange={setBaseUrl}
+            onSave={() => void saveApiKey()}
+            onCancel={() => {
+              setKeyProvider(null);
+              setPastedCode("");
+              setBaseUrl("");
+              setError(null);
+            }}
+          />
+        </SettingsSection>
+      </SettingsPageContainer>
+    );
+  }
 
   if (activeLogin) {
     return (
@@ -383,15 +596,17 @@ export function ProvidersPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Subscriptions">
+      <SettingsSection title="Providers">
         <div className="px-3 pb-2 text-[13px] leading-[1.45] text-muted-foreground sm:px-4">
-          Connect accounts you already pay for. Akeru uses the coding access included with each
-          subscription. Tokens stay on this Akeru server.
+          Connect a subscription or API key. Credentials stay on this environment.
         </div>
 
-        {statusQuery.error ? (
-          <div className="mx-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive sm:mx-4">
-            {statusQuery.error}
+        {error || statusQuery.error ? (
+          <div
+            role="alert"
+            className="mx-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive sm:mx-4"
+          >
+            {error ?? statusQuery.error}
           </div>
         ) : null}
 
@@ -400,7 +615,9 @@ export function ProvidersPanel() {
             key={definition.id}
             definition={definition}
             status={statusByProvider.get(definition.id)}
-            busy={busyProvider === definition.id || statusQuery.isPending}
+            busy={busyProvider === definition.id}
+            disabled={busyProvider !== null || statusQuery.isPending}
+            onApiKey={() => openApiKey(definition)}
             onConnect={() => void connect(definition)}
             onDisconnect={() => void disconnect(definition.id)}
             onTest={() => void testHealth(definition.id)}

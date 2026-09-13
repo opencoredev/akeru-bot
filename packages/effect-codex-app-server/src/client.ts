@@ -18,7 +18,10 @@ import {
 } from "./_internal/shared.ts";
 import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
 
-export interface CodexAppServerClientOptions {
+export interface CodexAppServerClientOptions extends Pick<
+  CodexProtocol.CodexAppServerPatchedProtocolOptions,
+  "rawNotificationBufferSize" | "rawRequestBufferSize"
+> {
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
   readonly logger?: (
@@ -27,7 +30,15 @@ export interface CodexAppServerClientOptions {
 }
 
 interface CodexAppServerClientRaw {
+  /**
+   * Opt-in, work-sharing stream, not a broadcast. Configure rawNotificationBufferSize before connecting.
+   * Disabled streams end immediately; enabled streams drain on input termination and are interrupted on scope close.
+   */
   readonly notifications: CodexProtocol.CodexAppServerPatchedProtocol["incomingNotifications"];
+  /**
+   * Opt-in request observation with the same stream lifecycle as notifications.
+   * Configure rawRequestBufferSize before connecting. Registered handlers still send replies.
+   */
   readonly requests: CodexProtocol.CodexAppServerPatchedProtocol["incomingRequests"];
   readonly request: CodexProtocol.CodexAppServerPatchedProtocol["request"];
   readonly notify: CodexProtocol.CodexAppServerPatchedProtocol["notify"];
@@ -187,6 +198,8 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
   const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
     stdio,
     ...(terminationError ? { terminationError } : {}),
+    rawNotificationBufferSize: options.rawNotificationBufferSize ?? 0,
+    rawRequestBufferSize: options.rawRequestBufferSize ?? 0,
     ...(options.logIncoming !== undefined ? { logIncoming: options.logIncoming } : {}),
     ...(options.logOutgoing !== undefined ? { logOutgoing: options.logOutgoing } : {}),
     ...(options.logger ? { logger: options.logger } : {}),

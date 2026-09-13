@@ -60,6 +60,37 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+Standard OpenCode discovery probes `opencode --version` for at most four seconds. The probe command
+runs in its own process group so a hanging wrapper cannot keep provider status running after the
+timeout. Inventory CLI commands (`models --verbose`, `agent list`, `debug skill`) run one at a time.
+A process-wide permit serializes the full inventory sequence, including retries, across concurrent
+provider checks and separately constructed OpenCode runtimes, because they share one SQLite database.
+OpenCode Go stays on the Mastra controller and does not use this CLI probe path.
+
+## Raw protocol observation
+
+The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
+[Codex app-server protocol](../../packages/effect-codex-app-server/src/protocol.ts) retain raw
+observations only when configured before connection. Incoming Codex JSONL is framed from
+per-chunk fragments so large messages are scanned once. `AcpClientOptions` and `AcpAgentOptions` expose
+`rawNotificationBufferSize` for `raw.notifications`. `CodexAppServerClientOptions` exposes that option
+and `rawRequestBufferSize` for `raw.requests`. Pass them to the package's `make` or layer constructor.
+
+- `0`, the default, retains nothing and completes the raw stream immediately.
+- A positive safe integer `N` keeps the newest `N` unread events in a sliding queue. Overflow drops
+  the oldest observation, including when a reader starts late or falls behind.
+- `"unbounded"` explicitly restores the legacy lossless FIFO within the connection scope. An absent
+  or slow reader can then retain the whole session.
+
+These are work-sharing streams, not broadcasts. Enabled streams drain when input ends; closing the
+connection scope discards the buffer and interrupts readers. Observation never blocks callback
+dispatch. Notification callbacks, request handlers, and replies keep their existing behavior even
+when raw observation is disabled or drops events. Reading `raw.requests` does not send a reply.
+Use handlers for required protocol work, not a lossy observation stream.
+
+This bounds optional transport observations, not provider transcripts or the Mastra Codex/Kimi turn
+path described above.
+
 ## Composio runtime
 
 Composio is an integration provider. Its toolkits appear as named plugins such as Gmail, but Akeru

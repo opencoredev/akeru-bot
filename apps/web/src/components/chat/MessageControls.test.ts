@@ -53,6 +53,7 @@ describe("message controls", () => {
     expect(html).toContain('aria-label="Copied"');
     expect(html).toContain("lucide-check");
     expect(html).not.toContain("Copied!");
+    expect(html).not.toContain("Read aloud");
 
     mocks.isCopied = false;
   });

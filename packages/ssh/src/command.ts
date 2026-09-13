@@ -113,13 +113,8 @@ export function baseSshArgs(
 }
 
 export function getLastNonEmptyOutputLine(stdout: string): string | null {
-  return (
-    stdout
-      .trim()
-      .split(/\r?\n/u)
-      .map((entry) => entry.trim())
-      .findLast((entry) => entry.length > 0) ?? null
-  );
+  const trimmed = stdout.trim();
+  return trimmed.slice(trimmed.lastIndexOf("\n") + 1).trim() || null;
 }
 
 export const collectProcessOutput = <E>(

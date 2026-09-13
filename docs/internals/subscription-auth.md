@@ -1,6 +1,6 @@
 # Subscription authentication
 
-Akeru lets a user connect an existing AI subscription. It does not ask for an API key and it does not run a provider CLI to authenticate.
+Akeru lets a user connect an existing AI subscription or supply an API key. The environment server owns both authentication methods. A custom base URL selects an API-compatible endpoint for API-key connections; it does not change subscription OAuth endpoints.
 
 Supported account flows:
 
@@ -19,7 +19,7 @@ The environment server owns credentials. It writes them to:
 <stateDir>/secrets/subscription-auth.json
 ```
 
-The directory uses mode `0700`. The file uses mode `0600`. Writes use a temporary file and atomic rename. OAuth access tokens and refresh tokens never cross the WebSocket contract. Clients only receive provider status, an authorization URL, a user code when required, and login progress.
+The directory uses mode `0700`. The file uses mode `0600`. Writes use a temporary file and atomic rename. Clients submit API keys through `subscriptionAuth.complete`; the server never returns saved keys. OAuth access tokens and refresh tokens never cross the WebSocket contract. Status includes the authentication method and custom base URL, but no credentials.
 
 Local desktop, a remote server, and a future hosted control plane use the same boundary. The storage adapter can move from the local file to an encrypted tenant secret store without changing the client contract.
 
@@ -34,15 +34,15 @@ When a run starts:
 3. It passes only that access token to the agent runtime or sandbox for that run.
 4. The sandbox loses the token when the run or sandbox ends.
 
-This keeps a disposable sandbox disposable. A stolen sandbox cannot renew access after its short-lived token expires.
+This limits the lifetime of OAuth access in a sandbox. API keys do not have the same short-lived guarantee. Keep keys in the environment secret store and pass them only to the provider runtime that needs them.
 
 ## Remote-ready login
 
 The client drives every login over RPC:
 
-- `subscriptionAuth.start` creates a pending login and returns the provider URL.
+- `subscriptionAuth.start` creates a pending login. An `authMode` of `api-key` selects key entry and accepts an optional `baseUrl`. OAuth remains the default for subscription providers.
 - `subscriptionAuth.poll` performs one upstream poll for a device or browser-poll flow.
-- `subscriptionAuth.complete` exchanges a pasted code for Anthropic.
+- `subscriptionAuth.complete` exchanges a pasted code for Anthropic OAuth or stores a key for an API-key login.
 - `subscriptionAuth.cancel` removes abandoned pending state.
 - `subscriptionAuth.logout` removes the stored credential.
 
@@ -52,4 +52,8 @@ Pending login state stays on the environment server. It is bounded and contains 
 
 ## Runtime integration
 
-`SubscriptionAuthService.getAccessToken(provider)` is the runtime seam. It returns a valid short-lived access token and serializes concurrent refresh requests. The current provider CLI adapters do not consume this seam yet. The Mastra runtime must call it when subscription-backed model execution replaces the legacy CLI harness.
+`SubscriptionAuthService.getAccessToken(provider)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests. `getApiKeyCredential(provider)` reloads the server-owned credential and returns its optional base URL for runtime use only.
+
+Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Kimi and OpenCode Go resolve keys and custom endpoints for model requests. Claude, Grok, and OpenCode receive saved API credentials when their adapter starts a provider process. The login, completion, and logout RPC paths stop affected bridge sessions when the API key or endpoint changes. The next turn starts a new process with the current connection. Grok supports API keys at its default endpoint; its current bridge rejects custom base URLs.
+
+Custom endpoints must use the selected provider's protocol. They do not make every model compatible with every driver. Health checks use the selected endpoint and disable HTTP redirects so a redirect cannot forward a key to another host.

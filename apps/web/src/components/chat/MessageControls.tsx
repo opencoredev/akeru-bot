@@ -1,6 +1,7 @@
 import { CheckIcon, CopyIcon, EllipsisIcon, ReplyIcon, SmilePlusIcon } from "lucide-react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { ReplyPlaybackControls, type ReplyPlaybackControlsProps } from "./ReplyPlaybackControls";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
@@ -43,6 +44,7 @@ export function MessageControls(props: {
   readonly selectedReaction?: MessageReactionOption | null;
   readonly onReply?: () => void;
   readonly onReactionChange?: (reaction: MessageReactionOption | null) => void;
+  readonly readAloud?: ReplyPlaybackControlsProps;
 }) {
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target: "message",
@@ -62,9 +64,10 @@ export function MessageControls(props: {
 
   return (
     <div
-      className={cn("flex items-center gap-0.5", props.align === "end" && "justify-end")}
+      className={cn("flex flex-wrap items-center gap-0.5", props.align === "end" && "justify-end")}
       data-message-controls="true"
     >
+      {props.readAloud ? <ReplyPlaybackControls {...props.readAloud} /> : null}
       <Menu>
         <Tooltip>
           <TooltipTrigger

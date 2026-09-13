@@ -42,6 +42,7 @@ import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import {
   channelOriginForAssistantMessage,
+  channelOriginLabel,
   channelProviderLabel,
   isBotConversationWorking,
   visibleBotChatMessages,
@@ -62,6 +63,8 @@ import {
   selectedReactionForPerson,
 } from "../chat/MessageControls";
 import { MessageReactions } from "../chat/MessageReactions";
+import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
+import { replyPlaybackControlProps, useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
@@ -180,6 +183,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     return results;
   }, [activities]);
   const voiceCall = useVoiceCall();
+  const replyPlayback = useOptionalReplyPlayback();
   const presence = useBotPresence(botId);
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
@@ -207,6 +211,12 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  useReplyPlaybackThread({
+    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
+    threadId: runtime.linkedThreadRef?.threadId,
+    messages,
+    mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
+  });
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
@@ -257,7 +267,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
 
   return (
     <SidebarInset
-      aria-label={`${bot.name} thread`}
+      aria-label={`${bot.name} chat`}
       className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
       data-testid="bot-thread-landing"
     >
@@ -312,9 +322,13 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                             ?.map(({ id, result }) => (
                               <PluginSearchResultCard className="mt-3" key={id} result={result} />
                             ))}
-                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
+                          {...(() => {
+                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
+                            return readAloud ? { readAloud } : {};
+                          })()}
                           selectedReaction={selectedReactionForPerson(
                             message.reactions,
                             currentPersonId,
@@ -362,7 +376,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     className="group/message flex items-end justify-end gap-1"
                     data-testid="bot-user-message"
                   >
-                    <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                    <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                       <MessageControls
                         align="end"
                         copyText={
@@ -397,6 +411,11 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     </div>
                     <div className="flex max-w-[78%] flex-col items-end">
                       <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+                        {message.channelOrigin ? (
+                          <div className="mb-1 text-xs font-medium text-muted-foreground">
+                            {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
+                          </div>
+                        ) : null}
                         {message.text ? (
                           <p className="whitespace-pre-wrap">{message.text}</p>
                         ) : null}

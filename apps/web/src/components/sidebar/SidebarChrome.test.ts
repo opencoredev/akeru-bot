@@ -150,6 +150,20 @@ describe("sidebar footer", () => {
     expect(source).not.toContain('openSettings("inbox")');
   });
 
+  it("keeps roster synchronization mounted when the mobile sidebar is closed", () => {
+    const layoutSource = NodeFS.readFileSync(
+      new URL("../AppSidebarLayout.tsx", import.meta.url),
+      "utf8",
+    );
+    const rosterSource = NodeFS.readFileSync(
+      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(layoutSource).toContain("  useServerRosterSync();");
+    expect(rosterSource).not.toContain("useServerRosterSync");
+  });
+
   it("creates manual bots with approval required without adding a first-run bot", () => {
     const rosterSource = NodeFS.readFileSync(
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),

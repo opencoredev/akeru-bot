@@ -124,7 +124,7 @@ export function AgentActivity(
       : tint;
 
   // With nothing active the aggregate only carries recently finished work, so
-  // "0 active agents" (and a lone "0" in the expanded island) read as broken.
+  // "0 active bots" (and a lone "0" in the expanded island) read as broken.
   // Lead with the outcome instead. The outcome is derived here from the rows
   // rather than taken from the server subtitle (which keys off the newest
   // terminal row): every presentation — header text, tint, count slots,
@@ -132,12 +132,12 @@ export function AgentActivity(
   // newer success.
   const allDone = props.activeCount === 0;
   const doneLabel = failedRow ? "Failed" : "Done";
-  const outcomeLabel = failedRow ? "Agent work failed" : "Agent work completed";
+  const outcomeLabel = failedRow ? "Bot work failed" : "Bot work completed";
 
-  // Header copy: "5 active agents" + (", 1 needs attention"). The banner renders
+  // Header copy: "5 active bots" + (", 1 needs attention"). The banner renders
   // the two parts in-line so the attention half can carry the accent color;
   // `summary` is the short form for tight spots (expanded center, watch card).
-  const agentWord = props.activeCount === 1 ? "agent" : "agents";
+  const agentWord = props.activeCount === 1 ? "bot" : "bots";
   const agentsLabel = allDone ? outcomeLabel : `${props.activeCount} active ${agentWord}`;
   const attentionSuffix =
     attentionRows.length > 0

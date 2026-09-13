@@ -1,4 +1,4 @@
-import { AuthAccessWriteScope, BotId, ChannelConnectionId } from "@t3tools/contracts";
+import { AuthAccessWriteScope, BotId, ChannelConnectionId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -16,6 +16,7 @@ import {
 
 describe("bot channel settings", () => {
   const botId = BotId.make("bot-1");
+  const projectId = ProjectId.make("project-1");
 
   it("shows disconnected live adapters", () => {
     const bot = { id: botId, channelBindings: [] };
@@ -55,24 +56,32 @@ describe("bot channel settings", () => {
 
   it("sends a trimmed Photon phone when self-hosted", () => {
     expect(
-      selfHostedIMessageConnectInput(botId, " photon.test:443 ", " secret ", " +15551234567 "),
+      selfHostedIMessageConnectInput(
+        botId,
+        projectId,
+        " photon.test:443 ",
+        " secret ",
+        " +15551234567 ",
+      ),
     ).toEqual({
       botId,
+      targetProjectId: projectId,
       provider: "imessage",
       mode: "self-hosted",
       serverUrl: "photon.test:443",
       apiKey: "secret",
       phone: "+15551234567",
     });
-    expect(selfHostedIMessageConnectInput(botId, "server", "key", "   ")).not.toHaveProperty(
-      "phone",
-    );
+    expect(
+      selfHostedIMessageConnectInput(botId, projectId, "server", "key", "   "),
+    ).not.toHaveProperty("phone");
   });
 
   it("sends trimmed WhatsApp credentials", () => {
     expect(
       whatsAppConnectInput(
         botId,
+        projectId,
         " access-token ",
         " app-secret ",
         " phone-number-id ",
@@ -80,6 +89,7 @@ describe("bot channel settings", () => {
       ),
     ).toEqual({
       botId,
+      targetProjectId: projectId,
       provider: "whatsapp",
       accessToken: "access-token",
       appSecret: "app-secret",
@@ -131,6 +141,15 @@ describe("bot channel settings", () => {
     ];
 
     expect(assignedBotForConnection(connectionId, bots)?.name).toBe("Scout");
+    expect(
+      assignedBotForConnection(connectionId, [
+        {
+          ...bots[0]!,
+          archivedAt: null,
+          channelBindings: [{ ...bots[0]!.channelBindings[0]!, status: "disconnected" }],
+        },
+      ])?.name,
+    ).toBe("Scout");
     expect(assignedBotForConnection(ChannelConnectionId.make("unassigned"), bots)).toBeUndefined();
   });
 
@@ -138,13 +157,16 @@ describe("bot channel settings", () => {
     expect(providerLabel("imessage")).toBe("Photon");
     expect(providerLabel("whatsapp")).toBe("Meta Cloud API");
     expect(providerLabel("telegram")).toBe("Telegram Bot API");
+    expect(providerLabel("slack")).toBe("Slack Socket Mode");
+    expect(providerLabel("discord")).toBe("Discord Gateway");
   });
 
   it("explains the real end-to-end channel test", () => {
-    expect(channelTestInstructions("imessage", "Akeru")).toContain("replies automatically");
-    expect(channelTestInstructions("imessage", "Akeru")).toContain("exact @Akeru mention");
-    expect(channelTestInstructions("whatsapp")).toContain("WhatsApp message");
-    expect(channelTestInstructions("telegram")).toContain("Telegram message");
+    expect(channelTestInstructions("imessage", "Akeru")).toContain("direct iMessage");
+    expect(channelTestInstructions("whatsapp")).toContain("direct WhatsApp");
+    expect(channelTestInstructions("telegram")).toContain("direct Telegram");
+    expect(channelTestInstructions("slack", "Akeru")).toContain("Slack channel thread");
+    expect(channelTestInstructions("discord", "Akeru")).toContain("Discord server");
   });
 
   it("parses copied Photon environment variables", () => {

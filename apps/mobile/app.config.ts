@@ -120,8 +120,8 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
     widgets: [
       {
         name: "AgentActivity",
-        displayName: "Agent Activity",
-        description: "Shows the current state of active Akeru Bot agents.",
+        displayName: "Bot Work",
+        description: "Shows current bot work in Akeru Bot.",
         supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
       },
     ],
@@ -160,10 +160,7 @@ const config: ExpoConfig = {
   name: variant.appName,
   slug: "akeru-bot",
   platforms: ["ios", "android"],
-  scheme:
-    variant.scheme === "akeru"
-      ? ["akeru", "t3code"]
-      : [variant.scheme, "t3code-dev", "akeru", "t3code"],
+  scheme: variant.scheme === "akeru" ? ["akeru"] : [variant.scheme, "akeru"],
   version: "1.0.4",
   runtimeVersion: {
     // Fingerprint (not appVersion) so an OTA only reaches binaries whose native

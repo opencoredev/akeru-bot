@@ -72,7 +72,7 @@ describe("workspace connection status", () => {
     const state = workspaceState({ hasPendingShellSnapshot: true });
 
     expect(shouldShowWorkspaceConnectionStatus(state)).toBe(true);
-    expect(workspaceConnectionStatusLabel(state)).toBe("Syncing threads...");
+    expect(workspaceConnectionStatusLabel(state)).toBe("Syncing chats...");
   });
 
   it("distinguishes initial shell loading from cached catch-up", () => {
@@ -82,7 +82,7 @@ describe("workspace connection status", () => {
     });
 
     expect(shouldShowWorkspaceConnectionStatus(state)).toBe(true);
-    expect(workspaceConnectionStatusLabel(state)).toBe("Loading threads...");
+    expect(workspaceConnectionStatusLabel(state)).toBe("Loading chats...");
   });
 
   it("presents nothing while connected", () => {

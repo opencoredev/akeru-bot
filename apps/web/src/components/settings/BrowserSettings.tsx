@@ -19,7 +19,7 @@ export function BrowserSettingsPanel() {
       <SettingsSection id="browser" title="Browser">
         <SettingsRow
           title="Browserbase"
-          description="Give agents a hosted browser they can use from any client."
+          description="Give bots a hosted browser they can use from any client."
           status={browser.enabled ? "Enabled" : configured ? "Configured" : "API key required"}
           control={
             <Switch
@@ -31,7 +31,7 @@ export function BrowserSettingsPanel() {
             />
           }
         />
-        <SettingsRow title="API key" description="Stored securely on this T3 server.">
+        <SettingsRow title="API key" description="Stored securely in this environment.">
           <form
             className="flex items-center gap-2 pt-3"
             onSubmit={(event) => {

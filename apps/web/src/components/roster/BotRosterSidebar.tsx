@@ -73,7 +73,6 @@ import {
 import { useRosterStore, type RosterItemRef, type RosterSection } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useBotThreadRef } from "./useBotThreadRef";
-import { useServerRosterSync } from "./useServerRoster";
 
 /** Avatar with a yellow needs-you light and a green working light. */
 function RosterAvatar({
@@ -529,7 +528,6 @@ function PinnedRosterItem({
 }
 
 export default function BotRosterSidebar() {
-  useServerRosterSync();
   const navigate = useNavigate();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const environmentId = usePrimaryEnvironmentId();

@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
-import type { EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import type { BotId, EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import { channelOriginLabel } from "@t3tools/client-runtime/channel-presentation";
 import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
@@ -64,6 +65,13 @@ import {
 
 import { AppText as Text } from "../../components/AppText";
 import { CopyTextButton } from "../../components/CopyTextButton";
+import { ReplyPlaybackControls } from "../replyPlayback/ReplyPlaybackControls";
+import {
+  replyPlaybackControlProps,
+  useReplyPlaybackThread,
+} from "../replyPlayback/useReplyPlaybackThread";
+import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
+import { useEnvironmentPresentation } from "../../state/presentation";
 import {
   parseReviewCommentMessageSegments,
   type ReviewInlineComment,
@@ -98,6 +106,7 @@ import {
   type ThreadFeedLatestTurn,
 } from "../../lib/threadActivity";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
+import { ThreadChannels } from "./ThreadChannels";
 import {
   resolveThreadFeedLiveFollow,
   type ThreadFeedLiveFollowEvent,
@@ -153,6 +162,7 @@ function isFreshTimestamp(input: string): boolean {
 export interface ThreadFeedProps {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+  readonly botId: BotId | null;
   readonly workspaceRoot?: string | null;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   readonly contentPresentation: ThreadContentPresentation;
@@ -1033,6 +1043,7 @@ function renderFeedEntry(
     readonly reviewCommentColors: ReviewCommentColors;
     readonly reviewCommentBubbleWidth: number;
     readonly userBubbleMaxWidth: number;
+    readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;
   },
 ) {
   const entry = info.item;
@@ -1118,6 +1129,11 @@ function renderFeedEntry(
                   : null),
             }}
           >
+            {message.channelOrigin ? (
+              <NativeText className="font-t3-medium text-[11px] text-neutral-600 dark:text-neutral-300">
+                {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
+              </NativeText>
+            ) : null}
             {message.text.trim().length > 0 ? (
               <UserMessageContent
                 text={message.text}
@@ -1217,17 +1233,23 @@ function renderFeedEntry(
           );
         })}
         {showAssistantMeta ? (
-          <View className="mt-1 flex-row items-center gap-1">
-            <CopyTextButton
-              accessibilityLabel="Copy message"
-              text={message.text}
-              tintColor={iconSubtleColor}
-              buttonSize={28}
-              iconSize={13}
-            />
-            <Text className="font-t3-medium text-xs tabular-nums text-neutral-600 dark:text-neutral-400">
-              {timestampLabel}
-            </Text>
+          <View className="mt-1 gap-1">
+            <View className="flex-row flex-wrap items-center gap-1">
+              <CopyTextButton
+                accessibilityLabel="Copy message"
+                text={message.text}
+                tintColor={iconSubtleColor}
+                buttonSize={28}
+                iconSize={13}
+              />
+              <Text className="font-t3-medium text-xs tabular-nums text-neutral-600 dark:text-neutral-400">
+                {timestampLabel}
+              </Text>
+            </View>
+            {(() => {
+              const readAloud = replyPlaybackControlProps(props.replyPlayback, message);
+              return readAloud ? <ReplyPlaybackControls {...readAloud} /> : null;
+            })()}
           </View>
         ) : null}
       </Animated.View>
@@ -1561,6 +1583,18 @@ function ThreadFeedPlaceholder(props: {
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const navigation = useNavigation();
+  const replyPlayback = useOptionalReplyPlayback();
+  const environment = useEnvironmentPresentation(props.environmentId);
+  const playbackMessages = useMemo(
+    () => props.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : [])),
+    [props.feed],
+  );
+  useReplyPlaybackThread({
+    environmentId: props.environmentId,
+    threadId: props.threadId,
+    messages: playbackMessages,
+    connected: environment.presentation?.connection.phase === "connected",
+  });
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foldSettleFrameRef = useRef<number | null>(null);
   const foldSettleSecondFrameRef = useRef<number | null>(null);
@@ -2122,6 +2156,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         reviewCommentBubbleWidth,
         userBubbleMaxWidth,
         skills: props.skills,
+        replyPlayback,
       }),
     [
       copiedRowId,
@@ -2143,6 +2178,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       props.environmentId,
       props.skills,
       renderMarkdownImage,
+      replyPlayback,
     ],
   );
 
@@ -2283,6 +2319,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             ListHeaderComponent={
               <>
                 {usesNativeAutomaticInsets ? null : <View style={{ height: topContentInset }} />}
+                <ThreadChannels environmentId={props.environmentId} botId={props.botId} />
                 {props.loadEarlier != null ? (
                   <Pressable
                     onPress={props.loadEarlier.onLoadEarlier}
@@ -2308,7 +2345,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             <ThreadFeedPlaceholder
               title="No conversation yet"
-              detail="Ask the agent to inspect the repo, run a command, or continue the active thread."
+              detail="Ask the bot to inspect the project, run a command, or continue the active chat."
               topInset={topContentInset}
               bottomInset={bottomContentInset}
               horizontalPadding={horizontalPadding}

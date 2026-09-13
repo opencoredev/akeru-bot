@@ -1,21 +1,50 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import * as JPEG from "jpeg-js";
 import { describe, expect, it } from "vite-plus/test";
 
 const sourceFile = (path: string) =>
   NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, path), "utf8");
 
+const jpegFrameMarker = (image: Buffer) => {
+  let offset = 2;
+
+  while (offset < image.byteLength) {
+    while (image[offset] === 0xff) offset += 1;
+    const marker = image[offset];
+    offset += 1;
+
+    if (marker >= 0xc0 && marker <= 0xc3) return marker;
+    if (marker === 0xda || marker === undefined) break;
+
+    const segmentLength = image.readUInt16BE(offset);
+    offset += segmentLength;
+  }
+
+  return undefined;
+};
+
 describe("marketing search metadata", () => {
   it("keeps search metadata while preserving the original home page", () => {
     const home = sourceFile("pages/index.astro");
 
-    expect(home).toContain('title="Akeru Bot | Open-source AI coding agent desktop app"');
-    expect(home).toContain(
-      'description="Run Claude, Codex, Grok, Kimi, and OpenCode coding agents',
-    );
-    expect(home).toContain('<h1 class="hero-title">Meet Akeru Bot</h1>');
+    expect(home).toContain('title="Akeru Bot | Open-source AI coding bot desktop app"');
+    expect(home).toContain('description="Run Claude, Codex, Grok, Kimi, and OpenCode coding bots');
+    expect(home).toContain('<h1 class="hero-title">AI teammates that run on your machine</h1>');
     expect(home).toContain('<h2 class="section-title">Every bot has its own setup</h2>');
+  });
+
+  it("keeps fallback and environment claims accurate", () => {
+    const home = sourceFile("pages/index.astro");
+    const download = sourceFile("pages/download.astro");
+
+    expect(home).toContain('<span id="download-label">All downloads</span>');
+    expect(home).not.toContain('class="btn-primary" data-os="mac"');
+    expect(home).toContain("Your environment owns the chats, bot profiles, and memory.");
+    expect(home).not.toContain("Everything stays on your machine");
+    expect(home).not.toContain("no hosted service");
+    expect(download).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none;/);
   });
 
   it("gives each Grok search intent one page", () => {
@@ -40,11 +69,40 @@ describe("marketing search metadata", () => {
     );
   });
 
+  it("connects Grok discovery to setup without inventing product evidence", () => {
+    const home = sourceFile("pages/index.astro");
+    const openSource = sourceFile("pages/open-source-grok-bot.astro");
+    const selfHosted = sourceFile("pages/guides/self-hosted-grok-bot.astro");
+    const sitemap = sourceFile("../public/sitemap.xml");
+
+    expect(home).toContain('href="/open-source-grok-bot"');
+    expect(openSource).toContain("Looking for an OSS Grok bot?");
+    expect(openSource).toContain('src="/app-screenshot.webp"');
+    expect(openSource).toContain("not a benchmark or a recorded Grok result");
+    expect(openSource).toContain('href="/guides/self-hosted-grok-bot#first-task"');
+    expect(openSource).toContain("Does self-hosting keep my prompts offline?");
+    expect(openSource).toContain("Your Grok subscription and any server you rent");
+    for (const page of [openSource, selfHosted]) {
+      expect(page).toContain("<code>~/.akeru</code> by default");
+      expect(page).not.toContain("under Subscriptions");
+    }
+    expect(selfHosted).toContain('id="first-task"');
+    expect(selfHosted).toContain("A prompt is not a permission boundary");
+    expect(selfHosted).toContain("Do not edit files, install dependencies, or run commands.");
+    for (const path of ["/", "/open-source-grok-bot", "/guides/self-hosted-grok-bot"]) {
+      expect(sitemap).toContain(
+        `<loc>https://www.akeru-bot.com${path}</loc><lastmod>2026-09-07</lastmod>`,
+      );
+    }
+    expect(openSource).toContain('dateModified="2026-09-07"');
+    expect(selfHosted).toContain('dateModified="2026-09-07"');
+  });
+
   it("publishes an editorial blog index that links every Grok article", () => {
     const blog = sourceFile("pages/blog/index.astro");
     const layout = sourceFile("layouts/Layout.astro");
 
-    expect(blog).toContain('title="Akeru Blog | Open-source AI agent guides"');
+    expect(blog).toContain('title="Akeru Blog | Open-source AI bot guides"');
     expect(blog).toContain("<h1>Blog</h1>");
     expect(blog).toContain('href: "/open-source-grok-bot"');
     expect(blog).toContain('href: "/compare/akeru-vs-grok-bot"');
@@ -62,7 +120,9 @@ describe("marketing search metadata", () => {
     const layout = sourceFile("layouts/Layout.astro");
     const home = sourceFile("pages/index.astro");
 
-    expect(layout).toContain("family=Geist:wght@400;500;600&family=EB+Garamond:wght@500");
+    expect(layout).toContain('src: url("/fonts/geist-latin.woff2") format("woff2");');
+    expect(layout).toContain('src: url("/fonts/eb-garamond-500-latin.woff2") format("woff2");');
+    expect(layout).not.toContain("fonts.googleapis.com");
     expect(layout).toContain('--font-serif: "EB Garamond", Georgia, serif;');
     expect(layout).toContain("--color-muted-foreground: #8a8a8a;");
     expect(home).not.toContain("--color-editorial-muted-foreground");
@@ -104,6 +164,24 @@ describe("marketing search metadata", () => {
 
     expect(searchPage).toMatch(/\.article-copy \{[\s\S]*?min-width: 0;/);
     expect(searchPage).toContain("overflow-x: auto;");
+  });
+
+  it("serves a crawler-compatible social card from a cache-busted URL", () => {
+    const layout = sourceFile("layouts/Layout.astro");
+    const socialImage = NodeFS.readFileSync(
+      NodePath.resolve(import.meta.dirname, "../public/og-v2.jpg"),
+    );
+    const decoded = JPEG.decode(socialImage, { formatAsRGBA: false, useTArray: true });
+
+    expect(layout).toContain('new URL("/og-v2.jpg", siteOrigin)');
+    expect(layout).toContain('<meta property="og:image:type" content="image/jpeg" />');
+    expect(layout).toContain('<meta property="og:image:width" content="1200" />');
+    expect(layout).toContain('<meta property="og:image:height" content="630" />');
+    expect(layout).toContain('<meta name="twitter:image:alt"');
+    expect(jpegFrameMarker(socialImage)).toBe(0xc0);
+    expect(decoded).toMatchObject({ width: 1200, height: 630 });
+    expect(decoded.data.byteLength).toBe(1200 * 630 * 3);
+    expect(socialImage.byteLength).toBeLessThan(5_000_000);
   });
 
   it("keeps missing pages out of search results", () => {

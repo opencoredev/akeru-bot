@@ -23,13 +23,20 @@ import {
 } from "./_internal/shared.ts";
 import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
 
-export interface AcpClientOptions {
+export interface AcpClientOptions extends Pick<
+  AcpProtocol.AcpPatchedProtocolOptions,
+  "rawNotificationBufferSize"
+> {
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
   readonly logger?: (event: AcpProtocol.AcpProtocolLogEvent) => Effect.Effect<void, never>;
 }
 
 type AcpClientRaw = {
+  /**
+   * Opt-in, work-sharing stream, not a broadcast. Configure rawNotificationBufferSize before connecting.
+   * Disabled streams end immediately; enabled streams drain on input termination and are interrupted on scope close.
+   */
   readonly notifications: Stream.Stream<AcpProtocol.AcpIncomingNotification>;
   readonly request: (method: string, payload: unknown) => Effect.Effect<unknown, AcpError.AcpError>;
   readonly notify: (method: string, payload: unknown) => Effect.Effect<void, AcpError.AcpError>;
@@ -401,6 +408,7 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
     stdio: stdio,
     ...(terminationError ? { terminationError } : {}),
     serverRequestMethods: new Set(AcpRpcs.ClientRpcs.requests.keys()),
+    rawNotificationBufferSize: options.rawNotificationBufferSize ?? 0,
     ...(options.logIncoming !== undefined ? { logIncoming: options.logIncoming } : {}),
     ...(options.logOutgoing !== undefined ? { logOutgoing: options.logOutgoing } : {}),
     ...(options.logger ? { logger: options.logger } : {}),

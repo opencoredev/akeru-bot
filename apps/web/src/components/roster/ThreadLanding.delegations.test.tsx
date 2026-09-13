@@ -92,6 +92,18 @@ vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
 vi.mock("../voice/VoiceCall", () => ({
   BotVoiceCallButton: () => null,
   useVoiceCall: () => ({ activeCall: null, startingBotId: null }),
+  useOptionalVoiceCall: () => ({ activeCall: null, startingBotId: null }),
+}));
+vi.mock("../chat/ReplyPlaybackProvider", () => ({
+  ReplyPlaybackProvider: ({ children }: { children: unknown }) => children,
+  useOptionalReplyPlayback: () => null,
+  useReplyPlayback: () => {
+    throw new Error("Reply playback is not available in this test.");
+  },
+}));
+vi.mock("~/lib/replyPlaybackThread", () => ({
+  useReplyPlaybackThread: () => undefined,
+  replyPlaybackControlProps: () => undefined,
 }));
 vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
 vi.mock("./botPresence", () => ({

@@ -26,7 +26,7 @@ export function workspaceConnectionStatusLabel(state: WorkspaceState): string {
   }
   if (state.connectionError !== null) return state.connectionError;
   if (state.hasPendingShellSnapshot) {
-    return state.hasLoadedShellSnapshot ? "Syncing threads..." : "Loading threads...";
+    return state.hasLoadedShellSnapshot ? "Syncing chats..." : "Loading chats...";
   }
   return "Not connected";
 }

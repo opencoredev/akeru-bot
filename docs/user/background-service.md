@@ -28,7 +28,7 @@ Stop it and remove it from startup:
 npx akeru-bot@latest service uninstall
 ```
 
-An update restarts Akeru. Let active agent work and terminal commands finish first. Wait when another
+An update restarts Akeru. Let active bot work and terminal commands finish first. Wait when another
 local or remote update is already running.
 
 ## Updates and rollback
@@ -56,7 +56,7 @@ can prevent automatic login.
 An install over SSH needs a user logged in at the Mac to start the launch agent immediately. Without
 that session, installation can finish but the agent starts at the next login.
 
-If agent work cannot read Desktop, Documents, or Downloads, grant Full Disk Access to the Node.js
+If bot work cannot read Desktop, Documents, or Downloads, grant Full Disk Access to the Node.js
 binary listed in the launch agent's `ProgramArguments`. Also check **System Settings > General >
 Login Items** if the launch agent does not start.
 

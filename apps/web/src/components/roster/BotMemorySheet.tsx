@@ -430,7 +430,7 @@ export function BotMemorySheet({
                       });
                     }}
                   >
-                    Export thread
+                    Export conversation
                   </Button>
                   <label className="inline-flex">
                     <Input

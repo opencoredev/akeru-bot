@@ -24,7 +24,10 @@ import {
   selectedReactionForPerson,
 } from "../chat/MessageControls";
 import { MessageReactions } from "../chat/MessageReactions";
+import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
+import { replyPlaybackControlProps, useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
@@ -63,6 +66,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  const replyPlayback = useOptionalReplyPlayback();
+  const voiceCall = useOptionalVoiceCall();
   const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
     reportFailure: false,
   });
@@ -88,6 +93,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const working =
     runtime.sending || runtime.respondingRequestIds.length > 0 || presence === "working";
   const messages = visibleBotChatMessages(runtime.messages);
+  useReplyPlaybackThread({
+    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
+    threadId: runtime.linkedThreadRef?.threadId,
+    messages,
+    mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
+  });
   const pendingApproval = approvalState.pendingApproval;
   const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
@@ -134,7 +145,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   return (
     <SidebarInset
-      aria-label={`${group.name} group thread`}
+      aria-label={`${group.name} group chat`}
       className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
       data-testid="group-thread-landing"
     >
@@ -172,7 +183,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   return (
                     <div
                       key={message.id}
-                      className="max-w-[85%]"
+                      className="group/message max-w-[85%]"
                       data-testid="group-provider-message"
                     >
                       <div className="text-sm font-medium">Unavailable bot</div>
@@ -182,9 +193,13 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
-                      <div className="mt-1">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
+                          {...(() => {
+                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
+                            return readAloud ? { readAloud } : {};
+                          })()}
                           onReply={() =>
                             setReplyTarget({
                               messageId: message.id,
@@ -219,9 +234,13 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
-                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
+                          {...(() => {
+                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
+                            return readAloud ? { readAloud } : {};
+                          })()}
                           selectedReaction={selectedReactionForPerson(
                             message.reactions,
                             peopleIdentity.current?.id,
@@ -261,7 +280,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   className="group/message flex items-end justify-end gap-1"
                   data-testid="group-user-message"
                 >
-                  <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                  <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                     <MessageControls
                       align="end"
                       copyText={

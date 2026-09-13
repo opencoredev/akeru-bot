@@ -17,7 +17,7 @@ so connect that service before you start the bot.
 ## Session behavior
 
 Akeru pauses remote sandboxes while bots are idle and reconnects to the saved provider workspace when
-work resumes.
+bot work resumes.
 
 Changing a provider credential replaces active sessions that use the connection. A running session
 cannot continue with the old credential.

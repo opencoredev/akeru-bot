@@ -7,6 +7,9 @@ import {
 import { usePrimarySettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { useSyncExternalStore } from "react";
+import type { ReplyReadoutPreference } from "@t3tools/client-runtime/reply-playback";
+import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -31,6 +34,7 @@ const VOICE_LABELS: Readonly<Record<ChatGptRealtimeVoice, string>> = {
 export function VoiceSettingsPanel() {
   const voice = usePrimarySettings((settings) => settings.voice);
   const updateSettings = useUpdatePrimarySettings();
+  const replyPlayback = useOptionalReplyPlayback();
 
   const selectVoice = (value: string | null) => {
     const selected = CHATGPT_REALTIME_VOICES.find((candidate) => candidate === value);
@@ -83,6 +87,7 @@ export function VoiceSettingsPanel() {
             </Select>
           }
         />
+        {replyPlayback ? <AutomaticReadoutRow preference={replyPlayback.preference} /> : null}
         <SettingsRow
           {...searchableSetting("voice-selection")}
           description="Choose the voice used for new calls."
@@ -113,5 +118,32 @@ export function VoiceSettingsPanel() {
         />
       </SettingsSection>
     </SettingsPageContainer>
+  );
+}
+
+function AutomaticReadoutRow({ preference }: { readonly preference: ReplyReadoutPreference }) {
+  const state = useSyncExternalStore(
+    preference.subscribe,
+    preference.getSnapshot,
+    preference.getSnapshot,
+  );
+  return (
+    <SettingsRow
+      {...searchableSetting("voice-read-aloud")}
+      description={
+        state.persistenceError
+          ? "This preference could not be saved on this device."
+          : "Read new completed replies in the open chat on this device. History is never replayed. This does not start a live call or generate a new answer."
+      }
+      control={
+        <Switch
+          checked={state.enabled}
+          onCheckedChange={(checked) => {
+            void preference.setEnabled(Boolean(checked));
+          }}
+          aria-label="Read new replies aloud"
+        />
+      }
+    />
   );
 }

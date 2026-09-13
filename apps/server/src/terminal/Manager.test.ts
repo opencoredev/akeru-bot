@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Data from "effect/Data";
+import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
@@ -210,9 +211,14 @@ interface CreateManagerOptions {
     readonly childCommand: string | null;
     readonly processIds: ReadonlyArray<number>;
   }>;
+  processTable?: Effect.Effect<
+    ReadonlyArray<{ readonly pid: number; readonly ppid: number; readonly name: string }>,
+    never
+  >;
   subprocessPollIntervalMs?: number;
   processKillGraceMs?: number;
   maxRetainedInactiveSessions?: number;
+  historyByteLimit?: number;
   ptyAdapter?: FakePtyAdapter;
 }
 
@@ -243,11 +249,15 @@ const createManager = (
         logsDir,
         historyLineLimit,
         ptyAdapter,
+        ...(options.historyByteLimit !== undefined
+          ? { historyByteLimit: options.historyByteLimit }
+          : {}),
         ...(options.shellResolver !== undefined ? { shellResolver: options.shellResolver } : {}),
         ...(options.env !== undefined ? { env: options.env } : {}),
         ...(options.subprocessInspector !== undefined
           ? { subprocessInspector: options.subprocessInspector }
           : {}),
+        ...(options.processTable !== undefined ? { processTable: options.processTable } : {}),
         ...(options.subprocessPollIntervalMs !== undefined
           ? { subprocessPollIntervalMs: options.subprocessPollIntervalMs }
           : {}),
@@ -275,6 +285,105 @@ const createManager = (
 
 const withHostPlatform = (platform: NodeJS.Platform) =>
   Layer.succeed(HostProcessPlatform, platform);
+
+// Apply the existing line policy, then find the longest code-point-aligned byte tail.
+function retainedHistory(text: string, maxLines: number, maxBytes = Infinity): string {
+  const terminated = text.endsWith("\n");
+  const lines = text.split("\n");
+  if (terminated) lines.pop();
+  const retained = lines.slice(Math.max(0, lines.length - maxLines)).join("\n");
+  const capped = terminated ? `${retained}\n` : retained;
+  if (Buffer.byteLength(capped) <= maxBytes) return capped;
+  const points = Array.from(capped);
+  let start = points.length;
+  let bytes = 0;
+  while (start > 0) {
+    const next = Buffer.byteLength(points[start - 1]!);
+    if (bytes + next > maxBytes) break;
+    bytes += next;
+    start -= 1;
+  }
+  return points.slice(start).join("");
+}
+
+it("preserves line and byte limits across arbitrary chunks, Unicode, ANSI sequences, and clear", () => {
+  let randomSeed = 0x20260904;
+  const fragments = [
+    "",
+    "a",
+    "\n",
+    "\n\n",
+    "\r",
+    "\r\n",
+    "café",
+    "名",
+    "🚀",
+    "\u001b[31m",
+    "\u001b[0m",
+    "\u001b]8;;url\u0007",
+    "\ud83d",
+    "\ude80",
+  ];
+  const nextFragment = () => {
+    randomSeed = (Math.imul(randomSeed, 1_664_525) + 1_013_904_223) >>> 0;
+    return fragments[randomSeed % fragments.length]!;
+  };
+
+  for (const maxBytes of [0, 3, 8, 64, Infinity]) {
+    for (const maxLines of [0, 1, 3, 5, 5_000]) {
+      let expected = retainedHistory("before\ninitial\n", maxLines, maxBytes);
+      const history = new TerminalManager.BoundedTerminalHistory(
+        maxLines,
+        "before\ninitial\n",
+        maxBytes,
+      );
+      expect(history.value()).toBe(expected);
+
+      for (let step = 0; step < 300; step += 1) {
+        if (step % 73 === 0) {
+          history.clear();
+          expected = "";
+          expect(history.value()).toBe(expected);
+        }
+        const chunk = nextFragment() + nextFragment();
+        history.append(chunk);
+        expected = retainedHistory(expected + chunk, maxLines, maxBytes);
+        expect(history.value()).toBe(expected);
+      }
+    }
+  }
+});
+
+it("bounds long partial lines and joins surrogate pairs across chunk boundaries", () => {
+  const maxBytes = 65_539;
+  let expected = "";
+  const history = new TerminalManager.BoundedTerminalHistory(5_000, "", maxBytes);
+  const writes = [
+    "a".repeat(16_383) + "😀" + "b".repeat(70_000),
+    "\r" + "c".repeat(70_000) + "\ud83d",
+    "\ude80" + "d".repeat(100),
+    "\uFEFF" + "名".repeat(30_000),
+  ];
+  for (const text of writes) {
+    history.append(text);
+    expected = retainedHistory(expected + text, 5_000, maxBytes);
+    expect(history.value()).toBe(expected);
+    expect(Buffer.byteLength(history.value())).toBeLessThanOrEqual(maxBytes);
+  }
+});
+
+it("preserves retained lines as older storage is compacted", () => {
+  for (const maxLines of [3, 5_000]) {
+    let expected = "";
+    const history = new TerminalManager.BoundedTerminalHistory(maxLines, expected);
+    for (let batch = 0; batch < 40; batch += 1) {
+      const chunk = Array.from({ length: 300 }, (_, line) => `${batch}:${line}\n`).join("");
+      history.append(chunk);
+      expected = retainedHistory(expected + chunk, maxLines);
+      expect(history.value()).toBe(expected);
+    }
+  }
+});
 
 it.layer(
   Layer.merge(NodeServices.layer, ProcessRunner.layer.pipe(Layer.provide(NodeServices.layer))),
@@ -1073,6 +1182,92 @@ it.layer(
     }),
   );
 
+  it("calculates snapshot failure backoff and success reset delays", () => {
+    assert.equal(TerminalManager.subprocessSnapshotPollDelayMs(1_000, 0), 1_000);
+    assert.equal(TerminalManager.subprocessSnapshotPollDelayMs(1_000, 1), 2_000);
+    assert.equal(TerminalManager.subprocessSnapshotPollDelayMs(1_000, 2), 4_000);
+    assert.equal(TerminalManager.subprocessSnapshotPollDelayMs(1_000, 30), 60_000);
+  });
+
+  it.effect("uses process snapshots from the resource monitor", () =>
+    Effect.gen(function* () {
+      let snapshotCalls = 0;
+      const { manager, getEvents } = yield* createManager(5, {
+        subprocessPollIntervalMs: 20,
+        processTable: Effect.sync(() => {
+          snapshotCalls += 1;
+          return [{ pid: 100, ppid: 9000, name: "ping.exe" }];
+        }),
+      }).pipe(Effect.provide(withHostPlatform("win32")));
+
+      yield* manager.open(openInput());
+      yield* waitFor(
+        Effect.map(getEvents, (events) =>
+          events.some(
+            (event) =>
+              event.type === "activity" && event.hasRunningSubprocess && event.label === "ping",
+          ),
+        ),
+        "1200 millis",
+      );
+      expect(snapshotCalls).toBeGreaterThan(0);
+    }),
+  );
+
+  it.effect("backs off the spawned fallback when the resource monitor snapshot fails", () =>
+    Effect.gen(function* () {
+      const fallbackCalls: Array<number> = [];
+      const processRunner: ProcessRunner.ProcessRunner["Service"] = {
+        run: () =>
+          Clock.currentTimeMillis.pipe(
+            Effect.map((now) => {
+              fallbackCalls.push(now);
+              return {
+                stdout: "  100  9000 vim",
+                stderr: "",
+                code: ChildProcessSpawner.ExitCode(0),
+                timedOut: false,
+                stdoutTruncated: false,
+                stderrInvalidUtf8: false,
+                stdoutInvalidUtf8: false,
+                stderrTruncated: false,
+              };
+            }),
+          ),
+      };
+
+      const { manager, getEvents } = yield* createManager(5, {
+        subprocessPollIntervalMs: 20,
+        processTable: Effect.fail("sidecar unavailable").pipe(
+          Effect.mapError((cause) => cause as never),
+        ),
+      }).pipe(
+        Effect.provideService(ProcessRunner.ProcessRunner, processRunner),
+        Effect.provide(withHostPlatform("linux")),
+      );
+
+      yield* manager.open(openInput());
+      yield* waitFor(
+        Effect.map(getEvents, (events) =>
+          events.some(
+            (event) =>
+              event.type === "activity" &&
+              event.hasRunningSubprocess === true &&
+              event.label === "vim",
+          ),
+        ),
+        "1200 millis",
+      );
+
+      yield* waitFor(
+        Effect.sync(() => fallbackCalls.length >= 4),
+        "2000 millis",
+      );
+      const spanMs = fallbackCalls[3]! - fallbackCalls[0]!;
+      expect(spanMs).toBeGreaterThan(150);
+    }),
+  );
+
   it.effect("caps persisted history to configured line limit", () =>
     Effect.gen(function* () {
       const { manager, ptyAdapter } = yield* createManager(3);
@@ -1089,6 +1284,105 @@ it.layer(
       expect(nonEmptyLines).toEqual(["line2", "line3", "line4"]);
     }),
   );
+
+  it.effect("caps incrementally appended history without losing partial or empty lines", () =>
+    Effect.gen(function* () {
+      const { manager, ptyAdapter } = yield* createManager(3);
+      yield* manager.open(openInput());
+      const process = ptyAdapter.processes[0];
+      expect(process).toBeDefined();
+      if (!process) return;
+
+      process.emitData("line1\n");
+      process.emitData("\n");
+      process.emitData("line3");
+      process.emitData("-continued\nline4");
+      yield* manager.close({ threadId: "thread-1" });
+
+      const reopened = yield* manager.open(openInput());
+      expect(reopened.history).toBe("\nline3-continued\nline4");
+    }),
+  );
+
+  it.effect("bounds persisted and attached history without truncating live output", () =>
+    Effect.gen(function* () {
+      const { manager, ptyAdapter, logsDir } = yield* createManager(5, { historyByteLimit: 10 });
+      const attachEvents = yield* Ref.make<ReadonlyArray<TerminalAttachStreamEvent>>([]);
+      const unsubscribe = yield* manager.attachStream(openInput(), (event) =>
+        Ref.update(attachEvents, (events) => [...events, event]),
+      );
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
+      const writes = ["a".repeat(32), "😀\rEND"];
+      const process = ptyAdapter.processes[0]!;
+      for (const text of writes) process.emitData(text);
+      yield* manager.close({ threadId: "thread-1" });
+      expect(yield* readFileString(yield* historyLogPath(logsDir))).toBe("aa😀\rEND");
+
+      const reopened = yield* manager.open(openInput());
+      const events = yield* Ref.get(attachEvents);
+      expect(events.filter((event) => event.type === "output").map((event) => event.data)).toEqual(
+        writes,
+      );
+      const snapshot = events.findLast((event) => event.type === "snapshot")?.snapshot;
+      expect(snapshot?.history).toBe("aa😀\rEND");
+      expect(snapshot?.sequence).toBe(reopened.sequence);
+    }),
+  );
+
+  for (const source of ["current", "legacy"] as const) {
+    it.effect(`reads only a Unicode-safe tail from oversized ${source} history`, () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        let sourcePath: string | undefined;
+        let closedReads = 0;
+        const readRequests: number[] = [];
+        const trackedFileSystem = FileSystem.FileSystem.of({
+          ...fs,
+          readFileString: (candidate, encoding) =>
+            candidate === sourcePath
+              ? Effect.die("History restoration must not read the whole file")
+              : fs.readFileString(candidate, encoding),
+          open: (candidate, options) =>
+            Effect.gen(function* () {
+              if (candidate !== sourcePath) return yield* fs.open(candidate, options);
+              yield* Effect.addFinalizer(() =>
+                Effect.sync(() => {
+                  closedReads += 1;
+                }),
+              );
+              const file = yield* fs.open(candidate, options);
+              return new Proxy(file, {
+                get(target, key) {
+                  if (key === "read") {
+                    return (buffer: Uint8Array) => {
+                      readRequests.push(buffer.byteLength);
+                      return target.read(buffer.subarray(0, 5));
+                    };
+                  }
+                  return Reflect.get(target, key, target);
+                },
+              });
+            }),
+        });
+        const { manager, logsDir } = yield* createManager(5, { historyByteLimit: 15 }).pipe(
+          Effect.provideService(FileSystem.FileSystem, trackedFileSystem),
+        );
+        const nextPath = yield* historyLogPath(logsDir);
+        sourcePath = source === "current" ? nextPath : path.join(logsDir, "thread-1.log");
+        yield* fs.writeFileString(sourcePath, "old".repeat(32_768) + "😀\uFEFFnewest\ré");
+
+        const snapshot = yield* manager.open(openInput());
+        expect(snapshot.history).toBe("\uFEFFnewest\ré");
+        expect(readRequests).toEqual([15, 10, 5]);
+        expect(closedReads).toBe(1);
+        expect(Buffer.from(yield* fs.readFile(nextPath)).toString()).toBe("\uFEFFnewest\ré");
+        if (source === "legacy") expect(yield* fs.exists(sourcePath)).toBe(false);
+        yield* manager.close({ threadId: "thread-1" });
+        expect((yield* manager.open(openInput())).history).toBe("\uFEFFnewest\ré");
+      }),
+    );
+  }
 
   it.effect("strips replay-unsafe terminal query and reply sequences from persisted history", () =>
     Effect.gen(function* () {

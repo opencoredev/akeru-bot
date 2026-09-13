@@ -45,6 +45,13 @@ export interface AcpPatchedProtocolOptions {
   readonly stdio: Stdio.Stdio;
   readonly terminationError?: Effect.Effect<AcpError.AcpError>;
   readonly serverRequestMethods: ReadonlySet<string>;
+  /**
+   * Enables raw notification observation. Zero (the default) returns an empty stream.
+   * A positive integer retains the newest N unread events, dropping the oldest on overflow.
+   * "unbounded" preserves the legacy lossless FIFO, including all events before a late reader.
+   * Buffers never block callback dispatch; finite buffers can also drop events for slow readers.
+   */
+  readonly rawNotificationBufferSize?: number | "unbounded";
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
   readonly logger?: (event: AcpProtocolLogEvent) => Effect.Effect<void, never>;
@@ -61,6 +68,10 @@ export interface AcpPatchedProtocolOptions {
 export interface AcpPatchedProtocol {
   readonly clientProtocol: RpcClient.Protocol["Service"];
   readonly serverProtocol: RpcServer.Protocol["Service"];
+  /**
+   * Opt-in FIFO shared by readers, not a broadcast. Disabled streams end immediately.
+   * Enabled streams drain on input termination; scope closure discards the buffer and interrupts readers.
+   */
   readonly incoming: Stream.Stream<AcpIncomingNotification>;
   readonly request: (method: string, payload: unknown) => Effect.Effect<unknown, AcpError.AcpError>;
   readonly notify: (method: string, payload: unknown) => Effect.Effect<void, AcpError.AcpError>;
@@ -77,13 +88,32 @@ const decodeElicitationComplete = Schema.decodeUnknownEffect(
 );
 const parserFactory = RpcSerialization.ndJsonRpc();
 
+const makeRawQueue = Effect.fn("makeRawQueue")(function* <A>(bufferSize: number | "unbounded" = 0) {
+  if (bufferSize === 0) {
+    return undefined;
+  }
+  if (bufferSize !== "unbounded" && (!Number.isSafeInteger(bufferSize) || bufferSize < 0)) {
+    return yield* Effect.die(
+      new RangeError("Raw buffer size must be a non-negative safe integer or 'unbounded'."),
+    );
+  }
+  return yield* Effect.acquireRelease(
+    Queue.sliding<A, Cause.Done<void>>(
+      bufferSize === "unbounded" ? Number.POSITIVE_INFINITY : bufferSize,
+    ),
+    Queue.shutdown,
+  );
+});
+
 export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(function* (
   options: AcpPatchedProtocolOptions,
 ): Effect.fn.Return<AcpPatchedProtocol, never, Scope.Scope> {
   const parser = parserFactory.makeUnsafe();
   const serverQueue = yield* Queue.unbounded<RpcMessage.FromClientEncoded>();
   const clientQueue = yield* Queue.unbounded<RpcMessage.FromServerEncoded>();
-  const notificationQueue = yield* Queue.unbounded<AcpIncomingNotification>();
+  const notificationQueue = yield* makeRawQueue<AcpIncomingNotification>(
+    options.rawNotificationBufferSize,
+  );
   const disconnects = yield* Queue.unbounded<number>();
   const outgoing = yield* Queue.unbounded<string | Uint8Array, Cause.Done<void>>();
   const nextRequestId = yield* Ref.make(1);
@@ -178,7 +208,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     );
 
   const dispatchNotification = (notification: AcpIncomingNotification) =>
-    Queue.offer(notificationQueue, notification).pipe(
+    (notificationQueue ? Queue.offer(notificationQueue, notification) : Effect.void).pipe(
       Effect.andThen(
         options.onNotification
           ? options.onNotification(notification).pipe(Effect.catch(() => Effect.void))
@@ -206,6 +236,9 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       return [
         Effect.gen(function* () {
           yield* Queue.offer(disconnects, 0);
+          if (notificationQueue) {
+            yield* Queue.end(notificationQueue);
+          }
           const error = yield* classify();
           if (!error) {
             return;
@@ -552,9 +585,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
   return {
     clientProtocol,
     serverProtocol,
-    get incoming() {
-      return Stream.fromQueue(notificationQueue);
-    },
+    incoming: notificationQueue ? Stream.fromQueue(notificationQueue) : Stream.empty,
     request: sendRequest,
     notify: sendNotification,
   } satisfies AcpPatchedProtocol;

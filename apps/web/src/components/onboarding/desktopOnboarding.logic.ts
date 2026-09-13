@@ -11,6 +11,13 @@ import { BLOB_COLORS, BLOB_SHAPES } from "../roster/roster.logic";
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
 export const DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY = "akeru:desktop-onboarding-completed:v1";
 
+export function markDesktopOnboardingCompleted(
+  storage: Pick<Storage, "removeItem" | "setItem">,
+): void {
+  storage.removeItem(DESKTOP_ONBOARDING_STORAGE_KEY);
+  storage.setItem(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
+}
+
 export type DesktopOnboardingStep = "subscription" | "use-case" | "identity" | "message";
 export type DesktopOnboardingUseCaseId =
   | "inbox"
@@ -97,6 +104,7 @@ const providerIds: readonly SubscriptionProviderId[] = [
   "anthropic",
   "xai",
   "kimi-for-coding",
+  "opencode-go",
 ];
 
 const useCaseIds: readonly DesktopOnboardingUseCaseId[] = [
@@ -147,6 +155,7 @@ const subscriptionDriver: Readonly<Partial<Record<SubscriptionProviderId, string
   anthropic: "claudeAgent",
   xai: "grok",
   "kimi-for-coding": "kimi",
+  "opencode-go": "opencodeGo",
 };
 
 export function resolveDesktopOnboardingEngine(

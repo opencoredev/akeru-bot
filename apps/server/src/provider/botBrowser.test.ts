@@ -202,6 +202,11 @@ describe("sandbox bot browser", () => {
     });
 
     try {
+      expect(executeCommand).not.toHaveBeenCalled();
+      expect(browserEndpoint).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+      await executeTool(browser.tools.browser_snapshot, {});
+      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(1);
       await expect(browser.attachment()).resolves.toMatchObject({
         browserUrl: "https://9223-e2b.example",
         requestHeaders: { "e2b-traffic-access-token": "traffic-token" },

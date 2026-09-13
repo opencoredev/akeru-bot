@@ -401,6 +401,7 @@ describe("serverSettings helpers", () => {
         overrides: {},
       },
       automaticGitFetchInterval: Duration.seconds(5),
+      providerHealthRefreshInterval: Duration.seconds(10),
       backgroundActivityProfile: "performance",
     });
 
@@ -411,6 +412,7 @@ describe("serverSettings helpers", () => {
     });
     expect(next.backgroundActivityProfile).toBe("battery-saver");
     expect(Duration.toMillis(next.automaticGitFetchInterval)).toBe(0);
+    expect(Duration.toMillis(next.providerHealthRefreshInterval)).toBe(15 * 60_000);
   });
 
   it("reconciles custom background activity back to a preset when overrides match the preset", () => {

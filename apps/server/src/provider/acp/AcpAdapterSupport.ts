@@ -12,7 +12,6 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 const isAcpProcessExitedError = Schema.is(EffectAcpErrors.AcpProcessExitedError);
-const isAcpRequestError = Schema.is(EffectAcpErrors.AcpRequestError);
 
 export function mapAcpToAdapterError(
   provider: ProviderDriverKind,
@@ -24,14 +23,6 @@ export function mapAcpToAdapterError(
     return new ProviderAdapterSessionClosedError({
       provider,
       threadId,
-      cause: error,
-    });
-  }
-  if (isAcpRequestError(error)) {
-    return new ProviderAdapterRequestError({
-      provider,
-      method,
-      detail: error.message,
       cause: error,
     });
   }

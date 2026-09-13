@@ -48,7 +48,7 @@ export class ThreadArchiveBlockedError extends Schema.TaggedErrorClass<ThreadArc
   },
 ) {
   override get message(): string {
-    return "Cannot archive a running thread.";
+    return "Cannot archive a running chat.";
   }
 }
 
@@ -72,7 +72,7 @@ export class ThreadSettleBlockedError extends Schema.TaggedErrorClass<ThreadSett
   },
 ) {
   override get message(): string {
-    return "This thread still needs attention. Resolve or interrupt it first, then try again.";
+    return "This chat still needs attention. Resolve or interrupt it first, then try again.";
   }
 }
 
@@ -96,7 +96,7 @@ export class ThreadSnoozeBlockedError extends Schema.TaggedErrorClass<ThreadSnoo
   },
 ) {
   override get message(): string {
-    return "This thread is waiting on you. Respond to the pending request before snoozing it.";
+    return "This chat is waiting on you. Respond to the pending request before snoozing it.";
   }
 }
 
@@ -132,7 +132,7 @@ export class ThreadPinReorderUnsupportedError extends Schema.TaggedErrorClass<Th
   },
 ) {
   override get message(): string {
-    return "This environment's server does not support reordering pinned threads yet. Update the server to reorder pins.";
+    return "This environment does not support reordering pinned chats yet. Update Akeru Bot to reorder pins.";
   }
 }
 
@@ -320,7 +320,7 @@ export function useThreadActions() {
         const confirmationResult = await settlePromise(() =>
           localApi.dialogs.confirm(
             [
-              "This thread is the only one linked to this worktree:",
+              "This chat is the only one linked to this worktree:",
               displayWorktreePath ?? orphanedWorktreePath,
               "",
               "Delete the worktree too?",
@@ -446,7 +446,7 @@ export function useThreadActions() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Thread deleted, but worktree removal failed",
+            title: "Chat deleted, but worktree removal failed",
             description: `Could not remove ${displayWorktreePath ?? orphanedWorktreePath}. ${message}`,
           }),
         );
@@ -673,13 +673,12 @@ export function useThreadActions() {
       const resolved = resolveThreadTarget(target);
 
       if (confirmThreadDelete && localApi) {
-        const title = resolved?.thread.title ?? "this thread";
+        const title = resolved?.thread.title ?? "this chat";
         const confirmationResult = await settlePromise(() =>
           localApi.dialogs.confirm(
-            [
-              `Delete thread "${title}"?`,
-              "This permanently clears conversation history for this thread.",
-            ].join("\n"),
+            [`Delete chat "${title}"?`, "This permanently clears this conversation history."].join(
+              "\n",
+            ),
             { variant: "destructive" },
           ),
         );

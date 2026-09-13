@@ -24,6 +24,11 @@ connection works. A routine can require an enabled connector.
 A plugin waiting for publisher approval stays visible, but **Connect** remains disabled. A plugin
 removed from the public directory stays under **Installed** until you remove it.
 
+If a service adds permissions after you first connected, select **Reconnect**. Akeru renews an
+outdated automatic OAuth client registration before opening sign-in, so services such as Hoplite
+can request their current permissions. You may need to approve those permissions again. Manually
+configured OAuth clients keep their existing registration.
+
 ## Enable tools for a bot
 
 Akeru enables a new plugin for every bot by default. Open the bot's **Tools** setting to disable it
@@ -39,10 +44,10 @@ replace the key under **Settings > Plugins**. Akeru stores the key on the enviro
 the plugin catalog or MCP registry.
 
 Connect more than one Gmail account when you need separate work and personal accounts. Manage each
-account under **Settings > Plugins**. The agent asks you to select an account when a tool call could
+account under **Settings > Plugins**. The bot asks you to select an account when a tool call could
 use more than one.
 
-Composio tools work in threads opened from web, desktop, or mobile after an environment has a key and
+Composio tools work in chats opened from web, desktop, or mobile after an environment has a key and
 at least one connected account. Configure accounts from the web or desktop client.
 
 ## Custom MCP servers

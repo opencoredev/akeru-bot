@@ -19,6 +19,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DelegationId,
+  GroupId,
   EventId,
   MessageId,
   ProjectId,
@@ -62,6 +63,7 @@ import {
   providerErrorLabel,
   providerErrorLabelFromInstanceHint,
   ProviderCommandReactorLive,
+  type ControllerEngineThread,
   resolveControllerBotId,
 } from "./ProviderCommandReactor.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -113,6 +115,21 @@ describe("ProviderCommandReactor", () => {
     expect(resolveControllerBotId({ botId: BotId.make("bot-owner"), respondingBotId: null })).toBe(
       "bot-owner",
     );
+  });
+
+  it("accepts a thread shell without messages, activities, or checkpoints", () => {
+    const shell: ControllerEngineThread = {
+      id: ThreadId.make("thread-shell"),
+      botId: BotId.make("bot-owner"),
+      groupId: GroupId.make("group-1"),
+      respondingBotId: BotId.make("bot-specialist"),
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+    };
+    expect(resolveControllerBotId(shell)).toBe("bot-specialist");
+    expect("messages" in shell).toBe(false);
+    expect("activities" in shell).toBe(false);
+    expect("checkpoints" in shell).toBe(false);
+    expect("deletedAt" in shell).toBe(false);
   });
   let runtime: ManagedRuntime.ManagedRuntime<
     OrchestrationEngineService | ProviderCommandReactor | ProjectionSnapshotQuery | BotUsageLedger,
@@ -1387,7 +1404,7 @@ describe("ProviderCommandReactor", () => {
   it("keeps the current title when regeneration returns the fallback", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
-    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "New thread" }));
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "New chat" }));
 
     await harness.runEffect(
       harness.engine.dispatch({
@@ -3774,15 +3791,15 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
-  it("surfaces stale provider approval request failures without faking approval resolution", async () => {
+  it("normalizes stale Codex approval callbacks without faking approval resolution", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
     harness.respondToRequest.mockImplementation(() =>
       Effect.fail(
         new ProviderAdapterRequestError({
           provider: ProviderDriverKind.make("codex"),
-          method: "session/request_permission",
-          detail: "Unknown pending permission request: approval-request-1",
+          method: "item/requestApproval/decision",
+          detail: "Unknown pending Codex approval request: approval-request-1",
         }),
       ),
     );
@@ -3863,7 +3880,7 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.messages).toContainEqual(
       expect.objectContaining({
         role: "assistant",
-        text: "I could not continue that approval because the agent session restarted. Send it again.",
+        text: "I could not continue that approval because the bot session restarted. Send it again.",
       }),
     );
     expect(thread?.session).toMatchObject({
@@ -3975,7 +3992,7 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.messages).toContainEqual(
       expect.objectContaining({
         role: "assistant",
-        text: "I could not continue that request because the agent session restarted. Send it again.",
+        text: "I could not continue that request because the bot session restarted. Send it again.",
       }),
     );
     expect(thread?.session).toMatchObject({

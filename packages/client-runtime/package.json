@@ -15,6 +15,10 @@
       "types": "./src/environment/index.ts",
       "default": "./src/environment/index.ts"
     },
+    "./reply-playback": {
+      "types": "./src/replyPlayback/index.ts",
+      "default": "./src/replyPlayback/index.ts"
+    },
     "./markdown-images": {
       "types": "./src/markdownImages.ts",
       "default": "./src/markdownImages.ts"
@@ -39,9 +43,17 @@
       "types": "./src/platform/index.ts",
       "default": "./src/platform/index.ts"
     },
+    "./provider-auth": {
+      "types": "./src/providerAuth.ts",
+      "default": "./src/providerAuth.ts"
+    },
     "./providerSkills": {
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
+    },
+    "./channel-presentation": {
+      "types": "./src/channelPresentation.ts",
+      "default": "./src/channelPresentation.ts"
     },
     "./settings-deep-link": {
       "types": "./src/settingsDeepLink.ts",

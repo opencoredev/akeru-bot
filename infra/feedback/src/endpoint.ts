@@ -170,7 +170,7 @@ async function readBoundedBody(request: Request): Promise<string | null> {
   return new TextDecoder("utf-8", { fatal: true }).decode(body);
 }
 
-function optionsResponse(): Response {
+export function productFeedbackOptionsResponse(): Response {
   return new Response(null, {
     status: 204,
     headers: {
@@ -190,7 +190,7 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
 
   return async (request: Request): Promise<Response> => {
     try {
-      if (request.method === "OPTIONS") return optionsResponse();
+      if (request.method === "OPTIONS") return productFeedbackOptionsResponse();
       if (request.method !== "POST") {
         return rejection(405, { reason: "malformed", message: "Use POST for feedback." });
       }
@@ -270,7 +270,20 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
         );
       }
 
-      if (ipCount >= PRODUCT_FEEDBACK_SUSPICIOUS_AFTER && options.turnstile) {
+      if (ipCount >= PRODUCT_FEEDBACK_SUSPICIOUS_AFTER) {
+        // Without Turnstile there is no way to clear suspicious traffic, so the
+        // suspicious threshold becomes the hard network limit.
+        if (!options.turnstile) {
+          return rejection(
+            429,
+            {
+              reason: "rate_limited",
+              message: "Too many feedback submissions came from this network. Try again later.",
+              retryAfterSeconds: PRODUCT_FEEDBACK_IP_WINDOW_SECONDS,
+            },
+            { "Retry-After": String(PRODUCT_FEEDBACK_IP_WINDOW_SECONDS) },
+          );
+        }
         if (!submission.turnstileToken) {
           return rejection(429, {
             reason: "challenge_required",

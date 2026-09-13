@@ -244,7 +244,7 @@ describe("DelegationCard", () => {
   it("opens the child through roster thread navigation", () => {
     const open = visitElements(
       cardElement("running"),
-      (element) => element.props["aria-label"] === "Open Mori thread",
+      (element) => element.props["aria-label"] === "Open Mori chat",
     );
     (open?.props.onClick as (() => void) | undefined)?.();
     expect(mocks.recordChatPath).toHaveBeenCalledWith("bot-child", "/environment-1/thread-child");
@@ -259,7 +259,7 @@ describe("DelegationCard", () => {
     const markup = renderCard("running", null);
     expect(markup).toContain("Unknown bot");
     expect(markup).toContain("Usage unavailable");
-    expect(markup).toContain('aria-label="Open Unknown bot thread" disabled=""');
+    expect(markup).toContain('aria-label="Open Unknown bot chat" disabled=""');
   });
 
   it("treats an archived child as unavailable", () => {
@@ -268,12 +268,12 @@ describe("DelegationCard", () => {
       archivedAt: "2026-08-31T00:02:00.000Z",
     });
     expect(markup).toContain("Unknown bot");
-    expect(markup).toContain('aria-label="Open Unknown bot thread" disabled=""');
+    expect(markup).toContain('aria-label="Open Unknown bot chat" disabled=""');
   });
 
   it("names both actions for assistive technology", () => {
     const markup = renderCard("running");
     expect(markup).toContain('aria-label="Cancel delegation to Mori"');
-    expect(markup).toContain('aria-label="Open Mori thread"');
+    expect(markup).toContain('aria-label="Open Mori chat"');
   });
 });

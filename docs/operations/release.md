@@ -31,17 +31,21 @@ release announcements.
 
 ## Runner setup
 
-CI and release workflows run through GitHub Actions. Tenki provides Linux and Apple Silicon macOS
-runners. GitHub provides the Windows runner. The Tenki Runner GitHub App must have access to
+CI and release workflows run through GitHub Actions. Tenki provides Linux runners. GitHub provides
+the Apple Silicon macOS and Windows runners. The Tenki Runner GitHub App must have access to
 `opencoredev/akeru-bot`.
 
 - Linux uses the 4-vCPU `tenki-standard-medium-4c-8g` runner.
 - Windows uses the GitHub-hosted `windows-2025` runner.
-- macOS uses the 4-vCPU Apple Silicon `tenki-macos-15-medium` runner.
+- macOS uses the GitHub-hosted Apple Silicon `macos-15` runner.
 
 ## macOS secrets
 
-Add these GitHub Actions secrets before running the workflow:
+The stable release builds a sealed, ad-hoc-signed DMG when all macOS secrets are absent. Users
+must approve that build through the macOS Gatekeeper installation flow. If any macOS secret is
+present, the workflow requires the complete set and stops on a partial configuration.
+
+Add these GitHub Actions secrets to publish a Developer ID signed and notarized DMG:
 
 - `MACOS_CERTIFICATE_P12` contains the base64-encoded `.p12` export of the Developer ID Application
   certificate and its private key.

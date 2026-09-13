@@ -28,7 +28,7 @@ export function usePendingTaskListActions(): {
 
   const confirmDeletePendingTask = useCallback((pendingTask: PendingNewTask) => {
     Alert.alert(
-      "Delete pending task?",
+      "Delete pending chat?",
       `“${pendingTask.title}” has not been sent yet and will be removed from the outbox.`,
       [
         { text: "Cancel", style: "cancel" },
@@ -43,8 +43,8 @@ export function usePendingTaskListActions(): {
               .then(() => releaseEditingQueuedMessage(pendingTask.message.messageId))
               .catch((error) => {
                 Alert.alert(
-                  "Could not delete pending task",
-                  error instanceof Error ? error.message : "The pending task could not be removed.",
+                  "Could not delete pending chat",
+                  error instanceof Error ? error.message : "The pending chat could not be removed.",
                 );
               });
           },

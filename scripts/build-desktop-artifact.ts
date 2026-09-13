@@ -30,7 +30,6 @@ import {
   findInlinedExternalPackages,
   selectCliPackagedRuntimeDependencies,
 } from "./lib/cli-external-packages.ts";
-import { loadRepoEnv } from "./lib/public-config.ts";
 import { stageReleaseLegalFiles } from "./lib/release-legal.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -52,7 +51,6 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "dev.leodoes.akeru";
-const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
@@ -188,15 +186,6 @@ function detectHostBuildPlatform(hostPlatform: string): typeof BuildPlatform.Typ
   if (hostPlatform === "win32") return "win";
   return undefined;
 }
-
-const getDefaultArch = Effect.fn("getDefaultArch")(function* (platform: typeof BuildPlatform.Type) {
-  const config = PLATFORM_CONFIG[platform];
-  if (!config) {
-    return "x64";
-  }
-
-  return yield* getDefaultBuildArch(platform, config);
-});
 
 export class UnsupportedHostBuildPlatformError extends Schema.TaggedErrorClass<UnsupportedHostBuildPlatformError>()(
   "UnsupportedHostBuildPlatformError",
@@ -1056,7 +1045,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   }
 
   const target = mergeOptions(input.target, env.target, PLATFORM_CONFIG[platform].defaultTarget);
-  const defaultArch = yield* getDefaultArch(platform);
+  const defaultArch = yield* getDefaultBuildArch(PLATFORM_CONFIG[platform].archChoices);
   const arch = mergeOptions(input.arch, env.arch, defaultArch);
   const supportedArchitectures = PLATFORM_CONFIG[platform].archChoices;
   if (!supportedArchitectures.includes(arch)) {
@@ -1876,7 +1865,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev"],
         },
       ],
       // Unsigned builds opt into identity "-" so electron-builder replaces
@@ -1930,7 +1919,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "Akeru Bot",
-          schemes: ["akeru", "akeru-dev", "t3code", "t3code-dev"],
+          schemes: ["akeru", "akeru-dev"],
         },
       ],
       desktop: {
@@ -1947,6 +1936,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // installed file topology. The optimization is in the payload shape, not
     // in trading update bandwidth for install speed.
     buildConfig.nsis = { differentialPackage: true };
+    // electron-builder writes HKCU URL-protocol registry entries from this
+    // list, so the OS hands akeru:// activations to this install instead of
+    // whatever app (for example an old T3 build) registered a scheme earlier.
+    // Only the production scheme: packaged builds never run as development,
+    // and claiming akeru-dev would steal it from a developer's local build.
+    buildConfig.protocols = [
+      {
+        name: "Akeru Bot",
+        schemes: ["akeru"],
+      },
+    ];
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",

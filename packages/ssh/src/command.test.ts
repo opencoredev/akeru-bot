@@ -119,16 +119,20 @@ describe("ssh command", () => {
     }),
   );
 
-  it.effect("reads the last non-empty ssh output line", () =>
-    Effect.sync(() => {
-      assert.equal(
-        getLastNonEmptyOutputLine(
-          ["Welcome to the host", "", '{"credential":"pairing-token"}', ""].join("\n"),
-        ),
-        '{"credential":"pairing-token"}',
-      );
-    }),
-  );
+  it.each([
+    ["", null],
+    [" \t\r\n\n ", null],
+    ["  ready  ", "ready"],
+    ["Welcome\n\n  ready \n \t\n", "ready"],
+    ["Welcome\r\n\r\n\tready \r\n \t\r\n", "ready"],
+    ["first\rsecond", "first\rsecond"],
+    [
+      ["Welcome to the host", "", '{"credential":"pairing-token"}', ""].join("\n"),
+      '{"credential":"pairing-token"}',
+    ],
+  ] as const)("reads the last non-empty ssh output line from %j", (stdout, expected) => {
+    assert.equal(getLastNonEmptyOutputLine(stdout), expected);
+  });
 
   it.effect("includes stdout in non-zero command failures when stderr is empty", () => {
     const spawner = ChildProcessSpawner.make(() =>

@@ -19,16 +19,10 @@ Keep serve-sim on its default `127.0.0.1` binding. Do not expose its preview to 
 
 1. Obtain the exact simulator UDID from the iOS build or launch workflow.
 2. Check whether an existing serve-sim stream for that UDID belongs to another task. Reuse it only when explicitly shared; never kill another task's stream.
-3. Otherwise, clear only a stale stream for that UDID and start the pinned version with scoped cleanup:
+3. Otherwise, start the pinned version as an owned background task and retain its handle. If another stream owns the device, report the conflict instead of terminating it:
 
    ```bash
-   SIMULATOR_ID=<simulator-udid>
-   cleanup_serve_sim() {
-     npx --yes serve-sim@0.1.45 --kill "$SIMULATOR_ID" >/dev/null 2>&1 || true
-   }
-   trap cleanup_serve_sim EXIT INT TERM HUP
-   cleanup_serve_sim
-   npx --yes serve-sim@0.1.45 "$SIMULATOR_ID"
+   npx --yes serve-sim@0.1.45 <simulator-udid>
    ```
 
 4. Keep the terminal alive and open the exact local URL printed by serve-sim in the agent's browser.
@@ -44,7 +38,7 @@ If the in-app browser explicitly reports that previews are unavailable, do not i
 
 ## Finish
 
-Stop the long-running terminal and wait for its cleanup trap to finish. If it disappeared without cleanup, run `npx --yes serve-sim@0.1.45 --kill <simulator-udid>` for that exact simulator. Never run an unscoped `--kill`.
+Retain the owned stream during human review according to [the verification policy](../../../docs/internals/verification.md). At final teardown, stop its captured background task. If a stream remains, verify that it is still the one owned by this task before running `npx --yes serve-sim@0.1.45 --kill <simulator-udid>`. Never run an unscoped `--kill`.
 
 ## Upstream
 

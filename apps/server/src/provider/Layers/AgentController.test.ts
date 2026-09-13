@@ -365,6 +365,7 @@ function makeLayer(
     | "memoryCandidateRepository"
     | "issueMcpCredential"
     | "revokeMcpCredential"
+    | "makeBotBrowser"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
 ) {
@@ -373,13 +374,14 @@ function makeLayer(
     ...(makeMcpManager ? { makeMcpManager } : {}),
     ...overrides,
     ...(delegationRuntime ? { delegationRuntime } : {}),
-    makeBotBrowser: () =>
-      ({
+    makeBotBrowser:
+      overrides?.makeBotBrowser ??
+      (() => ({
         tools: {},
         attachment: async () => undefined,
         reconnect: async () => undefined,
         close: async () => undefined,
-      }) as never,
+      })),
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -410,6 +412,7 @@ function provideController<A, E>(
     | "memoryCandidateRepository"
     | "issueMcpCredential"
     | "revokeMcpCredential"
+    | "makeBotBrowser"
   >,
 ) {
   return effect.pipe(
@@ -466,6 +469,52 @@ describe("toMcpServerConfigs", () => {
       "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
       "local-tools": { command: "bunx", args: ["local-tools"] },
     });
+  });
+
+  it("attaches browser metadata only to dependent connectors and preserves authentication", () => {
+    const server = withMcpRuntimeHeaders(
+      {
+        id: McpServerId.make("builtin-tinyfish"),
+        name: "TinyFish",
+        transport: "url" as const,
+        url: "https://example.com/mcp",
+        enabled: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      { Authorization: "Bearer fixture" },
+    );
+    const browser = {
+      browserUrl: "https://sandbox.example/browser",
+      mcpSessionId: "session",
+      requestHeaders: { "sandbox-key": "remote" },
+      localRequestHeaders: { "sandbox-key": "local" },
+      availableToHostedPlugins: true,
+    };
+    const local = { ...server, transport: "stdio" as const, command: "executor" };
+    expect(toMcpServerConfigs([server], browser)[server.id]).toEqual({
+      url: server.url,
+      headers: {
+        Authorization: "Bearer fixture",
+        "x-akeru-browser-mcp-url": browser.browserUrl,
+        "x-akeru-browser-mcp-session-id": "session",
+        "x-akeru-browser-mcp-headers": JSON.stringify(browser.requestHeaders),
+      },
+    });
+    expect(toMcpServerConfigs([local], browser)[server.id]).toMatchObject({
+      env: { AKERU_BROWSER_MCP_HEADERS: JSON.stringify(browser.localRequestHeaders) },
+    });
+    expect(
+      toMcpServerConfigs([server], { ...browser, availableToHostedPlugins: false })[server.id],
+    ).toEqual({
+      url: server.url,
+      headers: { Authorization: "Bearer fixture" },
+    });
+    const unrelated = { ...local, id: McpServerId.make("builtin-exa") };
+    expect(toMcpServerConfigs([unrelated], browser)[unrelated.id]).not.toHaveProperty("env");
+    expect(
+      toMcpServerConfigs([{ ...server, enabled: false }], browser)[server.id],
+    ).not.toHaveProperty("headers");
   });
 
   it("forwards transient MCP headers without adding them to the server record", () => {
@@ -617,6 +666,79 @@ describe("provider access health", () => {
 });
 
 describe("AgentControllerLive", () => {
+  for (const provider of [
+    "codex",
+    "kimi",
+    "opencodeGo",
+    "claudeAgent",
+    "grok",
+    "opencode",
+  ] as const) {
+    it.effect(`keeps unrelated connector browser acquisition lazy for ${provider}`, () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const attachment = vi.fn(async () => undefined);
+      const manager = {
+        init: vi.fn(async () => undefined),
+        disconnect: vi.fn(async () => undefined),
+        getTools: () => ({}),
+        getServerStatuses: () => [],
+      };
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const threadId = ThreadId.make(`lazy-${provider}`);
+          const instanceId = ProviderInstanceId.make(provider);
+          const selection = { instanceId, model: "fixture-model" };
+          yield* controller.resolveEngine({
+            threadId,
+            engine: null,
+            fallback: selection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(threadId, {
+            threadId,
+            provider: ProviderDriverKind.make(provider),
+            providerInstanceId: instanceId,
+            modelSelection: selection,
+            runtimeMode: "full-access",
+            mcpServers: [
+              {
+                id: McpServerId.make("builtin-exa"),
+                name: "Exa",
+                transport: "url",
+                url: "https://mcp.exa.ai/mcp",
+                enabled: true,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+            ],
+          });
+          expect(attachment).not.toHaveBeenCalled();
+          expect(manager.init).toHaveBeenCalledOnce();
+          expect(bridge.startSession).toHaveBeenCalledTimes(
+            provider === "codex" || provider === "kimi" || provider === "opencodeGo" ? 0 : 1,
+          );
+          yield* controller.stopSession({ threadId });
+        }),
+        bridge.service,
+        mastra.factory,
+        () => manager as never,
+        undefined,
+        undefined,
+        {
+          makeBotBrowser: () => ({
+            tools: {},
+            attachment,
+            reconnect: async () => undefined,
+            close: async () => undefined,
+          }),
+        },
+      );
+    });
+  }
+
   it("bills delegated usage receipts to the child bot", () => {
     const childBotId = BotId.make("bot-child");
     const childThreadId = ThreadId.make("thread-child");

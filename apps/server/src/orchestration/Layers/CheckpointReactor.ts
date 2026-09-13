@@ -164,7 +164,7 @@ const make = Effect.gen(function* () {
 
   const resolveThreadDetail = Effect.fn("resolveThreadDetail")(function* (threadId: ThreadId) {
     return yield* projectionSnapshotQuery
-      .getThreadDetailById(threadId)
+      .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
@@ -698,7 +698,7 @@ const make = Effect.gen(function* () {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
         turnCount: event.payload.turnCount,
-        detail: "Thread was not found in read model.",
+        detail: "Chat was not found.",
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
       return;
@@ -709,7 +709,7 @@ const make = Effect.gen(function* () {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
         turnCount: event.payload.turnCount,
-        detail: "No active provider session with workspace cwd is bound to this thread.",
+        detail: "No active provider session with a workspace is bound to this chat.",
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
       return;

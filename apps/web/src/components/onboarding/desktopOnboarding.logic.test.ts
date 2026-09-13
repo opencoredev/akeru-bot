@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
   desktopOnboardingModelSelection,
+  markDesktopOnboardingCompleted,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
@@ -126,6 +127,19 @@ describe("desktop onboarding", () => {
     });
   });
 
+  it("marks skipped onboarding complete and removes its draft", () => {
+    const values = new Map<string, string>([["akeru:desktop-onboarding:v1", "draft"]]);
+    const storage = {
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+
+    markDesktopOnboardingCompleted(storage);
+
+    expect(values.get("akeru:desktop-onboarding:v1")).toBeUndefined();
+    expect(values.get("akeru:desktop-onboarding-completed:v1")).toBe("1");
+  });
+
   it("does not restart after the completed user deletes every bot", () => {
     expect(
       shouldShowDesktopOnboarding({
@@ -200,15 +214,66 @@ describe("desktop onboarding", () => {
         availability: "available" as const,
         models: [{ slug: "claude-old" }, { slug: "claude-default", isDefault: true }],
       },
+      {
+        instanceId: "opencodeGo",
+        driver: "opencodeGo",
+        enabled: true,
+        installed: true,
+        availability: "available" as const,
+        models: [{ slug: "gpt-5.6-luna", isDefault: true }],
+      },
     ];
 
     expect(resolveDesktopOnboardingEngine("anthropic", providers)).toEqual({
       provider: "claudeAgent",
       model: "claude-default",
     });
+    expect(resolveDesktopOnboardingEngine("opencode-go", providers)).toEqual({
+      provider: "opencodeGo",
+      model: "gpt-5.6-luna",
+    });
     expect(resolveDesktopOnboardingEngine("xai", providers)).toBeNull();
     expect(
       desktopOnboardingModelSelection({ provider: "claudeAgent", model: "claude-default" }),
     ).toEqual({ instanceId: "claudeAgent", model: "claude-default" });
+  });
+
+  it.each([
+    ["openai-codex", "codex"],
+    ["anthropic", "claudeAgent"],
+    ["xai", "grok"],
+    ["kimi-for-coding", "kimi"],
+    ["opencode-go", "opencodeGo"],
+  ] as const)("restores and resolves the %s subscription", (providerId, driver) => {
+    const draft = { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId };
+    const provider = {
+      instanceId: `${driver}-custom`,
+      driver,
+      enabled: true,
+      installed: true,
+      models: [{ slug: "first" }, { slug: "default", isDefault: true }],
+    };
+
+    expect(parseDesktopOnboardingDraft(JSON.stringify(draft))).toEqual(draft);
+    expect(resolveDesktopOnboardingEngine(providerId, [provider])).toEqual({
+      provider: provider.instanceId,
+      model: "default",
+    });
+    expect(
+      resolveDesktopOnboardingEngine(providerId, [{ ...provider, enabled: false }]),
+    ).toBeNull();
+    expect(
+      resolveDesktopOnboardingEngine(providerId, [{ ...provider, installed: false }]),
+    ).toBeNull();
+    expect(
+      resolveDesktopOnboardingEngine(providerId, [{ ...provider, availability: "unavailable" }]),
+    ).toBeNull();
+    expect(resolveDesktopOnboardingEngine(providerId, [{ ...provider, models: [] }])).toBeNull();
+  });
+
+  it("restores an OpenCode Go onboarding draft", () => {
+    const draft = { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId: "opencode-go" as const };
+
+    expect(parseDesktopOnboardingDraft(JSON.stringify(draft))).toEqual(draft);
   });
 });

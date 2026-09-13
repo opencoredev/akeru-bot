@@ -1,3 +1,38 @@
+## @t3tools/web@0.0.40
+
+### Changes
+
+- [#176](https://github.com/opencoredev/akeru-bot/pull/176) feat(providers): add API key connections with custom endpoints
+- [#178](https://github.com/opencoredev/akeru-bot/pull/178) fix(server): keep libsql native loader external to the CLI bundle
+- [#182](https://github.com/opencoredev/akeru-bot/pull/182) fix(desktop): own dev and smoke Electron processes instead of pkill
+- [#180](https://github.com/opencoredev/akeru-bot/pull/180) feat(scripts): add dev status, worktree setup, UI fixtures, and pairing helpers
+- [#183](https://github.com/opencoredev/akeru-bot/pull/183) docs(agents): add verification policy and rewrite testing skills
+- [#184](https://github.com/opencoredev/akeru-bot/pull/184) fix(desktop): stop claiming legacy t3code:// protocol schemes
+- [#185](https://github.com/opencoredev/akeru-bot/pull/185) fix(release): recover version PR updates from Tegami's boxed errors
+- [#188](https://github.com/opencoredev/akeru-bot/pull/188) fix(feedback): send product feedback to the deployed Worker
+- [#191](https://github.com/opencoredev/akeru-bot/pull/191) feat(web): add Akeru Noir and flatten shared controls
+- [#189](https://github.com/opencoredev/akeru-bot/pull/189) feat(install): add release-pinned installer scripts
+- [#192](https://github.com/opencoredev/akeru-bot/pull/192) fix(plugins): renew stale Hoplite OAuth registrations
+- [#190](https://github.com/opencoredev/akeru-bot/pull/190) feat(channels): connect external conversations to bots
+
+## @t3tools/web@0.0.39
+
+### Changes
+
+- [#141](https://github.com/opencoredev/akeru-bot/pull/141) fix(web): mute routine notices and update actions
+- [#151](https://github.com/opencoredev/akeru-bot/pull/151) feat(marketing): add feedback.md, versioned metadata API, rate-limit headers
+- [#153](https://github.com/opencoredev/akeru-bot/pull/153) fix(desktop): recover failed update installs
+- [#154](https://github.com/opencoredev/akeru-bot/pull/154) fix(release): require signed macOS builds
+- [#155](https://github.com/opencoredev/akeru-bot/pull/155) fix(desktop): package lazy server dependencies
+- [#156](https://github.com/opencoredev/akeru-bot/pull/156) fix(mcp): open OAuth authorization requests
+- [#149](https://github.com/opencoredev/akeru-bot/pull/149) feat(marketing): report page requests to Notra GEO
+- [#158](https://github.com/opencoredev/akeru-bot/pull/158) ci: migrate Depot workflows to Tenki
+- [#150](https://github.com/opencoredev/akeru-bot/pull/150) fix(settings): remove obsolete thread controls
+- [#159](https://github.com/opencoredev/akeru-bot/pull/159) fix(chat): improve bot conversation usability
+- [#157](https://github.com/opencoredev/akeru-bot/pull/157) feat(plugins): add Composio integrations
+- [#162](https://github.com/opencoredev/akeru-bot/pull/162) fix(plugins): complete OAuth connections
+- [#163](https://github.com/opencoredev/akeru-bot/pull/163) feat(marketing): add Grok search pages
+
 ## @t3tools/web@0.0.38
 
 ### Changes

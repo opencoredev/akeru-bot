@@ -44,6 +44,7 @@ import {
   resolveDiffThemeName,
   resolveFileDiffPath,
 } from "../../lib/diffRendering";
+import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
@@ -73,6 +74,8 @@ import { PluginSearchResultCard } from "./PluginSearchResultCard";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
 import { keepTimelineEndVisibleAfterOverlayGrowth } from "./timelineScrollAnchoring";
 import { MessageControls } from "./MessageControls";
+import { useOptionalReplyPlayback } from "./ReplyPlaybackProvider";
+import { replyPlaybackControlProps } from "~/lib/replyPlaybackThread";
 import { MessageImageAttachments } from "./MessageImageAttachments";
 import {
   computeStableMessagesTimelineRows,
@@ -1201,6 +1204,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 }
 
 function AssistantMessageControls({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const replyPlayback = useOptionalReplyPlayback();
   const assistantCopyState = resolveAssistantMessageCopyState({
     text: row.message.text ?? null,
     showCopyButton: row.showAssistantCopyButton,
@@ -1211,7 +1215,13 @@ function AssistantMessageControls({ row }: { row: Extract<TimelineRow, { kind: "
     return null;
   }
 
-  return <MessageControls copyText={assistantCopyState.text ?? ""} />;
+  const readAloud = replyPlaybackControlProps(replyPlayback, row.message);
+  return (
+    <MessageControls
+      copyText={assistantCopyState.text ?? ""}
+      {...(readAloud ? { readAloud } : {})}
+    />
+  );
 }
 
 function ProposedPlanTimelineRow({
@@ -2101,6 +2111,7 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
               collapsed: false,
               diffStyle: "unified",
               theme: resolveDiffThemeName(ctx.resolvedTheme),
+              preferredHighlighter: PREFERRED_HIGHLIGHTER,
             }}
           />
         ))}
@@ -2583,8 +2594,8 @@ const AgentSpawnCtaRow = memo(function AgentSpawnCtaRow(props: { workEntry: Time
   const working = running + waiting;
   const dotClass = live ? "bg-info" : failed > 0 ? "bg-destructive" : "bg-success";
   const lead = live
-    ? `Kicked off ${agentCount} subagent${agentCount === 1 ? "" : "s"}`
-    : `Ran ${agentCount} subagent${agentCount === 1 ? "" : "s"}`;
+    ? `Delegated ${agentCount} bot work item${agentCount === 1 ? "" : "s"}`
+    : `Completed ${agentCount} bot work item${agentCount === 1 ? "" : "s"}`;
   const status = live
     ? livePhase
       ? `${livePhase.title} · ${livePhase.activeCount} working`
@@ -2612,7 +2623,7 @@ const AgentSpawnCtaRow = memo(function AgentSpawnCtaRow(props: { workEntry: Time
         {totalTokens > 0 ? (
           <span className="tabular-nums">Σ {formatSubagentTokenCount(totalTokens)}</span>
         ) : null}
-        <span className="text-info-foreground">{live ? "Open Agents ▸" : "View ▸"}</span>
+        <span className="text-info-foreground">{live ? "Open bot work ▸" : "View ▸"}</span>
       </span>
     </button>
   );

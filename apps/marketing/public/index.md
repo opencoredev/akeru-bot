@@ -1,10 +1,10 @@
 # Akeru Bot
 
-Akeru Bot is an open-source desktop and web application for running coding agents with separate tools, plugins, instructions, and long-term memory.
+Akeru Bot is an open-source desktop and web application for running coding bots with separate tools, plugins, instructions, and long-term memory.
 
 ## When to use Akeru Bot
 
-Use Akeru Bot when a user wants to run several coding bots in one workspace, give each bot a different tool list, keep memory across threads, connect through a local or remote browser, or bring an existing Claude, Codex, Grok, Kimi, or OpenCode subscription.
+Use Akeru Bot when a user wants to run several coding bots in one workspace, give each bot a different tool list, keep memory across conversations, connect through a local or remote browser, or bring an existing Claude, Codex, Grok, Kimi, or OpenCode subscription.
 
 ## Resources
 

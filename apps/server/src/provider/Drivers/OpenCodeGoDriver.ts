@@ -44,6 +44,7 @@ export const OPEN_CODE_GO_MODELS = [
   "minimax-m2.7",
   "minimax-m2.5",
   "muse-spark-1.2-contributor",
+  "muse-spark-1.3-contributor",
   "qwen3.8-max",
   "qwen3.8-flash",
   "qwen3.7-max",

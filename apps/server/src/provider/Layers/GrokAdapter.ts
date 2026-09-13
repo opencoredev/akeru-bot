@@ -34,6 +34,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { subscriptionRuntimeEnvironment } from "../../subscription-auth/runtime.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { toAcpMcpServers } from "../McpServerConfig.ts";
 import {
@@ -591,7 +592,11 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           ];
           const acp = yield* makeGrokAcpRuntime({
             grokSettings,
-            ...(options?.environment ? { environment: options.environment } : {}),
+            environment: subscriptionRuntimeEnvironment(
+              serverConfig.secretsDir,
+              "xai",
+              options?.environment,
+            ),
             childProcessSpawner,
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),

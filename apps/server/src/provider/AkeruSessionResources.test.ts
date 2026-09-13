@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
+import { createBotBrowser } from "./botBrowser.ts";
 import {
   type AkeruBotWorkspace,
   type AkeruRemoteSession,
@@ -132,6 +133,90 @@ describe("AkeruSessionResources", () => {
     expect(sharedBrowser.reconnect).toHaveBeenCalledOnce();
     await resources.shutdown();
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
+  });
+
+  it.each(["local", "vercel", "e2b", "daytona", "upstash"] as const)(
+    "acquires only usable connector browser attachments in %s workspaces",
+    async (botSandbox) => {
+      for (const transport of ["stdio", "url"] as const) {
+        for (const id of ["builtin-executor", "builtin-tinyfish", "builtin-exa", "raw-mcp"]) {
+          const botBrowser = browser();
+          const attachment = {
+            browserUrl: "https://sandbox.example/browser",
+            mcpSessionId: "session",
+            requestHeaders: {},
+            localRequestHeaders: {},
+            availableToHostedPlugins: botSandbox !== "local",
+          };
+          const acquireAttachment = vi.fn(async () => attachment);
+          const manager = mcpManager({ connected: true, toolCount: 1 });
+          const toMcpServerConfigs = vi.fn(() => ({}));
+          const resources = new AkeruSessionResources({
+            stateDir: stateDir(),
+            makeRemoteWorkspace: async () => workspace(),
+            makeBotBrowser: () => ({ ...botBrowser, attachment: acquireAttachment }),
+            makeMcpManager: () => manager as never,
+            toMcpServerConfigs,
+          });
+          const server = {
+            ...exaServer,
+            id: McpServerId.make(id),
+            transport,
+            command: "connector",
+          };
+          try {
+            await resources.acquire({
+              ...remoteInput,
+              botSandbox,
+              threadId: "connector",
+              mcpServers: [server, exaServer],
+            });
+            const requiresBrowser =
+              (id === "builtin-executor" || id === "builtin-tinyfish") &&
+              (transport === "stdio" || botSandbox !== "local");
+            expect(acquireAttachment).toHaveBeenCalledTimes(requiresBrowser ? 1 : 0);
+            expect(toMcpServerConfigs).toHaveBeenCalledWith(
+              [server, exaServer],
+              requiresBrowser ? attachment : undefined,
+            );
+            expect(manager.init).toHaveBeenCalledOnce();
+          } finally {
+            await resources.shutdown();
+          }
+        }
+      }
+    },
+  );
+
+  it("does no browser work for unrelated MCP startup and retains on-demand browser tools", async () => {
+    const attachment = vi.fn(async () => undefined);
+    const call = vi.fn(async () => "page tree");
+    const close = vi.fn(async () => undefined);
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: (input) =>
+        createBotBrowser({
+          ...input,
+          makeRpc: () => ({ attachment, call, close, reconnect: async () => undefined }),
+        }),
+      makeMcpManager: () => mcpManager({ connected: true, toolCount: 1 }) as never,
+      toMcpServerConfigs: () => ({}),
+    });
+    try {
+      await resources.acquire({ ...remoteInput, threadId: "lazy", mcpServers: [exaServer] });
+      expect(attachment).not.toHaveBeenCalled();
+      expect(call).not.toHaveBeenCalled();
+      const tool = resources.getConnectorTools("lazy").browser_snapshot as {
+        execute: (input: Record<string, unknown>) => Promise<unknown>;
+      };
+      await tool.execute({});
+      expect(call).toHaveBeenCalledExactlyOnceWith("tree", {});
+      expect(attachment).not.toHaveBeenCalled();
+    } finally {
+      await resources.shutdown();
+    }
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it("coalesces concurrent acquisition for the same thread", async () => {
@@ -474,13 +559,14 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it("allows one Computer Use controller and releases it on stop", async () => {
+  it("allows one Computer Use controller and releases it on stop without a browser attachment", async () => {
     const manager = mcpManager({ connected: true, toolCount: 1 });
+    const botBrowser = browser();
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       hostPlatform: "darwin",
       makeRemoteWorkspace: async () => workspace(),
-      makeBotBrowser: () => browser(),
+      makeBotBrowser: () => botBrowser,
       makeMcpManager: () => manager as never,
       resolveComputerUseServer: async () => ({
         command: "/local/launcher",
@@ -499,6 +585,7 @@ describe("AkeruSessionResources", () => {
     );
     await resources.release("controller");
     await resources.acquire({ ...input, threadId: "replacement" });
+    expect(botBrowser.attachment).not.toHaveBeenCalled();
     await resources.shutdown();
   });
 
@@ -535,7 +622,7 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it("creates and attaches a browser for remote workspaces", async () => {
+  it("keeps remote browser tools lazy for a connector without browser dependencies", async () => {
     const browserEndpoint = vi.fn(async () => ({
       url: "https://browser.example",
       requestHeaders: { authorization: "Bearer token" },
@@ -587,7 +674,7 @@ describe("AkeruSessionResources", () => {
     expect(makeBotBrowser).toHaveBeenCalledWith(
       expect.objectContaining({ browserEndpoint, workspace: remote.workspace }),
     );
-    expect(remoteBrowser.attachment).toHaveBeenCalledOnce();
+    expect(remoteBrowser.attachment).not.toHaveBeenCalled();
     expect(toMcpServerConfigs).toHaveBeenCalledWith(expect.any(Array), undefined);
     expect(resources.getConnectorTools("remote-mcp")).toEqual({ exa_search: {} });
     await resources.shutdown();

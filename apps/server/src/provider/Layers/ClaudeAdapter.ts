@@ -78,6 +78,7 @@ import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { subscriptionRuntimeEnvironment } from "../../subscription-auth/runtime.ts";
 import {
   createAkeruAgentInstructions,
   createAkeruBotInstructions,
@@ -4346,7 +4347,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         canUseTool,
         onUserDialog,
         supportedDialogKinds: ["resume_return"],
-        env: claudeEnvironment,
+        env: subscriptionRuntimeEnvironment(
+          serverConfig.secretsDir,
+          "anthropic",
+          claudeEnvironment,
+        ),
         additionalDirectories,
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
         ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),

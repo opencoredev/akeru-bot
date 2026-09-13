@@ -103,7 +103,11 @@ import {
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
 } from "../AkeruCatalogToolHandlers.ts";
-import { getMcpRuntimeHeaders, sameMcpServerConfigurations } from "../McpServerConfig.ts";
+import {
+  getMcpRuntimeHeaders,
+  mcpServerNeedsBrowserAttachment,
+  sameMcpServerConfigurations,
+} from "../McpServerConfig.ts";
 import {
   createAkeruToolRuntime,
   isMemoryToolId,
@@ -318,8 +322,6 @@ function mastraModeId(mode: "default" | "plan"): string {
   return mode === "plan" ? PLAN_MODE_ID : DEFAULT_MODE_ID;
 }
 
-const BROWSER_AWARE_MCP_SERVER_IDS = new Set(["builtin-executor", "builtin-tinyfish"]);
-
 export function toMcpServerConfigs(
   servers: readonly McpServer[],
   browser?: BotBrowserAttachment,
@@ -342,9 +344,10 @@ export function toMcpServerConfigs(
               ? { headers: getMcpRuntimeHeaders(server) }
               : {}),
             ...(browser?.availableToHostedPlugins &&
-            BROWSER_AWARE_MCP_SERVER_IDS.has(String(server.id))
+            mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
               ? {
                   headers: {
+                    ...getMcpRuntimeHeaders(server),
                     "x-akeru-browser-mcp-url": browser.browserUrl,
                     "x-akeru-browser-mcp-session-id": browser.mcpSessionId,
                     "x-akeru-browser-mcp-headers": browserRequestHeaders!,
@@ -355,7 +358,9 @@ export function toMcpServerConfigs(
         : {
             command: server.command,
             ...(server.args ? { args: [...server.args] } : {}),
-            ...(browserEnvironment && BROWSER_AWARE_MCP_SERVER_IDS.has(String(server.id))
+            ...(browserEnvironment &&
+            browser &&
+            mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
               ? { env: browserEnvironment }
               : {}),
           },
@@ -713,7 +718,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       makeMastraHarness({
         authStorage,
         getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
-        getOpenCodeGoApiKey: () => subscriptionAuth.getAccessToken("opencode-go"),
+        getOpenCodeGoApiKey: async () =>
+          subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
+        getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
         memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);
@@ -2191,7 +2198,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ) {
           return yield* new AgentControllerRuntimeError({
             operation: "respondToRequest",
-            detail: `Stale pending approval request: ${input.requestId}. The agent session restarted. Send the request again.`,
+            detail: `Stale pending approval request: ${input.requestId}. The bot session restarted. Send the request again.`,
           });
         }
         return yield* legacyProviderBridge.respondToRequest(input);
@@ -2206,7 +2213,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (!active.activeTurn) {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToRequest",
-          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+          detail: `Stale pending approval request: ${input.requestId}. The bot turn has ended. Send the request again.`,
         });
       }
       const toolCallId = String(input.requestId);
@@ -2301,7 +2308,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (admitted._tag === "Stale") {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToRequest",
-          detail: `Stale pending approval request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+          detail: `Stale pending approval request: ${input.requestId}. The bot turn has ended. Send the request again.`,
         });
       }
       const permissionUpdate = admitted.permissionUpdate;
@@ -2335,7 +2342,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ) {
           return yield* new AgentControllerRuntimeError({
             operation: "respondToUserInput",
-            detail: `Unknown pending user-input request: ${input.requestId}. The agent session restarted. Send the request again.`,
+            detail: `Unknown pending user-input request: ${input.requestId}. The bot session restarted. Send the request again.`,
           });
         }
         return yield* legacyProviderBridge.respondToUserInput(input);
@@ -2382,7 +2389,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (admitted._tag === "Stale") {
           return yield* new AgentControllerRuntimeError({
             operation: "respondToUserInput",
-            detail: `Unknown pending user-input request: ${input.requestId}. The agent turn has ended. Send the request again.`,
+            detail: `Unknown pending user-input request: ${input.requestId}. The bot turn has ended. Send the request again.`,
           });
         }
         yield* runMastra("respondToToolSuspension", () => admitted.resume);

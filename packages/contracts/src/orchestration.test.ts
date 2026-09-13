@@ -2,10 +2,11 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { ChannelConnectionId, MessageId } from "./baseSchemas.ts";
+import { ChannelConnectionId, MessageId, ProjectId } from "./baseSchemas.ts";
 import {
   BotAvatar,
   BotEngine,
+  CHANNEL_TRANSPORT_CAPABILITIES,
   DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -119,12 +120,47 @@ it.effect("decodes bot engine options while keeping old engines valid", () =>
   }),
 );
 
+it("defines the frozen conversation policy for every channel provider", () => {
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(CHANNEL_TRANSPORT_CAPABILITIES).map(([provider, capabilities]) => [
+        provider,
+        {
+          directMessages: capabilities.directMessages,
+          mentions: capabilities.mentions,
+          threads: capabilities.threads,
+        },
+      ]),
+    ),
+    {
+      telegram: { directMessages: true, mentions: false, threads: false },
+      imessage: { directMessages: true, mentions: false, threads: false },
+      whatsapp: { directMessages: true, mentions: false, threads: false },
+      slack: { directMessages: true, mentions: true, threads: true },
+      discord: { directMessages: true, mentions: true, threads: true },
+    },
+  );
+});
+
+it("advertises only channel actions exposed by the shipped transports", () => {
+  for (const capabilities of Object.values(CHANNEL_TRANSPORT_CAPABILITIES)) {
+    assert.equal(capabilities.typing, false);
+    assert.equal(capabilities.messageEdits, false);
+    assert.equal(capabilities.attachments, false);
+    assert.equal(capabilities.interactiveActions, false);
+  }
+  assert.equal(CHANNEL_TRANSPORT_CAPABILITIES.telegram.reactions, false);
+  assert.equal(CHANNEL_TRANSPORT_CAPABILITIES.slack.reactions, true);
+  assert.equal(CHANNEL_TRANSPORT_CAPABILITIES.discord.reactions, true);
+});
+
 it.effect("decodes live channel commands", () =>
   Effect.gen(function* () {
     const telegram = yield* decodeClientOrchestrationCommand({
       type: "channel.connect",
       commandId: "connect-telegram",
       botId: "bot-1",
+      targetProjectId: "project-1",
       provider: "telegram",
       token: " token ",
     });
@@ -132,6 +168,7 @@ it.effect("decodes live channel commands", () =>
       type: "channel.connect",
       commandId: "connect-imessage",
       botId: "bot-1",
+      targetProjectId: "project-1",
       provider: "imessage",
       mode: "hosted",
       projectId: " photon-project ",
@@ -141,11 +178,31 @@ it.effect("decodes live channel commands", () =>
       type: "channel.connect",
       commandId: "connect-whatsapp",
       botId: "bot-1",
+      targetProjectId: "project-1",
       provider: "whatsapp",
       accessToken: " access-token ",
       appSecret: " app-secret ",
       phoneNumberId: " phone-number-id ",
       verifyToken: " verify-token ",
+    });
+    const slack = yield* decodeClientOrchestrationCommand({
+      type: "channel.connect",
+      commandId: "connect-slack",
+      botId: "bot-1",
+      targetProjectId: "project-1",
+      provider: "slack",
+      botToken: " xoxb-token ",
+      appToken: " xapp-token ",
+    });
+    const discord = yield* decodeClientOrchestrationCommand({
+      type: "channel.connect",
+      commandId: "connect-discord",
+      botId: "bot-1",
+      targetProjectId: "project-1",
+      provider: "discord",
+      botToken: " discord-token ",
+      applicationId: " app-1 ",
+      publicKey: " public-key ",
     });
     const saveConnection = yield* decodeClientOrchestrationCommand({
       type: "channel.connection.save",
@@ -172,6 +229,19 @@ it.effect("decodes live channel commands", () =>
       phoneNumberId: "phone-number-id",
       verifyToken: "verify-token",
     });
+    assert.deepInclude(slack, {
+      targetProjectId: ProjectId.make("project-1"),
+      provider: "slack",
+      botToken: "xoxb-token",
+      appToken: "xapp-token",
+    });
+    assert.deepInclude(discord, {
+      targetProjectId: ProjectId.make("project-1"),
+      provider: "discord",
+      botToken: "discord-token",
+      applicationId: "app-1",
+      publicKey: "public-key",
+    });
     assert.deepInclude(saveConnection, {
       connectionId: ChannelConnectionId.make("photon-work"),
       name: "Work iPhone",
@@ -197,6 +267,7 @@ it.effect("decodes WhatsApp message origins", () =>
         channelOrigin: {
           provider: "whatsapp",
           externalThreadId: "whatsapp:phone:user",
+          externalMessageId: "wamid.1",
           externalSenderId: "user",
         },
       },
@@ -210,6 +281,7 @@ it.effect("decodes WhatsApp message origins", () =>
     assert.deepEqual(command.message.channelOrigin, {
       provider: "whatsapp",
       externalThreadId: "whatsapp:phone:user",
+      externalMessageId: "wamid.1",
       externalSenderId: "user",
     });
   }),
@@ -222,6 +294,7 @@ it.effect("requires credentials for the selected iMessage mode", () =>
         type: "channel.connect",
         commandId: "connect-imessage-hosted",
         botId: "bot-1",
+        targetProjectId: "project-1",
         provider: "imessage",
         mode: "hosted",
       }),
@@ -231,6 +304,7 @@ it.effect("requires credentials for the selected iMessage mode", () =>
         type: "channel.connect",
         commandId: "connect-imessage-self-hosted",
         botId: "bot-1",
+        targetProjectId: "project-1",
         provider: "imessage",
         mode: "self-hosted",
       }),

@@ -25,15 +25,15 @@ Akeru creates and controls the Codex session. The runtime supplies:
 - the selected ChatGPT subscription model
 
 Akeru normalizes tool calls, approvals, usage, messages, and errors before it sends them to the
-client. This keeps the same thread controls available on web, desktop, and mobile.
+client. This keeps the same chat controls available on web, desktop, and mobile.
 
 The environment server stores the subscription credential under its private secrets directory. It
 passes short-lived access to the runtime when needed. The credential does not enter the project,
-thread history, checkpoints, or client storage.
+conversation history, checkpoints, or client storage.
 
 ## Protected actions
 
-The runtime can allow routine reads and edits based on the thread's permission mode. It still asks
+The runtime can allow routine reads and edits based on the chat's permission mode. It still asks
 before an action that sends data, pays, deletes, changes production, publishes, exposes secrets,
 signs, refunds, or changes an account. An approval applies only to the pending action.
 

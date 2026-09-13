@@ -7,6 +7,7 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import { assert, it } from "@effect/vitest";
 
@@ -177,6 +178,42 @@ it.effect("effect-acp agent handles core agent requests and outbound client requ
       assert.deepEqual(yield* Ref.get(extNotifications), [2]);
     }).pipe(Effect.provide(context), Effect.ensuring(Scope.close(scope, Exit.void)));
   }),
+);
+
+it.effect(
+  "effect-acp agent opts into bounded late raw observation without changing cancel callbacks",
+  () =>
+    Effect.gen(function* () {
+      const { stdio, input } = yield* makeInMemoryStdio();
+      const agent = yield* AcpAgent.make(stdio, { rawNotificationBufferSize: 2 });
+      const received = yield* Deferred.make<void>();
+      let handled = 0;
+      yield* agent.handleCancel(() =>
+        Effect.suspend(() => {
+          handled++;
+          return handled === 3
+            ? Deferred.succeed(received, undefined).pipe(Effect.asVoid)
+            : Effect.void;
+        }),
+      );
+      for (const index of [0, 1, 2]) {
+        yield* Queue.offer(
+          input,
+          yield* encodeJsonl(SessionCancelNotification, {
+            jsonrpc: "2.0",
+            method: "session/cancel",
+            params: { sessionId: `session-${index}` },
+          }),
+        );
+      }
+      yield* Deferred.await(received);
+      const replay = yield* agent.raw.notifications.pipe(Stream.take(2), Stream.runCollect);
+      assert.equal(handled, 3);
+      assert.deepEqual(
+        replay.map((notification) => notification.params),
+        [{ sessionId: "session-1" }, { sessionId: "session-2" }],
+      );
+    }),
 );
 
 it.effect("effect-acp agent uses distinct ids for RPC calls and extension requests", () =>

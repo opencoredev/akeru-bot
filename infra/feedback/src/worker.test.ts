@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import type { FeedbackWorkerEnv } from "../alchemy.run.ts";
 import worker from "./worker.ts";
 
+const ENDPOINT = "https://akeru-feedback.leoisadev.workers.dev/v1/feedback";
+
 function env(overrides: Partial<FeedbackWorkerEnv> = {}): FeedbackWorkerEnv {
   return {
     DB: { prepare: vi.fn() } as unknown as D1Database,
@@ -13,25 +15,57 @@ function env(overrides: Partial<FeedbackWorkerEnv> = {}): FeedbackWorkerEnv {
   } as FeedbackWorkerEnv;
 }
 
+// A D1 stub for one empty inbox: every lookup finds nothing and the insert lands.
+function emptyInboxDatabase(): D1Database {
+  const statement = {
+    bind: () => statement,
+    first: async () => null,
+    run: async () => ({ meta: { changes: 1 } }),
+  };
+  return { prepare: () => statement } as unknown as D1Database;
+}
+
+function submission(): Request {
+  return new Request(ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.41" },
+    body: JSON.stringify({
+      schemaVersion: 1,
+      feedback: "The send button stays disabled.",
+      installToken: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      website: "",
+    }),
+  });
+}
+
 describe("feedback worker", () => {
   it("stays disabled when the HMAC secret is too short", async () => {
     const response = await worker.fetch(
-      new Request("https://feedback.akeru.bot/v1/feedback", { method: "POST" }),
+      new Request(ENDPOINT, { method: "POST" }),
       env({ HMAC_SECRET: "short" }),
     );
 
     expect(response.status).toBe(503);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(await response.json()).toMatchObject({ reason: "disabled" });
   });
 
-  it("stays disabled until Turnstile is configured", async () => {
+  it("accepts a direct browser submission without Turnstile keys", async () => {
+    const response = await worker.fetch(submission(), env({ DB: emptyInboxDatabase() }));
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(await response.json()).toMatchObject({ feedbackId: expect.stringMatching(/^fb_/) });
+  });
+
+  it("answers CORS preflight before reading configuration", async () => {
     const response = await worker.fetch(
-      new Request("https://feedback.akeru.bot/v1/feedback", { method: "POST" }),
-      env(),
+      new Request(ENDPOINT, { method: "OPTIONS" }),
+      env({ HMAC_SECRET: "short" }),
     );
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ reason: "disabled" });
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-methods")).toBe("POST, OPTIONS");
   });
 
   it("deletes expired rows during the daily scheduled run", async () => {

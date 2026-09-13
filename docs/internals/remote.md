@@ -55,7 +55,11 @@ a directly reachable server after normal pairing.
 ## Environment identity
 
 Each server stores a stable `environmentId` in its state directory. Clients use that identifier to
-reject endpoints that point at a different server than the saved target.
+reject endpoints that point at a different server than the saved target. Remote production web
+cookies use that same identity, so two `akeru serve` instances on one hostname keep separate
+sessions. Initialization publishes a complete ID atomically. Empty or whitespace-only ID files are
+repaired using a retained `<stateDir>/environment-id.recovery` file so concurrent and delayed
+repairs choose the same ID. Existing nonempty ID files remain authoritative.
 
 Repository identity may group related clones in the interface. It never changes routing. A project
 always belongs to one environment.

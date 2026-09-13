@@ -294,7 +294,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
               type: "action" as const,
             })),
             {
-              description: "Start another shell for this thread",
+              description: "Start another shell for this chat",
               icon: { name: "plus", type: "sfSymbol" },
               label: "Open new terminal",
               onPress: props.onOpenNewTerminal,
@@ -474,7 +474,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
           <NativeHeaderToolbar.MenuAction
             icon="plus"
             onPress={props.onOpenNewTerminal}
-            subtitle="Start another shell for this thread"
+            subtitle="Start another shell for this chat"
           >
             <NativeHeaderToolbar.Label>Open new terminal</NativeHeaderToolbar.Label>
           </NativeHeaderToolbar.MenuAction>
