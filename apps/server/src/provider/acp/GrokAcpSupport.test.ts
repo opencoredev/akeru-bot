@@ -63,6 +63,20 @@ describe("applyGrokAcpModelSelection", () => {
     }),
   );
 
+  it.effect("keeps the session's current model when the product slug is requested", () =>
+    Effect.gen(function* () {
+      const { runtime, modelCalls } = makeRecordingRuntime();
+      const result = yield* applyGrokAcpModelSelection({
+        runtime,
+        currentModelId: "grok-4.6",
+        requestedModelId: "grok-build",
+        mapError: (cause) => cause.message,
+      });
+      expect(modelCalls).toEqual([]);
+      expect(result).toBe("grok-4.6");
+    }),
+  );
+
   it.effect("skips set_model when requested matches current", () =>
     Effect.gen(function* () {
       const { runtime, modelCalls } = makeRecordingRuntime();

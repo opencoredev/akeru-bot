@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { describe, expect } from "vite-plus/test";
 
+import { sessionModelStateFromInitialize } from "./AcpRuntimeModel.ts";
 import { makeGrokAcpRuntime } from "./GrokAcpSupport.ts";
 
 const makeProbeRuntime = Effect.gen(function* () {
@@ -27,6 +28,18 @@ const makeProbeRuntime = Effect.gen(function* () {
 });
 
 describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("Grok ACP CLI probe", () => {
+  it.effect("initialize advertises model state without opening a session", () =>
+    Effect.gen(function* () {
+      const runtime = yield* makeProbeRuntime;
+      const initialized = yield* runtime.initialize();
+      const models = sessionModelStateFromInitialize(initialized);
+      expect(initialized.protocolVersion).toBeDefined();
+      expect(typeof models?.currentModelId).toBe("string");
+      expect(models?.availableModels.length ?? 0).toBeGreaterThan(0);
+      expect(models?.availableModels.some((model) => model.modelId === "grok-build")).toBe(false);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("initialize and authenticate against real grok agent stdio", () =>
     Effect.gen(function* () {
       const runtime = yield* makeProbeRuntime;
