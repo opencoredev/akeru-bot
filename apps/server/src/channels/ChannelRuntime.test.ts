@@ -444,6 +444,7 @@ function makeHarness(input: {
     getThreadReplayStats: () => Effect.die("unused thread replay stats"),
     dispatch,
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.succeed(Stream.empty),
     latestSequence: Effect.sync(() => sequence),
   } satisfies OrchestrationEngineShape;
   const dependencies: ChannelRuntimeDependencies = {

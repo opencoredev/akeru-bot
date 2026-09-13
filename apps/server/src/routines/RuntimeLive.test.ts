@@ -132,6 +132,7 @@ const harness = (
           readThreadEvents: () => Stream.empty,
           getThreadReplayStats: () => Effect.die("unused thread replay stats"),
           streamDomainEvents: domainEvents,
+          subscribeDomainEvents: Effect.succeed(domainEvents),
           latestSequence: Effect.succeed(0),
         }),
       ),

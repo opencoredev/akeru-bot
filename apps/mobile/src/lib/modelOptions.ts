@@ -2,7 +2,9 @@ import type {
   ModelCapabilities,
   ModelSelection,
   ServerConfig as T3ServerConfig,
+  SubscriptionProviderStatus,
 } from "@t3tools/contracts";
+import { filterProvidersBySubscriptionConnection } from "@t3tools/client-runtime/provider-auth";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
@@ -69,13 +71,15 @@ function normalizeSelectionOptions(
 export function resolveSelectableModelSelection(
   config: T3ServerConfig | null | undefined,
   selection: ModelSelection | null,
+  subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ModelSelection | null {
   if (!selection || !config) {
     return selection;
   }
-  const provider = config.providers.find(
-    (candidate) => candidate.instanceId === selection.instanceId,
-  );
+  const providers = subscriptionStatuses
+    ? filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses)
+    : config.providers;
+  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
   return provider &&
     provider.enabled &&
     provider.installed &&
@@ -94,8 +98,9 @@ export function resolveSelectableModelSelection(
 export function resolveDefaultableModelSelection(
   config: T3ServerConfig | null | undefined,
   selection: ModelSelection | null,
+  subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ModelSelection | null {
-  const usable = resolveSelectableModelSelection(config, selection);
+  const usable = resolveSelectableModelSelection(config, selection, subscriptionStatuses);
   if (!usable || !config) {
     return usable;
   }
@@ -107,10 +112,14 @@ export function resolveDefaultableModelSelection(
 export function buildModelOptions(
   config: T3ServerConfig | null | undefined,
   fallbackModelSelection: ModelSelection | null,
+  subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ReadonlyArray<ModelOption> {
   const options = new Map<string, ModelOption>();
 
-  for (const provider of config?.providers ?? []) {
+  const providers = subscriptionStatuses
+    ? filterProvidersBySubscriptionConnection(config?.providers ?? [], subscriptionStatuses)
+    : (config?.providers ?? []);
+  for (const provider of providers) {
     if (!provider.enabled || !provider.installed || provider.auth.status === "unauthenticated") {
       continue;
     }
@@ -139,7 +148,11 @@ export function buildModelOptions(
     }
   }
 
-  if (fallbackModelSelection) {
+  if (
+    fallbackModelSelection &&
+    (!subscriptionStatuses ||
+      providers.some((provider) => provider.instanceId === fallbackModelSelection.instanceId))
+  ) {
     const key = `${fallbackModelSelection.instanceId}:${fallbackModelSelection.model}`;
     const existing = options.get(key);
     if (existing) {

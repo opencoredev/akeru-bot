@@ -54,6 +54,19 @@ const healthLabels: Readonly<Record<NonNullable<SubscriptionProviderStatus["heal
   recovered: "Recovered",
 };
 
+function providerBadgeLabel(status: SubscriptionProviderStatus | undefined): string {
+  if (status?.connected !== true) return "Missing";
+  if (
+    status.health === "expired" ||
+    status.health === "revoked" ||
+    status.health === "failed" ||
+    status.health === "failed-first-request"
+  ) {
+    return healthLabels[status.health];
+  }
+  return "Connected";
+}
+
 function healthBadgeVariant(health: SubscriptionProviderStatus["health"] | undefined) {
   if (health === "healthy" || health === "recovered") return "success" as const;
   if (
@@ -111,7 +124,7 @@ export function ProviderLoginCard({
           )}
           {definition.label}
           <Badge variant={healthBadgeVariant(status?.health)} className="h-4 px-1.5 text-[10px]">
-            {status?.health ? healthLabels[status.health] : connected ? "Detected" : "Missing"}
+            {providerBadgeLabel(status)}
           </Badge>
         </span>
       }

@@ -8,6 +8,7 @@ import type {
   ProviderOptionSelection,
   RuntimeMode,
   ServerProviderSkill,
+  SubscriptionProviderStatus,
 } from "@t3tools/contracts";
 import {
   CommandId,
@@ -53,6 +54,7 @@ import {
 } from "../../state/use-composer-drafts";
 import { useDebouncedValue, usePaginatedBranches } from "../../state/queries";
 import { vcsEnvironment } from "../../state/vcs";
+import { serverEnvironment } from "../../state/server";
 import {
   flattenQueuedThreadMessages,
   threadOutboxManager,
@@ -153,6 +155,7 @@ type NewTaskFlowContextValue = {
   readonly modelOptions: ReadonlyArray<ModelOption>;
   readonly selectedModel: ModelSelection | null;
   readonly selectedModelOption: ModelOption | null;
+  readonly subscriptionStatuses: ReadonlyArray<SubscriptionProviderStatus> | undefined;
   readonly selectedProviderSkills: ReadonlyArray<ServerProviderSkill>;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly filteredBranches: ReadonlyArray<VcsRef>;
@@ -218,6 +221,12 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     projects.some((project) => project.environmentId === selectedEnvironmentIdOverride)
       ? selectedEnvironmentIdOverride
       : (projects[0]?.environmentId ?? null);
+  const subscriptionAuth = useEnvironmentQuery(
+    selectedEnvironmentId === null
+      ? null
+      : serverEnvironment.subscriptionAuth({ environmentId: selectedEnvironmentId, input: {} }),
+  );
+  const subscriptionStatuses = subscriptionAuth.data?.providers;
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [branchQuery, setBranchQuery] = useState("");
@@ -416,18 +425,26 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const draftModelSelection = resolveSelectableModelSelection(
     selectedEnvironmentServerConfig,
     selectedProjectDraft.modelSelection ?? null,
+    subscriptionStatuses,
   );
   const projectDefaultModelSelection = resolveDefaultableModelSelection(
     selectedEnvironmentServerConfig,
     selectedProject?.defaultModelSelection ?? null,
+    subscriptionStatuses,
   );
   const modelOptions = useMemo(
     () =>
       buildModelOptions(
         selectedEnvironmentServerConfig,
         draftModelSelection ?? projectDefaultModelSelection,
+        subscriptionStatuses,
       ),
-    [selectedEnvironmentServerConfig, draftModelSelection, projectDefaultModelSelection],
+    [
+      selectedEnvironmentServerConfig,
+      draftModelSelection,
+      projectDefaultModelSelection,
+      subscriptionStatuses,
+    ],
   );
 
   const selectedModel =
@@ -1034,6 +1051,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       modelOptions,
       selectedModel,
       selectedModelOption,
+      subscriptionStatuses,
       selectedProviderSkills,
       providerGroups,
       filteredBranches,
@@ -1095,6 +1113,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       selectedModel,
       selectedModelKey,
       selectedModelOption,
+      subscriptionStatuses,
       selectedProjectDraftKey,
       selectedProviderSkills,
       setSelectedModelOptions,
