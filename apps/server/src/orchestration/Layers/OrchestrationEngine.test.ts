@@ -113,6 +113,7 @@ describe("OrchestrationEngine", () => {
             detail: "historical replay should not be used during bootstrap",
           }),
         ),
+      hasEventAfter: () => Effect.succeed(false),
     };
 
     const projectionSnapshot = {
@@ -226,6 +227,7 @@ describe("OrchestrationEngine", () => {
         Layer.succeed(OrchestrationProjectionPipeline, {
           bootstrap: Effect.void,
           projectEvent: () => Effect.void,
+          projectEventDeferred: () => Effect.succeed(Effect.void),
         } satisfies OrchestrationProjectionPipelineShape),
       ),
       Layer.provide(Layer.succeed(OrchestrationEventStore, eventStore)),
@@ -824,6 +826,9 @@ describe("OrchestrationEngine", () => {
       readAll() {
         return Stream.fromIterable(events);
       },
+      hasEventAfter() {
+        return Effect.succeed(false);
+      },
     };
 
     const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
@@ -935,6 +940,8 @@ describe("OrchestrationEngine", () => {
         }
         return Effect.void;
       },
+      projectEventDeferred: (event) =>
+        flakyProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
     };
 
     const runtime = ManagedRuntime.make(
@@ -1060,6 +1067,9 @@ describe("OrchestrationEngine", () => {
       readAll() {
         return Stream.fromIterable(events);
       },
+      hasEventAfter() {
+        return Effect.succeed(false);
+      },
     };
 
     let shouldFailProjection = true;
@@ -1080,6 +1090,8 @@ describe("OrchestrationEngine", () => {
         }
         return Effect.void;
       },
+      projectEventDeferred: (event) =>
+        flakyProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
     };
 
     const runtime = ManagedRuntime.make(
