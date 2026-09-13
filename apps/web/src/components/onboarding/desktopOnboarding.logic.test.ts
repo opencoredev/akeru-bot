@@ -7,6 +7,7 @@ import {
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
+  resolveDesktopOnboardingCreationReadiness,
   resolveDesktopOnboardingEngine,
   resolveDesktopOnboardingUseCase,
   shouldShowDesktopOnboarding,
@@ -157,6 +158,19 @@ describe("desktop onboarding", () => {
     expect(parseDesktopOnboardingDraft(JSON.stringify(DEFAULT_DESKTOP_ONBOARDING_DRAFT))).toEqual(
       DEFAULT_DESKTOP_ONBOARDING_DRAFT,
     );
+    const customColorDraft = {
+      ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+      avatar: { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT.avatar, color: "#123ABC" },
+    };
+    expect(parseDesktopOnboardingDraft(JSON.stringify(customColorDraft))).toEqual(customColorDraft);
+    expect(
+      parseDesktopOnboardingDraft(
+        JSON.stringify({
+          ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+          avatar: { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT.avatar, color: "not-a-color" },
+        }),
+      ),
+    ).toBeNull();
     expect(parseDesktopOnboardingDraft("not json")).toBeNull();
     expect(
       parseDesktopOnboardingDraft(
@@ -236,6 +250,32 @@ describe("desktop onboarding", () => {
     expect(
       desktopOnboardingModelSelection({ provider: "claudeAgent", model: "claude-default" }),
     ).toEqual({ instanceId: "claudeAgent", model: "claude-default" });
+  });
+
+  it("keeps bot creation pending while the provider catalog is still loading", () => {
+    expect(resolveDesktopOnboardingCreationReadiness("openai-codex", null)).toEqual({
+      status: "loading",
+    });
+  });
+
+  it("separates an unavailable provider from a provider catalog that is still loading", () => {
+    expect(resolveDesktopOnboardingCreationReadiness("openai-codex", [])).toEqual({
+      status: "unavailable",
+    });
+    expect(
+      resolveDesktopOnboardingCreationReadiness("openai-codex", [
+        {
+          instanceId: "codex",
+          driver: "codex",
+          enabled: true,
+          installed: true,
+          models: [{ slug: "gpt-default", isDefault: true }],
+        },
+      ]),
+    ).toEqual({
+      status: "ready",
+      engine: { provider: "codex", model: "gpt-default" },
+    });
   });
 
   it.each([

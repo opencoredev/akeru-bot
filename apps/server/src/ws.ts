@@ -80,6 +80,7 @@ import {
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
+import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";
 import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import {
   buildProviderAccessCapabilities,
@@ -542,6 +543,18 @@ const makeWsRpcLayer = (
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const syncSubscriptionProviderSettings = Effect.gen(function* () {
+        const settings = yield* serverSettings.getSettings;
+        const patch = subscriptionProviderSettingsPatch(settings, subscriptionAuth.statuses());
+        if (patch) yield* serverSettings.updateSettings(patch);
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Failed to align provider settings with subscription connections", {
+            detail: cause.message,
+          }),
+        ),
+      );
+      yield* syncSubscriptionProviderSettings;
       const resetChangedApiKeySessions = makeApiKeySessionReset(
         subscriptionAuth,
         agentController,
@@ -702,6 +715,7 @@ const makeWsRpcLayer = (
       const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
         subscriptionAuth.reload();
         botInbox.reload();
+        yield* syncSubscriptionProviderSettings;
         const [providers, bots, snapshot] = yield* Effect.all([
           providerRegistry.getProviders,
           projectionBots
@@ -2509,7 +2523,10 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }).pipe(resetChangedApiKeySessions),
+            }).pipe(
+              resetChangedApiKeySessions,
+              Effect.tap(() => syncSubscriptionProviderSettings),
+            ),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthComplete]: ({ loginId, code }) =>
@@ -2521,7 +2538,10 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }).pipe(resetChangedApiKeySessions),
+            }).pipe(
+              resetChangedApiKeySessions,
+              Effect.tap(() => syncSubscriptionProviderSettings),
+            ),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthCancel]: ({ loginId }) =>

@@ -204,19 +204,21 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     useRosterStore.getState().selectBot(bot.id);
   }, [bot, navigate]);
 
-  if (!bot || bot.archivedAt !== null) return null;
   const working = isBotConversationWorking({
     sending: runtime.sending,
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  const available = bot?.archivedAt === null;
   useReplyPlaybackThread({
-    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
-    threadId: runtime.linkedThreadRef?.threadId,
-    messages,
+    environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
+    threadId: available ? runtime.linkedThreadRef?.threadId : null,
+    messages: available ? messages : [],
     mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
   });
+
+  if (!bot || bot.archivedAt !== null) return null;
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
