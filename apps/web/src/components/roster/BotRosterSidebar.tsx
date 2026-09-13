@@ -1,12 +1,12 @@
 import {
   DndContext,
-  DragOverlay,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
@@ -34,7 +34,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
@@ -73,7 +72,6 @@ import {
   formatRosterTimestamp,
   isRecordableChatPath,
   parseChatPath,
-  parseRosterEntryId,
   planRosterDrop,
   resolveLatestRosterMessage,
   resolveRosterDropTarget,
@@ -97,6 +95,7 @@ import {
   animateRosterLayoutChanges,
   createRosterCollisionDetection,
   createRosterSortingStrategy,
+  restrictBelowRosterLabel,
 } from "./roster.drag";
 import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
@@ -250,7 +249,6 @@ function sortableRootProps(sortable: SortableRosterRowBag) {
     style: {
       transform: CSS.Translate.toString(sortable.transform),
       transition: sortable.transition,
-      opacity: sortable.isDragging ? 0 : undefined,
       visibility:
         !sortable.isDragging && sortable.transform?.scaleY === 0 ? ("hidden" as const) : undefined,
     },
@@ -275,61 +273,6 @@ const dropVerbBadge: Record<RosterDropVerb, ReactNode> = {
 
 const ROSTER_DRAG_LABEL_HEIGHT = 24;
 
-function RosterDropVerbBadge({ verb }: { verb: RosterDropVerb }) {
-  return (
-    <span
-      role="status"
-      data-testid="roster-drop-verb"
-      className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
-    >
-      {dropVerbBadge[verb]}
-    </span>
-  );
-}
-
-function RosterDragOverlayCard({
-  activeId,
-  bots,
-  groups,
-  dropVerb,
-}: {
-  activeId: string;
-  bots: readonly Bot[];
-  groups: readonly Group[];
-  dropVerb: RosterDropVerb | null;
-}) {
-  const item = parseRosterEntryId(activeId);
-  if (item?.kind === "bot") {
-    const bot = bots.find((candidate) => candidate.id === item.id);
-    if (!bot) return null;
-    return (
-      <div
-        data-testid="roster-drag-overlay"
-        className="flex w-full items-center gap-2.5 rounded-lg border border-sidebar-border bg-sidebar px-2 py-1.5 text-sidebar-foreground shadow-xl select-none"
-      >
-        <BotAvatarView avatar={bot.avatar} name={bot.name} state="idle" className="size-10" />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
-        {dropVerb ? <RosterDropVerbBadge verb={dropVerb} /> : null}
-      </div>
-    );
-  }
-  if (item?.kind === "group") {
-    const group = groups.find((candidate) => candidate.id === item.id);
-    if (!group) return null;
-    return (
-      <div
-        data-testid="roster-drag-overlay"
-        className="flex w-full items-center gap-2.5 rounded-lg border border-sidebar-border bg-sidebar px-2 py-1.5 text-sidebar-foreground shadow-xl select-none"
-      >
-        <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
-        {dropVerb ? <RosterDropVerbBadge verb={dropVerb} /> : null}
-      </div>
-    );
-  }
-  return null;
-}
-
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
@@ -341,6 +284,7 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveDown,
   onNudge,
   sortable,
+  dropVerb,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
@@ -352,6 +296,7 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
+  dropVerb: RosterDropVerb | null;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -402,6 +347,15 @@ const BotRosterRow = memo(function BotRosterRow({
               </span>
             ) : null}
           </span>
+          {sortable.isDragging && dropVerb !== null ? (
+            <span
+              role="status"
+              data-testid="roster-drop-verb"
+              className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
+            >
+              {dropVerbBadge[dropVerb]}
+            </span>
+          ) : null}
         </button>
         <Menu>
           <MenuTrigger
@@ -484,6 +438,7 @@ function GroupRosterRow({
   canMoveDown,
   onNudge,
   sortable,
+  dropVerb,
 }: {
   group: Group;
   bots: readonly Bot[];
@@ -495,6 +450,7 @@ function GroupRosterRow({
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
+  dropVerb: RosterDropVerb | null;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const members = group.members.filter(
@@ -526,6 +482,15 @@ function GroupRosterRow({
         <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
         <span className="text-xs text-sidebar-muted-foreground">{members}</span>
+        {sortable.isDragging && dropVerb !== null ? (
+          <span
+            role="status"
+            data-testid="roster-drop-verb"
+            className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
+          >
+            {dropVerbBadge[dropVerb]}
+          </span>
+        ) : null}
       </button>
       <Menu>
         <MenuTrigger
@@ -564,7 +529,7 @@ function SortableRosterMarker(props: {
   draggable?: boolean;
   "data-testid"?: string;
 }) {
-  const { setNodeRef, transform, transition, listeners, isDragging } = useSortable({
+  const { setNodeRef, transform, transition, listeners } = useSortable({
     id: rosterMarkerId(props.marker),
     disabled: { draggable: props.draggable !== true },
     animateLayoutChanges: animateRosterLayoutChanges,
@@ -576,7 +541,6 @@ function SortableRosterMarker(props: {
       className={cn("list-none", props.className)}
       style={{
         transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0 : undefined,
         transition:
           typeof props.marker !== "string" && props.marker.kind === "section-placeholder"
             ? "none"
@@ -758,6 +722,7 @@ export default function BotRosterSidebar() {
   } | null>(null);
   const listMotionRef = useRef<ReturnType<typeof createRosterListMotion> | null>(null);
   const rosterListRef = useRef<HTMLUListElement | null>(null);
+  const dragLabelOffsetRef = useRef(0);
   const dragSensorRef = useRef<RosterPointerSensor | null>(null);
   const attachListMotionRef = useCallback((node: HTMLUListElement | null) => {
     rosterListRef.current = node;
@@ -785,12 +750,27 @@ export default function BotRosterSidebar() {
       onFinish: finishRosterDrag,
     }),
   );
+  const restrictBelowPins = useCallback(
+    (args: Parameters<typeof restrictBelowRosterLabel>[0]) =>
+      restrictBelowRosterLabel(args, dragLabelOffsetRef.current),
+    [],
+  );
   const handleRosterDragStart = useCallback(
     (event: DragStartEvent) => {
       const activeId = String(event.active.id);
       const from = zoneByEntryId.get(activeId);
       if (from === undefined) return;
       listMotionRef.current?.suspend();
+      const list = rosterListRef.current;
+      const header = list?.querySelector<HTMLElement>('[data-testid="roster-pinned-header"]');
+      if (list && header) {
+        const listRect = list.getBoundingClientRect();
+        const scale = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1;
+        dragLabelOffsetRef.current =
+          header.getBoundingClientRect().top - listRect.top + ROSTER_DRAG_LABEL_HEIGHT * scale;
+      } else {
+        dragLabelOffsetRef.current = 0;
+      }
       setDragState({
         activeId,
         from,
@@ -886,7 +866,6 @@ export default function BotRosterSidebar() {
     if (dragState === null || dragState.activeId !== id) return null;
     return resolveRosterDropVerb(dragState.from, dragTargetZone);
   };
-  const activeDropVerb = dragState === null ? null : dropVerbFor(dragState.activeId);
 
   // Remember the chat route the selected bot lands on, so re-selecting the
   // bot returns to its conversation. The first run after a selection change
@@ -1097,6 +1076,11 @@ export default function BotRosterSidebar() {
               <DndContext
                 sensors={dndSensors}
                 collisionDetection={dndCollisionDetection}
+                modifiers={[
+                  restrictToVerticalAxis,
+                  restrictBelowPins,
+                  restrictToFirstScrollableAncestor,
+                ]}
                 onDragStart={handleRosterDragStart}
                 onDragOver={handleRosterDragOver}
                 onDragEnd={handleRosterDragEnd}
@@ -1111,6 +1095,7 @@ export default function BotRosterSidebar() {
                   >
                     {rosterListItems.map((item) => {
                       if (item.kind === "entry") {
+                        const dropVerb = dropVerbFor(rosterListItemId(item));
                         const pinned = pinnedKeys.has(rosterItemKey(item.item));
                         const zoneOrder = rosterItemsForZone(item.zone, {
                           pinnedItems: visiblePinnedItems,
@@ -1154,6 +1139,7 @@ export default function BotRosterSidebar() {
                                         canMoveDown={canMoveDown}
                                         onNudge={onNudge}
                                         sortable={bag}
+                                        dropVerb={dropVerb}
                                       />
                                     );
                                   })()
@@ -1181,6 +1167,7 @@ export default function BotRosterSidebar() {
                                         canMoveDown={canMoveDown}
                                         onNudge={onNudge}
                                         sortable={bag}
+                                        dropVerb={dropVerb}
                                       />
                                     );
                                   })()
@@ -1266,24 +1253,6 @@ export default function BotRosterSidebar() {
                     })}
                   </ul>
                 </SortableContext>
-                {typeof document === "undefined"
-                  ? null
-                  : createPortal(
-                      <DragOverlay
-                        dropAnimation={{ duration: 150, easing: "ease-out" }}
-                        zIndex={80}
-                      >
-                        {dragState ? (
-                          <RosterDragOverlayCard
-                            activeId={dragState.activeId}
-                            bots={bots}
-                            groups={groups}
-                            dropVerb={activeDropVerb}
-                          />
-                        ) : null}
-                      </DragOverlay>,
-                      document.body,
-                    )}
               </DndContext>
               {visibleBots.length === 0 && visibleGroups.length === 0 ? (
                 <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">

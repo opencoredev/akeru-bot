@@ -60,7 +60,7 @@ The sidebar lists pinned bots and groups first, followed by the rest under **Bot
 
 Pins only change the roster layout. They do not change group membership or settle chats.
 
-While you drag, the lifted row can follow the pointer anywhere in the app. Move it back over the roster to choose a destination; dropping outside the roster cancels the move. The destination label stays readable and takes the accent color. The lifted row shows **Pin** or **Unpin** when the destination changes its pin state. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
+While you drag, the lifted row stays in the roster and moves vertically between available positions. The destination label stays readable and takes the accent color. The lifted row shows **Pin** or **Unpin** when the destination changes its pin state. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
 
 Pinning, unpinning, and moving an item keeps the sidebar at your current scroll position instead of following the item to its new place in the roster.
 

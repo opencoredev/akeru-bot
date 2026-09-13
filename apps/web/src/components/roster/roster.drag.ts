@@ -1,4 +1,4 @@
-import { closestCenter, type CollisionDetection } from "@dnd-kit/core";
+import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
 import {
   defaultAnimateLayoutChanges,
   verticalListSortingStrategy,
@@ -25,6 +25,17 @@ type Layout = Parameters<SortingStrategy>[0];
  * animate the drop twice. */
 export const animateRosterLayoutChanges: AnimateLayoutChanges = (args) =>
   args.isSorting ? defaultAnimateLayoutChanges(args) : false;
+
+/** Keep the lifted card below the Pins label, including when Pins is empty.
+ * The container rect follows scrolling; the offset is measured once at pickup. */
+export function restrictBelowRosterLabel(
+  { transform, containerNodeRect, draggingNodeRect }: Parameters<Modifier>[0],
+  offset: number,
+) {
+  if (!containerNodeRect || !draggingNodeRect) return transform;
+  const minimumY = containerNodeRect.top + offset - draggingNodeRect.top;
+  return transform.y < minimumY ? { ...transform, y: minimumY } : transform;
+}
 
 function markerIsPinnedBoundary(marker: RosterListMarker): boolean {
   return marker === "pinned-header" || marker === "pinned-divider";
@@ -60,17 +71,6 @@ export function createRosterCollisionDetection(
   let previousPointerY = options.activationY;
   let boundaryZone: "pinned" | "rest" | undefined;
   return (args) => {
-    if (args.pointerCoordinates) {
-      const rects = [...args.droppableRects.values()];
-      if (rects.length > 0) {
-        const left = Math.min(...rects.map((rect) => rect.left));
-        const right = Math.max(...rects.map((rect) => rect.right));
-        const top = Math.min(...rects.map((rect) => rect.top));
-        const bottom = Math.max(...rects.map((rect) => rect.bottom));
-        const { x, y } = args.pointerCoordinates;
-        if (x < left || x > right || y < top || y > bottom) return [];
-      }
-    }
     let collisions = closestCenter(args);
     const pointer = args.pointerCoordinates;
     const items = options.items;
