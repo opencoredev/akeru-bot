@@ -87,6 +87,17 @@ describe("roster collision detection", () => {
     const detector = createRosterCollisionDetection(() => true);
     expect(detector(collisionArgs())[0]?.id).toBe(rosterEntryId(mori));
   });
+
+  it("cancels pointer drops outside the roster while allowing free movement", () => {
+    const detector = createRosterCollisionDetection(() => true);
+    const args = collisionArgs();
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: { x: 700, y: 220 },
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("roster drag projection", () => {

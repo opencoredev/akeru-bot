@@ -60,7 +60,7 @@ The sidebar lists pinned bots and groups, then any named sections you create, th
 
 Pins, sections, and Unassigned are roster layout only. They do not change group membership, and they do not settle chats.
 
-While you drag, the destination label stays readable and takes the accent color. Empty and collapsed sections stay droppable. The lifted row shows **Pin**, **Unpin**, or **Move** when the drop would change its section. Reordering inside one section has no badge. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
+While you drag, the lifted row can follow the pointer anywhere in the app. Move it back over the roster to choose a destination; dropping outside the roster cancels the move. The destination label stays readable and takes the accent color. Empty and collapsed sections stay droppable. The lifted row shows **Pin**, **Unpin**, or **Move** when the drop would change its section. Reordering inside one section has no badge. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
 
 Pinning, unpinning, and moving an item keeps the sidebar at your current scroll position instead of following the item to its new place in the roster.
 
