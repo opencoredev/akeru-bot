@@ -182,6 +182,15 @@ export class AcpSessionRuntime extends Context.Service<
      */
     readonly handleExtNotification: EffectAcpClient.AcpClient["Service"]["handleExtNotification"];
     /**
+     * Sends ACP `initialize` without authenticating or opening a session.
+     * Provider health checks use this to read advertised models from `_meta.modelState`.
+     * @see https://agentclientprotocol.com/protocol/schema#initialize
+     */
+    readonly initialize: () => Effect.Effect<
+      EffectAcpSchema.InitializeResponse,
+      EffectAcpErrors.AcpError
+    >;
+    /**
      * Initializes the ACP connection, authenticates, and loads, resumes, or creates the session.
      * Concurrent calls share the same in-flight startup and a failed startup may be retried.
      */
@@ -535,18 +544,19 @@ export const make = (
         ),
       );
 
-    const startOnce = Effect.gen(function* () {
-      const initializePayload = {
-        protocolVersion: 1,
-        clientCapabilities: initializeClientCapabilities,
-        clientInfo: options.clientInfo,
-      } satisfies EffectAcpSchema.InitializeRequest;
+    const initializePayload = {
+      protocolVersion: 1,
+      clientCapabilities: initializeClientCapabilities,
+      clientInfo: options.clientInfo,
+    } satisfies EffectAcpSchema.InitializeRequest;
+    const sendInitialize = runLoggedRequest(
+      "initialize",
+      initializePayload,
+      acp.agent.initialize(initializePayload),
+    );
 
-      const initializeResult = yield* runLoggedRequest(
-        "initialize",
-        initializePayload,
-        acp.agent.initialize(initializePayload),
-      );
+    const startOnce = Effect.gen(function* () {
+      const initializeResult = yield* sendInitialize;
 
       const authenticatePayload = {
         methodId: options.authMethodId,
@@ -711,6 +721,7 @@ export const make = (
       handleUnknownExtNotification: acp.handleUnknownExtNotification,
       handleExtRequest: acp.handleExtRequest,
       handleExtNotification: acp.handleExtNotification,
+      initialize: () => sendInitialize,
       start: () => start,
       getEvents: () => Stream.fromQueue(eventQueue),
       drainEvents: Effect.gen(function* () {
