@@ -88,9 +88,14 @@ describe("ElectronShell", () => {
         electronShell.openExternal("zed://ssh/user%40host/workspace"),
         electronShell.openExternal("zed://ssh/host%3A22/workspace"),
         electronShell.openExternal("zed://ssh/host%2Fevil/workspace"),
+        electronShell.openExternal("zed://ssh/host%2fevil/workspace"),
+        electronShell.openExternal("zed://ssh/host%3a22/workspace"),
+        electronShell.openExternal("zed://ssh/user%2540host/workspace"),
+        electronShell.openExternal("zed://ssh/host%252Fevil/workspace"),
+        electronShell.openExternal("zed://ssh/host%253A22/workspace"),
       ]);
 
-      assert.deepEqual(results, [false, false, false]);
+      assert.deepEqual(results, [false, false, false, false, false, false, false, false]);
       assert.equal(openExternalMock.mock.calls.length, 0);
     }).pipe(Effect.provide(ElectronShell.layer)),
   );

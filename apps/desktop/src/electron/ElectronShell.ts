@@ -18,7 +18,9 @@ const REMOTE_EDITOR_PROTOCOLS = new Set(
 );
 
 // Zed's host sits in the first path segment, so it needs its own userinfo ban.
-const ZED_SSH_HOST = /^[^/@:]+$/;
+// A decoded host cannot contain `%`; rejecting it also blocks nested encoding
+// such as `%2540`, which another URL parser could decode into a delimiter.
+const ZED_SSH_HOST = /^[^/@:%]+$/;
 
 function isZedSshUrl(url: URL): boolean {
   if (url.host !== "ssh") {
