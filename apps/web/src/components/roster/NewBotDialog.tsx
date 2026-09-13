@@ -5,8 +5,9 @@ import { readFileAsDataUrl } from "../ChatView.logic";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { AvatarColorPicker } from "./AvatarColorPicker";
 import { BotAvatarView } from "./BotAvatarView";
-import { BLOB_COLORS, BLOB_SHAPES, randomBotAvatar } from "./roster.logic";
+import { BLOB_SHAPES, randomBotAvatar } from "./roster.logic";
 import type { BotAvatar } from "./types";
 
 /** A compact bot creation form with all required choices in one view. */
@@ -113,25 +114,10 @@ export function NewBotDialog({
                 })}
               </div>
 
-              <div className="flex flex-wrap gap-2.5">
-                {BLOB_COLORS.map((color) => {
-                  const selected = avatar.kind === "blob" && blobAvatar.color === color;
-                  return (
-                    <button
-                      key={color}
-                      type="button"
-                      aria-label={color}
-                      aria-pressed={selected}
-                      onClick={() => updateBlobAvatar({ ...blobAvatar, color })}
-                      style={{ backgroundColor: color }}
-                      className={cn(
-                        "size-8 cursor-pointer rounded-full border border-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        selected && "ring-2 ring-ring ring-offset-2 ring-offset-popover",
-                      )}
-                    />
-                  );
-                })}
-              </div>
+              <AvatarColorPicker
+                value={blobAvatar.color}
+                onChange={(color) => updateBlobAvatar({ ...blobAvatar, color })}
+              />
             </section>
           </div>
 

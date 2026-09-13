@@ -42,10 +42,11 @@ import {
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { BotAvatarView } from "../roster/BotAvatarView";
+import { AvatarColorPicker } from "../roster/AvatarColorPicker";
 import { BotPromptComposer } from "../roster/BotPromptComposer";
 import { writeBotDraft } from "../roster/botDraftStore";
 import { DEFAULT_BOT_RUNTIME_MODE } from "../roster/botSandbox";
-import { BLOB_COLORS, BLOB_SHAPES } from "../roster/roster.logic";
+import { BLOB_SHAPES } from "../roster/roster.logic";
 import { useRosterStore } from "../roster/rosterStore";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
 import {
@@ -540,23 +541,11 @@ function IdentityStep({
         </div>
         <div className="space-y-3">
           <h2 className="text-center text-xs font-medium text-muted-foreground">Color</h2>
-          <div className="mx-auto grid w-fit grid-cols-5 gap-3">
-            {BLOB_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={`${color} avatar color`}
-                aria-pressed={draft.avatar.color === color}
-                onClick={() => onChange({ ...draft, avatar: { ...draft.avatar, color } })}
-                className={`size-8 rounded-full border border-foreground/10 outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
-                  draft.avatar.color === color
-                    ? "ring-2 ring-ring ring-offset-2 ring-offset-background"
-                    : ""
-                }`}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
+          <AvatarColorPicker
+            className="mx-auto"
+            value={draft.avatar.color}
+            onChange={(color) => onChange({ ...draft, avatar: { ...draft.avatar, color } })}
+          />
         </div>
       </section>
       {providerReadiness.status === "loading" ? (
