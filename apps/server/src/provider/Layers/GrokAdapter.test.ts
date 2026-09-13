@@ -135,7 +135,7 @@ it("emits the current epoch result when the cancelled prompt drains first", () =
     remainingPrompts: 1,
     stored: undefined,
     incoming: cancelled,
-    emitTurnCompletion: true,
+    emitTurnCompletion: false,
   });
   assert.isUndefined(afterSuperseded.stored);
   assert.isUndefined(afterSuperseded.emit);
@@ -172,7 +172,7 @@ it("emits the current epoch result when the cancelled prompt drains last", () =>
     remainingPrompts: 0,
     stored: afterCurrent.stored,
     incoming: cancelled,
-    emitTurnCompletion: true,
+    emitTurnCompletion: false,
   });
   assert.deepEqual(afterSuperseded.stored, completed);
   assert.deepEqual(afterSuperseded.emit, completed);
