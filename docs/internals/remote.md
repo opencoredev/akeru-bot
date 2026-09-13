@@ -32,7 +32,9 @@ removes the credential from browser history after the exchange. The client then 
 that server. No Akeru service proxies the session.
 
 The server may advertise loopback, LAN, Tailscale, or custom HTTPS endpoints. Clients treat those
-addresses as hints. A connection attempt is the final reachability check.
+addresses as hints. A connection attempt is the final reachability check. Automatic LAN discovery
+skips Tailscale IPv4 addresses so a tailnet-first interface list does not advertise the same host
+as both Local network and Tailscale. Tailscale-only machines stay network-accessible.
 
 ## Direct and Tailscale access
 
