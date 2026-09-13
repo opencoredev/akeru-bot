@@ -17,6 +17,7 @@ import {
   parseChatPath,
   randomBotAvatar,
   resolveBlobRendering,
+  resolveBlobEyeColor,
   resolveBotPresence,
   resolveLatestRosterMessage,
   resolveRosterBotId,
@@ -51,6 +52,15 @@ function bot(input: Partial<Bot> & Pick<Bot, "id" | "name">): Bot {
     ...input,
   };
 }
+
+describe("resolveBlobEyeColor", () => {
+  it("chooses the eye color with the stronger contrast", () => {
+    expect(resolveBlobEyeColor("#141062")).toBe("#FFFFFF");
+    expect(resolveBlobEyeColor("#E0645C")).toBe("#0A0A0A");
+    expect(resolveBlobEyeColor("#FFFFFF")).toBe("#0A0A0A");
+    expect(resolveBlobEyeColor("#000000")).toBe("#FFFFFF");
+  });
+});
 
 describe("resolveRosterBotId", () => {
   it("does not redirect to a persisted bot that is absent from the loaded roster", () => {

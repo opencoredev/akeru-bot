@@ -67,6 +67,8 @@ import {
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { serverEnvironment } from "../../state/server";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
@@ -288,6 +290,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   });
   const settingsRoutePresentation = useExistingThreadSettingsRoutePresentation();
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
+  const subscriptionAuth = useEnvironmentQuery(
+    serverEnvironment.subscriptionAuth({ environmentId: props.environmentId, input: {} }),
+  );
+  const subscriptionStatuses = subscriptionAuth.data?.providers;
   const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
@@ -611,8 +617,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
   // ── Model menu ───────────────────────────────────────────
   const modelOptions = useMemo(
-    () => buildModelOptions(props.serverConfig, currentModelSelection),
-    [props.serverConfig, currentModelSelection],
+    () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses),
+    [props.serverConfig, currentModelSelection, subscriptionStatuses],
   );
   const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
   // An existing thread is bound to its harness: sessions can't move between

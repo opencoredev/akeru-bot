@@ -35,6 +35,45 @@ export const BLOB_COLORS: readonly string[] = [
 
 export const DEFAULT_BLOB_SHAPE: BotBlobShape = "circle";
 export const DEFAULT_BLOB_COLOR = "#7A8699";
+const DARK_EYES = "#0A0A0A";
+const LIGHT_EYES = "#FFFFFF";
+
+function relativeLuminance(hexColor: string) {
+  const channels = hexColor
+    .slice(1)
+    .match(/.{2}/g)
+    ?.map((channel) => Number.parseInt(channel, 16) / 255);
+
+  if (!channels || channels.length !== 3 || channels.some(Number.isNaN)) return null;
+
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  ) as [number, number, number];
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(first: number, second: number) {
+  const lighter = Math.max(first, second);
+  const darker = Math.min(first, second);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** Picks whichever eye color has the stronger contrast against the blob. */
+export function resolveBlobEyeColor(color: string) {
+  if (!isBotAvatarColor(color)) return DARK_EYES;
+
+  const bodyLuminance = relativeLuminance(color);
+  const darkLuminance = relativeLuminance(DARK_EYES);
+  if (bodyLuminance === null || darkLuminance === null) return DARK_EYES;
+
+  const darkContrast = contrastRatio(bodyLuminance, darkLuminance);
+  const lightContrast = contrastRatio(bodyLuminance, 1);
+  return lightContrast > darkContrast ? LIGHT_EYES : DARK_EYES;
+}
+
+export function isBotAvatarColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[\da-f]{6}$/i.test(value);
+}
 
 export function isBotBlobShape(value: string): value is BotBlobShape {
   return (BLOB_SHAPES as readonly string[]).includes(value);
