@@ -18,13 +18,10 @@ import {
   ArrowUpIcon,
   BotIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
-  FolderInputIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
   SearchIcon,
-  Trash2Icon,
   UsersIcon,
 } from "lucide-react";
 import {
@@ -57,15 +54,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../term
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { AkeruWordmark } from "../AkeruWordmark";
 import { Button } from "../ui/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "../ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -85,9 +74,7 @@ import {
   isRecordableChatPath,
   parseChatPath,
   parseRosterEntryId,
-  parseRosterSectionHeaderId,
   planRosterDrop,
-  planRosterSectionDrop,
   resolveLatestRosterMessage,
   resolveRosterDropTarget,
   resolveRosterDropVerb,
@@ -97,9 +84,6 @@ import {
   rosterItemsForZone,
   rosterListItemId,
   rosterMarkerId,
-  rosterSectionItems,
-  rosterZoneHasVisibleEntries,
-  rosterZonesEqual,
   orderRosterBotsForShortcuts,
   resolveRosterShortcutBot,
   type RosterDropVerb,
@@ -116,7 +100,7 @@ import {
 } from "./roster.drag";
 import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
-import { useRosterStore, type RosterSection } from "./rosterStore";
+import { useRosterStore } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useBotThreadRef } from "./useBotThreadRef";
 
@@ -161,11 +145,9 @@ function RosterAvatar({
 const RosterSidebarHeader = memo(function RosterSidebarHeader({
   onNewBot,
   onNewGroup,
-  onNewSection,
 }: {
   onNewBot: () => void;
   onNewGroup: () => void;
-  onNewSection: () => void;
 }) {
   return (
     <SidebarHeader
@@ -207,10 +189,6 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
               <MenuItem onClick={onNewGroup}>
                 <UsersIcon />
                 New group
-              </MenuItem>
-              <MenuItem onClick={onNewSection}>
-                <FolderInputIcon />
-                New section
               </MenuItem>
             </MenuPopup>
           </Menu>
@@ -293,12 +271,6 @@ const dropVerbBadge: Record<RosterDropVerb, ReactNode> = {
       Unpin
     </>
   ),
-  move: (
-    <>
-      <FolderInputIcon aria-hidden className="size-3" />
-      Move
-    </>
-  ),
 };
 
 const ROSTER_DRAG_LABEL_HEIGHT = 24;
@@ -319,13 +291,11 @@ function RosterDragOverlayCard({
   activeId,
   bots,
   groups,
-  sections,
   dropVerb,
 }: {
   activeId: string;
   bots: readonly Bot[];
   groups: readonly Group[];
-  sections: readonly RosterSection[];
   dropVerb: RosterDropVerb | null;
 }) {
   const item = parseRosterEntryId(activeId);
@@ -357,17 +327,7 @@ function RosterDragOverlayCard({
       </div>
     );
   }
-  const sectionId = parseRosterSectionHeaderId(activeId);
-  const section = sections.find((candidate) => candidate.id === sectionId);
-  return section ? (
-    <div
-      data-testid="roster-drag-overlay"
-      className="flex h-8 w-full items-center gap-1.5 rounded-md border border-sidebar-border bg-sidebar px-2 text-xs font-medium text-sidebar-foreground shadow-xl select-none"
-    >
-      <ChevronDownIcon className="size-3.5" />
-      <span className="min-w-0 flex-1 truncate">{section.name}</span>
-    </div>
-  ) : null;
+  return null;
 }
 
 const BotRosterRow = memo(function BotRosterRow({
@@ -376,9 +336,7 @@ const BotRosterRow = memo(function BotRosterRow({
   isActive,
   onSelect,
   pinned,
-  sections,
   onPin,
-  onMove,
   canMoveUp,
   canMoveDown,
   onNudge,
@@ -389,9 +347,7 @@ const BotRosterRow = memo(function BotRosterRow({
   isActive: boolean;
   onSelect: (bot: Bot) => void;
   pinned: boolean;
-  sections: readonly RosterSection[];
   onPin: (pinned: boolean) => void;
-  onMove: (sectionId: string | null) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
@@ -471,20 +427,6 @@ const BotRosterRow = memo(function BotRosterRow({
               <ArrowDownIcon />
               Move down
             </MenuItem>
-            <MenuSub>
-              <MenuSubTrigger>
-                <FolderInputIcon />
-                Move to
-              </MenuSubTrigger>
-              <MenuSubPopup>
-                {sections.map((section) => (
-                  <MenuItem key={section.id} onClick={() => onMove(section.id)}>
-                    {section.name}
-                  </MenuItem>
-                ))}
-                <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
-              </MenuSubPopup>
-            </MenuSub>
           </MenuPopup>
         </Menu>
       </div>
@@ -538,8 +480,6 @@ function GroupRosterRow({
   onSelect,
   pinned,
   onPin,
-  sections,
-  onMove,
   canMoveUp,
   canMoveDown,
   onNudge,
@@ -551,8 +491,6 @@ function GroupRosterRow({
   onSelect: () => void;
   pinned: boolean;
   onPin: (pinned: boolean) => void;
-  sections: readonly RosterSection[];
-  onMove: (sectionId: string | null) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
@@ -613,20 +551,6 @@ function GroupRosterRow({
             <ArrowDownIcon />
             Move down
           </MenuItem>
-          <MenuSub>
-            <MenuSubTrigger>
-              <FolderInputIcon />
-              Move to
-            </MenuSubTrigger>
-            <MenuSubPopup>
-              {sections.map((section) => (
-                <MenuItem key={section.id} onClick={() => onMove(section.id)}>
-                  {section.name}
-                </MenuItem>
-              ))}
-              <MenuItem onClick={() => onMove(null)}>Unassigned</MenuItem>
-            </MenuSubPopup>
-          </MenuSub>
         </MenuPopup>
       </Menu>
     </li>
@@ -740,25 +664,17 @@ export default function BotRosterSidebar() {
     reportFailure: false,
   });
   const pathname = useLocation({ select: (location) => location.pathname });
-  const {
-    bots,
-    groups,
-    lastMessageByBotId,
-    selectedBotId,
-    sections,
-    pinnedItems,
-    unassignedItems,
-  } = useRosterStore(
-    useShallow((state) => ({
-      bots: state.bots,
-      groups: state.groups,
-      lastMessageByBotId: state.lastMessageByBotId,
-      selectedBotId: state.selectedBotId,
-      sections: state.sections,
-      pinnedItems: state.pinnedItems,
-      unassignedItems: state.unassignedItems,
-    })),
-  );
+  const { bots, groups, lastMessageByBotId, selectedBotId, pinnedItems, unassignedItems } =
+    useRosterStore(
+      useShallow((state) => ({
+        bots: state.bots,
+        groups: state.groups,
+        lastMessageByBotId: state.lastMessageByBotId,
+        selectedBotId: state.selectedBotId,
+        pinnedItems: state.pinnedItems,
+        unassignedItems: state.unassignedItems,
+      })),
+    );
   const [query, setQuery] = useState("");
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
@@ -797,27 +713,9 @@ export default function BotRosterSidebar() {
     [visibleBots, visibleGroups],
   );
   const visiblePinnedItems = useMemo(() => pinnedItems.filter(liveItem), [liveItem, pinnedItems]);
-  const visibleSectionLayouts = useMemo(
-    () =>
-      sections.map((section) => ({
-        id: section.id,
-        name: section.name,
-        collapsed: !searching && section.collapsed,
-        items: rosterSectionItems(section).filter(
-          (item) => liveItem(item) && !pinnedKeys.has(rosterItemKey(item)),
-        ),
-      })),
-    [liveItem, pinnedKeys, searching, sections],
-  );
-  const assignedKeys = useMemo(
-    () => new Set(sections.flatMap((section) => rosterSectionItems(section).map(rosterItemKey))),
-    [sections],
-  );
   const visibleUnassignedItems = useMemo(() => {
     const remaining = (item: RosterItemRef) =>
-      liveItem(item) &&
-      !pinnedKeys.has(rosterItemKey(item)) &&
-      !assignedKeys.has(rosterItemKey(item));
+      liveItem(item) && !pinnedKeys.has(rosterItemKey(item));
     if (unassignedItems.length > 0) {
       const ordered = unassignedItems.filter(remaining);
       const seen = new Set(ordered.map(rosterItemKey));
@@ -835,17 +733,16 @@ export default function BotRosterSidebar() {
       ...visibleGroups.map((group) => ({ kind: "group" as const, id: group.id })),
       ...visibleBots.map((bot) => ({ kind: "bot" as const, id: bot.id })),
     ].filter(remaining);
-  }, [assignedKeys, liveItem, pinnedKeys, unassignedItems, visibleBots, visibleGroups]);
+  }, [liveItem, pinnedKeys, unassignedItems, visibleBots, visibleGroups]);
   const rosterListItems = useMemo(
     () =>
       buildRosterListItems({
         pinnedItems: visiblePinnedItems,
-        sections: visibleSectionLayouts,
+        sections: [],
         unassignedItems: visibleUnassignedItems,
       }),
-    [visiblePinnedItems, visibleSectionLayouts, visibleUnassignedItems],
+    [visiblePinnedItems, visibleUnassignedItems],
   );
-  const firstSectionId = sections[0]?.id ?? null;
   const zoneByEntryId = useMemo(() => {
     const map = new Map<string, RosterZone>();
     for (const item of rosterListItems) {
@@ -855,7 +752,7 @@ export default function BotRosterSidebar() {
   }, [rosterListItems]);
   const [dragState, setDragState] = useState<{
     readonly activeId: string;
-    readonly from: RosterZone | "section";
+    readonly from: RosterZone;
     readonly targetZone: RosterZone | null;
     readonly activationY: number | null;
   } | null>(null);
@@ -891,14 +788,13 @@ export default function BotRosterSidebar() {
   const handleRosterDragStart = useCallback(
     (event: DragStartEvent) => {
       const activeId = String(event.active.id);
-      const sectionId = parseRosterSectionHeaderId(activeId);
-      const from = sectionId ? ("section" as const) : zoneByEntryId.get(activeId);
+      const from = zoneByEntryId.get(activeId);
       if (from === undefined) return;
       listMotionRef.current?.suspend();
       setDragState({
         activeId,
         from,
-        targetZone: from === "section" ? null : from,
+        targetZone: from,
         activationY:
           event.activatorEvent instanceof PointerEvent ? event.activatorEvent.clientY : null,
       });
@@ -908,9 +804,8 @@ export default function BotRosterSidebar() {
   const handleRosterDragOver = useCallback(
     (event: DragOverEvent) => {
       const activeId = String(event.active.id);
-      if (parseRosterSectionHeaderId(activeId)) return;
       const target = event.over
-        ? resolveRosterDropTarget(rosterListItems, activeId, String(event.over.id), firstSectionId)
+        ? resolveRosterDropTarget(rosterListItems, activeId, String(event.over.id), null)
         : null;
       setDragState((current) =>
         current === null || current.activeId !== activeId
@@ -918,26 +813,15 @@ export default function BotRosterSidebar() {
           : { ...current, targetZone: target?.zone ?? null },
       );
     },
-    [firstSectionId, rosterListItems],
+    [rosterListItems],
   );
   const handleRosterDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeId = String(event.active.id);
       const overId = event.over ? String(event.over.id) : null;
       if (overId === null) return;
-      const sectionId = parseRosterSectionHeaderId(activeId);
-      if (sectionId) {
-        useRosterStore.getState().applyRosterDrop(
-          planRosterSectionDrop({
-            sectionIds: sections.map((section) => section.id),
-            activeSectionId: sectionId,
-            overId,
-          }),
-        );
-        return;
-      }
       const from = zoneByEntryId.get(activeId);
-      const target = resolveRosterDropTarget(rosterListItems, activeId, overId, firstSectionId);
+      const target = resolveRosterDropTarget(rosterListItems, activeId, overId, null);
       if (from === undefined || target === null) return;
       useRosterStore.getState().applyRosterDrop(
         planRosterDrop({
@@ -948,7 +832,7 @@ export default function BotRosterSidebar() {
         }),
       );
     },
-    [firstSectionId, rosterListItems, sections, visiblePinnedItems, zoneByEntryId],
+    [rosterListItems, visiblePinnedItems, zoneByEntryId],
   );
   useEffect(() => {
     if (
@@ -979,38 +863,27 @@ export default function BotRosterSidebar() {
     () =>
       createRosterSortingStrategy({
         items: rosterListItems,
-        firstSectionId,
         boundaryLabelHeight: ROSTER_DRAG_LABEL_HEIGHT,
       }),
-    [firstSectionId, rosterListItems],
+    [rosterListItems],
   );
   const dndCollisionDetection = useMemo(
     () =>
       createRosterCollisionDetection(
         (id) => {
           if (dragState === null) return true;
-          if (dragState.from === "section") {
-            return (
-              parseRosterSectionHeaderId(id) !== null || id === rosterMarkerId("unassigned-header")
-            );
-          }
-          return (
-            resolveRosterDropTarget(rosterListItems, dragState.activeId, id, firstSectionId) !==
-            null
-          );
+          return resolveRosterDropTarget(rosterListItems, dragState.activeId, id, null) !== null;
         },
         {
           items: rosterListItems,
           activationY: dragState?.activationY ?? null,
-          firstSectionId,
         },
       ),
-    [dragState, firstSectionId, rosterListItems],
+    [dragState, rosterListItems],
   );
   const dragTargetZone = dragState?.targetZone ?? null;
   const dropVerbFor = (id: string): RosterDropVerb | null => {
-    if (dragState === null || dragState.activeId !== id || dragState.from === "section")
-      return null;
+    if (dragState === null || dragState.activeId !== id) return null;
     return resolveRosterDropVerb(dragState.from, dragTargetZone);
   };
   const activeDropVerb = dragState === null ? null : dropVerbFor(dragState.activeId);
@@ -1037,8 +910,8 @@ export default function BotRosterSidebar() {
   };
 
   const shortcutBots = useMemo(
-    () => orderRosterBotsForShortcuts(bots, pinnedItems, sections),
-    [bots, pinnedItems, sections],
+    () => orderRosterBotsForShortcuts(bots, pinnedItems, []),
+    [bots, pinnedItems],
   );
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
@@ -1130,11 +1003,6 @@ export default function BotRosterSidebar() {
     void navigate({ to: "/groups/$groupId", params: { groupId } });
   };
 
-  const handleNewSection = () => {
-    const name = window.prompt("Section name");
-    if (name) useRosterStore.getState().createSection(name);
-  };
-
   const handleSelectGroup = (group: Group) => {
     void navigate({ to: "/groups/$groupId", params: { groupId: group.id } });
   };
@@ -1151,11 +1019,7 @@ export default function BotRosterSidebar() {
 
   return (
     <>
-      <RosterSidebarHeader
-        onNewBot={handleNewBot}
-        onNewGroup={handleNewGroup}
-        onNewSection={handleNewSection}
-      />
+      <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
       <SidebarContent
         className="gap-0"
         fixedHeader={
@@ -1250,7 +1114,7 @@ export default function BotRosterSidebar() {
                         const pinned = pinnedKeys.has(rosterItemKey(item.item));
                         const zoneOrder = rosterItemsForZone(item.zone, {
                           pinnedItems: visiblePinnedItems,
-                          sections: visibleSectionLayouts,
+                          sections: [],
                           unassignedItems: visibleUnassignedItems,
                         });
                         const zoneIndex = zoneOrder.findIndex((candidate) =>
@@ -1281,16 +1145,10 @@ export default function BotRosterSidebar() {
                                         isActive={!groupRouteActive && selectedBotId === bot.id}
                                         onSelect={handleSelect}
                                         pinned={pinned}
-                                        sections={sections}
                                         onPin={(nextPinned) =>
                                           useRosterStore
                                             .getState()
                                             .setItemPinned({ kind: "bot", id: bot.id }, nextPinned)
-                                        }
-                                        onMove={(sectionId) =>
-                                          useRosterStore
-                                            .getState()
-                                            .moveBotToSection(bot.id, sectionId)
                                         }
                                         canMoveUp={canMoveUp}
                                         canMoveDown={canMoveDown}
@@ -1311,7 +1169,6 @@ export default function BotRosterSidebar() {
                                         isActive={pathname === `/groups/${group.id}`}
                                         onSelect={() => handleSelectGroup(group)}
                                         pinned={pinned}
-                                        sections={sections}
                                         onPin={(nextPinned) =>
                                           useRosterStore
                                             .getState()
@@ -1319,11 +1176,6 @@ export default function BotRosterSidebar() {
                                               { kind: "group", id: group.id },
                                               nextPinned,
                                             )
-                                        }
-                                        onMove={(sectionId) =>
-                                          useRosterStore
-                                            .getState()
-                                            .moveGroupToSection(group.id, sectionId)
                                         }
                                         canMoveUp={canMoveUp}
                                         canMoveDown={canMoveDown}
@@ -1354,7 +1206,7 @@ export default function BotRosterSidebar() {
                             <RosterDragBoundary
                               key="pinned-divider"
                               marker="pinned-divider"
-                              label={sections[0]?.name ?? "Unassigned"}
+                              label="Bots"
                               visible={dragging}
                               isDropTarget={dragTargetZone !== null && dragTargetZone !== "pinned"}
                             />
@@ -1375,7 +1227,7 @@ export default function BotRosterSidebar() {
                                 )}
                               >
                                 <ChevronDownIcon className="size-3.5" />
-                                <span>Unassigned</span>
+                                <span>Bots</span>
                                 <span className="tabular-nums">
                                   {visibleUnassignedItems.length}
                                 </span>
@@ -1396,7 +1248,7 @@ export default function BotRosterSidebar() {
                             <RosterSectionPlaceholder
                               key="unassigned-placeholder"
                               marker="unassigned-placeholder"
-                              label="Unassigned"
+                              label="Bots"
                               showHint={
                                 dragging &&
                                 (visibleUnassignedItems.length === 0 ||
@@ -1408,141 +1260,8 @@ export default function BotRosterSidebar() {
                               isDropTarget={dragTargetZone === "unassigned"}
                             />
                           );
-                        default: {
-                          if (typeof item.marker !== "object") return null;
-                          const marker = item.marker;
-                          if (marker.kind === "section-header") {
-                            const section = sections.find(
-                              (candidate) => candidate.id === marker.sectionId,
-                            );
-                            if (!section) return null;
-                            const layout = visibleSectionLayouts.find(
-                              (candidate) => candidate.id === section.id,
-                            );
-                            const collapsed = layout?.collapsed ?? section.collapsed;
-                            const count = layout?.items.length ?? 0;
-                            const zone = { sectionId: section.id };
-                            const sectionIndex = sections.findIndex(
-                              (candidate) => candidate.id === section.id,
-                            );
-                            return (
-                              <SortableRosterMarker
-                                key={rosterMarkerId(item.marker)}
-                                marker={item.marker}
-                                draggable={!searching}
-                                data-testid="roster-section-header"
-                                className="relative"
-                              >
-                                <div
-                                  className="relative flex h-8 items-center rounded-md hover:bg-sidebar-row-hover"
-                                  onContextMenu={(event) => {
-                                    event.preventDefault();
-                                    event.currentTarget
-                                      .querySelector<HTMLButtonElement>("[data-section-actions]")
-                                      ?.click();
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    aria-expanded={!collapsed}
-                                    onClick={() =>
-                                      useRosterStore.getState().toggleSection(section.id)
-                                    }
-                                    className={cn(
-                                      "flex min-w-0 flex-1 cursor-grab items-center gap-1.5 px-2 text-left text-xs font-medium text-sidebar-muted-foreground active:cursor-grabbing",
-                                      rosterZonesEqual(dragTargetZone ?? "pinned", zone) &&
-                                        "text-primary",
-                                    )}
-                                  >
-                                    {collapsed ? (
-                                      <ChevronRightIcon className="size-3.5" />
-                                    ) : (
-                                      <ChevronDownIcon className="size-3.5" />
-                                    )}
-                                    <span className="truncate">{section.name}</span>
-                                    <span className="tabular-nums">{count}</span>
-                                  </button>
-                                  <Menu>
-                                    <MenuTrigger
-                                      render={
-                                        <button
-                                          type="button"
-                                          data-section-actions
-                                          aria-label={`Actions for ${section.name}`}
-                                          className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
-                                        />
-                                      }
-                                    />
-                                    <MenuPopup align="end">
-                                      <MenuItem
-                                        disabled={searching || sectionIndex <= 0}
-                                        onClick={() =>
-                                          useRosterStore
-                                            .getState()
-                                            .reorderSections(sectionIndex, sectionIndex - 1)
-                                        }
-                                      >
-                                        <ArrowUpIcon />
-                                        Move up
-                                      </MenuItem>
-                                      <MenuItem
-                                        disabled={searching || sectionIndex >= sections.length - 1}
-                                        onClick={() =>
-                                          useRosterStore
-                                            .getState()
-                                            .reorderSections(sectionIndex, sectionIndex + 1)
-                                        }
-                                      >
-                                        <ArrowDownIcon />
-                                        Move down
-                                      </MenuItem>
-                                      <MenuItem
-                                        variant="destructive"
-                                        onClick={() =>
-                                          useRosterStore.getState().deleteSection(section.id)
-                                        }
-                                      >
-                                        <Trash2Icon />
-                                        Delete section
-                                      </MenuItem>
-                                    </MenuPopup>
-                                  </Menu>
-                                </div>
-                              </SortableRosterMarker>
-                            );
-                          }
-                          const zone = { sectionId: marker.sectionId };
-                          const layout = visibleSectionLayouts.find(
-                            (candidate) => candidate.id === marker.sectionId,
-                          );
-                          const activeEntry = dragState && parseRosterEntryId(dragState.activeId);
-                          return (
-                            <RosterSectionPlaceholder
-                              key={rosterMarkerId(item.marker)}
-                              marker={item.marker}
-                              label={layout?.name ?? "Section"}
-                              showHint={
-                                dragging &&
-                                (layout?.items.length === 0 ||
-                                  layout?.collapsed === true ||
-                                  (activeEntry !== null &&
-                                    dragState?.from !== "section" &&
-                                    dragState !== null &&
-                                    rosterZonesEqual(dragState.from, zone) &&
-                                    !rosterZoneHasVisibleEntries(
-                                      rosterListItems,
-                                      zone,
-                                      activeEntry ?? undefined,
-                                    ) &&
-                                    dragTargetZone !== null &&
-                                    !rosterZonesEqual(dragTargetZone, zone)))
-                              }
-                              isDropTarget={
-                                dragTargetZone !== null && rosterZonesEqual(dragTargetZone, zone)
-                              }
-                            />
-                          );
-                        }
+                        default:
+                          return null;
                       }
                     })}
                   </ul>
@@ -1559,7 +1278,6 @@ export default function BotRosterSidebar() {
                             activeId={dragState.activeId}
                             bots={bots}
                             groups={groups}
-                            sections={sections}
                             dropVerb={activeDropVerb}
                           />
                         ) : null}

@@ -599,7 +599,7 @@ export function resolveRosterDropTarget(
   };
 }
 
-export type RosterDropVerb = "pin" | "unpin" | "move";
+export type RosterDropVerb = "pin" | "unpin";
 
 export function resolveRosterDropVerb(
   from: RosterZone,
@@ -608,7 +608,7 @@ export function resolveRosterDropVerb(
   if (to === null || rosterZonesEqual(from, to)) return null;
   if (to === "pinned") return "pin";
   if (from === "pinned") return "unpin";
-  return "move";
+  return null;
 }
 
 export type RosterDropPlan =

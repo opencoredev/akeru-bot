@@ -611,7 +611,7 @@ describe("roster drag drop planning", () => {
       unpin: true,
     });
     expect(resolveRosterDropVerb("pinned", "unassigned")).toBe("unpin");
-    expect(resolveRosterDropVerb({ sectionId: "news" }, "unassigned")).toBe("move");
+    expect(resolveRosterDropVerb({ sectionId: "news" }, "unassigned")).toBeNull();
   });
 
   it("keeps a collapsed or emptied section droppable after its last item leaves", () => {

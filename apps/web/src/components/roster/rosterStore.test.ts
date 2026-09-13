@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { reorderVisibleRosterBots, useRosterStore } from "./rosterStore";
+import { flattenPersistedSections, reorderVisibleRosterBots, useRosterStore } from "./rosterStore";
 import type { Bot, Group } from "./types";
 
 function bot(id: string, archivedAt: string | null = null): Bot {
@@ -45,7 +45,6 @@ beforeEach(() => {
     lastMessageByBotId: {},
     selectedBotId: null,
     chatPathByBotId: {},
-    sections: [],
     pinnedItems: [],
     unassignedItems: [],
     environmentId: null,
@@ -59,7 +58,6 @@ afterEach(() => {
     lastMessageByBotId: initialState.lastMessageByBotId,
     selectedBotId: initialState.selectedBotId,
     chatPathByBotId: initialState.chatPathByBotId,
-    sections: initialState.sections,
     pinnedItems: initialState.pinnedItems,
     unassignedItems: initialState.unassignedItems,
     environmentId: initialState.environmentId,
@@ -133,51 +131,7 @@ describe("bot order", () => {
   });
 });
 
-describe("roster sections and pins", () => {
-  it("moves a bot into a section without changing group or bot identity", () => {
-    const bots = [bot("one"), bot("two")];
-    useRosterStore.setState({
-      bots,
-      sections: [{ id: "news", name: "News", botIds: [], collapsed: false }],
-    });
-
-    useRosterStore.getState().moveBotToSection("one", "news");
-
-    expect(useRosterStore.getState().sections[0]?.botIds).toEqual(["one"]);
-    expect(useRosterStore.getState().bots).toEqual(bots);
-  });
-
-  it("moves a bot between sections and back to unassigned", () => {
-    useRosterStore.setState({
-      bots: [bot("one")],
-      sections: [
-        { id: "first", name: "First", botIds: ["one"], collapsed: false },
-        { id: "second", name: "Second", botIds: [], collapsed: false },
-      ],
-    });
-
-    useRosterStore.getState().moveBotToSection("one", "second");
-    expect(useRosterStore.getState().sections.map((section) => section.botIds)).toEqual([
-      [],
-      ["one"],
-    ]);
-
-    useRosterStore.getState().moveBotToSection("one", null);
-    expect(useRosterStore.getState().sections.map((section) => section.botIds)).toEqual([[], []]);
-  });
-
-  it("reorders bots inside Unassigned", () => {
-    useRosterStore.setState({ bots: [bot("one"), bot("two"), bot("three")] });
-
-    useRosterStore.getState().moveBotToSection("three", null, 0);
-
-    expect(useRosterStore.getState().bots.map((entry) => entry.id)).toEqual([
-      "three",
-      "one",
-      "two",
-    ]);
-  });
-
+describe("roster pins", () => {
   it("pins bots and groups as separate quick-launch items", () => {
     useRosterStore.getState().setItemPinned({ kind: "bot", id: "one" }, true);
     useRosterStore.getState().setItemPinned({ kind: "group", id: "crew" }, true);
@@ -186,140 +140,35 @@ describe("roster sections and pins", () => {
     expect(useRosterStore.getState().pinnedItems).toEqual([{ kind: "group", id: "crew" }]);
   });
 
-  it("moves a group between a section and Unassigned", () => {
-    useRosterStore.setState({
-      groups: [group("crew")],
-      sections: [
-        {
-          id: "launch",
-          name: "Launch",
-          botIds: [],
-          groupIds: [],
-          collapsed: false,
-        },
-      ],
-    });
-
-    useRosterStore.getState().moveGroupToSection("crew", "launch");
-    expect(useRosterStore.getState().sections[0]?.groupIds).toEqual(["crew"]);
-
-    useRosterStore.getState().moveGroupToSection("crew", null);
-    expect(useRosterStore.getState().sections[0]?.groupIds).toEqual([]);
-  });
-
-  it("reorders sections and persists collapsed state", () => {
-    useRosterStore.setState({
-      sections: [
-        { id: "first", name: "First", botIds: [], collapsed: false },
-        { id: "second", name: "Second", botIds: [], collapsed: false },
-      ],
-    });
-
-    useRosterStore.getState().toggleSection("first");
-    useRosterStore.getState().reorderSections(0, 1);
-
-    expect(
-      useRosterStore.getState().sections.map(({ id, collapsed }) => ({ id, collapsed })),
-    ).toEqual([
-      { id: "second", collapsed: false },
-      { id: "first", collapsed: true },
-    ]);
-  });
-
-  it("deletes a section without deleting its bots", () => {
-    const bots = [bot("one"), bot("two")];
-    useRosterStore.setState({
-      bots,
-      sections: [{ id: "old", name: "Old", botIds: ["one"], collapsed: false }],
-    });
-
-    useRosterStore.getState().deleteSection("old");
-
-    expect(useRosterStore.getState().sections).toEqual([]);
-    expect(useRosterStore.getState().bots).toEqual(bots);
-  });
-
-  it("does not erase another environment's layout", () => {
-    useRosterStore.setState({
-      environmentId: "env-one",
-      bots: [bot("one")],
-      sections: [{ id: "work", name: "Work", botIds: ["one"], collapsed: false }],
-    });
-    useRosterStore.getState().toggleSection("work");
-
-    useRosterStore.getState().replaceRoster({
-      environmentId: "env-two",
-      bots: [bot("two")],
-      groups: [],
-    });
-    expect(useRosterStore.getState().sections).toEqual([]);
-    useRosterStore.getState().replaceRoster({
-      environmentId: "env-one",
-      bots: [bot("one")],
-      groups: [],
-    });
-
-    expect(useRosterStore.getState().sections).toEqual([
-      {
-        id: "work",
-        name: "Work",
-        botIds: ["one"],
-        groupIds: [],
-        items: [{ kind: "bot", id: "one" }],
-        collapsed: true,
-      },
-    ]);
-  });
-
-  it("applies pin, unpin, and mixed-section drops without changing group membership", () => {
+  it("unpins a bot into the main list without changing group membership", () => {
     const crew = group("crew");
     useRosterStore.setState({
       bots: [bot("akeru"), bot("mori")],
       groups: [crew],
-      sections: [
-        {
-          id: "news",
-          name: "News",
-          botIds: ["akeru"],
-          groupIds: ["crew"],
-          items: [
-            { kind: "group", id: "crew" },
-            { kind: "bot", id: "akeru" },
-          ],
-          collapsed: false,
-        },
-      ],
+      pinnedItems: [{ kind: "bot", id: "mori" }],
+      unassignedItems: [{ kind: "bot", id: "akeru" }],
     });
-
-    useRosterStore.getState().applyRosterDrop({
-      kind: "pin",
-      item: { kind: "bot", id: "mori" },
-      order: [{ kind: "bot", id: "mori" }],
-    });
-    expect(useRosterStore.getState().pinnedItems).toEqual([{ kind: "bot", id: "mori" }]);
-    expect(useRosterStore.getState().groups).toEqual([crew]);
 
     useRosterStore.getState().applyRosterDrop({
       kind: "move",
       item: { kind: "bot", id: "mori" },
-      zone: { sectionId: "news" },
+      zone: "unassigned",
       order: [
-        { kind: "group", id: "crew" },
-        { kind: "bot", id: "akeru" },
         { kind: "bot", id: "mori" },
+        { kind: "bot", id: "akeru" },
       ],
       unpin: true,
     });
+
     expect(useRosterStore.getState().pinnedItems).toEqual([]);
-    expect(useRosterStore.getState().sections[0]?.items).toEqual([
-      { kind: "group", id: "crew" },
-      { kind: "bot", id: "akeru" },
-      { kind: "bot", id: "mori" },
+    expect(useRosterStore.getState().unassignedItems.map((item) => item.id)).toEqual([
+      "mori",
+      "akeru",
     ]);
-    expect(useRosterStore.getState().groups[0]?.members).toEqual([]);
+    expect(useRosterStore.getState().groups).toEqual([crew]);
   });
 
-  it("nudges unassigned bots with Move up without changing group membership", () => {
+  it("nudges bots in the main list without changing group membership", () => {
     useRosterStore.setState({
       bots: [bot("akeru"), bot("mori"), bot("scout")],
       groups: [group("crew")],
@@ -363,40 +212,32 @@ describe("roster sections and pins", () => {
     ]);
   });
 
-  it("nudges pinned and section items without crossing zones", () => {
-    useRosterStore.setState({
-      bots: [bot("akeru"), bot("mori"), bot("scout")],
-      groups: [group("crew")],
-      pinnedItems: [
-        { kind: "bot", id: "akeru" },
-        { kind: "group", id: "crew" },
-      ],
+  it("flattens legacy sections into the main list in their saved order", () => {
+    const migrated = flattenPersistedSections({
       sections: [
         {
-          id: "news",
-          name: "News",
-          botIds: ["mori", "scout"],
-          groupIds: [],
+          id: "first",
+          name: "First",
+          botIds: ["mori"],
+          groupIds: ["crew"],
           items: [
+            { kind: "group", id: "crew" },
             { kind: "bot", id: "mori" },
-            { kind: "bot", id: "scout" },
           ],
-          collapsed: false,
+          collapsed: true,
         },
+      ],
+      unassignedItems: [
+        { kind: "bot", id: "mori" },
+        { kind: "bot", id: "akeru" },
       ],
     });
 
-    useRosterStore.getState().nudgeRosterItem({ kind: "group", id: "crew" }, -1);
-    expect(useRosterStore.getState().pinnedItems.map((item) => item.id)).toEqual(["crew", "akeru"]);
-
-    useRosterStore.getState().nudgeRosterItem({ kind: "bot", id: "scout" }, -1);
-    expect(useRosterStore.getState().sections[0]?.items?.map((item) => item.id)).toEqual([
-      "scout",
-      "mori",
+    expect(migrated?.sections).toEqual([]);
+    expect(migrated?.unassignedItems).toEqual([
+      { kind: "group", id: "crew" },
+      { kind: "bot", id: "mori" },
+      { kind: "bot", id: "akeru" },
     ]);
-    expect(useRosterStore.getState().pinnedItems.map((item) => item.id)).toEqual(["crew", "akeru"]);
-
-    useRosterStore.getState().nudgeRosterItem({ kind: "group", id: "crew" }, -1);
-    expect(useRosterStore.getState().pinnedItems.map((item) => item.id)).toEqual(["crew", "akeru"]);
   });
 });
