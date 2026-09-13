@@ -9,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 import { createServerEnvironmentAtoms } from "@t3tools/client-runtime/state/server";
 import { createEnvironmentServerConfigsAtom } from "@t3tools/client-runtime/state/shell";
+import { filterProvidersBySubscriptionConnection } from "@t3tools/client-runtime/provider-auth";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -75,10 +76,16 @@ export const primaryServerSettingsAtom = Atom.make(
   (get): ServerSettings => get(primaryServerConfigAtom)?.settings ?? DEFAULT_SERVER_SETTINGS,
 ).pipe(Atom.withLabel("web-primary-server-settings"));
 
-export const primaryServerProvidersAtom = Atom.make(
-  (get): ReadonlyArray<ServerProvider> =>
-    get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS,
-).pipe(Atom.withLabel("web-primary-server-providers"));
+export const primaryServerProvidersAtom = Atom.make((get): ReadonlyArray<ServerProvider> => {
+  const environmentId = get(primaryEnvironmentIdAtom);
+  const providers = get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS;
+  if (environmentId === null) return EMPTY_SERVER_PROVIDERS;
+  const statuses = Option.getOrElse(
+    AsyncResult.value(get(serverEnvironment.subscriptionAuth({ environmentId, input: {} }))),
+    () => ({ providers: [], access: [], inbox: [] }),
+  );
+  return filterProvidersBySubscriptionConnection(providers, statuses.providers);
+}).pipe(Atom.withLabel("web-primary-server-providers"));
 
 export const primaryServerKeybindingsAtom = Atom.make(
   (get): ServerConfig["keybindings"] =>

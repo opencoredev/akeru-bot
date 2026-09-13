@@ -2,14 +2,31 @@
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  defaultInstanceIdForDriver,
+  ProviderDriverKind,
+  type SubscriptionProviderStatus,
+} from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { SubscriptionAuthService } from "./service.ts";
 import {
   mergeSubscriptionInstanceEnvironment,
+  subscriptionProviderSettingsPatch,
   subscriptionRequestUrl,
   subscriptionRuntimeEnvironment,
   withExplicitEnvironmentKeys,
 } from "./runtime.ts";
+
+const subscriptionStatus = (
+  provider: SubscriptionProviderStatus["provider"],
+  connected: boolean,
+): SubscriptionProviderStatus => ({
+  provider,
+  connected,
+  dependentBots: [],
+  dependentRoutines: [],
+});
 
 const directories: string[] = [];
 function fixture() {
@@ -23,6 +40,49 @@ afterEach(() => {
 });
 
 describe("subscription runtime credentials", () => {
+  it("aligns default provider enablement with Akeru subscription connections", () => {
+    expect(
+      subscriptionProviderSettingsPatch(DEFAULT_SERVER_SETTINGS, [
+        subscriptionStatus("openai-codex", false),
+        subscriptionStatus("anthropic", false),
+        subscriptionStatus("xai", true),
+        subscriptionStatus("kimi-for-coding", false),
+        subscriptionStatus("opencode-go", false),
+      ]),
+    ).toEqual({
+      providers: {
+        codex: { enabled: false },
+        claudeAgent: { enabled: false },
+        grok: { enabled: true },
+        kimi: { enabled: false },
+        opencodeGo: { enabled: false },
+      },
+    });
+  });
+
+  it("leaves explicitly configured default instances under instance control", () => {
+    const grok = ProviderDriverKind.make("grok");
+    const instanceId = defaultInstanceIdForDriver(grok);
+    expect(
+      subscriptionProviderSettingsPatch(
+        {
+          ...DEFAULT_SERVER_SETTINGS,
+          providerInstances: {
+            [instanceId]: { driver: grok, enabled: false, config: {} },
+          },
+        },
+        [subscriptionStatus("xai", true)],
+      ),
+    ).toEqual({
+      providers: {
+        codex: { enabled: false },
+        claudeAgent: { enabled: false },
+        kimi: { enabled: false },
+        opencodeGo: { enabled: false },
+      },
+    });
+  });
+
   it.each([
     ["anthropic", "ANTHROPIC_API_KEY", "instance-key"],
     ["anthropic", "ANTHROPIC_API_KEY", ""],

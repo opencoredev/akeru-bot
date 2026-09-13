@@ -1,4 +1,6 @@
 import {
+  defaultInstanceIdForDriver,
+  type ServerProvider,
   SubscriptionBaseUrl,
   type SubscriptionAuthStartInput,
   type SubscriptionProviderId,
@@ -45,7 +47,35 @@ export function apiKeyStartInput(
 
 export function providerConnectionLabel(status: SubscriptionProviderStatus): string {
   if (!status.connected) return "Not connected";
-  const mode = providerUsesApiKey(status) ? "API key saved" : "OAuth connected";
-  const health = status.health?.replaceAll("-", " ");
-  return health ? `${mode} · ${health}` : mode;
+  return providerUsesApiKey(status) ? "API key saved" : "OAuth connected";
+}
+
+const SUBSCRIPTION_PROVIDER_BY_DRIVER: Readonly<Record<string, SubscriptionProviderId>> = {
+  codex: "openai-codex",
+  claudeAgent: "anthropic",
+  cursor: "cursor",
+  grok: "xai",
+  kimi: "kimi-for-coding",
+  opencodeGo: "opencode-go",
+};
+
+/**
+ * Keep default built-in provider instances aligned with the connections the
+ * user made inside Akeru. Host CLI credentials are intentionally not enough
+ * to make an unconnected account appear in model pickers. Custom instances
+ * remain governed by their own configured environment and provider probe.
+ */
+export function filterProvidersBySubscriptionConnection(
+  providers: ReadonlyArray<ServerProvider>,
+  statuses: ReadonlyArray<SubscriptionProviderStatus>,
+): ReadonlyArray<ServerProvider> {
+  const connected = new Set(
+    statuses.filter((status) => status.connected).map((status) => status.provider),
+  );
+  return providers.filter((provider) => {
+    const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
+    if (!subscriptionProvider) return true;
+    if (provider.instanceId !== defaultInstanceIdForDriver(provider.driver)) return true;
+    return connected.has(subscriptionProvider);
+  });
 }
