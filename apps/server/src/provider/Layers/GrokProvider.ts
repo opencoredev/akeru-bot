@@ -161,10 +161,12 @@ export function parseGrokModelsCliOutput(output: string): GrokModelsCliOutput {
   const models: ServerProviderModel[] = [];
   for (const line of output.split(/\r?\n/)) {
     const bullet = line.match(/^\s*[*-]\s+(\S+)(.*)$/);
-    if (!bullet?.[1]) {
+    const plain = line.trim();
+    const rawSlug = bullet?.[1] ?? (/^[a-z0-9][a-z0-9._/-]*$/i.test(plain) ? plain : null);
+    if (rawSlug === null) {
       continue;
     }
-    const slug = resolveGrokAcpBaseModelId(bullet[1]);
+    const slug = resolveGrokAcpBaseModelId(rawSlug);
     if (seen.has(slug)) {
       continue;
     }
@@ -173,7 +175,7 @@ export function parseGrokModelsCliOutput(output: string): GrokModelsCliOutput {
       slug,
       name: displayNameFromGrokModelSlug(slug),
       isCustom: false,
-      ...(/\(default\)/i.test(bullet[2] ?? "") ? { isDefault: true } : {}),
+      ...(/\(default\)/i.test(bullet?.[2] ?? "") ? { isDefault: true } : {}),
       capabilities: EMPTY_CAPABILITIES,
     });
   }

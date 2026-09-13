@@ -7,7 +7,7 @@ import {
   groupQueuedThreadMessages,
   type QueuedThreadMessage,
 } from "./thread-outbox-model";
-import type { ThreadOutboxStorage } from "./thread-outbox-storage";
+import type { ThreadOutboxLoadResult, ThreadOutboxStorage } from "./thread-outbox-storage";
 
 export class ThreadOutboxManagerError extends Schema.TaggedErrorClass<ThreadOutboxManagerError>()(
   "ThreadOutboxManagerError",
@@ -46,7 +46,7 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
     ((message: string, error: unknown) => {
       console.warn(message, error);
     });
-  let loadPromise: Promise<void> | null = null;
+  let loadPromise: Promise<boolean> | null = null;
   let mutationQueue: Promise<void> = Promise.resolve();
 
   const serialize = <A>(mutation: () => Promise<A>): Promise<A> => {
@@ -58,6 +58,28 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
     return result;
   };
 
+  const reportUnreadOutboxRecords = (persisted: ThreadOutboxLoadResult): void => {
+    for (const unread of persisted.unreadRecords) {
+      warn("[thread-outbox] left unreadable persisted message on disk", unread);
+    }
+  };
+
+  const requireCompleteOutboxLoad = (
+    persisted: ThreadOutboxLoadResult,
+    environmentId: EnvironmentId,
+  ): ReadonlyArray<QueuedThreadMessage> => {
+    if (persisted.unreadRecords.length > 0) {
+      throw new ThreadOutboxManagerError({
+        operation: "clear-environment-load",
+        environmentId,
+        threadId: null,
+        messageId: null,
+        cause: persisted.unreadRecords,
+      });
+    }
+    return persisted.messages;
+  };
+
   const currentMessages = (): ReadonlyArray<QueuedThreadMessage> =>
     flattenQueuedThreadMessages(options.registry.get(queuedMessagesByThreadKeyAtom));
 
@@ -65,13 +87,21 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
     options.registry.set(queuedMessagesByThreadKeyAtom, groupQueuedThreadMessages(messages));
   };
 
-  const load = (): Promise<void> => {
+  const load = (): Promise<boolean> => {
     if (loadPromise !== null) {
       return loadPromise;
     }
     loadPromise = serialize(async () => {
-      const persistedMessages = await options.storage.load();
-      setMessages([...persistedMessages, ...currentMessages()]);
+      const persisted = await options.storage.load();
+      reportUnreadOutboxRecords(persisted);
+      setMessages([...persisted.messages, ...currentMessages()]);
+      // A mixed load is not complete. Drop the cache so a later load, such as
+      // drain after reconnect, can hydrate a file that becomes readable.
+      if (persisted.unreadRecords.length > 0) {
+        loadPromise = null;
+        return false;
+      }
+      return true;
     }).catch((cause) => {
       loadPromise = null;
       warn(
@@ -84,6 +114,7 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
           cause,
         }),
       );
+      return false;
     });
     return loadPromise;
   };
@@ -173,20 +204,17 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
   const clearEnvironment = (environmentId: EnvironmentId): Promise<void> =>
     serialize(async () => {
       const persisted = await options.storage.load().catch((cause) => {
-        warn(
-          "[thread-outbox] failed to load messages while clearing environment",
-          new ThreadOutboxManagerError({
-            operation: "clear-environment-load",
-            environmentId,
-            threadId: null,
-            messageId: null,
-            cause,
-          }),
-        );
-        return [];
+        throw new ThreadOutboxManagerError({
+          operation: "clear-environment-load",
+          environmentId,
+          threadId: null,
+          messageId: null,
+          cause,
+        });
       });
+      const readable = requireCompleteOutboxLoad(persisted, environmentId);
       const allMessages = flattenQueuedThreadMessages(
-        groupQueuedThreadMessages([...persisted, ...currentMessages()]),
+        groupQueuedThreadMessages([...readable, ...currentMessages()]),
       );
       const removedMessageIds = new Set<MessageId>();
 

@@ -133,6 +133,13 @@ Platform layers adapt operating-system capabilities. They do not implement
 connection policy. `EnvironmentOwnedDataCleanup` is part of this contract: on
 removal the registry clears its cache and calls the platform implementation, so
 web clears composer drafts and mobile clears drafts plus the thread outbox.
+Mobile draft loads fail closed: a read or decode error does not look like an
+empty store. Outbox hydration publishes readable queued messages and leaves
+unreadable files on disk with diagnostics. Environment cleanup still stops if
+any outbox record cannot be read, so unread attachment owners are not deleted.
+Queued delivery retries tagged transport failures (`RpcClientError`, disconnected
+or unregistered environments) and only restores a pending task after a server
+command or authorization rejection.
 
 ## Source Boundaries
 
