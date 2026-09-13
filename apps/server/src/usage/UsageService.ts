@@ -26,12 +26,15 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { ServerConfig } from "../config.ts";
@@ -61,6 +64,8 @@ const LITELLM_RATES_URL =
 
 /** Rates move rarely; a day-old table keeps the page working offline. */
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
+const RATES_FAILURE_BACKOFF_MS = 60_000;
+const RATES_MAX_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
 
 /**
  * Files are filtered by mtime before opening. The slack covers a session whose
@@ -132,6 +137,30 @@ export const layerTestWithRates = (rateTable: RateTable) =>
 
 export const layerTest = layerTestWithRates(new Map());
 
+// The service scope owns shared work; disconnecting one caller only cancels its wait.
+const singleFlight = <A, E>(scope: Scope.Scope) => {
+  const pending = new Map<string, Deferred.Deferred<A, E>>();
+  const acquire = Effect.fnUntraced(function* (key: string, work: Effect.Effect<A, E>) {
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const shared = Deferred.makeUnsafe<A, E>();
+    pending.set(key, shared);
+    yield* Deferred.into(
+      work.pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            pending.delete(key);
+          }),
+        ),
+      ),
+      shared,
+    ).pipe(Effect.forkIn(scope));
+    return shared;
+  }, Effect.uninterruptible);
+  return (key: string, work: Effect.Effect<A, E>) =>
+    acquire(key, work).pipe(Effect.flatMap(Deferred.await));
+};
+
 export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -140,8 +169,14 @@ export const make = Effect.gen(function* () {
   const httpClient = yield* HttpClient.HttpClient;
   const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
 
+  const scope = yield* Scope.Scope;
   const fileCache: ScanCache = new Map();
-  let cacheDirty = false;
+  const shareSummary = singleFlight<UsageSummary, UsageReadError>(scope);
+  const shareFile = singleFlight<readonly UsageRecord[], never>(scope);
+  const shareRates = singleFlight<void, never>(scope);
+  const persistLock = yield* Semaphore.make(1);
+  let cacheRevision = 0;
+  let persistedRevision = 0;
 
   const ratesCachePath = path.join(config.stateDir, "usage-model-rates.json");
   const scanCachePath = path.join(config.stateDir, "usage-scan-cache.json");
@@ -149,56 +184,87 @@ export const make = Effect.gen(function* () {
   let ratesFetchedAtMs: number | null = null;
   let ratesStatus: UsageSummary["pricing"]["status"] = "unavailable";
 
-  /**
-   * Loads the LiteLLM rate table, preferring a fresh copy and falling back to
-   * the on-disk snapshot. With neither, every model reports as unpriced rather
-   * than the page failing.
-   */
-  const ensureRates = Effect.fn("UsageService.ensureRates")(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    if (ratesFetchedAtMs !== null && now - ratesFetchedAtMs < RATES_TTL_MS) return;
+  let ratesNextAttemptAtMs = 0;
+  let ratesFailures = 0;
+  let ratesRefreshRunning = false;
 
-    if (ratesFetchedAtMs === null) {
+  const loadRates = yield* Effect.cached(
+    Effect.gen(function* () {
       const fromDisk = yield* fileSystem.readFileString(ratesCachePath).pipe(
-        Effect.flatMap((raw) => decodeRatesCache(raw)),
+        Effect.flatMap(decodeRatesCache),
         Effect.catchCause(() => Effect.succeed(null)),
       );
-      if (fromDisk !== null) {
-        const parsed = parseRateTable(fromDisk.document);
-        if (parsed.size > 0) {
-          rates = parsed;
-          ratesFetchedAtMs = fromDisk.fetchedAtMs;
-          ratesStatus = "cached";
-          if (now - fromDisk.fetchedAtMs < RATES_TTL_MS) return;
-        }
+      if (fromDisk === null) return;
+      const parsed = parseRateTable(fromDisk.document);
+      if (parsed.size > 0) {
+        rates = parsed;
+        ratesFetchedAtMs = fromDisk.fetchedAtMs;
+        ratesStatus = "cached";
       }
-    }
+    }),
+  );
 
-    const fetched = yield* httpClient.get(LITELLM_RATES_URL).pipe(
-      Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.flatMap((response) => response.json),
-      Effect.timeout(10_000),
-      Effect.catchCause(() => Effect.succeed(null)),
-    );
-    if (fetched === null) {
-      // The refresh failed; whatever we are serving is now past its TTL and
-      // must not keep claiming to be fresh.
-      if (rates.size > 0) ratesStatus = "cached";
-      return;
-    }
+  const refreshRates = yield* Effect.cachedWithTTL(
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      if (now < ratesNextAttemptAtMs) return;
+      if (ratesFetchedAtMs !== null && now - ratesFetchedAtMs < RATES_TTL_MS) return;
+      const fetched = yield* httpClient.get(LITELLM_RATES_URL).pipe(
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.flatMap((response) => response.json),
+        Effect.timeout(10_000),
+        Effect.catchCause(() => Effect.succeed(null)),
+      );
+      const parsed = parseRateTable(fetched);
+      const completedAt = yield* Clock.currentTimeMillis;
+      if (parsed.size === 0) {
+        ratesStatus = rates.size > 0 ? "cached" : "unavailable";
+        ratesNextAttemptAtMs =
+          completedAt +
+          Math.min(
+            RATES_MAX_FAILURE_BACKOFF_MS,
+            RATES_FAILURE_BACKOFF_MS * 2 ** Math.min(ratesFailures, 6),
+          );
+        ratesFailures += 1;
+        return;
+      }
+      rates = parsed;
+      ratesFetchedAtMs = completedAt;
+      ratesStatus = "fresh";
+      ratesFailures = 0;
+      ratesNextAttemptAtMs = 0;
+      yield* encodeRatesCache({ fetchedAtMs: completedAt, document: fetched }).pipe(
+        Effect.flatMap((serialized) => fileSystem.writeFileString(ratesCachePath, serialized)),
+        Effect.catchCause(() => Effect.void),
+      );
+    }),
+    0,
+  );
 
-    const parsed = parseRateTable(fetched);
-    if (parsed.size === 0) return;
-
-    rates = parsed;
-    ratesFetchedAtMs = now;
-    ratesStatus = "fresh";
-
-    yield* encodeRatesCache({ fetchedAtMs: now, document: fetched }).pipe(
-      Effect.flatMap((serialized) => fileSystem.writeFileString(ratesCachePath, serialized)),
-      Effect.catchCause(() => Effect.void),
-    );
-  });
+  // Cold readers share the fetch; stale readers keep working while one scoped refresh runs.
+  const ensureRates = Effect.fn("UsageService.ensureRates")(
+    function* () {
+      yield* loadRates;
+      const now = yield* Clock.currentTimeMillis;
+      if (ratesFetchedAtMs !== null && now - ratesFetchedAtMs < RATES_TTL_MS) return;
+      ratesStatus = rates.size > 0 ? "cached" : "unavailable";
+      if (now < ratesNextAttemptAtMs) return;
+      if (rates.size === 0) {
+        yield* refreshRates;
+      } else if (!ratesRefreshRunning) {
+        ratesRefreshRunning = true;
+        yield* refreshRates.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              ratesRefreshRunning = false;
+            }),
+          ),
+          Effect.forkIn(scope),
+        );
+      }
+    },
+    (effect) => shareRates("rates", effect),
+  );
 
   /**
    * Claude's config dir is the home itself when overridden, but a default
@@ -264,18 +330,18 @@ export const make = Effect.gen(function* () {
   );
 
   const persistScanCache = Effect.fn("UsageService.persistScanCache")(function* () {
-    if (!cacheDirty) return;
-    // Cleared only after the write lands, so a failed persist is retried on
-    // the next scan instead of leaving disk permanently stale.
+    if (cacheRevision === persistedRevision) return;
+    const revision = cacheRevision;
+    // Only acknowledge this revision; another scan can change the cache during the write.
     yield* encodeScanCacheFile(encodeScanCache(fileCache)).pipe(
       Effect.flatMap((serialized) => fileSystem.writeFileString(scanCachePath, serialized)),
       Effect.map(() => {
-        cacheDirty = false;
+        persistedRevision = revision;
       }),
       // A cache we cannot write is a slower next start, not a failed read.
       Effect.catchCause(() => Effect.void),
     );
-  });
+  }, persistLock.withPermit);
 
   /** Parses one transcript, reusing the cached result when it is unchanged. */
   const readFileRecords = (
@@ -284,31 +350,36 @@ export const make = Effect.gen(function* () {
     mtimeMs: number,
     provider: UsageProviderKind,
   ): Effect.Effect<readonly UsageRecord[]> =>
-    Effect.gen(function* () {
-      const cached = fileCache.get(filePath);
-      // Provider is part of the identity: if both providers were ever pointed
-      // at one directory, a hit parsed by the other parser must not be reused.
-      if (
-        cached &&
-        cached.size === size &&
-        cached.mtimeMs === mtimeMs &&
-        cached.provider === provider
-      ) {
-        return cached.records;
-      }
+    shareFile(
+      JSON.stringify([filePath, size, mtimeMs, provider]),
+      Effect.gen(function* () {
+        const cached = fileCache.get(filePath);
+        // Provider is part of the identity: if both providers were ever pointed
+        // at one directory, a hit parsed by the other parser must not be reused.
+        if (
+          cached &&
+          cached.size === size &&
+          cached.mtimeMs === mtimeMs &&
+          cached.provider === provider
+        ) {
+          return cached.records;
+        }
 
-      const parsed = yield* Effect.promise(() => readTranscriptRecords(filePath, provider));
-      // A read failure is not an empty transcript: caching it under this
-      // (size, mtime) would silently drop the file's usage until it changes.
-      if (parsed === null) return [];
-      // Stored already de-duplicated within the file, which is 99% of all
-      // duplicates. The aggregator still runs the cross-file dedupe pass.
-      const records = dedupeWithinFile(parsed);
+        const parsed = yield* Effect.promise(() =>
+          readTranscriptRecords(filePath, provider, { size, mtimeMs }),
+        );
+        // A read failure is not an empty transcript: caching it under this
+        // (size, mtime) would silently drop the file's usage until it changes.
+        if (parsed === null) return [];
+        // Stored already de-duplicated within the file, which is 99% of all
+        // duplicates. The aggregator still runs the cross-file dedupe pass.
+        const records = dedupeWithinFile(parsed);
 
-      fileCache.set(filePath, { size, mtimeMs, provider, records });
-      cacheDirty = true;
-      return records;
-    });
+        fileCache.set(filePath, { size, mtimeMs, provider, records });
+        cacheRevision += 1;
+        return records;
+      }),
+    );
 
   const priceStepUsage = Effect.fn("UsageService.priceStepUsage")(function* (
     input: PriceStepUsageInput,
@@ -367,6 +438,15 @@ export const make = Effect.gen(function* () {
     const windowStartMs =
       (hourlyWindow?.sinceTimeMs ?? DateTime.toEpochMillis(windowStart.value)) - MTIME_SLACK_MS;
 
+    const pricing = {
+      status: ratesStatus,
+      source: LITELLM_RATES_URL,
+      fetchedAt:
+        ratesFetchedAtMs === null
+          ? null
+          : DateTime.formatIso(DateTime.makeUnsafe(ratesFetchedAtMs)),
+      knownModels: rates.size,
+    };
     const aggregator = new UsageAggregator({
       timeZone: input.timeZone,
       sinceDay: input.sinceDay,
@@ -441,7 +521,7 @@ export const make = Effect.gen(function* () {
       windowStartMs,
       retentionCutoffMs: startedAtMs - CACHE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
     });
-    if (pruned > 0) cacheDirty = true;
+    if (pruned > 0) cacheRevision += 1;
     yield* persistScanCache();
 
     const aggregated = aggregator.finish();
@@ -461,20 +541,26 @@ export const make = Effect.gen(function* () {
       buckets: aggregated.buckets,
       sources,
       planLimits,
-      pricing: {
-        status: ratesStatus,
-        source: LITELLM_RATES_URL,
-        fetchedAt:
-          ratesFetchedAtMs === null
-            ? null
-            : DateTime.formatIso(DateTime.makeUnsafe(ratesFetchedAtMs)),
-        knownModels: rates.size,
-      },
+      pricing,
       scanDurationMs: Math.max(0, finishedAtMs - startedAtMs),
     } satisfies UsageSummary;
   });
 
-  return { readSummary, priceStepUsage } as const;
+  return {
+    readSummary: (input: UsageSummaryInput) =>
+      shareSummary(
+        JSON.stringify([
+          input.sinceDay,
+          input.untilDay,
+          input.timeZone,
+          input.resolution ?? "day",
+          input.sinceTime,
+          input.untilTime,
+        ]),
+        readSummary(input),
+      ),
+    priceStepUsage,
+  } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);

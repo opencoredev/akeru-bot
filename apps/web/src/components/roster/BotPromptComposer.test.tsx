@@ -147,6 +147,7 @@ describe("bot prompt composer", () => {
     expect(markup).toContain('readOnly=""');
     expect(markup).toContain('tabindex="-1"');
     expect(markup).toContain('aria-label="Send message"');
+    expect(markup).toContain('aria-label="Attach files"');
   });
 
   it("does not render model or reasoning controls", () => {

@@ -87,18 +87,19 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     setReplyTarget(null);
   }, [groupId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
+  const messages = visibleBotChatMessages(runtime.messages);
+  useReplyPlaybackThread({
+    environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
+    threadId: group ? runtime.linkedThreadRef?.threadId : null,
+    messages: group ? messages : [],
+    mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
+  });
+
   if (!group) return null;
   const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
   const boss = resolveAvailableGroupBoss(members, group.bossBotId);
   const working =
     runtime.sending || runtime.respondingRequestIds.length > 0 || presence === "working";
-  const messages = visibleBotChatMessages(runtime.messages);
-  useReplyPlaybackThread({
-    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
-    threadId: runtime.linkedThreadRef?.threadId,
-    messages,
-    mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
-  });
   const pendingApproval = approvalState.pendingApproval;
   const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
@@ -183,7 +184,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   return (
                     <div
                       key={message.id}
-                      className="max-w-[85%]"
+                      className="group/message max-w-[85%]"
                       data-testid="group-provider-message"
                     >
                       <div className="text-sm font-medium">Unavailable bot</div>
@@ -193,7 +194,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
-                      <div className="mt-1">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
                           {...(() => {
@@ -234,7 +235,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         text={message.text}
                         threadRef={runtime.linkedThreadRef ?? undefined}
                       />
-                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
                           {...(() => {
@@ -280,7 +281,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   className="group/message flex items-end justify-end gap-1"
                   data-testid="group-user-message"
                 >
-                  <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                  <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                     <MessageControls
                       align="end"
                       copyText={

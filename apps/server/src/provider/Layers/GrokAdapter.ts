@@ -275,7 +275,10 @@ export function grokTurnCompletionForPromptEpoch(input: {
     !superseded && input.emitTurnCompletion && input.incoming !== undefined
       ? input.incoming
       : input.stored;
-  const emit = input.remainingPrompts === 0 && input.emitTurnCompletion ? stored : undefined;
+  // The final drain may belong to a superseded prompt whose own settlement is
+  // suppressed. It must still flush a terminal result stored by the current
+  // epoch, or the merged turn remains running forever.
+  const emit = input.remainingPrompts === 0 ? stored : undefined;
   return { stored, emit };
 }
 
