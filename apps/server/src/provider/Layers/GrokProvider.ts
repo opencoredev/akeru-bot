@@ -32,6 +32,7 @@ import {
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
 import { sessionModelStateFromInitialize } from "../acp/AcpRuntimeModel.ts";
+import { discoverGrokSkills } from "../Drivers/GrokSkills.ts";
 import {
   GROK_DEFAULT_MODEL_SLUG,
   makeGrokAcpRuntime,
@@ -354,6 +355,11 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
         ? { status: "unauthenticated" }
         : { status: "unknown" };
 
+  const skills = yield* discoverGrokSkills(grokSettings, environment).pipe(
+    Effect.tapError((cause) => Effect.logDebug("Grok skill discovery failed.", { cause })),
+    Effect.orElseSucceed(() => []),
+  );
+
   const acpExit = yield* discoverGrokModelsViaAcpInitialize(grokSettings, environment).pipe(
     Effect.timeoutOption(GROK_ACP_INITIALIZE_TIMEOUT_MS),
     Effect.exit,
@@ -378,6 +384,7 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       enabled: grokSettings.enabled,
       checkedAt,
       models,
+      skills,
       probe: {
         installed: true,
         version,
@@ -393,6 +400,7 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     enabled: grokSettings.enabled,
     checkedAt,
     models,
+    skills,
     probe: {
       installed: true,
       version,
