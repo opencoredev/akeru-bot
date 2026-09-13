@@ -28,6 +28,7 @@ import {
 } from "./thread-outbox";
 import {
   isQueuedThreadCreationSendable,
+  didThreadOutboxEnvironmentReconnect,
   modelSelectionsEqual,
   resolveThreadOutboxDeliveryAction,
   resolveThreadOutboxFailureAction,
@@ -107,6 +108,7 @@ export function useThreadOutboxDrain(): void {
   const retryAttemptRef = useRef(new Map<MessageId, number>());
   const retryNotBeforeRef = useRef(new Map<MessageId, number>());
   const retryTimersRef = useRef(new Map<MessageId, ReturnType<typeof setTimeout>>());
+  const previousEnvironmentConnectionsRef = useRef(connectedEnvironments);
 
   useEffect(() => {
     ensureThreadOutboxLoaded();
@@ -117,6 +119,20 @@ export function useThreadOutboxDrain(): void {
       retryTimersRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    const environmentReconnected = didThreadOutboxEnvironmentReconnect(
+      previousEnvironmentConnectionsRef.current,
+      connectedEnvironments,
+    );
+    previousEnvironmentConnectionsRef.current = connectedEnvironments;
+    if (environmentReconnected) {
+      // Incomplete loads deliberately clear their cache. Retry them when a
+      // connection becomes usable again, not when publishing the loaded queue
+      // rerenders the drain.
+      ensureThreadOutboxLoaded();
+    }
+  }, [connectedEnvironments]);
 
   const makeDeliveryHelpers = useCallback((queuedMessage: QueuedThreadMessage) => {
     const reportFailure = (
@@ -283,7 +299,6 @@ export function useThreadOutboxDrain(): void {
   );
 
   useEffect(() => {
-    ensureThreadOutboxLoaded();
     if (dispatchingQueuedMessageId !== null) {
       return;
     }

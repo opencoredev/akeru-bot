@@ -46,6 +46,7 @@ vi.mock("expo-file-system", () => {
 
 import {
   decodeQueuedThreadMessage,
+  didThreadOutboxEnvironmentReconnect,
   encodeQueuedThreadMessage,
   flattenQueuedThreadMessages,
   groupQueuedThreadMessages,
@@ -906,6 +907,28 @@ describe("thread outbox", () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  it("retries incomplete outbox hydration only when an environment reconnects", () => {
+    const connected = [{ environmentId: "environment-1", connectionState: "connected" }];
+    expect(didThreadOutboxEnvironmentReconnect(connected, connected)).toBe(false);
+    expect(
+      didThreadOutboxEnvironmentReconnect(connected, [
+        { environmentId: "environment-1", connectionState: "disconnected" },
+      ]),
+    ).toBe(false);
+    expect(
+      didThreadOutboxEnvironmentReconnect(
+        [{ environmentId: "environment-1", connectionState: "disconnected" }],
+        connected,
+      ),
+    ).toBe(true);
+    expect(
+      didThreadOutboxEnvironmentReconnect(connected, [
+        ...connected,
+        { environmentId: "environment-2", connectionState: "connected" },
+      ]),
+    ).toBe(true);
   });
 
   // A pending task created offline drains the moment the phone reconnects,
