@@ -155,7 +155,7 @@ type NewTaskFlowContextValue = {
   readonly modelOptions: ReadonlyArray<ModelOption>;
   readonly selectedModel: ModelSelection | null;
   readonly selectedModelOption: ModelOption | null;
-  readonly subscriptionStatuses: ReadonlyArray<SubscriptionProviderStatus>;
+  readonly subscriptionStatuses: ReadonlyArray<SubscriptionProviderStatus> | undefined;
   readonly selectedProviderSkills: ReadonlyArray<ServerProviderSkill>;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly filteredBranches: ReadonlyArray<VcsRef>;
@@ -226,7 +226,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId: selectedEnvironmentId, input: {} }),
   );
-  const subscriptionStatuses = subscriptionAuth.data?.providers ?? [];
+  const subscriptionStatuses = subscriptionAuth.data?.providers;
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [branchQuery, setBranchQuery] = useState("");

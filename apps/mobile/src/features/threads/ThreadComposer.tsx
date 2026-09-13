@@ -293,7 +293,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId: props.environmentId, input: {} }),
   );
-  const subscriptionStatuses = subscriptionAuth.data?.providers ?? [];
+  const subscriptionStatuses = subscriptionAuth.data?.providers;
   const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);

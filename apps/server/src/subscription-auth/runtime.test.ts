@@ -45,6 +45,7 @@ describe("subscription runtime credentials", () => {
       subscriptionProviderSettingsPatch(DEFAULT_SERVER_SETTINGS, [
         subscriptionStatus("openai-codex", false),
         subscriptionStatus("anthropic", false),
+        subscriptionStatus("cursor", true),
         subscriptionStatus("xai", true),
         subscriptionStatus("kimi-for-coding", false),
         subscriptionStatus("opencode-go", false),
@@ -53,6 +54,7 @@ describe("subscription runtime credentials", () => {
       providers: {
         codex: { enabled: false },
         claudeAgent: { enabled: false },
+        cursor: { enabled: true },
         grok: { enabled: true },
         kimi: { enabled: false },
         opencodeGo: { enabled: false },

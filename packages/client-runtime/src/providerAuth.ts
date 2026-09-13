@@ -67,8 +67,9 @@ const SUBSCRIPTION_PROVIDER_BY_DRIVER: Readonly<Record<string, SubscriptionProvi
  */
 export function filterProvidersBySubscriptionConnection(
   providers: ReadonlyArray<ServerProvider>,
-  statuses: ReadonlyArray<SubscriptionProviderStatus>,
+  statuses: ReadonlyArray<SubscriptionProviderStatus> | undefined,
 ): ReadonlyArray<ServerProvider> {
+  if (!statuses) return providers;
   const connected = new Set(
     statuses.filter((status) => status.connected).map((status) => status.provider),
   );

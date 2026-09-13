@@ -80,11 +80,10 @@ export const primaryServerProvidersAtom = Atom.make((get): ReadonlyArray<ServerP
   const environmentId = get(primaryEnvironmentIdAtom);
   const providers = get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS;
   if (environmentId === null) return EMPTY_SERVER_PROVIDERS;
-  const statuses = Option.getOrElse(
+  const statuses = Option.getOrUndefined(
     AsyncResult.value(get(serverEnvironment.subscriptionAuth({ environmentId, input: {} }))),
-    () => ({ providers: [], access: [], inbox: [] }),
   );
-  return filterProvidersBySubscriptionConnection(providers, statuses.providers);
+  return filterProvidersBySubscriptionConnection(providers, statuses?.providers);
 }).pipe(Atom.withLabel("web-primary-server-providers"));
 
 export const primaryServerKeybindingsAtom = Atom.make(

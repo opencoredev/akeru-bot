@@ -132,4 +132,10 @@ describe("filterProvidersBySubscriptionConnection", () => {
 
     expect(filterProvidersBySubscriptionConnection([custom], [])).toEqual([custom]);
   });
+
+  it("preserves configured providers until connection status is available", () => {
+    const providers = [provider("codex"), provider("claudeAgent")];
+
+    expect(filterProvidersBySubscriptionConnection(providers, undefined)).toEqual(providers);
+  });
 });
