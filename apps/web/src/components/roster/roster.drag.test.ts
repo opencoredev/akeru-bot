@@ -98,6 +98,48 @@ describe("roster collision detection", () => {
       }),
     ).toEqual([]);
   });
+
+  it("targets a section header while its section body is under the pointer", () => {
+    const items = buildRosterListItems({
+      pinnedItems: [],
+      sections: [
+        { id: "alpha", name: "Alpha", items: [akeru], collapsed: false },
+        { id: "beta", name: "Beta", items: [mori], collapsed: false },
+      ],
+      unassignedItems: [],
+    });
+    const active = rosterMarkerId({ kind: "section-header", sectionId: "alpha" });
+    const over = rosterEntryId(mori);
+    const { rects, activeIndex, overIndex } = layout(items, active, over);
+    const collisionRect = rects[overIndex]!;
+    const args = {
+      active: {
+        id: active,
+        data: { current: {} },
+        rect: { current: { initial: rects[activeIndex]!, translated: collisionRect } },
+      },
+      collisionRect,
+      droppableRects: new Map(items.map((item, index) => [rosterListItemId(item), rects[index]!])),
+      droppableContainers: items.map((item, index) => ({
+        id: rosterListItemId(item),
+        key: rosterListItemId(item),
+        disabled: false,
+        data: { current: {} },
+        node: { current: null },
+        rect: { current: rects[index]! },
+      })),
+      pointerCoordinates: null,
+    } satisfies Parameters<CollisionDetection>[0];
+    const detector = createRosterCollisionDetection(
+      (id) => id === rosterMarkerId({ kind: "section-header", sectionId: "beta" }),
+      { items },
+    );
+
+    expect(closestCenter(args)[0]?.id).toBe(over);
+    expect(detector(args)[0]?.id).toBe(
+      rosterMarkerId({ kind: "section-header", sectionId: "beta" }),
+    );
+  });
 });
 
 describe("roster drag projection", () => {
