@@ -74,6 +74,11 @@ A process-wide permit serializes the full inventory sequence, including retries,
 provider checks and separately constructed OpenCode runtimes, because they share one SQLite database.
 OpenCode Go stays on the Mastra controller and does not use this CLI probe path.
 
+Legacy OpenCode rollback targets the first removed assistant message and then reads the native
+revert boundary. OpenCode keeps reverted messages in the transcript until the next prompt, so
+`readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
+stays on Mastra and does not use this adapter path.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
