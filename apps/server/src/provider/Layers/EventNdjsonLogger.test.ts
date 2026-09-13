@@ -4,8 +4,9 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { ThreadId } from "@t3tools/contracts";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Logger from "effect/Logger";
@@ -80,6 +81,35 @@ describe("EventNdjsonLogger", () => {
       }
     }).pipe(Effect.provide(Logger.layer([logCapture], { mergeWithExisting: false })));
   });
+
+  it.effect("closes empty and buffered stores when the owning fiber is interrupted", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-interrupt-"));
+      try {
+        for (const count of [0, 1]) {
+          const basePath = NodePath.join(tempDir, `provider-${count}.ndjson`);
+          const ready = yield* Deferred.make<void>();
+          const owner = yield* Effect.gen(function* () {
+            const store = yield* makeEventNdjsonLogStore(basePath, { batchWindowMs: 10_000 });
+            yield* Effect.addFinalizer(() => store.close());
+            if (count > 0) {
+              yield* store.logger("native").write({ id: "accepted" }, ThreadId.make("thread-1"));
+            }
+            yield* Deferred.succeed(ready, undefined);
+            return yield* Effect.never;
+          }).pipe(Effect.scoped, Effect.forkChild);
+          yield* Deferred.await(ready);
+          yield* Fiber.interrupt(owner);
+          if (count > 0) {
+            const line = NodeFS.readFileSync(ownedLogPath(basePath, "thread-1"), "utf8").trim();
+            assert.equal(parseLogLine(line).payload, '{"id":"accepted"}');
+          }
+        }
+      } finally {
+        NodeFS.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
 
   it.effect("writes effect-style lines to thread-scoped files", () =>
     Effect.gen(function* () {
@@ -251,6 +281,7 @@ describe("EventNdjsonLogger", () => {
 
         assert.equal(NodeFS.existsSync(threadPath), false);
         yield* TestClock.adjust(1_000);
+        yield* store.flush;
         assert.equal(NodeFS.existsSync(threadPath), true);
         yield* store.close();
       } finally {
@@ -276,6 +307,7 @@ describe("EventNdjsonLogger", () => {
         yield* logger.write({ id: "accepted" }, ThreadId.make("thread-interrupted"));
 
         yield* TestClock.adjust(1_000);
+        yield* store.flush;
 
         assert.equal(NodeFS.existsSync(threadPath), true);
         assert.include(NodeFS.readFileSync(threadPath, "utf8"), '{"id":"accepted"}');
@@ -521,7 +553,7 @@ describe("EventNdjsonLogger", () => {
     }),
   );
 
-  it("attributes batches that were written before a later chunk fails", () => {
+  it("attributes batches that were written before a later chunk fails", async () => {
     const records: ReadonlyArray<PendingRecord> = [
       {
         stream: "native",
@@ -539,10 +571,10 @@ describe("EventNdjsonLogger", () => {
     const attributed: Array<PendingRecord> = [];
     let writes = 0;
 
-    assert.throws(() =>
+    await expect(
       writeBatchedMessages(
         {
-          write: () => {
+          write: async () => {
             writes += 1;
             if (writes === 2) throw new Error("simulated disk exhaustion");
           },
@@ -551,9 +583,92 @@ describe("EventNdjsonLogger", () => {
         5,
         (written) => attributed.push(...written),
       ),
-    );
+    ).rejects.toThrow("simulated disk exhaustion");
     assert.deepEqual(attributed, [records[0]]);
   });
+
+  it.effect(
+    "backpressures concurrent batches within byte and record limits and flushes in order",
+    () =>
+      Effect.gen(function* () {
+        const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-bound-"));
+        const basePath = NodePath.join(tempDir, "events.log");
+        try {
+          const store = yield* makeEventNdjsonLogStore(basePath, {
+            maxBufferedBytes: 160,
+            maxBufferedRecords: 2,
+            batchWindowMs: 1_000,
+          });
+          const native = store.logger("native");
+          const canonical = store.logger("canonical");
+          yield* Effect.all(
+            Array.from({ length: 20 }, (_, index) =>
+              (index % 2 ? canonical : native).write({ id: index }, ThreadId.make("ordered")),
+            ),
+            { concurrency: "unbounded" },
+          );
+          yield* native.close();
+          yield* store.flush;
+          yield* store.close();
+          const lines = NodeFS.readFileSync(ownedLogPath(basePath, "ordered"), "utf8")
+            .trim()
+            .split("\n")
+            .map(parseLogLine);
+          assert.deepEqual(
+            lines.map((line) => line.payload),
+            Array.from({ length: 20 }, (_, id) => encodeUnknownJson({ id })),
+          );
+          let serializedAfterClose = false;
+          yield* native.write(
+            {
+              toJSON: () => {
+                serializedAfterClose = true;
+                return {};
+              },
+            },
+            null,
+          );
+          assert.isFalse(serializedAfterClose);
+        } finally {
+          NodeFS.rmSync(tempDir, { recursive: true, force: true });
+        }
+      }),
+  );
+
+  it.effect(
+    "reports rejected oversized records and asynchronous disk failures without failing provider work",
+    () =>
+      Effect.gen(function* () {
+        const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-error-"));
+        const basePath = NodePath.join(tempDir, "events.log");
+        const messages: unknown[] = [];
+        const capture = Logger.make<unknown, void>(({ message }) => {
+          messages.push(message);
+        });
+        try {
+          yield* Effect.gen(function* () {
+            const store = yield* makeEventNdjsonLogStore(basePath, {
+              maxBufferedBytes: 256,
+              batchWindowMs: 0,
+            });
+            NodeFS.mkdirSync(ownedLogPath(basePath, "broken"));
+            const logger = store.logger("native");
+            yield* logger.write({ payload: "x".repeat(1024) }, ThreadId.make("oversized"));
+            yield* logger.write({ id: "failed" }, ThreadId.make("broken"));
+            yield* logger.write({ id: "retained" }, ThreadId.make("healthy"));
+            yield* store.close();
+          }).pipe(Effect.provide(Logger.layer([capture], { mergeWithExisting: false })));
+          assert.isFalse(NodeFS.existsSync(ownedLogPath(basePath, "oversized")));
+          assert.include(
+            NodeFS.readFileSync(ownedLogPath(basePath, "healthy"), "utf8"),
+            "retained",
+          );
+          assert.equal(messages.length, 2);
+        } finally {
+          NodeFS.rmSync(tempDir, { recursive: true, force: true });
+        }
+      }),
+  );
 
   it.effect("reports logical provider log writes to resource attribution", () =>
     Effect.gen(function* () {

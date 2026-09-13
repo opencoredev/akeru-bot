@@ -324,7 +324,7 @@ const scopedProgram = Effect.scoped(
         yield* Effect.forEach(instances, (instance) => instance.stop(), {
           concurrency: "unbounded",
         });
-      }).pipe(Effect.ensuring(shutdown.markComplete)),
+      }),
     );
 
     yield* startup;
