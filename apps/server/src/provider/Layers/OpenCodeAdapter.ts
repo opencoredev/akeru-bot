@@ -979,11 +979,14 @@ export function makeOpenCodeAdapter(
             // supervised thread on the same directory.
             context.resolvedRequestIds.add(event.properties.id);
             context.autoRepliedRequestIds.add(event.properties.id);
-            yield* runOpenCodeSdk("permission.reply", () =>
-              context.client.permission.reply({
-                requestID: event.properties.id,
-                reply: "once",
-              }),
+            yield* runOpenCodeSdk("permission.reply", (signal) =>
+              context.client.permission.reply(
+                {
+                  requestID: event.properties.id,
+                  reply: "once",
+                },
+                { signal },
+              ),
             ).pipe(
               Effect.timeout("10 seconds"),
               Effect.matchEffect({

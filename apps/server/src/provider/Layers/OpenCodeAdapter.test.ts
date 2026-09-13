@@ -88,6 +88,9 @@ const runtimeMock = {
     mcpAddCalls: [] as Array<{ name: string; config: unknown }>,
     permissionReplyCalls: [] as Array<{ requestID: string; reply: string }>,
     permissionReplyError: null as Error | null,
+    permissionReplyImplementation: null as
+      | ((requestID: string, reply: string, signal?: AbortSignal) => Promise<void>)
+      | null,
   },
   reset() {
     this.state.startCalls.length = 0;
@@ -116,6 +119,7 @@ const runtimeMock = {
     this.state.mcpAddCalls.length = 0;
     this.state.permissionReplyCalls.length = 0;
     this.state.permissionReplyError = null;
+    this.state.permissionReplyImplementation = null;
   },
 };
 
@@ -248,11 +252,19 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         }),
       },
       permission: {
-        reply: async ({ requestID, reply }: { requestID: string; reply: string }) => {
+        reply: async (
+          { requestID, reply }: { requestID: string; reply: string },
+          options?: { signal?: AbortSignal },
+        ) => {
           runtimeMock.state.permissionReplyCalls.push({ requestID, reply });
           if (runtimeMock.state.permissionReplyError) {
             throw runtimeMock.state.permissionReplyError;
           }
+          await runtimeMock.state.permissionReplyImplementation?.(
+            requestID,
+            reply,
+            options?.signal,
+          );
         },
       },
       mcp: {
@@ -1889,5 +1901,63 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 
       yield* adapter.stopSession(threadId);
     }).pipe(TestClock.withLive),
+  );
+
+  it.effect("aborts a timed-out auto-reply before opening the fallback dialog", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-full-access-auto-reply-timeout");
+      let startReply!: () => void;
+      const replyStarted = new Promise<void>((resolve) => {
+        startReply = resolve;
+      });
+      let aborted = false;
+      runtimeMock.state.permissionReplyImplementation = (_requestID, _reply, signal) =>
+        new Promise<void>((_resolve, reject) => {
+          startReply();
+          signal?.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              reject(new Error("permission reply aborted"));
+            },
+            { once: true },
+          );
+        });
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "permission.asked",
+          properties: {
+            id: "per_timeout",
+            sessionID: "http://127.0.0.1:9999/session",
+            permission: "edit",
+            patterns: ["src/app.ts"],
+            metadata: {},
+            always: [],
+          },
+        },
+      ];
+      const openedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* Effect.promise(() => replyStarted);
+      yield* TestClock.adjust("10 seconds");
+      const opened = Option.getOrThrow(yield* Fiber.join(openedFiber));
+      NodeAssert.equal(opened.requestId, "per_timeout");
+      NodeAssert.equal(aborted, true);
+      NodeAssert.deepEqual(runtimeMock.state.permissionReplyCalls, [
+        { requestID: "per_timeout", reply: "once" },
+      ]);
+
+      yield* adapter.stopSession(threadId);
+    }),
   );
 });
