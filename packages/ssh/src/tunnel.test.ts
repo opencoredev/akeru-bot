@@ -503,7 +503,7 @@ describe("ssh tunnel scripts", () => {
         let remoteRunning = false;
         const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
         const spawner = ChildProcessSpawner.make((command) =>
-          Effect.gen(function* () {
+          Effect.sync(() => {
             const args = commandArgs(command);
             const isTarget = args.includes(target.alias);
             if (args.includes("-G")) {
