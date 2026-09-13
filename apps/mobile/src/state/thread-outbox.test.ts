@@ -46,7 +46,6 @@ vi.mock("expo-file-system", () => {
 
 import {
   decodeQueuedThreadMessage,
-  didThreadOutboxEnvironmentReconnect,
   encodeQueuedThreadMessage,
   flattenQueuedThreadMessages,
   groupQueuedThreadMessages,
@@ -56,6 +55,7 @@ import {
   resolveThreadOutboxFailureAction,
   resolveQueuedThreadSettings,
   shouldRetryThreadOutboxDelivery,
+  threadOutboxHydrationRetryDelayMs,
   threadOutboxRetryDelayMs,
   type QueuedThreadMessage,
 } from "./thread-outbox-model";
@@ -147,7 +147,7 @@ describe("thread outbox", () => {
       },
     });
 
-    await manager.load();
+    await expect(manager.load()).resolves.toBe(false);
 
     expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
       "environment-1:thread-1": [readable],
@@ -193,19 +193,19 @@ describe("thread outbox", () => {
       },
     });
 
-    await manager.load();
+    await expect(manager.load()).resolves.toBe(false);
     expect(
       flattenQueuedThreadMessages(registry.get(manager.queuedMessagesByThreadKeyAtom)),
     ).toEqual([first]);
     expect(loadCalls).toBe(1);
 
-    await manager.load();
+    await expect(manager.load()).resolves.toBe(true);
     expect(loadCalls).toBe(2);
     expect(
       flattenQueuedThreadMessages(registry.get(manager.queuedMessagesByThreadKeyAtom)),
     ).toEqual([first, second]);
 
-    await manager.load();
+    await expect(manager.load()).resolves.toBe(true);
     expect(loadCalls).toBe(2);
   });
 
@@ -909,26 +909,8 @@ describe("thread outbox", () => {
     ).toBe(false);
   });
 
-  it("retries incomplete outbox hydration only when an environment reconnects", () => {
-    const connected = [{ environmentId: "environment-1", connectionState: "connected" }];
-    expect(didThreadOutboxEnvironmentReconnect(connected, connected)).toBe(false);
-    expect(
-      didThreadOutboxEnvironmentReconnect(connected, [
-        { environmentId: "environment-1", connectionState: "disconnected" },
-      ]),
-    ).toBe(false);
-    expect(
-      didThreadOutboxEnvironmentReconnect(
-        [{ environmentId: "environment-1", connectionState: "disconnected" }],
-        connected,
-      ),
-    ).toBe(true);
-    expect(
-      didThreadOutboxEnvironmentReconnect(connected, [
-        ...connected,
-        { environmentId: "environment-2", connectionState: "connected" },
-      ]),
-    ).toBe(true);
+  it("bounds incomplete outbox hydration retries", () => {
+    expect([0, 1, 2, 3].map(threadOutboxHydrationRetryDelayMs)).toEqual([250, 1_000, 4_000, null]);
   });
 
   // A pending task created offline drains the moment the phone reconnects,

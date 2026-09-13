@@ -432,6 +432,24 @@ describe("mobile composer drafts", () => {
     });
   });
 
+  it("waits for an edit queued behind the flush drain sentinel", async () => {
+    vi.useFakeTimers();
+    const draftKey = "environment-1:thread-1";
+    await flushComposerDrafts();
+
+    setComposerDraftText(draftKey, "first edit");
+    vi.advanceTimersByTime(200);
+    const flushing = flushComposerDrafts();
+
+    setComposerDraftText(draftKey, "latest edit");
+    vi.advanceTimersByTime(200);
+    await flushing;
+
+    expect(JSON.parse(composerDraftFileMocks.getDocument())).toMatchObject({
+      drafts: { [draftKey]: { text: "latest edit" } },
+    });
+  });
+
   it("propagates a flush write failure instead of resolving as saved", async () => {
     const draftKey = "environment-1:thread-1";
     setComposerDraftText(draftKey, "unsaved");

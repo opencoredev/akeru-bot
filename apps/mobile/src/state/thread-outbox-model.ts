@@ -224,23 +224,10 @@ export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
   return isTransportConnectionErrorMessage(errorMessage(error));
 }
 
-interface ThreadOutboxEnvironmentConnection {
-  readonly environmentId: string;
-  readonly connectionState: string;
-}
+const THREAD_OUTBOX_HYDRATION_RETRY_DELAYS_MS = [250, 1_000, 4_000] as const;
 
-export function didThreadOutboxEnvironmentReconnect(
-  previous: ReadonlyArray<ThreadOutboxEnvironmentConnection>,
-  current: ReadonlyArray<ThreadOutboxEnvironmentConnection>,
-): boolean {
-  const previousStates = new Map(
-    previous.map((environment) => [environment.environmentId, environment.connectionState]),
-  );
-  return current.some(
-    (environment) =>
-      environment.connectionState === "connected" &&
-      previousStates.get(environment.environmentId) !== "connected",
-  );
+export function threadOutboxHydrationRetryDelayMs(attempt: number): number | null {
+  return THREAD_OUTBOX_HYDRATION_RETRY_DELAYS_MS[attempt] ?? null;
 }
 
 export type ThreadOutboxCommandStage = "settings-sync" | "start-turn";

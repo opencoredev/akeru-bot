@@ -105,12 +105,14 @@ export const composerDraftsAtom = Atom.make<Record<string, ComposerDraft>>({}).p
 let loadPromise: Promise<void> | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let persistRetryNeeded = false;
+let persistRevision = 0;
 const persistenceQueue = new SerializedAsyncQueue();
 
 /** Resets module-level state between test runs. */
 export function resetComposerDraftsLoadState(): void {
   loadPromise = null;
   persistRetryNeeded = false;
+  persistRevision = 0;
   if (persistTimer !== null) {
     clearTimeout(persistTimer);
     persistTimer = null;
@@ -221,7 +223,8 @@ export async function flushComposerDrafts(): Promise<void> {
   }
   // An edit during an awaited write schedules another debounced write, so
   // keep landing snapshots until no debounce is pending after a queue drain.
-  do {
+  for (;;) {
+    const revisionToFlush = persistRevision;
     while (persistTimer !== null || persistRetryNeeded) {
       if (persistTimer !== null) clearTimeout(persistTimer);
       persistTimer = null;
@@ -238,10 +241,17 @@ export async function flushComposerDrafts(): Promise<void> {
     // Draining also waits for an already-fired debounce whose write is still
     // gated behind its own hydration await inside the queue.
     await persistenceQueue.run(() => Promise.resolve());
-  } while (persistTimer !== null || persistRetryNeeded);
+    // An edit can schedule its debounce while the drain sentinel is waiting
+    // behind an older write. Its revision changes immediately, before that
+    // later write enters the queue, so repeat until that edit is durable too.
+    if (persistRevision === revisionToFlush && persistTimer === null && !persistRetryNeeded) {
+      return;
+    }
+  }
 }
 
 function schedulePersistComposerDrafts(): void {
+  persistRevision += 1;
   if (persistTimer !== null) {
     clearTimeout(persistTimer);
   }
