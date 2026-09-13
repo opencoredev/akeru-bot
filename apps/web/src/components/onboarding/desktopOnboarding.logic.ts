@@ -150,6 +150,11 @@ interface DesktopOnboardingProvider {
   }>;
 }
 
+export type DesktopOnboardingCreationReadiness =
+  | { readonly status: "loading" }
+  | { readonly status: "unavailable" }
+  | { readonly status: "ready"; readonly engine: BotEngine };
+
 const subscriptionDriver: Readonly<Partial<Record<SubscriptionProviderId, string>>> = {
   "openai-codex": "codex",
   anthropic: "claudeAgent",
@@ -171,6 +176,15 @@ export function resolveDesktopOnboardingEngine(
   );
   const model = provider?.models.find((candidate) => candidate.isDefault) ?? provider?.models[0];
   return provider && model ? { provider: provider.instanceId, model: model.slug } : null;
+}
+
+export function resolveDesktopOnboardingCreationReadiness(
+  providerId: SubscriptionProviderId,
+  providers: ReadonlyArray<DesktopOnboardingProvider> | null,
+): DesktopOnboardingCreationReadiness {
+  if (providers === null) return { status: "loading" };
+  const engine = resolveDesktopOnboardingEngine(providerId, providers);
+  return engine ? { status: "ready", engine } : { status: "unavailable" };
 }
 
 export function desktopOnboardingModelSelection(engine: BotEngine | null): ModelSelection | null {

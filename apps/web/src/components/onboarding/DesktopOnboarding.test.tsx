@@ -1,4 +1,6 @@
 import { EnvironmentId, type SubscriptionProviderId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -16,9 +18,31 @@ const mocks = vi.hoisted(() => ({
   form: null as ComponentProps<typeof ProviderApiKeyForm> | null,
   input: null as { onChange: (event: { currentTarget: { value: string } }) => void } | null,
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
+  captureModes: [] as boolean[],
   connected: false,
 }));
 
+vi.mock("@effect/atom-react", () => ({
+  useAtomValue: (atom: string) => {
+    if (atom === "shell") return { status: "live" };
+    if (atom === "bots") return [];
+    return [];
+  },
+}));
+vi.mock("../../state/bots", () => ({
+  botEnvironment: { create: "create" },
+  environmentBotsAtom: () => "bots",
+}));
+vi.mock("../../state/environments", () => ({
+  usePrimaryEnvironmentId: () => "onboarding-environment",
+}));
+vi.mock("../../state/shell", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../state/shell")>();
+  return {
+    ...actual,
+    environmentShell: { ...actual.environmentShell, stateValueAtom: () => "shell" },
+  };
+});
 vi.mock("../../state/server", () => ({
   serverEnvironment: {
     subscriptionAuth: () => ({}),
@@ -26,6 +50,7 @@ vi.mock("../../state/server", () => ({
     completeSubscriptionAuth: "complete",
     cancelSubscriptionAuth: "cancel",
     pollSubscriptionAuth: "poll",
+    providersValueAtom: () => "providers",
   },
 }));
 vi.mock("../../state/query", () => ({
@@ -59,7 +84,7 @@ vi.mock("../ui/input", () => ({
   },
 }));
 
-import { SubscriptionStep } from "./DesktopOnboarding";
+import { DesktopOnboarding, SubscriptionStep } from "./DesktopOnboarding";
 
 // Match the minimal ReactDOM host used by PreviewView's unit tests.
 class TestNode {
@@ -114,12 +139,13 @@ let root: Root;
 const environmentId = EnvironmentId.make("onboarding-environment");
 const success = <T,>(value: T) => ({ _tag: "Success" as const, value });
 
-async function render(providerId: SubscriptionProviderId = "openai-codex") {
+async function render(providerId: SubscriptionProviderId = "openai-codex", captureMode = false) {
   await act(async () =>
     root.render(
       <SubscriptionStep
         environmentId={environmentId}
         draft={{ ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId }}
+        captureMode={captureMode}
         onChange={vi.fn()}
         onContinue={mocks.next}
       />,
@@ -139,16 +165,22 @@ beforeEach(() => {
   mocks.buttons.clear();
   mocks.form = null;
   mocks.input = null;
+  mocks.captureModes = [];
   mocks.connected = false;
   mocks.start.mockResolvedValue(success({ loginId: "key-login" }));
   mocks.complete.mockResolvedValue(success({ status: "connected" }));
   mocks.cancel.mockResolvedValue(success({}));
   const document = new TestNode("#document", null, 9);
   vi.stubGlobal("document", document);
+  const storage = new Map<string, string>();
   vi.stubGlobal("window", {
     document,
     HTMLIFrameElement: TestNode,
     location: { search: "" },
+    localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    },
     open: mocks.open,
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -305,5 +337,36 @@ describe("onboarding API-key connections", () => {
     await click("Continue");
     expect(mocks.next).toHaveBeenCalledOnce();
     expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("keeps capture mode stable after the router normalizes the URL", async () => {
+    const CaptureSurface = ({ captureMode }: { captureMode: boolean }) => {
+      mocks.captureModes.push(captureMode);
+      return null;
+    };
+    window.location.search = "?akeru-onboarding-capture=1";
+    await act(async () => root.render(<DesktopOnboarding Surface={CaptureSurface} />));
+    expect(mocks.captureModes.at(-1)).toBe(true);
+
+    window.location.search = "";
+    await act(async () => root.render(<DesktopOnboarding Surface={CaptureSurface} />));
+    expect(mocks.captureModes.at(-1)).toBe(true);
+  });
+
+  it("re-enables paste completion when the request is interrupted", async () => {
+    mocks.start.mockResolvedValue(
+      success({
+        loginId: "oauth-login",
+        provider: "anthropic",
+        completion: "paste",
+        url: "https://claude.example/login",
+      }),
+    );
+    mocks.complete.mockResolvedValue(AsyncResult.failure(Cause.interrupt(1)));
+    await render("anthropic");
+    await click("Connect Claude");
+    await act(async () => mocks.input?.onChange({ currentTarget: { value: "oauth-code" } }));
+    await click("Connect");
+    expect(mocks.buttons.get("Connect")?.disabled).toBe(false);
   });
 });

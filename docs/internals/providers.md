@@ -60,6 +60,20 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+The legacy OpenCode adapter owns child sessions created for subagents. Permission and question events
+from a descendant session are routed onto the parent thread after ancestry is verified. Stop and
+interrupt walk the child tree and abort every descendant, not only the parent. Unrelated OpenCode
+sessions are left alone. Full-access threads auto-reply permission asks once, without a dialog, and
+fall back to the dialog if that reply fails. OpenCode Go stays on the Mastra controller and does not
+use this adapter path.
+
+Standard OpenCode discovery probes `opencode --version` for at most four seconds. The probe command
+runs in its own process group so a hanging wrapper cannot keep provider status running after the
+timeout. Inventory CLI commands (`models --verbose`, `agent list`, `debug skill`) run one at a time.
+A process-wide permit serializes the full inventory sequence, including retries, across concurrent
+provider checks and separately constructed OpenCode runtimes, because they share one SQLite database.
+OpenCode Go stays on the Mastra controller and does not use this CLI probe path.
+
 Legacy OpenCode rollback targets the first removed assistant message and then reads the native
 revert boundary. OpenCode keeps reverted messages in the transcript until the next prompt, so
 `readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
@@ -69,7 +83,8 @@ stays on Mastra and does not use this adapter path.
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
 [Codex app-server protocol](../../packages/effect-codex-app-server/src/protocol.ts) retain raw
-observations only when configured before connection. `AcpClientOptions` and `AcpAgentOptions` expose
+observations only when configured before connection. Incoming Codex JSONL is framed from
+per-chunk fragments so large messages are scanned once. `AcpClientOptions` and `AcpAgentOptions` expose
 `rawNotificationBufferSize` for `raw.notifications`. `CodexAppServerClientOptions` exposes that option
 and `rawRequestBufferSize` for `raw.requests`. Pass them to the package's `make` or layer constructor.
 
