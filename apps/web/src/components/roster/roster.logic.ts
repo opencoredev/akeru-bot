@@ -599,18 +599,6 @@ export function resolveRosterDropTarget(
   };
 }
 
-export type RosterDropVerb = "pin" | "unpin";
-
-export function resolveRosterDropVerb(
-  from: RosterZone,
-  to: RosterZone | null,
-): RosterDropVerb | null {
-  if (to === null || rosterZonesEqual(from, to)) return null;
-  if (to === "pinned") return "pin";
-  if (from === "pinned") return "unpin";
-  return null;
-}
-
 export type RosterDropPlan =
   | { readonly kind: "none" }
   | { readonly kind: "reorder-pinned"; readonly order: readonly RosterItemRef[] }

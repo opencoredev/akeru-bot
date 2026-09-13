@@ -19,7 +19,6 @@ import {
   BotIcon,
   ChevronDownIcon,
   PinIcon,
-  PinOffIcon,
   PlusIcon,
   SearchIcon,
   UsersIcon,
@@ -75,7 +74,6 @@ import {
   planRosterDrop,
   resolveLatestRosterMessage,
   resolveRosterDropTarget,
-  resolveRosterDropVerb,
   resolveRosterIndicator,
   rosterItemKey,
   rosterItemsEqual,
@@ -84,7 +82,6 @@ import {
   rosterMarkerId,
   orderRosterBotsForShortcuts,
   resolveRosterShortcutBot,
-  type RosterDropVerb,
   type RosterItemRef,
   type RosterLastMessage,
   type RosterListMarker,
@@ -256,21 +253,6 @@ function sortableRootProps(sortable: SortableRosterRowBag) {
   };
 }
 
-const dropVerbBadge: Record<RosterDropVerb, ReactNode> = {
-  pin: (
-    <>
-      <PinIcon aria-hidden className="size-3" />
-      Pin
-    </>
-  ),
-  unpin: (
-    <>
-      <PinOffIcon aria-hidden className="size-3" />
-      Unpin
-    </>
-  ),
-};
-
 const ROSTER_DRAG_LABEL_HEIGHT = 24;
 
 const BotRosterRow = memo(function BotRosterRow({
@@ -284,7 +266,6 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveDown,
   onNudge,
   sortable,
-  dropVerb,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
@@ -296,7 +277,6 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
-  dropVerb: RosterDropVerb | null;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -347,15 +327,6 @@ const BotRosterRow = memo(function BotRosterRow({
               </span>
             ) : null}
           </span>
-          {sortable.isDragging && dropVerb !== null ? (
-            <span
-              role="status"
-              data-testid="roster-drop-verb"
-              className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
-            >
-              {dropVerbBadge[dropVerb]}
-            </span>
-          ) : null}
         </button>
         <Menu>
           <MenuTrigger
@@ -438,7 +409,6 @@ function GroupRosterRow({
   canMoveDown,
   onNudge,
   sortable,
-  dropVerb,
 }: {
   group: Group;
   bots: readonly Bot[];
@@ -450,7 +420,6 @@ function GroupRosterRow({
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
-  dropVerb: RosterDropVerb | null;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const members = group.members.filter(
@@ -482,15 +451,6 @@ function GroupRosterRow({
         <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
         <span className="text-xs text-sidebar-muted-foreground">{members}</span>
-        {sortable.isDragging && dropVerb !== null ? (
-          <span
-            role="status"
-            data-testid="roster-drop-verb"
-            className="pointer-events-none ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-primary/40 bg-primary/10 px-1.5 text-[11px] font-medium text-primary"
-          >
-            {dropVerbBadge[dropVerb]}
-          </span>
-        ) : null}
       </button>
       <Menu>
         <MenuTrigger
@@ -558,7 +518,7 @@ function SortableRosterMarker(props: {
 
 function RosterDragBoundary(props: {
   marker: "pinned-header" | "pinned-divider";
-  label: string;
+  label: string | null;
   visible: boolean;
   isDropTarget: boolean;
 }) {
@@ -569,22 +529,32 @@ function RosterDragBoundary(props: {
       className="pointer-events-none relative mx-0.5 -mb-px h-0"
     >
       {props.visible ? (
-        <div className="roster-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2">
-          <span
-            className={cn(
-              "shrink-0 text-xs font-medium",
-              props.isDropTarget ? "text-primary" : "text-sidebar-foreground/80",
-            )}
-          >
-            {props.label}
-          </span>
-          <span
-            aria-hidden
-            className={cn(
-              "h-px flex-1",
-              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-foreground/25",
-            )}
-          />
+        <div
+          aria-hidden={props.label === null ? true : undefined}
+          className={cn(
+            "roster-drag-boundary-label absolute inset-x-2 top-1 h-4",
+            props.label !== null && "flex items-center gap-2",
+          )}
+        >
+          {props.label !== null ? (
+            <>
+              <span
+                className={cn(
+                  "shrink-0 text-xs font-medium",
+                  props.isDropTarget ? "text-primary" : "text-sidebar-foreground/80",
+                )}
+              >
+                {props.label}
+              </span>
+              <span
+                aria-hidden
+                className={cn(
+                  "h-px flex-1",
+                  props.isDropTarget ? "bg-primary/50" : "bg-sidebar-foreground/25",
+                )}
+              />
+            </>
+          ) : null}
         </div>
       ) : null}
     </SortableRosterMarker>
@@ -862,11 +832,6 @@ export default function BotRosterSidebar() {
     [dragState, rosterListItems],
   );
   const dragTargetZone = dragState?.targetZone ?? null;
-  const dropVerbFor = (id: string): RosterDropVerb | null => {
-    if (dragState === null || dragState.activeId !== id) return null;
-    return resolveRosterDropVerb(dragState.from, dragTargetZone);
-  };
-
   // Remember the chat route the selected bot lands on, so re-selecting the
   // bot returns to its conversation. The first run after a selection change
   // is skipped: the route still belongs to the previously selected bot.
@@ -1095,7 +1060,6 @@ export default function BotRosterSidebar() {
                   >
                     {rosterListItems.map((item) => {
                       if (item.kind === "entry") {
-                        const dropVerb = dropVerbFor(rosterListItemId(item));
                         const pinned = pinnedKeys.has(rosterItemKey(item.item));
                         const zoneOrder = rosterItemsForZone(item.zone, {
                           pinnedItems: visiblePinnedItems,
@@ -1139,7 +1103,6 @@ export default function BotRosterSidebar() {
                                         canMoveDown={canMoveDown}
                                         onNudge={onNudge}
                                         sortable={bag}
-                                        dropVerb={dropVerb}
                                       />
                                     );
                                   })()
@@ -1167,7 +1130,6 @@ export default function BotRosterSidebar() {
                                         canMoveDown={canMoveDown}
                                         onNudge={onNudge}
                                         sortable={bag}
-                                        dropVerb={dropVerb}
                                       />
                                     );
                                   })()
@@ -1193,7 +1155,7 @@ export default function BotRosterSidebar() {
                             <RosterDragBoundary
                               key="pinned-divider"
                               marker="pinned-divider"
-                              label="Bots"
+                              label={null}
                               visible={dragging}
                               isDropTarget={dragTargetZone !== null && dragTargetZone !== "pinned"}
                             />
