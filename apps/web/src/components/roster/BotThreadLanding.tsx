@@ -210,10 +210,11 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  const available = bot?.archivedAt === null;
   useReplyPlaybackThread({
-    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
-    threadId: runtime.linkedThreadRef?.threadId,
-    messages,
+    environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
+    threadId: available ? runtime.linkedThreadRef?.threadId : null,
+    messages: available ? messages : [],
     mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
   });
 

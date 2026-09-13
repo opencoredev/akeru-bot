@@ -236,11 +236,14 @@ describe("thread landing reply playback hook order", () => {
     async (state) => {
       const unavailableBots = state === "missing" ? [] : [{ ...bot, archivedAt: bot.updatedAt }];
       mocks.bots = unavailableBots;
+      mocks.messages = [message];
       const renderBot = async () => {
         await act(async () => root.render(<BotThreadLanding botId={bot.id} />));
       };
       await renderBot();
       expect(mocks.landing).not.toHaveBeenCalled();
+      expect(mocks.setContext).toHaveBeenLastCalledWith(null);
+      expect(mocks.observe).toHaveBeenLastCalledWith([]);
 
       mocks.bots = [bot];
       mocks.messages = [message];
@@ -255,11 +258,20 @@ describe("thread landing reply playback hook order", () => {
       mocks.landing.mockClear();
       await expect(renderBot()).resolves.toBeUndefined();
       expect(mocks.landing).not.toHaveBeenCalled();
+      expect(mocks.setContext).toHaveBeenLastCalledWith(null);
+      expect(mocks.observe).toHaveBeenLastCalledWith([]);
+      mocks.messages = [...mocks.messages, { ...message, id: MessageId.make("later-reply") }];
+      await renderBot();
+      expect(mocks.setContext).toHaveBeenLastCalledWith(null);
+      expect(mocks.observe).toHaveBeenLastCalledWith([]);
     },
   );
   it("renders an initially missing group then its hydrated group without a hook ordering error", async () => {
+    mocks.messages = [message];
     await render();
     expect(mocks.landing).not.toHaveBeenCalled();
+    expect(mocks.setContext).toHaveBeenLastCalledWith(null);
+    expect(mocks.observe).toHaveBeenLastCalledWith([]);
 
     mocks.groups = [group];
     mocks.messages = [message];
@@ -287,5 +299,11 @@ describe("thread landing reply playback hook order", () => {
     mocks.landing.mockClear();
     await expect(render()).resolves.toBeUndefined();
     expect(mocks.landing).not.toHaveBeenCalled();
+    expect(mocks.setContext).toHaveBeenLastCalledWith(null);
+    expect(mocks.observe).toHaveBeenLastCalledWith([]);
+    mocks.messages = [...mocks.messages, { ...message, id: MessageId.make("later-reply") }];
+    await render();
+    expect(mocks.setContext).toHaveBeenLastCalledWith(null);
+    expect(mocks.observe).toHaveBeenLastCalledWith([]);
   });
 });

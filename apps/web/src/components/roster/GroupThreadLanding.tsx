@@ -89,9 +89,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   const messages = visibleBotChatMessages(runtime.messages);
   useReplyPlaybackThread({
-    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
-    threadId: runtime.linkedThreadRef?.threadId,
-    messages,
+    environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
+    threadId: group ? runtime.linkedThreadRef?.threadId : null,
+    messages: group ? messages : [],
     mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
   });
 
