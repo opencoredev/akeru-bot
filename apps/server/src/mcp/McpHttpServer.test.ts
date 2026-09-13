@@ -387,6 +387,21 @@ it.effect("registers annotated tools and preserves authenticated request context
         alternateTabId,
       );
 
+      const textOnly = yield* server
+        .callTool({
+          name: "preview_snapshot",
+          arguments: { tabId: alternateTabId, includeImage: false },
+        })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(textOnly.isError).toBe(false);
+      expect(textOnly.content.some((content) => content.type === "image")).toBe(false);
+      expect(textOnly.structuredContent).toMatchObject({
+        screenshot: { mimeType: "image/png", width: 10, height: 5, redacted: true },
+      });
+
       const evaluation = yield* server
         .callTool({ name: "preview_evaluate", arguments: { expression: "document.body" } })
         .pipe(

@@ -129,7 +129,10 @@ const harness = (
         Layer.succeed(OrchestrationEngineService, {
           dispatch: () => Effect.die("unused"),
           readEvents: () => Stream.empty,
+          readThreadEvents: () => Stream.empty,
+          getThreadReplayStats: () => Effect.die("unused thread replay stats"),
           streamDomainEvents: domainEvents,
+          subscribeDomainEvents: Effect.succeed(domainEvents),
           latestSequence: Effect.succeed(0),
         }),
       ),

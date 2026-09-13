@@ -60,11 +60,60 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+The legacy OpenCode adapter owns child sessions created for subagents. Permission and question events
+from a descendant session are routed onto the parent thread after ancestry is verified. Stop and
+interrupt walk the child tree and abort every descendant, not only the parent. Unrelated OpenCode
+sessions are left alone. Full-access threads auto-reply permission asks once, without a dialog, and
+fall back to the dialog if that reply fails. OpenCode Go stays on the Mastra controller and does not
+use this adapter path.
+
+Standard OpenCode discovery probes `opencode --version` for at most four seconds. The probe command
+runs in its own process group so a hanging wrapper cannot keep provider status running after the
+timeout. Inventory CLI commands (`models --verbose`, `agent list`, `debug skill`) run one at a time.
+A process-wide permit serializes the full inventory sequence, including retries, across concurrent
+provider checks and separately constructed OpenCode runtimes, because they share one SQLite database.
+OpenCode Go stays on the Mastra controller and does not use this CLI probe path.
+
+Legacy OpenCode rollback targets the first removed assistant message and then reads the native
+revert boundary. OpenCode keeps reverted messages in the transcript until the next prompt, so
+`readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
+stays on Mastra and does not use this adapter path.
+
+### Grok health check
+
+`checkGrokProviderStatus` never opens an ACP session. It runs `grok --version`, then `grok models`
+for login state and model slugs, then a single ACP `initialize` and reads models from
+`_meta.modelState`. `authenticate` and `session/new` are skipped on purpose: `authenticate` can open
+a browser login and `session/new` boots every configured MCP server, both of which made background
+probes hang or surprise the user. A failed `initialize` degrades to `warning` with the CLI's model
+list instead of persisting `error` over a working install. `XAI_API_KEY` counts as authenticated.
+The built-in `grok-build` slug is the CLI's product name, not an ACP model id.
+`applyGrokAcpModelSelection` treats it as "keep the session's current model" and never sends it in
+`session/set_model`. Grok snapshots no longer advertise `requiresNewThreadForModelChange`, so an
+in-session model change reaches ACP `session/set_model`.
+
+Cursor and OpenCode still start sessions through `AcpSessionRuntime.start()`. The new
+`initialize()` method is additive and unused by those adapters.
+
+ACP outbound notifications (`session/cancel` included) encode as JSON-RPC with no `id` or
+`headers`. The previous Request encoder emitted `id: ""`, which Grok CLI treats as a malformed
+request and drops, so Stop did not stop. Cursor and OpenCode share this protocol path; the mock
+agent was previously lenient and hid the bug. `AcpSessionRuntime.cancel` now waits for the cancel
+write before returning so a replacement prompt cannot race ahead of it. Grok mid-turn sends cancel
+the in-flight prompt and continue the same turn instead of queueing.
+
+Grok skill discovery uses `grok inspect --json`. Machine-level health checks recover probe
+failures to an empty skill list. `ProviderInstance.snapshotForCwd` re-runs inspect in the
+thread workspace so a failed probe is not cached as empty. Composer cwd refresh still uses the
+machine snapshot until a client calls `snapshotForCwd`. Cursor composer wiring from the same
+upstream PR is not in this change.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
 [Codex app-server protocol](../../packages/effect-codex-app-server/src/protocol.ts) retain raw
-observations only when configured before connection. `AcpClientOptions` and `AcpAgentOptions` expose
+observations only when configured before connection. Incoming Codex JSONL is framed from
+per-chunk fragments so large messages are scanned once. `AcpClientOptions` and `AcpAgentOptions` expose
 `rawNotificationBufferSize` for `raw.notifications`. `CodexAppServerClientOptions` exposes that option
 and `rawRequestBufferSize` for `raw.requests`. Pass them to the package's `make` or layer constructor.
 

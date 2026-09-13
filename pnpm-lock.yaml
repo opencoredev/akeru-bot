@@ -504,7 +504,7 @@ importers:
         version: 0.9.4(patch_hash=ab9ff544009e1891cfe3930105862d3699007f38922a79f3c98d90018deca368)
       '@mastra/code-sdk':
         specifier: 1.5.1
-        version: 1.5.1(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(bufferutil@4.1.0)(express@5.2.1)(hono@4.12.27)(playwright-core@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(utf-8-validate@6.0.6)
+        version: 1.5.1(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(bufferutil@4.1.0)(express@5.2.1)(hono@4.12.27)(playwright-core@1.60.0)(utf-8-validate@6.0.6)
       '@mastra/core':
         specifier: 1.63.0
         version: 1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3)
@@ -523,9 +523,6 @@ importers:
       '@photon-ai/chat-adapter-imessage':
         specifier: 3.2.0
         version: 3.2.0(ai@6.0.266(zod@4.4.3))(chat@4.39.0(ai@6.0.266(zod@4.4.3))(zod@4.4.3))(typescript@6.0.3)(zod@4.4.3)
-      '@pierre/diffs':
-        specifier: 'catalog:'
-        version: 1.3.0-beta.10(patch_hash=7ef7cb0cbabb17c15cdb137554068b36f15f6f5265e73fb51452aa3380db91aa)(@shikijs/themes@4.3.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@upstash/box':
         specifier: 0.5.3
         version: 0.5.3(zod@4.4.3)
@@ -16341,7 +16338,7 @@ snapshots:
       postcss: 8.5.26
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -17157,7 +17154,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@mastra/code-sdk@1.5.1(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(bufferutil@4.1.0)(express@5.2.1)(hono@4.12.27)(playwright-core@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(utf-8-validate@6.0.6)':
+  '@mastra/code-sdk@1.5.1(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.4)(bufferutil@4.1.0)(express@5.2.1)(hono@4.12.27)(playwright-core@1.60.0)(utf-8-validate@6.0.6)':
     dependencies:
       '@agentclientprotocol/sdk': 0.21.1(zod@4.4.3)
       '@ai-sdk/amazon-bedrock': 3.0.120(zod@4.4.3)
@@ -21050,8 +21047,8 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
-      expo-widgets: 56.0.19(32843e0c0883df8bccfa0b8323659df5)
+      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
+      expo-widgets: 56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -22983,22 +22980,6 @@ snapshots:
     dependencies:
       expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
       react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
-
-  expo-widgets@56.0.19(32843e0c0883df8bccfa0b8323659df5):
-    dependencies:
-      '@expo/plist': 0.7.0
-      '@expo/ui': 56.0.18(32843e0c0883df8bccfa0b8323659df5)
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
-      react: 19.2.6
-      react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@types/react'
-      - '@types/react-dom'
-      - react-dom
-      - react-native-reanimated
-      - react-native-worklets
-    optional: true
 
   expo-widgets@56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0):
     dependencies:
