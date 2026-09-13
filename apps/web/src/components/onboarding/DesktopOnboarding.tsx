@@ -19,7 +19,7 @@ import {
   LoaderIcon,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 
 import { isElectron } from "../../env";
@@ -75,6 +75,14 @@ import {
 const NO_ENVIRONMENT = "" as EnvironmentId;
 const EASE = [0.23, 1, 0.32, 1] as const;
 const LEAVE = [0.4, 0, 1, 1] as const;
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
 
 function readDraft(): DesktopOnboardingDraft | null {
   return parseDesktopOnboardingDraft(window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY));
@@ -813,7 +821,41 @@ function OnboardingSurface({
     appRoot.inert = true;
     appRoot.setAttribute("aria-hidden", "true");
     surfaceRef.current?.focus();
+
+    const focusableElements = () => {
+      const surface = surfaceRef.current;
+      if (!surface) return [];
+      return Array.from(surface.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (element) =>
+          !element.matches(":disabled") &&
+          element.tabIndex >= 0 &&
+          element.closest('[inert],[aria-hidden="true"]') === null,
+      );
+    };
+    const containFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const surface = surfaceRef.current;
+      if (!surface) return;
+      const focusable = focusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        surface.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      const active = document.activeElement;
+      if (!surface.contains(active) || (event.shiftKey && active === first)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", containFocus, true);
     return () => {
+      document.removeEventListener("keydown", containFocus, true);
       appRoot.inert = wasInert;
       if (previousAriaHidden === null) appRoot.removeAttribute("aria-hidden");
       else appRoot.setAttribute("aria-hidden", previousAriaHidden);
@@ -1037,7 +1079,18 @@ function OnboardingSurface({
   );
 }
 
-export function DesktopOnboarding() {
+interface DesktopOnboardingSurfaceProps {
+  readonly initialDraft: DesktopOnboardingDraft;
+  readonly environmentId: EnvironmentId;
+  readonly captureMode: boolean;
+  readonly onFinished: () => void;
+}
+
+export function DesktopOnboarding({
+  Surface = OnboardingSurface,
+}: {
+  readonly Surface?: ComponentType<DesktopOnboardingSurfaceProps>;
+} = {}) {
   const environmentId = usePrimaryEnvironmentId();
   const atomKey = environmentId ?? NO_ENVIRONMENT;
   const rosterLoaded = useAtomValue(environmentShell.stateValueAtom(atomKey)).status === "live";
@@ -1088,7 +1141,7 @@ export function DesktopOnboarding() {
   return (
     <AnimatePresence>
       {show && initialDraftRef.current && environmentId ? (
-        <OnboardingSurface
+        <Surface
           key="desktop-onboarding"
           initialDraft={initialDraftRef.current}
           environmentId={environmentId}
