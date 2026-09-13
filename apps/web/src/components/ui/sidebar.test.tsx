@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   Sidebar,
+  SidebarContent,
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuSubButton,
@@ -65,6 +66,18 @@ describe("sidebar interactive cursors", () => {
     expect(html).toContain("duration-[320ms]");
     expect(html).toContain("ease-[cubic-bezier(0.22,1.18,0.36,1)]");
     expect(html).toContain("motion-reduce:transition-none");
+  });
+
+  it("does not let reordered roster rows move the scroll viewport", () => {
+    const html = renderToStaticMarkup(
+      <SidebarProvider>
+        <Sidebar>
+          <SidebarContent>Scout</SidebarContent>
+        </Sidebar>
+      </SidebarProvider>,
+    );
+
+    expect(html).toContain("[overflow-anchor:none]");
   });
 
   it("uses shared geometry and icon constraints for menu buttons by default", () => {

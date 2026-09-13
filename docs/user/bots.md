@@ -62,6 +62,8 @@ Pins, sections, and Unassigned are roster layout only. They do not change group 
 
 While you drag, the destination label stays readable and takes the accent color. Empty and collapsed sections stay droppable. The lifted row shows **Pin**, **Unpin**, or **Move** when the drop would change its section. Reordering inside one section has no badge. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
 
+Pinning, unpinning, and moving an item keeps the sidebar at your current scroll position instead of following the item to its new place in the roster.
+
 On this device the layout is stored in the browser for the connected environment. Refresh keeps it. Other devices keep their own layout until the environment can store roster order.
 
 ## Conversation panel
