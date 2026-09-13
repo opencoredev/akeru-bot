@@ -4863,6 +4863,75 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("subscribeShell keeps sparse replay below the captured head", () =>
+    Effect.gen(function* () {
+      const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+      const now = "2026-01-01T00:00:00.000Z";
+      const replayProjectId = ProjectId.make("project-replayed");
+      const liveProjectId = ProjectId.make("project-live");
+      const projectDeleted = (sequence: number, projectId: ProjectId): OrchestrationEvent => ({
+        sequence,
+        eventId: EventId.make(`event-project-deleted-${sequence}`),
+        aggregateKind: "project",
+        aggregateId: projectId,
+        occurredAt: now,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        type: "project.deleted",
+        payload: { projectId, deletedAt: now },
+      });
+      const replayed = projectDeleted(1, replayProjectId);
+      const newer = projectDeleted(6, liveProjectId);
+      let replayHead: number | undefined;
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(5),
+            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            readEvents: (_afterSequence, _limit, toSequenceInclusive) => {
+              replayHead = toSequenceInclusive;
+              return Stream.fromEffect(PubSub.publish(liveEvents, newer)).pipe(
+                Stream.flatMap(() =>
+                  Stream.fromIterable(
+                    [replayed, newer].filter(
+                      (event) =>
+                        toSequenceInclusive === undefined || event.sequence <= toSequenceInclusive,
+                    ),
+                  ),
+                ),
+              );
+            },
+          },
+          projectionSnapshotQuery: {
+            getEventReplayStats: () => Effect.succeed({ eventCount: 1, payloadBytes: 100 }),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeShell]({
+            afterSequence: 0,
+            requestCompletionMarker: true,
+          }).pipe(
+            Stream.takeUntil((item) => item.kind === "synchronized"),
+            Stream.runCollect,
+          ),
+        ),
+      );
+
+      assert.deepEqual(
+        items.map((item) => ("sequence" in item ? item.sequence : item.kind)),
+        [1, 6, "synchronized"],
+      );
+      assert.equal(replayHead, 5);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("maps delegation lifecycle events into shell upserts", () =>
     Effect.gen(function* () {
       const now = "2026-08-31T00:00:00.000Z";

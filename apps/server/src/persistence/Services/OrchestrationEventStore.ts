@@ -51,6 +51,7 @@ export interface OrchestrationEventStoreShape {
    *
    * @param sequenceExclusive - Sequence cursor (exclusive).
    * @param limit - Maximum number of events to emit.
+   * @param toSequenceInclusive - Optional captured upper sequence boundary.
    * @returns Stream containing ordered events.
    *
    * Reads in fixed-size pages and normalizes non-integer/negative limits.
@@ -58,6 +59,7 @@ export interface OrchestrationEventStoreShape {
   readonly readFromSequence: (
     sequenceExclusive: number,
     limit?: number,
+    toSequenceInclusive?: number,
   ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
 
   /** Read one aggregate through a captured global head, without decoding other streams. */

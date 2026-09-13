@@ -90,6 +90,7 @@ const OrchestrationEventPersistedRowSchema = Schema.Struct({
 
 const ReadFromSequenceRequestSchema = Schema.Struct({
   sequenceExclusive: NonNegativeInt,
+  toSequenceInclusive: NonNegativeInt,
   limit: Schema.Number,
 });
 const AggregateReplayRequestSchema = Schema.Struct({
@@ -216,6 +217,7 @@ const makeEventStore = Effect.gen(function* () {
           metadata_json AS "metadata"
         FROM orchestration_events
         WHERE sequence > ${request.sequenceExclusive}
+          AND sequence <= ${request.toSequenceInclusive}
         ORDER BY sequence ASC
         LIMIT ${request.limit}
       `,
@@ -302,9 +304,10 @@ const makeEventStore = Effect.gen(function* () {
   const readFromSequence: OrchestrationEventStoreShape["readFromSequence"] = (
     sequenceExclusive,
     limit = DEFAULT_READ_FROM_SEQUENCE_LIMIT,
+    toSequenceInclusive = Number.MAX_SAFE_INTEGER,
   ) => {
     const normalizedLimit = Math.max(0, Math.floor(limit));
-    if (normalizedLimit === 0) {
+    if (normalizedLimit === 0 || sequenceExclusive >= toSequenceInclusive) {
       return Stream.empty;
     }
     return Stream.paginate(
@@ -312,6 +315,7 @@ const makeEventStore = Effect.gen(function* () {
       ({ cursor, remaining }) =>
         readEventRowsFromSequence({
           sequenceExclusive: cursor,
+          toSequenceInclusive,
           limit: Math.min(remaining, READ_PAGE_SIZE),
         }).pipe(
           Effect.mapError(

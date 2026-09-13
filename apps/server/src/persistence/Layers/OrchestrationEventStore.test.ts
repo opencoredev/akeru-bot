@@ -173,6 +173,35 @@ layer("OrchestrationEventStore", (it) => {
     }),
   );
 
+  it.effect("bounds global replay to a captured head across sequence gaps", () =>
+    Effect.gen(function* () {
+      const store = yield* OrchestrationEventStore;
+      const sql = yield* SqlClient.SqlClient;
+      const threadId = ThreadId.make("bounded-global-replay");
+      const first = yield* store.append(messageEvent(threadId, "bounded-first"));
+      const pruned = yield* store.append(messageEvent(threadId, "bounded-pruned"));
+      const last = yield* store.append(messageEvent(threadId, "bounded-last"));
+      yield* sql`DELETE FROM orchestration_events WHERE sequence = ${pruned.sequence}`;
+      yield* sql`
+        INSERT INTO orchestration_events (
+          event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
+          actor_kind, payload_json, metadata_json
+        ) VALUES (
+          'bounded-after-captured-head', 'thread', ${threadId}, 3, 'thread.message-sent',
+          '2026-01-01T00:00:00.000Z', 'provider', '{', '{}'
+        )
+      `;
+
+      const events = yield* store
+        .readFromSequence(first.sequence - 1, last.sequence - first.sequence + 1, last.sequence)
+        .pipe(Stream.runCollect);
+      assert.deepEqual(
+        events.map((event) => event.sequence),
+        [first.sequence, last.sequence],
+      );
+    }),
+  );
+
   it.effect("reads one aggregate through the captured head across pruned global gaps", () =>
     Effect.gen(function* () {
       const store = yield* OrchestrationEventStore;

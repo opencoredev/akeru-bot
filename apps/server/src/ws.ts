@@ -2011,7 +2011,7 @@ const makeWsRpcLayer = (
                   // are already covered by the live subscription, so this bound
                   // cannot chase a moving event-store head or grow the live
                   // buffer indefinitely while waiting for an empty page.
-                  orchestrationEngine.readEvents(afterSequence, replayGap),
+                  orchestrationEngine.readEvents(afterSequence, replayGap, headSequence),
                 ).pipe(
                   Stream.mapError(
                     (cause) =>

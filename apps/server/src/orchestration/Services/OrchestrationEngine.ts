@@ -47,11 +47,13 @@ export interface OrchestrationEngineShape {
    * @param limit - Maximum number of events to read. Defaults to the event
    *   store's page-bounded default; pass a higher value when the caller must
    *   read a wider global range. Thread subscriptions use readThreadEvents.
+   * @param toSequenceInclusive - Optional captured upper sequence boundary.
    * @returns Stream containing ordered events.
    */
   readonly readEvents: (
     fromSequenceExclusive: number,
     limit?: number,
+    toSequenceInclusive?: number,
   ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError, never>;
 
   /** Read only this thread's events through a captured authoritative head. */
