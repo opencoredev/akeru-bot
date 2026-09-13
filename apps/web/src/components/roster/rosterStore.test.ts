@@ -336,8 +336,31 @@ describe("roster sections and pins", () => {
       "mori",
       "akeru",
       "scout",
+      "crew",
     ]);
     expect(useRosterStore.getState().groups[0]?.members).toEqual([]);
+  });
+
+  it("nudges newly live unassigned items omitted from the saved order", () => {
+    useRosterStore.setState({
+      bots: [bot("akeru"), bot("mori")],
+      groups: [group("crew")],
+      unassignedItems: [{ kind: "bot", id: "akeru" }],
+    });
+
+    useRosterStore.getState().nudgeRosterItem({ kind: "group", id: "crew" }, -1);
+    expect(useRosterStore.getState().unassignedItems).toEqual([
+      { kind: "group", id: "crew" },
+      { kind: "bot", id: "akeru" },
+      { kind: "bot", id: "mori" },
+    ]);
+
+    useRosterStore.getState().nudgeRosterItem({ kind: "bot", id: "mori" }, -1);
+    expect(useRosterStore.getState().unassignedItems).toEqual([
+      { kind: "group", id: "crew" },
+      { kind: "bot", id: "mori" },
+      { kind: "bot", id: "akeru" },
+    ]);
   });
 
   it("nudges pinned and section items without crossing zones", () => {

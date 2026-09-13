@@ -537,15 +537,22 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     const pinnedKeys = new Set(state.pinnedItems.map(rosterItemKey));
     const remaining = (candidate: RosterItemRef) =>
       !assigned.has(rosterItemKey(candidate)) && !pinnedKeys.has(rosterItemKey(candidate));
-    const unassigned =
-      state.unassignedItems.length > 0
-        ? state.unassignedItems.filter(remaining)
-        : [
-            ...state.groups.map((group) => ({ kind: "group" as const, id: group.id })),
-            ...state.bots
-              .filter((bot) => bot.archivedAt === null)
-              .map((bot) => ({ kind: "bot" as const, id: bot.id })),
-          ].filter(remaining);
+    const unassigned = state.unassignedItems.filter(remaining);
+    const seen = new Set(unassigned.map(rosterItemKey));
+    for (const group of state.groups) {
+      const candidate = { kind: "group" as const, id: group.id };
+      if (remaining(candidate) && !seen.has(rosterItemKey(candidate))) {
+        unassigned.push(candidate);
+        seen.add(rosterItemKey(candidate));
+      }
+    }
+    for (const bot of state.bots) {
+      const candidate = { kind: "bot" as const, id: bot.id };
+      if (bot.archivedAt === null && remaining(candidate) && !seen.has(rosterItemKey(candidate))) {
+        unassigned.push(candidate);
+        seen.add(rosterItemKey(candidate));
+      }
+    }
     const movedUnassigned = moveRosterItemInOrder(unassigned, item, delta);
     if (!movedUnassigned) return;
     set({ unassignedItems: movedUnassigned });
