@@ -413,6 +413,172 @@ describe("orchestration projector", () => {
     expect(settledThread?.latestTurn?.completedAt).toBe(settledAt);
   });
 
+  it.effect.each([
+    ["ready", "completed"],
+    ["interrupted", "interrupted"],
+  ] as const)(
+    "preserves the turn state after a %s session captures its checkpoint",
+    ([status, state]) =>
+      Effect.gen(function* () {
+        const createdAt = "2026-02-23T08:00:00.000Z";
+        const startedAt = "2026-02-23T08:00:05.000Z";
+        const settledAt = "2026-02-23T08:01:00.000Z";
+        const afterCreate = yield* projectEvent(
+          createEmptyReadModel(createdAt),
+          makeEvent({
+            sequence: 1,
+            type: "thread.created",
+            aggregateKind: "thread",
+            aggregateId: "thread-1",
+            occurredAt: createdAt,
+            commandId: "cmd-create",
+            payload: {
+              threadId: "thread-1",
+              projectId: "project-1",
+              title: "demo",
+              modelSelection: {
+                provider: ProviderDriverKind.make("codex"),
+                model: "gpt-5.3-codex",
+              },
+              runtimeMode: "full-access",
+              branch: null,
+              worktreePath: null,
+              createdAt,
+              updatedAt: createdAt,
+            },
+          }),
+        );
+        const afterRunning = yield* projectEvent(
+          afterCreate,
+          makeEvent({
+            sequence: 2,
+            type: "thread.session-set",
+            aggregateKind: "thread",
+            aggregateId: "thread-1",
+            occurredAt: startedAt,
+            commandId: "cmd-running",
+            payload: {
+              threadId: "thread-1",
+              session: {
+                threadId: "thread-1",
+                status: "running",
+                providerName: "codex",
+                providerSessionId: "session-1",
+                providerThreadId: "provider-thread-1",
+                runtimeMode: "approval-required",
+                activeTurnId: "turn-1",
+                lastError: null,
+                updatedAt: startedAt,
+              },
+            },
+          }),
+        );
+        const afterSettled = yield* projectEvent(
+          afterRunning,
+          makeEvent({
+            sequence: 3,
+            type: "thread.session-set",
+            aggregateKind: "thread",
+            aggregateId: "thread-1",
+            occurredAt: settledAt,
+            commandId: "cmd-settled",
+            payload: {
+              threadId: "thread-1",
+              session: {
+                threadId: "thread-1",
+                status,
+                providerName: "codex",
+                providerSessionId: "session-1",
+                providerThreadId: "provider-thread-1",
+                runtimeMode: "approval-required",
+                activeTurnId: null,
+                lastError: null,
+                updatedAt: settledAt,
+              },
+            },
+          }),
+        );
+        const afterCheckpoint = yield* projectEvent(
+          afterSettled,
+          makeEvent({
+            sequence: 4,
+            type: "thread.turn-diff-completed",
+            aggregateKind: "thread",
+            aggregateId: "thread-1",
+            occurredAt: settledAt,
+            commandId: "cmd-checkpoint",
+            payload: {
+              threadId: "thread-1",
+              turnId: "turn-1",
+              checkpointTurnCount: 1,
+              checkpointRef: "refs/t3/checkpoints/thread-1/turn/1",
+              status: "ready",
+              files: [],
+              assistantMessageId: "assistant-1",
+              completedAt: settledAt,
+            },
+          }),
+        );
+
+        expect(afterCheckpoint.threads[0]?.latestTurn?.state).toBe(state);
+        expect(afterCheckpoint.threads[0]?.checkpoints[0]?.status).toBe("ready");
+      }),
+  );
+
+  it.effect("does not treat a missing checkpoint as an interruption", () =>
+    Effect.gen(function* () {
+      const createdAt = "2026-02-23T08:00:00.000Z";
+      const afterCreate = yield* projectEvent(
+        createEmptyReadModel(createdAt),
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: createdAt,
+          commandId: "cmd-create",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-1",
+            title: "demo",
+            modelSelection: {
+              provider: ProviderDriverKind.make("codex"),
+              model: "gpt-5.3-codex",
+            },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt,
+            updatedAt: createdAt,
+          },
+        }),
+      );
+      const afterCheckpoint = yield* projectEvent(
+        afterCreate,
+        makeEvent({
+          sequence: 2,
+          type: "thread.turn-diff-completed",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: createdAt,
+          commandId: "cmd-placeholder",
+          payload: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            checkpointTurnCount: 1,
+            checkpointRef: "provider-diff:placeholder",
+            status: "missing",
+            files: [],
+            assistantMessageId: "assistant-1",
+            completedAt: createdAt,
+          },
+        }),
+      );
+
+      expect(afterCheckpoint.threads[0]?.latestTurn?.state).toBe("completed");
+    }),
+  );
+
   it("updates canonical thread runtime mode from thread.runtime-mode-set", async () => {
     const createdAt = "2026-02-23T08:00:00.000Z";
     const updatedAt = "2026-02-23T08:00:05.000Z";
