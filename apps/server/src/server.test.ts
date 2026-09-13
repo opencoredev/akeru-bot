@@ -345,6 +345,11 @@ const makeAuthTestLayer = () =>
   EnvironmentAuth.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
     Layer.provide(ServerSecretStore.layer),
+    Layer.provide(
+      Layer.mock(ServerEnvironment.ServerEnvironmentIdentity)({
+        getEnvironmentId: Effect.succeed(testEnvironmentDescriptor.environmentId),
+      }),
+    ),
   );
 
 const makeBrowserOtlpPayload = (spanName: string) =>
@@ -939,6 +944,8 @@ const buildAppUnderTest = (options?: {
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getProjectShellById: () => Effect.succeed(Option.none()),
             getThreadShellById: () => Effect.succeed(Option.none()),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
             getThreadDetailById: () => Effect.succeed(Option.none()),
             getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
@@ -1584,6 +1591,48 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(sessionBody.authenticated, true);
       assert.equal(sessionBody.sessionMethod, "browser-session-cookie");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("migrates a valid legacy remote-web session cookie", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest({ config: { mode: "web", host: "192.168.1.50" } });
+
+      const { cookie } = yield* bootstrapBrowserSession();
+      const currentCookie = cookie?.split(";")[0] ?? "";
+      const legacyCookie = currentCookie.replace(/^t3_session_[^=]+=/, "t3_session=");
+      const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
+      const response = yield* fetchEffect(sessionUrl, {
+        headers: { cookie: legacyCookie },
+      });
+      const body = yield* responseJsonEffect<{ readonly authenticated: boolean }>(response);
+
+      assert.equal(body.authenticated, true);
+      assert.equal(response.headers["set-cookie"], cookie);
+      assert.equal(response.headers["cache-control"], "no-store");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect.each(["cookie", "bearer"])(
+    "does not migrate a stale legacy cookie when %s auth succeeds",
+    (source) =>
+      Effect.gen(function* () {
+        yield* buildAppUnderTest({ config: { mode: "web", host: "192.168.1.50" } });
+
+        const { cookie } = yield* bootstrapBrowserSession();
+        const sessionCookie = cookie?.split(";")[0] ?? "";
+        const sessionToken = extractSessionTokenFromSetCookie(cookie ?? "");
+        const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
+        const response = yield* fetchEffect(sessionUrl, {
+          headers:
+            source === "cookie"
+              ? { cookie: `${sessionCookie}; t3_session=stale` }
+              : { authorization: `Bearer ${sessionToken}`, cookie: "t3_session=stale" },
+        });
+        const body = yield* responseJsonEffect<{ readonly authenticated: boolean }>(response);
+
+        assert.equal(body.authenticated, true);
+        assert.isUndefined(response.headers["set-cookie"]);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("exchanges a bootstrap grant for a scoped bearer access token", () =>
@@ -5360,6 +5409,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 shellFetches.push(threadId);
                 return Option.some(makeDefaultOrchestrationThreadShell({ id: threadId }));
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5438,6 +5489,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 shellFetches.push(threadId);
                 return Option.some(makeDefaultOrchestrationThreadShell({ id: threadId }));
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5528,6 +5581,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
           projectionSnapshotQuery: {
             getThreadShellById: () => Effect.succeed(Option.none()),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5589,6 +5644,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                       Option.some(makeDefaultOrchestrationThreadShell({ id: threadId })),
                     );
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5710,6 +5767,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5788,6 +5847,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                       }),
                     );
               }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5844,6 +5905,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.succeed(
                 Option.some(makeDefaultOrchestrationThreadShell({ id: threadId, session: null })),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -5912,6 +5975,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                     }),
                   ),
                 ),
+              getThreadRuntimeContext: () => Effect.die("unused"),
+              getTurnStartMessage: () => Effect.die("unused"),
             },
           },
         });
@@ -5978,6 +6043,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -6032,6 +6099,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.succeed(
                 Option.some(makeDefaultOrchestrationThreadShell({ id: threadId, session: null })),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -6105,6 +6174,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
@@ -6177,6 +6248,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 ),
               ),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
           },
         },
       });
