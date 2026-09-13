@@ -1850,7 +1850,13 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         threadId,
         runtimeMode: "full-access",
       });
-      yield* Effect.promise(() => replyCompleted);
+      yield* Effect.promise(() => replyCompleted).pipe(
+        Effect.timeoutOrElse({
+          duration: "1 second",
+          orElse: () => Effect.fail(new Error("OpenCode permission reply did not complete")),
+        }),
+        TestClock.withLive,
+      );
       NodeAssert.deepEqual(runtimeMock.state.permissionReplyCalls, [
         { requestID: "per_full", reply: "once" },
       ]);
