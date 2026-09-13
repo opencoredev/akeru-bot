@@ -1,4 +1,6 @@
 import { EnvironmentId, type SubscriptionProviderId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -114,12 +116,13 @@ let root: Root;
 const environmentId = EnvironmentId.make("onboarding-environment");
 const success = <T,>(value: T) => ({ _tag: "Success" as const, value });
 
-async function render(providerId: SubscriptionProviderId = "openai-codex") {
+async function render(providerId: SubscriptionProviderId = "openai-codex", captureMode = false) {
   await act(async () =>
     root.render(
       <SubscriptionStep
         environmentId={environmentId}
         draft={{ ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId }}
+        captureMode={captureMode}
         onChange={vi.fn()}
         onContinue={mocks.next}
       />,
@@ -305,5 +308,29 @@ describe("onboarding API-key connections", () => {
     await click("Continue");
     expect(mocks.next).toHaveBeenCalledOnce();
     expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("keeps capture mode stable after the router normalizes the URL", async () => {
+    await render("openai-codex", true);
+    await click("Continue");
+    expect(mocks.next).toHaveBeenCalledOnce();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("re-enables paste completion when the request is interrupted", async () => {
+    mocks.start.mockResolvedValue(
+      success({
+        loginId: "oauth-login",
+        provider: "anthropic",
+        completion: "paste",
+        url: "https://claude.example/login",
+      }),
+    );
+    mocks.complete.mockResolvedValue(AsyncResult.failure(Cause.interrupt(1)));
+    await render("anthropic");
+    await click("Connect Claude");
+    await act(async () => mocks.input?.onChange({ currentTarget: { value: "oauth-code" } }));
+    await click("Connect");
+    expect(mocks.buttons.get("Connect")?.disabled).toBe(false);
   });
 });
