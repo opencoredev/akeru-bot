@@ -12,6 +12,7 @@ import {
 } from "../ui/dialog";
 import { Switch } from "../ui/switch";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { AvatarColorPicker } from "./AvatarColorPicker";
 import { BotAvatarView } from "./BotAvatarView";
 import {
   ditherSeedForName,
@@ -20,7 +21,7 @@ import {
   resolveUploadAvatar,
   type UploadRendering,
 } from "./dither.logic";
-import { BLOB_COLORS, BLOB_SHAPES, resolveBlobRendering } from "./roster.logic";
+import { BLOB_SHAPES, resolveBlobRendering } from "./roster.logic";
 import type { Bot, BotAvatar, BotBlobShape } from "./types";
 import { useSaveBotAvatar } from "./useServerRoster";
 
@@ -197,22 +198,7 @@ export function AvatarPickerDialog({
                   </button>
                 ))}
               </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {BLOB_COLORS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-label={option}
-                    aria-pressed={color === option}
-                    onClick={() => setColor(option)}
-                    style={{ backgroundColor: option }}
-                    className={cn(
-                      "size-7 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      color === option && "ring-2 ring-ring ring-offset-2 ring-offset-background",
-                    )}
-                  />
-                ))}
-              </div>
+              <AvatarColorPicker className="mx-auto" value={color} onChange={setColor} />
             </>
           ) : tab === "generate" ? (
             <div className="flex h-40 flex-col items-center justify-center gap-3">

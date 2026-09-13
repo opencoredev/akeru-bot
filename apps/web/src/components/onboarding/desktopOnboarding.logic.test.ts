@@ -158,6 +158,19 @@ describe("desktop onboarding", () => {
     expect(parseDesktopOnboardingDraft(JSON.stringify(DEFAULT_DESKTOP_ONBOARDING_DRAFT))).toEqual(
       DEFAULT_DESKTOP_ONBOARDING_DRAFT,
     );
+    const customColorDraft = {
+      ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+      avatar: { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT.avatar, color: "#123ABC" },
+    };
+    expect(parseDesktopOnboardingDraft(JSON.stringify(customColorDraft))).toEqual(customColorDraft);
+    expect(
+      parseDesktopOnboardingDraft(
+        JSON.stringify({
+          ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+          avatar: { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT.avatar, color: "not-a-color" },
+        }),
+      ),
+    ).toBeNull();
     expect(parseDesktopOnboardingDraft("not json")).toBeNull();
     expect(
       parseDesktopOnboardingDraft(
