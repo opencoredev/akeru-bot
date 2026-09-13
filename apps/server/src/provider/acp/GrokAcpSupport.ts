@@ -76,10 +76,16 @@ export const makeGrokAcpRuntime = (
     return yield* makeXAiPromptCompletionRuntime(runtime);
   });
 
+/**
+ * Akeru's built-in Grok slug. It is the CLI's product name, not a model id the ACP accepts,
+ * so selecting it means "use whatever model the Grok session currently runs on".
+ */
+export const GROK_DEFAULT_MODEL_SLUG = "grok-build";
+
 export function resolveGrokAcpBaseModelId(model: string | null | undefined): string {
   const trimmed = model?.trim();
-  const base = trimmed && trimmed.length > 0 ? trimmed : "grok-build";
-  return normalizeModelSlug(base, GROK_DRIVER_KIND) ?? "grok-build";
+  const base = trimmed && trimmed.length > 0 ? trimmed : GROK_DEFAULT_MODEL_SLUG;
+  return normalizeModelSlug(base, GROK_DRIVER_KIND) ?? GROK_DEFAULT_MODEL_SLUG;
 }
 
 export function currentGrokModelIdFromSessionSetup(
@@ -97,12 +103,15 @@ export function applyGrokAcpModelSelection<E>(input: {
   readonly requestedModelId: string | undefined;
   readonly mapError: (cause: EffectAcpErrors.AcpError) => E;
 }): Effect.Effect<string | undefined, E> {
+  // The product slug is never sent over the wire; it keeps the session's current model.
+  const requestedModelId =
+    input.requestedModelId === GROK_DEFAULT_MODEL_SLUG ? undefined : input.requestedModelId;
   const shouldSwitchModel =
-    input.requestedModelId !== undefined && input.requestedModelId !== input.currentModelId;
+    requestedModelId !== undefined && requestedModelId !== input.currentModelId;
   if (!shouldSwitchModel) {
     return Effect.succeed(input.currentModelId);
   }
   return input.runtime
-    .setSessionModel(input.requestedModelId)
-    .pipe(Effect.mapError(input.mapError), Effect.as(input.requestedModelId));
+    .setSessionModel(requestedModelId)
+    .pipe(Effect.mapError(input.mapError), Effect.as(requestedModelId));
 }

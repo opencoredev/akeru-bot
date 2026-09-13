@@ -93,9 +93,9 @@ export function isProviderInstancePickerSelectable(entry: ProviderInstanceEntry)
   );
 }
 
-/** Picker rails contain configured, enabled instances only. */
+/** Picker rails contain only instances that can contribute selectable models. */
 export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled;
+  return isProviderInstancePickerSelectable(entry);
 }
 
 /**

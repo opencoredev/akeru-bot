@@ -289,9 +289,12 @@ describe("plugin catalog loader", () => {
       catalogStatus: "verification-pending",
     });
     expect(byId.get("executor")).toMatchObject({
-      authentication: "oauth",
+      kind: "mcp-stdio",
+      command: "executor",
+      args: ["mcp"],
+      authentication: "none",
       requiredCredentials: [],
-      transport: { type: "url", url: "https://executor.sh/mcp" },
+      transport: { type: "stdio", command: "executor", args: ["mcp"] },
       connection: { type: "verification-pending" },
       catalogStatus: "verification-pending",
     });

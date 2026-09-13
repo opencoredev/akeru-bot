@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 
 import { cn } from "~/lib/utils";
 import { generateDitherIdenticon, identiconPathData } from "./dither.logic";
-import { blinkDelayMs, resolveBlobRendering } from "./roster.logic";
+import { blinkDelayMs, resolveBlobEyeColor, resolveBlobRendering } from "./roster.logic";
 import type { BotAvatar, BotBlobShape } from "./types";
 
 /**
@@ -12,9 +12,6 @@ import type { BotAvatar, BotBlobShape } from "./types";
  * avatars".
  */
 export type BotAnimationState = "idle" | "working" | "needs-you" | "success";
-
-/** Eyes are always near-black, ink on the body. */
-const INK = "#0A0A0A";
 
 /**
  * Where the face sits on the 100×100 viewBox. Bottom-heavy shapes (triangle,
@@ -77,7 +74,7 @@ function BlobShape({ shape, color }: { shape: BotBlobShape; color: string }) {
  * a focused face. Needs-you raises and spreads them. Success closes them into
  * happy arcs.
  */
-function Eyes({ state }: { state: BotAnimationState }) {
+function Eyes({ state, color }: { state: BotAnimationState; color: string }) {
   switch (state) {
     case "working":
       return (
@@ -89,7 +86,7 @@ function Eyes({ state }: { state: BotAnimationState }) {
             height="10"
             rx="4.5"
             transform="rotate(14 -9 5)"
-            fill={INK}
+            fill={color}
           />
           <rect
             x="4.5"
@@ -98,7 +95,7 @@ function Eyes({ state }: { state: BotAnimationState }) {
             height="10"
             rx="4.5"
             transform="rotate(14 9 5)"
-            fill={INK}
+            fill={color}
           />
         </>
       );
@@ -112,7 +109,7 @@ function Eyes({ state }: { state: BotAnimationState }) {
             height="26"
             rx="4.5"
             transform="rotate(10 -11 0)"
-            fill={INK}
+            fill={color}
           />
           <rect
             x="6.5"
@@ -121,7 +118,7 @@ function Eyes({ state }: { state: BotAnimationState }) {
             height="26"
             rx="4.5"
             transform="rotate(10 11 0)"
-            fill={INK}
+            fill={color}
           />
         </>
       );
@@ -130,14 +127,14 @@ function Eyes({ state }: { state: BotAnimationState }) {
         <>
           <path
             d="M-17 1 Q-11 -9 -5 1"
-            stroke={INK}
+            stroke={color}
             strokeWidth="4"
             strokeLinecap="round"
             fill="none"
           />
           <path
             d="M5 1 Q11 -9 17 1"
-            stroke={INK}
+            stroke={color}
             strokeWidth="4"
             strokeLinecap="round"
             fill="none"
@@ -154,7 +151,7 @@ function Eyes({ state }: { state: BotAnimationState }) {
             height="20"
             rx="4.5"
             transform="rotate(14 -9.5 0)"
-            fill={INK}
+            fill={color}
           />
           <rect
             x="5"
@@ -163,7 +160,7 @@ function Eyes({ state }: { state: BotAnimationState }) {
             height="20"
             rx="4.5"
             transform="rotate(14 9.5 0)"
-            fill={INK}
+            fill={color}
           />
         </>
       );
@@ -174,7 +171,15 @@ function Eyes({ state }: { state: BotAnimationState }) {
  * The face. A nested svg owns the blink so scaleY uses that svg's viewBox,
  * not a <g> fill-box that collapses as the eyes close and strobes the avatar.
  */
-function Face({ shape, state }: { shape: BotBlobShape; state: BotAnimationState }) {
+function Face({
+  shape,
+  state,
+  color,
+}: {
+  shape: BotBlobShape;
+  state: BotAnimationState;
+  color: string;
+}) {
   const { y, scale } = FACE_LAYOUT[shape];
   return (
     <g transform={`translate(50 ${y}) scale(${scale})`}>
@@ -188,7 +193,7 @@ function Face({ shape, state }: { shape: BotBlobShape; state: BotAnimationState 
         overflow="visible"
         aria-hidden
       >
-        <Eyes state={state} />
+        <Eyes state={state} color={color} />
       </svg>
     </g>
   );
@@ -251,6 +256,7 @@ export function BotAvatarView({
   }
 
   const { shape, color } = resolveBlobRendering(avatar);
+  const eyeColor = resolveBlobEyeColor(color);
   return (
     <svg
       viewBox="0 0 100 100"
@@ -263,7 +269,7 @@ export function BotAvatarView({
     >
       <g className="bot-body">
         <BlobShape shape={shape} color={color} />
-        <Face shape={shape} state={state} />
+        <Face shape={shape} state={state} color={eyeColor} />
       </g>
     </svg>
   );

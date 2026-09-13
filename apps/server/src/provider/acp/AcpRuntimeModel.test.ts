@@ -16,6 +16,7 @@ import {
   parsePermissionRequest,
   parseSessionModeState,
   parseSessionUpdateEvent,
+  sessionModelStateFromInitialize,
   sessionUpdateIsReplay,
   syntheticLoadSessionResponseFromInitialize,
   waitForSessionLoadReplayIdle,
@@ -113,6 +114,32 @@ describe("AcpRuntimeModel", () => {
         },
       } satisfies EffectAcpSchema.SessionNotification),
     ).toBe(false);
+  });
+
+  it("reads Grok model state from initialize._meta before a session exists", () => {
+    const modelState = sessionModelStateFromInitialize({
+      protocolVersion: 1,
+      _meta: {
+        modelState: {
+          currentModelId: "grok-4.6",
+          availableModels: [
+            { modelId: "grok-4.6", name: "Grok 4.6" },
+            { modelId: "grok-mock-alt", name: "Grok Mock Alt" },
+          ],
+        },
+      },
+    } satisfies EffectAcpSchema.InitializeResponse);
+
+    expect(modelState?.currentModelId).toBe("grok-4.6");
+    expect(modelState?.availableModels.map((model) => model.modelId)).toEqual([
+      "grok-4.6",
+      "grok-mock-alt",
+    ]);
+    expect(
+      sessionModelStateFromInitialize({
+        protocolVersion: 1,
+      } satisfies EffectAcpSchema.InitializeResponse),
+    ).toBeUndefined();
   });
 
   it("builds a synthetic load response from initialize model state", () => {
