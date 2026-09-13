@@ -47,7 +47,9 @@ authorization.
 
 The desktop app can start or reuse Akeru Bot on an SSH host and open a local port forward. The
 remote host owns all server state. The desktop stores an `SshConnectionTarget` and reconnects
-through the forwarded endpoint.
+through the forwarded endpoint. Managed remote servers exec the resolved CLI without an npm wrapper
+so the recorded PID is the server itself. A stop that does not confirm exit keeps ownership files
+and reports failure; reconnect waits for that stop on the same target.
 
 SSH is a desktop capability because it requires local process and SSH access. Web and mobile can use
 a directly reachable server after normal pairing.
