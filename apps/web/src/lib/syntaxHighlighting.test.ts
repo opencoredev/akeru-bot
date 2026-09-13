@@ -9,7 +9,11 @@ vi.mock("@pierre/diffs", () => ({
   getSharedHighlighter,
 }));
 
-import { getSyntaxHighlighterPromise } from "./syntaxHighlighting";
+import { getSyntaxHighlighterPromise, PREFERRED_HIGHLIGHTER } from "./syntaxHighlighting";
+
+it("prefers the Oniguruma WASM highlighter", () => {
+  expect(PREFERRED_HIGHLIGHTER).toBe("shiki-wasm");
+});
 
 it("caches the recovered text highlighter for unsupported languages", async () => {
   const textHighlighter = {} as DiffsHighlighter;
@@ -25,4 +29,7 @@ it("caches the recovered text highlighter for unsupported languages", async () =
 
   expect(second).toBe(first);
   expect(getSharedHighlighter).toHaveBeenCalledTimes(2);
+  expect(getSharedHighlighter).toHaveBeenCalledWith(
+    expect.objectContaining({ preferredHighlighter: "shiki-wasm" }),
+  );
 });

@@ -60,11 +60,19 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+Standard OpenCode discovery probes `opencode --version` for at most four seconds. The probe command
+runs in its own process group so a hanging wrapper cannot keep provider status running after the
+timeout. Inventory CLI commands (`models --verbose`, `agent list`, `debug skill`) run one at a time.
+A process-wide permit serializes the full inventory sequence, including retries, across concurrent
+provider checks and separately constructed OpenCode runtimes, because they share one SQLite database.
+OpenCode Go stays on the Mastra controller and does not use this CLI probe path.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
 [Codex app-server protocol](../../packages/effect-codex-app-server/src/protocol.ts) retain raw
-observations only when configured before connection. `AcpClientOptions` and `AcpAgentOptions` expose
+observations only when configured before connection. Incoming Codex JSONL is framed from
+per-chunk fragments so large messages are scanned once. `AcpClientOptions` and `AcpAgentOptions` expose
 `rawNotificationBufferSize` for `raw.notifications`. `CodexAppServerClientOptions` exposes that option
 and `rawRequestBufferSize` for `raw.requests`. Pass them to the package's `make` or layer constructor.
 
