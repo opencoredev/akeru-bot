@@ -136,6 +136,22 @@ export const EnvironmentIdentificationMode = Schema.Literals(["artwork", "pill",
 export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
 export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
 
+export const QuitConfirmationMode = Schema.Literals(["direct", "hold", "double-click"]);
+export type QuitConfirmationMode = typeof QuitConfirmationMode.Type;
+export const DEFAULT_QUIT_CONFIRMATION_MODE: QuitConfirmationMode = "hold";
+
+const LegacyConfirmQuit = Schema.Boolean.pipe(
+  Schema.decodeTo(
+    QuitConfirmationMode,
+    SchemaTransformation.transform({
+      decode: (confirmQuit): QuitConfirmationMode => (confirmQuit ? "hold" : "direct"),
+      encode: (mode) => mode === "hold",
+    }),
+  ),
+);
+
+const QuitConfirmationModeSetting = Schema.Union([QuitConfirmationMode, LegacyConfirmQuit]);
+
 /**
  * A user-chosen font family (a single name or a comma-separated list). Empty
  * means "use the app default"; clients compose their own fallback stacks.
@@ -191,9 +207,11 @@ export const ClientSettingsSchema = Schema.Struct({
   browserAutoShowFloatingPreview: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW)),
   ),
-  // Desktop-only: require holding the quit shortcut (Cmd/Ctrl+Q) before the
-  // app quits; a quick tap only shows a hint. Browser clients ignore it.
-  confirmQuit: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Desktop-only. Boolean values from older settings files decode to their
+  // equivalent mode and encode back as the canonical string value.
+  confirmQuit: QuitConfirmationModeSetting.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_QUIT_CONFIRMATION_MODE)),
+  ),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
@@ -1093,7 +1111,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
   browserDefaultAppearance: Schema.optionalKey(PreviewAppearancePreference),
   browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
-  confirmQuit: Schema.optionalKey(Schema.Boolean),
+  confirmQuit: Schema.optionalKey(QuitConfirmationMode),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
