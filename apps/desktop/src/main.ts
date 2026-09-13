@@ -204,4 +204,8 @@ const desktopRuntimeLayer = desktopApplicationRuntimeLayer.pipe(
   Layer.provideMerge(DesktopPreReadyPlatform.layer),
 );
 
-DesktopApp.program.pipe(Effect.provide(desktopRuntimeLayer), NodeRuntime.runMain);
+DesktopApp.program.pipe(
+  Effect.ensuring(DesktopShutdown.acknowledgeShutdown),
+  Effect.provide(desktopRuntimeLayer),
+  NodeRuntime.runMain,
+);

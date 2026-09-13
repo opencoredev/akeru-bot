@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 
 import type { BotAvatar, BotBlobShape } from "../roster/types";
-import { BLOB_COLORS, BLOB_SHAPES } from "../roster/roster.logic";
+import { BLOB_SHAPES, isBotAvatarColor } from "../roster/roster.logic";
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
 export const DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY = "akeru:desktop-onboarding-completed:v1";
@@ -96,7 +96,7 @@ function isBlobShape(value: unknown): value is BotBlobShape {
 }
 
 function isBlobColor(value: unknown): value is string {
-  return typeof value === "string" && BLOB_COLORS.includes(value);
+  return isBotAvatarColor(value);
 }
 
 const providerIds: readonly SubscriptionProviderId[] = [
@@ -150,6 +150,11 @@ interface DesktopOnboardingProvider {
   }>;
 }
 
+export type DesktopOnboardingCreationReadiness =
+  | { readonly status: "loading" }
+  | { readonly status: "unavailable" }
+  | { readonly status: "ready"; readonly engine: BotEngine };
+
 const subscriptionDriver: Readonly<Partial<Record<SubscriptionProviderId, string>>> = {
   "openai-codex": "codex",
   anthropic: "claudeAgent",
@@ -171,6 +176,15 @@ export function resolveDesktopOnboardingEngine(
   );
   const model = provider?.models.find((candidate) => candidate.isDefault) ?? provider?.models[0];
   return provider && model ? { provider: provider.instanceId, model: model.slug } : null;
+}
+
+export function resolveDesktopOnboardingCreationReadiness(
+  providerId: SubscriptionProviderId,
+  providers: ReadonlyArray<DesktopOnboardingProvider> | null,
+): DesktopOnboardingCreationReadiness {
+  if (providers === null) return { status: "loading" };
+  const engine = resolveDesktopOnboardingEngine(providerId, providers);
+  return engine ? { status: "ready", engine } : { status: "unavailable" };
 }
 
 export function desktopOnboardingModelSelection(engine: BotEngine | null): ModelSelection | null {

@@ -50,6 +50,12 @@ describe("parseGrokModelsCliOutput", () => {
     expect(parseGrokModelsCliOutput(LOGGED_OUT_MODELS_OUTPUT).authenticated).toBe(false);
   });
 
+  it("reads the plain one-model-per-line output from current CLIs", () => {
+    const parsed = parseGrokModelsCliOutput("grok-4.6\ncodex-1/gpt-5.6-sol\n");
+    expect(parsed.authenticated).toBeNull();
+    expect(parsed.models.map((model) => model.slug)).toEqual(["grok-4.6", "codex-1/gpt-5.6-sol"]);
+  });
+
   it("returns unknown auth for unrecognized output", () => {
     expect(parseGrokModelsCliOutput("grok 9.9.9\n").authenticated).toBeNull();
   });
@@ -295,7 +301,7 @@ describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("checkGrokProviderStatus l
         }),
       );
       expect(snapshot.status).toBe("ready");
-      expect(snapshot.auth.status).toBe("authenticated");
+      expect(["authenticated", "unknown"]).toContain(snapshot.auth.status);
       expect(snapshot.requiresNewThreadForModelChange).toBeUndefined();
       expect(snapshot.models.length).toBeGreaterThan(0);
       expect(snapshot.models.some((model) => model.slug === "grok-build")).toBe(false);

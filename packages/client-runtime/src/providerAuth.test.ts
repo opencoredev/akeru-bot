@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { SubscriptionProviderStatus } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+  type SubscriptionProviderStatus,
+} from "@t3tools/contracts";
 import {
   apiKeyStartInput,
   apiKeyValidationError,
+  filterProvidersBySubscriptionConnection,
   PROVIDER_CONNECTIONS,
   providerConnectionLabel,
   providerUsesApiKey,
@@ -73,7 +79,7 @@ describe("provider API key forms", () => {
 
   it("does not claim a saved key passed a health check", () => {
     expect(providerConnectionLabel({ ...status, authMode: "api-key", health: "detected" })).toBe(
-      "API key saved · detected",
+      "API key saved",
     );
     expect(providerConnectionLabel({ ...status, connected: false })).toBe("Not connected");
     expect(providerConnectionLabel(status)).toBe("OAuth connected");
@@ -83,5 +89,53 @@ describe("provider API key forms", () => {
     expect(providerUsesApiKey(status)).toBe(false);
     expect(providerUsesApiKey({ ...status, authMode: "api-key" })).toBe(true);
     expect(providerUsesApiKey({ ...status, provider: "opencode-go" })).toBe(true);
+  });
+});
+
+describe("filterProvidersBySubscriptionConnection", () => {
+  const provider = (driver: string, instanceId = driver): ServerProvider => ({
+    instanceId: ProviderInstanceId.make(instanceId),
+    driver: ProviderDriverKind.make(driver),
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-09-13T00:00:00.000Z",
+    models: [],
+    slashCommands: [],
+    skills: [],
+  });
+
+  it("keeps only connected built-in subscription providers", () => {
+    const providers = [
+      provider("codex"),
+      provider("claudeAgent"),
+      provider("grok"),
+      provider("opencode"),
+    ];
+    const statuses: SubscriptionProviderStatus[] = [
+      { ...status, provider: "openai-codex", connected: false, health: "missing" },
+      { ...status, provider: "anthropic", connected: false, health: "missing" },
+      { ...status, provider: "xai", connected: true, health: "detected" },
+    ];
+
+    expect(
+      filterProvidersBySubscriptionConnection(providers, statuses).map(
+        (candidate) => candidate.instanceId,
+      ),
+    ).toEqual(["grok", "opencode"]);
+  });
+
+  it("preserves custom instances that own their connection", () => {
+    const custom = provider("codex", "codex_work");
+
+    expect(filterProvidersBySubscriptionConnection([custom], [])).toEqual([custom]);
+  });
+
+  it("preserves configured providers until connection status is available", () => {
+    const providers = [provider("codex"), provider("claudeAgent")];
+
+    expect(filterProvidersBySubscriptionConnection(providers, undefined)).toEqual(providers);
   });
 });
