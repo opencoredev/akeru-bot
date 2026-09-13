@@ -106,6 +106,8 @@ describe("OrchestrationEngine", () => {
           return savedEvent;
         }),
       readFromSequence: () => Stream.empty,
+      readAggregateRange: () => Stream.die("unused aggregate replay"),
+      getAggregateReplayStats: () => Effect.die("unused aggregate replay stats"),
       readAll: () =>
         Stream.fail(
           new PersistenceSqlError({
@@ -209,6 +211,7 @@ describe("OrchestrationEngine", () => {
           getSnapshotSequence: () =>
             Effect.succeed({ snapshotSequence: projectionSnapshot.snapshotSequence }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),
+          getEventReplayStats: () => Effect.die("unused"),
           getOriginalProjectIdByWorkspaceRoot: () => Effect.die("unused"),
           getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
           getProjectShellById: () => Effect.succeed(Option.none()),
@@ -823,6 +826,12 @@ describe("OrchestrationEngine", () => {
       readFromSequence(sequenceExclusive) {
         return Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive));
       },
+      readAggregateRange() {
+        return Stream.die("unused aggregate replay");
+      },
+      getAggregateReplayStats() {
+        return Effect.die("unused aggregate replay stats");
+      },
       readAll() {
         return Stream.fromIterable(events);
       },
@@ -1063,6 +1072,12 @@ describe("OrchestrationEngine", () => {
       },
       readFromSequence(sequenceExclusive) {
         return Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive));
+      },
+      readAggregateRange() {
+        return Stream.die("unused aggregate replay");
+      },
+      getAggregateReplayStats() {
+        return Effect.die("unused aggregate replay stats");
       },
       readAll() {
         return Stream.fromIterable(events);

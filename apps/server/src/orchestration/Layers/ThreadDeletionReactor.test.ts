@@ -69,6 +69,8 @@ describe("ThreadDeletionReactor.start", () => {
 
         const engine: OrchestrationEngineService["Service"] = {
           readEvents: () => Stream.die("unused"),
+          readThreadEvents: () => Stream.die("unused"),
+          getThreadReplayStats: () => Effect.die("unused"),
           dispatch: () => Effect.die("unused"),
           get streamDomainEvents() {
             return Stream.die(
