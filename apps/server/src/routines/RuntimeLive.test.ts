@@ -130,6 +130,7 @@ const harness = (
           dispatch: () => Effect.die("unused"),
           readEvents: () => Stream.empty,
           streamDomainEvents: domainEvents,
+          subscribeDomainEvents: Effect.succeed(domainEvents),
           latestSequence: Effect.succeed(0),
         }),
       ),

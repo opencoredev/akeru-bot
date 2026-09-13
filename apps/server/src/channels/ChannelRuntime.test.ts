@@ -442,6 +442,7 @@ function makeHarness(input: {
     readEvents: () => Stream.empty,
     dispatch,
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.succeed(Stream.empty),
     latestSequence: Effect.sync(() => sequence),
   } satisfies OrchestrationEngineShape;
   const dependencies: ChannelRuntimeDependencies = {

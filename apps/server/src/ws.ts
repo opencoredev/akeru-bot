@@ -80,6 +80,7 @@ import {
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
+import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";
 import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import {
   buildProviderAccessCapabilities,
@@ -114,6 +115,7 @@ import {
 import { decideCommandSequence } from "./orchestration/decider.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
 import { EntityMemoryRepository } from "./memory/Services/EntityMemoryRepository.ts";
@@ -506,6 +508,7 @@ const makeWsRpcLayer = (
       const routineRepository = yield* RoutineRepository;
       const routineRuntime = yield* RoutineRuntime;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+      const threadDeletionReactor = yield* ThreadDeletionReactor;
       // Every command dispatched on this connection carries the connecting
       // client's origin, including server-generated bootstrap sub-commands:
       // the client's request caused them.
@@ -542,6 +545,18 @@ const makeWsRpcLayer = (
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const syncSubscriptionProviderSettings = Effect.gen(function* () {
+        const settings = yield* serverSettings.getSettings;
+        const patch = subscriptionProviderSettingsPatch(settings, subscriptionAuth.statuses());
+        if (patch) yield* serverSettings.updateSettings(patch);
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Failed to align provider settings with subscription connections", {
+            detail: cause.message,
+          }),
+        ),
+      );
+      yield* syncSubscriptionProviderSettings;
       const resetChangedApiKeySessions = makeApiKeySessionReset(
         subscriptionAuth,
         agentController,
@@ -702,6 +717,7 @@ const makeWsRpcLayer = (
       const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
         subscriptionAuth.reload();
         botInbox.reload();
+        yield* syncSubscriptionProviderSettings;
         const [providers, bots, snapshot] = yield* Effect.all([
           providerRegistry.getProviders,
           projectionBots
@@ -1396,7 +1412,7 @@ const makeWsRpcLayer = (
 
           const bootstrapProgram = Effect.gen(function* () {
             if (bootstrap?.createThread) {
-              yield* dispatchFromClient({
+              const created = yield* dispatchFromClient({
                 type: "thread.create",
                 commandId: yield* serverCommandId("bootstrap-thread-create"),
                 threadId: command.threadId,
@@ -1411,6 +1427,11 @@ const makeWsRpcLayer = (
                 worktreePath: bootstrap.createThread.worktreePath,
                 createdAt: bootstrap.createThread.createdAt,
               });
+              // The successful create is a fence in the engine command queue:
+              // every delete for the prior incarnation committed before it.
+              // Drain through that event before setup or turn start can own
+              // terminals and provider sessions under the reused thread id.
+              yield* threadDeletionReactor.drainThrough(created.sequence);
               createdThread = true;
             }
 
@@ -1498,6 +1519,14 @@ const makeWsRpcLayer = (
           normalizedCommand.type === "thread.turn.start" && normalizedCommand.bootstrap
             ? dispatchBootstrapTurnStart(normalizedCommand)
             : dispatchFromClient(normalizedCommand).pipe(
+                Effect.tap(({ sequence }) =>
+                  // Returning from thread.create is the handoff point at which
+                  // clients may start resources for the new incarnation. Use
+                  // its event sequence as the exact deletion-cleanup fence.
+                  normalizedCommand.type === "thread.create"
+                    ? threadDeletionReactor.drainThrough(sequence)
+                    : Effect.void,
+                ),
                 Effect.mapError((cause) =>
                   toDispatchCommandError(cause, "Failed to dispatch orchestration command"),
                 ),
@@ -2509,7 +2538,10 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }).pipe(resetChangedApiKeySessions),
+            }).pipe(
+              resetChangedApiKeySessions,
+              Effect.tap(() => syncSubscriptionProviderSettings),
+            ),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthComplete]: ({ loginId, code }) =>
@@ -2521,7 +2553,10 @@ const makeWsRpcLayer = (
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
-            }).pipe(resetChangedApiKeySessions),
+            }).pipe(
+              resetChangedApiKeySessions,
+              Effect.tap(() => syncSubscriptionProviderSettings),
+            ),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.subscriptionAuthCancel]: ({ loginId }) =>
