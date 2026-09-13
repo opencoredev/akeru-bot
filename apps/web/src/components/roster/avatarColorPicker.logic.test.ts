@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { clampColorFraction, hexToHsv, hsvToHex } from "./avatarColorPicker.logic";
+import {
+  clampColorFraction,
+  formatColorFieldValueText,
+  hexToHsv,
+  hsvToHex,
+} from "./avatarColorPicker.logic";
 
 describe("avatar color picker", () => {
   it("round trips custom hex colors through HSV", () => {
@@ -20,5 +25,11 @@ describe("avatar color picker", () => {
     expect(clampColorFraction(-0.5)).toBe(0);
     expect(clampColorFraction(0.4)).toBe(0.4);
     expect(clampColorFraction(1.5)).toBe(1);
+  });
+
+  it("announces both dimensions of the saturation and brightness field", () => {
+    expect(formatColorFieldValueText({ h: 240, s: 0.75, v: 0.4 }, "#191966")).toBe(
+      "Saturation 75%, brightness 40%, #191966",
+    );
   });
 });

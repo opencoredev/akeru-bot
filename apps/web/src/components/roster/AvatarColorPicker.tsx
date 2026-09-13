@@ -2,7 +2,13 @@ import { useEffect, useState, type KeyboardEvent, type PointerEvent } from "reac
 
 import { cn } from "../../lib/utils";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import { clampColorFraction, hexToHsv, hsvToHex, type HsvColor } from "./avatarColorPicker.logic";
+import {
+  clampColorFraction,
+  formatColorFieldValueText,
+  hexToHsv,
+  hsvToHex,
+  type HsvColor,
+} from "./avatarColorPicker.logic";
 import { BLOB_COLORS, DEFAULT_BLOB_COLOR, isBotAvatarColor } from "./roster.logic";
 
 function ColorThumb({ color, left, top }: { color: string; left: string; top: string }) {
@@ -95,7 +101,7 @@ function ColorPickerPanel({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(hsv.v * 100)}
-        aria-valuetext={color}
+        aria-valuetext={formatColorFieldValueText(hsv, color)}
         className="relative h-36 cursor-crosshair touch-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{
           backgroundColor: hueColor,

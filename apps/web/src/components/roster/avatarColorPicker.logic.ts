@@ -44,3 +44,7 @@ export function hsvToHex({ h, s, v }: HsvColor): string {
 export function clampColorFraction(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
+
+export function formatColorFieldValueText(color: HsvColor, hex: string): string {
+  return `Saturation ${Math.round(color.s * 100)}%, brightness ${Math.round(color.v * 100)}%, ${hex}`;
+}
