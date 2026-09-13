@@ -56,7 +56,7 @@ Changing the provider starts a fresh provider session with the same enabled tool
 
 ## Organize the roster
 
-The sidebar lists pinned bots and groups first, followed by the rest under **Bots**. Drag a bot or group to reorder it, pin it, or unpin it. Dragging into **Pinned** pins it at that spot, and dragging a pinned item back into **Bots** unpins it.
+The sidebar shows pinned bots and groups as launcher cards at the top, followed by the rest as detailed rows under **Bots**. Drag a bot or group to reorder it, pin it, or unpin it. Dragging into **Pinned** pins it at that spot, and dragging a pinned item back into **Bots** unpins it.
 
 Pins only change the roster layout. They do not change group membership or settle chats.
 

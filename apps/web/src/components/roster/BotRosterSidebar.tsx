@@ -286,7 +286,12 @@ const BotRosterRow = memo(function BotRosterRow({
     <li
       role="listitem"
       data-roster-item
-      className={cn("list-none touch-pan-y", sortable.isDragging && "z-50")}
+      data-pinned={pinned || undefined}
+      className={cn(
+        "list-none touch-pan-y",
+        pinned && "my-2 w-24 self-center",
+        sortable.isDragging && "z-50",
+      )}
       {...sortableRootProps(sortable)}
     >
       <div
@@ -297,36 +302,48 @@ const BotRosterRow = memo(function BotRosterRow({
           menuTriggerRef.current?.click();
         }}
         className={cn(
-          "relative flex w-full items-center rounded-lg outline-none select-none",
+          "relative flex w-full items-center outline-none select-none",
+          pinned ? "rounded-xl" : "rounded-lg",
           sortable.isDragging
             ? "bg-[linear-gradient(var(--sidebar-row-active),var(--sidebar-row-active)),linear-gradient(var(--sidebar),var(--sidebar))] text-sidebar-foreground shadow-lg"
             : isActive
               ? "bg-sidebar-row-active text-sidebar-foreground"
-              : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+              : pinned
+                ? "bg-sidebar-row-hover/50 text-sidebar-foreground hover:bg-sidebar-row-hover"
+                : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
         )}
       >
         <button
           type="button"
           aria-current={isActive || undefined}
           onClick={() => onSelect(bot)}
-          className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+          className={cn(
+            "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
+            pinned
+              ? "min-h-24 flex-col justify-center gap-2 rounded-xl px-2 py-3 text-center"
+              : "items-center gap-2.5 rounded-lg px-2 py-1.5 text-left",
+          )}
         >
-          <RosterAvatar bot={bot} presence={presence} className="size-10" />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="flex items-baseline gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+          <RosterAvatar bot={bot} presence={presence} className={pinned ? "size-14" : "size-10"} />
+          {pinned ? (
+            <span className="max-w-full truncate text-xs font-medium">{bot.name}</span>
+          ) : (
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+                {latestMessage ? (
+                  <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+                    {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+                  </span>
+                ) : null}
+              </span>
               {latestMessage ? (
-                <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-                  {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+                <span className="truncate text-[13px] text-sidebar-muted-foreground">
+                  {latestMessage.text}
                 </span>
               ) : null}
             </span>
-            {latestMessage ? (
-              <span className="truncate text-[13px] text-sidebar-muted-foreground">
-                {latestMessage.text}
-              </span>
-            ) : null}
-          </span>
+          )}
         </button>
         <Menu>
           <MenuTrigger
@@ -431,14 +448,18 @@ function GroupRosterRow({
       role="listitem"
       data-roster-item
       data-testid="roster-group-card"
+      data-pinned={pinned || undefined}
       onContextMenu={(event) => {
         event.preventDefault();
         menuTriggerRef.current?.click();
       }}
       className={cn(
-        "relative flex touch-pan-y items-center rounded-lg",
+        "relative flex touch-pan-y items-center",
+        pinned ? "my-2 w-24 self-center rounded-xl" : "rounded-lg",
         sortable.isDragging && "z-50 bg-sidebar shadow-xl",
-        isActive && "bg-sidebar-row-active",
+        isActive
+          ? "bg-sidebar-row-active"
+          : pinned && "bg-sidebar-row-hover/50 hover:bg-sidebar-row-hover",
       )}
       {...sortableRootProps(sortable)}
     >
@@ -446,11 +467,27 @@ function GroupRosterRow({
         type="button"
         aria-current={isActive || undefined}
         onClick={onSelect}
-        className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+        className={cn(
+          "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
+          pinned
+            ? "min-h-24 flex-col justify-center gap-2 rounded-xl px-2 py-3 text-center"
+            : "items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-sidebar-row-hover",
+        )}
       >
-        <GroupMemberStack group={group} bots={bots} sizeClassName="size-10" />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.name}</span>
-        <span className="text-xs text-sidebar-muted-foreground">{members}</span>
+        <GroupMemberStack
+          group={group}
+          bots={bots}
+          sizeClassName={pinned ? "size-14" : "size-10"}
+        />
+        <span
+          className={cn(
+            "min-w-0 max-w-full truncate",
+            pinned ? "text-xs font-medium" : "flex-1 text-sm font-semibold",
+          )}
+        >
+          {group.name}
+        </span>
+        {pinned ? null : <span className="text-xs text-sidebar-muted-foreground">{members}</span>}
       </button>
       <Menu>
         <MenuTrigger
