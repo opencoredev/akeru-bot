@@ -114,9 +114,7 @@ describe("feedback worker", () => {
       {} as ExecutionContext,
     );
 
-    expect(prepare).toHaveBeenCalledWith(
-      "DELETE FROM akeru_feedback_inbox WHERE expires_at <= ? AND github_issue_status <> 'unknown'",
-    );
+    expect(prepare).toHaveBeenCalledWith("DELETE FROM akeru_feedback_inbox WHERE expires_at <= ?");
     expect(bind).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
     expect(run).toHaveBeenCalledOnce();
   });

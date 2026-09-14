@@ -140,9 +140,7 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
     },
     deleteExpired: async (now) => {
       await database
-        .prepare(
-          "DELETE FROM akeru_feedback_inbox WHERE expires_at <= ? AND github_issue_status <> 'unknown'",
-        )
+        .prepare("DELETE FROM akeru_feedback_inbox WHERE expires_at <= ?")
         .bind(now)
         .run();
     },
