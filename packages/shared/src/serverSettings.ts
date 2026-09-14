@@ -4,6 +4,7 @@ import {
   resolveProviderInstanceEnabled,
   type ModelSelection,
   type ProviderDriverKind,
+  ProviderInstanceId,
   type ServerProvider,
   ServerSettings,
   type ServerSettingsPatch,
@@ -44,6 +45,62 @@ export function isModelSelectionProviderEnabled(
     isProviderDriverKind(selection.instanceId) &&
     getLegacyProviderSettings(settings, selection.instanceId)?.enabled === true
   );
+}
+
+function providerDriverForSelection(
+  settings: ServerSettings,
+  selection: ModelSelection,
+): ProviderDriverKind | undefined {
+  const instance = settings.providerInstances[selection.instanceId];
+  if (instance !== undefined) return instance.driver;
+  return isProviderDriverKind(selection.instanceId) ? selection.instanceId : undefined;
+}
+
+/**
+ * Map a text-generation model onto another environment by enabled provider
+ * identity (driver), not by copying instance IDs blindly.
+ */
+export function textGenerationSelectionForTarget(
+  selection: ModelSelection,
+  sourceSettings: ServerSettings,
+  targetSettings: ServerSettings,
+): ModelSelection | undefined {
+  const sourceDriver = providerDriverForSelection(sourceSettings, selection);
+  if (sourceDriver === undefined) return undefined;
+
+  const sameId = targetSettings.providerInstances[selection.instanceId];
+  if (
+    sameId !== undefined &&
+    sameId.driver === sourceDriver &&
+    resolveProviderInstanceEnabled(sameId)
+  ) {
+    return createModelSelection(selection.instanceId, selection.model, selection.options);
+  }
+
+  const targetInstances = Object.entries(targetSettings.providerInstances);
+  const matched = targetInstances.find(
+    ([, instance]) => instance.driver === sourceDriver && resolveProviderInstanceEnabled(instance),
+  );
+  if (matched !== undefined) {
+    return createModelSelection(
+      ProviderInstanceId.make(matched[0]),
+      selection.model,
+      selection.options,
+    );
+  }
+
+  if (targetInstances.some(([, instance]) => instance.driver === sourceDriver)) {
+    return undefined;
+  }
+
+  const legacyInstanceId = ProviderInstanceId.make(sourceDriver);
+  if (
+    targetSettings.providerInstances[legacyInstanceId] === undefined &&
+    getLegacyProviderSettings(targetSettings, sourceDriver)?.enabled === true
+  ) {
+    return createModelSelection(legacyInstanceId, selection.model, selection.options);
+  }
+  return undefined;
 }
 
 export function resolveSourceControlWriterModelSelection(
