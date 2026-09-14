@@ -59,6 +59,70 @@ describe("isPreviewRefreshShortcut", () => {
   });
 });
 
+describe("isPreviewEditingShortcut", () => {
+  const input = (platform: NodeJS.Platform, key: string, overrides: Partial<Electron.Input> = {}) =>
+    ({
+      type: "keyDown",
+      key,
+      meta: platform === "darwin",
+      control: platform !== "darwin",
+      shift: false,
+      alt: false,
+      ...overrides,
+    }) as Electron.Input;
+
+  it.each(["darwin", "linux", "win32"] as const)(
+    "allows native editing chords on %s without allowing host shortcuts",
+    (platform) => {
+      for (const key of ["a", "c", "v", "x", "z", "V"]) {
+        expect(PreviewManager.isPreviewEditingShortcut(input(platform, key), platform)).toBe(true);
+      }
+      const redo =
+        platform === "win32" ? input(platform, "y") : input(platform, "z", { shift: true });
+      expect(PreviewManager.isPreviewEditingShortcut(redo, platform)).toBe(true);
+      expect(
+        PreviewManager.isPreviewEditingShortcut(
+          input(platform, "v", { shift: true, alt: platform === "darwin" }),
+          platform,
+        ),
+      ).toBe(true);
+
+      for (const key of ["k", ",", "w", "j", "q", "+", "=", "-", "0", "r", "F12"]) {
+        expect(PreviewManager.isPreviewEditingShortcut(input(platform, key), platform)).toBe(false);
+      }
+      for (const modifiers of [
+        { meta: false, control: false },
+        { meta: true, control: true },
+        { meta: platform !== "darwin", control: platform === "darwin" },
+        { alt: true },
+        { shift: true, alt: platform !== "darwin" },
+      ]) {
+        expect(
+          PreviewManager.isPreviewEditingShortcut(input(platform, "v", modifiers), platform),
+        ).toBe(false);
+      }
+      expect(
+        PreviewManager.isPreviewEditingShortcut(input(platform, "a", { shift: true }), platform),
+      ).toBe(false);
+    },
+  );
+
+  it("recognizes macOS Paste and Match Style when Option changes the key to a symbol", () => {
+    const pasteAndMatchStyle = input("darwin", "◊", { code: "KeyV", alt: true, shift: true });
+    expect(PreviewManager.isPreviewEditingShortcut(pasteAndMatchStyle, "darwin")).toBe(true);
+    for (const modifiers of [
+      { code: "KeyC" },
+      { alt: false },
+      { shift: false },
+      { control: true },
+    ]) {
+      expect(
+        PreviewManager.isPreviewEditingShortcut({ ...pasteAndMatchStyle, ...modifiers }, "darwin"),
+      ).toBe(false);
+    }
+  });
+});
+
 const {
   browserWindowConstructor,
   createFromBuffer,
@@ -208,6 +272,7 @@ const makeTestPreviewWebContents = (
     ipc: { on: vi.fn(), off: vi.fn() },
     send: webviewSend,
     navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+    setIgnoreMenuShortcuts: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     debugger: {
       isAttached: () => false,
@@ -284,6 +349,7 @@ const makeFaviconWebContents = (options?: {
     send: webviewSend,
     session: { fetch },
     navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+    setIgnoreMenuShortcuts: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     executeJavaScriptInIsolatedWorld,
     debugger: {
@@ -376,6 +442,114 @@ describe("PreviewManager", () => {
     createFromBuffer.mockReset();
     webviewSend.mockClear();
   });
+
+  effectIt.effect("keeps preview shortcuts out of the host window", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const preview = makeFaviconWebContents();
+        const sendInputEvent = vi.fn();
+        const hostWebContents = { sendInputEvent };
+        Object.assign(preview.webContents, { hostWebContents });
+        fromId.mockReturnValue(preview.webContents);
+        getFocusedWebContents.mockReturnValue(preview.webContents as never);
+        yield* manager.setMainWindow({
+          isDestroyed: () => false,
+          once: vi.fn(),
+          webContents: hostWebContents,
+        } as never);
+        yield* manager.createTab("tab_keys");
+        yield* manager.registerWebview("tab_keys", 42);
+
+        expect(
+          (preview.webContents as Electron.WebContents).setIgnoreMenuShortcuts,
+        ).toHaveBeenCalledWith(true);
+        const beforeInput = preview.listeners.get("before-input-event")!;
+        for (const control of [false, true]) {
+          for (const key of ["k", ",", "w", "j", "q", "+"]) {
+            for (const type of ["keyDown", "keyUp"]) {
+              const preventDefault = vi.fn();
+              beforeInput(
+                { preventDefault } as never,
+                { type, key, meta: !control, control, shift: key === "j", alt: false } as never,
+              );
+              yield* Effect.yieldNow;
+              expect(preventDefault).not.toHaveBeenCalled();
+              expect(
+                (preview.webContents as Electron.WebContents).setIgnoreMenuShortcuts,
+              ).toHaveBeenLastCalledWith(true);
+            }
+          }
+        }
+        expect(sendInputEvent).not.toHaveBeenCalled();
+
+        const preventDefault = vi.fn();
+        beforeInput(
+          { preventDefault } as never,
+          {
+            type: "keyDown",
+            key: "r",
+            meta: true,
+            control: false,
+            shift: false,
+            alt: false,
+          } as never,
+        );
+        yield* Effect.yieldNow;
+        expect(preventDefault).toHaveBeenCalledOnce();
+        expect(preview.reload).toHaveBeenCalledOnce();
+        expect(sendInputEvent).not.toHaveBeenCalled();
+      }),
+    ),
+  );
+
+  effectIt.effect("preserves focused browser editing in tabs and sign-in popups", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const preview = makeFaviconWebContents();
+        fromId.mockReturnValue(preview.webContents);
+        yield* manager.createTab("tab_editing");
+        yield* manager.registerWebview("tab_editing", 42);
+
+        const popup = makeFaviconWebContents({ id: 43 });
+        preview.listeners.get("did-create-window")!({ webContents: popup.webContents } as never);
+        expect(
+          (popup.webContents as Electron.WebContents).setIgnoreMenuShortcuts,
+        ).toHaveBeenCalledWith(true);
+
+        for (const browser of [preview, popup]) {
+          const contents = browser.webContents as Electron.WebContents;
+          getFocusedWebContents.mockReturnValue(browser.webContents as never);
+          const beforeInput = browser.listeners.get("before-input-event")!;
+          const preventDefault = vi.fn();
+          const input = {
+            type: "keyDown",
+            key: "v",
+            meta: true,
+            control: false,
+            shift: false,
+            alt: false,
+          };
+          beforeInput({ preventDefault } as never, input as never);
+          expect(contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(false);
+          // Releasing Command must not disable native fallback for the pending paste.
+          beforeInput(
+            { preventDefault } as never,
+            { ...input, type: "keyUp", key: "Meta", meta: false } as never,
+          );
+          expect(contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(false);
+
+          beforeInput({ preventDefault } as never, { ...input, key: "w" } as never);
+          expect(contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(true);
+
+          // An injected paste in an unfocused guest cannot edit the active renderer.
+          getFocusedWebContents.mockReturnValue(null);
+          beforeInput({ preventDefault } as never, input as never);
+          expect(contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(true);
+          expect(preventDefault).not.toHaveBeenCalled();
+        }
+      }),
+    ),
+  );
 
   effectIt.effect("reports an unregistered webview as temporarily unavailable", () =>
     withManager((manager) =>
@@ -520,6 +694,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -621,6 +796,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           get debugger() {
             if (destroyed) throw new Error("Object has been destroyed");
@@ -1125,6 +1301,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -1189,6 +1366,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -1229,6 +1407,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -1275,6 +1454,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -1330,6 +1510,7 @@ describe("PreviewManager", () => {
               ipc: { on: vi.fn(), off: vi.fn() },
               send: webviewSend,
               navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+              setIgnoreMenuShortcuts: vi.fn(),
               setWindowOpenHandler: vi.fn(),
               debugger: {
                 isAttached: () => false,
@@ -1427,6 +1608,7 @@ describe("PreviewManager", () => {
         ipc: { on: vi.fn(), off: vi.fn() },
         send: webviewSend,
         navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+        setIgnoreMenuShortcuts: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         debugger: {
           isAttached: () => false,
@@ -1760,6 +1942,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -1852,6 +2035,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -2151,6 +2335,7 @@ describe("PreviewManager", () => {
             ipc: { on: vi.fn(), off: vi.fn() },
             send: webviewSend,
             navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+            setIgnoreMenuShortcuts: vi.fn(),
             setWindowOpenHandler: vi.fn(),
             debugger: {
               isAttached: () => false,
@@ -2363,6 +2548,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -2448,6 +2634,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -3065,6 +3252,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn(), removeListener: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -3123,6 +3311,7 @@ describe("PreviewManager", () => {
             goBack,
             goForward,
           },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -3252,6 +3441,7 @@ describe("PreviewManager", () => {
           },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -3562,6 +3752,7 @@ describe("PreviewManager", () => {
           },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -3717,6 +3908,7 @@ describe("PreviewManager", () => {
           },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
@@ -3781,6 +3973,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           debugger: {
             isAttached: () => false,
