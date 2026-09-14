@@ -16,6 +16,8 @@ export interface TerminalOutputState {
 export interface TerminalOutputCursor {
   readonly generation: number;
   readonly resetVersion: number;
+  /** Start of the retained output already rendered into the viewport. */
+  readonly retainedStartOffset: number;
   readonly offset: number;
 }
 
@@ -23,6 +25,7 @@ export interface TerminalOutputCursor {
 export const INITIAL_TERMINAL_OUTPUT_CURSOR = Object.freeze<TerminalOutputCursor>({
   generation: -1,
   resetVersion: -1,
+  retainedStartOffset: 0,
   offset: 0,
 });
 
@@ -288,16 +291,18 @@ export function readTerminalOutputUpdate(
   output: TerminalOutputState,
   cursor: TerminalOutputCursor,
 ): TerminalOutputUpdate {
+  const retainedStartOffset = output.chunks[0]?.startOffset ?? output.nextOffset;
   const nextCursor = {
     generation: output.generation,
     resetVersion: output.resetVersion,
+    retainedStartOffset,
     offset: output.nextOffset,
   };
-  const firstChunk = output.chunks[0];
   if (
     cursor.generation !== output.generation ||
     cursor.resetVersion !== output.resetVersion ||
-    cursor.offset < (firstChunk?.startOffset ?? output.nextOffset)
+    cursor.retainedStartOffset !== retainedStartOffset ||
+    cursor.offset < retainedStartOffset
   ) {
     return { type: "reset", data: terminalOutputText(output), cursor: nextCursor };
   }

@@ -238,7 +238,7 @@ describe("terminal session reducers", () => {
         12,
       );
       const update = readTerminalOutputUpdate(state.output, cursor);
-      expect(update).toMatchObject({ type: "append", data });
+      expect(update).toMatchObject({ type: "reset", data: expected });
       expect(terminalOutputText(state.output)).toBe(expected);
       expect(state.output.retainedBytes).toBe(retainedBytes);
       cursor = update.cursor;
@@ -265,7 +265,7 @@ describe("terminal session reducers", () => {
     expect(readTerminalOutputUpdate(state.output, update.cursor).type).toBe("none");
   });
 
-  it("preserves the byte-limited tail and resets a cursor before a partially trimmed chunk", () => {
+  it("preserves the byte-limited tail and resets every viewport after rollover", () => {
     const initial = applyTerminalAttachStreamEvent(EMPTY_TERMINAL_BUFFER_STATE, {
       type: "snapshot",
       snapshot: { ...BASE_SNAPSHOT, history: "" },
@@ -288,8 +288,8 @@ describe("terminal session reducers", () => {
     );
 
     expect(readTerminalOutputUpdate(state.output, caughtUpCursor)).toMatchObject({
-      type: "append",
-      data: " world",
+      type: "reset",
+      data: "lo world",
     });
     expect(readTerminalOutputUpdate(state.output, staleCursor)).toMatchObject({
       type: "reset",
