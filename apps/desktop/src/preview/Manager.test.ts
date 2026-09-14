@@ -796,6 +796,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setIgnoreMenuShortcuts: vi.fn(),
           setWindowOpenHandler: vi.fn(),
           get debugger() {
             if (destroyed) throw new Error("Object has been destroyed");
