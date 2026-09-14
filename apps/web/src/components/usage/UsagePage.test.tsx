@@ -1,4 +1,4 @@
-import { USAGE_CONTRACT_VERSION } from "@t3tools/contracts";
+import { EnvironmentId, USAGE_CONTRACT_VERSION, UsageDay } from "@t3tools/contracts";
 import { mergeUsage } from "@t3tools/shared/usageMerge";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -35,6 +35,7 @@ vi.mock("./UsageCharts", async (importOriginal) => {
 });
 
 import { UsagePage } from "./UsagePage";
+import { saveUsagePagePreferences } from "./usagePagePreferences";
 
 const connectedPlanLimits = [
   {
@@ -57,6 +58,7 @@ const connectedPlanLimits = [
 ];
 
 beforeEach(() => {
+  saveUsagePagePreferences({ metric: "limits", windowDays: 30 });
   testState.useUsage.mockReturnValue({
     merged: {
       ...mergeUsage([], USAGE_CONTRACT_VERSION),
@@ -111,7 +113,7 @@ describe("UsagePage", () => {
     expect(markup).not.toContain("Weekly 55% left");
     expect(markup).not.toContain("Connect a subscription");
     expect(markup).not.toContain("Connect an environment");
-    expect(markup).toContain("Activity");
+    expect(markup).not.toContain("Activity");
     expect(markup).not.toContain("animate-spin");
   });
 
@@ -146,8 +148,8 @@ describe("UsagePage", () => {
 
     expect(markup).toContain("Weekly 55% left");
     expect(markup).not.toContain("Reading plan limits");
-    expect(markup).toContain("Activity");
-    expect(markup).toContain("activity-chart");
+    expect(markup).not.toContain("Activity");
+    expect(markup).not.toContain("activity-chart");
     expect(markup).not.toContain("animate-spin");
   });
 
@@ -183,10 +185,12 @@ describe("UsagePage", () => {
     expect(markup).toContain("anthropic");
   });
 
-  it("labels model activity by its transcript provider, not its model name", () => {
+  it("labels model activity by its recorded provider, not its model name", () => {
+    saveUsagePagePreferences({ metric: "tokens", windowDays: 30 });
     testState.useUsage.mockReturnValue({
       merged: {
         ...mergeUsage([], USAGE_CONTRACT_VERSION),
+        connectedProviders: ["openai-codex" as const, "anthropic" as const],
         models: [
           {
             provider: "codex" as const,
@@ -225,5 +229,79 @@ describe("UsagePage", () => {
     expect(markup).toContain("Codex · claude-opus-5");
     expect(markup).toContain("Claude · gpt-5.6-sol");
     expect(markup).not.toContain("Claude · claude-opus-5");
+  });
+
+  it("does not show machine-wide transcript costs when no provider is connected", () => {
+    saveUsagePagePreferences({ metric: "cost", windowDays: 30 });
+    const summary = {
+      contractVersion: USAGE_CONTRACT_VERSION,
+      readAt: "2026-09-13T00:00:00.000Z",
+      timeZone: "UTC",
+      sinceDay: UsageDay.make("2026-08-15"),
+      untilDay: UsageDay.make("2026-09-13"),
+      buckets: [
+        {
+          day: UsageDay.make("2026-09-13"),
+          provider: "codex" as const,
+          model: "gpt-5.6-sol",
+          totals: {
+            uncachedInputTokens: 1_000,
+            cachedInputTokens: 0,
+            cacheCreationTokens: 0,
+            outputTokens: 100,
+            reasoningTokens: 0,
+          },
+          costUsd: 12.34,
+          cacheSavingsUsd: 0,
+          costSource: "modelPriced" as const,
+          records: 1,
+          unpricedRecords: 0,
+          sessions: 1,
+        },
+      ],
+      sources: [
+        {
+          fingerprint: {
+            hostId: "test-machine",
+            provider: "codex" as const,
+            resolvedHomePath: "/home/test/.codex/sessions",
+            volumeId: "1:1",
+          },
+          status: "ok" as const,
+          scannedFiles: 1,
+          skippedFiles: 0,
+          malformedRecords: 0,
+          distinctSessions: 1,
+          message: null,
+        },
+      ],
+      planLimits: [],
+      connectedProviders: [],
+      pricing: { status: "fresh" as const, source: "litellm", fetchedAt: null, knownModels: 1 },
+      scanDurationMs: 1,
+    };
+    testState.useUsage.mockReturnValue({
+      merged: mergeUsage(
+        [{ environmentId: EnvironmentId.make("env-1"), label: "This Mac", summary }],
+        USAGE_CONTRACT_VERSION,
+      ),
+      environments: [
+        {
+          environmentId: "env-1",
+          label: "This Mac",
+          isPending: false,
+          error: null,
+          summary,
+        },
+      ],
+      isPending: false,
+      isPartial: false,
+      refresh: vi.fn(),
+    });
+
+    const markup = renderToStaticMarkup(<UsagePage />);
+
+    expect(markup).not.toContain("$12.34");
+    expect(markup).toContain("Connect a provider in Settings");
   });
 });

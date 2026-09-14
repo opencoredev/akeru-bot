@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { UsagePage } from "../components/usage/UsagePage";
+import { PluginsPage } from "../components/plugins/PluginsDialog";
 
-export const Route = createFileRoute("/usage")({
+export const Route = createFileRoute("/plugins")({
   beforeLoad: async ({ context }) => {
     if (
       context.authGateState.status !== "authenticated" &&
@@ -11,5 +11,5 @@ export const Route = createFileRoute("/usage")({
       throw redirect({ to: "/pair", replace: true });
     }
   },
-  component: UsagePage,
+  component: PluginsPage,
 });

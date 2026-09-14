@@ -83,10 +83,11 @@ export interface MergedUsage {
   readonly contributingEnvironments: readonly EnvironmentId[];
   readonly staleEnvironments: readonly EnvironmentId[];
   readonly planLimits: readonly UsageProviderPlanLimits[];
+  readonly connectedProviders: readonly SubscriptionProviderId[];
 }
 
 /**
- * Two sources are the same physical transcript directory only when host,
+ * Two sources are the same physical provider-usage store only when host,
  * provider, path and filesystem identity all agree.
  *
  * `volumeId` is what stops two machines that happen to share a hostname and a
@@ -103,10 +104,10 @@ function fingerprintKey(fingerprint: UsageSourceFingerprint): string {
 }
 
 /**
- * Decides which environment owns each physical transcript directory.
+ * Decides which environment owns each physical provider-usage store.
  *
- * Several environments on one machine (worktree servers, for instance) resolve
- * the same provider home and would otherwise double count every token. The
+ * Several clients can report one environment and would otherwise double count
+ * every token. The
  * first environment in a stable order claims a fingerprint; the rest have that
  * provider's buckets dropped. Environments are sorted by id so the winner does
  * not change between renders.
@@ -144,6 +145,11 @@ function ownedContribution(
   readonly sessionsByProvider: ReadonlyMap<UsageProviderKind, number>;
 } {
   const ownedProviders = new Set<UsageProviderKind>();
+  const connectedUsageProviders = new Set<UsageProviderKind>();
+  for (const provider of environment.summary.connectedProviders ?? []) {
+    const usageProvider = USAGE_PROVIDER_BY_CONNECTION[provider];
+    if (usageProvider !== undefined) connectedUsageProviders.add(usageProvider);
+  }
   const sessionsByProvider = new Map<UsageProviderKind, number>();
   for (const source of environment.summary.sources) {
     if (source.status === "missing") continue;
@@ -160,10 +166,22 @@ function ownedContribution(
     }
   }
   return {
-    buckets: environment.summary.buckets.filter((bucket) => ownedProviders.has(bucket.provider)),
+    buckets: environment.summary.buckets.filter(
+      (bucket) =>
+        ownedProviders.has(bucket.provider) && connectedUsageProviders.has(bucket.provider),
+    ),
     sessionsByProvider,
   };
 }
+
+const USAGE_PROVIDER_BY_CONNECTION = {
+  anthropic: "claude",
+  "openai-codex": "codex",
+  cursor: "cursor",
+  xai: "grok",
+  "kimi-for-coding": "kimi",
+  "opencode-go": "opencode",
+} as const satisfies Record<SubscriptionProviderId, UsageProviderKind>;
 
 function bucketTokens(bucket: UsageBucket): number {
   // reasoningTokens is a subset of outputTokens and must not be added again.
@@ -199,6 +217,7 @@ const EMPTY_MERGED: MergedUsage = {
   contributingEnvironments: [],
   staleEnvironments: [],
   planLimits: [],
+  connectedProviders: [],
 };
 
 /**
@@ -418,6 +437,9 @@ export function mergeUsage(
     contributingEnvironments,
     staleEnvironments,
     planLimits: mergePlanLimits(current),
+    connectedProviders: [
+      ...new Set(current.flatMap((environment) => environment.summary.connectedProviders ?? [])),
+    ],
   };
 }
 

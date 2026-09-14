@@ -54,6 +54,7 @@ import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
+import { AkeruWordmark } from "../AkeruWordmark";
 import { Button } from "../ui/button";
 import {
   Menu,
@@ -181,9 +182,7 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
           to="/"
           className="flex items-center justify-center rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]"
         >
-          <span className="truncate text-xl leading-none tracking-tight [font-family:var(--font-brand-serif)]">
-            akeru
-          </span>
+          <AkeruWordmark />
         </Link>
         <div className="flex items-center justify-end">
           <Menu>

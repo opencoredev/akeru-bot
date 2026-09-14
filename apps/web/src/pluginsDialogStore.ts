@@ -5,6 +5,7 @@ interface PluginsDialogState {
   readonly requestedQuery: string | null;
   readonly openPlugins: (query?: string) => void;
   readonly closePlugins: () => void;
+  readonly acknowledgeNavigation: () => void;
 }
 
 export const usePluginsDialogStore = create<PluginsDialogState>((set) => ({
@@ -12,6 +13,7 @@ export const usePluginsDialogStore = create<PluginsDialogState>((set) => ({
   requestedQuery: null,
   openPlugins: (query) => set({ open: true, requestedQuery: query?.trim() || null }),
   closePlugins: () => set({ open: false, requestedQuery: null }),
+  acknowledgeNavigation: () => set({ open: false }),
 }));
 
 export function openPlugins(query?: string): void {
@@ -20,6 +22,10 @@ export function openPlugins(query?: string): void {
 
 export function closePlugins(): void {
   usePluginsDialogStore.getState().closePlugins();
+}
+
+export function acknowledgePluginsNavigation(): void {
+  usePluginsDialogStore.getState().acknowledgeNavigation();
 }
 
 export function isLegacyPluginsPath(pathname: string): boolean {

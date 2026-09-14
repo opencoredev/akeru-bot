@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsageRouteImport } from './routes/usage'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PluginsRouteImport } from './routes/plugins'
 import { Route as PairRouteImport } from './routes/pair'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
+import { Route as SettingsSectionRouteImport } from './routes/settings.$section'
 import { Route as SettingsSplatRouteImport } from './routes/settings.$'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as ChatGroupsGroupIdRouteImport } from './routes/_chat.groups.$groupId'
@@ -31,6 +33,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PluginsRoute = PluginsRouteImport.update({
+  id: '/plugins',
+  path: '/plugins',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PairRoute = PairRouteImport.update({
   id: '/pair',
   path: '/pair',
@@ -44,6 +51,11 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ChatRoute,
+} as any)
+const SettingsSectionRoute = SettingsSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsSplatRoute = SettingsSplatRouteImport.update({
   id: '/$',
@@ -80,10 +92,12 @@ const ChatEnvironmentIdThreadIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/pair': typeof PairRoute
+  '/plugins': typeof PluginsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/$': typeof SettingsSplatRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/bots/$botId': typeof ChatBotsBotIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -91,10 +105,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/pair': typeof PairRoute
+  '/plugins': typeof PluginsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/$': typeof SettingsSplatRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/bots/$botId': typeof ChatBotsBotIdRoute
@@ -105,10 +121,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteWithChildren
   '/pair': typeof PairRoute
+  '/plugins': typeof PluginsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/$': typeof SettingsSplatRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/bots/$botId': typeof ChatBotsBotIdRoute
@@ -120,10 +138,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/pair'
+    | '/plugins'
     | '/settings'
     | '/usage'
     | '/projects/$projectKey'
     | '/settings/$'
+    | '/settings/$section'
     | '/$environmentId/$threadId'
     | '/bots/$botId'
     | '/draft/$draftId'
@@ -131,10 +151,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/pair'
+    | '/plugins'
     | '/settings'
     | '/usage'
     | '/projects/$projectKey'
     | '/settings/$'
+    | '/settings/$section'
     | '/'
     | '/$environmentId/$threadId'
     | '/bots/$botId'
@@ -144,10 +166,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_chat'
     | '/pair'
+    | '/plugins'
     | '/settings'
     | '/usage'
     | '/projects/$projectKey'
     | '/settings/$'
+    | '/settings/$section'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/bots/$botId'
@@ -158,6 +182,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   PairRoute: typeof PairRoute
+  PluginsRoute: typeof PluginsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   UsageRoute: typeof UsageRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
@@ -177,6 +202,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plugins': {
+      id: '/plugins'
+      path: '/plugins'
+      fullPath: '/plugins'
+      preLoaderRoute: typeof PluginsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pair': {
@@ -199,6 +231,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof ChatRoute
+    }
+    '/settings/$section': {
+      id: '/settings/$section'
+      path: '/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof SettingsSectionRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/settings/$': {
       id: '/settings/$'
@@ -265,10 +304,12 @@ const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface SettingsRouteChildren {
   SettingsSplatRoute: typeof SettingsSplatRoute
+  SettingsSectionRoute: typeof SettingsSectionRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsSplatRoute: SettingsSplatRoute,
+  SettingsSectionRoute: SettingsSectionRoute,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
@@ -278,6 +319,7 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   PairRoute: PairRoute,
+  PluginsRoute: PluginsRoute,
   SettingsRoute: SettingsRouteWithChildren,
   UsageRoute: UsageRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
