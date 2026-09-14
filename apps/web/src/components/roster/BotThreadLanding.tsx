@@ -71,6 +71,8 @@ import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
+import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
+import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -165,6 +167,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const runtimeWarning = useMemo(
+    () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
+    [activities, runtime.latestTurn],
+  );
   const pluginResultsByTurn = useMemo(() => {
     const results = new Map<
       TurnId,
@@ -204,19 +210,21 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     useRosterStore.getState().selectBot(bot.id);
   }, [bot, navigate]);
 
-  if (!bot || bot.archivedAt !== null) return null;
   const working = isBotConversationWorking({
     sending: runtime.sending,
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
     presence,
   });
   const messages = visibleBotChatMessages(runtime.messages, working);
+  const available = bot?.archivedAt === null;
   useReplyPlaybackThread({
-    environmentId: runtime.linkedThreadRef?.environmentId ?? environmentId,
-    threadId: runtime.linkedThreadRef?.threadId,
-    messages,
+    environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
+    threadId: available ? runtime.linkedThreadRef?.threadId : null,
+    messages: available ? messages : [],
     mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
   });
+
+  if (!bot || bot.archivedAt !== null) return null;
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
@@ -322,7 +330,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                             ?.map(({ id, result }) => (
                               <PluginSearchResultCard className="mt-3" key={id} result={result} />
                             ))}
-                      <div className="mt-1 flex opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                         <MessageControls
                           copyText={message.text || "Attachment"}
                           {...(() => {
@@ -376,7 +384,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     className="group/message flex items-end justify-end gap-1"
                     data-testid="bot-user-message"
                   >
-                    <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
+                    <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
                       <MessageControls
                         align="end"
                         copyText={
@@ -490,6 +498,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             items={inboxItems}
             onOpenDetails={() => openSettings("inbox", null, environmentId)}
           />
+          <ThreadRuntimeWarningBanner warning={runtimeWarning} />
           <ThreadErrorBanner
             error={
               inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error

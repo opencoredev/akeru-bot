@@ -412,6 +412,7 @@ export function useGroupThreadRuntime(groupId: string) {
     error,
     groupReady,
     linkedThreadRef,
+    latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
     pendingUserInputs,
     pendingUserInputAnswers,

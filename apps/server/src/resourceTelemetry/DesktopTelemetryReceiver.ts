@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
+import * as NodeNet from "node:net";
 
 import * as NodeStream from "@effect/platform-node/NodeStream";
 import {
@@ -303,6 +304,15 @@ export function requireDesktopTelemetryWriteProgress(
     : Effect.fail(new DesktopTelemetryControlStalled({ fd, remainingBytes }));
 }
 
+export function openDesktopTelemetryReadable(fd: number) {
+  // Filesystem reads on inherited sockets cannot be cancelled while the peer stays open.
+  if (NodeFS.fstatSync(fd).isSocket()) {
+    return new NodeNet.Socket({ fd, readable: true, writable: false });
+  }
+  // Keep file, FIFO, and Windows non-socket descriptor handling unchanged.
+  return NodeFS.createReadStream("", { fd, autoClose: true });
+}
+
 export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")(function* () {
   const config = yield* ServerConfig;
   const serverSettings = yield* ServerSettingsService;
@@ -438,11 +448,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     const fd = config.desktopTelemetryFd;
     const readable = yield* Effect.acquireRelease(
       Effect.try({
-        try: () =>
-          NodeFS.createReadStream("", {
-            fd,
-            autoClose: true,
-          }),
+        try: () => openDesktopTelemetryReadable(fd),
         catch: (cause) => new DesktopTelemetryStreamFailed({ fd, cause }),
       }),
       (stream) =>

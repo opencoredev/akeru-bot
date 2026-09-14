@@ -51,6 +51,48 @@ describe("mobile model options", () => {
     ]);
   });
 
+  it("does not offer host-detected models for disconnected subscriptions", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "codex",
+          driver: "codex",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", capabilities: null }],
+        },
+        {
+          instanceId: "grok",
+          driver: "grok",
+          enabled: true,
+          installed: true,
+          auth: { status: "unknown" },
+          models: [{ slug: "grok-build", name: "Grok Build", capabilities: null }],
+        },
+      ],
+    } as unknown as ServerConfig;
+
+    const options = buildModelOptions(config, null, [
+      {
+        provider: "openai-codex",
+        connected: false,
+        health: "missing",
+        dependentBots: [],
+        dependentRoutines: [],
+      },
+      {
+        provider: "xai",
+        connected: true,
+        health: "detected",
+        dependentBots: [],
+        dependentRoutines: [],
+      },
+    ]);
+
+    expect(options.map((option) => option.key)).toEqual(["grok:grok-build"]);
+  });
+
   it("normalizes a legacy fallback selection against current capabilities", () => {
     const config = {
       providers: [
