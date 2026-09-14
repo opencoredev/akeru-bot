@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 import { closestCenter, type CollisionDetection } from "@dnd-kit/core";
-import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sortable";
+import {
+  rectSortingStrategy,
+  verticalListSortingStrategy,
+  type SortingStrategy,
+} from "@dnd-kit/sortable";
 
-import { createRosterCollisionDetection, createRosterSortingStrategy } from "./roster.drag";
+import {
+  createRosterCollisionDetection,
+  createRosterSortingStrategy,
+  restrictRosterDragAxis,
+} from "./roster.drag";
 import {
   buildRosterListItems,
   rosterEntryId,
@@ -15,6 +23,22 @@ import {
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const akeru: RosterItemRef = { kind: "bot", id: "akeru" };
 const mori: RosterItemRef = { kind: "bot", id: "mori" };
+
+function modifierArgs() {
+  return {
+    transform: { x: 12, y: 24, scaleX: 1, scaleY: 1 },
+  } as Parameters<typeof restrictRosterDragAxis>[0];
+}
+
+describe("roster drag axis", () => {
+  it("allows pinned cards to move across wrapped rows", () => {
+    expect(restrictRosterDragAxis(modifierArgs(), "pinned")).toMatchObject({ x: 12, y: 24 });
+  });
+
+  it("keeps full-width bot rows on the vertical axis", () => {
+    expect(restrictRosterDragAxis(modifierArgs(), "unassigned")).toMatchObject({ x: 0, y: 24 });
+  });
+});
 
 function layout(items: readonly RosterListItem[], active: string, over: string, cardHeight = 52) {
   let top = 100;
@@ -87,9 +111,78 @@ describe("roster collision detection", () => {
     const detector = createRosterCollisionDetection(() => true);
     expect(detector(collisionArgs())[0]?.id).toBe(rosterEntryId(mori));
   });
+
+  it("targets a section header while its section body is under the pointer", () => {
+    const items = buildRosterListItems({
+      pinnedItems: [],
+      sections: [
+        { id: "alpha", name: "Alpha", items: [akeru], collapsed: false },
+        { id: "beta", name: "Beta", items: [mori], collapsed: false },
+      ],
+      unassignedItems: [],
+    });
+    const active = rosterMarkerId({ kind: "section-header", sectionId: "alpha" });
+    const over = rosterEntryId(mori);
+    const { rects, activeIndex, overIndex } = layout(items, active, over);
+    const collisionRect = rects[overIndex]!;
+    const args = {
+      active: {
+        id: active,
+        data: { current: {} },
+        rect: { current: { initial: rects[activeIndex]!, translated: collisionRect } },
+      },
+      collisionRect,
+      droppableRects: new Map(items.map((item, index) => [rosterListItemId(item), rects[index]!])),
+      droppableContainers: items.map((item, index) => ({
+        id: rosterListItemId(item),
+        key: rosterListItemId(item),
+        disabled: false,
+        data: { current: {} },
+        node: { current: null },
+        rect: { current: rects[index]! },
+      })),
+      pointerCoordinates: null,
+    } satisfies Parameters<CollisionDetection>[0];
+    const detector = createRosterCollisionDetection(
+      (id) => id === rosterMarkerId({ kind: "section-header", sectionId: "beta" }),
+      { items },
+    );
+
+    expect(closestCenter(args)[0]?.id).toBe(over);
+    expect(detector(args)[0]?.id).toBe(
+      rosterMarkerId({ kind: "section-header", sectionId: "beta" }),
+    );
+  });
 });
 
 describe("roster drag projection", () => {
+  it("uses two-dimensional projection when reordering wrapped pinned cards", () => {
+    const cedar: RosterItemRef = { kind: "bot", id: "cedar" };
+    const items = buildRosterListItems({
+      pinnedItems: [akeru, mori, cedar],
+      sections: [],
+      unassignedItems: [],
+    });
+    const args = layout(items, rosterEntryId(akeru), rosterEntryId(mori));
+    const pinnedIndexes = items.flatMap((item, index) =>
+      item.kind === "entry" && item.zone === "pinned" ? [index] : [],
+    );
+    const [first, second, third] = pinnedIndexes;
+    if (first === undefined || second === undefined || third === undefined) {
+      throw new Error("expected three pinned entries");
+    }
+    args.rects[first] = { top: 100, bottom: 172, left: 0, right: 72, width: 72, height: 72 };
+    args.rects[second] = { top: 100, bottom: 172, left: 76, right: 148, width: 72, height: 72 };
+    args.rects[third] = { top: 176, bottom: 248, left: 0, right: 72, width: 72, height: 72 };
+    args.activeNodeRect = args.rects[first];
+
+    const strategy = createRosterSortingStrategy({ items });
+    expect(strategy({ ...args, index: second })).toEqual(
+      rectSortingStrategy({ ...args, index: second }),
+    );
+    expect(strategy({ ...args, index: second })?.x).not.toBe(0);
+  });
+
   it("opens Pins label space while dragging an unassigned bot to the header", () => {
     const items = buildRosterListItems({
       pinnedItems: [],

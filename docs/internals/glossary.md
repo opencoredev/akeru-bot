@@ -43,7 +43,7 @@ A single user-to-assistant work cycle inside a thread. It starts with user input
 
 ### Roster organization
 
-The live sidebar is `BotRosterSidebar`. Pins, named sections, and Unassigned are a client layout over bots and groups. They must not assign or remove group members, and they must not settle chats. Drag planning lives in `roster.logic.ts`; pointer cleanup, insertion-gap projection, and list motion live beside it in `roster.pointer.ts`, `roster.drag.ts`, and `roster.motion.ts`.
+The live sidebar is `BotRosterSidebar`. Pins and the main Bots list are a client layout over bots and groups. They must not assign or remove group members, and they must not settle chats. Drag planning lives in `roster.logic.ts`; pointer cleanup, insertion-gap projection, and list motion live beside it in `roster.pointer.ts`, `roster.drag.ts`, and `roster.motion.ts`.
 
 #### Activity
 

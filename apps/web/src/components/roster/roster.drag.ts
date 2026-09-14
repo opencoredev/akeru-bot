@@ -1,6 +1,8 @@
 import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   defaultAnimateLayoutChanges,
+  rectSortingStrategy,
   verticalListSortingStrategy,
   type AnimateLayoutChanges,
   type SortingStrategy,
@@ -37,12 +39,36 @@ export function restrictBelowRosterLabel(
   return transform.y < minimumY ? { ...transform, y: minimumY } : transform;
 }
 
+/** Pinned cards need both axes for their wrapped shelf. Full-width roster rows
+ * stay vertical so their movement matches their one-column layout. */
+export function restrictRosterDragAxis(
+  args: Parameters<Modifier>[0],
+  sourceZone: RosterZone | null,
+) {
+  return sourceZone === "pinned" ? args.transform : restrictToVerticalAxis(args);
+}
+
 function markerIsPinnedBoundary(marker: RosterListMarker): boolean {
   return marker === "pinned-header" || marker === "pinned-divider";
 }
 
-/** Reject the nearest unsupported target without selecting another section.
- * Recreate this detector when drop eligibility changes. */
+function sectionTargetForItem(items: readonly RosterListItem[], id: string): string | null {
+  const item = items.find((candidate) => rosterListItemId(candidate) === id);
+  if (!item) return null;
+  if (item.kind === "entry") {
+    if (item.zone === "unassigned") return rosterMarkerId("unassigned-header");
+    if (item.zone === "pinned") return null;
+    return rosterMarkerId({ kind: "section-header", sectionId: item.zone.sectionId });
+  }
+  if (item.marker === "unassigned-placeholder") return rosterMarkerId("unassigned-header");
+  if (typeof item.marker === "object" && item.marker.kind === "section-placeholder") {
+    return rosterMarkerId({ kind: "section-header", sectionId: item.marker.sectionId });
+  }
+  return null;
+}
+
+/** Reject unsupported targets. A section drag treats its full visible body as
+ * the section header target. Recreate this detector when eligibility changes. */
 export function createRosterCollisionDetection(
   isValidTarget: (id: string) => boolean,
   options: {
@@ -111,7 +137,13 @@ export function createRosterCollisionDetection(
     const id = String(nearest.id);
     const valid = validity.get(id) ?? isValidTarget(id);
     validity.set(id, valid);
-    return valid ? collisions : collisions.filter((collision) => collision.id === args.active.id);
+    if (valid) return collisions;
+    if (items && parseRosterSectionHeaderId(String(args.active.id)) !== null) {
+      const targetId = sectionTargetForItem(items, id);
+      const target = collisions.find((collision) => String(collision.id) === targetId);
+      if (target) return [target, ...collisions.filter((collision) => collision !== target)];
+    }
+    return collisions.filter((collision) => collision.id === args.active.id);
   };
 }
 
@@ -343,6 +375,16 @@ export function createRosterSortingStrategy(input: {
   }
 
   return (args) => {
+    const active = items[args.activeIndex];
+    const over = items[args.overIndex];
+    if (
+      active?.kind === "entry" &&
+      active.zone === "pinned" &&
+      over?.kind === "entry" &&
+      over.zone === "pinned"
+    ) {
+      return rectSortingStrategy(args);
+    }
     if (
       previous?.rects !== args.rects ||
       previous.activeIndex !== args.activeIndex ||

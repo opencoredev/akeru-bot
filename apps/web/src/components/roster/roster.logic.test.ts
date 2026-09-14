@@ -31,7 +31,6 @@ import {
   rosterItemsForZone,
   buildRosterListItems,
   resolveRosterDropTarget,
-  resolveRosterDropVerb,
   rosterBotDragId,
   rosterEntryId,
   rosterGroupDropId,
@@ -585,7 +584,6 @@ describe("roster drag drop planning", () => {
         pinnedOrder: [akeru],
       }),
     ).toEqual({ kind: "pin", item: mori, order: [mori, akeru] });
-    expect(resolveRosterDropVerb("unassigned", "pinned")).toBe("pin");
   });
 
   it("unpins a bot dropped into Unassigned and keeps the named section as a move", () => {
@@ -610,8 +608,6 @@ describe("roster drag drop planning", () => {
       order: [akeru, mori],
       unpin: true,
     });
-    expect(resolveRosterDropVerb("pinned", "unassigned")).toBe("unpin");
-    expect(resolveRosterDropVerb({ sectionId: "news" }, "unassigned")).toBe("move");
   });
 
   it("keeps a collapsed or emptied section droppable after its last item leaves", () => {
@@ -656,7 +652,6 @@ describe("roster drag drop planning", () => {
         pinnedOrder: [akeru],
       }).kind,
     ).toBe("none");
-    expect(resolveRosterDropVerb("pinned", "pinned")).toBeNull();
   });
 
   it("nudges an item one slot without wrapping past the ends", () => {

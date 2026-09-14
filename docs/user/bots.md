@@ -56,11 +56,13 @@ Changing the provider starts a fresh provider session with the same enabled tool
 
 ## Organize the roster
 
-The sidebar lists pinned bots and groups, then any named sections you create, then everything else under **Unassigned**. Drag a bot or group to reorder it, pin it, or unpin it. Dragging into **Pinned** pins it at that spot. Dragging a pinned item into a section or Unassigned unpins it. Drag a section header to reorder sections.
+The sidebar shows pinned bots and groups as launcher cards at the top, followed by the rest as detailed rows under **Bots**. Drag a bot or group to reorder it, pin it, or unpin it. Dragging into **Pinned** pins it at that spot, and dragging a pinned item back into **Bots** unpins it.
 
-Pins, sections, and Unassigned are roster layout only. They do not change group membership, and they do not settle chats.
+Pins only change the roster layout. They do not change group membership or settle chats.
 
-While you drag, the destination label stays readable and takes the accent color. Empty and collapsed sections stay droppable. The lifted row shows **Pin**, **Unpin**, or **Move** when the drop would change its section. Reordering inside one section has no badge. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
+While you drag, the lifted row stays in the roster and moves vertically between available positions. The destination label stays readable and takes the accent color. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
+
+Pinning, unpinning, and moving an item keeps the sidebar at your current scroll position instead of following the item to its new place in the roster.
 
 On this device the layout is stored in the browser for the connected environment. Refresh keeps it. Other devices keep their own layout until the environment can store roster order.
 
