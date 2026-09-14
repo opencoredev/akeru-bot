@@ -266,6 +266,7 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveDown,
   onNudge,
   sortable,
+  spanPinnedRow,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
@@ -277,6 +278,7 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
+  spanPinnedRow: boolean;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -288,8 +290,9 @@ const BotRosterRow = memo(function BotRosterRow({
       data-roster-item
       data-pinned={pinned || undefined}
       className={cn(
-        "list-none touch-pan-y",
-        pinned && "my-2 w-18 self-center",
+        "col-span-2 list-none touch-pan-y",
+        pinned && "my-2 w-18 justify-self-center",
+        pinned && !spanPinnedRow && "col-span-1",
         sortable.isDragging && "z-50",
       )}
       {...sortableRootProps(sortable)}
@@ -320,7 +323,7 @@ const BotRosterRow = memo(function BotRosterRow({
           className={cn(
             "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
             pinned
-              ? "min-h-20 flex-col justify-center gap-1.5 rounded-xl px-2 py-2 text-center"
+              ? "min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-center"
               : "items-center gap-2.5 rounded-lg px-2 py-1.5 text-left",
           )}
         >
@@ -426,6 +429,7 @@ function GroupRosterRow({
   canMoveDown,
   onNudge,
   sortable,
+  spanPinnedRow,
 }: {
   group: Group;
   bots: readonly Bot[];
@@ -437,6 +441,7 @@ function GroupRosterRow({
   canMoveDown: boolean;
   onNudge: (delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
+  spanPinnedRow: boolean;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const members = group.members.filter(
@@ -454,8 +459,9 @@ function GroupRosterRow({
         menuTriggerRef.current?.click();
       }}
       className={cn(
-        "relative flex touch-pan-y items-center",
-        pinned ? "my-2 w-18 self-center rounded-xl" : "rounded-lg",
+        "relative col-span-2 flex touch-pan-y items-center",
+        pinned ? "my-2 w-18 justify-self-center rounded-xl" : "rounded-lg",
+        pinned && !spanPinnedRow && "col-span-1",
         sortable.isDragging && "z-50 bg-sidebar shadow-xl",
         isActive
           ? "bg-sidebar-row-active"
@@ -470,7 +476,7 @@ function GroupRosterRow({
         className={cn(
           "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
           pinned
-            ? "min-h-20 flex-col justify-center gap-1.5 rounded-xl px-2 py-2 text-center"
+            ? "min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-center"
             : "items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-sidebar-row-hover",
         )}
       >
@@ -563,7 +569,7 @@ function RosterDragBoundary(props: {
     <SortableRosterMarker
       marker={props.marker}
       data-testid={`roster-${props.marker}`}
-      className="pointer-events-none relative mx-0.5 -mb-px h-0"
+      className="pointer-events-none relative col-span-2 mx-0.5 -mb-px h-0"
     >
       {props.visible ? (
         <div
@@ -608,7 +614,7 @@ function RosterSectionPlaceholder(props: {
     <SortableRosterMarker
       marker={props.marker}
       data-testid="roster-section-placeholder"
-      className="relative mx-0.5 -mb-px h-0"
+      className="relative col-span-2 mx-0.5 -mb-px h-0"
     >
       {props.showHint ? (
         <div
@@ -1093,7 +1099,7 @@ export default function BotRosterSidebar() {
                     ref={attachListMotionRef}
                     role="list"
                     aria-label="Bots and groups"
-                    className="relative flex flex-col gap-px"
+                    className="relative grid grid-cols-2 gap-x-1 gap-y-px"
                   >
                     {rosterListItems.map((item) => {
                       if (item.kind === "entry") {
@@ -1109,6 +1115,11 @@ export default function BotRosterSidebar() {
                         const canMoveUp = !searching && zoneIndex > 0;
                         const canMoveDown =
                           !searching && zoneIndex >= 0 && zoneIndex < zoneOrder.length - 1;
+                        const spanPinnedRow =
+                          pinned &&
+                          (visiblePinnedItems.length === 1 ||
+                            (visiblePinnedItems.length % 2 === 1 &&
+                              zoneIndex === visiblePinnedItems.length - 1));
                         const onNudge = (delta: -1 | 1) =>
                           useRosterStore.getState().nudgeRosterItem(item.item, delta);
                         return (
@@ -1140,6 +1151,7 @@ export default function BotRosterSidebar() {
                                         canMoveDown={canMoveDown}
                                         onNudge={onNudge}
                                         sortable={bag}
+                                        spanPinnedRow={spanPinnedRow}
                                       />
                                     );
                                   })()
@@ -1167,6 +1179,7 @@ export default function BotRosterSidebar() {
                                         canMoveDown={canMoveDown}
                                         onNudge={onNudge}
                                         sortable={bag}
+                                        spanPinnedRow={spanPinnedRow}
                                       />
                                     );
                                   })()
@@ -1203,7 +1216,7 @@ export default function BotRosterSidebar() {
                               key="unassigned-header"
                               marker="unassigned-header"
                               data-testid="roster-unassigned-header"
-                              className="relative"
+                              className="relative col-span-2"
                             >
                               <div
                                 className={cn(
