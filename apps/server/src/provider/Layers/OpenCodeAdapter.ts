@@ -422,7 +422,8 @@ function retainOpenCodeTextPart(
   part: OpenCodeTextPart,
 ): OpenCodeTextPartState {
   const previous = context.textPartById.get(part.id);
-  if (previous && previous.messageID !== part.messageID) {
+  const previousInMessage = previous?.messageID === part.messageID ? previous : undefined;
+  if (previous && !previousInMessage) {
     forgetOpenCodeTextPart(context, part.id);
   }
   const parts =
@@ -433,8 +434,8 @@ function retainOpenCodeTextPart(
     type: part.type,
     text: part.text,
     ...(part.time !== undefined ? { time: part.time } : {}),
-    emittedText: previous?.emittedText,
-    completed: previous?.completed ?? false,
+    emittedText: previousInMessage?.emittedText,
+    completed: previousInMessage?.completed ?? false,
   };
   parts.set(part.id, state);
   context.textPartsByMessageId.set(part.messageID, parts);
