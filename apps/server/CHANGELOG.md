@@ -1,3 +1,11 @@
+## akeru-bot@0.0.42
+
+### Changes
+
+- [#259](https://github.com/opencoredev/akeru-bot/pull/259) feat(web): redesign usage and settings pages
+- [#271](https://github.com/opencoredev/akeru-bot/pull/271) fix(feedback): make failed requests reportable
+- [#272](https://github.com/opencoredev/akeru-bot/pull/272) feat(web): improve roster dragging and pinned bots
+
 ## akeru-bot@0.0.41
 
 ### Changes
