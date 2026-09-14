@@ -60,6 +60,26 @@ describe("pending approvals", () => {
     ]);
   });
 
+  it("carries command arguments when approval arrives before its tool activity", () => {
+    const args = { command: "git status", cwd: "/workspace" };
+    const approvals = derivePendingApprovals([
+      makeActivity({
+        kind: "approval.requested",
+        payload: {
+          requestId: "shell-reversed",
+          requestKind: "command",
+          toolName: "Shell",
+        },
+      }),
+      makeActivity({
+        kind: "tool.started",
+        payload: { toolCallId: "shell-reversed", data: { args } },
+      }),
+    ]);
+
+    expect(approvals[0]?.args).toEqual(args);
+  });
+
   it("maps dynamic_tool_call approvals to the command kind", () => {
     expect(
       derivePendingApprovals([

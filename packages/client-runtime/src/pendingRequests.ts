@@ -118,6 +118,20 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
   const closedUserInputs = new Set<ApprovalRequestId>();
   const toolArgsByCallId = new Map<string, unknown>();
 
+  // Tool and approval activities can arrive in either order. Index command
+  // details first so an earlier approval still receives its matching args.
+  for (const activity of activities) {
+    if (activity.kind !== "tool.started") continue;
+    const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
+    if (!payload) continue;
+    const toolCallId = typeof payload.toolCallId === "string" ? payload.toolCallId : null;
+    const data = Predicate.isObject(payload.data) ? payload.data : null;
+    if (!toolCallId || !data) continue;
+    const toolArgs =
+      data.args ?? (typeof data.command === "string" ? { command: data.command } : undefined);
+    if (toolArgs !== undefined) toolArgsByCallId.set(toolCallId, toolArgs);
+  }
+
   // Request IDs are unique. A terminal event stays final even when provider
   // sequences and server-generated activities arrive in a different order.
   for (const activity of activities) {
@@ -125,16 +139,7 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
     const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
     if (!payload) continue;
 
-    if (activity.kind === "tool.started") {
-      const toolCallId = typeof payload.toolCallId === "string" ? payload.toolCallId : null;
-      const data = Predicate.isObject(payload.data) ? payload.data : null;
-      if (toolCallId && data) {
-        const toolArgs =
-          data.args ?? (typeof data.command === "string" ? { command: data.command } : undefined);
-        if (toolArgs !== undefined) toolArgsByCallId.set(toolCallId, toolArgs);
-      }
-      continue;
-    }
+    if (activity.kind === "tool.started") continue;
 
     if (!isRequestId(payload.requestId)) continue;
     const requestId = payload.requestId;

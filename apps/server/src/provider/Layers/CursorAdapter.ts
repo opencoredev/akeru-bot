@@ -514,12 +514,6 @@ export function makeCursorAdapter(
           let ctx!: CursorSessionContext;
 
           const resumeSessionId = parseCursorResume(input.resumeCursor)?.sessionId;
-          const acpNativeLoggers = makeAcpNativeLoggers({
-            nativeEventLogger,
-            provider: PROVIDER,
-            threadId: input.threadId,
-          });
-
           // Resolve the CursorSettings used to spawn the ACP child. Production
           // leaves `options.resolveSettings` undefined so we use the value
           // captured at adapter construction — per-instance isolation is
@@ -531,6 +525,12 @@ export function makeCursorAdapter(
           const effectiveCursorSettings = options?.resolveSettings
             ? yield* options.resolveSettings
             : cursorSettings;
+          const acpNativeLoggers = makeAcpNativeLoggers({
+            nativeEventLogger,
+            provider: PROVIDER,
+            threadId: input.threadId,
+            verboseProtocolLogging: effectiveCursorSettings.verboseProtocolLogging,
+          });
 
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const mcpServers = [

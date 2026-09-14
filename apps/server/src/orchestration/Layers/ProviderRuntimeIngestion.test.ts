@@ -2,6 +2,7 @@
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeChildProcess from "node:child_process";
 
 import {
   OrchestrationReadModel,
@@ -53,12 +54,18 @@ import {
   type AgentControllerShape,
 } from "../../provider/Services/AgentController.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
+import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
+import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
+import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
-import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
+import {
+  findTaskTitleInActivities,
+  ProviderRuntimeIngestionLive,
+} from "./ProviderRuntimeIngestion.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
@@ -72,6 +79,44 @@ import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.t
 function makeTestServerSettingsLayer(overrides: Partial<ServerSettings> = {}) {
   return ServerSettingsService.layerTest(overrides);
 }
+
+describe("findTaskTitleInActivities", () => {
+  it("reads a title from a projection activity record that uses activityId instead of id", () => {
+    expect(
+      findTaskTitleInActivities(
+        [
+          {
+            kind: "task.started",
+            payload: { taskId: "task-1", title: "Typecheck mobile app" },
+          },
+        ],
+        "task-1",
+      ),
+    ).toBe("Typecheck mobile app");
+  });
+
+  it("prefers the latest matching progress title and ignores other tasks", () => {
+    expect(
+      findTaskTitleInActivities(
+        [
+          {
+            kind: "task.started",
+            payload: { taskId: "task-1", title: "first name" },
+          },
+          {
+            kind: "task.progress",
+            payload: { taskId: "task-2", title: "other task" },
+          },
+          {
+            kind: "task.progress",
+            payload: { taskId: "task-1", title: "latest name" },
+          },
+        ],
+        "task-1",
+      ),
+    ).toBe("latest name");
+  });
+});
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
@@ -237,9 +282,15 @@ describe("ProviderRuntimeIngestion", () => {
     threadTitle?: string;
     botOwned?: boolean;
     botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
+    workspaceSubdirectory?: string;
   }) {
-    const workspaceRoot = makeTempDir("t3-provider-project-");
-    NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".git"));
+    const repositoryRoot = makeTempDir("t3-provider-project-");
+    NodeChildProcess.execFileSync("git", ["init", "--initial-branch=main"], {
+      cwd: repositoryRoot,
+      stdio: "ignore",
+    });
+    const workspaceRoot = NodePath.join(repositoryRoot, options?.workspaceSubdirectory ?? "");
+    NodeFS.mkdirSync(workspaceRoot, { recursive: true });
     const provider = createAgentControllerHarness();
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
@@ -266,6 +317,8 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(ChannelDeliveryStoreLive.pipe(Layer.provide(SqlitePersistenceMemory))),
       Layer.provideMerge(ServerSecretStore.layer),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
+      Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistry.layer))),
+      Layer.provideMerge(VcsProcess.layer),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), workspaceRoot)),
       Layer.provideMerge(NodeServices.layer),
     );
@@ -3793,9 +3846,24 @@ describe("ProviderRuntimeIngestion", () => {
       turnId: asTurnId("turn-warning"),
       payload: {
         message: "Reconnecting... 2/5",
+        key: "provider.retry",
         detail: {
           willRetry: true,
         },
+      },
+    });
+
+    harness.emit({
+      type: "runtime.warning",
+      eventId: asEventId("evt-warning-resolved"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-warning"),
+      payload: {
+        message: "Reconnected.",
+        key: "provider.retry",
+        resolved: true,
       },
     });
 
@@ -3807,11 +3875,20 @@ describe("ProviderRuntimeIngestion", () => {
         entry.activities.some(
           (activity: ProviderRuntimeTestActivity) =>
             activity.id === "evt-warning-runtime" && activity.kind === "runtime.warning",
-        ),
+        ) &&
+        entry.activities.some((activity) => activity.id === "evt-warning-resolved"),
     );
     expect(thread.session?.status).toBe("running");
     expect(thread.session?.activeTurnId).toBe("turn-warning");
     expect(thread.session?.lastError).toBeNull();
+    const resolvedActivity = thread.activities.find(
+      (activity) => activity.id === "evt-warning-resolved",
+    );
+    expect(resolvedActivity?.payload).toMatchObject({
+      key: "provider.retry",
+      message: "Reconnected.",
+      resolved: true,
+    });
   });
 
   it("maps session/thread lifecycle and item.started into session/activity projections", async () => {
@@ -4014,6 +4091,30 @@ describe("ProviderRuntimeIngestion", () => {
     expect(checkpoint?.assistantMessageId).toBe("assistant:item-p1-assistant");
     expect(checkpoint?.checkpointRef).toBe("provider-diff:evt-turn-diff-updated");
   });
+
+  effectIt.effect("tracks provider diff updates from a nested Git workspace", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({ workspaceSubdirectory: "apps/server" }),
+      );
+      harness.emit({
+        type: "turn.diff.updated",
+        eventId: asEventId("evt-nested-diff"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("nested-turn"),
+        payload: {
+          unifiedDiff: "diff --git a/apps/server/file.ts b/apps/server/file.ts\n+new\n",
+        },
+      });
+      yield* Effect.promise(harness.drain);
+      const snapshot = yield* Effect.promise(harness.readModel);
+      expect(snapshot.threads[0]?.checkpoints).toEqual([
+        expect.objectContaining({ turnId: "nested-turn", status: "missing" }),
+      ]);
+    }),
+  );
 
   it("does not replace the app title with provider metadata", async () => {
     const harness = await createHarness({ threadTitle: "Bot conversation" });
@@ -4669,6 +4770,57 @@ describe("ProviderRuntimeIngestion", () => {
       payload: { reason: "Interrupted by user." },
     });
     await harness.drain();
+    expect((await harness.readThreadShell()).hasPendingUserInput).toBe(false);
+    expect(
+      (await harness.readModel()).threads[0]!.activities.filter(
+        (activity) => activity.kind === "user-input.resolved",
+      ),
+    ).toMatchObject([{ payload: { requestId: request.requestId } }]);
+  });
+
+  it("resolves a terminal native question after an ordinary response failure", async () => {
+    const harness = await createHarness();
+    const request = userInputEvent("failed-response-turn", "failed-response-question");
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("failed-response-started"),
+      provider: request.provider,
+      threadId: request.threadId,
+      turnId: request.turnId,
+      createdAt: request.createdAt,
+    });
+    harness.emit(request);
+    await harness.drain();
+    await harness.dispatch({
+      type: "thread.activity.append",
+      commandId: CommandId.make("cmd-failed-user-input-response"),
+      threadId: request.threadId,
+      activity: {
+        id: asEventId("failed-user-input-response"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+        tone: "error",
+        kind: "provider.user-input.respond.failed",
+        summary: "User input response failed",
+        payload: {
+          requestId: request.requestId,
+          detail: "Provider connection failed while sending the response",
+        },
+        turnId: asTurnId("failed-response-turn"),
+      },
+      createdAt: "2026-01-01T00:00:02.000Z",
+    });
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("failed-response-completed"),
+      provider: request.provider,
+      threadId: request.threadId,
+      turnId: request.turnId,
+      createdAt: "2026-01-01T00:00:03.000Z",
+      payload: { state: "failed" },
+    });
+    await harness.drain();
+
     expect((await harness.readThreadShell()).hasPendingUserInput).toBe(false);
     expect(
       (await harness.readModel()).threads[0]!.activities.filter(
