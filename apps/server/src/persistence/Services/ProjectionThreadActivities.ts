@@ -41,6 +41,13 @@ export const ListProjectionThreadActivitiesInput = Schema.Struct({
 });
 export type ListProjectionThreadActivitiesInput = typeof ListProjectionThreadActivitiesInput.Type;
 
+export const ListProjectionThreadUserInputLifecycleInput = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+});
+export type ListProjectionThreadUserInputLifecycleInput =
+  typeof ListProjectionThreadUserInputLifecycleInput.Type;
+
 export const GetLatestProjectionThreadTaskActivityInput = Schema.Struct({
   threadId: ThreadId,
   taskId: Schema.String,
@@ -84,6 +91,11 @@ export interface ProjectionThreadActivityRepositoryShape {
    */
   readonly listUserInputLifecycleByThreadId: (
     input: ListProjectionThreadActivitiesInput,
+  ) => Effect.Effect<ReadonlyArray<ProjectionThreadActivity>, ProjectionRepositoryError>;
+
+  /** List user-input lifecycle rows for one terminal turn. */
+  readonly listUserInputLifecycleByThreadAndTurn: (
+    input: ListProjectionThreadUserInputLifecycleInput,
   ) => Effect.Effect<ReadonlyArray<ProjectionThreadActivity>, ProjectionRepositoryError>;
 
   /**

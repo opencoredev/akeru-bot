@@ -13,6 +13,7 @@ import {
   DeleteProjectionThreadActivitiesInput,
   GetLatestProjectionThreadTaskActivityInput,
   ListProjectionThreadActivitiesInput,
+  ListProjectionThreadUserInputLifecycleInput,
   ProjectionThreadActivity,
   ProjectionThreadActivityRepository,
   type ProjectionThreadActivityRepositoryShape,
@@ -155,6 +156,33 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
       `,
   });
 
+  const listUserInputLifecycleActivityRowsForTurn = SqlSchema.findAll({
+    Request: ListProjectionThreadUserInputLifecycleInput,
+    Result: ProjectionThreadActivityDbRowSchema,
+    execute: ({ threadId, turnId }) =>
+      sql`
+        SELECT
+          activity_id AS "activityId",
+          thread_id AS "threadId",
+          turn_id AS "turnId",
+          tone,
+          kind,
+          summary,
+          payload_json AS "payload",
+          sequence,
+          created_at AS "createdAt"
+        FROM projection_thread_activities
+        WHERE thread_id = ${threadId}
+          AND turn_id = ${turnId}
+          AND kind IN (
+            'user-input.requested',
+            'user-input.resolved',
+            'provider.user-input.respond.failed'
+          )
+        ORDER BY sequence ASC, created_at ASC, activity_id ASC
+      `,
+  });
+
   const getLatestProjectionThreadTaskActivityRow = SqlSchema.findOneOption({
     Request: GetLatestProjectionThreadTaskActivityInput,
     Result: ProjectionThreadActivityDbRowSchema,
@@ -231,6 +259,18 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
         Effect.map((rows) => rows.map(toProjectionThreadActivity)),
       );
 
+  const listUserInputLifecycleByThreadAndTurn: ProjectionThreadActivityRepositoryShape["listUserInputLifecycleByThreadAndTurn"] =
+    (input) =>
+      listUserInputLifecycleActivityRowsForTurn(input).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionThreadActivityRepository.listUserInputLifecycleByThreadAndTurn:query",
+            "ProjectionThreadActivityRepository.listUserInputLifecycleByThreadAndTurn:decodeRows",
+          ),
+        ),
+        Effect.map((rows) => rows.map(toProjectionThreadActivity)),
+      );
+
   const getLatestTaskActivity: ProjectionThreadActivityRepositoryShape["getLatestTaskActivity"] = (
     input,
   ) =>
@@ -255,6 +295,7 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
     upsert,
     listByThreadId,
     listUserInputLifecycleByThreadId,
+    listUserInputLifecycleByThreadAndTurn,
     getLatestTaskActivity,
     deleteByThreadId,
   } satisfies ProjectionThreadActivityRepositoryShape;

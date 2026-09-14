@@ -31,6 +31,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Exit from "effect/Exit";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -532,6 +533,10 @@ export function runtimeEventToActivities(
           payload: {
             ...(event.requestId ? { requestId: event.requestId } : {}),
             questions: event.payload.questions,
+            ...("responseMode" in event.payload &&
+            (event.payload as { responseMode?: unknown }).responseMode === "message"
+              ? { responseMode: "message" as const }
+              : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -999,6 +1004,64 @@ const make = Effect.gen(function* () {
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
     );
+
+  const resolveNativeUserInputForTerminalTurn = (input: {
+    readonly event: ProviderRuntimeEvent;
+    readonly threadId: ThreadId;
+    readonly turnId: TurnId;
+    readonly now: string;
+  }) =>
+    Effect.gen(function* () {
+      const activities = yield* projectionThreadActivities.listUserInputLifecycleByThreadAndTurn({
+        threadId: input.threadId,
+        turnId: input.turnId,
+      });
+      const pendingRequestIds = new Set<string>();
+      for (const activity of activities) {
+        const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
+        if (!payload || typeof payload.requestId !== "string") continue;
+        const requestId = payload.requestId;
+
+        if (activity.kind === "user-input.requested" && payload.responseMode !== "message") {
+          pendingRequestIds.add(requestId);
+          continue;
+        }
+        if (activity.kind === "user-input.resolved") {
+          pendingRequestIds.delete(requestId);
+          continue;
+        }
+        if (activity.kind !== "provider.user-input.respond.failed") continue;
+        const detail = typeof payload.detail === "string" ? payload.detail.toLowerCase() : "";
+        if (
+          detail.includes("stale pending user-input request") ||
+          detail.includes("unknown pending user-input request") ||
+          detail.includes("unknown pending user input request") ||
+          detail.includes("unknown pending codex user input request")
+        ) {
+          pendingRequestIds.delete(requestId);
+        }
+      }
+
+      // Native callbacks cannot accept answers after their turn terminates.
+      // Message-mode questions can still receive a later chat message.
+      for (const requestId of pendingRequestIds) {
+        yield* orchestrationEngine.dispatch({
+          type: "thread.activity.append",
+          commandId: yield* providerCommandId(input.event, "terminal-user-input-resolved"),
+          threadId: input.threadId,
+          activity: {
+            id: EventId.make(`${input.event.eventId}:user-input-resolved:${requestId}`),
+            createdAt: input.now,
+            tone: "info",
+            kind: "user-input.resolved",
+            summary: "User input dismissed",
+            payload: { requestId },
+            turnId: input.turnId,
+          },
+          createdAt: input.now,
+        });
+      }
+    });
 
   const turnMessageIdsByTurnKey = yield* Cache.make<string, Set<MessageId>>({
     capacity: TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY,
@@ -2073,6 +2136,18 @@ const make = Effect.gen(function* () {
           fallbackMarkdown: proposedPlanCompletion.planMarkdown,
           updatedAt: now,
         });
+      }
+
+      if (event.type === "turn.completed" || event.type === "turn.aborted") {
+        const turnId = toTurnId(event.turnId);
+        if (turnId) {
+          yield* resolveNativeUserInputForTerminalTurn({
+            event,
+            threadId: thread.id,
+            turnId,
+            now,
+          });
+        }
       }
 
       if (event.type === "turn.completed") {
