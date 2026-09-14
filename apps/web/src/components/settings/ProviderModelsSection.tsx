@@ -75,6 +75,21 @@ interface ProviderModelsSectionProps {
   readonly onModelOrderChange: (next: ReadonlyArray<string>) => void;
 }
 
+export function nextHiddenModelsForBulkToggle(
+  models: ReadonlyArray<Pick<ServerProviderModel, "slug" | "isCustom">>,
+  hiddenModels: ReadonlyArray<string>,
+): string[] {
+  const builtInSlugs = models.filter((model) => !model.isCustom).map((model) => model.slug);
+  const builtInSlugSet = new Set(builtInSlugs);
+  const allBuiltInModelsHidden = builtInSlugs.every((slug) => hiddenModels.includes(slug));
+
+  if (allBuiltInModelsHidden) {
+    return hiddenModels.filter((slug) => !builtInSlugSet.has(slug));
+  }
+
+  return [...new Set([...hiddenModels, ...builtInSlugs])];
+}
+
 /**
  * Shared "Models" section rendered on both the built-in default and custom
  * provider-instance cards. Owns its own input + error local state so two
@@ -111,6 +126,9 @@ export function ProviderModelsSection({
       modelOrder,
     });
   }, [favoriteModelSet, modelOrder, models]);
+  const builtInModels = useMemo(() => models.filter((model) => !model.isCustom), [models]);
+  const allBuiltInModelsHidden =
+    builtInModels.length > 0 && builtInModels.every((model) => hiddenModelSet.has(model.slug));
 
   const handleAdd = () => {
     const normalized = normalizeCustomModelSlug(input);
@@ -188,7 +206,21 @@ export function ProviderModelsSection({
 
   return (
     <div>
-      <div className="text-xs font-medium text-foreground">Models</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-medium text-foreground">Models</div>
+        {builtInModels.length > 0 ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost-muted"
+            onClick={() =>
+              onHiddenModelsChange(nextHiddenModelsForBulkToggle(models, hiddenModels))
+            }
+          >
+            {allBuiltInModelsHidden ? "Enable all" : "Disable all"}
+          </Button>
+        ) : null}
+      </div>
       <div className="mt-1 text-xs text-muted-foreground">
         {models.length} model{models.length === 1 ? "" : "s"} available.
       </div>

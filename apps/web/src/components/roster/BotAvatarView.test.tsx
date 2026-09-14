@@ -12,8 +12,17 @@ describe("BotAvatarView", () => {
     expect(markup).toContain('class="bot-eyes"');
     expect(markup).toContain('viewBox="-22 -18 44 36"');
     expect(markup).toContain('data-bot-state="idle"');
+    expect(markup).toContain('fill="#0A0A0A"');
     expect(markup).not.toContain("</text>");
     expect(markup).not.toContain(">T</text>");
+  });
+
+  it("uses light eyes when the blob color is dark", () => {
+    const markup = renderToStaticMarkup(
+      <BotAvatarView name="Theo" avatar={{ kind: "blob", shape: "pill", color: "#141062" }} />,
+    );
+
+    expect(markup).toContain('fill="#FFFFFF"');
   });
 
   it("shortens the eyes while working", () => {

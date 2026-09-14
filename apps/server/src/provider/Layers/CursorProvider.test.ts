@@ -298,6 +298,7 @@ const baseCursorSettings: CursorSettings = {
   binaryPath: "cursor-agent",
   apiEndpoint: "",
   customModels: [],
+  verboseProtocolLogging: false,
 };
 const cursorAcpDiscoveryFailedMessage = [
   "Cursor ACP model discovery failed.",
@@ -435,6 +436,7 @@ describe("checkCursorProviderStatus", () => {
         binaryPath: missingCursorBinaryPath,
         apiEndpoint: "",
         customModels: [],
+        verboseProtocolLogging: false,
       }),
     );
 
@@ -456,6 +458,7 @@ describe("checkCursorProviderStatus", () => {
           binaryPath: wrapperPath,
           apiEndpoint: "",
           customModels: [],
+          verboseProtocolLogging: false,
         },
         {
           ...process.env,
@@ -484,6 +487,7 @@ describe("discoverCursorModelsViaAcp", () => {
         binaryPath: wrapperPath,
         apiEndpoint: "",
         customModels: [],
+        verboseProtocolLogging: false,
       }).pipe(Effect.scoped),
     );
 
@@ -506,6 +510,7 @@ describe("discoverCursorModelsViaAcp", () => {
         binaryPath: wrapperPath,
         apiEndpoint: "",
         customModels: [],
+        verboseProtocolLogging: false,
       }),
     );
 
