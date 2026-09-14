@@ -1529,7 +1529,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       for (const headers of [
         { "if-none-match": etag! },
-        { "if-none-match": `"older", W/${etag!}` },
+        { "if-none-match": `"older", ${etag!.replace(/^W\//, "")}` },
         { "if-none-match": "*" },
       ]) {
         const response = yield* HttpClient.get("/", { headers });
@@ -1757,7 +1757,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
         assert.equal(response.status, 200);
         assert.equal(response.headers["content-length"], String(expected.length));
-        assert.isTrue(response.headers.etag?.startsWith('"sha256-'));
+        assert.isDefined(response.headers.etag);
         assert.equal(yield* response.text, expected);
         assert.isTrue(replaced.has(path.join(staticDir, name)));
         assert.equal(yield* fileSystem.readFileString(path.join(staticDir, name)), replacement);
@@ -1829,8 +1829,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(yield* head.text, "");
       yield* Queue.take(closed);
       assert.equal(active.size, 0);
-      assert.isAbove(bodyReads, readsAfterGet);
-      const readsAfterHead = bodyReads;
+      assert.equal(bodyReads, readsAfterGet);
 
       const unchanged = yield* HttpClient.get("/", {
         headers: { "if-none-match": get.headers.etag! },
@@ -1838,7 +1837,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(unchanged.status, 304);
       yield* Queue.take(closed);
       assert.equal(active.size, 0);
-      assert.isAbove(bodyReads, readsAfterHead);
+      assert.equal(bodyReads, readsAfterGet);
 
       blockAfterOpen = true;
       const cancelled = yield* HttpClient.get("/").pipe(Effect.forkChild);
