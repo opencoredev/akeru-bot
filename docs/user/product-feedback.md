@@ -13,7 +13,8 @@ does not contain a screenshot, raw page content, input value, credential, tool r
 path, full URL, open chat, or conversation history.
 
 A failed send keeps the draft. A confirmed send clears it. No account is required. The service can
-keep accepted feedback for up to 90 days.
+keep accepted feedback for up to 90 days and post it publicly to the Akeru Bot GitHub Issues tab.
+Do not include secrets or private data. A GitHub issue remains until a maintainer removes it.
 
 Turn off **Product feedback** under **Settings > Privacy** to disable sending. A self-hosted
 environment can set an HTTPS endpoint under **Settings > General > About**. Loopback HTTP is allowed

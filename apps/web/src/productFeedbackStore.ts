@@ -31,6 +31,7 @@ interface ProductFeedbackDialogState {
   readonly stopPicking: (element?: ProductFeedbackElement) => void;
   readonly updateDraft: (draft: Partial<ProductFeedbackDraft>) => void;
   readonly clearDraft: () => void;
+  readonly completeFeedback: () => void;
 }
 
 export const useProductFeedbackStore = create<ProductFeedbackDialogState>((set) => ({
@@ -53,10 +54,18 @@ export const useProductFeedbackStore = create<ProductFeedbackDialogState>((set) 
     })),
   updateDraft: (draft) => set((state) => ({ draft: { ...state.draft, ...draft } })),
   clearDraft: () => set({ draft: EMPTY_PRODUCT_FEEDBACK_DRAFT }),
+  completeFeedback: () => set({ open: false, picking: false, draft: EMPTY_PRODUCT_FEEDBACK_DRAFT }),
 }));
 
 export function openProductFeedback(draft?: Partial<ProductFeedbackDraft>): void {
   useProductFeedbackStore.getState().openFeedback(draft);
+}
+
+export function openProductFeedbackWithPrefill(feedback: string): void {
+  const current = useProductFeedbackStore.getState().draft;
+  useProductFeedbackStore.getState().openFeedback({
+    feedback: appendBounded(current.feedback, feedback, PRODUCT_FEEDBACK_TEXT_MAX_CHARS),
+  });
 }
 
 export function productFeedbackDraftFromToolArgs(
@@ -78,9 +87,6 @@ function appendBounded(current: string, proposed: string, maxLength: number): st
 export function openProductFeedbackFromToolArgs(args: unknown): boolean {
   const proposed = productFeedbackDraftFromToolArgs(args);
   if (!proposed?.feedback) return false;
-  const current = useProductFeedbackStore.getState().draft;
-  useProductFeedbackStore.getState().openFeedback({
-    feedback: appendBounded(current.feedback, proposed.feedback, PRODUCT_FEEDBACK_TEXT_MAX_CHARS),
-  });
+  openProductFeedbackWithPrefill(proposed.feedback);
   return true;
 }

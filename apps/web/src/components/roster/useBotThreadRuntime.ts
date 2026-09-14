@@ -506,7 +506,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     bootstrapped,
     botReady,
     defaultProject: activeProject,
-    error,
+    error: error ?? rememberedThread?.session?.lastError ?? null,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,

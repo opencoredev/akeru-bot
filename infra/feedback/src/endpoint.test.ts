@@ -104,11 +104,13 @@ async function reason(response: Response): Promise<string> {
 describe("product feedback endpoint", () => {
   it("stores a strict, privacy-bounded payload and returns a feedback id", async () => {
     const memory = makeRepository();
+    const accepted: StoredProductFeedback[] = [];
     const endpoint = makeProductFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       randomId: () => "feedback-1",
       now: () => new Date("2026-08-30T12:00:00.000Z"),
+      onAccepted: (feedback) => accepted.push(feedback),
     });
     const response = await endpoint(
       request({
@@ -136,6 +138,23 @@ describe("product feedback endpoint", () => {
     expect(memory.rows[0]?.submission).not.toHaveProperty("website");
     expect(memory.rows[0]?.installHash).toMatch(/^[a-f0-9]{64}$/);
     expect(memory.rows[0]?.coarseIpHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(accepted).toEqual(memory.rows);
+  });
+
+  it("keeps the durable receipt successful when background delivery cannot be scheduled", async () => {
+    const memory = makeRepository();
+    const endpoint = makeProductFeedbackEndpoint({
+      repository: memory.repository,
+      hmacSecret: "test-secret-that-is-long-enough",
+      onAccepted: () => {
+        throw new Error("scheduler unavailable");
+      },
+    });
+
+    const response = await endpoint(request(baseSubmission()));
+
+    expect(response.status).toBe(201);
+    expect(memory.rows).toHaveLength(1);
   });
 
   it("rejects malformed JSON, excess fields, oversized bodies, and honeypots", async () => {

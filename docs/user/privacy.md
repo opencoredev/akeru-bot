@@ -9,7 +9,8 @@ server uses that worktree's `.akeru` directory instead.
 - Provider requests send the prompt, selected files, tool results, and conversation context to the
   provider that you select. That provider controls its processing and retention.
 - Product feedback sends the text and an optional safe interface descriptor to
-  the Akeru feedback service. The service can retain accepted feedback for up to 90 days.
+  the Akeru feedback service. The service can retain accepted feedback for up to 90 days and post
+  it publicly to the Akeru Bot GitHub Issues tab, where it remains until a maintainer removes it.
 - Voice calls send microphone audio and call state to the ChatGPT Realtime service while a call is
   active.
 - Reading a stored reply aloud will send the spoken form of that reply to the selected speech

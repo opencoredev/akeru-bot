@@ -20,6 +20,7 @@ import {
 } from "../ui/dialog";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
+import { toastManager } from "../ui/toast";
 
 interface TurnstileApi {
   readonly render: (
@@ -83,13 +84,11 @@ export function ProductFeedbackDialog() {
   const startPicking = useProductFeedbackStore((state) => state.startPicking);
   const stopPicking = useProductFeedbackStore((state) => state.stopPicking);
   const updateDraft = useProductFeedbackStore((state) => state.updateDraft);
-  const clearDraft = useProductFeedbackStore((state) => state.clearDraft);
+  const completeFeedback = useProductFeedbackStore((state) => state.completeFeedback);
   const [submitting, setSubmitting] = useState(false);
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState<
-    | { readonly kind: "idle" }
-    | { readonly kind: "success"; readonly feedbackId: string }
-    | { readonly kind: "failure"; readonly message: string }
+    { readonly kind: "idle" } | { readonly kind: "failure"; readonly message: string }
   >({ kind: "idle" });
   const [challengeSiteKey, setChallengeSiteKey] = useState<string | null>(null);
   const [challengeAttempt, setChallengeAttempt] = useState(0);
@@ -135,11 +134,11 @@ export function ProductFeedbackDialog() {
     const result = await submitProductFeedback(settings.productFeedbackEndpoint, payload);
     setSubmitting(false);
     if (result.ok) {
-      setStatus({ kind: "success", feedbackId: result.receipt.feedbackId });
-      clearDraft();
+      completeFeedback();
       setWebsite("");
       setChallengeSiteKey(null);
       setTurnstileToken(undefined);
+      toastManager.add({ type: "success", title: "Feedback sent" });
       return;
     }
     setStatus({ kind: "failure", message: result.rejection.message });
@@ -214,11 +213,10 @@ export function ProductFeedbackDialog() {
               <p role="alert" className="text-sm text-destructive-foreground">
                 {status.message}
               </p>
-            ) : status.kind === "success" ? (
-              <p role="status" className="text-sm text-foreground">
-                Feedback sent. ID: <code>{status.feedbackId}</code>
-              </p>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Feedback is posted publicly to GitHub Issues. Do not include secrets or private data.
+            </p>
             {!settings.productFeedbackEnabled ? (
               <p role="status" className="text-sm text-muted-foreground">
                 Product feedback is disabled in Settings.

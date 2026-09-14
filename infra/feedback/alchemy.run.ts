@@ -13,7 +13,7 @@ export const FeedbackWorker = Cloudflare.Worker("FeedbackWorker", {
   name: "akeru-feedback",
   main: new URL("./src/worker.ts", import.meta.url).pathname,
   compatibility: {
-    date: "2026-08-30",
+    date: "2026-09-14",
     flags: ["nodejs_compat"],
   },
   crons: ["0 3 * * *"],
@@ -24,6 +24,16 @@ export const FeedbackWorker = Cloudflare.Worker("FeedbackWorker", {
       Config.withDefault(""),
     ),
     TURNSTILE_SECRET_KEY: Config.redacted("AKERU_FEEDBACK_TURNSTILE_SECRET_KEY").pipe(
+      Config.withDefault(Redacted.make("")),
+    ),
+    GITHUB_REPOSITORY: Config.string("AKERU_FEEDBACK_GITHUB_REPOSITORY").pipe(
+      Config.withDefault("opencoredev/akeru-bot"),
+    ),
+    GITHUB_APP_ID: Config.string("AKERU_FEEDBACK_GITHUB_APP_ID").pipe(Config.withDefault("")),
+    GITHUB_APP_INSTALLATION_ID: Config.string("AKERU_FEEDBACK_GITHUB_APP_INSTALLATION_ID").pipe(
+      Config.withDefault(""),
+    ),
+    GITHUB_APP_PRIVATE_KEY: Config.redacted("AKERU_FEEDBACK_GITHUB_APP_PRIVATE_KEY").pipe(
       Config.withDefault(Redacted.make("")),
     ),
   },

@@ -3,6 +3,11 @@ import { Alert, AlertAction, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { CircleAlertIcon, XIcon } from "lucide-react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { openProductFeedbackWithPrefill } from "../../productFeedbackStore";
+
+export function threadErrorFeedbackDraft(error: string): string {
+  return `A request failed in a bot chat.\n\nError details:\n${error}`;
+}
 
 export function getThreadErrorBannerKey(threadKey: string, error: string | null): string | null {
   return error === null ? null : `${threadKey}\u0000${error}`;
@@ -53,13 +58,21 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
             </TooltipPopup>
           </Tooltip>
         </AlertDescription>
-        {onDismiss && (
-          <AlertAction>
+        <AlertAction>
+          <Button
+            size="xs"
+            type="button"
+            variant="outline"
+            onClick={() => openProductFeedbackWithPrefill(threadErrorFeedbackDraft(error))}
+          >
+            Send feedback
+          </Button>
+          {onDismiss ? (
             <Button variant="ghost" size="icon-xs" aria-label="Dismiss error" onClick={onDismiss}>
               <XIcon className="text-destructive" />
             </Button>
-          </AlertAction>
-        )}
+          ) : null}
+        </AlertAction>
       </Alert>
     </div>
   );

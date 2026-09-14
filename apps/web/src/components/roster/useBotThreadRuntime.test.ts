@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   useAtomCommand: vi.fn(),
   command: vi.fn(),
   approvalCommand: Symbol("respondToApproval"),
+  primaryEnvironmentId: null as EnvironmentId | null,
+  threadShells: [] as Array<Record<string, unknown>>,
+  threadShell: null as Record<string, unknown> | null,
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -33,15 +36,17 @@ vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
 vi.mock("../../modelSelection", () => ({ resolveAppModelSelectionState: () => null }));
 vi.mock("../../state/entities", () => ({
   useProjects: () => [],
-  useThreadShells: () => [],
+  useThreadShells: () => mocks.threadShells,
   useAllEnvironmentShellsBootstrapped: () => true,
-  useThreadShell: () => null,
+  useThreadShell: () => mocks.threadShell,
   useThreadMessages: () => [],
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
 vi.mock("../../state/bots", () => ({ environmentBotsAtom: () => null }));
-vi.mock("../../state/environments", () => ({ usePrimaryEnvironmentId: () => null }));
+vi.mock("../../state/environments", () => ({
+  usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
+}));
 vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: null }));
 vi.mock("../../state/threads", () => ({
   threadEnvironment: { respondToApproval: mocks.approvalCommand },
@@ -60,6 +65,9 @@ vi.mock("./rosterStore", () => ({
 beforeEach(() => {
   hooks.reset();
   vi.clearAllMocks();
+  mocks.primaryEnvironmentId = null;
+  mocks.threadShells = [];
+  mocks.threadShell = null;
   mocks.derivePendingApprovals.mockReturnValue([]);
   mocks.useAtomCommand.mockReturnValue(mocks.command);
   mocks.command.mockResolvedValue({ _tag: "Success", value: undefined });
@@ -100,5 +108,30 @@ describe("bot runtime approval ownership", () => {
       environmentId: threadRef.environmentId,
       input: { threadId: threadRef.threadId, requestId, decision: "accept" },
     });
+  });
+});
+
+describe("bot runtime errors", () => {
+  it("surfaces the persisted provider error for a failed turn", () => {
+    const environmentId = EnvironmentId.make("env-a");
+    mocks.primaryEnvironmentId = environmentId;
+    mocks.threadShells = [
+      {
+        environmentId,
+        id: ThreadId.make("thread-1"),
+        botId: "bot-1",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+        archivedAt: null,
+      },
+    ];
+    mocks.threadShell = {
+      ...mocks.threadShells[0],
+      session: { lastError: "Provider rejected the request." },
+    };
+
+    hooks.beginRender();
+    const runtime = useBotThreadRuntime("bot-1", null);
+
+    expect(runtime.error).toBe("Provider rejected the request.");
   });
 });
