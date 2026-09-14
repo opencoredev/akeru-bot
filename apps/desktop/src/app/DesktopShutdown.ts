@@ -4,6 +4,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
+import { DesktopTraceShutdown } from "./DesktopObservability.ts";
+
 export class DesktopShutdown extends Context.Service<
   DesktopShutdown,
   {
@@ -31,5 +33,13 @@ const make = Effect.gen(function* () {
     isComplete: Ref.get(completedRef),
   });
 });
+
+// Run outside the app span so its final record is included in the drain.
+export const acknowledgeShutdown = Effect.gen(function* () {
+  const trace = yield* DesktopTraceShutdown;
+  const shutdown = yield* DesktopShutdown;
+  yield* trace.close;
+  yield* shutdown.markComplete;
+}).pipe(Effect.uninterruptible, Effect.withTracerEnabled(false));
 
 export const layer = Layer.effect(DesktopShutdown, make);
