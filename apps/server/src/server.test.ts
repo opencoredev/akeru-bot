@@ -1529,9 +1529,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       for (const headers of [
         { "if-none-match": etag! },
-        { "if-none-match": `"older", ${etag!.replace(/^W\//, "")}` },
+        { "if-none-match": `"older", W/${etag!}` },
         { "if-none-match": "*" },
-        { "if-modified-since": initial.headers["last-modified"]! },
       ]) {
         const response = yield* HttpClient.get("/", { headers });
         assert.equal(response.status, 304);
@@ -1539,6 +1538,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(response.headers["cache-control"], "no-cache");
         assert.equal(yield* response.text, "");
       }
+
+      const dateOnly = yield* HttpClient.get("/", {
+        headers: { "if-modified-since": initial.headers["last-modified"]! },
+      });
+      assert.equal(dateOnly.status, 200);
+      assert.include(yield* dateOnly.text, "first build");
 
       const mismatched = yield* HttpClient.get("/", {
         headers: {
@@ -1554,6 +1559,36 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(changed.status, 200);
       assert.notEqual(changed.headers.etag, etag);
       assert.include(yield* changed.text, "next build");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("changes mutable validators when equal-size content keeps its modification time", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const staticDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-static-etag-" });
+      const indexPath = path.join(staticDir, "index.html");
+      const original = "<html>build one</html>";
+      const replacement = "<html>build two</html>";
+      assert.equal(original.length, replacement.length);
+      yield* fileSystem.writeFileString(indexPath, original);
+      const originalInfo = yield* fileSystem.stat(indexPath);
+      const originalMtime = Option.getOrThrow(originalInfo.mtime);
+      yield* buildAppUnderTest({ config: { staticDir } });
+
+      const initial = yield* HttpClient.get("/");
+      const initialEtag = initial.headers.etag;
+      assert.equal(yield* initial.text, original);
+      assert.isDefined(initialEtag);
+
+      yield* fileSystem.writeFileString(indexPath, replacement);
+      yield* fileSystem.utimes(indexPath, originalMtime, originalMtime);
+      const changed = yield* HttpClient.get("/", {
+        headers: { "if-none-match": initialEtag! },
+      });
+      assert.equal(changed.status, 200);
+      assert.notEqual(changed.headers.etag, initialEtag);
+      assert.equal(yield* changed.text, replacement);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
@@ -1722,7 +1757,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
         assert.equal(response.status, 200);
         assert.equal(response.headers["content-length"], String(expected.length));
-        assert.isTrue(response.headers.etag?.startsWith(`W/"${expected.length.toString(16)}-`));
+        assert.isTrue(response.headers.etag?.startsWith('"sha256-'));
         assert.equal(yield* response.text, expected);
         assert.isTrue(replaced.has(path.join(staticDir, name)));
         assert.equal(yield* fileSystem.readFileString(path.join(staticDir, name)), replacement);
@@ -1794,7 +1829,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(yield* head.text, "");
       yield* Queue.take(closed);
       assert.equal(active.size, 0);
-      assert.equal(bodyReads, readsAfterGet);
+      assert.isAbove(bodyReads, readsAfterGet);
+      const readsAfterHead = bodyReads;
 
       const unchanged = yield* HttpClient.get("/", {
         headers: { "if-none-match": get.headers.etag! },
@@ -1802,7 +1838,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(unchanged.status, 304);
       yield* Queue.take(closed);
       assert.equal(active.size, 0);
-      assert.equal(bodyReads, readsAfterGet);
+      assert.isAbove(bodyReads, readsAfterHead);
 
       blockAfterOpen = true;
       const cancelled = yield* HttpClient.get("/").pipe(Effect.forkChild);

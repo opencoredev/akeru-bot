@@ -1,4 +1,5 @@
 import Mime from "@effect/platform-node/Mime";
+import * as NodeCrypto from "node:crypto";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
@@ -339,6 +340,20 @@ const streamStaticFile = (file: FileSystem.File, size: bigint) =>
     }),
   );
 
+const hashStaticFile = Effect.fn("hashStaticFile")(function* (file: FileSystem.File, size: bigint) {
+  const hash = NodeCrypto.createHash("sha256");
+  let offset = 0n;
+  while (offset < size) {
+    const remaining = size - offset;
+    const bytes = yield* file.readAlloc(remaining < 65_536n ? remaining : 65_536n);
+    if (Option.isNone(bytes)) break;
+    hash.update(bytes.value);
+    offset += BigInt(bytes.value.byteLength);
+  }
+  yield* file.seek(0, "start");
+  return `"sha256-${hash.digest("hex")}"`;
+});
+
 const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
   function* (immutableBuildAssets: ReadonlySet<string>) {
     const request = yield* HttpServerRequest.HttpServerRequest;
@@ -418,9 +433,11 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
       "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
     };
     const modifiedAt = Option.getOrUndefined(fileInfo.mtime);
-    const etag = modifiedAt
-      ? `W/"${fileInfo.size.toString(16)}-${modifiedAt.getTime().toString(16)}"`
-      : undefined;
+    const etag = immutable
+      ? modifiedAt
+        ? `W/"${fileInfo.size.toString(16)}-${modifiedAt.getTime().toString(16)}"`
+        : undefined
+      : yield* hashStaticFile(opened.file, fileInfo.size);
     if (etag !== undefined && modifiedAt !== undefined) {
       headers.ETag = etag;
       headers["Last-Modified"] = modifiedAt.toUTCString();
@@ -436,10 +453,11 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
             const candidate = value.trim();
             return (
               candidate === "*" ||
-              (etag !== undefined && candidate.replace(/^W\//i, "") === etag.slice(2))
+              (etag !== undefined && candidate.replace(/^W\//i, "") === etag.replace(/^W\//i, ""))
             );
           })
-        : ifModifiedSince !== undefined &&
+        : immutable &&
+          ifModifiedSince !== undefined &&
           modifiedAt !== undefined &&
           Date.parse(modifiedAt.toUTCString()) <= Date.parse(ifModifiedSince);
     if (unchanged) {
