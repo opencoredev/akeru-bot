@@ -690,6 +690,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             nativeEventLogger,
             provider: PROVIDER,
             threadId: input.threadId,
+            verboseProtocolLogging: grokSettings.verboseProtocolLogging,
           });
 
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);

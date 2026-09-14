@@ -1269,6 +1269,42 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
     }),
   );
 
+  it.effect("enables ACP protocol logging from Grok settings", () =>
+    Effect.gen(function* () {
+      const wrapperPath = yield* Effect.promise(() => makeMockGrokWrapper());
+      const protocolLogged = yield* Deferred.make<void>();
+      const adapter = yield* makeGrokAdapter(
+        decodeGrokSettings({ binaryPath: wrapperPath, verboseProtocolLogging: true }),
+        {
+          nativeEventLogger: {
+            filePath: "memory://grok-native-events",
+            write: (record: unknown) =>
+              typeof record === "object" &&
+              record !== null &&
+              "event" in record &&
+              typeof record.event === "object" &&
+              record.event !== null &&
+              "kind" in record.event &&
+              record.event.kind === "protocol"
+                ? Deferred.succeed(protocolLogged, undefined).pipe(Effect.asVoid)
+                : Effect.void,
+            close: () => Effect.void,
+          },
+        },
+      ).pipe(Effect.orDie);
+      const threadId = ThreadId.make("grok-verbose-protocol-log");
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("grok"),
+        cwd: process.cwd(),
+        runtimeMode: "full-access",
+      });
+      yield* Deferred.await(protocolLogged);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   // Production calls startSession from a request fiber that finishes as soon as
   // the session exists. `Effect.forkChild` made the notification consumer a
   // child of that fiber, and Effect interrupts a fiber's children when it

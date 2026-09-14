@@ -511,9 +511,17 @@ export const CursorSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    verboseProtocolLogging: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({
+        title: "Verbose protocol logging",
+        description: "Record full ACP protocol diagnostics in provider event logs.",
+        providerSettingsForm: { control: "switch" },
+      }),
+    ),
   },
   {
-    order: ["binaryPath", "apiEndpoint"],
+    order: ["binaryPath", "apiEndpoint", "verboseProtocolLogging"],
   },
 );
 export type CursorSettings = typeof CursorSettings.Type;
@@ -537,9 +545,17 @@ export const GrokSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    verboseProtocolLogging: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({
+        title: "Verbose protocol logging",
+        description: "Record full ACP protocol diagnostics in provider event logs.",
+        providerSettingsForm: { control: "switch" },
+      }),
+    ),
   },
   {
-    order: ["binaryPath"],
+    order: ["binaryPath", "verboseProtocolLogging"],
   },
 );
 export type GrokSettings = typeof GrokSettings.Type;
@@ -980,12 +996,14 @@ const CursorSettingsPatch = Schema.Struct({
   binaryPath: Schema.optionalKey(TrimmedString),
   apiEndpoint: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+  verboseProtocolLogging: Schema.optionalKey(Schema.Boolean),
 });
 
 const GrokSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+  verboseProtocolLogging: Schema.optionalKey(Schema.Boolean),
 });
 
 const KimiSettingsPatch = Schema.Struct({

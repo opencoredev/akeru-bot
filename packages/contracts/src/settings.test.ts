@@ -412,8 +412,22 @@ describe("provider enabled defaults", () => {
     expect(decoded.providers.claudeAgent.enabled).toBe(true);
     expect(decoded.providers.cursor.enabled).toBe(false);
     expect(decoded.providers.grok.enabled).toBe(false);
+    expect(decoded.providers.cursor.verboseProtocolLogging).toBe(false);
+    expect(decoded.providers.grok.verboseProtocolLogging).toBe(false);
     expect(decoded.providers.opencode.enabled).toBe(false);
     expect(decoded.providers.opencodeGo.enabled).toBe(true);
+  });
+
+  it("decodes ACP protocol logging opt-ins for Cursor and Grok", () => {
+    const decoded = decodeServerSettings({
+      providers: {
+        cursor: { verboseProtocolLogging: true },
+        grok: { verboseProtocolLogging: true },
+      },
+    });
+
+    expect(decoded.providers.cursor.verboseProtocolLogging).toBe(true);
+    expect(decoded.providers.grok.verboseProtocolLogging).toBe(true);
   });
 
   it("derives per-driver defaults from the settings schemas", () => {
