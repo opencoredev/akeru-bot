@@ -9,8 +9,6 @@ import type { DailyTotals } from "@t3tools/shared/usageMerge";
 
 import { Line } from "../dither-kit/area";
 import { LineChart } from "../dither-kit/area-chart";
-import { Bar } from "../dither-kit/bar";
-import { BarChart } from "../dither-kit/bar-chart";
 import { BlockLegend } from "../dither-kit/block-legend";
 import type { ChartConfig } from "../dither-kit/chart-context";
 import type { DitherColor } from "../dither-kit/palette";
@@ -77,51 +75,53 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
     props.limits.plan === null
       ? presentation.label
       : `${presentation.label} · ${props.limits.plan}`;
-  const data = props.limits.windows.map((window) => ({
-    label: window.label,
-    left: remainingPercent(window),
-  }));
-
   return (
     <section className="flex min-w-0 flex-col gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
+      <h2 className="flex items-center gap-2 px-1 text-sm font-medium text-foreground">
         <ProviderMark icon={presentation.icon} />
         {title}
       </h2>
       {props.limits.windows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-xl border border-border/70 px-4 py-5 text-sm text-muted-foreground">
           {props.limits.message ?? "No limit data yet."}
         </p>
       ) : (
-        <>
-          <BarChart
-            data={data}
-            config={{ left: { label: "Left", color: presentation.color } }}
-            animate={false}
-            bloom="off"
-            className="h-48 w-full"
-            margins={{ top: 8, right: 8, bottom: 22, left: 36 }}
-          >
-            <Grid vertical={false} />
-            <XAxis dataKey="label" />
-            <YAxis tickFormatter={(value) => `${Math.round(value)}%`} tickCount={5} />
-            <Tooltip valueFormatter={(value) => `${Math.round(value)}% left`} />
-            <Bar dataKey="left" variant="gradient" />
-          </BarChart>
-          <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-            {props.limits.windows.map((window) => (
-              <li
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
+          {props.limits.windows.map((window) => {
+            const left = remainingPercent(window);
+            return (
+              <div
                 key={`${window.kind}:${window.label}`}
-                className="flex items-baseline justify-between gap-3"
+                className="grid gap-3 px-4 py-4 md:grid-cols-[10rem_minmax(0,1fr)_7rem] md:items-center md:gap-5"
               >
-                <span className="text-foreground">
-                  {window.label} {Math.round(remainingPercent(window))}% left
+                <div className="flex items-baseline justify-between gap-3 md:block">
+                  <span className="text-sm font-medium text-foreground">{window.label}</span>
+                  <span className="text-2xl font-semibold text-foreground tabular-nums md:mt-1 md:block">
+                    {Math.round(left)}%
+                    <span className="ms-1 text-xs font-normal text-muted-foreground">left</span>
+                  </span>
+                </div>
+                <div
+                  role="img"
+                  aria-label={`${window.label}: ${Math.round(left)}% left`}
+                  className="relative h-7 overflow-hidden rounded-md bg-muted/70"
+                >
+                  <div
+                    className="absolute inset-y-0 start-0 rounded-md opacity-75"
+                    style={{
+                      width: `${left}%`,
+                      backgroundColor: `var(--color-${presentation.color}-500, var(--foreground))`,
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_4px,var(--border)_4px,var(--border)_5px)] opacity-30" />
+                </div>
+                <span className="text-xs text-muted-foreground tabular-nums md:text-end">
+                  {formatReset(window.resetsAt)}
                 </span>
-                <span className="tabular-nums">{formatReset(window.resetsAt)}</span>
-              </li>
-            ))}
-          </ul>
-        </>
+              </div>
+            );
+          })}
+        </div>
       )}
     </section>
   );
@@ -130,6 +130,10 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
 const ACTIVITY_COLOR: Record<UsageProviderKind, DitherColor> = {
   claude: "orange",
   codex: "green",
+  cursor: "purple",
+  grok: "grey",
+  kimi: "blue",
+  opencode: "green",
 };
 
 export function UsageActivityChart(props: {

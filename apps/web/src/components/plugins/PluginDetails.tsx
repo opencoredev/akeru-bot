@@ -14,6 +14,7 @@ import {
 } from "./pluginPresentation";
 
 interface PluginDetailsContentProps {
+  readonly standalone?: boolean;
   readonly plugin: PluginDirectoryDefinition;
   readonly server: McpServer | undefined;
   readonly accessStatus?: ProviderAccessStatus;
@@ -252,6 +253,7 @@ export function PluginDetailsContent({
 }
 
 export function PluginDetails({
+  standalone = false,
   plugin,
   server,
   accessStatus,
@@ -271,7 +273,11 @@ export function PluginDetails({
           <Button aria-label="Back to plugins" size="icon-sm" variant="ghost" onClick={onBack}>
             <ChevronLeftIcon className="size-4" />
           </Button>
-          <DialogTitle className="text-base">Plugin details</DialogTitle>
+          {standalone ? (
+            <h1 className="text-base font-semibold">Plugin details</h1>
+          ) : (
+            <DialogTitle className="text-base">Plugin details</DialogTitle>
+          )}
         </div>
       </DialogHeader>
       <PluginDetailsContent

@@ -3,6 +3,8 @@ import {
   BotIcon,
   BrowserIcon,
   CallIcon,
+  Bug02Icon,
+  GitBranchIcon,
   HardDriveIcon,
   KeyboardIcon,
   Link02Icon,
@@ -80,6 +82,21 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   diagnostics: DiagnosticsSettingsPanel,
 };
 
+export function SettingsPanelForSection({ section }: { readonly section: SettingsSection }) {
+  const Panel = SECTION_PANELS[section];
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner />
+        </div>
+      }
+    >
+      <Panel />
+    </Suspense>
+  );
+}
+
 /** Sections with a nav row. Anything else is reached from a link inside a panel. */
 export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   readonly section: SettingsSection;
@@ -98,12 +115,13 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   { section: "inbox", label: "Errors", icon: AlertCircleIcon },
   { section: "connections", label: "Connections", icon: Link02Icon },
   { section: "keybindings", label: "Keybindings", icon: KeyboardIcon },
+  { section: "source-control", label: "Source control", icon: GitBranchIcon },
+  { section: "diagnostics", label: "Diagnostics", icon: Bug02Icon },
 ];
 
 export function SettingsDialog() {
   const section = useSettingsDialogStore((state) => state.section);
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
-  const Panel = section ? SECTION_PANELS[section] : null;
 
   return (
     <Dialog
@@ -144,15 +162,7 @@ export function SettingsDialog() {
         </nav>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Suspense
-            fallback={
-              <div className="flex flex-1 items-center justify-center">
-                <Spinner />
-              </div>
-            }
-          >
-            {Panel ? <Panel /> : null}
-          </Suspense>
+          {section ? <SettingsPanelForSection section={section} /> : null}
         </div>
       </DialogPopup>
     </Dialog>

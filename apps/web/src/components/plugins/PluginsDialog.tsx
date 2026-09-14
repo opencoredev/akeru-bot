@@ -42,6 +42,7 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
+import { SidebarInset } from "../ui/sidebar";
 import {
   CustomMcpServers,
   ComposioToolkitResults,
@@ -153,7 +154,13 @@ export function validateMcpServerDraft(draft: McpServerDraft): string | null {
   }
 }
 
-function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId: EnvironmentId }) {
+function PluginsDialogForEnvironment({
+  environmentId,
+  standalone = false,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly standalone?: boolean;
+}) {
   const requestedQuery = usePluginsDialogStore((state) => state.requestedQuery);
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const bots = useAtomValue(environmentBotsAtom(environmentId));
@@ -554,6 +561,7 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
     <>
       {selectedPlugin ? (
         <PluginDetails
+          standalone={standalone}
           plugin={selectedPlugin}
           server={selectedPluginServer}
           {...(selectedPluginAccess ? { accessStatus: selectedPluginAccess } : {})}
@@ -579,7 +587,11 @@ function PluginsDialogForEnvironment({ environmentId }: { readonly environmentId
         <>
           <DialogHeader className={PLUGIN_DIRECTORY_HEADER_CLASS_NAME}>
             <div className="pe-8">
-              <DialogTitle>Plugins</DialogTitle>
+              {standalone ? (
+                <h1 className="font-heading text-xl font-semibold leading-none">Plugins</h1>
+              ) : (
+                <DialogTitle>Plugins</DialogTitle>
+              )}
             </div>
             <div className="relative">
               <SearchIcon
@@ -811,5 +823,28 @@ export function PluginsDialog() {
         )}
       </DialogPopup>
     </Dialog>
+  );
+}
+
+export function PluginsPage() {
+  const environmentId = usePrimaryEnvironmentId();
+  return (
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground"
+        data-slot="dialog-popup"
+      >
+        {environmentId ? (
+          <PluginsDialogForEnvironment environmentId={environmentId} standalone />
+        ) : (
+          <div className="p-6">
+            <h1 className="font-heading text-xl font-semibold">Plugins</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Connect an environment to manage plugins.
+            </p>
+          </div>
+        )}
+      </div>
+    </SidebarInset>
   );
 }

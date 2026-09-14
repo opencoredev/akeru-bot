@@ -31,7 +31,7 @@ import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcp
 import { environmentSnapshotAtom } from "../../state/shell";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { AkeruMark } from "../AkeruMark";
+import { AkeruWordmark } from "../AkeruWordmark";
 import { isBuiltinMcpServer } from "../plugins/pluginRegistry";
 import { cn } from "../../lib/utils";
 import {
@@ -76,56 +76,49 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   return (
     <SidebarHeader
       className={cn(
-        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
+        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
         isElectron && "drag-region",
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
-      <SidebarTrigger
-        className={cn(
-          "relative z-10 md:hidden",
-          backdropVariant &&
-            "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
-          backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
-        )}
-      />
-      <SidebarBrand onBackdrop={backdropVariant !== null} />
-      {pillLabel ? (
-        <Badge
-          className="relative z-10 ml-1 rounded-full px-1.5 text-muted-foreground"
-          data-environment-identification="pill"
-          size="sm"
-          variant="secondary"
-        >
-          {pillLabel}
-        </Badge>
-      ) : null}
+      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center justify-start">
+          <SidebarTrigger
+            className={cn(
+              "md:hidden",
+              backdropVariant &&
+                "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
+              backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
+            )}
+          />
+        </div>
+        <div className="relative flex items-center justify-center">
+          <Link
+            aria-label="Go to chats"
+            className={cn(
+              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]",
+              backdropVariant ? "text-white" : "text-sidebar-foreground",
+            )}
+            to="/"
+          >
+            <AkeruWordmark />
+          </Link>
+          {pillLabel ? (
+            <Badge
+              className="absolute left-full ml-2 rounded-full px-1.5 text-muted-foreground"
+              data-environment-identification="pill"
+              size="sm"
+              variant="secondary"
+            >
+              {pillLabel}
+            </Badge>
+          ) : null}
+        </div>
+        <div aria-hidden />
+      </div>
     </SidebarHeader>
   );
 });
-
-function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
-  return (
-    <Link
-      aria-label="Go to chats"
-      className={cn(
-        "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
-        onBackdrop ? "text-white" : "text-foreground",
-      )}
-      to="/"
-    >
-      <AkeruMark aria-hidden />
-      <span
-        className={cn(
-          "-translate-y-px truncate text-sm font-medium tracking-tight",
-          onBackdrop ? "text-white/70" : "text-muted-foreground",
-        )}
-      >
-        Akeru Bot
-      </span>
-    </Link>
-  );
-}
 
 const PLUGIN_CATALOG = loadCatalog();
 const COMPUTER_USE_SERVER_ID = "builtin-computer-use";

@@ -1,7 +1,7 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import { APP_DISPLAY_NAME } from "../branding";
-import { AkeruMark } from "../components/AkeruMark";
+import { AkeruWordmark } from "../components/AkeruWordmark";
 import { Button } from "../components/ui/button";
 
 function reloadApp() {
@@ -21,7 +21,7 @@ export function RootRouteErrorView({ error, reset, reload = reloadApp }: RootRou
       className="flex h-full min-h-0 flex-col bg-background text-foreground"
     >
       <header className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1.5 pl-[var(--workspace-controls-left)] pr-[var(--workspace-controls-right)]">
-        <AkeruMark aria-hidden className="text-foreground" />
+        <AkeruWordmark aria-hidden className="text-2xl text-foreground" />
         <span className="truncate text-sm font-medium tracking-tight text-muted-foreground">
           {APP_DISPLAY_NAME}
         </span>

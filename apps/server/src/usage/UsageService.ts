@@ -1,13 +1,9 @@
 /**
- * UsageService - scans provider transcripts and returns priced usage buckets.
+ * UsageService - reports usage created by Akeru's connected provider runtimes.
  *
- * The scan reads the provider CLIs' own session files rather than Akeru Bot's
- * orchestration projections, so usage covers turns driven outside Akeru Bot too.
- * This is the approach `ccusage` takes.
- *
- * Transcripts are append-only, so parsed records are memoised per file by
- * `(size, mtime)`. A cold 30-day scan of ~1.4 GB lands around 2-3 seconds; warm
- * scans only reparse files that changed.
+ * The usage ledger is environment-local. Provider CLI transcript directories
+ * are intentionally not consulted: a machine-wide CLI login is not an Akeru
+ * Settings -> Providers connection and must never appear on this page.
  *
  * @module UsageService
  */
@@ -15,6 +11,8 @@ import * as NodeOS from "node:os";
 
 import {
   USAGE_CONTRACT_VERSION,
+  type AkeruUsageEntry,
+  type SubscriptionProviderId,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -22,7 +20,6 @@ import {
   type UsageTokenTotals,
   UsageReadError,
 } from "@t3tools/contracts";
-import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -34,50 +31,24 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { ServerConfig } from "../config.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
-import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
-import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
+import { ProviderUsageHistory } from "./ProviderUsageHistory.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, priceUsage, type PricedUsage, type RateTable } from "./usagePricing.ts";
-import {
-  listTranscriptFiles,
-  readDirectoryVolumeId,
-  readTranscriptRecords,
-} from "./usageTranscriptReader.ts";
-import {
-  decodeScanCache,
-  dedupeWithinFile,
-  encodeScanCache,
-  pruneScanCache,
-  type ScanCache,
-} from "./usageScanCache.ts";
-import type { UsageRecord } from "./usageTranscripts.ts";
 import { readPlanLimits } from "./usagePlanLimits.ts";
+import type { UsageRecord } from "./usageTranscripts.ts";
 
 const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
-
-/** Rates move rarely; a day-old table keeps the page working offline. */
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
 const RATES_FAILURE_BACKOFF_MS = 60_000;
 const RATES_MAX_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
-
-/**
- * Files are filtered by mtime before opening. The slack covers a session whose
- * last write lands just before local midnight on the window's first day.
- */
-const MTIME_SLACK_MS = 36 * 60 * 60 * 1000;
 const MAX_HOURLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const DAILY_QUERY_SLACK_HOURS = 36;
 
-/** Longest window the UI offers, plus slack. Older entries are pruned. */
-const CACHE_RETENTION_DAYS = 90;
-
-/** On-disk shape of the rate snapshot. */
 const RatesCacheFile = Schema.Struct({
   fetchedAtMs: Schema.Number,
   document: Schema.Unknown,
@@ -89,10 +60,18 @@ const encodeRatesCache = Schema.encodeEffect(
   Schema.fromJsonString(RatesCacheFile as unknown as Schema.Codec<typeof RatesCacheFile.Type>),
 );
 
-/** The scan cache is narrowed by hand in `usageScanCache`, so JSON is enough here. */
-const ScanCacheJson = Schema.fromJsonString(Schema.Unknown as unknown as Schema.Codec<unknown>);
-const decodeScanCacheFile = Schema.decodeUnknownEffect(ScanCacheJson);
-const encodeScanCacheFile = Schema.encodeEffect(ScanCacheJson);
+const DRIVER_CONNECTIONS = {
+  claudeAgent: { provider: "claude", connection: "anthropic" },
+  codex: { provider: "codex", connection: "openai-codex" },
+  cursor: { provider: "cursor", connection: "cursor" },
+  grok: { provider: "grok", connection: "xai" },
+  kimi: { provider: "kimi", connection: "kimi-for-coding" },
+  opencode: { provider: "opencode", connection: "opencode-go" },
+  opencodeGo: { provider: "opencode", connection: "opencode-go" },
+} as const satisfies Record<
+  string,
+  { readonly provider: UsageProviderKind; readonly connection: SubscriptionProviderId }
+>;
 
 export interface PriceStepUsageInput {
   readonly model: string;
@@ -107,6 +86,48 @@ export class UsageService extends Context.Service<
     readonly priceStepUsage: (input: PriceStepUsageInput) => Effect.Effect<PricedUsage>;
   }
 >()("akeru-bot/usage/UsageService") {}
+
+/** Maps one ledger row only when its Akeru provider connection is active. */
+export function usageRecordFromEntry(
+  entry: AkeruUsageEntry,
+  connectedProviders: ReadonlySet<SubscriptionProviderId>,
+): UsageRecord | null {
+  if (entry.provider === null || entry.model === null) return null;
+  const mapping = DRIVER_CONNECTIONS[entry.provider as keyof typeof DRIVER_CONNECTIONS];
+  if (mapping === undefined || !connectedProviders.has(mapping.connection)) return null;
+
+  const timestamp = DateTime.make(entry.createdAt);
+  if (Option.isNone(timestamp)) return null;
+
+  const outputTokens = entry.outputTokens ?? 0;
+  return {
+    provider: mapping.provider,
+    timestampMs: DateTime.toEpochMillis(timestamp.value),
+    model: entry.model,
+    sessionId: entry.threadId ?? entry.botId,
+    totals: {
+      uncachedInputTokens: entry.inputTokens ?? 0,
+      cachedInputTokens: 0,
+      cacheCreationTokens: 0,
+      outputTokens,
+      reasoningTokens: Math.min(entry.reasoningTokens ?? 0, outputTokens),
+    },
+    reportedCostUsd: null,
+    dedupeKey: entry.reservationId,
+  };
+}
+
+/** Filesystem identity of an environment's usage ledger, as `device:inode`. */
+export const readUsageStoreVolumeId = Effect.fn("UsageService.readUsageStoreVolumeId")(function* (
+  fileSystem: FileSystem.FileSystem,
+  databasePath: string,
+) {
+  const stats = yield* fileSystem
+    .stat(databasePath)
+    .pipe(Effect.catchCause(() => Effect.succeed(null)));
+  if (stats === null || Option.isNone(stats.ino)) return "";
+  return `${stats.dev}:${stats.ino.value}`;
+});
 
 /** Empty summary, for suites that only need the RPC surface to resolve. */
 export const layerTestWithRates = (rateTable: RateTable) =>
@@ -129,6 +150,8 @@ export const layerTestWithRates = (rateTable: RateTable) =>
             knownModels: rateTable.size,
           },
           scanDurationMs: 0,
+          planLimits: [],
+          connectedProviders: [],
         }),
       priceStepUsage: (input) =>
         Effect.succeed(priceUsage(rateTable, input.model, input.totals, input.reportedCostUsd)),
@@ -165,25 +188,19 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* ServerConfig;
-  const settingsService = yield* ServerSettings.ServerSettingsService;
   const httpClient = yield* HttpClient.HttpClient;
+  const providerUsageHistory = yield* ProviderUsageHistory;
   const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
 
   const scope = yield* Scope.Scope;
-  const fileCache: ScanCache = new Map();
   const shareSummary = singleFlight<UsageSummary, UsageReadError>(scope);
-  const shareFile = singleFlight<readonly UsageRecord[], never>(scope);
   const shareRates = singleFlight<void, never>(scope);
-  const persistLock = yield* Semaphore.make(1);
-  let cacheRevision = 0;
-  let persistedRevision = 0;
 
   const ratesCachePath = path.join(config.stateDir, "usage-model-rates.json");
-  const scanCachePath = path.join(config.stateDir, "usage-scan-cache.json");
+  const usageDatabasePath = path.join(config.stateDir, "state.sqlite");
   let rates: RateTable = new Map();
   let ratesFetchedAtMs: number | null = null;
   let ratesStatus: UsageSummary["pricing"]["status"] = "unavailable";
-
   let ratesNextAttemptAtMs = 0;
   let ratesFailures = 0;
   let ratesRefreshRunning = false;
@@ -266,121 +283,6 @@ export const make = Effect.gen(function* () {
     (effect) => shareRates("rates", effect),
   );
 
-  /**
-   * Claude's config dir is the home itself when overridden, but a default
-   * install nests transcripts under `~/.claude/projects`. Probe both.
-   */
-  const resolveClaudeTranscriptDir = (homePath: string) =>
-    Effect.gen(function* () {
-      const nested = path.join(homePath, ".claude", "projects");
-      const nestedExists = yield* fileSystem
-        .exists(nested)
-        .pipe(Effect.catchCause(() => Effect.succeed(false)));
-      return nestedExists ? nested : path.join(homePath, "projects");
-    });
-
-  /** Resolves the transcript directory for each provider. */
-  const resolveTranscriptDirs = Effect.fn("UsageService.resolveTranscriptDirs")(function* () {
-    // A settings failure must surface as an error: swallowing it here would
-    // present "zero usage from every provider" as a valid answer.
-    const settings = yield* settingsService.getSettings.pipe(
-      Effect.catchCause(
-        (cause) =>
-          new UsageReadError({
-            reason: "scanFailed",
-            // Bounded description; the squashed failure travels as the cause.
-            // Squashed, not the Cause tree: a full tree in a Defect field is
-            // the unbounded wire payload the bounded detail exists to avoid.
-            detail: "Server settings could not be read.",
-            cause: Cause.squash(cause),
-          }),
-      ),
-    );
-
-    const claudeHome = yield* resolveClaudeHomePath(settings.providers.claudeAgent);
-    const claudeDir = yield* resolveClaudeTranscriptDir(claudeHome);
-    const codexLayout = yield* resolveCodexHomeLayout(settings.providers.codex);
-
-    return [
-      { provider: "claude" as const, dir: claudeDir, homePath: claudeHome },
-      {
-        provider: "codex" as const,
-        dir: path.join(codexLayout.sharedHomePath, "sessions"),
-        homePath: codexLayout.sharedHomePath,
-      },
-    ];
-  });
-
-  /**
-   * Loads the persisted scan cache exactly once per process.
-   *
-   * `Effect.cached` makes concurrent first readers await the same load rather
-   * than each seeing a "loaded" flag set before the read finished and cold
-   * scanning against an empty cache.
-   */
-  const ensureScanCacheLoaded = yield* Effect.cached(
-    Effect.gen(function* () {
-      const document = yield* fileSystem.readFileString(scanCachePath).pipe(
-        Effect.flatMap((raw) => decodeScanCacheFile(raw)),
-        Effect.catchCause(() => Effect.succeed(null)),
-      );
-      if (document === null) return;
-      for (const [path, entry] of decodeScanCache(document)) fileCache.set(path, entry);
-    }),
-  );
-
-  const persistScanCache = Effect.fn("UsageService.persistScanCache")(function* () {
-    if (cacheRevision === persistedRevision) return;
-    const revision = cacheRevision;
-    // Only acknowledge this revision; another scan can change the cache during the write.
-    yield* encodeScanCacheFile(encodeScanCache(fileCache)).pipe(
-      Effect.flatMap((serialized) => fileSystem.writeFileString(scanCachePath, serialized)),
-      Effect.map(() => {
-        persistedRevision = revision;
-      }),
-      // A cache we cannot write is a slower next start, not a failed read.
-      Effect.catchCause(() => Effect.void),
-    );
-  }, persistLock.withPermit);
-
-  /** Parses one transcript, reusing the cached result when it is unchanged. */
-  const readFileRecords = (
-    filePath: string,
-    size: number,
-    mtimeMs: number,
-    provider: UsageProviderKind,
-  ): Effect.Effect<readonly UsageRecord[]> =>
-    shareFile(
-      JSON.stringify([filePath, size, mtimeMs, provider]),
-      Effect.gen(function* () {
-        const cached = fileCache.get(filePath);
-        // Provider is part of the identity: if both providers were ever pointed
-        // at one directory, a hit parsed by the other parser must not be reused.
-        if (
-          cached &&
-          cached.size === size &&
-          cached.mtimeMs === mtimeMs &&
-          cached.provider === provider
-        ) {
-          return cached.records;
-        }
-
-        const parsed = yield* Effect.promise(() =>
-          readTranscriptRecords(filePath, provider, { size, mtimeMs }),
-        );
-        // A read failure is not an empty transcript: caching it under this
-        // (size, mtime) would silently drop the file's usage until it changes.
-        if (parsed === null) return [];
-        // Stored already de-duplicated within the file, which is 99% of all
-        // duplicates. The aggregator still runs the cross-file dedupe pass.
-        const records = dedupeWithinFile(parsed);
-
-        fileCache.set(filePath, { size, mtimeMs, provider, records });
-        cacheRevision += 1;
-        return records;
-      }),
-    );
-
   const priceStepUsage = Effect.fn("UsageService.priceStepUsage")(function* (
     input: PriceStepUsageInput,
   ) {
@@ -420,33 +322,47 @@ export const make = Effect.gen(function* () {
       hourlyWindow = { sinceTimeMs, untilTimeMs };
     }
 
-    const startedAtMs = yield* Clock.currentTimeMillis;
-    yield* ensureRates();
-    yield* ensureScanCacheLoaded;
-
-    const hostId = NodeOS.hostname();
-    // The home resolvers ask for `Path` themselves; satisfy them from the
-    // instance we already hold so `readSummary` stays context-free.
-    const dirs = yield* resolveTranscriptDirs().pipe(Effect.provideService(Path.Path, path));
-    const windowStart = DateTime.make(`${input.sinceDay}T00:00:00Z`);
-    if (Option.isNone(windowStart)) {
+    const sinceBoundary = DateTime.make(`${input.sinceDay}T00:00:00Z`);
+    const untilBoundary = DateTime.make(`${input.untilDay}T00:00:00Z`);
+    if (Option.isNone(sinceBoundary) || Option.isNone(untilBoundary)) {
       return yield* new UsageReadError({
         reason: "invalidWindow",
-        detail: `sinceDay '${input.sinceDay}' is not a valid date`,
+        detail: "Usage day window contains an invalid date",
       });
     }
-    const windowStartMs =
-      (hourlyWindow?.sinceTimeMs ?? DateTime.toEpochMillis(windowStart.value)) - MTIME_SLACK_MS;
 
-    const pricing = {
-      status: ratesStatus,
-      source: LITELLM_RATES_URL,
-      fetchedAt:
-        ratesFetchedAtMs === null
-          ? null
-          : DateTime.formatIso(DateTime.makeUnsafe(ratesFetchedAtMs)),
-      knownModels: rates.size,
-    };
+    const startedAtMs = yield* Clock.currentTimeMillis;
+    yield* ensureRates();
+    subscriptionAuth.reload();
+    const connectedProviders = subscriptionAuth
+      .statuses()
+      .filter((status) => status.connected)
+      .map((status) => status.provider);
+    const connectedSet = new Set<SubscriptionProviderId>(connectedProviders);
+
+    const querySince = hourlyWindow
+      ? DateTime.makeUnsafe(hourlyWindow.sinceTimeMs)
+      : DateTime.subtract(sinceBoundary.value, { hours: DAILY_QUERY_SLACK_HOURS });
+    const queryUntil = hourlyWindow
+      ? DateTime.makeUnsafe(hourlyWindow.untilTimeMs)
+      : DateTime.add(untilBoundary.value, { hours: 24 + DAILY_QUERY_SLACK_HOURS });
+
+    const entries = yield* providerUsageHistory
+      .readReported({
+        sinceAt: DateTime.formatIso(querySince),
+        untilAt: DateTime.formatIso(queryUntil),
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new UsageReadError({
+              reason: "scanFailed",
+              detail: "Akeru provider usage could not be read.",
+              cause,
+            }),
+        ),
+      );
+
     const aggregator = new UsageAggregator({
       timeZone: input.timeZone,
       sinceDay: input.sinceDay,
@@ -455,79 +371,36 @@ export const make = Effect.gen(function* () {
       ...hourlyWindow,
       rates,
     });
-
-    const sources: UsageSource[] = [];
-    const livePaths = new Set<string>();
-    const walkedRoots: string[] = [];
-
-    for (const { provider, dir } of dirs) {
-      const volumeId = yield* Effect.promise(() => readDirectoryVolumeId(dir));
-      const exists = yield* fileSystem
-        .exists(dir)
-        .pipe(Effect.catchCause(() => Effect.succeed(false)));
-
-      if (!exists) {
-        sources.push({
-          fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
-          status: "missing",
-          scannedFiles: 0,
-          skippedFiles: 0,
-          malformedRecords: 0,
-          distinctSessions: 0,
-          message: "No transcript directory on this environment.",
-        });
-        continue;
-      }
-
-      walkedRoots.push(dir);
-      const files = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
-      let scannedFiles = 0;
-      let skippedFiles = 0;
-      // Distinct per directory. Buckets carry per-cell session counts, but a
-      // session spans days and models, so clients total this figure instead.
-      const sessionIds = new Set<string>();
-
-      for (const file of files) {
-        livePaths.add(file.path);
-        const records = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
-        if (records.length === 0) {
-          skippedFiles += 1;
-          continue;
-        }
-        scannedFiles += 1;
-        for (const record of records) {
-          // Only sessions that contributed in-window count: the mtime slack
-          // admits boundary files whose records fall outside the range.
-          if (aggregator.add(record) && record.sessionId.length > 0) {
-            sessionIds.add(record.sessionId);
-          }
-        }
-      }
-
-      sources.push({
-        fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
-        status: "ok",
-        scannedFiles,
-        skippedFiles,
-        malformedRecords: 0,
-        distinctSessions: sessionIds.size,
-        message: null,
-      });
+    const sessionsByProvider = new Map<UsageProviderKind, Set<string>>();
+    for (const entry of entries) {
+      const record = usageRecordFromEntry(entry, connectedSet);
+      if (record === null || !aggregator.add(record)) continue;
+      const sessions = sessionsByProvider.get(record.provider) ?? new Set<string>();
+      if (record.sessionId.length > 0) sessions.add(record.sessionId);
+      sessionsByProvider.set(record.provider, sessions);
     }
 
-    const pruned = pruneScanCache(fileCache, {
-      livePaths,
-      walkedRoots,
-      windowStartMs,
-      retentionCutoffMs: startedAtMs - CACHE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
-    });
-    if (pruned > 0) cacheRevision += 1;
-    yield* persistScanCache();
+    const hostId = NodeOS.hostname();
+    const volumeId = yield* readUsageStoreVolumeId(fileSystem, usageDatabasePath);
+    const sources: UsageSource[] = [
+      ...new Set(
+        Object.values(DRIVER_CONNECTIONS)
+          .filter((mapping) => connectedSet.has(mapping.connection))
+          .map((mapping) => mapping.provider),
+      ),
+    ].map((provider) => ({
+      fingerprint: { hostId, provider, resolvedHomePath: usageDatabasePath, volumeId },
+      status: "ok",
+      scannedFiles: 0,
+      skippedFiles: 0,
+      malformedRecords: 0,
+      distinctSessions: sessionsByProvider.get(provider)?.size ?? 0,
+      message: null,
+    }));
 
     const aggregated = aggregator.finish();
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
-    subscriptionAuth.reload();
     const planLimits = yield* Effect.promise(() =>
       readPlanLimits((provider) => subscriptionAuth.getPlanAccessToken(provider)),
     ).pipe(Effect.catchCause(() => Effect.succeed([])));
@@ -541,7 +414,16 @@ export const make = Effect.gen(function* () {
       buckets: aggregated.buckets,
       sources,
       planLimits,
-      pricing,
+      connectedProviders,
+      pricing: {
+        status: ratesStatus,
+        source: LITELLM_RATES_URL,
+        fetchedAt:
+          ratesFetchedAtMs === null
+            ? null
+            : DateTime.formatIso(DateTime.makeUnsafe(ratesFetchedAtMs)),
+        knownModels: rates.size,
+      },
       scanDurationMs: Math.max(0, finishedAtMs - startedAtMs),
     } satisfies UsageSummary;
   });

@@ -42,6 +42,8 @@ interface SettingsDialogState {
     environmentId?: EnvironmentId | null,
   ) => void;
   readonly clearTarget: () => void;
+  readonly acknowledgeNavigation: () => void;
+  readonly clearEnvironment: () => void;
   readonly closeSettings: () => void;
 }
 
@@ -56,6 +58,8 @@ export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
       environmentId: environmentId === undefined ? state.environmentId : environmentId,
     })),
   clearTarget: () => set({ targetId: null }),
+  acknowledgeNavigation: () => set({ section: null, targetId: null }),
+  clearEnvironment: () => set({ environmentId: null }),
   closeSettings: () => set({ section: null, targetId: null, environmentId: null }),
 }));
 
@@ -80,6 +84,14 @@ export function clearSettingsTarget(): void {
 
 export function closeSettings(): void {
   useSettingsDialogStore.getState().closeSettings();
+}
+
+export function acknowledgeSettingsNavigation(): void {
+  useSettingsDialogStore.getState().acknowledgeNavigation();
+}
+
+export function clearSettingsEnvironment(): void {
+  useSettingsDialogStore.getState().clearEnvironment();
 }
 
 /** Map a legacy `/settings/...` pathname onto a dialog section. */

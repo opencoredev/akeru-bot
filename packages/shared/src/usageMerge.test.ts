@@ -43,6 +43,14 @@ function summary(
   }[],
   contractVersion: number = USAGE_CONTRACT_VERSION,
 ): UsageSummary {
+  const connectionByProvider = {
+    claude: "anthropic",
+    codex: "openai-codex",
+    cursor: "cursor",
+    grok: "xai",
+    kimi: "kimi-for-coding",
+    opencode: "opencode-go",
+  } as const;
   return {
     contractVersion,
     readAt: "2026-08-07T00:00:00.000Z",
@@ -66,6 +74,9 @@ function summary(
     })),
     pricing: { status: "fresh", source: "litellm", fetchedAt: null, knownModels: 10 },
     scanDurationMs: 1,
+    connectedProviders: [
+      ...new Set(sources.map((source) => connectionByProvider[source.provider])),
+    ],
   };
 }
 

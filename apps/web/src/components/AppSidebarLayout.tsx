@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { useLocation } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
@@ -14,6 +15,7 @@ import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings"
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import BotRosterSidebar from "./roster/BotRosterSidebar";
+import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { useServerRosterSync } from "./roster/useServerRoster";
 import { openSettings } from "~/settingsDialogStore";
 import { openProductFeedback } from "~/productFeedbackStore";
@@ -142,6 +144,8 @@ function ProjectProjectionRetention() {
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   useServerRosterSync();
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const stageArtworkVisible = false;
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
@@ -225,7 +229,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           onResize: setSidebarWidth,
         }}
       >
-        <BotRosterSidebar />
+        {isOnSettings ? <SettingsSidebarNav /> : <BotRosterSidebar />}
         <SidebarRail onDoubleClick={resetSidebarWidth} />
       </Sidebar>
       {children}

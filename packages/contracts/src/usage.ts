@@ -1,14 +1,12 @@
 /**
  * Usage reporting contract.
  *
- * Each environment scans the provider CLIs' own on-disk session transcripts
- * (`~/.claude/projects/**\/*.jsonl`, `~/.codex/sessions/**\/*.jsonl`) rather than
- * relying on Akeru Bot's own orchestration projections, so usage stays complete
- * even for turns that were never driven through Akeru Bot. This mirrors the
- * approach `ccusage` takes.
+ * Each environment reports usage recorded by Akeru Bot's provider runtime.
+ * Machine-wide CLI transcripts are deliberately excluded: a local Claude or
+ * Codex login is not an Akeru provider connection.
  *
  * Environments return pre-aggregated `(day, hourStart?, provider, model)`
- * buckets. Raw transcript records never cross the wire.
+ * buckets. Raw ledger records never cross the wire.
  *
  * @module usage
  */
@@ -22,9 +20,16 @@ import { SubscriptionProviderId } from "./subscriptionAuth.ts";
  * client renders partial coverage when an environment reports an older version
  * rather than failing the whole page.
  */
-export const USAGE_CONTRACT_VERSION = 4 as const;
+export const USAGE_CONTRACT_VERSION = 5 as const;
 
-export const UsageProviderKind = Schema.Literals(["claude", "codex"]);
+export const UsageProviderKind = Schema.Literals([
+  "claude",
+  "codex",
+  "cursor",
+  "grok",
+  "kimi",
+  "opencode",
+]);
 export type UsageProviderKind = typeof UsageProviderKind.Type;
 
 /**
@@ -46,7 +51,7 @@ export type UsageResolution = typeof UsageResolution.Type;
 /**
  * Why a bucket's cost is what it is.
  *
- * - `providerReported` - the transcript carried an explicit cost figure.
+ * - `providerReported` - the provider carried an explicit cost figure.
  * - `modelPriced` - we matched the model against the LiteLLM rate table.
  * - `unpriced` - tokens are known, rates are not. Counted in totals, excluded
  *   from cost.
@@ -97,13 +102,13 @@ export const UsageBucket = Schema.Struct({
   /** Distinct assistant responses, after de-duplication. */
   records: NonNegativeInt,
   unpricedRecords: NonNegativeInt,
-  /** Distinct transcript sessions that contributed to this cell. */
+  /** Distinct Akeru chats that contributed to this cell. */
   sessions: NonNegativeInt,
 });
 export type UsageBucket = typeof UsageBucket.Type;
 
 /**
- * Identifies the physical transcript directory a source read from.
+ * Identifies the environment-local provider usage ledger a source read from.
  *
  * Two environments on the same machine (worktree servers, for example) resolve
  * the same provider home and would otherwise double count. The client drops
@@ -114,13 +119,10 @@ export const UsageSourceFingerprint = Schema.Struct({
   provider: UsageProviderKind,
   resolvedHomePath: TrimmedNonEmptyString,
   /**
-   * Filesystem identity of the transcript directory, as `device:inode`.
+   * Filesystem identity of the usage store, as `device:inode`.
    *
-   * Hostname and path alone are not enough: every Mac in a fleet resolves
-   * `/Users/<user>/.claude`, so two machines that happen to share a hostname
-   * would look like one source and have their usage silently dropped. The
-   * device/inode pair is stable for two servers reading the same directory and
-   * effectively never collides across machines. Empty when it cannot be read.
+   * Hostname and path alone are not enough when environments use matching home
+   * paths. Empty when filesystem identity cannot be read.
    */
   volumeId: Schema.String,
 });
@@ -137,7 +139,7 @@ export const UsageSource = Schema.Struct({
   /** Records that parsed but carried no recognisable usage payload. */
   malformedRecords: NonNegativeInt,
   /**
-   * Distinct transcript sessions seen under this directory. Buckets also carry
+   * Distinct Akeru chats seen in this store. Buckets also carry
    * per-bucket session counts, but a session spans days and models, so summing
    * those overcounts; this is the figure clients should total.
    */
@@ -216,8 +218,10 @@ export const UsageSummary = Schema.Struct({
   pricing: UsagePricing,
   /** Wall-clock cost of the scan, surfaced in diagnostics. */
   scanDurationMs: NonNegativeInt,
-  /** Live Claude and Codex plan windows. Absent on older servers. */
+  /** Live plan windows for connected provider subscriptions. */
   planLimits: Schema.optional(Schema.Array(UsageProviderPlanLimits)),
+  /** Settings -> Providers connections that may contribute usage. Absent on older servers. */
+  connectedProviders: Schema.optional(Schema.Array(SubscriptionProviderId)),
 });
 export type UsageSummary = typeof UsageSummary.Type;
 

@@ -14,9 +14,7 @@ import { ReplyPlaybackProvider } from "../components/chat/ReplyPlaybackProvider"
 import { VoiceCallProvider } from "../components/voice/VoiceCall";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
-import { SettingsDialog } from "../components/settings/SettingsDialog";
-import { PluginsDialog } from "../components/plugins/PluginsDialog";
-import { UsageDialog } from "../components/usage/UsageDialog";
+import { SurfaceNavigationCoordinator } from "../components/SurfaceNavigationCoordinator";
 import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
 import { PolicyNotice } from "../components/privacy/PolicyNotice";
 import { RootRouteErrorView } from "./RootRouteErrorView";
@@ -138,14 +136,12 @@ function RootRouteView() {
         <ConfirmDialogHost />
         <SlowRpcRequestToastCoordinator />
         <HostedStaticEnvironmentBootstrap />
+        <SurfaceNavigationCoordinator />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
         <ReplyPlaybackProvider>
           <VoiceCallProvider>{appShell}</VoiceCallProvider>
-          <SettingsDialog />
         </ReplyPlaybackProvider>
-        <PluginsDialog />
-        <UsageDialog />
         <ProductFeedbackDialog />
         <PolicyNotice />
         {/* Above the router: a theme draft is judged by walking the app, so the
