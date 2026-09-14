@@ -62,6 +62,8 @@ describe("subscription providers", () => {
     expect(markup).toContain("Reconnect key");
     expect(markup).toContain("Use OAuth");
     expect(markup).toContain("Disconnect Claude");
+    expect(markup).toContain("Connected");
+    expect(markup).not.toContain("Detected");
     expect(markup).not.toContain(SUBSCRIPTION_PROVIDERS[1]!.description);
   });
 

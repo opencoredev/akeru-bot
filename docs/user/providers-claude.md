@@ -24,6 +24,8 @@ real provider request succeeds.
 - Select **Reconnect** after an expired or revoked login.
 - Disconnect the account to remove its stored credential from this environment.
 
+If a Claude chat fails because the login expired, Akeru names that cause instead of a generic API error and tells you to run `claude auth login` on the environment machine. A usage-limit failure says the limit was reached and to send the message again after it resets.
+
 Sign-in state belongs to one environment. Connect Claude again on each separate Akeru server that
 should use the account.
 

@@ -168,6 +168,48 @@ const cursorAdapterTestLayer = it.layer(
 );
 
 cursorAdapterTestLayer("CursorAdapterLive", (it) => {
+  it.effect("enables ACP protocol logging from Cursor settings", () =>
+    Effect.gen(function* () {
+      const settings = yield* ServerSettingsService;
+      const wrapperPath = yield* Effect.promise(() => makeMockAgentWrapper());
+      yield* settings.updateSettings({
+        providers: {
+          cursor: { binaryPath: wrapperPath, verboseProtocolLogging: true },
+        },
+      });
+      const protocolLogged = yield* Deferred.make<void>();
+      const resolveSettings = yield* makeResolveCursorSettings;
+      const adapter = yield* makeCursorAdapter(decodeCursorSettings({}), {
+        resolveSettings,
+        nativeEventLogger: {
+          filePath: "memory://cursor-native-events",
+          write: (record: unknown) =>
+            typeof record === "object" &&
+            record !== null &&
+            "event" in record &&
+            typeof record.event === "object" &&
+            record.event !== null &&
+            "kind" in record.event &&
+            record.event.kind === "protocol"
+              ? Deferred.succeed(protocolLogged, undefined).pipe(Effect.asVoid)
+              : Effect.void,
+          close: () => Effect.void,
+        },
+      });
+      const threadId = ThreadId.make("cursor-verbose-protocol-log");
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("cursor"),
+        cwd: process.cwd(),
+        runtimeMode: "full-access",
+        modelSelection: { instanceId: ProviderInstanceId.make("cursor"), model: "default" },
+      });
+      yield* Deferred.await(protocolLogged);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("starts a session and maps mock ACP prompt flow to runtime events", () =>
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;

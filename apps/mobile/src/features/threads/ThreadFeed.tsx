@@ -84,6 +84,7 @@ import {
   NATIVE_REVIEW_DIFF_CONTENT_WIDTH,
 } from "../review/nativeReviewDiffAdapter";
 import { buildReviewParsedDiff } from "../review/reviewModel";
+import { faviconUrlForOrigin } from "@t3tools/shared/favicon";
 import { cn } from "../../lib/cn";
 import {
   deriveCenteredContentHorizontalPadding,
@@ -447,7 +448,8 @@ const MarkdownExternalLink = memo(function MarkdownExternalLink(props: {
   readonly host: string;
   readonly href: string;
 }) {
-  const [failed, setFailed] = useState(() => failedMarkdownFaviconHosts.has(props.host));
+  const [failedHost, setFailedHost] = useState<string | null>(null);
+  const faviconUrl = faviconUrlForOrigin(`https://${props.host}`);
 
   return (
     <NativeText
@@ -460,15 +462,17 @@ const MarkdownExternalLink = memo(function MarkdownExternalLink(props: {
         textDecorationLine: "none",
       }}
     >
-      {!failed ? (
+      {faviconUrl !== null &&
+      failedHost !== props.host &&
+      !failedMarkdownFaviconHosts.has(props.host) ? (
         <Image
           source={{
-            uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(props.host)}&sz=32`,
+            uri: faviconUrl,
           }}
           style={[markdownLinkStyles.inlineIcon, markdownLinkStyles.favicon]}
           onError={() => {
             failedMarkdownFaviconHosts.add(props.host);
-            setFailed(true);
+            setFailedHost(props.host);
           }}
         />
       ) : (
