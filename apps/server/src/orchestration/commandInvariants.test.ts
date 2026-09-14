@@ -202,4 +202,39 @@ describe("commandInvariants", () => {
       ),
     ).rejects.toThrow("already exists");
   });
+
+  it("allows recreating a soft-deleted thread id", async () => {
+    const deletedReadModel: OrchestrationReadModel = {
+      ...readModel,
+      threads: [
+        {
+          ...readModel.threads[0]!,
+          deletedAt: now,
+        },
+      ],
+    };
+
+    await Effect.runPromise(
+      requireThreadAbsent({
+        readModel: deletedReadModel,
+        command: {
+          type: "thread.create",
+          commandId: CommandId.make("cmd-retry-create"),
+          threadId: ThreadId.make("thread-1"),
+          projectId: ProjectId.make("project-a"),
+          title: "retry",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "full-access",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+        },
+        threadId: ThreadId.make("thread-1"),
+      }),
+    );
+  });
 });

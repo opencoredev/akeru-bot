@@ -14,7 +14,7 @@
  * (`packages/shared/src/composerInlineTokens.ts`), so a rendered chip and a
  * dispatched skill are always the same set.
  */
-const SKILL_MENTION_PATTERN = /(^|\s)\$([a-zA-Z][a-zA-Z0-9:_-]*)(?=\s|$)/g;
+const SKILL_MENTION_PATTERN = /(^|\s)\$([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/g;
 
 export interface ClaudeSkillDispatch {
   /** Text before the dispatched mention, or `undefined` when it opens the prompt. */

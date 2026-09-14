@@ -31,6 +31,18 @@ describe("collectComposerInlineTokens", () => {
     ]);
   });
 
+  it("collects numeric-leading skill names", () => {
+    expect(collectComposerInlineTokens("Use $123-review now")).toEqual([
+      {
+        type: "skill",
+        value: "123-review",
+        source: "$123-review",
+        start: 4,
+        end: 15,
+      },
+    ]);
+  });
+
   it("does not convert incomplete trailing tokens", () => {
     expect(collectComposerInlineTokens("Use $ui")).toEqual([]);
     expect(collectComposerInlineTokens("Inspect @AGENTS.md")).toEqual([]);

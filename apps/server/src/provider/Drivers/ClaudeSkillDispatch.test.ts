@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { planClaudeSkillDispatch } from "./ClaudeSkillDispatch.ts";
 
-const SKILLS = new Set(["implement", "review", "re-release-version"]);
+const SKILLS = new Set(["implement", "review", "re-release-version", "123-review"]);
 
 describe("planClaudeSkillDispatch", () => {
   it("leaves prompts without a known skill mention unchanged", () => {
@@ -25,6 +25,14 @@ describe("planClaudeSkillDispatch", () => {
       leadingText: "/review the diff, then",
       commandText: "/implement the fixes",
       skillName: "implement",
+    });
+  });
+
+  it("dispatches a numeric-leading discovered skill", () => {
+    expect(planClaudeSkillDispatch("use $123-review now", SKILLS)).toEqual({
+      leadingText: "use",
+      commandText: "/123-review now",
+      skillName: "123-review",
     });
   });
 

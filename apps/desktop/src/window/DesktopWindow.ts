@@ -27,7 +27,7 @@ import * as PreviewManager from "../preview/Manager.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
-import { makeQuitHoldHandler } from "./QuitHold.ts";
+import { makeQuitShortcutHandler } from "./QuitHold.ts";
 
 const TITLEBAR_HEIGHT = 40;
 const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linux
@@ -205,6 +205,21 @@ export function isRetryableDevelopmentRendererLoadFailure(input: {
       navigationUrl: input.validatedUrl,
     })
   );
+}
+
+export function concealPendingQuitWindow(
+  window: Pick<
+    Electron.BrowserWindow,
+    "isDestroyed" | "isFullScreen" | "setFullScreen" | "setOpacity"
+  >,
+): void {
+  if (window.isDestroyed()) return;
+  if (window.isFullScreen()) {
+    window.setFullScreen(false);
+  }
+  // Electron implements window opacity on macOS and Windows. Linux keeps the
+  // release-gated quit behavior but cannot make the pending window disappear.
+  window.setOpacity(0);
 }
 
 function getWindowTitleBarOptions(
@@ -477,52 +492,81 @@ export const make = Effect.gen(function* () {
       webPreferences.contextIsolation = false;
     });
 
-    window.webContents.on("context-menu", (event, params) => {
-      event.preventDefault();
+    const contextMenuContents = new WeakSet<Electron.WebContents>();
+    const installContextMenu = (
+      ownerWindow: Electron.BrowserWindow,
+      contents: Electron.WebContents,
+    ): void => {
+      if (contextMenuContents.has(contents)) return;
+      contextMenuContents.add(contents);
+      contents.on("context-menu", (event, params) => {
+        event.preventDefault();
+        if (contents.isDestroyed() || ownerWindow.isDestroyed()) return;
+        // Native editing roles act on the focused contents, which may still be
+        // the host renderer when the user right-clicks inside a browser guest.
+        contents.focus();
 
-      const menuTemplate: Electron.MenuItemConstructorOptions[] = [];
+        const menuTemplate: Electron.MenuItemConstructorOptions[] = [];
 
-      if (params.misspelledWord) {
-        for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
-          menuTemplate.push({
-            label: suggestion,
-            click: () => window.webContents.replaceMisspelling(suggestion),
-          });
+        if (params.misspelledWord) {
+          for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+            menuTemplate.push({
+              label: suggestion,
+              click: () => {
+                if (!contents.isDestroyed()) contents.replaceMisspelling(suggestion);
+              },
+            });
+          }
+          if (params.dictionarySuggestions.length === 0) {
+            menuTemplate.push({ label: "No suggestions", enabled: false });
+          }
+          menuTemplate.push({ type: "separator" });
         }
-        if (params.dictionarySuggestions.length === 0) {
-          menuTemplate.push({ label: "No suggestions", enabled: false });
-        }
-        menuTemplate.push({ type: "separator" });
-      }
 
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(params.linkURL))) {
-        menuTemplate.push(
-          {
-            label: "Copy Link",
-            click: () => {
-              void runPromise(electronShell.copyText(params.linkURL));
+        if (Option.isSome(ElectronShell.parseSafeExternalUrl(params.linkURL))) {
+          menuTemplate.push(
+            {
+              label: "Copy Link",
+              click: () => {
+                void runPromise(electronShell.copyText(params.linkURL));
+              },
             },
-          },
-          { type: "separator" },
+            { type: "separator" },
+          );
+        }
+
+        if (params.mediaType === "image") {
+          menuTemplate.push({
+            label: "Copy Image",
+            click: () => {
+              if (!contents.isDestroyed()) contents.copyImageAt(params.x, params.y);
+            },
+          });
+          menuTemplate.push({ type: "separator" });
+        }
+
+        menuTemplate.push(
+          { role: "cut", enabled: params.editFlags.canCut },
+          { role: "copy", enabled: params.editFlags.canCopy },
+          { role: "paste", enabled: params.editFlags.canPaste },
+          { role: "selectAll", enabled: params.editFlags.canSelectAll },
         );
-      }
 
-      if (params.mediaType === "image") {
-        menuTemplate.push({
-          label: "Copy Image",
-          click: () => window.webContents.copyImageAt(params.x, params.y),
-        });
-        menuTemplate.push({ type: "separator" });
-      }
-
-      menuTemplate.push(
-        { role: "cut", enabled: params.editFlags.canCut },
-        { role: "copy", enabled: params.editFlags.canCopy },
-        { role: "paste", enabled: params.editFlags.canPaste },
-        { role: "selectAll", enabled: params.editFlags.canSelectAll },
-      );
-
-      void runPromise(electronMenu.popupTemplate({ window, template: menuTemplate }));
+        void runPromise(
+          electronMenu.popupTemplate({
+            window: ownerWindow,
+            template: menuTemplate,
+            ...(params.frame ? { frame: params.frame } : {}),
+          }),
+        );
+      });
+      contents.on("did-create-window", (popup) => {
+        installContextMenu(popup, popup.webContents);
+      });
+    };
+    installContextMenu(window, window.webContents);
+    window.webContents.on("did-attach-webview", (_event, contents) => {
+      installContextMenu(window, contents);
     });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
@@ -551,12 +595,11 @@ export const make = Effect.gen(function* () {
     // close-terminal shortcut can outlive the terminal that handled its first
     // press, so reject repeats before they reach the native window accelerator.
     // Deliberate presses still flow through the renderer or native menu.
-    // Chrome-style hold-to-quit: intercept the quit accelerator before the
-    // native menu sees it and only quit after the shortcut is held. The
-    // renderer shows the "Hold to Quit" hint via QUIT_SHORTCUT_CHANNEL.
-    const quitHoldHandler = makeQuitHoldHandler({
+    // Intercept the quit accelerator before the native menu sees it and apply
+    // the configured direct, hold, or double-press behavior.
+    const quitShortcutHandler = makeQuitShortcutHandler({
       platform: environment.platform,
-      isEnabled: () =>
+      getMode: () =>
         runPromise(
           Effect.map(
             clientSettings.get,
@@ -566,17 +609,20 @@ export const make = Effect.gen(function* () {
             }),
           ),
         ),
-      notify: (state) => {
+      notify: (hint) => {
         if (!window.isDestroyed()) {
-          window.webContents.send(QUIT_SHORTCUT_CHANNEL, state);
+          window.webContents.send(QUIT_SHORTCUT_CHANNEL, hint);
         }
       },
+      // Keep the transparent window focused until the physical shortcut is
+      // released so its remaining repeats cannot reach the next app.
+      concealWindow: () => concealPendingQuitWindow(window),
       quit: () => {
         void runPromise(electronApp.quit);
       },
     });
     window.webContents.on("before-input-event", (event, input) => {
-      quitHoldHandler(event, input);
+      quitShortcutHandler(event, input);
       if (input.type !== "keyDown" || !input.isAutoRepeat) return;
       const modifier = environment.platform === "darwin" ? input.meta : input.control;
       if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
