@@ -46,6 +46,8 @@ import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
+import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
+import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -75,6 +77,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const runtimeWarning = useMemo(
+    () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
+    [activities, runtime.latestTurn],
+  );
   const presence = useGroupPresence(groupId);
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
@@ -350,6 +356,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           items={inboxItems}
           onOpenDetails={() => openSettings("inbox", null, environmentId)}
         />
+        <ThreadRuntimeWarningBanner warning={runtimeWarning} />
         <ThreadErrorBanner
           error={
             inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error

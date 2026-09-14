@@ -71,6 +71,8 @@ import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
+import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
+import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -165,6 +167,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const runtimeWarning = useMemo(
+    () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
+    [activities, runtime.latestTurn],
+  );
   const pluginResultsByTurn = useMemo(() => {
     const results = new Map<
       TurnId,
@@ -492,6 +498,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             items={inboxItems}
             onOpenDetails={() => openSettings("inbox", null, environmentId)}
           />
+          <ThreadRuntimeWarningBanner warning={runtimeWarning} />
           <ThreadErrorBanner
             error={
               inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
