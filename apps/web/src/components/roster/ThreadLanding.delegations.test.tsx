@@ -9,6 +9,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationMessage,
+  type OrchestrationLatestTurn,
   type OrchestrationShellSnapshot,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
@@ -31,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   messages: [] as OrchestrationMessage[],
   pendingUserInputs: [] as PendingUserInput[],
   groupPendingUserInputs: [] as PendingUserInput[],
+  latestTurn: null as OrchestrationLatestTurn | null,
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -127,7 +129,6 @@ vi.mock("./useBotThreadRuntime", () => ({
     advancePendingUserInput: vi.fn(),
     messages: mocks.messages,
     error: null,
-    latestTurn: null,
     defaultProject: null,
     botReady: true,
     bootstrapped: true,
@@ -135,6 +136,7 @@ vi.mock("./useBotThreadRuntime", () => ({
       environmentId: EnvironmentId.make("environment-1"),
       threadId: ThreadId.make("thread-parent"),
     },
+    latestTurn: mocks.latestTurn,
     send: vi.fn(),
   }),
 }));
@@ -152,6 +154,7 @@ vi.mock("./useGroupThreadRuntime", () => ({
       environmentId: EnvironmentId.make("environment-1"),
       threadId: ThreadId.make("thread-parent"),
     },
+    latestTurn: mocks.latestTurn,
     pendingUserInputs: mocks.groupPendingUserInputs,
     pendingUserInputAnswers: {},
     pendingUserInputQuestionIndex: 0,
@@ -167,6 +170,7 @@ import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
+import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const decodeDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord);
 const parentBot: Bot = {
@@ -247,6 +251,7 @@ describe("thread landing delegations", () => {
     mocks.messages = [];
     mocks.pendingUserInputs = [];
     mocks.groupPendingUserInputs = [];
+    mocks.latestTurn = null;
     mocks.snapshot = {
       snapshotSequence: 1,
       bots: [],
@@ -396,5 +401,40 @@ describe("thread landing delegations", () => {
 
     expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
     expect(prompt?.props.onSelectSingleOption).toBe(prompt?.props.onToggleOption);
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("renders an active runtime warning in the %s conversation", (_kind, render) => {
+    const turnId = TurnId.make("turn-warning");
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.latestTurn = {
+      turnId,
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+    mocks.activities = [
+      {
+        id: EventId.make("warning-current"),
+        tone: "info",
+        kind: "runtime.warning",
+        summary: "Usage limit reached",
+        payload: { message: "Claude is paused until the usage window resets." },
+        turnId,
+        createdAt: timestamp,
+      },
+    ];
+
+    hooks.beginRender();
+    const banner = visitElements(
+      render(),
+      (element) => element.type === ThreadRuntimeWarningBanner,
+    ) as ReactElement<Parameters<typeof ThreadRuntimeWarningBanner>[0]> | null;
+
+    expect(banner?.props.warning).toBe("Claude is paused until the usage window resets.");
   });
 });

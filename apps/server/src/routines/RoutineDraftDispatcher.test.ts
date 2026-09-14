@@ -163,6 +163,7 @@ function deleteHarness(input: {
     searchThreads: () => Effect.succeed({ matches: [] }),
     getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 1 }),
     getCounts: () => Effect.die("unused"),
+    getEventReplayStats: () => Effect.die("unused"),
     getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
     getOriginalProjectIdByWorkspaceRoot: () => Effect.succeed(Option.none()),
     getProjectShellById: () => Effect.succeed(Option.none()),
@@ -170,6 +171,8 @@ function deleteHarness(input: {
     getThreadCheckpointContext: () => Effect.succeed(Option.none()),
     getFullThreadDiffContext: () => Effect.succeed(Option.none()),
     getThreadShellById: () => Effect.succeed(Option.none()),
+    getThreadRuntimeContext: () => Effect.die("unused"),
+    getTurnStartMessage: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
   };
   const layer = RoutineDraftDispatcherLive.pipe(
@@ -183,7 +186,10 @@ function deleteHarness(input: {
               return { sequence: commands.length };
             }),
           readEvents: () => Stream.empty,
+          readThreadEvents: () => Stream.empty,
+          getThreadReplayStats: () => Effect.die("unused thread replay stats"),
           streamDomainEvents: Stream.empty,
+          subscribeDomainEvents: Effect.succeed(Stream.empty),
           latestSequence: Effect.succeed(0),
         }),
       ),
