@@ -118,6 +118,20 @@ describe("usageRecordFromEntry", () => {
 });
 
 it.layer(NodeServices.layer)("UsageService pricing", (it) => {
+  it.effect("reads the usage ledger's filesystem identity", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-usage-volume-" });
+      const databasePath = `${directory}/state.sqlite`;
+      yield* fs.writeFileString(databasePath, "fixture");
+
+      expect(yield* UsageService.readUsageStoreVolumeId(fs, databasePath)).toMatch(/^\d+:\d+$/);
+      expect(yield* UsageService.readUsageStoreVolumeId(fs, `${directory}/missing.sqlite`)).toBe(
+        "",
+      );
+    }),
+  );
+
   it.effect("shares simultaneous cold pricing fetches", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();

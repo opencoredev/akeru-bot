@@ -304,4 +304,50 @@ describe("UsagePage", () => {
     expect(markup).not.toContain("$12.34");
     expect(markup).toContain("Connect a provider in Settings");
   });
+
+  it("explains stale environment coverage before suggesting a provider connection", () => {
+    saveUsagePagePreferences({ metric: "cost", windowDays: 30 });
+    const staleSummary = {
+      contractVersion: USAGE_CONTRACT_VERSION - 1,
+      readAt: "2026-09-13T00:00:00.000Z",
+      timeZone: "UTC",
+      sinceDay: UsageDay.make("2026-08-15"),
+      untilDay: UsageDay.make("2026-09-13"),
+      buckets: [],
+      sources: [],
+      planLimits: [],
+      connectedProviders: ["openai-codex" as const],
+      pricing: { status: "fresh" as const, source: "litellm", fetchedAt: null, knownModels: 1 },
+      scanDurationMs: 1,
+    };
+    testState.useUsage.mockReturnValue({
+      merged: mergeUsage(
+        [
+          {
+            environmentId: EnvironmentId.make("env-1"),
+            label: "This Mac",
+            summary: staleSummary,
+          },
+        ],
+        USAGE_CONTRACT_VERSION,
+      ),
+      environments: [
+        {
+          environmentId: "env-1",
+          label: "This Mac",
+          isPending: false,
+          error: null,
+          summary: staleSummary,
+        },
+      ],
+      isPending: false,
+      isPartial: false,
+      refresh: vi.fn(),
+    });
+
+    const markup = renderToStaticMarkup(<UsagePage />);
+
+    expect(markup).toContain("This Mac runs an older server version");
+    expect(markup).not.toContain("Connect a provider in Settings");
+  });
 });

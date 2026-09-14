@@ -117,6 +117,18 @@ export function usageRecordFromEntry(
   };
 }
 
+/** Filesystem identity of an environment's usage ledger, as `device:inode`. */
+export const readUsageStoreVolumeId = Effect.fn("UsageService.readUsageStoreVolumeId")(function* (
+  fileSystem: FileSystem.FileSystem,
+  databasePath: string,
+) {
+  const stats = yield* fileSystem
+    .stat(databasePath)
+    .pipe(Effect.catchCause(() => Effect.succeed(null)));
+  if (stats === null || Option.isNone(stats.ino)) return "";
+  return `${stats.dev}:${stats.ino.value}`;
+});
+
 /** Empty summary, for suites that only need the RPC surface to resolve. */
 export const layerTestWithRates = (rateTable: RateTable) =>
   Layer.succeed(
@@ -369,6 +381,7 @@ export const make = Effect.gen(function* () {
     }
 
     const hostId = NodeOS.hostname();
+    const volumeId = yield* readUsageStoreVolumeId(fileSystem, usageDatabasePath);
     const sources: UsageSource[] = [
       ...new Set(
         Object.values(DRIVER_CONNECTIONS)
@@ -376,7 +389,7 @@ export const make = Effect.gen(function* () {
           .map((mapping) => mapping.provider),
       ),
     ].map((provider) => ({
-      fingerprint: { hostId, provider, resolvedHomePath: usageDatabasePath, volumeId: "" },
+      fingerprint: { hostId, provider, resolvedHomePath: usageDatabasePath, volumeId },
       status: "ok",
       scannedFiles: 0,
       skippedFiles: 0,

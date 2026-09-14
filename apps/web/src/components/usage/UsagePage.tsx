@@ -291,6 +291,12 @@ export function UsagePage() {
                 {environments.length > 1 ? <UsageDeviceStrip environments={environments} /> : null}
                 <UsageSkeleton />
               </>
+            ) : merged.staleEnvironments.length > 0 && merged.connectedProviders.length === 0 ? (
+              <UsageCoverageNotice
+                environments={environments}
+                duplicateSources={merged.duplicateSources}
+                staleEnvironments={merged.staleEnvironments}
+              />
             ) : merged.connectedProviders.length === 0 ? (
               <div className="rounded-xl border border-border/70 px-5 py-6">
                 <h2 className="text-sm font-medium text-foreground">No provider usage yet</h2>
