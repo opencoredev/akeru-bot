@@ -25,6 +25,7 @@ import type {
   ProviderDriverKind,
   ProviderInstanceEnvironment,
   ProviderInstanceId,
+  ServerProvider,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 import type * as Schema from "effect/Schema";
@@ -69,6 +70,13 @@ export interface ProviderInstance {
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
   readonly snapshot: ServerProviderShape;
+  /**
+   * Optional workspace-scoped snapshot. Grok uses this to probe `grok inspect --json`
+   * in the thread cwd so project skills are not cached as an empty machine catalog.
+   */
+  readonly snapshotForCwd?: (
+    workspaceCwd: string,
+  ) => Effect.Effect<ServerProvider, ProviderDriverError>;
   /** Present for legacy/provider-native session transports. Mastra-native drivers omit it. */
   readonly adapter: ProviderAdapterShape<ProviderAdapterError> | undefined;
   /** Present when the provider supports app-level title and source-control writing. */

@@ -19,6 +19,10 @@
       "types": "./src/replyPlayback/index.ts",
       "default": "./src/replyPlayback/index.ts"
     },
+    "./pending-requests": {
+      "types": "./src/pendingRequests.ts",
+      "default": "./src/pendingRequests.ts"
+    },
     "./markdown-images": {
       "types": "./src/markdownImages.ts",
       "default": "./src/markdownImages.ts"

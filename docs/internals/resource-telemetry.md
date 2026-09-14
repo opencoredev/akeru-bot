@@ -7,7 +7,10 @@ Status: implemented
 ## Purpose
 
 Resource telemetry replaces recurring `ps`, PowerShell, `ioreg`, and `pmset`
-subprocess probes with two persistent, direct data sources:
+subprocess probes with two persistent, direct data sources. Terminal subprocess
+polling reads one shared `processTable` snapshot from the same sidecar, then
+falls back to `ps` or PowerShell with exponential backoff if the sidecar is
+down.
 
 1. a standalone Rust resource-monitor executable that reads process counters
    through operating-system APIs via `sysinfo`;
