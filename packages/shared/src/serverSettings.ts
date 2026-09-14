@@ -80,12 +80,22 @@ export function textGenerationSelectionForTarget(
   const matched = Object.entries(targetSettings.providerInstances).find(
     ([, instance]) => instance.driver === sourceDriver && resolveProviderInstanceEnabled(instance),
   );
-  if (matched === undefined) return undefined;
-  return createModelSelection(
-    ProviderInstanceId.make(matched[0]),
-    selection.model,
-    selection.options,
-  );
+  if (matched !== undefined) {
+    return createModelSelection(
+      ProviderInstanceId.make(matched[0]),
+      selection.model,
+      selection.options,
+    );
+  }
+
+  const legacyInstanceId = ProviderInstanceId.make(sourceDriver);
+  if (
+    targetSettings.providerInstances[legacyInstanceId] === undefined &&
+    getLegacyProviderSettings(targetSettings, sourceDriver)?.enabled === true
+  ) {
+    return createModelSelection(legacyInstanceId, selection.model, selection.options);
+  }
+  return undefined;
 }
 
 export function resolveSourceControlWriterModelSelection(

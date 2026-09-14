@@ -555,23 +555,30 @@ describe("textGenerationSelectionForTarget", () => {
     ).toEqual(createModelSelection(ProviderInstanceId.make("claude_work"), "claude-opus-4-6"));
   });
 
-  it.each(["missing", "disabled", "different-driver"] as const)(
+  it("uses the canonical instance id for an enabled legacy target", () => {
+    const targetSettings = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: {},
+    };
+    expect(
+      textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),
+    ).toEqual(claudeSelection);
+  });
+
+  it.each(["disabled", "different-driver"] as const)(
     "does not copy an instance id onto a %s target provider",
     (availability) => {
       const targetSettings = {
         ...DEFAULT_SERVER_SETTINGS,
-        providerInstances:
-          availability === "missing"
-            ? {}
-            : {
-                claudeAgent: {
-                  driver: ProviderDriverKind.make(
-                    availability === "different-driver" ? "codex" : "claudeAgent",
-                  ),
-                  enabled: availability !== "disabled",
-                  config: {},
-                },
-              },
+        providerInstances: {
+          claudeAgent: {
+            driver: ProviderDriverKind.make(
+              availability === "different-driver" ? "codex" : "claudeAgent",
+            ),
+            enabled: availability !== "disabled",
+            config: {},
+          },
+        },
       };
       expect(
         textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),

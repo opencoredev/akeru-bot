@@ -16,6 +16,20 @@ import type * as Stream from "effect/Stream";
 
 import type { OrchestrationEventStoreError } from "../Errors.ts";
 
+export interface OrchestrationAggregateReplayRange {
+  readonly aggregateKind: OrchestrationEvent["aggregateKind"];
+  readonly aggregateId: string;
+  readonly fromSequenceExclusive: number;
+  readonly toSequenceInclusive: number;
+}
+
+export interface OrchestrationAggregateReplayStats {
+  readonly eventCount: number;
+  readonly payloadBytes: number;
+  /** A creation in this range does not prove that the aggregate still exists. */
+  readonly hasCreateEvent: boolean;
+}
+
 /**
  * OrchestrationEventStoreShape - Service API for orchestration event persistence.
  */
@@ -37,6 +51,7 @@ export interface OrchestrationEventStoreShape {
    *
    * @param sequenceExclusive - Sequence cursor (exclusive).
    * @param limit - Maximum number of events to emit.
+   * @param toSequenceInclusive - Optional captured upper sequence boundary.
    * @returns Stream containing ordered events.
    *
    * Reads in fixed-size pages and normalizes non-integer/negative limits.
@@ -44,7 +59,21 @@ export interface OrchestrationEventStoreShape {
   readonly readFromSequence: (
     sequenceExclusive: number,
     limit?: number,
+    toSequenceInclusive?: number,
   ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
+
+  /** Read one aggregate through a captured global head, without decoding other streams. */
+  readonly readAggregateRange: (
+    input: OrchestrationAggregateReplayRange & { readonly limit?: number },
+  ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
+
+  /**
+   * Measure at most maxEvents + 1 rows without decoding payloads. The extra
+   * row tells the caller to use a snapshot instead of a truncated replay.
+   */
+  readonly getAggregateReplayStats: (
+    input: OrchestrationAggregateReplayRange & { readonly maxEvents: number },
+  ) => Effect.Effect<OrchestrationAggregateReplayStats, OrchestrationEventStoreError>;
 
   /**
    * Read all events from the beginning of the stream.
@@ -52,6 +81,19 @@ export interface OrchestrationEventStoreShape {
    * @returns Stream containing all stored events.
    */
   readonly readAll: () => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
+
+  /**
+   * Check whether an aggregate has an event of the given type after a sequence.
+   *
+   * Used during replay to tell whether a later event supersedes the one being
+   * applied, without streaming the rest of the log.
+   */
+  readonly hasEventAfter: (input: {
+    readonly aggregateKind: OrchestrationEvent["aggregateKind"];
+    readonly aggregateId: string;
+    readonly type: OrchestrationEvent["type"];
+    readonly sequenceExclusive: number;
+  }) => Effect.Effect<boolean, OrchestrationEventStoreError>;
 }
 
 /**

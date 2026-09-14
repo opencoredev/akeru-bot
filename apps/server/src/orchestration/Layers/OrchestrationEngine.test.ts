@@ -106,6 +106,8 @@ describe("OrchestrationEngine", () => {
           return savedEvent;
         }),
       readFromSequence: () => Stream.empty,
+      readAggregateRange: () => Stream.die("unused aggregate replay"),
+      getAggregateReplayStats: () => Effect.die("unused aggregate replay stats"),
       readAll: () =>
         Stream.fail(
           new PersistenceSqlError({
@@ -113,6 +115,7 @@ describe("OrchestrationEngine", () => {
             detail: "historical replay should not be used during bootstrap",
           }),
         ),
+      hasEventAfter: () => Effect.succeed(false),
     };
 
     const projectionSnapshot = {
@@ -208,6 +211,7 @@ describe("OrchestrationEngine", () => {
           getSnapshotSequence: () =>
             Effect.succeed({ snapshotSequence: projectionSnapshot.snapshotSequence }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),
+          getEventReplayStats: () => Effect.die("unused"),
           getOriginalProjectIdByWorkspaceRoot: () => Effect.die("unused"),
           getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
           getProjectShellById: () => Effect.succeed(Option.none()),
@@ -215,6 +219,8 @@ describe("OrchestrationEngine", () => {
           getThreadCheckpointContext: () => Effect.succeed(Option.none()),
           getFullThreadDiffContext: () => Effect.succeed(Option.none()),
           getThreadShellById: () => Effect.succeed(Option.none()),
+          getThreadRuntimeContext: () => Effect.die("unused"),
+          getTurnStartMessage: () => Effect.die("unused"),
           getThreadDetailById: () => Effect.succeed(Option.none()),
           getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
           searchThreads: () => Effect.succeed({ matches: [] }),
@@ -224,6 +230,7 @@ describe("OrchestrationEngine", () => {
         Layer.succeed(OrchestrationProjectionPipeline, {
           bootstrap: Effect.void,
           projectEvent: () => Effect.void,
+          projectEventDeferred: () => Effect.succeed(Effect.void),
         } satisfies OrchestrationProjectionPipelineShape),
       ),
       Layer.provide(Layer.succeed(OrchestrationEventStore, eventStore)),
@@ -819,8 +826,17 @@ describe("OrchestrationEngine", () => {
       readFromSequence(sequenceExclusive) {
         return Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive));
       },
+      readAggregateRange() {
+        return Stream.die("unused aggregate replay");
+      },
+      getAggregateReplayStats() {
+        return Effect.die("unused aggregate replay stats");
+      },
       readAll() {
         return Stream.fromIterable(events);
+      },
+      hasEventAfter() {
+        return Effect.succeed(false);
       },
     };
 
@@ -933,6 +949,8 @@ describe("OrchestrationEngine", () => {
         }
         return Effect.void;
       },
+      projectEventDeferred: (event) =>
+        flakyProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
     };
 
     const runtime = ManagedRuntime.make(
@@ -1055,8 +1073,17 @@ describe("OrchestrationEngine", () => {
       readFromSequence(sequenceExclusive) {
         return Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive));
       },
+      readAggregateRange() {
+        return Stream.die("unused aggregate replay");
+      },
+      getAggregateReplayStats() {
+        return Effect.die("unused aggregate replay stats");
+      },
       readAll() {
         return Stream.fromIterable(events);
+      },
+      hasEventAfter() {
+        return Effect.succeed(false);
       },
     };
 
@@ -1078,6 +1105,8 @@ describe("OrchestrationEngine", () => {
         }
         return Effect.void;
       },
+      projectEventDeferred: (event) =>
+        flakyProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
     };
 
     const runtime = ManagedRuntime.make(

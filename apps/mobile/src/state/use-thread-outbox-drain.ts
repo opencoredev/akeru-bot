@@ -32,6 +32,7 @@ import {
   resolveThreadOutboxDeliveryAction,
   resolveThreadOutboxFailureAction,
   resolveQueuedThreadSettings,
+  threadOutboxHydrationRetryDelayMs,
   threadOutboxRetryDelayMs,
   type QueuedThreadCreation,
   type QueuedThreadMessage,
@@ -107,9 +108,13 @@ export function useThreadOutboxDrain(): void {
   const retryAttemptRef = useRef(new Map<MessageId, number>());
   const retryNotBeforeRef = useRef(new Map<MessageId, number>());
   const retryTimersRef = useRef(new Map<MessageId, ReturnType<typeof setTimeout>>());
+  const connectedEnvironmentKey = connectedEnvironments
+    .filter((environment) => environment.connectionState === "connected")
+    .map((environment) => environment.environmentId)
+    .sort()
+    .join("\n");
 
   useEffect(() => {
-    ensureThreadOutboxLoaded();
     return () => {
       for (const timer of retryTimersRef.current.values()) {
         clearTimeout(timer);
@@ -117,6 +122,30 @@ export function useThreadOutboxDrain(): void {
       retryTimersRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryAttempt = 0;
+
+    const hydrate = (): void => {
+      void ensureThreadOutboxLoaded().then((complete) => {
+        if (complete || !active || connectedEnvironmentKey.length === 0) return;
+        const delayMs = threadOutboxHydrationRetryDelayMs(retryAttempt);
+        retryAttempt += 1;
+        if (delayMs === null) return;
+        retryTimer = setTimeout(hydrate, delayMs);
+      });
+    };
+
+    // Retry a mixed valid/corrupt read for a short bounded window while the
+    // environment stays connected. Connection-set changes restart the window.
+    hydrate();
+    return () => {
+      active = false;
+      if (retryTimer !== null) clearTimeout(retryTimer);
+    };
+  }, [connectedEnvironmentKey]);
 
   const makeDeliveryHelpers = useCallback((queuedMessage: QueuedThreadMessage) => {
     const reportFailure = (
