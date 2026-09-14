@@ -93,6 +93,7 @@ import {
   createRosterCollisionDetection,
   createRosterSortingStrategy,
   restrictBelowRosterLabel,
+  restrictRosterDragAxis,
 } from "./roster.drag";
 import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
@@ -762,6 +763,11 @@ export default function BotRosterSidebar() {
       restrictBelowRosterLabel(args, dragLabelOffsetRef.current),
     [],
   );
+  const restrictRosterAxis = useCallback(
+    (args: Parameters<typeof restrictRosterDragAxis>[0]) =>
+      restrictRosterDragAxis(args, zoneByEntryId.get(String(args.active?.id)) ?? null),
+    [zoneByEntryId],
+  );
   const handleRosterDragStart = useCallback(
     (event: DragStartEvent) => {
       const activeId = String(event.active.id);
@@ -1078,7 +1084,11 @@ export default function BotRosterSidebar() {
               <DndContext
                 sensors={dndSensors}
                 collisionDetection={dndCollisionDetection}
-                modifiers={[restrictBelowPins, restrictToFirstScrollableAncestor]}
+                modifiers={[
+                  restrictRosterAxis,
+                  restrictBelowPins,
+                  restrictToFirstScrollableAncestor,
+                ]}
                 onDragStart={handleRosterDragStart}
                 onDragOver={handleRosterDragOver}
                 onDragEnd={handleRosterDragEnd}

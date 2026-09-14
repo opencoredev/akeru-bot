@@ -1,4 +1,5 @@
 import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   defaultAnimateLayoutChanges,
   rectSortingStrategy,
@@ -36,6 +37,15 @@ export function restrictBelowRosterLabel(
   if (!containerNodeRect || !draggingNodeRect) return transform;
   const minimumY = containerNodeRect.top + offset - draggingNodeRect.top;
   return transform.y < minimumY ? { ...transform, y: minimumY } : transform;
+}
+
+/** Pinned cards need both axes for their wrapped shelf. Full-width roster rows
+ * stay vertical so their movement matches their one-column layout. */
+export function restrictRosterDragAxis(
+  args: Parameters<Modifier>[0],
+  sourceZone: RosterZone | null,
+) {
+  return sourceZone === "pinned" ? args.transform : restrictToVerticalAxis(args);
 }
 
 function markerIsPinnedBoundary(marker: RosterListMarker): boolean {

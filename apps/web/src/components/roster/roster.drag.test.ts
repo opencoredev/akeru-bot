@@ -6,7 +6,11 @@ import {
   type SortingStrategy,
 } from "@dnd-kit/sortable";
 
-import { createRosterCollisionDetection, createRosterSortingStrategy } from "./roster.drag";
+import {
+  createRosterCollisionDetection,
+  createRosterSortingStrategy,
+  restrictRosterDragAxis,
+} from "./roster.drag";
 import {
   buildRosterListItems,
   rosterEntryId,
@@ -19,6 +23,22 @@ import {
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const akeru: RosterItemRef = { kind: "bot", id: "akeru" };
 const mori: RosterItemRef = { kind: "bot", id: "mori" };
+
+function modifierArgs() {
+  return {
+    transform: { x: 12, y: 24, scaleX: 1, scaleY: 1 },
+  } as Parameters<typeof restrictRosterDragAxis>[0];
+}
+
+describe("roster drag axis", () => {
+  it("allows pinned cards to move across wrapped rows", () => {
+    expect(restrictRosterDragAxis(modifierArgs(), "pinned")).toMatchObject({ x: 12, y: 24 });
+  });
+
+  it("keeps full-width bot rows on the vertical axis", () => {
+    expect(restrictRosterDragAxis(modifierArgs(), "unassigned")).toMatchObject({ x: 0, y: 24 });
+  });
+});
 
 function layout(items: readonly RosterListItem[], active: string, over: string, cardHeight = 52) {
   let top = 100;
