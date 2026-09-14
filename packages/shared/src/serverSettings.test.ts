@@ -565,6 +565,22 @@ describe("textGenerationSelectionForTarget", () => {
     ).toEqual(claudeSelection);
   });
 
+  it("does not fall back to legacy settings when a migrated instance is disabled", () => {
+    const targetSettings = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: {
+        claude_work: {
+          driver: ProviderDriverKind.make("claudeAgent"),
+          enabled: false,
+          config: {},
+        },
+      },
+    };
+    expect(
+      textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),
+    ).toBeUndefined();
+  });
+
   it.each(["disabled", "different-driver"] as const)(
     "does not copy an instance id onto a %s target provider",
     (availability) => {

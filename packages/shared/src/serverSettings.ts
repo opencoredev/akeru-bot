@@ -77,7 +77,8 @@ export function textGenerationSelectionForTarget(
     return createModelSelection(selection.instanceId, selection.model, selection.options);
   }
 
-  const matched = Object.entries(targetSettings.providerInstances).find(
+  const targetInstances = Object.entries(targetSettings.providerInstances);
+  const matched = targetInstances.find(
     ([, instance]) => instance.driver === sourceDriver && resolveProviderInstanceEnabled(instance),
   );
   if (matched !== undefined) {
@@ -86,6 +87,10 @@ export function textGenerationSelectionForTarget(
       selection.model,
       selection.options,
     );
+  }
+
+  if (targetInstances.some(([, instance]) => instance.driver === sourceDriver)) {
+    return undefined;
   }
 
   const legacyInstanceId = ProviderInstanceId.make(sourceDriver);
