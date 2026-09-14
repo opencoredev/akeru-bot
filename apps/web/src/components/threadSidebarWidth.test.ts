@@ -35,14 +35,15 @@ describe("thread sidebar width", () => {
     expect(resolveInitialThreadSidebarWidth(900, 700)).toBe(THREAD_SIDEBAR_MIN_WIDTH);
   });
 
-  it("shows the desktop wordmark across the sidebar's full legal width range", () => {
+  it("centers the wordmark across the sidebar's full legal width range", () => {
     const sidebarSource = NodeFS.readFileSync(
       new URL("./sidebar/SidebarChrome.tsx", import.meta.url),
       "utf8",
     );
 
-    expect(sidebarSource).toContain("hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1");
-    expect(sidebarSource).toContain("md:flex");
+    expect(sidebarSource).toContain("grid-cols-[1fr_auto_1fr]");
+    expect(sidebarSource).toContain("min-w-0 flex-1");
+    expect(sidebarSource).toContain("group-data-[collapsible=icon]:hidden");
     expect(THREAD_SIDEBAR_MIN_WIDTH).toBe(13 * 16);
   });
 });
