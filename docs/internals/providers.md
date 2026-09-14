@@ -60,6 +60,10 @@ the active runtime and starts the selected provider without reusing an incompati
 bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
 a Mastra session is absent.
 
+The legacy OpenCode adapter keeps only per-message text state for later PATCH edits. Tool input and
+output are emitted as lifecycle events and are not retained in the session map. Individually removed
+text parts and whole removed messages are discarded from retained state. OpenCode Go stays on Mastra.
+
 The legacy OpenCode adapter owns child sessions created for subagents. Permission and question events
 from a descendant session are routed onto the parent thread after ancestry is verified. Stop and
 interrupt walk the child tree and abort every descendant, not only the parent. Unrelated OpenCode
