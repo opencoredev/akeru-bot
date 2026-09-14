@@ -289,7 +289,7 @@ const BotRosterRow = memo(function BotRosterRow({
       data-pinned={pinned || undefined}
       className={cn(
         "list-none touch-pan-y",
-        pinned && "my-2 w-24 self-center",
+        pinned && "my-2 w-18 self-center",
         sortable.isDragging && "z-50",
       )}
       {...sortableRootProps(sortable)}
@@ -320,11 +320,11 @@ const BotRosterRow = memo(function BotRosterRow({
           className={cn(
             "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
             pinned
-              ? "min-h-24 flex-col justify-center gap-2 rounded-xl px-2 py-3 text-center"
+              ? "min-h-20 flex-col justify-center gap-1.5 rounded-xl px-2 py-2 text-center"
               : "items-center gap-2.5 rounded-lg px-2 py-1.5 text-left",
           )}
         >
-          <RosterAvatar bot={bot} presence={presence} className={pinned ? "size-14" : "size-10"} />
+          <RosterAvatar bot={bot} presence={presence} className={pinned ? "size-12" : "size-10"} />
           {pinned ? (
             <span className="max-w-full truncate text-xs font-medium">{bot.name}</span>
           ) : (
@@ -455,7 +455,7 @@ function GroupRosterRow({
       }}
       className={cn(
         "relative flex touch-pan-y items-center",
-        pinned ? "my-2 w-24 self-center rounded-xl" : "rounded-lg",
+        pinned ? "my-2 w-18 self-center rounded-xl" : "rounded-lg",
         sortable.isDragging && "z-50 bg-sidebar shadow-xl",
         isActive
           ? "bg-sidebar-row-active"
@@ -470,14 +470,14 @@ function GroupRosterRow({
         className={cn(
           "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
           pinned
-            ? "min-h-24 flex-col justify-center gap-2 rounded-xl px-2 py-3 text-center"
+            ? "min-h-20 flex-col justify-center gap-1.5 rounded-xl px-2 py-2 text-center"
             : "items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-sidebar-row-hover",
         )}
       >
         <GroupMemberStack
           group={group}
           bots={bots}
-          sizeClassName={pinned ? "size-14" : "size-10"}
+          sizeClassName={pinned ? "size-12" : "size-10"}
         />
         <span
           className={cn(
