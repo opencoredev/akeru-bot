@@ -7,19 +7,25 @@
  * @module ProjectionSnapshotQuery
  */
 import type {
+  BotId,
   CheckpointRef,
+  GroupId,
+  MessageId,
   OrchestrationCheckpointSummary,
+  OrchestrationMessage,
   OrchestrationProject,
   OrchestrationProjectShell,
   OrchestrationReadModel,
   OrchestrationSearchThreadsInput,
   OrchestrationSearchThreadsResult,
+  OrchestrationSession,
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
   OrchestrationThreadDetailWindow,
   OrchestrationThreadShell,
   ProjectId,
+  RuntimeMode,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -31,6 +37,11 @@ import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
 export interface ProjectionSnapshotCounts {
   readonly projectCount: number;
   readonly threadCount: number;
+}
+
+export interface ProjectionEventReplayStats {
+  readonly eventCount: number;
+  readonly payloadBytes: number;
 }
 
 export interface ProjectionSnapshotSequence {
@@ -52,6 +63,31 @@ export interface ProjectionFullThreadDiffContext {
   readonly worktreePath: string | null;
   readonly latestCheckpointTurnCount: number;
   readonly toCheckpointRef: CheckpointRef | null;
+}
+
+export interface ProjectionThreadRuntimeContext {
+  readonly id: ThreadId;
+  readonly title: string;
+  readonly session: OrchestrationSession | null;
+  readonly projectId: ProjectId;
+  readonly botId: BotId | null;
+  readonly groupId: GroupId | null;
+  readonly respondingBotId: BotId | null;
+  readonly runtimeMode: RuntimeMode;
+}
+
+export interface ProjectionThreadDetailQuery {
+  /**
+   * Limit activities before SQLite returns and decodes their payloads.
+   * Any explicit filter omits pinned-request reads. An empty list also skips
+   * the activity query. Omit this option to preserve the full detail response.
+   */
+  readonly activityKinds?: ReadonlyArray<string>;
+}
+
+export interface ProjectionTurnStartMessage {
+  readonly message: OrchestrationMessage;
+  readonly hasOtherUserMessages: boolean;
 }
 
 /**
@@ -120,6 +156,14 @@ export interface ProjectionSnapshotQueryShape {
   readonly getCounts: () => Effect.Effect<ProjectionSnapshotCounts, ProjectionRepositoryError>;
 
   /**
+   * Measure a persisted event range without decoding its payload bodies.
+   */
+  readonly getEventReplayStats: (input: {
+    readonly fromSequenceExclusive: number;
+    readonly toSequenceInclusive: number;
+  }) => Effect.Effect<ProjectionEventReplayStats, ProjectionRepositoryError>;
+
+  /**
    * Read the active project for an exact workspace root match.
    */
   readonly getActiveProjectByWorkspaceRoot: (
@@ -171,10 +215,27 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
 
   /**
+   * Read thread id, title, and session in one query for buffered provider events.
+   */
+  readonly getThreadRuntimeContext: (
+    threadId: ThreadId,
+  ) => Effect.Effect<Option.Option<ProjectionThreadRuntimeContext>, ProjectionRepositoryError>;
+
+  /**
+   * Read the user prompt that starts a turn and whether the thread has any
+   * other non-compaction user message.
+   */
+  readonly getTurnStartMessage: (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+  }) => Effect.Effect<Option.Option<ProjectionTurnStartMessage>, ProjectionRepositoryError>;
+
+  /**
    * Read a single active thread detail snapshot by id.
    */
   readonly getThreadDetailById: (
     threadId: ThreadId,
+    query?: ProjectionThreadDetailQuery,
   ) => Effect.Effect<Option.Option<OrchestrationThread>, ProjectionRepositoryError>;
 
   /**
