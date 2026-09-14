@@ -9,6 +9,12 @@ import {
   productFeedbackOptionsResponse,
   type ProductFeedbackRepository,
 } from "./endpoint.ts";
+import {
+  deliverFeedbackToGitHub,
+  drainFeedbackToGitHub,
+  type FeedbackDeliveryOutbox,
+  type GitHubIssueDestination,
+} from "./githubIssueDelivery.ts";
 
 interface FeedbackRow {
   readonly feedback_id: string;
@@ -18,6 +24,7 @@ interface FeedbackRow {
   readonly coarse_ip_hash: string;
   readonly content_hash: string;
   readonly payload_json: string;
+  readonly github_delivery_attempts?: number;
 }
 
 const TurnstileResponse = Schema.Struct({ success: Schema.Boolean });
@@ -139,6 +146,102 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
   };
 }
 
+function deliveryRecord(row: FeedbackRow) {
+  const decoded = decodeStoredProductFeedbackSubmission(JSON.parse(row.payload_json));
+  if (Exit.isFailure(decoded)) throw new Error("Stored feedback payload is invalid.");
+  return {
+    feedbackId: row.feedback_id,
+    receivedAt: row.received_at,
+    deliveryAttempts: row.github_delivery_attempts ?? 0,
+    submission: decoded.value,
+  };
+}
+
+export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): FeedbackDeliveryOutbox {
+  return {
+    claim: async (feedbackId, now, leaseExpiresAt) => {
+      const result = await database
+        .prepare(
+          `UPDATE akeru_feedback_inbox
+           SET github_issue_status = 'delivering',
+               github_delivery_attempts = github_delivery_attempts + 1,
+               github_lease_expires_at = ?,
+               github_next_attempt_at = NULL,
+               github_last_error_code = NULL
+           WHERE feedback_id = ?
+             AND (github_issue_status = 'pending'
+               OR (github_issue_status = 'failed'
+                   AND (github_next_attempt_at IS NULL OR github_next_attempt_at <= ?))
+               OR (github_issue_status = 'delivering' AND github_lease_expires_at <= ?))`,
+        )
+        .bind(leaseExpiresAt, feedbackId, now, now)
+        .run();
+      if (result.meta.changes !== 1) return null;
+      const row = await database
+        .prepare("SELECT * FROM akeru_feedback_inbox WHERE feedback_id = ? LIMIT 1")
+        .bind(feedbackId)
+        .first<FeedbackRow>();
+      return row ? deliveryRecord(row) : null;
+    },
+    listEligible: async (now, limit) => {
+      const result = await database
+        .prepare(
+          `SELECT feedback_id FROM akeru_feedback_inbox
+           WHERE github_issue_status = 'pending'
+              OR (github_issue_status = 'failed'
+                  AND (github_next_attempt_at IS NULL OR github_next_attempt_at <= ?))
+              OR (github_issue_status = 'delivering' AND github_lease_expires_at <= ?)
+           ORDER BY received_at ASC
+           LIMIT ?`,
+        )
+        .bind(now, now, limit)
+        .all<{ feedback_id: string }>();
+      return result.results.map((row) => row.feedback_id);
+    },
+    markDelivered: async (feedbackId, issueNumber, issueUrl) => {
+      await database
+        .prepare(
+          `UPDATE akeru_feedback_inbox
+           SET github_issue_status = 'delivered',
+               github_issue_number = ?,
+               github_issue_url = ?,
+               github_next_attempt_at = NULL,
+               github_lease_expires_at = NULL,
+               github_last_error_code = NULL
+           WHERE feedback_id = ? AND github_issue_status = 'delivering'`,
+        )
+        .bind(issueNumber, issueUrl, feedbackId)
+        .run();
+    },
+    markFailed: async (feedbackId, nextAttemptAt, errorCode) => {
+      await database
+        .prepare(
+          `UPDATE akeru_feedback_inbox
+           SET github_issue_status = 'failed',
+               github_next_attempt_at = ?,
+               github_lease_expires_at = NULL,
+               github_last_error_code = ?
+           WHERE feedback_id = ? AND github_issue_status = 'delivering'`,
+        )
+        .bind(nextAttemptAt, errorCode, feedbackId)
+        .run();
+    },
+    markUnknown: async (feedbackId, errorCode) => {
+      await database
+        .prepare(
+          `UPDATE akeru_feedback_inbox
+           SET github_issue_status = 'unknown',
+               github_next_attempt_at = NULL,
+               github_lease_expires_at = NULL,
+               github_last_error_code = ?
+           WHERE feedback_id = ? AND github_issue_status = 'delivering'`,
+        )
+        .bind(errorCode, feedbackId)
+        .run();
+    },
+  };
+}
+
 function makeTurnstile(env: FeedbackWorkerEnv) {
   if (!env.TURNSTILE_SITE_KEY || !env.TURNSTILE_SECRET_KEY) return undefined;
   return {
@@ -163,8 +266,29 @@ function validHmacSecret(secret: string): boolean {
   return new TextEncoder().encode(secret).byteLength >= 32;
 }
 
+function githubDestination(env: FeedbackWorkerEnv): GitHubIssueDestination | null {
+  if (
+    !env.GITHUB_REPOSITORY ||
+    !env.GITHUB_APP_ID ||
+    !env.GITHUB_APP_INSTALLATION_ID ||
+    !env.GITHUB_APP_PRIVATE_KEY
+  ) {
+    return null;
+  }
+  return {
+    repository: env.GITHUB_REPOSITORY,
+    appId: env.GITHUB_APP_ID,
+    installationId: env.GITHUB_APP_INSTALLATION_ID,
+    privateKey: env.GITHUB_APP_PRIVATE_KEY,
+  };
+}
+
 export default {
-  async fetch(request: Request, env: FeedbackWorkerEnv): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: FeedbackWorkerEnv,
+    context: ExecutionContext,
+  ): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname !== "/v1/feedback") {
       return new Response("Not Found", { status: 404 });
@@ -182,10 +306,24 @@ export default {
     // Without Turnstile keys the endpoint still runs, but the suspicious-traffic
     // threshold becomes a hard network limit instead of a challenge.
     const turnstile = makeTurnstile(env);
+    const destination = githubDestination(env);
+    const outbox = destination ? makeGitHubIssueOutbox(env.DB) : null;
     return makeProductFeedbackEndpoint({
       repository: makeRepository(env.DB),
       hmacSecret: env.HMAC_SECRET,
       ...(turnstile ? { turnstile } : {}),
+      ...(destination && outbox
+        ? {
+            onAccepted: (feedback) =>
+              context.waitUntil(
+                deliverFeedbackToGitHub({
+                  destination,
+                  feedbackId: feedback.feedbackId,
+                  outbox,
+                }),
+              ),
+          }
+        : {}),
     })(request);
   },
   async scheduled(
@@ -193,6 +331,10 @@ export default {
     env: FeedbackWorkerEnv,
     _context: ExecutionContext,
   ): Promise<void> {
+    const destination = githubDestination(env);
+    if (destination) {
+      await drainFeedbackToGitHub({ destination, outbox: makeGitHubIssueOutbox(env.DB) });
+    }
     await makeRepository(env.DB).deleteExpired(new Date().toISOString());
   },
 };

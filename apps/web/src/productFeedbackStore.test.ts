@@ -4,6 +4,7 @@ import {
   EMPTY_PRODUCT_FEEDBACK_DRAFT,
   openProductFeedback,
   openProductFeedbackFromToolArgs,
+  openProductFeedbackWithPrefill,
   productFeedbackDraftFromToolArgs,
   useProductFeedbackStore,
 } from "./productFeedbackStore";
@@ -40,6 +41,18 @@ describe("product feedback store", () => {
     expect(useProductFeedbackStore.getState().draft).toEqual(EMPTY_PRODUCT_FEEDBACK_DRAFT);
   });
 
+  it("closes and clears the dialog after a successful submission", () => {
+    openProductFeedback({ feedback: "The action failed." });
+
+    useProductFeedbackStore.getState().completeFeedback();
+
+    expect(useProductFeedbackStore.getState()).toMatchObject({
+      open: false,
+      picking: false,
+      draft: EMPTY_PRODUCT_FEEDBACK_DRAFT,
+    });
+  });
+
   it("decodes only bounded bot-authored draft fields", () => {
     expect(
       productFeedbackDraftFromToolArgs({
@@ -70,5 +83,17 @@ describe("product feedback store", () => {
       feedback: "My existing report.\n\nAgent proposal.",
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("adds error context without replacing an existing manual draft", () => {
+    openProductFeedback({ feedback: "My existing report." });
+    useProductFeedbackStore.getState().closeFeedback();
+
+    openProductFeedbackWithPrefill("A request failed.");
+
+    expect(useProductFeedbackStore.getState()).toMatchObject({
+      open: true,
+      draft: { feedback: "My existing report.\n\nA request failed." },
+    });
   });
 });

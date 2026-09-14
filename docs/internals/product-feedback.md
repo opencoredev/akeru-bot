@@ -2,7 +2,7 @@
 
 > For maintainers. Using Akeru Bot? See [Product feedback](../user/product-feedback.md).
 
-Product feedback uses a standalone Cloudflare Worker in `infra/feedback`. Static web clients cannot own the inbox, and each distributed Akeru Bot server belongs to one installation. The default central endpoint is `https://akeru-feedback.leoisadev.workers.dev/v1/feedback`. The `akeru-bot.com` zone is on Vercel DNS, so the Worker has no custom hostname; the contracts default points at the workers.dev URL and clients post to it directly with CORS. The Worker stores no Linear issue and exposes no public inbox route.
+Product feedback uses a standalone Cloudflare Worker in `infra/feedback`. Static web clients cannot own the inbox, and each distributed Akeru Bot server belongs to one installation. The default central endpoint is `https://akeru-feedback.leoisadev.workers.dev/v1/feedback`. The `akeru-bot.com` zone is on Vercel DNS, so the Worker has no custom hostname; the contracts default points at the workers.dev URL and clients post to it directly with CORS. The Worker exposes no separate inbox route. When configured, it forwards accepted reports to the normal GitHub Issues tab for `opencoredev/akeru-bot` by default.
 
 ## Client boundary
 
@@ -34,10 +34,12 @@ The client keeps its installation token for 30 days. A successful send does not 
 
 D1 stores only the HMAC identifiers and the bounded safe payload. It does not store the raw installation token, raw IP, Turnstile token, or honeypot. A daily cron removes rows after 90 days. Submission returns a generated feedback ID and receipt time.
 
+The D1 row is also a delivery outbox. After returning the durable receipt, the Worker schedules GitHub delivery with `waitUntil`; the daily cron drains pending and confirmed-failed rows. HTTP failures retry with bounded exponential backoff. A network or runtime failure after the GitHub request begins is marked `unknown` for manual inspection because retrying an ambiguous create could duplicate the issue.
+
 The Cloudflare deployment trusts only `CF-Connecting-IP`. A self-host adapter must pass the socket address from a trusted proxy. It must not trust an arbitrary `X-Forwarded-For` header.
 
 ## Operations and self-hosting
 
-Deploy the Worker from `infra/feedback` with `vp run --filter akeru-feedback deploy`. `AKERU_FEEDBACK_HMAC_SECRET` is required; the Worker returns `503` until it holds at least 32 bytes. `AKERU_FEEDBACK_TURNSTILE_SITE_KEY` and `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY` are optional and enable the challenge step. Alchemy state is local and gitignored because the Cloudflare state store bootstrap fails on the pinned alchemy version. The Worker and D1 names are pinned, so a checkout without state recovers the existing resources with `alchemy deploy --stage production --adopt`; a plain deploy without state fails instead of creating duplicates.
+Deploy the Worker from `infra/feedback` with `vp run --filter akeru-feedback deploy`. `AKERU_FEEDBACK_HMAC_SECRET` is required; the Worker returns `503` until it holds at least 32 bytes. `AKERU_FEEDBACK_TURNSTILE_SITE_KEY` and `AKERU_FEEDBACK_TURNSTILE_SECRET_KEY` are optional and enable the challenge step. `AKERU_FEEDBACK_GITHUB_REPOSITORY` names the `owner/repository` issue destination and defaults to `opencoredev/akeru-bot`. GitHub delivery uses `AKERU_FEEDBACK_GITHUB_APP_ID`, `AKERU_FEEDBACK_GITHUB_APP_INSTALLATION_ID`, and the secret `AKERU_FEEDBACK_GITHUB_APP_PRIVATE_KEY`. The App installation must be limited to the destination repository and needs only Issues write permission. The Worker signs a short-lived App JWT, then asks GitHub for a repository- and permission-scoped installation token before creating an issue. Without all three App values, feedback remains in D1 as pending. Alchemy state is local and gitignored because the Cloudflare state store bootstrap fails on the pinned alchemy version. The Worker and D1 names are pinned, so a checkout without state recovers the existing resources with `alchemy deploy --stage production --adopt`; a plain deploy without state fails instead of creating duplicates.
 
 Maintainers inspect the inbox with authenticated local D1 tooling. Do not add a public listing route. A self-hosted Akeru Bot environment can replace the endpoint in **Settings → About**. Keep production endpoints on HTTPS.

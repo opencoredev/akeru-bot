@@ -409,7 +409,7 @@ export function useGroupThreadRuntime(groupId: string) {
   return {
     bootstrapped,
     defaultProject: activeProject,
-    error,
+    error: error ?? rememberedThread?.session?.lastError ?? null,
     groupReady,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,

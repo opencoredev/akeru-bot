@@ -7,6 +7,7 @@ import {
   isThreadErrorBannerDismissedForSession,
   shouldShowThreadErrorBanner,
   ThreadErrorBanner,
+  threadErrorFeedbackDraft,
 } from "./ThreadErrorBanner";
 
 describe("ThreadErrorBanner", () => {
@@ -84,5 +85,14 @@ describe("ThreadErrorBanner", () => {
     expect(markup).toContain("min-h-7 pt-1 sm:min-h-6 sm:pt-0.5");
     expect(markup).toContain("h-lh w-4");
     expect(markup).toContain("h-lh self-start");
+  });
+
+  it("offers a one-click feedback draft containing the error details", () => {
+    const markup = renderToStaticMarkup(<ThreadErrorBanner error="Provider crashed" />);
+
+    expect(markup).toContain("Send feedback");
+    expect(threadErrorFeedbackDraft("Provider crashed")).toBe(
+      "A request failed in a bot chat.\n\nError details:\nProvider crashed",
+    );
   });
 });

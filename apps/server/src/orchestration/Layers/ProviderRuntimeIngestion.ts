@@ -2192,7 +2192,7 @@ const make = Effect.gen(function* () {
           if (!hasVisibleAssistantReply && !finalizedReplyVisibility.some(Boolean)) {
             const fallbackText =
               event.payload.state === "failed"
-                ? "I could not complete that request. Check the error details and try again."
+                ? "I cannot complete the request. Check the error details."
                 : "I finished without a text response. Please try again.";
             yield* finalizeAssistantMessage({
               event,

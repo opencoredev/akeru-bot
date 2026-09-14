@@ -1230,6 +1230,38 @@ describe("ProviderRuntimeIngestion", () => {
     expect(thread.messages.filter((message) => message.turnId === turnId)).toHaveLength(1);
   });
 
+  it("adds an actionable reply when a failed turn has no assistant text", async () => {
+    const harness = await createHarness();
+    const turnId = asTurnId("turn-failed-without-text");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-failed-without-text-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId,
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-failed-without-text-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:02.000Z",
+      turnId,
+      payload: { state: "failed", errorMessage: "Provider crashed" },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message) =>
+          message.turnId === turnId &&
+          message.text === "I cannot complete the request. Check the error details.",
+      ),
+    );
+    expect(thread.messages.filter((message) => message.turnId === turnId)).toHaveLength(1);
+  });
+
   it("applies provider session.state.changed transitions directly", async () => {
     const harness = await createHarness();
     const waitingAt = "2026-01-01T00:00:00.000Z";

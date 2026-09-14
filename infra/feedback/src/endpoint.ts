@@ -52,6 +52,7 @@ export interface ProductFeedbackEndpointOptions {
   readonly resolveIp?: (request: Request) => string;
   readonly now?: () => Date;
   readonly randomId?: () => string;
+  readonly onAccepted?: (feedback: StoredProductFeedback) => void;
   readonly turnstile?: {
     readonly siteKey: string;
     readonly verify: (token: string, remoteIp: string) => Promise<boolean>;
@@ -362,6 +363,20 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
           reason: "duplicate",
           message: "This feedback was already received.",
         });
+      }
+      try {
+        options.onAccepted?.({
+          feedbackId,
+          receivedAt,
+          expiresAt,
+          installHash,
+          coarseIpHash,
+          contentHash,
+          submission: safeSubmission,
+        });
+      } catch {
+        // Storage is the acceptance boundary. A background delivery scheduler
+        // cannot turn a durable receipt into a failed browser submission.
       }
       return receipt({ feedbackId, receivedAt });
     } catch {
