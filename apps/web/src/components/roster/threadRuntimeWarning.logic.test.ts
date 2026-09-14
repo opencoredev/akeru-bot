@@ -18,12 +18,13 @@ const runningTurn: OrchestrationLatestTurn = {
   completedAt: null,
   assistantMessageId: null,
 };
+const warningPayload = { message: "Claude is paused until the usage window resets." };
 const warning: OrchestrationThreadActivity = {
   id: EventId.make("warning-current"),
   tone: "info",
   kind: "runtime.warning",
   summary: "Usage limit reached",
-  payload: { message: "Claude is paused until the usage window resets." },
+  payload: warningPayload,
   turnId,
   createdAt: timestamp,
 };
@@ -55,5 +56,52 @@ describe("activeThreadRuntimeWarning", () => {
         turnId: TurnId.make("turn-recovered"),
       }),
     ).toBeNull();
+  });
+
+  it("clears a recovered warning while the turn remains running", () => {
+    expect(
+      activeThreadRuntimeWarning(
+        [
+          { ...warning, payload: { ...warningPayload, key: "claude.rate-limit:five_hour" } },
+          {
+            ...warning,
+            id: EventId.make("warning-recovered"),
+            summary: "Claude usage limit recovered. Processing resumed.",
+            payload: {
+              message: "Claude usage limit recovered. Processing resumed.",
+              key: "claude.rate-limit:five_hour",
+              resolved: true,
+            },
+          },
+        ],
+        runningTurn,
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps another keyed warning visible after one warning recovers", () => {
+    expect(
+      activeThreadRuntimeWarning(
+        [
+          { ...warning, payload: { ...warningPayload, key: "claude.rate-limit:seven_day" } },
+          {
+            ...warning,
+            id: EventId.make("warning-five-hour"),
+            payload: { ...warningPayload, key: "claude.rate-limit:five_hour" },
+          },
+          {
+            ...warning,
+            id: EventId.make("warning-five-hour-recovered"),
+            summary: "Claude usage limit recovered. Processing resumed.",
+            payload: {
+              message: "Claude usage limit recovered. Processing resumed.",
+              key: "claude.rate-limit:five_hour",
+              resolved: true,
+            },
+          },
+        ],
+        runningTurn,
+      ),
+    ).toBe("Claude is paused until the usage window resets.");
   });
 });

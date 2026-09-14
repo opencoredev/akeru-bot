@@ -2180,6 +2180,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     context: ClaudeSessionContext,
     message: string,
     detail?: unknown,
+    lifecycle?: { readonly key: string; readonly resolved?: boolean },
   ) {
     const turnState = context.turnState;
     const stamp = yield* makeEventStamp();
@@ -2193,6 +2194,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       payload: {
         message,
         ...(detail !== undefined ? { detail } : {}),
+        ...(lifecycle ? { key: lifecycle.key } : {}),
+        ...(lifecycle?.resolved === true ? { resolved: true } : {}),
       },
       providerRefs: nativeProviderRefs(context),
     });
@@ -3694,6 +3697,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const blocked = rateLimitInfo.status === "rejected" && !overageAllowed;
       const limitType = rateLimitInfo.rateLimitType ?? "unknown";
       const limitKey = `${limitType}:${rateLimitInfo.resetsAt ?? "unknown"}`;
+      const warningKey = `claude.rate-limit:${limitType}`;
+      const recovered =
+        context.turnState?.rejectedRateLimitTypes.has(limitType) === true && !blocked;
       if (context.turnState) {
         // Current blocking evidence is independent of whether its warning has
         // already been shown. A recovery can omit or advance the reset time;
@@ -3715,8 +3721,15 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         if (!context.announcedUsageLimits.keys.has(limitKey)) {
           context.announcedUsageLimits.keys.add(limitKey);
           const notice = describeClaudeUsageLimit(rateLimitInfo, Date.parse(stamp.createdAt));
-          yield* emitRuntimeWarning(context, notice, rateLimitInfo);
+          yield* emitRuntimeWarning(context, notice, rateLimitInfo, { key: warningKey });
         }
+      } else if (recovered) {
+        yield* emitRuntimeWarning(
+          context,
+          "Claude usage limit recovered. Processing resumed.",
+          rateLimitInfo,
+          { key: warningKey, resolved: true },
+        );
       }
       return;
     }

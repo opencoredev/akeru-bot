@@ -2067,6 +2067,62 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("resolves a usage-limit warning when Claude reports recovery", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.takeUntil(
+          (event) => event.type === "runtime.warning" && event.payload.resolved === true,
+        ),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
+      harness.query.emit({
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "rejected",
+          rateLimitType: "five_hour",
+          resetsAt: 1_800_000_000,
+        },
+        session_id: "sdk-session-limit-recovery",
+        uuid: "rate-limit-rejected",
+      } as unknown as SDKMessage);
+      harness.query.emit({
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "allowed",
+          rateLimitType: "five_hour",
+          resetsAt: 1_800_000_000,
+        },
+        session_id: "sdk-session-limit-recovery",
+        uuid: "rate-limit-allowed",
+      } as unknown as SDKMessage);
+
+      const warnings = Array.from(yield* Fiber.join(runtimeEventsFiber)).filter(
+        (event) => event.type === "runtime.warning",
+      );
+      assert.equal(warnings.length, 2);
+      assert.equal(warnings[0]?.payload.key, "claude.rate-limit:five_hour");
+      assert.equal(warnings[0]?.payload.resolved, undefined);
+      assert.equal(warnings[1]?.payload.key, "claude.rate-limit:five_hour");
+      assert.equal(warnings[1]?.payload.resolved, true);
+      assert.equal(
+        warnings[1]?.payload.message,
+        "Claude usage limit recovered. Processing resumed.",
+      );
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   const usageLimitMessage =
     "Claude usage limit reached. Send the message again once the limit resets.";
   const genericApiErrorMessage = "Claude gave up after repeated API errors.";
