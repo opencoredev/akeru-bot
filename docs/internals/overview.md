@@ -73,11 +73,22 @@ processing is totally ordered. For each envelope `processEnvelope`:
 3. inside one SQL transaction, appends events to the event store, applies them to the in-memory read
    model via [`projector.ts`][projector], projects them into persisted tables, and writes the
    accepted receipt;
-4. after commit, swaps in the new read model and publishes committed events to subscribers.
+4. after commit, swaps in the new read model, cleans up attachments, and publishes committed events
+   to subscribers. Attachment cleanup failures are logged and do not reject committed commands.
 
 Because persistence and projection share a transaction, the read model cannot durably disagree with
 the event log. On dispatch failure the engine rereads persisted events past the starting sequence and
 reconciles.
+
+[`ProjectionSnapshotQuery.ts`][snapshot] is the persisted read model. Client thread snapshots load
+activity payloads in 25-row primary-key batches and project each batch before the next read. Shell
+summary refresh uses SQL aggregates for latest user-message time, pending approval count, and
+actionable-plan status, plus user-input lifecycle rows only. Provider command metadata paths use
+thread shells; turn start uses a single-message query. Runtime ingestion uses a joined thread
+context and keyed message, plan, and task-activity lookups instead of hydrating a full thread.
+`upsertMany` exists for projector cursors. Runtime `projectEvent` still commits each projector
+separately because attachment cleanup runs after each projector transaction. Combining those
+commits is shared with checkpoint attachment-transaction work and is not done here.
 
 Command and event names live in [`orchestration.ts`][contracts]. Some commands are client
 dispatchable (`thread.create`, `thread.turn.start`, `thread.approval.respond`); others are internal
@@ -107,8 +118,8 @@ build production behavior on receipts.
 Provider event logs in [`EventNdjsonLogger.ts`][event-log] drop canonical deltas and native
 streaming chunks (Codex item/realtime methods, Claude content-block deltas, ACP
 `agent_message_chunk`/`agent_thought_chunk`, OpenCode text/reasoning part updates) before
-serialization. ACP request diagnostics stay on by default; full protocol logging is opt-in and
-filters the same transient session updates. Async drain/close behavior for this file is owned
+serialization. ACP request diagnostics stay on by default; full protocol logging is opt-in through
+the Cursor and Grok provider settings and filters the same transient session updates. Async drain/close behavior for this file is owned
 separately by the desktop log-drain work and is not changed here.
 
 ## Provider drivers
@@ -149,6 +160,7 @@ already dispatch.
 [session]: ../../packages/client-runtime/src/rpc/session.ts
 [startup]: ../../apps/server/src/serverRuntimeStartup.ts
 [engine]: ../../apps/server/src/orchestration/Layers/OrchestrationEngine.ts
+[snapshot]: ../../apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts
 [decider]: ../../apps/server/src/orchestration/decider.ts
 [projector]: ../../apps/server/src/orchestration/projector.ts
 [worker]: ../../packages/shared/src/DrainableWorker.ts

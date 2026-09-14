@@ -1,4 +1,12 @@
-import type { ProviderInstanceConfig, ProviderInstanceEnvironment } from "@t3tools/contracts";
+import {
+  defaultInstanceIdForDriver,
+  type ProviderInstanceConfig,
+  type ProviderInstanceEnvironment,
+  ProviderDriverKind,
+  type ServerSettings,
+  type ServerSettingsPatch,
+  type SubscriptionProviderStatus,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 import { mergeProviderInstanceEnvironment } from "../provider/ProviderInstanceEnvironment.ts";
@@ -12,6 +20,38 @@ const explicitEnvironmentKeys = Symbol("subscriptionInstanceEnvironmentKeys");
 type SubscriptionEnvironment = NodeJS.ProcessEnv & {
   readonly [explicitEnvironmentKeys]?: ReadonlySet<string>;
 };
+
+const subscriptionProviderDrivers = [
+  ["codex", "openai-codex"],
+  ["claudeAgent", "anthropic"],
+  ["cursor", "cursor"],
+  ["grok", "xai"],
+  ["kimi", "kimi-for-coding"],
+  ["opencodeGo", "opencode-go"],
+] as const;
+
+/**
+ * Subscription connections own the enabled state of Akeru's default provider
+ * instances. Explicit instances keep their own switch because they may carry
+ * separate credentials or isolation settings.
+ */
+export function subscriptionProviderSettingsPatch(
+  settings: ServerSettings,
+  statuses: ReadonlyArray<SubscriptionProviderStatus>,
+): ServerSettingsPatch | null {
+  const connected = new Map(statuses.map((status) => [status.provider, status.connected]));
+  const providers: NonNullable<ServerSettingsPatch["providers"]> = {};
+
+  for (const [driver, subscriptionProvider] of subscriptionProviderDrivers) {
+    const driverKind = ProviderDriverKind.make(driver);
+    if (Object.hasOwn(settings.providerInstances, defaultInstanceIdForDriver(driverKind))) continue;
+    const enabled = connected.get(subscriptionProvider) ?? false;
+    if (settings.providers[driver].enabled === enabled) continue;
+    Object.assign(providers, { [driver]: { enabled } });
+  }
+
+  return Object.keys(providers).length > 0 ? { providers } : null;
+}
 
 /** The symbol survives environment spreads without becoming a child-process variable. */
 export function mergeSubscriptionInstanceEnvironment(

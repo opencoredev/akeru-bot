@@ -789,6 +789,8 @@ export type ToolReceiptPayload = typeof ToolReceiptPayload.Type;
 const RuntimeWarningPayload = Schema.Struct({
   message: TrimmedNonEmptyStringSchema,
   detail: Schema.optional(Schema.Unknown),
+  key: Schema.optional(TrimmedNonEmptyStringSchema),
+  resolved: Schema.optional(Schema.Boolean),
 });
 export type RuntimeWarningPayload = typeof RuntimeWarningPayload.Type;
 

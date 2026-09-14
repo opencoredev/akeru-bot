@@ -116,6 +116,7 @@ const makeGrokConfig = (overrides: Partial<GrokSettings>): GrokSettings => ({
   enabled: false,
   binaryPath: "grok",
   customModels: [],
+  verboseProtocolLogging: false,
   ...overrides,
 });
 
