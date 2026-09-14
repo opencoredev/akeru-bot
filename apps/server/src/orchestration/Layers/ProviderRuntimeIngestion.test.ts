@@ -3839,9 +3839,24 @@ describe("ProviderRuntimeIngestion", () => {
       turnId: asTurnId("turn-warning"),
       payload: {
         message: "Reconnecting... 2/5",
+        key: "provider.retry",
         detail: {
           willRetry: true,
         },
+      },
+    });
+
+    harness.emit({
+      type: "runtime.warning",
+      eventId: asEventId("evt-warning-resolved"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-warning"),
+      payload: {
+        message: "Reconnected.",
+        key: "provider.retry",
+        resolved: true,
       },
     });
 
@@ -3853,11 +3868,20 @@ describe("ProviderRuntimeIngestion", () => {
         entry.activities.some(
           (activity: ProviderRuntimeTestActivity) =>
             activity.id === "evt-warning-runtime" && activity.kind === "runtime.warning",
-        ),
+        ) &&
+        entry.activities.some((activity) => activity.id === "evt-warning-resolved"),
     );
     expect(thread.session?.status).toBe("running");
     expect(thread.session?.activeTurnId).toBe("turn-warning");
     expect(thread.session?.lastError).toBeNull();
+    const resolvedActivity = thread.activities.find(
+      (activity) => activity.id === "evt-warning-resolved",
+    );
+    expect(resolvedActivity?.payload).toMatchObject({
+      key: "provider.retry",
+      message: "Reconnected.",
+      resolved: true,
+    });
   });
 
   it("maps session/thread lifecycle and item.started into session/activity projections", async () => {

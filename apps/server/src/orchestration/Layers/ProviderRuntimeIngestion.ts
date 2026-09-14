@@ -492,6 +492,8 @@ export function runtimeEventToActivities(
           payload: {
             message: truncateDetail(event.payload.message),
             ...(event.payload.detail !== undefined ? { detail: event.payload.detail } : {}),
+            ...(event.payload.key !== undefined ? { key: event.payload.key } : {}),
+            ...(event.payload.resolved !== undefined ? { resolved: event.payload.resolved } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
