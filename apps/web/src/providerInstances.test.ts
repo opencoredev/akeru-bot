@@ -129,18 +129,31 @@ describe("isProviderInstancePickerSelectable", () => {
 });
 
 describe("isProviderInstancePickerVisible", () => {
-  it("keeps enabled instances in the rail and removes disabled instances", () => {
-    const [enabledEntry, disabledEntry] = deriveProviderInstanceEntries([
-      provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
-      provider({
-        provider: ProviderDriverKind.make("claudeAgent"),
-        instanceId: "claudeAgent",
-        enabled: false,
-      }),
-    ]);
+  it("keeps selectable instances in the rail and removes inactive instances", () => {
+    const [enabledEntry, disabledEntry, missingEntry, signedOutEntry] =
+      deriveProviderInstanceEntries([
+        provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
+        provider({
+          provider: ProviderDriverKind.make("claudeAgent"),
+          instanceId: "claudeAgent",
+          enabled: false,
+        }),
+        provider({
+          provider: ProviderDriverKind.make("kimi"),
+          instanceId: "kimi",
+          installed: false,
+        }),
+        provider({
+          provider: ProviderDriverKind.make("opencodeGo"),
+          instanceId: "opencodeGo",
+          authStatus: "unauthenticated",
+        }),
+      ]);
 
     expect(enabledEntry && isProviderInstancePickerVisible(enabledEntry)).toBe(true);
     expect(disabledEntry && isProviderInstancePickerVisible(disabledEntry)).toBe(false);
+    expect(missingEntry && isProviderInstancePickerVisible(missingEntry)).toBe(false);
+    expect(signedOutEntry && isProviderInstancePickerVisible(signedOutEntry)).toBe(false);
   });
 });
 

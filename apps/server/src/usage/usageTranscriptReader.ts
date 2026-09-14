@@ -38,10 +38,22 @@ export interface TranscriptFile {
  * removed while the walk is in flight, and a partial listing is far better than
  * failing the page.
  */
-export async function listTranscriptFiles(
+const walks = new Map<string, Promise<readonly TranscriptFile[]>>();
+const reads = new Map<string, Promise<readonly UsageRecord[] | null>>();
+
+export function listTranscriptFiles(
   root: string,
   sinceMs: number,
 ): Promise<readonly TranscriptFile[]> {
+  let walk = walks.get(root);
+  if (!walk) {
+    walk = walkTranscriptFiles(root).finally(() => walks.delete(root));
+    walks.set(root, walk);
+  }
+  return walk.then((files) => files.filter((file) => file.mtimeMs >= sinceMs));
+}
+
+async function walkTranscriptFiles(root: string): Promise<readonly TranscriptFile[]> {
   const found: TranscriptFile[] = [];
 
   const walk = async (dir: string): Promise<void> => {
@@ -60,9 +72,7 @@ export async function listTranscriptFiles(
       if (!entry.name.endsWith(".jsonl")) continue;
       try {
         const stats = await NodeFSP.stat(child);
-        if (stats.mtimeMs >= sinceMs) {
-          found.push({ path: child, size: stats.size, mtimeMs: stats.mtimeMs });
-        }
+        found.push({ path: child, size: stats.size, mtimeMs: stats.mtimeMs });
       } catch {
         // Vanished between readdir and stat.
       }
@@ -102,7 +112,21 @@ export async function readDirectoryVolumeId(path: string): Promise<string> {
  * their own, so those still have to pass through the reducer to keep model
  * attribution correct.
  */
-export async function readTranscriptRecords(
+export function readTranscriptRecords(
+  filePath: string,
+  provider: UsageProviderKind,
+  version?: Pick<TranscriptFile, "size" | "mtimeMs">,
+): Promise<readonly UsageRecord[] | null> {
+  const key = JSON.stringify([filePath, provider, version?.size, version?.mtimeMs]);
+  let read = reads.get(key);
+  if (!read) {
+    read = scanTranscriptRecords(filePath, provider).finally(() => reads.delete(key));
+    reads.set(key, read);
+  }
+  return read;
+}
+
+async function scanTranscriptRecords(
   filePath: string,
   provider: UsageProviderKind,
 ): Promise<readonly UsageRecord[] | null> {
