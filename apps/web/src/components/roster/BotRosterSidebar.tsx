@@ -6,7 +6,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
@@ -1002,7 +1002,7 @@ export default function BotRosterSidebar() {
     <>
       <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
       <SidebarContent
-        className="gap-0"
+        className="gap-0 [overflow-anchor:none]"
         fixedHeader={
           <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
             <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
@@ -1078,11 +1078,7 @@ export default function BotRosterSidebar() {
               <DndContext
                 sensors={dndSensors}
                 collisionDetection={dndCollisionDetection}
-                modifiers={[
-                  restrictToVerticalAxis,
-                  restrictBelowPins,
-                  restrictToFirstScrollableAncestor,
-                ]}
+                modifiers={[restrictBelowPins, restrictToFirstScrollableAncestor]}
                 onDragStart={handleRosterDragStart}
                 onDragOver={handleRosterDragOver}
                 onDragEnd={handleRosterDragEnd}

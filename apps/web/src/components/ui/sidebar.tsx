@@ -713,10 +713,8 @@ function SidebarContent({
       {fixedHeader ? <div className="w-full shrink-0">{fixedHeader}</div> : null}
       <ScrollArea hideScrollbars scrollFade className="h-auto min-h-0 flex-1">
         <div
-          // Moving a pinned row between roster zones must not make the browser
-          // follow that row and jump the scroll viewport to its new position.
           className={cn(
-            "flex w-full min-w-0 flex-col gap-2 [overflow-anchor:none] group-data-[collapsible=icon]:overflow-hidden",
+            "flex w-full min-w-0 flex-col gap-2 group-data-[collapsible=icon]:overflow-hidden",
             className,
           )}
           data-sidebar="content"

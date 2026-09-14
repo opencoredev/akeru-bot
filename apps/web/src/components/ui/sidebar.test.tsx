@@ -68,7 +68,7 @@ describe("sidebar interactive cursors", () => {
     expect(html).toContain("motion-reduce:transition-none");
   });
 
-  it("does not let reordered roster rows move the scroll viewport", () => {
+  it("preserves browser scroll anchoring for shared sidebar lists", () => {
     const html = renderToStaticMarkup(
       <SidebarProvider>
         <Sidebar>
@@ -77,7 +77,7 @@ describe("sidebar interactive cursors", () => {
       </SidebarProvider>,
     );
 
-    expect(html).toContain("[overflow-anchor:none]");
+    expect(html).not.toContain("[overflow-anchor:none]");
   });
 
   it("uses shared geometry and icon constraints for menu buttons by default", () => {

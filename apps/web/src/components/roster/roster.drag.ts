@@ -1,6 +1,7 @@
 import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
 import {
   defaultAnimateLayoutChanges,
+  rectSortingStrategy,
   verticalListSortingStrategy,
   type AnimateLayoutChanges,
   type SortingStrategy,
@@ -364,6 +365,16 @@ export function createRosterSortingStrategy(input: {
   }
 
   return (args) => {
+    const active = items[args.activeIndex];
+    const over = items[args.overIndex];
+    if (
+      active?.kind === "entry" &&
+      active.zone === "pinned" &&
+      over?.kind === "entry" &&
+      over.zone === "pinned"
+    ) {
+      return rectSortingStrategy(args);
+    }
     if (
       previous?.rects !== args.rects ||
       previous.activeIndex !== args.activeIndex ||

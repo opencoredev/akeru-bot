@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import { closestCenter, type CollisionDetection } from "@dnd-kit/core";
-import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sortable";
+import {
+  rectSortingStrategy,
+  verticalListSortingStrategy,
+  type SortingStrategy,
+} from "@dnd-kit/sortable";
 
 import { createRosterCollisionDetection, createRosterSortingStrategy } from "./roster.drag";
 import {
@@ -132,6 +136,33 @@ describe("roster collision detection", () => {
 });
 
 describe("roster drag projection", () => {
+  it("uses two-dimensional projection when reordering wrapped pinned cards", () => {
+    const cedar: RosterItemRef = { kind: "bot", id: "cedar" };
+    const items = buildRosterListItems({
+      pinnedItems: [akeru, mori, cedar],
+      sections: [],
+      unassignedItems: [],
+    });
+    const args = layout(items, rosterEntryId(akeru), rosterEntryId(mori));
+    const pinnedIndexes = items.flatMap((item, index) =>
+      item.kind === "entry" && item.zone === "pinned" ? [index] : [],
+    );
+    const [first, second, third] = pinnedIndexes;
+    if (first === undefined || second === undefined || third === undefined) {
+      throw new Error("expected three pinned entries");
+    }
+    args.rects[first] = { top: 100, bottom: 172, left: 0, right: 72, width: 72, height: 72 };
+    args.rects[second] = { top: 100, bottom: 172, left: 76, right: 148, width: 72, height: 72 };
+    args.rects[third] = { top: 176, bottom: 248, left: 0, right: 72, width: 72, height: 72 };
+    args.activeNodeRect = args.rects[first];
+
+    const strategy = createRosterSortingStrategy({ items });
+    expect(strategy({ ...args, index: second })).toEqual(
+      rectSortingStrategy({ ...args, index: second }),
+    );
+    expect(strategy({ ...args, index: second })?.x).not.toBe(0);
+  });
+
   it("opens Pins label space while dragging an unassigned bot to the header", () => {
     const items = buildRosterListItems({
       pinnedItems: [],
