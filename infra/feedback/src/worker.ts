@@ -1,4 +1,4 @@
-// @effect-diagnostics globalFetch:off globalDate:off
+// @effect-diagnostics globalConsole:off globalFetch:off globalDate:off
 import { StoredProductFeedbackSubmission } from "@t3tools/contracts";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
@@ -25,6 +25,7 @@ interface FeedbackRow {
   readonly content_hash: string;
   readonly payload_json: string;
   readonly github_delivery_attempts?: number;
+  readonly github_delivery_claim_id?: string;
 }
 
 const TurnstileResponse = Schema.Struct({ success: Schema.Boolean });
@@ -71,8 +72,8 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
       const result = await database
         .prepare(
           `INSERT INTO akeru_feedback_inbox
-            (feedback_id, received_at, expires_at, install_hash, coarse_ip_hash, content_hash, payload_json)
-           SELECT ?, ?, ?, ?, ?, ?, ?
+            (feedback_id, received_at, expires_at, install_hash, coarse_ip_hash, content_hash, payload_json, github_delivery_eligible)
+           SELECT ?, ?, ?, ?, ?, ?, ?, 1
            WHERE (SELECT COUNT(*) FROM akeru_feedback_inbox
                   WHERE coarse_ip_hash = ? AND received_at >= ?) < ?
              AND NOT EXISTS (SELECT 1 FROM akeru_feedback_inbox
@@ -139,7 +140,9 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
     },
     deleteExpired: async (now) => {
       await database
-        .prepare("DELETE FROM akeru_feedback_inbox WHERE expires_at <= ?")
+        .prepare(
+          "DELETE FROM akeru_feedback_inbox WHERE expires_at <= ? AND github_issue_status <> 'unknown'",
+        )
         .bind(now)
         .run();
     },
@@ -151,6 +154,7 @@ function deliveryRecord(row: FeedbackRow) {
   if (Exit.isFailure(decoded)) throw new Error("Stored feedback payload is invalid.");
   return {
     feedbackId: row.feedback_id,
+    claimId: row.github_delivery_claim_id ?? "",
     receivedAt: row.received_at,
     deliveryAttempts: row.github_delivery_attempts ?? 0,
     submission: decoded.value,
@@ -159,22 +163,25 @@ function deliveryRecord(row: FeedbackRow) {
 
 export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): FeedbackDeliveryOutbox {
   return {
-    claim: async (feedbackId, now, leaseExpiresAt) => {
+    claim: async (feedbackId, claimId, now, leaseExpiresAt) => {
       const result = await database
         .prepare(
           `UPDATE akeru_feedback_inbox
            SET github_issue_status = 'delivering',
                github_delivery_attempts = github_delivery_attempts + 1,
+               github_delivery_claim_id = ?,
                github_lease_expires_at = ?,
                github_next_attempt_at = NULL,
                github_last_error_code = NULL
            WHERE feedback_id = ?
+             AND github_delivery_eligible = 1
+             AND expires_at > ?
              AND (github_issue_status = 'pending'
                OR (github_issue_status = 'failed'
                    AND (github_next_attempt_at IS NULL OR github_next_attempt_at <= ?))
                OR (github_issue_status = 'delivering' AND github_lease_expires_at <= ?))`,
         )
-        .bind(leaseExpiresAt, feedbackId, now, now)
+        .bind(claimId, leaseExpiresAt, feedbackId, now, now, now)
         .run();
       if (result.meta.changes !== 1) return null;
       const row = await database
@@ -187,18 +194,20 @@ export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): Feedba
       const result = await database
         .prepare(
           `SELECT feedback_id FROM akeru_feedback_inbox
-           WHERE github_issue_status = 'pending'
-              OR (github_issue_status = 'failed'
-                  AND (github_next_attempt_at IS NULL OR github_next_attempt_at <= ?))
-              OR (github_issue_status = 'delivering' AND github_lease_expires_at <= ?)
+           WHERE github_delivery_eligible = 1
+             AND expires_at > ?
+             AND (github_issue_status = 'pending'
+               OR (github_issue_status = 'failed'
+                   AND (github_next_attempt_at IS NULL OR github_next_attempt_at <= ?))
+               OR (github_issue_status = 'delivering' AND github_lease_expires_at <= ?))
            ORDER BY received_at ASC
            LIMIT ?`,
         )
-        .bind(now, now, limit)
+        .bind(now, now, now, limit)
         .all<{ feedback_id: string }>();
       return result.results.map((row) => row.feedback_id);
     },
-    markDelivered: async (feedbackId, issueNumber, issueUrl) => {
+    markDelivered: async (feedbackId, claimId, issueNumber, issueUrl) => {
       await database
         .prepare(
           `UPDATE akeru_feedback_inbox
@@ -207,37 +216,54 @@ export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): Feedba
                github_issue_url = ?,
                github_next_attempt_at = NULL,
                github_lease_expires_at = NULL,
+               github_delivery_claim_id = NULL,
                github_last_error_code = NULL
-           WHERE feedback_id = ? AND github_issue_status = 'delivering'`,
+           WHERE feedback_id = ?
+             AND github_issue_status = 'delivering'
+             AND github_delivery_claim_id = ?`,
         )
-        .bind(issueNumber, issueUrl, feedbackId)
+        .bind(issueNumber, issueUrl, feedbackId, claimId)
         .run();
     },
-    markFailed: async (feedbackId, nextAttemptAt, errorCode) => {
+    markFailed: async (feedbackId, claimId, nextAttemptAt, errorCode) => {
       await database
         .prepare(
           `UPDATE akeru_feedback_inbox
            SET github_issue_status = 'failed',
                github_next_attempt_at = ?,
                github_lease_expires_at = NULL,
+               github_delivery_claim_id = NULL,
                github_last_error_code = ?
-           WHERE feedback_id = ? AND github_issue_status = 'delivering'`,
+           WHERE feedback_id = ?
+             AND github_issue_status = 'delivering'
+             AND github_delivery_claim_id = ?`,
         )
-        .bind(nextAttemptAt, errorCode, feedbackId)
+        .bind(nextAttemptAt, errorCode, feedbackId, claimId)
         .run();
     },
-    markUnknown: async (feedbackId, errorCode) => {
+    markUnknown: async (feedbackId, claimId, errorCode) => {
       await database
         .prepare(
           `UPDATE akeru_feedback_inbox
            SET github_issue_status = 'unknown',
                github_next_attempt_at = NULL,
                github_lease_expires_at = NULL,
+               github_delivery_claim_id = NULL,
                github_last_error_code = ?
-           WHERE feedback_id = ? AND github_issue_status = 'delivering'`,
+           WHERE feedback_id = ?
+             AND github_issue_status = 'delivering'
+             AND github_delivery_claim_id = ?`,
         )
-        .bind(errorCode, feedbackId)
+        .bind(errorCode, feedbackId, claimId)
         .run();
+    },
+    countUnknown: async () => {
+      const row = await database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM akeru_feedback_inbox WHERE github_issue_status = 'unknown'",
+        )
+        .first<{ count: number }>();
+      return row?.count ?? 0;
     },
   };
 }
@@ -331,10 +357,18 @@ export default {
     env: FeedbackWorkerEnv,
     _context: ExecutionContext,
   ): Promise<void> {
+    const now = new Date().toISOString();
+    await makeRepository(env.DB).deleteExpired(now);
     const destination = githubDestination(env);
     if (destination) {
-      await drainFeedbackToGitHub({ destination, outbox: makeGitHubIssueOutbox(env.DB) });
+      const outbox = makeGitHubIssueOutbox(env.DB);
+      await drainFeedbackToGitHub({ destination, outbox });
+      const unknownCount = await outbox.countUnknown();
+      if (unknownCount > 0) {
+        console.error(
+          JSON.stringify({ event: "feedback.github_delivery_unknown_outstanding", unknownCount }),
+        );
+      }
     }
-    await makeRepository(env.DB).deleteExpired(new Date().toISOString());
   },
 };

@@ -1,10 +1,11 @@
-// @effect-diagnostics globalDate:off
+// @effect-diagnostics cryptoRandomUUID:off globalConsole:off globalDate:off
 import type { StoredProductFeedbackSubmission } from "@t3tools/contracts";
 import * as NodeBuffer from "node:buffer";
 import * as NodeCrypto from "node:crypto";
 
 export interface FeedbackDeliveryRecord {
   readonly feedbackId: string;
+  readonly claimId: string;
   readonly receivedAt: string;
   readonly deliveryAttempts: number;
   readonly submission: StoredProductFeedbackSubmission;
@@ -13,21 +14,25 @@ export interface FeedbackDeliveryRecord {
 export interface FeedbackDeliveryOutbox {
   readonly claim: (
     feedbackId: string,
+    claimId: string,
     now: string,
     leaseExpiresAt: string,
   ) => Promise<FeedbackDeliveryRecord | null>;
   readonly listEligible: (now: string, limit: number) => Promise<readonly string[]>;
   readonly markDelivered: (
     feedbackId: string,
+    claimId: string,
     issueNumber: number,
     issueUrl: string,
   ) => Promise<void>;
   readonly markFailed: (
     feedbackId: string,
+    claimId: string,
     nextAttemptAt: string,
     errorCode: string,
   ) => Promise<void>;
-  readonly markUnknown: (feedbackId: string, errorCode: string) => Promise<void>;
+  readonly markUnknown: (feedbackId: string, claimId: string, errorCode: string) => Promise<void>;
+  readonly countUnknown: () => Promise<number>;
 }
 
 export interface GitHubIssueDestination {
@@ -54,6 +59,7 @@ interface GitHubIssueUnknown {
 }
 
 const DELIVERY_LEASE_MILLISECONDS = 60_000;
+const GITHUB_REQUEST_TIMEOUT_MILLISECONDS = 20_000;
 const MAX_DELIVERY_BATCH = 10;
 const MAX_RETRY_DELAY_MILLISECONDS = 86_400_000;
 const GITHUB_API_VERSION = "2026-03-10";
@@ -158,6 +164,7 @@ async function createInstallationToken(
       {
         method: "POST",
         headers: githubHeaders(jwt),
+        signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MILLISECONDS),
         body: JSON.stringify({
           repositories: [repositoryName],
           permissions: { issues: "write" },
@@ -207,6 +214,7 @@ async function createGitHubIssue(
     issueResponse = await request(`${repositoryUrl}/issues`, {
       method: "POST",
       headers: githubHeaders(token),
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MILLISECONDS),
       body: JSON.stringify(formatGitHubIssue(record)),
     });
   } catch {
@@ -246,10 +254,13 @@ export async function deliverFeedbackToGitHub(options: {
   readonly now?: () => Date;
   readonly request?: typeof fetch;
   readonly signJwt?: typeof createGitHubAppJwt;
+  readonly claimId?: () => string;
 }): Promise<void> {
   const current = (options.now ?? (() => new Date()))();
+  const claimId = (options.claimId ?? (() => crypto.randomUUID()))();
   const record = await options.outbox.claim(
     options.feedbackId,
+    claimId,
     current.toISOString(),
     new Date(current.getTime() + DELIVERY_LEASE_MILLISECONDS).toISOString(),
   );
@@ -263,6 +274,7 @@ export async function deliverFeedbackToGitHub(options: {
   if (authenticated.kind === "failed") {
     await options.outbox.markFailed(
       record.feedbackId,
+      record.claimId,
       retryAt(current, record.deliveryAttempts),
       authenticated.errorCode,
     );
@@ -277,16 +289,29 @@ export async function deliverFeedbackToGitHub(options: {
   if (result.kind === "failed") {
     await options.outbox.markFailed(
       record.feedbackId,
+      record.claimId,
       retryAt(current, record.deliveryAttempts),
       result.errorCode,
     );
     return;
   }
   if (result.kind === "unknown") {
-    await options.outbox.markUnknown(record.feedbackId, result.errorCode);
+    await options.outbox.markUnknown(record.feedbackId, record.claimId, result.errorCode);
+    console.error(
+      JSON.stringify({
+        event: "feedback.github_delivery_unknown",
+        feedbackId: record.feedbackId,
+        errorCode: result.errorCode,
+      }),
+    );
     return;
   }
-  await options.outbox.markDelivered(record.feedbackId, result.number, result.htmlUrl);
+  await options.outbox.markDelivered(
+    record.feedbackId,
+    record.claimId,
+    result.number,
+    result.htmlUrl,
+  );
 }
 
 export async function drainFeedbackToGitHub(options: {

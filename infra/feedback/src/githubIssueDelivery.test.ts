@@ -13,6 +13,7 @@ import {
 
 const record: FeedbackDeliveryRecord = {
   feedbackId: "fb_example",
+  claimId: "claim-example",
   receivedAt: "2026-09-14T12:00:00.000Z",
   deliveryAttempts: 1,
   submission: {
@@ -34,6 +35,7 @@ function outbox(overrides: Partial<FeedbackDeliveryOutbox> = {}): FeedbackDelive
     markDelivered: vi.fn(async () => undefined),
     markFailed: vi.fn(async () => undefined),
     markUnknown: vi.fn(async () => undefined),
+    countUnknown: vi.fn(async () => 0),
     ...overrides,
   };
 }
@@ -105,17 +107,27 @@ describe("GitHub feedback delivery", () => {
       outbox: store,
       request,
       signJwt,
+      claimId: () => record.claimId,
     });
 
     expect(request).toHaveBeenCalledTimes(2);
+    expect(store.claim).toHaveBeenCalledWith(
+      "fb_example",
+      "claim-example",
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    );
     expect(request.mock.calls[0]?.[0]).toBe(
       "https://api.github.com/app/installations/67890/access_tokens",
     );
     expect(request.mock.calls[1]?.[0]).toBe(
       "https://api.github.com/repos/opencoredev/akeru-bot/issues",
     );
+    expect(request.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(request.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(store.markDelivered).toHaveBeenCalledWith(
       "fb_example",
+      "claim-example",
       42,
       "https://github.com/opencoredev/akeru-bot/issues/42",
     );
@@ -134,12 +146,14 @@ describe("GitHub feedback delivery", () => {
       outbox: store,
       request,
       signJwt,
+      claimId: () => record.claimId,
       now: () => new Date("2026-09-14T12:00:00.000Z"),
     });
 
     expect(request).toHaveBeenCalledTimes(2);
     expect(store.markFailed).toHaveBeenCalledWith(
       "fb_example",
+      "claim-example",
       "2026-09-14T12:05:00.000Z",
       "issue_http_503",
     );
@@ -148,6 +162,7 @@ describe("GitHub feedback delivery", () => {
 
   it("flags an ambiguous issue-creation failure without retrying into a duplicate", async () => {
     const store = outbox();
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(installationTokenResponse())
@@ -159,9 +174,21 @@ describe("GitHub feedback delivery", () => {
       outbox: store,
       request,
       signJwt,
+      claimId: () => record.claimId,
     });
 
-    expect(store.markUnknown).toHaveBeenCalledWith("fb_example", "issue_network_error");
+    expect(store.markUnknown).toHaveBeenCalledWith(
+      "fb_example",
+      "claim-example",
+      "issue_network_error",
+    );
+    expect(log).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: "feedback.github_delivery_unknown",
+        feedbackId: "fb_example",
+        errorCode: "issue_network_error",
+      }),
+    );
     expect(store.markFailed).not.toHaveBeenCalled();
   });
 
@@ -175,11 +202,13 @@ describe("GitHub feedback delivery", () => {
       outbox: store,
       request,
       signJwt,
+      claimId: () => record.claimId,
       now: () => new Date("2026-09-14T12:00:00.000Z"),
     });
 
     expect(store.markFailed).toHaveBeenCalledWith(
       "fb_example",
+      "claim-example",
       "2026-09-14T12:05:00.000Z",
       "installation_token_http_503",
     );

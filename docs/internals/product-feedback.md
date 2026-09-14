@@ -34,7 +34,11 @@ The client keeps its installation token for 30 days. A successful send does not 
 
 D1 stores only the HMAC identifiers and the bounded safe payload. It does not store the raw installation token, raw IP, Turnstile token, or honeypot. A daily cron removes rows after 90 days. Submission returns a generated feedback ID and receipt time.
 
-The D1 row is also a delivery outbox. After returning the durable receipt, the Worker schedules GitHub delivery with `waitUntil`; the daily cron drains pending and confirmed-failed rows. HTTP failures retry with bounded exponential backoff. A network or runtime failure after the GitHub request begins is marked `unknown` for manual inspection because retrying an ambiguous create could duplicate the issue.
+The D1 row is also a delivery outbox. New submissions are explicitly marked eligible for public delivery; migrated rows default to ineligible so feedback accepted before the public-GitHub disclosure cannot be published retroactively. After returning the durable receipt, the Worker schedules GitHub delivery with `waitUntil`; the daily cron deletes expired non-quarantined rows before draining unexpired pending and confirmed-failed rows. HTTP failures retry with bounded exponential backoff. Each attempt has a unique claim ID, and both GitHub requests have deadlines shorter than the delivery lease, preventing a stale attempt from overwriting a newer result.
+
+A network or runtime failure after GitHub issue creation begins is marked `unknown` because retrying an ambiguous create could duplicate the issue. Unknown rows are quarantined from ordinary retention. The transition and every scheduled run with outstanding unknown rows emit structured `feedback.github_delivery_unknown` or `feedback.github_delivery_unknown_outstanding` errors to Worker logs.
+
+To reconcile an unknown row, query `feedback_id`, `received_at`, `github_last_error_code`, and `payload_json` from `akeru_feedback_inbox WHERE github_issue_status = 'unknown'` with authenticated Wrangler D1 tooling. Search all repository issues for the feedback ID. If an issue exists, set the row to `delivered` with its issue number and URL; if none exists, set it to `failed` with `github_next_attempt_at` set to the current ISO timestamp so the next drain retries. Never retry before checking GitHub.
 
 The Cloudflare deployment trusts only `CF-Connecting-IP`. A self-host adapter must pass the socket address from a trusted proxy. It must not trust an arbitrary `X-Forwarded-For` header.
 
