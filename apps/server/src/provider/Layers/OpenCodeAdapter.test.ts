@@ -2019,4 +2019,149 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       yield* adapter.stopSession(threadId);
     }),
   );
+
+  it.effect("applies late assistant metadata without scanning historical tool parts", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-text-index");
+      const sessionID = "http://127.0.0.1:9999/session";
+      const toolEvents = Array.from({ length: 24 }, (_, index) => ({
+        type: "message.part.updated",
+        properties: {
+          sessionID,
+          part: {
+            id: `tool-${index}`,
+            messageID: "msg-tools",
+            type: "tool",
+            tool: "bash",
+            callID: `call-${index}`,
+            state: {
+              status: "completed",
+              output: "x".repeat(1024),
+              time: { start: 1, end: 2 },
+            },
+          },
+        },
+      }));
+      runtimeMock.state.subscribedEvents = [
+        ...toolEvents,
+        {
+          type: "message.part.updated",
+          properties: {
+            sessionID,
+            part: {
+              id: "text-1",
+              messageID: "msg-assistant",
+              type: "text",
+              text: "Hello",
+              time: { start: 1 },
+            },
+          },
+        },
+        {
+          type: "message.updated",
+          properties: {
+            sessionID,
+            info: { id: "msg-assistant", role: "assistant" },
+          },
+        },
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "content.delta"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      const delta = Option.getOrThrow(
+        yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")),
+      );
+      NodeAssert.equal(delta.type, "content.delta");
+      if (delta.type === "content.delta") {
+        NodeAssert.equal(delta.payload.delta, "Hello");
+      }
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("does not re-emit an individually removed text part", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-removed-text-part");
+      const sessionID = "http://127.0.0.1:9999/session";
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "message.updated",
+          properties: {
+            sessionID,
+            info: { id: "msg-assistant", role: "assistant" },
+          },
+        },
+        {
+          type: "message.part.updated",
+          properties: {
+            sessionID,
+            part: {
+              id: "removed-text-part",
+              messageID: "msg-assistant",
+              type: "text",
+              text: "stale text that was removed",
+              time: { start: 1 },
+            },
+          },
+        },
+        {
+          type: "message.part.removed",
+          properties: {
+            sessionID,
+            messageID: "msg-assistant",
+            partID: "removed-text-part",
+          },
+        },
+        {
+          type: "message.updated",
+          properties: {
+            sessionID,
+            info: { id: "msg-assistant", role: "assistant" },
+          },
+        },
+        {
+          type: "message.part.updated",
+          properties: {
+            sessionID,
+            part: {
+              id: "retained-text-part",
+              messageID: "msg-assistant",
+              type: "text",
+              text: "replacement text",
+              time: { start: 2 },
+            },
+          },
+        },
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "content.delta"),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      const deltas = Array.from(
+        yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")),
+      ).map((event) => (event.type === "content.delta" ? event.payload.delta : undefined));
+      NodeAssert.deepEqual(deltas, ["stale text that was removed", "replacement text"]);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
 });
