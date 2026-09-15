@@ -12,7 +12,7 @@ import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
 import { decideOrchestrationCommand } from "./decider.ts";
-import { createEmptyReadModel } from "./projector.ts";
+import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
 const NOW = "2026-09-15T12:00:00.000Z";
 const THREAD_ID = ThreadId.make("thread-resume");
@@ -99,6 +99,50 @@ it.layer(NodeServices.layer)("turn resume decider", (it) => {
 
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
       expect(error.message).toContain("does not have an interrupted request");
+    }),
+  );
+
+  it.effect("reserves the interrupted turn before another resume can be accepted", () =>
+    Effect.gen(function* () {
+      const readModel = makeReadModel(makeThread("error"));
+      const first = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.turn.resume",
+          commandId: CommandId.make("command-resume-first"),
+          threadId: THREAD_ID,
+          createdAt: NOW,
+        },
+        readModel,
+      });
+      if (!("type" in first) || first.type !== "thread.turn-resume-requested") {
+        return yield* Effect.die("Expected a resume request event");
+      }
+      const reserved = yield* projectEvent(readModel, {
+        sequence: 1,
+        eventId: first.eventId,
+        aggregateKind: first.aggregateKind,
+        aggregateId: first.aggregateId,
+        occurredAt: first.occurredAt,
+        commandId: first.commandId,
+        causationEventId: first.causationEventId,
+        correlationId: first.correlationId,
+        metadata: first.metadata,
+        type: "thread.turn-resume-requested",
+        payload: { threadId: THREAD_ID, createdAt: NOW },
+      });
+      expect(reserved.threads[0]?.session?.status).toBe("starting");
+
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.turn.resume",
+          commandId: CommandId.make("command-resume-second"),
+          threadId: THREAD_ID,
+          createdAt: NOW,
+        },
+        readModel: reserved,
+      }).pipe(Effect.flip);
+
+      expect(error.message).toContain("already active");
     }),
   );
 

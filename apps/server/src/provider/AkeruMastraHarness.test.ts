@@ -508,6 +508,36 @@ describe("AkeruMastraHarness", () => {
     );
   });
 
+  it("uses an isolated OpenCode Go inline connection", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-inline-opencode-auth.json");
+    const getCredential = vi.fn(() => ({
+      type: "api-key" as const,
+      access: "provider-wide-key",
+    }));
+    const environment = {
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        provider: {
+          "opencode-go": {
+            options: { apiKey: "inline-key", baseURL: "https://inline.example/v1" },
+          },
+        },
+      }),
+    };
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "opencode-go/gpt-5.6-luna",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+        { environment, instanceEnvironment: environment, useSavedCredential: false },
+      ),
+      { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
+    );
+    expect(getCredential).not.toHaveBeenCalled();
+  });
+
   it("builds a compact, human prompt with the bot name and current date", () => {
     const instructions = createAkeruAgentInstructions({
       name: "  Research\nBot  ",

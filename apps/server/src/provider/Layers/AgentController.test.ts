@@ -121,6 +121,40 @@ describe("mastraConnectionIssue", () => {
       "Connect",
     );
   });
+
+  it.each([
+    [ProviderDriverKind.make("codex"), { OPENAI_API_KEY: "ambient-key" }],
+    [ProviderDriverKind.make("claudeAgent"), { ANTHROPIC_API_KEY: "ambient-key" }],
+    [ProviderDriverKind.make("grok"), { XAI_API_KEY: "ambient-key" }],
+    [ProviderDriverKind.make("opencodeGo"), { OPENCODE_API_KEY: "ambient-key" }],
+  ] as const)("accepts ambient credentials for %s without a saved connection", (provider, env) => {
+    assert.isUndefined(
+      mastraConnectionIssue(
+        provider,
+        { environment: env, instanceEnvironment: {}, useSavedCredential: true },
+        false,
+      ),
+    );
+  });
+
+  it("accepts an isolated OpenCode Go inline credential", () => {
+    const environment = {
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        provider: {
+          "opencode-go": {
+            options: { apiKey: "inline-key", baseURL: "https://inline.example/v1" },
+          },
+        },
+      }),
+    };
+    assert.isUndefined(
+      mastraConnectionIssue(
+        ProviderDriverKind.make("opencodeGo"),
+        { environment, instanceEnvironment: environment, useSavedCredential: false },
+        false,
+      ),
+    );
+  });
 });
 
 function computerUseServer() {

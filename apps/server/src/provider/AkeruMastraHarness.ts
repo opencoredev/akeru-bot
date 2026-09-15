@@ -480,6 +480,32 @@ export function mastraModelId(provider: ProviderDriverKind, model: string): stri
   return trimmed.startsWith(token) ? trimmed : `${token}${trimmed}`;
 }
 
+export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | undefined): {
+  readonly apiKey?: string;
+  readonly baseUrl?: string;
+} {
+  const content = environment?.OPENCODE_CONFIG_CONTENT?.trim();
+  if (!content) return {};
+  try {
+    const parsed = JSON.parse(content) as {
+      readonly provider?: {
+        readonly "opencode-go"?: {
+          readonly options?: { readonly apiKey?: unknown; readonly baseURL?: unknown };
+        };
+      };
+    };
+    const options = parsed.provider?.["opencode-go"]?.options;
+    const apiKey = typeof options?.apiKey === "string" ? options.apiKey.trim() : "";
+    const baseUrl = typeof options?.baseURL === "string" ? options.baseURL.trim() : "";
+    return {
+      ...(apiKey ? { apiKey } : {}),
+      ...(baseUrl ? { baseUrl } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
@@ -583,7 +609,8 @@ export function resolveAkeruMastraModel(
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
   }
   if (trimmed.startsWith("opencode-go/")) {
-    const instanceApiKey = environment?.OPENCODE_API_KEY?.trim();
+    const inlineConnection = openCodeGoInlineConnection(environment);
+    const instanceApiKey = environment?.OPENCODE_API_KEY?.trim() || inlineConnection.apiKey;
     const resolveApiKey = instanceApiKey
       ? async () => instanceApiKey
       : useSavedCredential
@@ -595,6 +622,7 @@ export function resolveAkeruMastraModel(
       resolveApiKey,
       () =>
         environment?.OPENCODE_BASE_URL?.trim() ||
+        inlineConnection.baseUrl ||
         (useSavedCredential ? getSubscriptionApiKey?.("opencode-go")?.baseUrl : undefined),
     );
   }

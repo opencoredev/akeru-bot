@@ -85,6 +85,7 @@ import {
   createAkeruMastraHarness,
   criticalAkeruAction,
   mastraModelId,
+  openCodeGoInlineConnection,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
@@ -453,6 +454,25 @@ export function mastraConnectionIssue(
     ? connection.environment
     : connection.instanceEnvironment;
   if (connection.useSavedCredential) {
+    const hasAmbientCredential = (() => {
+      switch (String(provider)) {
+        case "codex":
+          return Boolean(env.OPENAI_API_KEY?.trim());
+        case "claudeAgent":
+          return Boolean(
+            env.ANTHROPIC_API_KEY?.trim() ||
+            env.ANTHROPIC_AUTH_TOKEN?.trim() ||
+            env.CLAUDE_CODE_OAUTH_TOKEN?.trim(),
+          );
+        case "grok":
+          return Boolean(env.XAI_API_KEY?.trim());
+        case "opencodeGo":
+          return Boolean(env.OPENCODE_API_KEY?.trim() || openCodeGoInlineConnection(env).apiKey);
+        default:
+          return false;
+      }
+    })();
+    if (hasAmbientCredential) return undefined;
     return savedCredentialConnected
       ? undefined
       : `Connect ${provider} in Settings before starting.`;
@@ -475,7 +495,7 @@ export function mastraConnectionIssue(
     case "kimi":
       return "Custom Kimi credentials are not supported by the Akeru harness.";
     case "opencodeGo":
-      return env.OPENCODE_API_KEY?.trim()
+      return env.OPENCODE_API_KEY?.trim() || openCodeGoInlineConnection(env).apiKey
         ? undefined
         : "This OpenCode Go instance needs OPENCODE_API_KEY for the Akeru harness.";
     default:
