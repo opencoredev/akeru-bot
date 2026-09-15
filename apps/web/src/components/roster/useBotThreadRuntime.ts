@@ -37,7 +37,6 @@ import {
   togglePendingUserInputOptionSelection,
 } from "../../pendingUserInput";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
-import { resolveBotRuntimeMode } from "./botSandbox";
 import {
   buildBotTurnStartInput,
   createBotTurnSubmissionQueue,
@@ -156,6 +155,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const resumeTurnCommand = useAtomCommand(threadEnvironment.resumeTurn, { reportFailure: false });
   const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
@@ -176,6 +176,30 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   >({});
   const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
+  const canResume =
+    linkedThreadRef !== null &&
+    (rememberedThread?.session?.status === "error" ||
+      rememberedThread?.session?.status === "interrupted" ||
+      rememberedThread?.session?.status === "stopped") &&
+    (rememberedThread?.latestTurn?.state === "error" ||
+      rememberedThread?.latestTurn?.state === "interrupted" ||
+      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+  const resume = useCallback(async (): Promise<boolean> => {
+    if (!linkedThreadRef || !canResume || resuming) return false;
+    setResuming(true);
+    setError(null);
+    const result = await resumeTurnCommand({
+      environmentId: linkedThreadRef.environmentId,
+      input: { threadId: linkedThreadRef.threadId },
+    });
+    setResuming(false);
+    if (result._tag === "Failure") {
+      setError(errorMessage(result));
+      return false;
+    }
+    return true;
+  }, [canResume, linkedThreadRef, resumeTurnCommand, resuming]);
   const submitPendingUserInput = useCallback(
     async (
       requestId: ApprovalRequestId,
@@ -224,7 +248,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
                 effectiveModelSelection ??
                 activeProject.defaultModelSelection ??
                 appDefaultModelSelection,
-              runtimeMode: resolveBotRuntimeMode(bot?.sandbox ?? null, settings.localExecutionMode),
+              runtimeMode: bot?.runtimeMode ?? settings.localExecutionMode,
               interactionMode: DEFAULT_INTERACTION_MODE,
               branch: null,
               worktreePath: null,
@@ -297,10 +321,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           effectiveModelSelection ??
           activeProject.defaultModelSelection ??
           appDefaultModelSelection;
-        const runtimeMode = resolveBotRuntimeMode(
-          bot?.sandbox ?? null,
-          settings.localExecutionMode,
-        );
+        const runtimeMode = bot?.runtimeMode ?? settings.localExecutionMode;
         const title = threadTitle(prompt, files);
 
         try {
@@ -505,6 +526,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     appendTranscript,
     bootstrapped,
     botReady,
+    canResume,
     defaultProject: activeProject,
     error: error ?? rememberedThread?.session?.lastError ?? null,
     linkedThreadRef,
@@ -514,6 +536,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     pendingUserInputAnswers,
     pendingUserInputQuestionIndex,
     respondingRequestIds,
+    resume,
+    resuming,
     selectPendingUserInputOption,
     advancePendingUserInput,
     send,

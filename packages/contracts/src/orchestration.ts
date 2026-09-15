@@ -1660,6 +1660,13 @@ export const ThreadTurnStartCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadTurnResumeCommand = Schema.Struct({
+  type: Schema.Literal("thread.turn.resume"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
 const ClientThreadTurnStartCommand = Schema.Struct({
   type: Schema.Literal("thread.turn.start"),
   commandId: CommandId,
@@ -1795,6 +1802,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
+  ThreadTurnResumeCommand,
   ThreadVoiceTranscriptAppendCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -1853,6 +1861,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
+  ThreadTurnResumeCommand,
   ThreadVoiceTranscriptAppendCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -2040,6 +2049,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.message-sent",
   "thread.message-reaction-set",
   "thread.turn-start-requested",
+  "thread.turn-resume-requested",
   "thread.turn-interrupt-requested",
   "thread.approval-response-requested",
   "thread.user-input-response-requested",
@@ -2384,6 +2394,11 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   timezone: Schema.optional(TrimmedNonEmptyString),
+  createdAt: IsoDateTime,
+});
+
+export const ThreadTurnResumeRequestedPayload = Schema.Struct({
+  threadId: ThreadId,
   createdAt: IsoDateTime,
 });
 
@@ -2749,6 +2764,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.turn-start-requested"),
     payload: ThreadTurnStartRequestedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.turn-resume-requested"),
+    payload: ThreadTurnResumeRequestedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

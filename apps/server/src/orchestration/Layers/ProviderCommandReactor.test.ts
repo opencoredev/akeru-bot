@@ -189,12 +189,19 @@ describe("ProviderCommandReactor", () => {
     readonly requiresNewThreadForModelChange?: boolean;
     readonly titleRegenerationCompletionDispatchFailures?: number;
     readonly titleRegenerationBeforeStart?: "one" | "two";
+    readonly turnStartBeforeReactor?: boolean;
+    readonly runningTurnBeforeReactor?: boolean;
+    readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
     readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
+    readonly sendTurnEffect?: () => Effect.Effect<
+      { readonly threadId: ThreadId; readonly turnId: TurnId },
+      ProviderAdapterRequestError
+    >;
     readonly botEngine?: { readonly provider: string; readonly model: string } | null;
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly bindTurnFailure?: boolean;
@@ -277,10 +284,12 @@ describe("ProviderCommandReactor", () => {
       );
     });
     const sendTurn = vi.fn((_: unknown) =>
-      Effect.succeed({
-        threadId: ThreadId.make("thread-1"),
-        turnId: asTurnId("turn-1"),
-      }),
+      input?.sendTurnEffect
+        ? input.sendTurnEffect()
+        : Effect.succeed({
+            threadId: ThreadId.make("thread-1"),
+            turnId: asTurnId("turn-1"),
+          }),
     );
     const interruptTurn = vi.fn((interruptInput: unknown) =>
       (input?.interruptTurnEffect?.() ?? Effect.void).pipe(
@@ -596,6 +605,84 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
       }),
     );
+    if (input?.turnStartBeforeReactor === true || input?.runningTurnBeforeReactor === true) {
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-turn-start-before-reactor"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("user-message-before-reactor"),
+            role: "user",
+            text: "recover this persisted request",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+    }
+    if (input?.runningTurnBeforeReactor === true) {
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-running-before-reactor"),
+          threadId: ThreadId.make("thread-1"),
+          session: {
+            threadId: ThreadId.make("thread-1"),
+            status: "running",
+            providerName: "codex",
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            runtimeMode: "approval-required",
+            mcpServerIds: [],
+            activeTurnId: asTurnId("turn-before-reactor"),
+            lastError: null,
+            updatedAt: now,
+          },
+          createdAt: now,
+        }),
+      );
+      if (input.pendingRequestBeforeReactor) {
+        const requestId = `${input.pendingRequestBeforeReactor}-before-restart`;
+        await Effect.runPromise(
+          engine.dispatch({
+            type: "thread.activity.append",
+            commandId: CommandId.make(`cmd-${requestId}`),
+            threadId: ThreadId.make("thread-1"),
+            activity: {
+              id: EventId.make(`activity-${requestId}`),
+              tone: input.pendingRequestBeforeReactor === "approval" ? "approval" : "info",
+              kind:
+                input.pendingRequestBeforeReactor === "approval"
+                  ? "approval.requested"
+                  : "user-input.requested",
+              summary:
+                input.pendingRequestBeforeReactor === "approval"
+                  ? "Approval requested"
+                  : "User input requested",
+              payload:
+                input.pendingRequestBeforeReactor === "approval"
+                  ? { requestId, requestKind: "command" }
+                  : {
+                      requestId,
+                      questions: [
+                        {
+                          id: "choice",
+                          header: "Choice",
+                          question: "Continue?",
+                          options: [{ label: "Yes", description: "Continue the work" }],
+                        },
+                      ],
+                    },
+              turnId: asTurnId("turn-before-reactor"),
+              createdAt: now,
+            },
+            createdAt: now,
+          }),
+        );
+      }
+    }
     if (input?.titleRegenerationBeforeStart === "two") {
       await Effect.runPromise(
         engine.dispatch({
@@ -727,6 +814,220 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("replays a persisted turn start that predates reactor startup exactly once", async () => {
+    const harness = await createHarness({ turnStartBeforeReactor: true });
+
+    await harness.drain();
+
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input: "recover this persisted request",
+    });
+  });
+
+  it("continues a running turn after reactor startup without replaying the user prompt", async () => {
+    const harness = await createHarness({ runningTurnBeforeReactor: true });
+
+    await harness.drain();
+
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input: expect.stringContaining("server restarted"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).not.toMatchObject({
+      input: "recover this persisted request",
+    });
+  });
+
+  it("marks an interrupted turn resumable when automatic recovery fails", async () => {
+    const harness = await createHarness({
+      runningTurnBeforeReactor: true,
+      sendTurnEffect: () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: ProviderDriverKind.make("codex"),
+            method: "thread.turn.start",
+            detail: "Provider was temporarily unavailable.",
+          }),
+        ),
+    });
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.session).toMatchObject({
+      status: "error",
+      lastError: expect.stringContaining("Use Resume to continue"),
+    });
+    expect(thread?.latestTurn?.state).toBe("error");
+  });
+
+  it.each(["approval", "user-input"] as const)(
+    "expires a stale pending %s before automatic restart recovery",
+    async (requestKind) => {
+      const harness = await createHarness({
+        runningTurnBeforeReactor: true,
+        pendingRequestBeforeReactor: requestKind,
+      });
+
+      await harness.drain();
+
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.activities).toContainEqual(
+        expect.objectContaining({
+          kind: requestKind === "approval" ? "approval.resolved" : "user-input.resolved",
+          payload: expect.objectContaining({
+            requestId: `${requestKind}-before-restart`,
+            outcome: "interrupted",
+          }),
+        }),
+      );
+      expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+        input: expect.stringContaining("server restarted"),
+      });
+    },
+  );
+
+  it("resumes an errored turn without adding or replaying a user message", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-before-manual-resume"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-before-manual-resume"),
+          role: "user",
+          text: "finish the migration",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-running-before-manual-resume"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "approval-required",
+          mcpServerIds: [],
+          activeTurnId: asTurnId("turn-before-manual-resume"),
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-error-before-manual-resume"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "error",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "approval-required",
+          mcpServerIds: [],
+          activeTurnId: null,
+          lastError: "Automatic recovery failed.",
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+    harness.sendTurn.mockClear();
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.resume",
+        commandId: CommandId.make("cmd-manual-resume"),
+        threadId: ThreadId.make("thread-1"),
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input: expect.stringContaining("Resume the interrupted request"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).not.toMatchObject({
+      input: "finish the migration",
+    });
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.messages.filter((message) => message.role === "user")).toHaveLength(1);
+  });
+
+  it("retries the original request when session startup failed before provider acceptance", async () => {
+    let attempts = 0;
+    const harness = await createHarness({
+      startSessionEffect: (session) => {
+        attempts += 1;
+        return attempts === 1
+          ? Effect.fail(
+              new ProviderAdapterRequestError({
+                provider: ProviderDriverKind.make("codex"),
+                method: "startSession",
+                detail: "not connected",
+                cause: new Error("not connected"),
+              }),
+            )
+          : Effect.succeed(session);
+      },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-pre-provider-failure"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("message-pre-provider-failure"),
+          role: "user",
+          text: "send this only once",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+    expect(harness.sendTurn).not.toHaveBeenCalled();
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.resume",
+        commandId: CommandId.make("cmd-resume-pre-provider-failure"),
+        threadId: ThreadId.make("thread-1"),
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.sendTurn).toHaveBeenCalledOnce();
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({ input: "send this only once" });
   });
 
   it.each([

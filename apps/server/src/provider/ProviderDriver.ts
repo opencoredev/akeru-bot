@@ -69,6 +69,15 @@ export interface ProviderInstance {
   readonly displayName: string | undefined;
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
+  /**
+   * Server-only connection inputs for Akeru's Mastra model transport.
+   * This value must never be projected into provider snapshots or wire contracts.
+   */
+  readonly mastraConnection?: {
+    readonly environment: NodeJS.ProcessEnv;
+    readonly instanceEnvironment: NodeJS.ProcessEnv;
+    readonly useSavedCredential: boolean;
+  };
   readonly snapshot: ServerProviderShape;
   /**
    * Optional workspace-scoped snapshot. Grok uses this to probe `grok inspect --json`

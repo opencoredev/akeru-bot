@@ -38,10 +38,12 @@ Two registries separate configuration from live processes:
 directory to route session and turn operations for a thread, so callers name a thread, not an agent.
 
 Desktop chat does not call `ProviderService` directly from orchestration. The command reactor calls
-Akeru's [`AgentController`][controller]. Codex and Kimi threads run through Akeru's custom Mastra Core
-controller and call `Session.sendMessage()`. The backing agent is a general-purpose Akeru assistant
-with no Mastra memory or task signals. Akeru builds workspace and enabled plugin tools per thread, and
-resolves the selected subscription model through explicit server-owned auth. AgentController
+Akeru's [`AgentController`][controller]. Codex, Claude, Grok, Kimi, and OpenCode Go threads run
+through Akeru's custom Mastra Core controller and call `Session.sendMessage()`. The backing agent is a general-purpose Akeru assistant
+with Akeru-owned observational memory, workspace, tools, approval policy, and lifecycle. Akeru builds
+workspace and enabled plugin tools per thread, and resolves the selected subscription model through
+the exact provider instance's private transport descriptor. Explicit instance credentials and base
+URLs take precedence and never fall back to provider-wide credentials. AgentController
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
@@ -53,12 +55,12 @@ an account. Unknown mutating intent also asks. The pending approval map binds th
 exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
 as one-use approval.
 
-Claude, Grok, and OpenCode keep their existing adapters. [`LegacyProviderBridge`][bridge]
-routes those providers through `ProviderService` and forwards their canonical runtime events. Claude
-receives the same general-purpose Akeru instructions and enabled MCP servers. A provider change stops
-the active runtime and starts the selected provider without reusing an incompatible resume cursor. The
-bridge is not the Codex turn path, and AgentController never falls back to the legacy Codex loop when
-a Mastra session is absent.
+Standard OpenCode is the sole compatibility runtime behind [`LegacyProviderBridge`][bridge]. Its
+server API exposes an OpenCode-owned agent session, not a raw model transport, so wrapping it would
+still leave two agent loops. OpenCode Go is the direct model transport for the unified Akeru harness.
+A provider change stops the active runtime and starts the selected provider without reusing an
+incompatible resume cursor. AgentController never falls back to a provider-owned loop when a Mastra
+session is absent.
 
 The legacy OpenCode adapter keeps only per-message text state for later PATCH edits. Tool input and
 output are emitted as lifecycle events and are not retained in the session map. Individually removed

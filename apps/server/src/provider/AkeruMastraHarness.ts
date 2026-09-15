@@ -2,7 +2,11 @@
 import * as NodeURL from "node:url";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
+import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
 import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
+import { xaiProvider } from "@mastra/code-sdk/providers/xai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
 import type { ToolsInput } from "@mastra/core/agent";
 import {
@@ -144,6 +148,7 @@ const routineDeleteResultSchema = z.object({
 export type AkeruRoutineDeleteResult = z.infer<typeof routineDeleteResultSchema>;
 
 export interface AkeruMastraState {
+  readonly providerInstanceId?: string;
   readonly projectPath?: string;
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
@@ -191,6 +196,13 @@ export interface AkeruMastraHarnessOptions {
   readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
   readonly getOpenCodeGoApiKey?: () => Promise<string | undefined>;
   readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
+  readonly getModelConnection?: (providerInstanceId: string) =>
+    | {
+        readonly environment: NodeJS.ProcessEnv;
+        readonly instanceEnvironment: NodeJS.ProcessEnv;
+        readonly useSavedCredential: boolean;
+      }
+    | undefined;
   readonly memoryDbPath: string;
   readonly startMemoryCall?: (input: {
     readonly threadId: string;
@@ -319,6 +331,19 @@ function controllerModelOptions(requestContext: RequestContext): AkeruMastraStat
     : undefined;
 }
 
+function controllerModelConnection(
+  requestContext: RequestContext,
+  getModelConnection: AkeruMastraHarnessOptions["getModelConnection"],
+) {
+  const state = controllerContext(requestContext)?.state;
+  if (typeof state !== "object" || state === null || !("providerInstanceId" in state)) {
+    return undefined;
+  }
+  return typeof state.providerInstanceId === "string"
+    ? getModelConnection?.(state.providerInstanceId)
+    : undefined;
+}
+
 function controllerResourceId(requestContext: RequestContext): string | undefined {
   const value = controllerContext(requestContext)?.resourceId;
   return typeof value === "string" ? value : undefined;
@@ -441,6 +466,8 @@ export async function createAkeruMastraMemory(
 
 const MASTRA_MODEL_PREFIX = {
   codex: "openai",
+  claudeAgent: "anthropic",
+  grok: "xai",
   kimi: "kimi-for-coding",
   opencodeGo: "opencode-go",
 } as const;
@@ -460,13 +487,35 @@ export function resolveAkeruMastraModel(
   getOpenCodeGoApiKey?: () => Promise<string | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
+  connection?: {
+    readonly environment: NodeJS.ProcessEnv;
+    readonly instanceEnvironment: NodeJS.ProcessEnv;
+    readonly useSavedCredential: boolean;
+  },
 ) {
   const trimmed = modelId.trim();
+  const environment = connection?.useSavedCredential
+    ? connection.environment
+    : connection?.instanceEnvironment;
+  const useSavedCredential = connection?.useSavedCredential !== false;
   if (trimmed.startsWith("openai/")) {
-    if (getSubscriptionApiKey?.("openai-codex")) {
-      return akeruOpenAIProvider(trimmed.slice("openai/".length), () =>
-        getSubscriptionApiKey("openai-codex"),
-      );
+    const instanceApiKey = environment?.OPENAI_API_KEY?.trim();
+    const getCredential = instanceApiKey
+      ? () => ({
+          type: "api-key" as const,
+          access: instanceApiKey,
+          ...(environment?.OPENAI_BASE_URL?.trim()
+            ? { baseUrl: environment.OPENAI_BASE_URL.trim() }
+            : {}),
+        })
+      : useSavedCredential
+        ? () => getSubscriptionApiKey?.("openai-codex")
+        : undefined;
+    if (getCredential?.()) {
+      return akeruOpenAIProvider(trimmed.slice("openai/".length), () => getCredential());
+    }
+    if (!useSavedCredential) {
+      throw new Error("This Codex instance has no OPENAI_API_KEY transport for Akeru Mastra.");
     }
     const reasoningEffort = modelOptions?.reasoningEffort;
     return openaiCodexProvider(trimmed.slice("openai/".length), {
@@ -474,16 +523,79 @@ export function resolveAkeruMastraModel(
       ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
     });
   }
+  if (trimmed.startsWith("anthropic/")) {
+    const model = trimmed.slice("anthropic/".length);
+    const instanceApiKey = environment?.ANTHROPIC_API_KEY?.trim();
+    const instanceAuthToken =
+      environment?.ANTHROPIC_AUTH_TOKEN?.trim() ?? environment?.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+    if (instanceApiKey || instanceAuthToken) {
+      return createAnthropic({
+        ...(instanceApiKey ? { apiKey: instanceApiKey } : { authToken: instanceAuthToken! }),
+        ...(environment?.ANTHROPIC_BASE_URL?.trim()
+          ? { baseURL: environment.ANTHROPIC_BASE_URL.trim() }
+          : {}),
+      })(model);
+    }
+    const credential = useSavedCredential ? getSubscriptionApiKey?.("anthropic") : undefined;
+    if (credential) {
+      return createAnthropic({
+        apiKey: credential.access,
+        ...(credential.baseUrl ? { baseURL: credential.baseUrl } : {}),
+      })(model);
+    }
+    if (!useSavedCredential) {
+      throw new Error(
+        "This Claude instance has no API key or auth token transport for Akeru Mastra.",
+      );
+    }
+    return opencodeClaudeMaxProvider(model, { authStorage });
+  }
+  if (trimmed.startsWith("xai/")) {
+    const model = trimmed.slice("xai/".length);
+    const instanceApiKey = environment?.XAI_API_KEY?.trim();
+    const credential = instanceApiKey
+      ? {
+          access: instanceApiKey,
+          baseUrl: environment?.XAI_BASE_URL?.trim() || undefined,
+        }
+      : useSavedCredential
+        ? getSubscriptionApiKey?.("xai")
+        : undefined;
+    if (credential) {
+      return createOpenAICompatible({
+        name: "xai",
+        apiKey: credential.access,
+        baseURL: credential.baseUrl ?? "https://api.x.ai/v1",
+      })(model);
+    }
+    if (!useSavedCredential) {
+      throw new Error("This Grok instance has no XAI_API_KEY transport for Akeru Mastra.");
+    }
+    return xaiProvider(model, { authStorage });
+  }
   if (trimmed.startsWith("kimi-for-coding/")) {
+    if (!useSavedCredential) {
+      throw new Error(
+        "Custom Kimi instance credentials are not supported by the Akeru Mastra transport.",
+      );
+    }
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
   }
   if (trimmed.startsWith("opencode-go/")) {
-    if (!getOpenCodeGoApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
+    const instanceApiKey = environment?.OPENCODE_API_KEY?.trim();
+    const resolveApiKey = instanceApiKey
+      ? async () => instanceApiKey
+      : useSavedCredential
+        ? getOpenCodeGoApiKey
+        : undefined;
+    if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
     return akeruOpenCodeGoProvider(
       trimmed.slice("opencode-go/".length),
-      getOpenCodeGoApiKey,
-      () => getSubscriptionApiKey?.("opencode-go")?.baseUrl,
+      resolveApiKey,
+      () =>
+        environment?.OPENCODE_BASE_URL?.trim() ||
+        (useSavedCredential ? getSubscriptionApiKey?.("opencode-go")?.baseUrl : undefined),
     );
   }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
@@ -879,6 +991,7 @@ export async function createAkeruMastraHarness(
         options.getOpenCodeGoApiKey,
         controllerModelOptions(requestContext),
         options.getSubscriptionApiKey,
+        controllerModelConnection(requestContext, options.getModelConnection),
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,

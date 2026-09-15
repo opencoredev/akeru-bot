@@ -34,6 +34,7 @@ import { makeCodexTextGeneration } from "../../textGeneration/CodexTextGeneratio
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeCodexAdapter } from "../Layers/CodexAdapter.ts";
 import { checkCodexProviderStatus, makePendingCodexProvider } from "../Layers/CodexProvider.ts";
@@ -42,7 +43,10 @@ import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
 import type { ServerProviderDraft } from "../providerSnapshot.ts";
-import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
+import {
+  explicitProviderInstanceEnvironment,
+  mergeProviderInstanceEnvironment,
+} from "../ProviderInstanceEnvironment.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
   makePackageManagedProviderMaintenanceResolver,
@@ -224,6 +228,15 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        mastraConnection: {
+          environment: processEnv,
+          instanceEnvironment: explicitProviderInstanceEnvironment(environment),
+          useSavedCredential: instanceUsesSavedCredential("openai-codex", {
+            driver: DRIVER_KIND,
+            environment,
+            config,
+          }),
+        },
         snapshot,
         adapter,
         textGeneration,

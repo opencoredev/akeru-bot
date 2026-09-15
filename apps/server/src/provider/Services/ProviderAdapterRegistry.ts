@@ -38,6 +38,12 @@ export interface ProviderInstanceRoutingInfo {
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
   readonly continuationIdentity: ProviderContinuationIdentity;
+  /** Server-only. Never include this in a client projection or persisted event. */
+  readonly mastraConnection?: {
+    readonly environment: NodeJS.ProcessEnv;
+    readonly instanceEnvironment: NodeJS.ProcessEnv;
+    readonly useSavedCredential: boolean;
+  };
 }
 
 /**
