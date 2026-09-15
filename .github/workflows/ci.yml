@@ -80,7 +80,7 @@ jobs:
             printf 'Add a release changeset with `pnpm changeset` or an explicit empty marker with `pnpm changeset --empty`.\n' >&2
             exit 1
           fi
-          pnpm exec changeset status --since=origin/main
+          vp exec changeset status --since=origin/main
 
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron

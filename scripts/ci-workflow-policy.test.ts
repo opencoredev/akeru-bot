@@ -87,7 +87,7 @@ describe("CI workflow budget", () => {
       "git ls-files .github/pr-assets",
       "node scripts/check-public-dependencies.ts",
       "vp install --frozen-lockfile",
-      "pnpm exec changeset status --since=origin/main",
+      "vp exec changeset status --since=origin/main",
       "vp run --filter @t3tools/desktop ensure:electron",
       "node scripts/validate-plugin-catalog.ts",
       "scripts/validate-plugin-catalog.test.ts",
