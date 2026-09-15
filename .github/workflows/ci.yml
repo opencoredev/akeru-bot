@@ -6,6 +6,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact version-branch revision to validate
+        required: false
+        type: string
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -20,6 +25,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.expected_sha || github.sha }}
 
       - name: Reject repository-owned PR assets
         run: |
@@ -41,6 +49,38 @@ jobs:
 
       - name: Install from the committed lockfile
         run: vp install --frozen-lockfile
+
+      - name: Protect stable release versions
+        if: >-
+          ${{ github.event_name == 'pull_request' &&
+              !(github.head_ref == 'changeset-release/main' &&
+                github.event.pull_request.head.repo.full_name == github.repository &&
+                github.event.pull_request.user.login == 'github-actions[bot]') }}
+        run: |
+          changed=false
+          for manifest in apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json; do
+            base_version="$(git show "origin/main:$manifest" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk).on('end', () => console.log(JSON.parse(data).version))")"
+            head_version="$(node -p "require('./$manifest').version")"
+            if test "$base_version" != "$head_version"; then
+              printf '%s changes the stable version from %s to %s. Only the repository-owned Changesets version PR may change release versions.\n' "$manifest" "$base_version" "$head_version" >&2
+              changed=true
+            fi
+          done
+          test "$changed" = false
+
+      - name: Require a changeset decision
+        if: >-
+          ${{ github.event_name == 'pull_request' &&
+              !(github.head_ref == 'changeset-release/main' &&
+                github.event.pull_request.head.repo.full_name == github.repository &&
+                github.event.pull_request.user.login == 'github-actions[bot]') }}
+        run: |
+          changeset_files="$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD -- '.changeset/*.md' ':!.changeset/README.md')"
+          if test -z "$changeset_files"; then
+            printf 'Add a release changeset with `pnpm changeset` or an explicit empty marker with `pnpm changeset --empty`.\n' >&2
+            exit 1
+          fi
+          pnpm exec changeset status --since=origin/main
 
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron

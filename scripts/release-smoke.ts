@@ -128,8 +128,12 @@ for (const [needle, label] of [
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["vp run release:version-pr", "version pull request command"],
-  ["actions: write", "CI dispatch permission"],
+  ["changesets/action@", "Changesets GitHub Action"],
+  ["version: pnpm release:version", "Changesets version command"],
+  [
+    'gh workflow run ci.yml --ref "$head_ref" -f expected_sha="$head_sha"',
+    "version branch CI dispatch",
+  ],
   ["contents: write", "version branch permission"],
   ["pull-requests: write", "version pull request permission"],
 ] as const) {
@@ -140,6 +144,14 @@ assertOmits(
   "gh release create",
   "Version packages workflow publishes before its pull request merges",
 );
+for (const [needle, label] of [
+  ['cron: "17 */3 * * *"', "three-hour nightly schedule"],
+  ["scripts/nightly-release.ts", "nightly release selection"],
+  ["--prerelease --latest=false", "non-latest nightly release"],
+  ["runs-on: tenki-standard-small-2c-4g", "Tenki release control plane"],
+] as const) {
+  assertContains(releaseWorkflow, needle, `Release workflow is missing ${label}.`);
+}
 assertContains(
   releaseWorkflow,
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",

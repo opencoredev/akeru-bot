@@ -9,6 +9,8 @@ type Step = {
   readonly id?: string;
   readonly if?: string;
   readonly run?: string;
+  readonly uses?: string;
+  readonly with?: Readonly<Record<string, string | boolean>>;
 };
 
 type Job = {
@@ -42,6 +44,15 @@ describe("CI workflow budget", () => {
     expect(ci.on.pull_request).toEqual({
       types: ["opened", "synchronize", "reopened", "ready_for_review"],
     });
+    expect(ci.on.workflow_dispatch).toEqual({
+      inputs: {
+        expected_sha: {
+          description: "Exact version-branch revision to validate",
+          required: false,
+          type: "string",
+        },
+      },
+    });
     expect(ci.on).not.toHaveProperty("push");
     expect(ci.on).not.toHaveProperty("merge_group");
     expect(ci.concurrency?.group).toBe("ci-${{ github.event.pull_request.number || github.ref }}");
@@ -51,11 +62,32 @@ describe("CI workflow budget", () => {
       "${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}",
     );
     expect(ci.jobs.check?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
+    expect(ci.jobs.check?.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
+      "${{ inputs.expected_sha || github.sha }}",
+    );
+
+    const stableVersionGuard = ci.jobs.check?.steps.find(
+      (step) => step.name === "Protect stable release versions",
+    );
+    const changesetGuard = ci.jobs.check?.steps.find(
+      (step) => step.name === "Require a changeset decision",
+    );
+    for (const guard of [stableVersionGuard, changesetGuard]) {
+      expect(guard?.if).toContain("github.head_ref == 'changeset-release/main'");
+      expect(guard?.if).toContain(
+        "github.event.pull_request.head.repo.full_name == github.repository",
+      );
+      expect(guard?.if).toContain("github.event.pull_request.user.login == 'github-actions[bot]'");
+    }
+    expect(stableVersionGuard?.run).toContain(
+      "Only the repository-owned Changesets version PR may change release versions.",
+    );
 
     for (const command of [
       "git ls-files .github/pr-assets",
       "node scripts/check-public-dependencies.ts",
       "vp install --frozen-lockfile",
+      "pnpm exec changeset status --since=origin/main",
       "vp run --filter @t3tools/desktop ensure:electron",
       "node scripts/validate-plugin-catalog.ts",
       "scripts/validate-plugin-catalog.test.ts",
@@ -102,16 +134,19 @@ describe("CI workflow budget", () => {
       "pull-requests": "write",
     });
     expect(versionJob?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
-    expect(versionJob?.steps.find((step) => step.run)?.run).toBe("vp run release:version-pr");
-
-    const updater = NodeFS.readFileSync(
-      new URL("../scripts/update-version-pull-request.ts", import.meta.url),
-      "utf8",
+    const changesets = versionJob?.steps.find((step) => step.id === "changesets");
+    expect(changesets?.uses).toContain("changesets/action@");
+    expect(changesets?.with?.version).toBe("pnpm release:version");
+    expect(changesets?.with?.createGithubReleases).toBe(false);
+    const dispatch = versionJob?.steps.find(
+      (step) => step.name === "Run checks for the updated version branch",
     );
-    expect(updater).toContain('"merge-base",');
-    expect(updater).toContain('"--is-ancestor",');
-    expect(updater).toContain('"pr",\n    "edit",');
-    expect(updater).toContain('"workflow", "run", "ci.yml"');
+    expect(dispatch?.if).toBe("steps.changesets.outputs.pullRequestNumber != ''");
+    expect(dispatch?.if).not.toContain("hasChangesets");
+    expect(dispatch?.run).toContain(".head.sha");
+    expect(dispatch?.run).toContain(".head.repo.full_name");
+    expect(dispatch?.run).toContain('test "$head_ref" = changeset-release/main');
+    expect(dispatch?.run).toContain('-f expected_sha="$head_sha"');
   });
 
   it("uses 4-vCPU Linux runners in the manual release smoke workflow", () => {
