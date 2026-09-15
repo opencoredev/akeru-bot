@@ -48,7 +48,12 @@ describe("CI workflow budget", () => {
       inputs: {
         expected_sha: {
           description: "Exact version-branch revision to validate",
-          required: false,
+          required: true,
+          type: "string",
+        },
+        expected_pr_number: {
+          description: "Repository-owned Changesets pull request to validate",
+          required: true,
           type: "string",
         },
       },
@@ -65,6 +70,16 @@ describe("CI workflow budget", () => {
     expect(ci.jobs.check?.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
       "${{ inputs.expected_sha || github.sha }}",
     );
+    const dispatchAuthorization = ci.jobs.check?.steps.find(
+      (step) => step.name === "Authorize version-branch dispatch",
+    );
+    expect(dispatchAuthorization?.if).toBe("${{ github.event_name == 'workflow_dispatch' }}");
+    expect(dispatchAuthorization?.run).toContain(".head.ref");
+    expect(dispatchAuthorization?.run).toContain(".head.sha");
+    expect(dispatchAuthorization?.run).toContain(".head.repo.full_name");
+    expect(dispatchAuthorization?.run).toContain(".user.login");
+    expect(dispatchAuthorization?.run).toContain("github-actions[bot]");
+    expect(dispatchAuthorization?.run).toContain('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"');
 
     const stableVersionGuard = ci.jobs.check?.steps.find(
       (step) => step.name === "Protect stable release versions",
@@ -82,6 +97,8 @@ describe("CI workflow budget", () => {
     expect(stableVersionGuard?.run).toContain(
       "Only the repository-owned Changesets version PR may change release versions.",
     );
+    expect(changesetGuard?.run).toContain("--diff-filter=A");
+    expect(changesetGuard?.run).not.toContain("--diff-filter=ACMRT");
 
     for (const command of [
       "git ls-files .github/pr-assets",
@@ -147,6 +164,7 @@ describe("CI workflow budget", () => {
     expect(dispatch?.run).toContain(".head.repo.full_name");
     expect(dispatch?.run).toContain('test "$head_ref" = changeset-release/main');
     expect(dispatch?.run).toContain('-f expected_sha="$head_sha"');
+    expect(dispatch?.run).toContain('-f expected_pr_number="$PR_NUMBER"');
   });
 
   it("uses 4-vCPU Linux runners in the manual release smoke workflow", () => {

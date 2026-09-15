@@ -56,4 +56,4 @@ jobs:
           head_repo="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.repo.full_name')"
           test "$head_ref" = changeset-release/main
           test "$head_repo" = "$GITHUB_REPOSITORY"
-          gh workflow run ci.yml --ref "$head_ref" -f expected_sha="$head_sha"
+          gh workflow run ci.yml --ref "$head_ref" -f expected_sha="$head_sha" -f expected_pr_number="$PR_NUMBER"
