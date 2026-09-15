@@ -52,6 +52,13 @@ If the change depends on motion, timing, transitions, or interaction details, in
 
 If we have to guess what changed, we are much less likely to review it.
 
+Every pull request must also record its release decision. Run `pnpm changeset`, select one of the
+Akeru product packages, and write a short user-facing summary. Use `patch` for compatible fixes,
+`minor` for compatible features, and `major` only for a breaking change. The product packages ship
+as one fixed-version release train, so selecting one is enough. For documentation, tests,
+refactors, and internal-only tooling, run `pnpm changeset --empty`. CI rejects pull requests that
+omit this decision.
+
 ## Discuss Changes First
 
 If you are thinking about a non-trivial change, start a discussion first. Issues are reserved for bug reports and the plugin and provider proposal forms.

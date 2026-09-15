@@ -1,8 +1,10 @@
-# Tenki and GitHub-hosted runners build every stable asset before the final job creates the tag and release.
+# Tenki and required native runners build stable and nightly desktop releases.
 
-name: Stable release
+name: Stable and nightly releases
 
 on:
+  schedule:
+    - cron: "17 */3 * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -17,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: stable-release
+  group: desktop-release
   cancel-in-progress: false
 
 jobs:
@@ -29,6 +31,7 @@ jobs:
       publish: ${{ steps.version.outputs.publish }}
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      channel: ${{ steps.version.outputs.channel }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,6 +43,9 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           version="$(node -p "require('./apps/server/package.json').version")"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -53,6 +59,17 @@ jobs:
               exit 1
             fi
           done
+          if test "$EVENT_NAME" = schedule; then
+            latest_tag="$(gh release list --limit 100 --json tagName,isPrerelease,publishedAt --jq '[.[] | select(.isPrerelease and (.tagName | startswith("nightly-v")))] | sort_by(.publishedAt) | last | .tagName // ""')"
+            previous_sha="-"
+            if test -n "$latest_tag"; then
+              git fetch --force origin "refs/tags/$latest_tag:refs/tags/$latest_tag"
+              previous_sha="$(git rev-list -n 1 "$latest_tag")"
+            fi
+            node scripts/nightly-release.ts "$version" "$GITHUB_SHA" "$previous_sha" "$RUN_ID" "$RUN_ATTEMPT"
+            printf 'channel=nightly\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if test "$EVENT_NAME" != workflow_dispatch; then
             previous_version="$(git show "HEAD^:apps/server/package.json" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk).on('end', () => console.log(JSON.parse(data).version))")"
             for manifest in apps/desktop/package.json apps/web/package.json packages/contracts/package.json; do
@@ -72,7 +89,7 @@ jobs:
             printf 'Stable tag v%s already exists.\n' "$version" >&2
             exit 1
           fi
-          printf 'publish=true\nversion=%s\ntag=v%s\n' "$version" "$version" >> "$GITHUB_OUTPUT"
+          printf 'publish=true\nversion=%s\ntag=v%s\nchannel=stable\n' "$version" "$version" >> "$GITHUB_OUTPUT"
 
       - name: Setup Vite+
         if: steps.version.outputs.publish == 'true'
@@ -97,6 +114,7 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
       T3CODE_DESKTOP_UPDATE_REPOSITORY: opencoredev/akeru-bot
     strategy:
       fail-fast: false
@@ -313,7 +331,7 @@ jobs:
       - name: Upload desktop assets
         uses: actions/upload-artifact@v7
         with:
-          name: stable-${{ matrix.platform }}-${{ matrix.arch }}
+          name: ${{ needs.preflight.outputs.channel }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             release/*
             !release/builder-debug.yml
@@ -321,7 +339,7 @@ jobs:
           retention-days: 7
 
   release:
-    name: Publish stable release
+    name: Publish release
     needs: [preflight, desktop]
     if: needs.preflight.outputs.publish == 'true'
     runs-on: tenki-standard-small-2c-4g
@@ -330,16 +348,22 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
       RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+      RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v8
         with:
-          pattern: stable-*
+          pattern: ${{ needs.preflight.outputs.channel }}-*
           path: release
           merge-multiple: true
       - name: Verify names and hashes
         run: node scripts/verify-release-assets.ts release "$RELEASE_VERSION"
-      - name: Create stable tag and GitHub Release
+      - name: Create stable GitHub Release
+        if: env.RELEASE_CHANNEL == 'stable'
         run: gh release create "$RELEASE_TAG" release/* --target "$GITHUB_SHA" --title "Akeru Bot $RELEASE_TAG" --generate-notes
+      - name: Create nightly GitHub Release
+        if: env.RELEASE_CHANNEL == 'nightly'
+        run: gh release create "$RELEASE_TAG" release/* --target "$GITHUB_SHA" --title "Akeru Bot nightly $RELEASE_VERSION" --prerelease --latest=false --generate-notes
       - name: Update the next version PR
+        if: env.RELEASE_CHANNEL == 'stable'
         run: gh workflow run version-packages.yml --ref main

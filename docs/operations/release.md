@@ -1,9 +1,37 @@
-# Release smoke runbook
+# Release runbook
 
 > Do not publish a signed Akeru Bot build until qualified legal counsel approves the current Terms
 > of Use and Privacy Policy versions in `packages/contracts/src/settings.ts`.
 
 > For Akeru Bot maintainers.
+
+## Pull requests and stable releases
+
+Every ordinary pull request commits a release decision. Run `pnpm changeset` for a shipped change,
+select one product package, choose `patch`, `minor`, or `major`, and write a concise user-facing
+summary. Use `pnpm changeset --empty` for documentation, tests, refactors, and internal tooling.
+The four product packages (`akeru-bot`, desktop, web, and contracts) are a fixed group and always
+receive the same version. Packages without versions remain outside the release train.
+
+After changes reach `main`, Changesets creates or refreshes one Version Packages pull request. It
+combines the pending release levels, updates all four manifests and changelogs, and consumes the
+changeset files. Merging this pull request is the deliberate stable release button. That merge
+starts the native builds, verifies every artifact, creates the `vX.Y.Z` tag, and creates the stable
+GitHub Release. Ordinary feature merges do not release immediately, and this flow does not publish
+the `akeru-bot` npm package. CI rejects stable-version edits from every PR except the authenticated,
+repository-owned Changesets PR.
+
+## Nightly releases
+
+GitHub Actions checks `main` at minute 17 every three hours. If `main` has not advanced since the
+latest successful nightly, the workflow exits without building. Otherwise it creates a semver
+prerelease version containing the workflow run, retry number, and commit SHA, then builds the same
+macOS arm64, Windows x64, and Linux x64 desktop artifacts. The GitHub Release is marked as a
+prerelease and `latest=false`, so installers and update checks that follow the latest stable release
+do not switch to nightly builds. Nightlies neither edit committed package versions nor consume
+stable changesets. A failed run creates no release; a rerun uses a new collision-safe version.
+
+## Manual smoke build
 
 `.github/workflows/release-smoke.yml` validates release inputs without publishing or releasing
 anything. Dispatch it from GitHub Actions with a version such as `0.0.0-smoke.0`.
@@ -80,5 +108,5 @@ vp run --filter akeru-bot build
 node apps/server/scripts/cli.ts publish --dry-run --app-version 0.0.0-smoke.0 --verbose
 ```
 
-Do not use this smoke workflow as a release procedure. A publishing workflow must be designed and
-reviewed separately before Akeru Bot ships a public release.
+Do not use the smoke workflow as a release procedure. Merge the Version Packages pull request for
+a stable release, or let the scheduled workflow create a nightly.

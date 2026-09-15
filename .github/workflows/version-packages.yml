@@ -1,4 +1,4 @@
-# Tegami keeps one reviewable version PR. Publishing starts only after that PR merges.
+# Changesets keeps one reviewable version PR. Publishing starts only after that PR merges.
 
 name: Version packages
 
@@ -34,8 +34,26 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Update version PR
+      - name: Update Version Packages PR
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: pnpm release:version
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run checks for the updated version branch
+        if: steps.changesets.outputs.pullRequestNumber != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: vp run release:version-pr
+          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
+          head_ref="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.ref')"
+          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')"
+          head_repo="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.repo.full_name')"
+          test "$head_ref" = changeset-release/main
+          test "$head_repo" = "$GITHUB_REPOSITORY"
+          gh workflow run ci.yml --ref "$head_ref" -f expected_sha="$head_sha" -f expected_pr_number="$PR_NUMBER"

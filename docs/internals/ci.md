@@ -20,9 +20,12 @@ Issue-label, PR-vouch, and PR-size jobs also use Tenki Linux runners through Git
 The repository ruleset requires the `Repository checks` result before a pull request can
 merge. Direct pushes to `main` cannot bypass this gate. Release workflows start after the validated
 revision lands on `main`; version packaging is separate from pull-request CI. The version workflow
-updates the pull request body after Tegami updates its branch, then dispatches CI for that branch.
-This explicit dispatch is required because pushes made with the GitHub Actions token do not start
-another pull-request workflow.
+uses Changesets to maintain one rolling Version Packages pull request. CI also requires every
+ordinary pull request to contain a real or empty changeset, so release intent cannot be lost after
+merge. Changesets consumes those files in the version pull request and keeps the four product
+package versions synchronized. Only the repository-owned Changesets branch and bot-authored pull
+request can bypass the marker check or change those stable versions. Updates to that branch dispatch
+CI against the exact pull request head SHA; empty-only changesets do not dispatch a version branch.
 
 [`.github/workflows/installer-tests.yml`](../../.github/workflows/installer-tests.yml) runs focused
 Windows PowerShell 5.1 tests when the Windows installer changes. It checks checksum rejection,
@@ -51,5 +54,11 @@ Missing signing credentials produce unsigned macOS and Windows artifacts.
 Unsigned macOS builds still replace Electron's linker-signed stub with a sealed ad-hoc signature
 and fail the release if `codesign --verify` fails or the identifier is not `dev.leodoes.akeru`.
 Complete credentials use the existing Developer ID, notarization, and Azure Trusted Signing paths.
+
+The same workflow runs at minute 17 every three hours for nightly releases. It skips the build when
+`main` still points at the commit from the latest successful nightly. Otherwise it builds the same
+three desktop targets under a semver prerelease version and creates a GitHub prerelease that cannot
+replace the latest stable release. Linux preflight, build, and publication jobs use Tenki; native
+macOS and Windows builds remain on the required GitHub-hosted runners.
 
 See the [release smoke runbook](../operations/release.md) for the exact validation path.
