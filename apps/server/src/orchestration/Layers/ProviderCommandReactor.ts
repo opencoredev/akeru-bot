@@ -2158,6 +2158,34 @@ const make = Effect.gen(function* () {
     return match;
   });
 
+  const findPersistedTurnResume = Effect.fn("findPersistedTurnResume")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly throughSequence: number;
+  }) {
+    let cursor = 0;
+    let match: Extract<ProviderIntentEvent, { type: "thread.turn-resume-requested" }> | undefined;
+    while (cursor < input.throughSequence) {
+      const page = Array.from(
+        yield* Stream.runCollect(
+          orchestrationEngine.readThreadEvents({
+            threadId: input.threadId,
+            fromSequenceExclusive: cursor,
+            toSequenceInclusive: input.throughSequence,
+            limit: 500,
+          }),
+        ),
+      );
+      if (page.length === 0) break;
+      for (const event of page) {
+        if (event.type === "thread.turn-resume-requested") match = event;
+      }
+      const nextCursor = page.at(-1)?.sequence ?? cursor;
+      if (nextCursor <= cursor) break;
+      cursor = nextCursor;
+    }
+    return match;
+  });
+
   const settleStalePendingRequests = Effect.fn("settleStalePendingRequests")(function* (input: {
     readonly threadId: ThreadId;
     readonly activities: ReadonlyArray<{
@@ -2230,6 +2258,7 @@ const make = Effect.gen(function* () {
 
   const recoverStartupProviderWork = Effect.fn("recoverStartupProviderWork")(function* () {
     const throughSequence = yield* orchestrationEngine.latestSequence;
+    const initialReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
     const pendingTurnStarts = projectionSnapshotQuery.listPendingTurnStarts
       ? yield* projectionSnapshotQuery.listPendingTurnStarts()
       : [];
@@ -2248,6 +2277,33 @@ const make = Effect.gen(function* () {
           threadId: pending.threadId,
           messageId: pending.messageId,
         });
+      }
+    }
+
+    const pendingResumes = initialReadModel.threads.filter(
+      (thread) =>
+        thread.deletedAt === null &&
+        thread.archivedAt === null &&
+        thread.session?.status === "starting" &&
+        (thread.latestTurn === null ||
+          thread.latestTurn.state === "error" ||
+          thread.latestTurn.state === "interrupted"),
+    );
+    for (const thread of pendingResumes) {
+      const event = yield* findPersistedTurnResume({
+        threadId: thread.id,
+        throughSequence,
+      });
+      if (event) {
+        pendingThreadIds.add(String(thread.id));
+        yield* worker.enqueue(event);
+      } else {
+        yield* Effect.logWarning(
+          "provider command reactor could not recover pending resume event",
+          {
+            threadId: thread.id,
+          },
+        );
       }
     }
     yield* worker.drain;

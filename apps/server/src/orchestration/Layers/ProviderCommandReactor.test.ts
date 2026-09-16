@@ -191,6 +191,7 @@ describe("ProviderCommandReactor", () => {
     readonly titleRegenerationBeforeStart?: "one" | "two";
     readonly turnStartBeforeReactor?: boolean;
     readonly runningTurnBeforeReactor?: boolean;
+    readonly resumeBeforeReactor?: boolean;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
@@ -605,7 +606,11 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
       }),
     );
-    if (input?.turnStartBeforeReactor === true || input?.runningTurnBeforeReactor === true) {
+    if (
+      input?.turnStartBeforeReactor === true ||
+      input?.runningTurnBeforeReactor === true ||
+      input?.resumeBeforeReactor === true
+    ) {
       await Effect.runPromise(
         engine.dispatch({
           type: "thread.turn.start",
@@ -623,7 +628,7 @@ describe("ProviderCommandReactor", () => {
         }),
       );
     }
-    if (input?.runningTurnBeforeReactor === true) {
+    if (input?.runningTurnBeforeReactor === true || input?.resumeBeforeReactor === true) {
       await Effect.runPromise(
         engine.dispatch({
           type: "thread.session.set",
@@ -682,6 +687,35 @@ describe("ProviderCommandReactor", () => {
           }),
         );
       }
+    }
+    if (input?.resumeBeforeReactor === true) {
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-error-before-resume"),
+          threadId: ThreadId.make("thread-1"),
+          session: {
+            threadId: ThreadId.make("thread-1"),
+            status: "error",
+            providerName: "codex",
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            runtimeMode: "approval-required",
+            mcpServerIds: [],
+            activeTurnId: null,
+            lastError: "Automatic recovery failed.",
+            updatedAt: now,
+          },
+          createdAt: now,
+        }),
+      );
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "thread.turn.resume",
+          commandId: CommandId.make("cmd-resume-before-reactor"),
+          threadId: ThreadId.make("thread-1"),
+          createdAt: now,
+        }),
+      );
     }
     if (input?.titleRegenerationBeforeStart === "two") {
       await Effect.runPromise(
@@ -826,6 +860,19 @@ describe("ProviderCommandReactor", () => {
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
       threadId: ThreadId.make("thread-1"),
       input: "recover this persisted request",
+    });
+  });
+
+  it("replays a persisted resume that predates reactor startup exactly once", async () => {
+    const harness = await createHarness({ resumeBeforeReactor: true });
+
+    await harness.drain();
+
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input: expect.stringContaining("Resume the interrupted request"),
     });
   });
 
