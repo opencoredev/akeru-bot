@@ -33,6 +33,7 @@ import {
   classifyAkeruExternalCommand,
   classifyAkeruSensitivePath,
   type AkeruConversationMemorySnapshot,
+  type BotPersonalityTone,
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
   type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
@@ -148,6 +149,7 @@ export interface AkeruMastraState {
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
   readonly botName?: string;
+  readonly personalityTone?: BotPersonalityTone;
   readonly modelOptions?: {
     readonly reasoningEffort?: string;
     readonly serviceTier?: string;
@@ -503,9 +505,21 @@ export function resolveAkeruInstructions(
     isBotConversation && "botName" in state && typeof state.botName === "string"
       ? state.botName
       : "Akeru";
+  const personalityTone =
+    isBotConversation && "personalityTone" in state && typeof state.personalityTone === "number"
+      ? state.personalityTone
+      : undefined;
   return isBotConversation
-    ? createAkeruBotInstructions({ name, now })
-    : createAkeruAgentInstructions({ name, now });
+    ? createAkeruBotInstructions({
+        name,
+        now,
+        ...(personalityTone !== undefined ? { personalityTone } : {}),
+      })
+    : createAkeruAgentInstructions({
+        name,
+        now,
+        ...(personalityTone !== undefined ? { personalityTone } : {}),
+      });
 }
 
 export async function resolveAkeruTools(

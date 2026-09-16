@@ -127,6 +127,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
+        personalityTone: 50,
         voiceEnabled: true,
       });
       yield* engine.dispatch({
@@ -201,6 +202,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
+        personalityTone: 50,
         voiceEnabled: true,
         channelBindings: [],
         groupId: null,
