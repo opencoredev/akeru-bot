@@ -135,11 +135,11 @@ function mapProviderSessionStatusToOrchestrationStatus(
   }
 }
 
-const turnStartKeyForEvent = (event: ProviderIntentEvent): string =>
+const turnRequestKeyForEvent = (event: ProviderIntentEvent): string =>
   event.commandId !== null ? `command:${event.commandId}` : `event:${event.eventId}`;
 
-const HANDLED_TURN_START_KEY_MAX = 10_000;
-const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
+const HANDLED_TURN_REQUEST_KEY_MAX = 10_000;
+const HANDLED_TURN_REQUEST_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
 const MAX_REGENERATION_ATTACHMENTS = 4;
 const MAX_THREAD_TITLE_CONTEXT_CHARS = 8_000;
@@ -417,16 +417,16 @@ const make = Effect.gen(function* () {
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
-  const handledTurnStartKeys = yield* Cache.make<string, true>({
-    capacity: HANDLED_TURN_START_KEY_MAX,
-    timeToLive: HANDLED_TURN_START_KEY_TTL,
+  const handledTurnRequestKeys = yield* Cache.make<string, true>({
+    capacity: HANDLED_TURN_REQUEST_KEY_MAX,
+    timeToLive: HANDLED_TURN_REQUEST_KEY_TTL,
     lookup: () => Effect.succeed(true),
   });
 
-  const hasHandledTurnStartRecently = (key: string) =>
-    Cache.getOption(handledTurnStartKeys, key).pipe(
+  const hasHandledTurnRequestRecently = (key: string) =>
+    Cache.getOption(handledTurnRequestKeys, key).pipe(
       Effect.flatMap((cached) =>
-        Cache.set(handledTurnStartKeys, key, true).pipe(Effect.as(Option.isSome(cached))),
+        Cache.set(handledTurnRequestKeys, key, true).pipe(Effect.as(Option.isSome(cached))),
       ),
     );
 
@@ -1472,8 +1472,8 @@ const make = Effect.gen(function* () {
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
-    const key = turnStartKeyForEvent(event);
-    if (yield* hasHandledTurnStartRecently(key)) {
+    const key = turnRequestKeyForEvent(event);
+    if (yield* hasHandledTurnRequestRecently(key)) {
       return;
     }
 
@@ -1785,6 +1785,11 @@ const make = Effect.gen(function* () {
   const processTurnResumeRequested = Effect.fn("processTurnResumeRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-resume-requested" }>,
   ) {
+    const key = turnRequestKeyForEvent(event);
+    if (yield* hasHandledTurnRequestRecently(key)) {
+      return;
+    }
+
     const detail = Option.getOrUndefined(
       yield* projectionSnapshotQuery.getThreadDetailById(event.payload.threadId),
     );

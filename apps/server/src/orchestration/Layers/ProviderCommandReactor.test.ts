@@ -192,6 +192,7 @@ describe("ProviderCommandReactor", () => {
     readonly turnStartBeforeReactor?: boolean;
     readonly runningTurnBeforeReactor?: boolean;
     readonly resumeBeforeReactor?: boolean;
+    readonly replayPersistedResumeOnSubscribe?: boolean;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
@@ -500,7 +501,33 @@ describe("ProviderCommandReactor", () => {
           get streamDomainEvents() {
             return engine.streamDomainEvents;
           },
-          subscribeDomainEvents: engine.subscribeDomainEvents,
+          subscribeDomainEvents:
+            input?.replayPersistedResumeOnSubscribe === true
+              ? engine.subscribeDomainEvents.pipe(
+                  Effect.flatMap((liveEvents) =>
+                    engine.latestSequence.pipe(
+                      Effect.flatMap((throughSequence) =>
+                        Stream.runCollect(
+                          engine.readThreadEvents({
+                            threadId: ThreadId.make("thread-1"),
+                            fromSequenceExclusive: 0,
+                            toSequenceInclusive: throughSequence,
+                            limit: 500,
+                          }),
+                        ).pipe(Effect.orDie),
+                      ),
+                      Effect.map((events) => {
+                        const resume = Array.from(events).findLast(
+                          (event) => event.type === "thread.turn-resume-requested",
+                        );
+                        return resume
+                          ? Stream.concat(Stream.make(resume, resume), liveEvents)
+                          : liveEvents;
+                      }),
+                    ),
+                  ),
+                )
+              : engine.subscribeDomainEvents,
           latestSequence: engine.latestSequence,
         } satisfies OrchestrationEngineService["Service"];
       }),
@@ -868,6 +895,18 @@ describe("ProviderCommandReactor", () => {
       threadId: ThreadId.make("thread-1"),
       input: expect.stringContaining("Resume the interrupted request"),
     });
+  });
+
+  it("deduplicates a persisted resume delivered by both startup recovery and the live stream", async () => {
+    const harness = await createHarness({
+      resumeBeforeReactor: true,
+      replayPersistedResumeOnSubscribe: true,
+    });
+
+    await harness.drain();
+
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
   });
 
   it("continues a running turn after reactor startup without replaying the user prompt", async () => {
