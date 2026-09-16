@@ -1,6 +1,5 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import InstallPromptDialog from "../components/InstallPromptDialog.astro";
 import { RELEASES_URL } from "../lib/releases";
 ---
 
@@ -67,11 +66,9 @@ import { RELEASES_URL } from "../lib/releases";
     </a>
   </p>
   </div>
-  <InstallPromptDialog />
 </Layout>
 
 <script>
-  import { installPromptPlatformForDownload } from "../lib/downloadInstallPrompt";
   import {
     fetchLatestRelease,
     requiresUnsignedInstall,
@@ -90,13 +87,6 @@ import { RELEASES_URL } from "../lib/releases";
       const suffix = card.dataset.asset;
       if (!suffix) return;
       const asset = await resolveAssetDownload(card, suffix, releasePromise);
-      const promptPlatform = installPromptPlatformForDownload(card.dataset.os, asset !== null);
-      if (promptPlatform) {
-        card.dataset.installPrompt = promptPlatform;
-        card.href = "#";
-        card.removeAttribute("data-unsigned");
-        return;
-      }
       card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
     });
 
