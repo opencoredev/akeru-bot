@@ -124,8 +124,8 @@ describe("release downloads", () => {
     NodeAssert.equal(selectReleaseAsset({ ...release, tag_name: "preview" }, "arm64.dmg"), null);
   });
 
-  it("prompts for every unsigned desktop artifact", () => {
-    NodeAssert.equal(requiresUnsignedInstall("arm64.dmg"), true);
+  it("prompts only for unsigned desktop artifacts", () => {
+    NodeAssert.equal(requiresUnsignedInstall("arm64.dmg"), false);
     NodeAssert.equal(requiresUnsignedInstall("x64.exe"), true);
     NodeAssert.equal(requiresUnsignedInstall("x64.AppImage"), true);
   });

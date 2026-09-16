@@ -32,7 +32,7 @@ const TARGETS = {
     os: "mac",
     label: "Download for macOS",
     assetSuffix: "arm64.dmg",
-    unsigned: true,
+    unsigned: false,
   },
   win: {
     os: "win",
