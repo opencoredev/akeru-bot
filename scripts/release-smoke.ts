@@ -113,8 +113,10 @@ for (const [needle, label] of [
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: tenki-standard-medium-4c-8g", "Tenki Linux runner"],
   ["macOS signing credentials must be either complete or absent.", "macOS signing mode"],
-  ["Build unsigned macOS artifact", "unsigned macOS fallback"],
-  ["Verify unsigned macOS app signature", "unsigned macOS signature verification"],
+  [
+    "Stable macOS releases require the complete Developer ID signing credential set.",
+    "required macOS signing guard",
+  ],
   ["--signed", "existing signed build path"],
   ["xcrun notarytool submit", "macOS notarization"],
   ["verify-release-assets.ts", "asset name and hash verification"],
