@@ -215,6 +215,8 @@ describe("CI workflow budget", () => {
       "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
     );
     expect(steps.find((step) => step.name === "Build unsigned macOS artifact")).toBeUndefined();
-    expect(steps.find((step) => step.name === "Verify unsigned macOS app signature")).toBeUndefined();
+    expect(
+      steps.find((step) => step.name === "Verify unsigned macOS app signature"),
+    ).toBeUndefined();
   });
 });
