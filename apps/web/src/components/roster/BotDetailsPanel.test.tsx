@@ -1,7 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - The route contract reads its source.
 import * as NodeFS from "node:fs";
 
-import { BotId, ProjectId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -34,33 +33,22 @@ const bot: Bot = {
 };
 
 describe("BotDetailsPanel", () => {
-  it("shows the per-bot profile editor with simple panel chrome", () => {
+  it("shows a compact overview that hands settings off to the full page", () => {
     const markup = renderToStaticMarkup(<BotDetailsPanel bot={bot} />);
     expect(markup).toContain("Akeru&#x27;s browser");
     expect(markup).toContain('data-testid="bot-browser-preview"');
-    expect(markup).toContain(">Settings</h2>");
-    expect(markup).toContain('aria-label="Change bot avatar"');
-    expect(markup).toContain('aria-label="Bot name"');
-    expect(markup).toContain('aria-label="Bot label"');
-    expect(markup).toContain('aria-label="Bot description"');
-    expect(markup).toContain("Connect a provider");
-    expect(markup).toContain("Token hard stop");
-    expect(markup).toContain('aria-label="Token hard stop"');
-    expect(markup).toContain(">Sandbox</div>");
-    expect(markup).toContain('aria-label="Sandbox provider"');
-    expect(markup).toContain('aria-label="Bot usage"');
-    expect(markup).toContain(">Voice calls</span>");
-    expect(markup).toContain('aria-label="Enable voice calls for Akeru"');
-    expect(markup).toContain('aria-label="Bot usage"');
-    expect(markup).toContain(">Memory</div>");
-    expect(markup).toContain('aria-label="Manage bot memory"');
-    expect(markup).toContain("Facts and history");
-    expect(markup).toContain(">Tools</div>");
-    expect(markup).toContain("No workspace tools");
-    expect(markup).toContain(">Channels</div>");
-    expect(markup).toContain('aria-label="Manage bot channels"');
-    expect(markup).toContain("No channels");
-    expect(markup).toContain(">Manage</span>");
+    expect(markup).toContain(">Bot</h2>");
+    expect(markup).toContain("Akeru");
+    expect(markup).toContain("Research");
+    expect(markup).toContain("Finds evidence and explains what matters.");
+    expect(markup).toContain("Open bot settings");
+    expect(markup).toContain("Personality");
+    expect(markup).toContain("Balanced");
+    expect(markup).toContain("App default");
+    expect(markup).toContain("Sandbox");
+    expect(markup).not.toContain('aria-label="Bot name"');
+    expect(markup).not.toContain('aria-label="Bot description"');
+    expect(markup).not.toContain("Token hard stop");
     expect(markup).toContain('aria-label="Collapse Akeru bot sidebar"');
     expect(markup).toContain('aria-label="Open Akeru bot sidebar"');
     expect(markup).toContain("Routines");
@@ -69,32 +57,6 @@ describe("BotDetailsPanel", () => {
     expect(markup).not.toContain("border-b border-border");
     expect(markup).toContain("border-t border-border");
   });
-
-  it.each(["disconnected", "failed", "needs-reconnect"] as const)(
-    "shows an assigned %s channel without claiming it is connected",
-    (status) => {
-      const markup = renderToStaticMarkup(
-        <BotDetailsPanel
-          bot={{
-            ...bot,
-            channelBindings: [
-              {
-                botId: BotId.make(bot.id),
-                provider: "slack",
-                projectId: ProjectId.make("project-1"),
-                status,
-                externalIdentity: null,
-                connectedAt: null,
-                sentMessageIds: [],
-              },
-            ],
-          }}
-        />,
-      );
-      expect(markup).toContain("0 of 1 connected");
-      expect(markup).not.toContain("No channels");
-    },
-  );
 
   it("sets, clears, and rejects invalid hard stops", () => {
     expect(parseBotUsageCapInput("50000")).toEqual({
@@ -134,17 +96,24 @@ describe("BotDetailsPanel", () => {
     expect(source).toContain("RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY");
   });
 
-  it("owns model and reasoning controls in the bot sidebar", () => {
-    const source = NodeFS.readFileSync(new URL("./BotDetailsPanel.tsx", import.meta.url), "utf8");
+  it("keeps model and reasoning controls on the full settings page", () => {
+    const panelSource = NodeFS.readFileSync(
+      new URL("./BotDetailsPanel.tsx", import.meta.url),
+      "utf8",
+    );
+    const settingsSource = NodeFS.readFileSync(
+      new URL("./BotSettingsPage.tsx", import.meta.url),
+      "utf8",
+    );
     const composerSource = NodeFS.readFileSync(
       new URL("./BotPromptComposer.tsx", import.meta.url),
       "utf8",
     );
 
-    expect(source).toContain("<BotModelPicker");
-    expect(source).toContain("<TraitsPicker");
-    expect(source).toContain(">Reasoning</div>");
-    expect(source).toContain("options: modelOptions");
+    expect(panelSource).not.toContain("<BotModelPicker");
+    expect(panelSource).not.toContain("<TraitsPicker");
+    expect(settingsSource).toContain("<BotModelPicker");
+    expect(settingsSource).toContain("<TraitsPicker");
     expect(composerSource).not.toContain("BotModelPicker");
     expect(composerSource).not.toContain("TraitsPicker");
     expect(composerSource).not.toContain("reasoningPicker");
@@ -190,12 +159,9 @@ describe("BotDetailsPanel", () => {
       "utf8",
     );
     expect(source).toContain("<BotDetailsPanel");
-    expect(source).toContain("onSaveBot=");
     expect(source).toContain("threadRef={threadRef}");
-    expect(source).toContain("voiceEnabled,");
-    expect(source).toContain("usageCap,");
-    expect(source).toContain("sandbox,");
-    expect(source).toContain("disabledMcpServerIds,");
+    expect(source).toContain("onOpenSettings={() =>");
+    expect(source).not.toContain("onSaveBot=");
     expect(source).not.toContain("RightPanelTabs");
     expect(source).not.toContain("ThreadTerminalDrawer");
   });

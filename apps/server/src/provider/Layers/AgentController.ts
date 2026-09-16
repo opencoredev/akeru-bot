@@ -27,8 +27,10 @@ import {
   RoutineId,
   TurnId,
   AKERU_TOOL_CATALOG,
+  BALANCED_BOT_PERSONALITY_TONE,
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   type BotId,
+  type BotPersonalityTone,
   type McpServer,
   type AkeruCreateRoutineInput,
   type ModelSelection,
@@ -90,7 +92,10 @@ import {
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
-import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
+import {
+  AKERU_BOT_TURN_INSTRUCTIONS,
+  createAkeruBotTurnInstructions,
+} from "../AkeruAgentInstructions.ts";
 import type { ProviderInstanceRoutingInfo } from "../Services/ProviderAdapterRegistry.ts";
 import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
@@ -158,6 +163,8 @@ interface ResolvedEngine {
   readonly mastraModelId: string;
   readonly mode: "default" | "plan";
   readonly botConversation: boolean;
+  readonly botName?: string;
+  readonly personalityTone?: BotPersonalityTone;
 }
 
 function mastraModelOptions(resolved: ResolvedEngine) {
@@ -739,6 +746,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         readonly cwd: string | undefined;
         readonly provider: ProviderDriverKind;
         readonly providerInstanceId: ProviderInstanceId;
+        readonly botName: string | undefined;
+        readonly personalityTone: BotPersonalityTone;
       }
     >();
     let delegationRuntime = options?.delegationRuntime;
@@ -1801,6 +1810,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: `Thread '${threadId}' has no resolved engine.`,
         });
       }
+      const personalityTone =
+        input.personalityTone ?? bot?.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE;
+      resolvedByThread.set(key, {
+        ...resolved,
+        ...(input.botName ? { botName: input.botName } : {}),
+        personalityTone,
+      });
       if (usesMastraCode(resolved.provider)) {
         const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
         if (!routing.enabled) {
@@ -1835,6 +1851,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             yolo: false,
             botConversation: resolved.botConversation,
             botName: input.botName || "",
+            personalityTone,
           }),
         );
         const toolSession = { ...existing.toolSession };
@@ -1878,7 +1895,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         existingLegacy?.workspaceResourceKey === workspaceResourceKey &&
         existingLegacy.cwd === input.cwd &&
         existingLegacy.provider === resolved.provider &&
-        existingLegacy.providerInstanceId === resolved.providerInstanceId
+        existingLegacy.providerInstanceId === resolved.providerInstanceId &&
+        existingLegacy.botName === input.botName &&
+        existingLegacy.personalityTone === personalityTone
       ) {
         const live = (yield* legacyProviderBridge.listSessions()).find(
           (session) => session.threadId === threadId,
@@ -1928,24 +1947,28 @@ const make = (options?: AgentControllerLiveOptions) =>
               }),
             ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {
-        return yield* legacyProviderBridge.startSession(threadId, input).pipe(
-          Effect.tap((session) =>
-            Effect.sync(() => {
-              legacyResourceIdentity.set(key, {
-                workspaceResourceKey,
-                cwd: input.cwd,
-                provider: resolved.provider,
-                providerInstanceId: resolved.providerInstanceId,
-              });
-              return session;
-            }),
-          ),
-          Effect.tapError(() =>
-            runMastra("resources.release", () =>
-              sessionResources.release(key, { destroy: true }),
-            ).pipe(Effect.ignoreCause({ log: true })),
-          ),
-        );
+        return yield* legacyProviderBridge
+          .startSession(threadId, { ...input, personalityTone })
+          .pipe(
+            Effect.tap((session) =>
+              Effect.sync(() => {
+                legacyResourceIdentity.set(key, {
+                  workspaceResourceKey,
+                  cwd: input.cwd,
+                  provider: resolved.provider,
+                  providerInstanceId: resolved.providerInstanceId,
+                  botName: input.botName,
+                  personalityTone,
+                });
+                return session;
+              }),
+            ),
+            Effect.tapError(() =>
+              runMastra("resources.release", () =>
+                sessionResources.release(key, { destroy: true }),
+              ).pipe(Effect.ignoreCause({ log: true })),
+            ),
+          );
       }
       const workspace = "botWorkspace" in resources ? resources.botWorkspace : undefined;
       const userComputerWorkspace =
@@ -2091,6 +2114,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             yolo: false,
             botConversation: resolved.botConversation,
             ...(input.botName ? { botName: input.botName } : {}),
+            personalityTone,
             ...(modelOptions ? { modelOptions } : {}),
           }),
         );
@@ -2190,7 +2214,15 @@ const make = (options?: AgentControllerLiveOptions) =>
             resolved?.botConversation === true && String(resolved.provider) !== "claudeAgent"
               ? {
                   ...providerInput,
-                  input: [AKERU_BOT_TURN_INSTRUCTIONS, providerInput.input]
+                  input: [
+                    createAkeruBotTurnInstructions({
+                      ...(resolved.botName ? { name: resolved.botName } : {}),
+                      ...(resolved.personalityTone !== undefined
+                        ? { personalityTone: resolved.personalityTone }
+                        : {}),
+                    }),
+                    providerInput.input,
+                  ]
                     .filter(Boolean)
                     .join("\n\n"),
                 }

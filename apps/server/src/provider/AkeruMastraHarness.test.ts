@@ -546,11 +546,11 @@ describe("AkeruMastraHarness", () => {
 
     assert.include(instructions, "You are Research Bot, a sharp, curious general assistant");
     assert.include(instructions, "Today is Wednesday, September 2, 2026");
-    assert.include(instructions, "Write like a thoughtful human teammate");
-    assert.include(instructions, "Silently reread before sending");
+    assert.include(instructions, "Write with judgment");
+    assert.include(instructions, "Before sending, cut filler");
     assert.include(instructions, "Name every drawback");
     assert.include(instructions, "Never use em or en dashes");
-    assert.include(instructions, "enabled plugin tools");
+    assert.include(instructions, "enabled plugins");
     assert.include(instructions, "Prefer preview_* tools over browser_* tools");
     assert.include(instructions, "Own the requested outcome");
     assert.include(instructions, "Carry multi-step work through implementation");
@@ -580,14 +580,17 @@ describe("AkeruMastraHarness", () => {
     const regular = new RequestContext();
     regular.setRaw("controller", { state: { botConversation: false } });
     const bot = new RequestContext();
-    bot.setRaw("controller", { state: { botConversation: true, botName: "Mina" } });
+    bot.setRaw("controller", {
+      state: { botConversation: true, botName: "Mina", personalityTone: 20 },
+    });
 
     assert.equal(resolveAkeruInstructions(regular, now), createAkeruAgentInstructions({ now }));
     assert.equal(
       resolveAkeruInstructions(bot, now),
-      createAkeruBotInstructions({ name: "Mina", now }),
+      createAkeruBotInstructions({ name: "Mina", now, personalityTone: 20 }),
     );
     assert.include(resolveAkeruInstructions(bot, now), "You are Mina");
+    assert.include(resolveAkeruInstructions(bot, now), "20/100, a 80% chill");
     assert.include(resolveAkeruInstructions(bot, now), "Before you use a tool");
     assert.include(resolveAkeruInstructions(bot, now), "automatic continuation");
   });

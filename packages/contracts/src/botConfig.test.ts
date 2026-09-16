@@ -1,10 +1,11 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { BotCreatedPayload, BotUsageCap } from "./orchestration.ts";
+import { BotCreatedPayload, BotPersonalityTone, BotUsageCap } from "./orchestration.ts";
 
 const decodeUsageCap = Schema.decodeUnknownSync(BotUsageCap);
 const decodeCreated = Schema.decodeUnknownSync(BotCreatedPayload);
+const decodePersonalityTone = Schema.decodeUnknownSync(BotPersonalityTone);
 
 describe("BotUsageCap", () => {
   it("accepts positive token limits and rejects invalid limits", () => {
@@ -36,6 +37,7 @@ describe("BotUsageCap", () => {
     expect(bot.description).toBeNull();
     expect(bot.disabledMcpServerIds).toEqual([]);
     expect(bot.voiceEnabled).toBe(false);
+    expect(bot.personalityTone).toBe(50);
   });
 
   it("accepts cloud sandbox providers on bot events", () => {
@@ -53,6 +55,15 @@ describe("BotUsageCap", () => {
           updatedAt: "2026-01-01T00:00:00.000Z",
         }).sandbox,
       ).toBe(sandbox);
+    }
+  });
+});
+
+describe("BotPersonalityTone", () => {
+  it("accepts the slider range and rejects values outside it", () => {
+    for (const tone of [0, 40, 50, 100]) expect(decodePersonalityTone(tone)).toBe(tone);
+    for (const tone of [-1, 101, 49.5, Number.NaN]) {
+      expect(() => decodePersonalityTone(tone)).toThrow();
     }
   });
 });
