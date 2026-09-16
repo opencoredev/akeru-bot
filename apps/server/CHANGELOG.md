@@ -1,5 +1,15 @@
 ## akeru-bot@0.0.41
 
+## 0.1.0
+
+### Minor Changes
+
+- [#276](https://github.com/opencoredev/akeru-bot/pull/276) [`730617d`](https://github.com/opencoredev/akeru-bot/commit/730617d74a9eca6047950a3f53a41d7a569610d6) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Add per-bot personality settings with Chill, Balanced, and Professional styles.
+
+### Patch Changes
+
+- [#275](https://github.com/opencoredev/akeru-bot/pull/275) [`554c9c4`](https://github.com/opencoredev/akeru-bot/commit/554c9c40db6d16985d2658500b7e02c297c9dbe1) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Recover interrupted chats after server restarts and route supported providers through the unified Akeru agent controller.
+
 ### Changes
 
 - [#193](https://github.com/opencoredev/akeru-bot/pull/193) fix(marketing): connect Grok discovery pages to setup

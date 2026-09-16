@@ -1,5 +1,18 @@
 ## @t3tools/desktop@0.0.41
 
+## 0.1.0
+
+### Patch Changes
+
+- [#277](https://github.com/opencoredev/akeru-bot/pull/277) [`8240cf5`](https://github.com/opencoredev/akeru-bot/commit/8240cf5926b8de78c33c2a75f21452d29435a4d2) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Redesigned the macOS DMG installer background with an editorial black-and-paper look and a hand-drawn arrow guiding the drag to Applications.
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.1.0
+  - @t3tools/client-runtime@0.0.1
+  - @t3tools/shared@0.0.1
+  - @t3tools/ssh@0.0.1
+  - @t3tools/tailscale@0.0.1
+
 ### Changes
 
 - [#193](https://github.com/opencoredev/akeru-bot/pull/193) fix(marketing): connect Grok discovery pages to setup
