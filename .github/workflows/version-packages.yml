@@ -34,6 +34,9 @@ jobs:
           cache: true
           run-install: true
 
+      - name: Enable pnpm for the Changesets action
+        run: corepack enable
+
       - name: Update Version Packages PR
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
