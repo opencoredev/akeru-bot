@@ -32,6 +32,8 @@ import {
   AppState,
   Keyboard,
   Platform,
+  Pressable,
+  Text,
   useWindowDimensions,
   View,
   type GestureResponderEvent,
@@ -116,6 +118,9 @@ export interface ThreadDetailScreenProps {
   readonly onNativePasteImages: (uris: ReadonlyArray<string>) => Promise<void>;
   readonly onRemoveDraftImage: (imageId: string) => void;
   readonly onStopThread: () => void;
+  readonly onResumeThread: () => void;
+  readonly canResumeThread: boolean;
+  readonly resumingThread: boolean;
   readonly onSendMessage: () => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
@@ -695,6 +700,25 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               </Animated.View>
             ) : null}
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
+              {props.canResumeThread ? (
+                <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3">
+                  <Text className="min-w-0 flex-1 text-sm text-foreground">
+                    {props.selectedThread.session?.lastError ??
+                      "The request stopped before it could finish."}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Resume interrupted request"
+                    className="rounded-xl bg-primary px-3 py-2 disabled:opacity-50"
+                    disabled={props.resumingThread}
+                    onPress={props.onResumeThread}
+                  >
+                    <Text className="font-semibold text-primary-foreground">
+                      {props.resumingThread ? "Resuming…" : "Resume"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {props.activePendingApproval || props.activePendingUserInput ? (
                 <Animated.View
                   className="shrink-0 gap-3 px-4 pb-3"

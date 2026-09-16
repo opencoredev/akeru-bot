@@ -39,7 +39,6 @@ import {
 import { derivePendingUserInputs } from "../../session-logic";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
-import { resolveBotRuntimeMode } from "./botSandbox";
 import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -147,6 +146,7 @@ export function useGroupThreadRuntime(groupId: string) {
     reportFailure: false,
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const resumeTurnCommand = useAtomCommand(threadEnvironment.resumeTurn, { reportFailure: false });
   const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
@@ -161,6 +161,30 @@ export function useGroupThreadRuntime(groupId: string) {
   >({});
   const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
+  const canResume =
+    linkedThreadRef !== null &&
+    (rememberedThread?.session?.status === "error" ||
+      rememberedThread?.session?.status === "interrupted" ||
+      rememberedThread?.session?.status === "stopped") &&
+    (rememberedThread?.latestTurn?.state === "error" ||
+      rememberedThread?.latestTurn?.state === "interrupted" ||
+      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+  const resume = useCallback(async (): Promise<boolean> => {
+    if (!linkedThreadRef || !canResume || resuming) return false;
+    setResuming(true);
+    setError(null);
+    const result = await resumeTurnCommand({
+      environmentId: linkedThreadRef.environmentId,
+      input: { threadId: linkedThreadRef.threadId },
+    });
+    setResuming(false);
+    if (result._tag === "Failure") {
+      setError(errorMessage(result));
+      return false;
+    }
+    return true;
+  }, [canResume, linkedThreadRef, resumeTurnCommand, resuming]);
 
   const submitPendingUserInput = useCallback(
     async (
@@ -251,7 +275,7 @@ export function useGroupThreadRuntime(groupId: string) {
       const createdAt = new Date().toISOString();
       const currentThreadRef = retainedThreadRef.current.threadRef;
       const threadId = currentThreadRef?.threadId ?? newThreadId();
-      const runtimeMode = resolveBotRuntimeMode(respondingBot.sandbox, settings.localExecutionMode);
+      const runtimeMode = respondingBot.runtimeMode;
 
       try {
         const attachments = await Promise.all(
@@ -408,6 +432,7 @@ export function useGroupThreadRuntime(groupId: string) {
 
   return {
     bootstrapped,
+    canResume,
     defaultProject: activeProject,
     error: error ?? rememberedThread?.session?.lastError ?? null,
     groupReady,
@@ -419,6 +444,8 @@ export function useGroupThreadRuntime(groupId: string) {
     pendingUserInputQuestionIndex,
     respondingRequestIds,
     respondingBotId: rememberedThread?.respondingBotId ?? group?.bossBotId ?? null,
+    resume,
+    resuming,
     selectPendingUserInputOption,
     advancePendingUserInput,
     send,

@@ -33,6 +33,7 @@ import type * as Option from "effect/Option";
 import type * as Effect from "effect/Effect";
 
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
+import type { ProjectionPendingTurnStart } from "../../persistence/Services/ProjectionTurns.ts";
 
 export interface ProjectionSnapshotCounts {
   readonly projectCount: number;
@@ -229,6 +230,16 @@ export interface ProjectionSnapshotQueryShape {
     readonly threadId: ThreadId;
     readonly messageId: MessageId;
   }) => Effect.Effect<Option.Option<ProjectionTurnStartMessage>, ProjectionRepositoryError>;
+
+  /**
+   * Lists turn starts that were durably projected but have not yet been bound
+   * to a concrete provider turn. Startup recovery uses these rows to close the
+   * hot event-stream crash window.
+   */
+  readonly listPendingTurnStarts?: () => Effect.Effect<
+    ReadonlyArray<ProjectionPendingTurnStart>,
+    ProjectionRepositoryError
+  >;
 
   /**
    * Read a single active thread detail snapshot by id.

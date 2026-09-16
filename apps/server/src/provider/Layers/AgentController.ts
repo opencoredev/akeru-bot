@@ -85,11 +85,13 @@ import {
   createAkeruMastraHarness,
   criticalAkeruAction,
   mastraModelId,
+  openCodeGoInlineConnection,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
 import { AKERU_BOT_TURN_INSTRUCTIONS } from "../AkeruAgentInstructions.ts";
+import type { ProviderInstanceRoutingInfo } from "../Services/ProviderAdapterRegistry.ts";
 import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
 import {
@@ -402,7 +404,13 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
 }
 
 function usesMastraCode(provider: ProviderDriverKind): boolean {
-  return provider === "codex" || provider === "kimi" || provider === "opencodeGo";
+  return (
+    provider === "codex" ||
+    provider === "claudeAgent" ||
+    provider === "grok" ||
+    provider === "kimi" ||
+    provider === "opencodeGo"
+  );
 }
 
 function disabledProviderError(
@@ -433,6 +441,65 @@ function subscriptionProviderForDriver(
       return "opencode-go";
     default:
       return undefined;
+  }
+}
+
+export function mastraConnectionIssue(
+  provider: ProviderDriverKind,
+  connection: ProviderInstanceRoutingInfo["mastraConnection"],
+  savedCredentialConnected: boolean,
+): string | undefined {
+  if (!connection) return undefined;
+  const env = connection.useSavedCredential
+    ? connection.environment
+    : connection.instanceEnvironment;
+  if (connection.useSavedCredential) {
+    const hasAmbientCredential = (() => {
+      switch (String(provider)) {
+        case "codex":
+          return Boolean(env.OPENAI_API_KEY?.trim());
+        case "claudeAgent":
+          return Boolean(
+            env.ANTHROPIC_API_KEY?.trim() ||
+            env.ANTHROPIC_AUTH_TOKEN?.trim() ||
+            env.CLAUDE_CODE_OAUTH_TOKEN?.trim(),
+          );
+        case "grok":
+          return Boolean(env.XAI_API_KEY?.trim());
+        case "opencodeGo":
+          return Boolean(env.OPENCODE_API_KEY?.trim() || openCodeGoInlineConnection(env).apiKey);
+        default:
+          return false;
+      }
+    })();
+    if (hasAmbientCredential) return undefined;
+    return savedCredentialConnected
+      ? undefined
+      : `Connect ${provider} in Settings before starting.`;
+  }
+  switch (String(provider)) {
+    case "codex":
+      return env.OPENAI_API_KEY?.trim()
+        ? undefined
+        : "This Codex instance needs OPENAI_API_KEY for the Akeru harness.";
+    case "claudeAgent":
+      return env.ANTHROPIC_API_KEY?.trim() ||
+        env.ANTHROPIC_AUTH_TOKEN?.trim() ||
+        env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
+        ? undefined
+        : "This Claude instance needs an API key or auth token for the Akeru harness.";
+    case "grok":
+      return env.XAI_API_KEY?.trim()
+        ? undefined
+        : "This Grok instance needs XAI_API_KEY for the Akeru harness.";
+    case "kimi":
+      return "Custom Kimi credentials are not supported by the Akeru harness.";
+    case "opencodeGo":
+      return env.OPENCODE_API_KEY?.trim() || openCodeGoInlineConnection(env).apiKey
+        ? undefined
+        : "This OpenCode Go instance needs OPENCODE_API_KEY for the Akeru harness.";
+    default:
+      return `Provider '${provider}' has no Akeru Mastra transport.`;
   }
 }
 
@@ -500,6 +567,10 @@ const make = (options?: AgentControllerLiveOptions) =>
     const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
     const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
     const resolvedByThread = new Map<string, ResolvedEngine>();
+    const modelConnections = new Map<
+      string,
+      NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
+    >();
     const sessions = new Map<string, ActiveSession>();
     const memoryUsageByThread = new Map<
       string,
@@ -721,6 +792,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         getOpenCodeGoApiKey: async () =>
           subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
         getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
+        getModelConnection: (providerInstanceId) => modelConnections.get(providerInstanceId),
         memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
         syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
           const active = sessions.get(threadId);
@@ -1591,6 +1663,20 @@ const make = (options?: AgentControllerLiveOptions) =>
           modelSelection.instanceId,
         );
       }
+      if (routing.mastraConnection) {
+        modelConnections.set(String(modelSelection.instanceId), routing.mastraConnection);
+      } else {
+        modelConnections.delete(String(modelSelection.instanceId));
+      }
+      if (usesMastraCode(routing.driverKind)) {
+        const subscriptionProvider = subscriptionProviderForDriver(routing.driverKind);
+        const issue = mastraConnectionIssue(
+          routing.driverKind,
+          routing.mastraConnection,
+          subscriptionProvider ? subscriptionAuth.isConnected(subscriptionProvider) : false,
+        );
+        if (issue) return yield* unavailable(new Error(issue));
+      }
       const capabilities = usesMastraCode(routing.driverKind)
         ? { sessionModelSwitch: "in-session" as const }
         : yield* legacyProviderBridge
@@ -1627,6 +1713,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             yield* runMastra("state.set", () =>
               active.session.state.set({
                 ...activeState,
+                providerInstanceId: String(resolved.providerInstanceId),
                 ...(nextModelOptions ? { modelOptions: nextModelOptions } : {}),
               }),
             );
@@ -1999,6 +2086,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         const modelOptions = mastraModelOptions(resolved);
         yield* runMastra("state.set", () =>
           session.state.set({
+            providerInstanceId: String(resolved.providerInstanceId),
             ...(input.cwd ? { projectPath: input.cwd } : {}),
             yolo: false,
             botConversation: resolved.botConversation,
@@ -2258,7 +2346,12 @@ const make = (options?: AgentControllerLiveOptions) =>
       }
       const toolRequest = active.approvalRequests.get(toolCallId);
       const pendingApproval = active.pendingApprovals.get(toolCallId);
-      if (!toolRequest || !pendingApproval) return;
+      if (!toolRequest || !pendingApproval) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToRequest",
+          detail: `Stale pending approval request: ${input.requestId}. The request is no longer active.`,
+        });
+      }
       const { name: toolName, input: toolInput } = toolRequest;
       const akeruTool = AKERU_TOOL_CATALOG.find((tool) => tool.id === toolName);
       const runtimeToolId = akeruTool?.id ?? (isMemoryToolId(toolName) ? toolName : undefined);

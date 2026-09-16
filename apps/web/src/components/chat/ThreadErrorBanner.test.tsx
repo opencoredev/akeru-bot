@@ -95,4 +95,12 @@ describe("ThreadErrorBanner", () => {
       "A request failed in a bot chat.\n\nError details:\nProvider crashed",
     );
   });
+
+  it("offers Resume for a recoverable failed request", () => {
+    const markup = renderToStaticMarkup(
+      <ThreadErrorBanner error="Automatic recovery failed" onResume={() => {}} />,
+    );
+
+    expect(markup).toContain(">Resume<");
+  });
 });
