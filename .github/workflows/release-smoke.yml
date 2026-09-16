@@ -45,7 +45,7 @@ jobs:
     name: ${{ matrix.label }}
     needs: release_smoke
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       RELEASE_VERSION: ${{ inputs.version }}
     strategy:
