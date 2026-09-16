@@ -1,6 +1,5 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import InstallPromptDialog from "../components/InstallPromptDialog.astro";
 import { docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
 
@@ -233,12 +232,10 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       </a>
     </div>
   </section>
-  <InstallPromptDialog />
 </Layout>
 
 <script>
   import { pickMostVisibleDemo } from "../lib/demoPlayback";
-  import { installPromptPlatformForDownload } from "../lib/downloadInstallPrompt";
   import {
     detectDownloadTarget,
     fetchLatestRelease,
@@ -275,27 +272,12 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       const suffix = card.dataset.asset;
       if (!suffix || card === button) return;
       const asset = await resolveAssetDownload(card, suffix, release);
-      const promptPlatform = installPromptPlatformForDownload(card.dataset.os, asset !== null);
-      if (promptPlatform) {
-        card.dataset.installPrompt = promptPlatform;
-        card.href = "#";
-        card.removeAttribute("data-unsigned");
-        return;
-      }
       card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
     });
 
     if (button && platform) {
       const asset = await resolveAssetDownload(button, platform.assetSuffix, release);
-      const promptPlatform = installPromptPlatformForDownload(platform.os, asset !== null);
-      if (promptPlatform) {
-        button.dataset.installPrompt = promptPlatform;
-        button.href = "#";
-        button.removeAttribute("data-unsigned");
-        button.removeAttribute("aria-disabled");
-      } else {
-        button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
-      }
+      button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
       if (!asset && label) label.textContent = "All downloads";
     }
     await Promise.all(cardDownloads);
