@@ -69,9 +69,9 @@ the Apple Silicon macOS and Windows runners. The Tenki Runner GitHub App must ha
 
 ## macOS secrets
 
-The stable release builds a sealed, ad-hoc-signed DMG when all macOS secrets are absent. Users
-must approve that build through the macOS Gatekeeper installation flow. If any macOS secret is
-present, the workflow requires the complete set and stops on a partial configuration.
+The stable release fails before building when the macOS secrets are absent, so an unsigned DMG
+can never publish as the latest stable release. Scheduled nightlies still build the sealed,
+ad-hoc-signed fallback without secrets. A partial secret configuration stops every channel.
 
 Add these GitHub Actions secrets to publish a Developer ID signed and notarized DMG:
 
