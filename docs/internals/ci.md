@@ -50,9 +50,9 @@ Apple Silicon macOS and Windows runners build the advertised desktop targets bef
 creates the `vX.Y.Z` tag and GitHub Release. The final job verifies the exact asset names and
 `SHA256SUMS`, then starts the next Version Packages update. Version automation waits for the current
 stable tag before it prepares another version.
-Missing signing credentials produce unsigned macOS and Windows artifacts.
-Unsigned macOS builds still replace Electron's linker-signed stub with a sealed ad-hoc signature
-and fail the release if `codesign --verify` fails or the identifier is not `dev.leodoes.akeru`.
+Stable macOS releases require the complete Developer ID signing credential set and fail before
+building when it is absent, so an unsigned DMG can never publish as latest. Missing Windows
+credentials still produce an unsigned Windows installer.
 Complete credentials use the existing Developer ID, notarization, and Azure Trusted Signing paths.
 
 The same workflow runs at minute 17 every three hours for nightly releases. It skips the build when
