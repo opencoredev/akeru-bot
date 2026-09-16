@@ -395,6 +395,17 @@ export const BotUsageCap = Schema.Struct({
 });
 export type BotUsageCap = typeof BotUsageCap.Type;
 
+export const MIN_BOT_PERSONALITY_TONE = 0;
+export const BALANCED_BOT_PERSONALITY_TONE = 50;
+export const MAX_BOT_PERSONALITY_TONE = 100;
+export const BotPersonalityTone = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_BOT_PERSONALITY_TONE,
+    maximum: MAX_BOT_PERSONALITY_TONE,
+  }),
+);
+export type BotPersonalityTone = typeof BotPersonalityTone.Type;
+
 export const CHANNEL_PROVIDERS = ["telegram", "imessage", "whatsapp", "slack", "discord"] as const;
 export const ChannelProvider = Schema.Literals(CHANNEL_PROVIDERS);
 export type ChannelProvider = typeof ChannelProvider.Type;
@@ -502,6 +513,7 @@ export const OrchestrationBot = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   channelBindings: Schema.Array(ChannelBinding).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
@@ -1102,6 +1114,7 @@ const BotCreateCommand = Schema.Struct({
   sandbox: Schema.NullOr(BotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.NullOr(GroupId),
   createdAt: IsoDateTime,
@@ -1121,6 +1134,7 @@ const BotUpdateCommand = Schema.Struct({
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
@@ -1140,6 +1154,7 @@ const ClientBotUpdateCommand = Schema.Struct({
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
@@ -2125,6 +2140,9 @@ export const BotCreatedPayload = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  personalityTone: BotPersonalityTone.pipe(
+    Schema.withDecodingDefault(Effect.succeed(BALANCED_BOT_PERSONALITY_TONE)),
+  ),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   channelBindings: Schema.Array(ChannelBinding).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
@@ -2146,6 +2164,7 @@ export const BotUpdatedPayload = Schema.Struct({
   sandbox: Schema.optional(PersistedBotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),

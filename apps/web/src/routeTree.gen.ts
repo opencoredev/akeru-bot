@@ -18,6 +18,7 @@ import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsSectionRouteImport } from './routes/settings.$section'
 import { Route as SettingsSplatRouteImport } from './routes/settings.$'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
+import { Route as BotsBotIdSettingsRouteImport } from './routes/bots.$botId.settings'
 import { Route as ChatGroupsGroupIdRouteImport } from './routes/_chat.groups.$groupId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatBotsBotIdRouteImport } from './routes/_chat.bots.$botId'
@@ -67,6 +68,11 @@ const ProjectsProjectKeyRoute = ProjectsProjectKeyRouteImport.update({
   path: '/projects/$projectKey',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BotsBotIdSettingsRoute = BotsBotIdSettingsRouteImport.update({
+  id: '/bots/$botId/settings',
+  path: '/bots/$botId/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatGroupsGroupIdRoute = ChatGroupsGroupIdRouteImport.update({
   id: '/groups/$groupId',
   path: '/groups/$groupId',
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/bots/$botId': typeof ChatBotsBotIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/groups/$groupId': typeof ChatGroupsGroupIdRoute
+  '/bots/$botId/settings': typeof BotsBotIdSettingsRoute
 }
 export interface FileRoutesByTo {
   '/pair': typeof PairRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/bots/$botId': typeof ChatBotsBotIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/groups/$groupId': typeof ChatGroupsGroupIdRoute
+  '/bots/$botId/settings': typeof BotsBotIdSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/_chat/bots/$botId': typeof ChatBotsBotIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/_chat/groups/$groupId': typeof ChatGroupsGroupIdRoute
+  '/bots/$botId/settings': typeof BotsBotIdSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/bots/$botId'
     | '/draft/$draftId'
     | '/groups/$groupId'
+    | '/bots/$botId/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/pair'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/bots/$botId'
     | '/draft/$draftId'
     | '/groups/$groupId'
+    | '/bots/$botId/settings'
   id:
     | '__root__'
     | '/_chat'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/_chat/bots/$botId'
     | '/_chat/draft/$draftId'
     | '/_chat/groups/$groupId'
+    | '/bots/$botId/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -186,6 +198,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRouteWithChildren
   UsageRoute: typeof UsageRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
+  BotsBotIdSettingsRoute: typeof BotsBotIdSettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       path: '/projects/$projectKey'
       fullPath: '/projects/$projectKey'
       preLoaderRoute: typeof ProjectsProjectKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bots/$botId/settings': {
+      id: '/bots/$botId/settings'
+      path: '/bots/$botId/settings'
+      fullPath: '/bots/$botId/settings'
+      preLoaderRoute: typeof BotsBotIdSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_chat/groups/$groupId': {
@@ -323,6 +343,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRouteWithChildren,
   UsageRoute: UsageRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
+  BotsBotIdSettingsRoute: BotsBotIdSettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

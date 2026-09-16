@@ -1,66 +1,26 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  ProviderInstanceId,
-  type BotEngine,
-  type EnvironmentId,
-  type McpServerId,
-} from "@t3tools/contracts";
+import type { ScopedThreadRef } from "@t3tools/contracts";
 import {
   Cancel01Icon,
-  Brain02Icon,
-  Edit02Icon,
-  Link02Icon,
   PanelRightCloseIcon,
   PanelRightIcon,
-  WrenchIcon,
+  Settings02Icon,
 } from "@hugeicons/core-free-icons";
-import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useEffect, useReducer, useState, type ReactNode } from "react";
 
-import { usePrimarySettings } from "../../hooks/useSettings";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
-import {
-  getCustomModelOptionsByInstance,
-  resolveAppModelSelectionForInstance,
-  resolveAppModelSelectionState,
-} from "../../modelSelection";
-import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  resolveSelectableProviderInstanceEntry,
-  sortProviderInstanceEntries,
-} from "../../providerInstances";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { environmentMcpServersAtom } from "../../state/mcpServers";
-import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../../state/server";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Sheet, SheetClose, SheetPopup, SheetTitle } from "../ui/sheet";
-import { Textarea } from "../ui/textarea";
-import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { shouldRenderTraitsControls, TraitsPicker } from "../chat/TraitsPicker";
-import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotBrowserPreview } from "./BotBrowserPreview";
-import { BotChannelsSheet } from "./BotChannelsSheet";
-import { BotModelPicker } from "./BotModelPicker";
-import { BotUsageSection } from "./BotUsageSection";
-import { BotMemorySheet } from "./BotMemorySheet";
-import {
-  BOT_SANDBOX_OPTIONS,
-  botSandboxChoice,
-  botSandboxLabel,
-  type BotSandboxChoice,
-} from "./botSandbox";
-import { BotToolsSheet, buildBotToolItems } from "./BotToolsSheet";
+import { botPersonalityToneLabel, canonicalizeBotPersonalityTone } from "./botPersonalityTone";
+import { botSandboxChoice, botSandboxLabel } from "./botSandbox";
 import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
 import type { Bot } from "./types";
-import type { ScopedThreadRef } from "@t3tools/contracts";
-
-const NO_ENVIRONMENT = "" as EnvironmentId;
 
 type BotDetailsPanelState = {
   readonly desktopOpen: boolean;
@@ -85,463 +45,75 @@ export function reduceBotDetailsPanelState(
   return { ...state, mobileOpen: action.open };
 }
 
-export function parseBotUsageCapInput(input: string): {
-  readonly valid: boolean;
-  readonly value: Bot["usageCap"];
-} {
-  if (input.trim().length === 0) return { valid: true, value: null };
-  const limit = Number(input);
-  if (!Number.isSafeInteger(limit) || limit <= 0) return { valid: false, value: null };
-  return { valid: true, value: { unit: "tokens", limit } };
-}
+export {
+  parseBotUsageCapInput,
+  resolveBotUsageCapForProvider,
+  type BotProfileUpdate,
+} from "./useBotProfileDraft";
 
-export function resolveBotUsageCapForProvider(
-  input: string,
-  providerDriver?: string,
-): {
-  readonly available: boolean;
-  readonly valid: boolean;
-  readonly value: Bot["usageCap"];
-} {
-  if (providerDriver === "cursor" || providerDriver === "grok") {
-    return { available: false, valid: true, value: null };
-  }
-  return { available: true, ...parseBotUsageCapInput(input) };
-}
-
-export interface BotProfileUpdate {
-  readonly name: string;
-  readonly label: string | null;
-  readonly description: string | null;
-  readonly engine: BotEngine | null;
-  readonly usageCap: Bot["usageCap"];
-  readonly sandbox: Bot["sandbox"];
-  readonly voiceEnabled: boolean;
-  readonly disabledMcpServerIds: readonly McpServerId[];
-}
-
-function BotProfileEditor({
+function BotOverview({
   bot,
-  onSave,
-  threadRef,
-  active,
+  onOpenSettings,
   routinePanel,
 }: {
   readonly bot: Bot;
-  readonly onSave?: (input: BotProfileUpdate) => Promise<boolean>;
-  readonly threadRef: ScopedThreadRef | null;
-  readonly active: boolean;
+  readonly onOpenSettings?: () => void;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
 }) {
-  const providers = useAtomValue(primaryServerProvidersAtom);
-  const environmentId = usePrimaryEnvironmentId();
-  const mcpServers = useAtomValue(environmentMcpServersAtom(environmentId ?? NO_ENVIRONMENT));
-  const settings = usePrimarySettings();
-  const [name, setName] = useState(bot.name);
-  const [label, setLabel] = useState(bot.label ?? "");
-  const [description, setDescription] = useState(bot.description ?? "");
-  const [avatarOpen, setAvatarOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [engineChanged, setEngineChanged] = useState(false);
-  const [usageCap, setUsageCap] = useState(() => bot.usageCap?.limit.toString() ?? "");
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [memoryOpen, setMemoryOpen] = useState(false);
-  const [channelsOpen, setChannelsOpen] = useState(false);
-  const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
-  const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
-  const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
-    bot.disabledMcpServerIds,
-  );
-
-  const instanceEntries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
-      ),
-    [providers, settings],
-  );
-  const defaultSelection = useMemo(
-    () => resolveAppModelSelectionState(settings, providers),
-    [providers, settings],
-  );
-  const [provider, setProvider] = useState(bot.engine?.provider ?? defaultSelection.instanceId);
-  const activeEntry = useMemo(
-    () =>
-      resolveSelectableProviderInstanceEntry(instanceEntries, ProviderInstanceId.make(provider)),
-    [instanceEntries, provider],
-  );
-  const [model, setModel] = useState<string>(
-    () =>
-      bot.engine?.model ??
-      (activeEntry
-        ? resolveAppModelSelectionForInstance(activeEntry.instanceId, settings, providers, null)
-        : null) ??
-      defaultSelection.model,
-  );
-  const [modelOptions, setModelOptions] = useState(
-    () =>
-      bot.engine?.options ??
-      (bot.engine?.provider === defaultSelection.instanceId &&
-      bot.engine.model === defaultSelection.model
-        ? defaultSelection.options
-        : undefined),
-  );
-  const modelOptionsByInstance = useMemo(
-    () => getCustomModelOptionsByInstance(settings, providers),
-    [providers, settings],
-  );
-
-  useEffect(() => {
-    if (engineChanged) return;
-    setProvider(bot.engine?.provider ?? defaultSelection.instanceId);
-    if (bot.engine?.model) setModel(bot.engine.model);
-    setModelOptions(
-      bot.engine?.options ??
-        (bot.engine?.provider === defaultSelection.instanceId &&
-        bot.engine.model === defaultSelection.model
-          ? defaultSelection.options
-          : undefined),
-    );
-  }, [bot.engine, defaultSelection, engineChanged]);
-
-  const normalizedLabel = label.trim() || null;
-  const normalizedDescription = description.trim() || null;
-  const nextEngine: Bot["engine"] =
-    engineChanged && model
-      ? {
-          provider,
-          model,
-          ...(modelOptions ? { options: modelOptions } : {}),
-        }
-      : bot.engine;
-  const showModelOptions =
-    activeEntry !== undefined &&
-    model.length > 0 &&
-    shouldRenderTraitsControls({
-      provider: activeEntry.driverKind,
-      models: activeEntry.models,
-      model,
-      prompt: "",
-      modelOptions,
-      allowPromptInjectedEffort: false,
-      planModeEnabled: settings.planModeEnabled,
-    });
-  const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
-  const usageCapDirty =
-    !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
-  const nextSandbox: Bot["sandbox"] = sandbox;
-  const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);
-  const enabledToolCount = tools.filter(
-    (tool) => tool.workspaceEnabled && !disabledMcpServerIds.includes(tool.id),
-  ).length;
-  const assignedChannels = (bot.channelBindings ?? []).filter(
-    (binding) => binding.connectionId || binding.projectId || binding.status !== "disconnected",
-  );
-  const connectedChannelCount = assignedChannels.filter(
-    (binding) => binding.status === "connected",
-  ).length;
-  const toolOverridesDirty =
-    [...disabledMcpServerIds].sort().join("\u0000") !==
-    [...bot.disabledMcpServerIds].sort().join("\u0000");
-  const sandboxDirty = sandbox !== botSandboxChoice(bot.sandbox);
-  const dirty =
-    name.trim() !== bot.name ||
-    normalizedLabel !== bot.label ||
-    normalizedDescription !== bot.description ||
-    engineChanged ||
-    usageCapDirty ||
-    sandboxDirty ||
-    voiceEnabled !== bot.voiceEnabled ||
-    toolOverridesDirty;
-
-  const markChanged = () => setSaved(false);
-
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
-      <div className="flex flex-col items-center pb-7 pt-6">
-        <button
-          type="button"
-          aria-label="Change bot avatar"
-          onClick={() => setAvatarOpen(true)}
-          className="group relative rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <BotAvatarView avatar={bot.avatar} name={name || bot.name} className="size-20" />
-          <span className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors group-hover:text-foreground">
-            <AppIcon className="size-3.5" icon={Edit02Icon} />
-          </span>
-        </button>
-      </div>
-
-      <div className="space-y-5">
-        <label className="block space-y-2 text-sm font-medium">
-          Name
-          <Input
-            aria-label="Bot name"
-            value={name}
-            onChange={(event) => {
-              setName(event.currentTarget.value);
-              markChanged();
-            }}
-          />
-        </label>
-
-        <label className="block space-y-2 text-sm font-medium">
-          <span>
-            Label <span className="font-normal text-muted-foreground">(optional)</span>
-          </span>
-          <Input
-            aria-label="Bot label"
-            value={label}
-            placeholder="Research, marketing, admin"
-            onChange={(event) => {
-              setLabel(event.currentTarget.value);
-              markChanged();
-            }}
-          />
-        </label>
-
-        <label className="block space-y-2 text-sm font-medium">
-          Description
-          <Textarea
-            aria-label="Bot description"
-            value={description}
-            placeholder="What this bot is for"
-            rows={5}
-            className="min-h-28 resize-none"
-            onChange={(event) => {
-              setDescription(event.currentTarget.value);
-              markChanged();
-            }}
-          />
-        </label>
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Model</div>
-          <div className="flex min-h-10 items-center rounded-lg border border-border bg-muted/20 px-2">
-            {activeEntry && model ? (
-              <BotModelPicker
-                activeInstanceId={activeEntry.instanceId}
-                model={model}
-                instanceEntries={instanceEntries}
-                modelOptionsByInstance={modelOptionsByInstance}
-                onChange={(instanceId, nextModel) => {
-                  setProvider(instanceId);
-                  setModel(nextModel);
-                  setModelOptions(
-                    defaultSelection.instanceId === instanceId &&
-                      defaultSelection.model === nextModel
-                      ? defaultSelection.options
-                      : undefined,
-                  );
-                  setEngineChanged(true);
-                  markChanged();
-                }}
-              />
-            ) : (
-              <span className="px-1 text-sm text-muted-foreground">Connect a provider</span>
-            )}
-          </div>
-        </div>
-
-        {showModelOptions && activeEntry ? (
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Reasoning</div>
-            <div className="flex min-h-10 items-center rounded-lg border border-border bg-muted/20 px-2">
-              <TraitsPicker
-                provider={activeEntry.driverKind}
-                instanceId={activeEntry.instanceId}
-                models={activeEntry.models}
-                model={model}
-                prompt=""
-                onPromptChange={() => {}}
-                modelOptions={modelOptions}
-                allowPromptInjectedEffort={false}
-                planModeEnabled={settings.planModeEnabled}
-                triggerClassName="w-full max-w-none justify-between"
-                onModelOptionsChange={(nextOptions) => {
-                  setModelOptions(nextOptions);
-                  setEngineChanged(true);
-                  markChanged();
-                }}
-              />
-            </div>
-          </div>
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
+      <div className="flex flex-col items-center text-center">
+        <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-16" />
+        <h3 className="mt-3 text-base font-semibold">{bot.name}</h3>
+        {bot.label ? <p className="mt-0.5 text-sm text-muted-foreground">{bot.label}</p> : null}
+        {bot.description ? (
+          <p className="mt-3 line-clamp-3 max-w-64 text-sm leading-relaxed text-muted-foreground">
+            {bot.description}
+          </p>
         ) : null}
-
-        <BotUsageSection environmentId={active ? environmentId : null} botId={bot.id} />
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Memory</div>
-          <button
-            type="button"
-            aria-label="Manage bot memory"
-            disabled={!threadRef}
-            onClick={() => setMemoryOpen(true)}
-            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors enabled:hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Brain02Icon} />
-            <span className="min-w-0 flex-1 text-sm">Facts and history</span>
-            <span className="text-xs text-muted-foreground">Manage</span>
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Sandbox</div>
-          <Select
-            value={sandbox}
-            onValueChange={(value) => {
-              if (value === null) return;
-              if (!BOT_SANDBOX_OPTIONS.some((option) => option.value === value)) return;
-              setSandbox(value as BotSandboxChoice);
-              markChanged();
-            }}
-          >
-            <SelectTrigger className="w-full bg-muted/20" aria-label="Sandbox provider">
-              <SelectValue>{botSandboxLabel(sandbox)}</SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {BOT_SANDBOX_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-        </div>
-
-        {resolvedUsageCap.available ? (
-          <label className="block space-y-2 text-sm font-medium">
-            <span>
-              Token hard stop <span className="font-normal text-muted-foreground">(optional)</span>
-            </span>
-            <Input
-              aria-label="Token hard stop"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={usageCap}
-              placeholder="No limit"
-              onChange={(event) => {
-                setUsageCap(event.currentTarget.value);
-                markChanged();
-              }}
-            />
-          </label>
-        ) : (
-          <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
-            <span className="text-sm font-medium">Token hard stop</span>
-            <span className="text-sm text-muted-foreground">Unavailable for this provider</span>
-          </div>
-        )}
-
-        <div className="flex min-h-10 items-center justify-between rounded-lg border border-border bg-muted/20 px-3">
-          <span className="text-sm font-medium">Voice calls</span>
-          <Switch
-            checked={voiceEnabled}
-            onCheckedChange={(checked) => {
-              setVoiceEnabled(Boolean(checked));
-              markChanged();
-            }}
-            aria-label={`${voiceEnabled ? "Disable" : "Enable"} voice calls for ${bot.name}`}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Tools</div>
-          <button
-            type="button"
-            aria-label="Manage bot tools"
-            aria-expanded={toolsOpen}
-            onClick={() => setToolsOpen(true)}
-            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={WrenchIcon} />
-            <span className="min-w-0 flex-1 text-sm">
-              {tools.length === 0
-                ? "No workspace tools"
-                : `${enabledToolCount} of ${tools.length} enabled`}
-            </span>
-            <span className="text-xs text-muted-foreground">Manage</span>
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-sm font-medium">Channels</div>
-          <button
-            type="button"
-            aria-label="Manage bot channels"
-            aria-expanded={channelsOpen}
-            onClick={() => setChannelsOpen(true)}
-            className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <AppIcon className="size-4 shrink-0 text-muted-foreground" icon={Link02Icon} />
-            <span className="min-w-0 flex-1 text-sm">
-              {assignedChannels.length === 0
-                ? "No channels"
-                : `${connectedChannelCount} of ${assignedChannels.length} connected`}
-            </span>
-            <span className="text-xs text-muted-foreground">Manage</span>
-          </button>
-        </div>
       </div>
 
-      <div className="mt-7 flex items-center justify-end gap-3">
-        {saved ? <span className="mr-auto text-xs text-success">Saved</span> : null}
-        <Button
-          size="sm"
-          disabled={saving || !dirty || !name.trim() || !resolvedUsageCap.valid || !onSave}
-          onClick={() => {
-            if (!onSave) return;
-            setSaving(true);
-            void onSave({
-              name: name.trim(),
-              label: normalizedLabel,
-              description: normalizedDescription,
-              engine: nextEngine,
-              usageCap: resolvedUsageCap.value,
-              sandbox: nextSandbox,
-              voiceEnabled,
-              disabledMcpServerIds,
-            }).then((success) => {
-              setSaving(false);
-              setSaved(success);
-              if (success) setEngineChanged(false);
-            });
-          }}
-        >
-          {saving ? "Saving" : "Save"}
-        </Button>
-      </div>
+      <Button
+        className="mt-6 w-full justify-center"
+        variant="outline"
+        disabled={!onOpenSettings}
+        onClick={onOpenSettings}
+      >
+        <AppIcon className="size-4" icon={Settings02Icon} />
+        Open bot settings
+      </Button>
+
+      <dl className="mt-6 divide-y divide-border/70 border-y border-border/70 text-sm">
+        <div className="flex items-center justify-between gap-4 py-3">
+          <dt className="text-muted-foreground">Personality</dt>
+          <dd className="font-medium">
+            {botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone))}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-4 py-3">
+          <dt className="text-muted-foreground">Model</dt>
+          <dd className="max-w-44 truncate font-medium">{bot.engine?.model ?? "App default"}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4 py-3">
+          <dt className="text-muted-foreground">Sandbox</dt>
+          <dd className="font-medium">{botSandboxLabel(botSandboxChoice(bot.sandbox))}</dd>
+        </div>
+      </dl>
 
       <RoutinePanel botName={bot.name} {...(routinePanel ?? { status: "unavailable" as const })} />
-
-      <AvatarPickerDialog bot={bot} open={avatarOpen} onOpenChange={setAvatarOpen} />
-      <BotToolsSheet
-        open={toolsOpen}
-        onOpenChange={setToolsOpen}
-        servers={mcpServers}
-        disabledIds={disabledMcpServerIds}
-        onDisabledIdsChange={(ids) => {
-          setDisabledMcpServerIds(ids);
-          markChanged();
-        }}
-      />
-      <BotMemorySheet open={memoryOpen} onOpenChange={setMemoryOpen} threadRef={threadRef} />
-      <BotChannelsSheet bot={bot} open={channelsOpen} onOpenChange={setChannelsOpen} />
     </div>
   );
 }
 
 export function BotDetailsPanel({
   bot,
-  onSaveBot,
+  onOpenSettings,
   threadRef = null,
   routinePanel,
 }: {
   readonly bot: Bot;
-  readonly onSaveBot?: (input: BotProfileUpdate) => Promise<boolean>;
+  /** Opens the full bot settings page. Omitted when no router is available. */
+  readonly onOpenSettings?: () => void;
   readonly threadRef?: ScopedThreadRef | null;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
 }) {
@@ -590,16 +162,14 @@ export function BotDetailsPanel({
       {!browserExpanded || !canExpandBrowser ? (
         <>
           <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-            <h2 className="text-sm font-medium">Settings</h2>
+            <h2 className="text-sm font-medium">Bot</h2>
             <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
               {closeButton}
             </div>
           </header>
-          <BotProfileEditor
+          <BotOverview
             bot={bot}
-            threadRef={threadRef}
-            active={active}
-            {...(onSaveBot ? { onSave: onSaveBot } : {})}
+            {...(onOpenSettings ? { onOpenSettings } : {})}
             {...(routinePanel ? { routinePanel } : {})}
           />
         </>
@@ -685,7 +255,7 @@ export function BotDetailsPanel({
           showCloseButton={false}
           side="right"
         >
-          <SheetTitle className="sr-only">Edit {bot.name}</SheetTitle>
+          <SheetTitle className="sr-only">{bot.name} overview</SheetTitle>
           {content(
             panelState.mobileOpen,
             <SheetClose

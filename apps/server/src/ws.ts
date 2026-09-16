@@ -21,6 +21,7 @@ import {
   type AuthAccessStreamEvent,
   type AuthEnvironmentScope,
   AuthSessionId,
+  BALANCED_BOT_PERSONALITY_TONE,
   BotId,
   ClientSurface,
   CommandId,
@@ -1136,6 +1137,7 @@ const makeWsRpcLayer = (
                     sandbox: nextBot.sandbox,
                     runtimeMode: nextBot.runtimeMode,
                     usageCap: nextBot.usageCap,
+                    personalityTone: nextBot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
                     voiceEnabled: nextBot.voiceEnabled,
                     channelBindings: ChannelRuntime.channelBindingsForRuntime(
                       nextBot.channelBindings ?? [],

@@ -17,6 +17,7 @@ import { McpServerConfiguration, McpServerId } from "./mcpServer.ts";
 import {
   BotAvatar,
   BotEngine,
+  BotPersonalityTone,
   BotSandboxBrowserSharing,
   PersistedBotSandbox,
   BotUsageCap,
@@ -92,6 +93,7 @@ export const PortabilityBotData = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
   usageCap: Schema.NullOr(BotUsageCap),
+  personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean,
   archived: Schema.Boolean,
 });

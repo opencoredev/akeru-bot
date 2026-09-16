@@ -9,7 +9,7 @@ import {
   SkillAssignmentId,
   SkillId,
 } from "@t3tools/contracts";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { BotThreadLanding } from "../components/roster/BotThreadLanding";
@@ -21,7 +21,6 @@ import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
 import { randomUUID } from "../lib/utils";
 import { botRoutePanelKeys } from "./botRoutePanelKeys";
-import { botEnvironment } from "../state/bots";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { routineEnvironment } from "../state/routines";
 import { primaryServerProvidersAtom } from "../state/server";
@@ -33,8 +32,8 @@ const NO_ENVIRONMENT = "" as EnvironmentId;
 function BotThreadRouteView() {
   const { botId } = Route.useParams();
   const panelKeys = botRoutePanelKeys(botId);
+  const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
-  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const draftRoutine = useAtomCommand(routineEnvironment.draft, { reportFailure: false });
   const approveRoutine = useAtomCommand(routineEnvironment.approve, { reportFailure: false });
   const enableRoutine = useAtomCommand(routineEnvironment.enable, { reportFailure: false });
@@ -295,37 +294,8 @@ function BotThreadRouteView() {
               });
             },
           }}
-          onSaveBot={async ({
-            name,
-            label,
-            description,
-            engine,
-            usageCap,
-            sandbox,
-            voiceEnabled,
-            disabledMcpServerIds,
-          }) => {
-            if (!environmentId) return false;
-            const result = await updateBot({
-              environmentId,
-              input: {
-                botId: BotId.make(bot.id),
-                name,
-                label,
-                description,
-                engine,
-                usageCap,
-                sandbox,
-                voiceEnabled,
-                disabledMcpServerIds,
-              },
-            });
-            if (result._tag === "Failure") {
-              toastManager.add({ type: "error", title: "Could not save bot settings" });
-              return false;
-            }
-            toastManager.add({ type: "success", title: "Bot settings saved" });
-            return true;
+          onOpenSettings={() => {
+            void navigate({ to: "/bots/$botId/settings", params: { botId } });
           }}
         />
       ) : null}
