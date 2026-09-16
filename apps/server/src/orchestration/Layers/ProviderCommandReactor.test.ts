@@ -606,117 +606,111 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
       }),
     );
-    if (
-      input?.turnStartBeforeReactor === true ||
-      input?.runningTurnBeforeReactor === true ||
-      input?.resumeBeforeReactor === true
-    ) {
-      await Effect.runPromise(
-        engine.dispatch({
-          type: "thread.turn.start",
-          commandId: CommandId.make("cmd-turn-start-before-reactor"),
-          threadId: ThreadId.make("thread-1"),
-          message: {
-            messageId: asMessageId("user-message-before-reactor"),
-            role: "user",
-            text: "recover this persisted request",
-            attachments: [],
-          },
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          runtimeMode: "approval-required",
-          createdAt: now,
-        }),
-      );
-    }
-    if (input?.runningTurnBeforeReactor === true || input?.resumeBeforeReactor === true) {
-      await Effect.runPromise(
-        engine.dispatch({
-          type: "thread.session.set",
-          commandId: CommandId.make("cmd-session-running-before-reactor"),
-          threadId: ThreadId.make("thread-1"),
-          session: {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        if (
+          input?.turnStartBeforeReactor === true ||
+          input?.runningTurnBeforeReactor === true ||
+          input?.resumeBeforeReactor === true
+        ) {
+          yield* engine.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-turn-start-before-reactor"),
             threadId: ThreadId.make("thread-1"),
-            status: "running",
-            providerName: "codex",
-            providerInstanceId: ProviderInstanceId.make("codex"),
+            message: {
+              messageId: asMessageId("user-message-before-reactor"),
+              role: "user",
+              text: "recover this persisted request",
+              attachments: [],
+            },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
             runtimeMode: "approval-required",
-            mcpServerIds: [],
-            activeTurnId: asTurnId("turn-before-reactor"),
-            lastError: null,
-            updatedAt: now,
-          },
-          createdAt: now,
-        }),
-      );
-      if (input.pendingRequestBeforeReactor) {
-        const requestId = `${input.pendingRequestBeforeReactor}-before-restart`;
-        await Effect.runPromise(
-          engine.dispatch({
-            type: "thread.activity.append",
-            commandId: CommandId.make(`cmd-${requestId}`),
+            createdAt: now,
+          });
+        }
+        if (input?.runningTurnBeforeReactor === true || input?.resumeBeforeReactor === true) {
+          yield* engine.dispatch({
+            type: "thread.session.set",
+            commandId: CommandId.make("cmd-session-running-before-reactor"),
             threadId: ThreadId.make("thread-1"),
-            activity: {
-              id: EventId.make(`activity-${requestId}`),
-              tone: input.pendingRequestBeforeReactor === "approval" ? "approval" : "info",
-              kind:
-                input.pendingRequestBeforeReactor === "approval"
-                  ? "approval.requested"
-                  : "user-input.requested",
-              summary:
-                input.pendingRequestBeforeReactor === "approval"
-                  ? "Approval requested"
-                  : "User input requested",
-              payload:
-                input.pendingRequestBeforeReactor === "approval"
-                  ? { requestId, requestKind: "command" }
-                  : {
-                      requestId,
-                      questions: [
-                        {
-                          id: "choice",
-                          header: "Choice",
-                          question: "Continue?",
-                          options: [{ label: "Yes", description: "Continue the work" }],
-                        },
-                      ],
-                    },
-              turnId: asTurnId("turn-before-reactor"),
-              createdAt: now,
+            session: {
+              threadId: ThreadId.make("thread-1"),
+              status: "running",
+              providerName: "codex",
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              runtimeMode: "approval-required",
+              mcpServerIds: [],
+              activeTurnId: asTurnId("turn-before-reactor"),
+              lastError: null,
+              updatedAt: now,
             },
             createdAt: now,
-          }),
-        );
-      }
-    }
-    if (input?.resumeBeforeReactor === true) {
-      await Effect.runPromise(
-        engine.dispatch({
-          type: "thread.session.set",
-          commandId: CommandId.make("cmd-session-error-before-resume"),
-          threadId: ThreadId.make("thread-1"),
-          session: {
+          });
+          if (input.pendingRequestBeforeReactor) {
+            const requestId = `${input.pendingRequestBeforeReactor}-before-restart`;
+            yield* engine.dispatch({
+              type: "thread.activity.append",
+              commandId: CommandId.make(`cmd-${requestId}`),
+              threadId: ThreadId.make("thread-1"),
+              activity: {
+                id: EventId.make(`activity-${requestId}`),
+                tone: input.pendingRequestBeforeReactor === "approval" ? "approval" : "info",
+                kind:
+                  input.pendingRequestBeforeReactor === "approval"
+                    ? "approval.requested"
+                    : "user-input.requested",
+                summary:
+                  input.pendingRequestBeforeReactor === "approval"
+                    ? "Approval requested"
+                    : "User input requested",
+                payload:
+                  input.pendingRequestBeforeReactor === "approval"
+                    ? { requestId, requestKind: "command" }
+                    : {
+                        requestId,
+                        questions: [
+                          {
+                            id: "choice",
+                            header: "Choice",
+                            question: "Continue?",
+                            options: [{ label: "Yes", description: "Continue the work" }],
+                          },
+                        ],
+                      },
+                turnId: asTurnId("turn-before-reactor"),
+                createdAt: now,
+              },
+              createdAt: now,
+            });
+          }
+        }
+        if (input?.resumeBeforeReactor === true) {
+          yield* engine.dispatch({
+            type: "thread.session.set",
+            commandId: CommandId.make("cmd-session-error-before-resume"),
             threadId: ThreadId.make("thread-1"),
-            status: "error",
-            providerName: "codex",
-            providerInstanceId: ProviderInstanceId.make("codex"),
-            runtimeMode: "approval-required",
-            mcpServerIds: [],
-            activeTurnId: null,
-            lastError: "Automatic recovery failed.",
-            updatedAt: now,
-          },
-          createdAt: now,
-        }),
-      );
-      await Effect.runPromise(
-        engine.dispatch({
-          type: "thread.turn.resume",
-          commandId: CommandId.make("cmd-resume-before-reactor"),
-          threadId: ThreadId.make("thread-1"),
-          createdAt: now,
-        }),
-      );
-    }
+            session: {
+              threadId: ThreadId.make("thread-1"),
+              status: "error",
+              providerName: "codex",
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              runtimeMode: "approval-required",
+              mcpServerIds: [],
+              activeTurnId: null,
+              lastError: "Automatic recovery failed.",
+              updatedAt: now,
+            },
+            createdAt: now,
+          });
+          yield* engine.dispatch({
+            type: "thread.turn.resume",
+            commandId: CommandId.make("cmd-resume-before-reactor"),
+            threadId: ThreadId.make("thread-1"),
+            createdAt: now,
+          });
+        }
+      }),
+    );
     if (input?.titleRegenerationBeforeStart === "two") {
       await Effect.runPromise(
         engine.dispatch({
