@@ -199,7 +199,7 @@ describe("CI workflow budget", () => {
     expect(text).toContain("gh workflow run version-packages.yml --ref main");
   });
 
-  it("fails the stable macOS release when Apple credentials are absent", () => {
+  it("fails stable but not nightly macOS releases when Apple credentials are absent", () => {
     const release = workflow(".github/workflows/release.yml");
     const steps = release.jobs.desktop?.steps ?? [];
 
@@ -208,15 +208,28 @@ describe("CI workflow budget", () => {
     expect(validate?.run).toContain(
       "Stable macOS releases require the complete Developer ID signing credential set.",
     );
+    expect(validate?.run).toContain('test "$RELEASE_CHANNEL" = stable');
+    expect(validate?.run).toMatch(/credential set\.\\n' >&2\n\s*exit 1/);
     expect(steps.find((step) => step.name === "Build signed macOS artifact")?.if).toBe(
       "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
+    );
+    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
+    );
+    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")?.run).not.toContain(
+      "--signed",
     );
     expect(steps.find((step) => step.name === "Notarize and verify macOS DMG")?.if).toBe(
       "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
     );
-    expect(steps.find((step) => step.name === "Build unsigned macOS artifact")).toBeUndefined();
+    expect(steps.find((step) => step.name === "Verify unsigned macOS app signature")?.if).toBe(
+      "matrix.platform == 'mac' && env.MACOS_SIGNED != 'true'",
+    );
     expect(
-      steps.find((step) => step.name === "Verify unsigned macOS app signature"),
-    ).toBeUndefined();
+      steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
+    ).toContain("^Signature=adhoc$");
+    expect(
+      steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
+    ).toContain("grep -Fqx 'Identifier=dev.leodoes.akeru'");
   });
 });

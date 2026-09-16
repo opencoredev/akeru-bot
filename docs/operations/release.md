@@ -42,6 +42,8 @@ anything. Dispatch it from GitHub Actions with a version such as `0.0.0-smoke.0`
   local path outside the repository.
 - The release configuration passes `scripts/release-smoke.ts`.
 - macOS builds one arm64 DMG with the `dev.leodoes.akeru` bundle identifier.
+- Unsigned macOS builds use a sealed ad-hoc signature. The workflow verifies the signature and the
+  `dev.leodoes.akeru` identifier.
 - Signed macOS builds use a Developer ID Application certificate. Electron-builder submits and
   staples the app before it packages the DMG. The workflow submits and staples the DMG separately.
 - Signed apps include the Electron hardened-runtime and microphone entitlements. The workflow
@@ -68,8 +70,8 @@ the Apple Silicon macOS and Windows runners. The Tenki Runner GitHub App must ha
 ## macOS secrets
 
 The stable release fails before building when the macOS secrets are absent, so an unsigned DMG
-can never publish as the latest release. A partial secret configuration also stops the workflow;
-only the complete set signs, notarizes, and publishes.
+can never publish as the latest stable release. Scheduled nightlies still build the sealed,
+ad-hoc-signed fallback without secrets. A partial secret configuration stops every channel.
 
 Add these GitHub Actions secrets to publish a Developer ID signed and notarized DMG:
 
