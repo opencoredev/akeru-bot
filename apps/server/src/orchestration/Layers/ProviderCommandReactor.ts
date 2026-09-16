@@ -969,6 +969,9 @@ const make = Effect.gen(function* () {
         mcpServers,
         ...(respondingBotId ? { botId: respondingBotId } : {}),
         ...(respondingBot ? { botName: respondingBot.name } : {}),
+        ...(respondingBot?.personalityTone !== undefined
+          ? { personalityTone: respondingBot.personalityTone }
+          : {}),
         ...(project
           ? {
               memoryAccess: {

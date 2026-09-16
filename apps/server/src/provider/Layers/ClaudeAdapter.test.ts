@@ -491,6 +491,7 @@ describe("ClaudeAdapterLive", () => {
         runtimeMode: "full-access",
         botId: "bot-1" as never,
         botName: "Mina",
+        personalityTone: 100,
       });
 
       const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
@@ -501,6 +502,7 @@ describe("ClaudeAdapterLive", () => {
       assert.include(appendedInstructions, "Before you use a tool");
       assert.include(appendedInstructions, "automatic continuation");
       assert.include(appendedInstructions, "You are Mina");
+      assert.include(appendedInstructions, "100/100, a 0% chill and 100% professional blend");
       assert.match(appendedInstructions, /Today is [A-Z][a-z]+, [A-Z][a-z]+ \d{1,2}, \d{4}/);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),

@@ -13,6 +13,7 @@ import {
 import {
   BotSandbox,
   BotSandboxBrowserSharing,
+  BotPersonalityTone,
   ChatAttachment,
   ModelSelection,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
@@ -68,6 +69,7 @@ export const ProviderSessionStartInput = Schema.Struct({
   sandboxMode: Schema.optional(ProviderSandboxMode),
   botId: Schema.optional(BotId),
   botName: Schema.optional(TrimmedNonEmptyString),
+  personalityTone: Schema.optional(BotPersonalityTone),
   botSandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   botSandboxEnvironment: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   botSandboxBrowserSharing: Schema.optional(BotSandboxBrowserSharing),

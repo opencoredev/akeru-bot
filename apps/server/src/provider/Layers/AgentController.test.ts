@@ -1107,15 +1107,31 @@ describe("AgentControllerLive", () => {
           botId: BotId.make("bot-one"),
         };
 
-        yield* controller.startSession(codexThreadId, { ...input, botName: "Research bot" });
+        yield* controller.startSession(codexThreadId, {
+          ...input,
+          botName: "Research bot",
+          personalityTone: 20,
+        });
         expect(mastra.session.state.set).toHaveBeenLastCalledWith(
-          expect.objectContaining({ botConversation: true, botName: "Research bot" }),
+          expect.objectContaining({
+            botConversation: true,
+            botName: "Research bot",
+            personalityTone: 20,
+          }),
         );
 
-        yield* controller.startSession(codexThreadId, { ...input, botName: "Mina" });
+        yield* controller.startSession(codexThreadId, {
+          ...input,
+          botName: "Mina",
+          personalityTone: 80,
+        });
         expect(mastra.createSession).toHaveBeenCalledOnce();
         expect(mastra.session.state.set).toHaveBeenLastCalledWith(
-          expect.objectContaining({ botConversation: true, botName: "Mina" }),
+          expect.objectContaining({
+            botConversation: true,
+            botName: "Mina",
+            personalityTone: 80,
+          }),
         );
       }),
       bridge.service,
@@ -3360,6 +3376,46 @@ describe("AgentControllerLive", () => {
         expect(bridge.sendTurn).toHaveBeenCalledOnce();
         expect(mastra.createSession).not.toHaveBeenCalled();
         expect(mastra.sendMessage).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("adds compact personality instructions to legacy bot turns", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const threadId = ThreadId.make("thread-grok-personality");
+        const instanceId = ProviderInstanceId.make("grok");
+        const selection = { instanceId, model: "grok-code-fast-1" };
+        yield* controller.resolveEngine({
+          threadId,
+          engine: null,
+          fallback: selection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(threadId, {
+          threadId,
+          provider: ProviderDriverKind.make("grok"),
+          providerInstanceId: instanceId,
+          modelSelection: selection,
+          runtimeMode: "full-access",
+          botId: BotId.make("bot-grok"),
+          botName: "Mina",
+          personalityTone: 20,
+        });
+        yield* controller.sendTurn({ threadId, input: "hey what's up" });
+
+        expect(bridge.sendTurn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: expect.stringContaining("20/100, a 80% chill and 20% professional blend"),
+          }),
+        );
+        expect(bridge.sendTurn.mock.calls[0]?.[0].input).toContain("hey what's up");
       }),
       bridge.service,
       mastra.factory,
