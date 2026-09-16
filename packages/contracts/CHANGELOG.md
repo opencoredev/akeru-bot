@@ -1,5 +1,7 @@
 ## @t3tools/contracts@0.0.41
 
+## 0.1.0
+
 ### Changes
 
 - [#193](https://github.com/opencoredev/akeru-bot/pull/193) fix(marketing): connect Grok discovery pages to setup

@@ -1,5 +1,14 @@
 ## @t3tools/web@0.0.41
 
+## 0.1.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.1.0
+  - @t3tools/client-runtime@0.0.1
+  - @t3tools/shared@0.0.1
+
 ### Changes
 
 - [#193](https://github.com/opencoredev/akeru-bot/pull/193) fix(marketing): connect Grok discovery pages to setup
