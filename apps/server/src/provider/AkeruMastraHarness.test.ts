@@ -416,6 +416,58 @@ describe("AkeruMastraHarness", () => {
     expect(getCredential).toHaveBeenCalledWith("openai-codex");
   });
 
+  it("uses the selected instance key without reading the provider-wide credential", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-instance-auth.json");
+    const getCredential = vi.fn(() => ({
+      type: "api-key" as const,
+      access: "provider-wide-key",
+    }));
+    expect(
+      resolveAkeruMastraModel(
+        "xai/grok-code-fast-1",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+        {
+          environment: {
+            XAI_API_KEY: "instance-key",
+            XAI_BASE_URL: "https://instance.example/v1",
+          },
+          instanceEnvironment: {
+            XAI_API_KEY: "instance-key",
+            XAI_BASE_URL: "https://instance.example/v1",
+          },
+          useSavedCredential: false,
+        },
+      ),
+    ).toMatchObject({ modelId: "grok-code-fast-1", provider: "xai.chat" });
+    expect(getCredential).not.toHaveBeenCalled();
+  });
+
+  it("does not leak provider-wide credentials into an isolated instance", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-isolated-auth.json");
+    const getCredential = vi.fn(() => ({
+      type: "api-key" as const,
+      access: "provider-wide-key",
+    }));
+    assert.throws(
+      () =>
+        resolveAkeruMastraModel(
+          "anthropic/claude-fable-5",
+          authStorage,
+          undefined,
+          undefined,
+          undefined,
+          getCredential,
+          { environment: {}, instanceEnvironment: {}, useSavedCredential: false },
+        ),
+      "has no API key or auth token transport",
+    );
+    expect(getCredential).not.toHaveBeenCalled();
+  });
+
   it("keeps Kimi model names on the Kimi subscription transport", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
     assert.equal(
@@ -456,6 +508,36 @@ describe("AkeruMastraHarness", () => {
     );
   });
 
+  it("uses an isolated OpenCode Go inline connection", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-inline-opencode-auth.json");
+    const getCredential = vi.fn(() => ({
+      type: "api-key" as const,
+      access: "provider-wide-key",
+    }));
+    const environment = {
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        provider: {
+          "opencode-go": {
+            options: { apiKey: "inline-key", baseURL: "https://inline.example/v1" },
+          },
+        },
+      }),
+    };
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "opencode-go/gpt-5.6-luna",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+        { environment, instanceEnvironment: environment, useSavedCredential: false },
+      ),
+      { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
+    );
+    expect(getCredential).not.toHaveBeenCalled();
+  });
+
   it("builds a compact, human prompt with the bot name and current date", () => {
     const instructions = createAkeruAgentInstructions({
       name: "  Research\nBot  ",
@@ -470,6 +552,9 @@ describe("AkeruMastraHarness", () => {
     assert.include(instructions, "Never use em or en dashes");
     assert.include(instructions, "enabled plugin tools");
     assert.include(instructions, "Prefer preview_* tools over browser_* tools");
+    assert.include(instructions, "Own the requested outcome");
+    assert.include(instructions, "Carry multi-step work through implementation");
+    assert.include(instructions, "Never report success before");
     assert.include(instructions, "akeru_list_routines");
     assert.notInclude(instructions, "—");
     assert.notInclude(instructions, "coding agent");

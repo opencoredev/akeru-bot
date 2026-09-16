@@ -503,6 +503,8 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             error={
               inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
             }
+            {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
+            resuming={runtime.resuming}
           />
           <BotPromptComposer
             botName={bot.name}

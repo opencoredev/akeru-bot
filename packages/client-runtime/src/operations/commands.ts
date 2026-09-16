@@ -86,6 +86,7 @@ export type SetThreadMessageReactionInput = Omit<
   readonly updatedAt?: CommandOf<"thread.message.reaction.set">["updatedAt"];
 };
 export type StartThreadTurnInput = CommandInput<"thread.turn.start">;
+export type ResumeThreadTurnInput = CommandInput<"thread.turn.resume">;
 export type AppendVoiceTranscriptInput = CommandInput<"thread.voice-transcript.append">;
 export type InterruptThreadTurnInput = CommandInput<"thread.turn.interrupt">;
 export type RespondToThreadApprovalInput = CommandInput<"thread.approval.respond">;
@@ -695,6 +696,18 @@ export const startThreadTurn: (input: StartThreadTurnInput) => CommandEffect = E
     ...input,
     timezone: input.timezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"),
     type: "thread.turn.start",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const resumeThreadTurn: (input: ResumeThreadTurnInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.resumeThreadTurn",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "thread.turn.resume",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });

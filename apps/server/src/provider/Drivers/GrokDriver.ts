@@ -9,6 +9,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
+import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { makeGrokTextGeneration } from "../../textGeneration/GrokTextGeneration.ts";
 import { ProviderDriverError } from "../Errors.ts";
@@ -27,6 +28,7 @@ import {
   type ProviderInstance,
 } from "../ProviderDriver.ts";
 import type { ServerProviderDraft } from "../providerSnapshot.ts";
+import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
   makeManualOnlyProviderMaintenanceCapabilities,
@@ -176,6 +178,15 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        mastraConnection: {
+          environment: processEnv,
+          instanceEnvironment: explicitProviderInstanceEnvironment(environment),
+          useSavedCredential: instanceUsesSavedCredential("xai", {
+            driver: DRIVER_KIND,
+            environment,
+            config,
+          }),
+        },
         snapshot,
         snapshotForCwd,
         adapter,

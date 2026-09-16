@@ -14,3 +14,9 @@ export function mergeProviderInstanceEnvironment(
   }
   return next;
 }
+
+export function explicitProviderInstanceEnvironment(
+  environment: ProviderInstanceEnvironment | undefined,
+): NodeJS.ProcessEnv {
+  return Object.fromEntries(environment?.map((variable) => [variable.name, variable.value]) ?? []);
+}

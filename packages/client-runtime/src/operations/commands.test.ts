@@ -36,6 +36,7 @@ import {
   detachChannel,
   disconnectChannel,
   reconnectChannel,
+  resumeThreadTurn,
   sendChannelMessage,
   setThreadMessageReaction,
   settleThread,
@@ -303,6 +304,28 @@ describe("environment commands", () => {
         type: "thread.turn.start",
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       });
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("dispatches an invisible turn resume command", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* resumeThreadTurn({
+        commandId: CommandId.make("resume-turn"),
+        threadId: ThreadId.make("thread-1"),
+        createdAt: "2026-06-06T00:02:00.000Z",
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toEqual([
+        {
+          type: "thread.turn.resume",
+          commandId: "resume-turn",
+          threadId: "thread-1",
+          createdAt: "2026-06-06T00:02:00.000Z",
+        },
+      ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 

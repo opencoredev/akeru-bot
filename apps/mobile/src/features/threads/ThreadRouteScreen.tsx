@@ -214,6 +214,8 @@ function ThreadRouteContent(
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, "thread interrupt");
+  const resumeThreadTurn = useAtomCommand(threadEnvironment.resumeTurn, "thread resume");
+  const [resumingThread, setResumingThread] = useState(false);
   const navigation = useNavigation();
   const params = props.route.params;
   const environmentIdRaw = firstRouteParam(params.environmentId);
@@ -496,6 +498,14 @@ function ThreadRouteContent(
       },
     });
   }, [interruptThreadTurn, selectedThread]);
+  const handleResumeThread = useCallback(() => {
+    if (!selectedThread || resumingThread) return;
+    setResumingThread(true);
+    void resumeThreadTurn({
+      environmentId: selectedThread.environmentId,
+      input: { threadId: selectedThread.id },
+    }).finally(() => setResumingThread(false));
+  }, [resumeThreadTurn, resumingThread, selectedThread]);
 
   const handleOpenTerminal = useCallback(
     (nextTerminalId?: string | null) => {
@@ -796,6 +806,15 @@ function ThreadRouteContent(
           onRemoveDraftImage={composer.onRemoveDraftImage}
           serverConfig={serverConfig}
           onStopThread={handleStopThread}
+          onResumeThread={handleResumeThread}
+          canResumeThread={
+            selectedThread.session?.status === "error" &&
+            (selectedThread.latestTurn?.state === "error" ||
+              selectedThread.latestTurn?.state === "interrupted" ||
+              (selectedThread.latestTurn === null &&
+                selectedThreadDetail?.messages.at(-1)?.role === "user"))
+          }
+          resumingThread={resumingThread}
           onSendMessage={composer.onSendMessage}
           onReconnectEnvironment={handleReconnectEnvironment}
           onUpdateThreadModelSelection={composer.onUpdateModelSelection}

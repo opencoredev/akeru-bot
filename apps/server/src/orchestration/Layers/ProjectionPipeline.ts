@@ -1669,6 +1669,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         });
         return;
       }
+      if (event.type === "thread.turn-resume-requested") {
+        const existing = yield* projectionThreadSessionRepository.getByThreadId({
+          threadId: event.payload.threadId,
+        });
+        if (Option.isNone(existing)) return;
+        yield* projectionThreadSessionRepository.upsert({
+          ...existing.value,
+          status: "starting",
+          lastError: null,
+          updatedAt: event.payload.createdAt,
+        });
+        return;
+      }
       if (event.type !== "thread.session-set") {
         return;
       }
