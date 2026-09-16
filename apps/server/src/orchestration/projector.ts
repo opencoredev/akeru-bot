@@ -26,6 +26,7 @@ import {
   RoutineRunningPayload,
   RoutineSkillAssignedPayload,
   RoutineSkillUnassignedPayload,
+  ThreadTurnResumeRequestedPayload,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -404,6 +405,7 @@ export function projectEvent(
             sandbox: payload.sandbox,
             runtimeMode: payload.runtimeMode,
             usageCap: payload.usageCap,
+            personalityTone: payload.personalityTone,
             voiceEnabled: payload.voiceEnabled,
             channelBindings: payload.channelBindings,
             groupId: payload.groupId,
@@ -438,6 +440,9 @@ export function projectEvent(
             ...(payload.sandbox !== undefined ? { sandbox: payload.sandbox } : {}),
             ...(payload.runtimeMode !== undefined ? { runtimeMode: payload.runtimeMode } : {}),
             ...(payload.usageCap !== undefined ? { usageCap: payload.usageCap } : {}),
+            ...(payload.personalityTone !== undefined
+              ? { personalityTone: payload.personalityTone }
+              : {}),
             ...(payload.voiceEnabled !== undefined ? { voiceEnabled: payload.voiceEnabled } : {}),
             ...(payload.channelBindings !== undefined
               ? { channelBindings: payload.channelBindings }
@@ -1132,6 +1137,31 @@ export function projectEvent(
             updatedAt: event.occurredAt,
           }),
         })),
+      );
+
+    case "thread.turn-resume-requested":
+      return decodeForEvent(
+        ThreadTurnResumeRequestedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => {
+          const thread = findProjectedThread(nextBase.threads, payload.threadId);
+          if (!thread?.session) return nextBase;
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              session: {
+                ...thread.session,
+                status: "starting",
+                lastError: null,
+                updatedAt: payload.createdAt,
+              },
+              updatedAt: payload.createdAt,
+            }),
+          };
+        }),
       );
 
     case "thread.session-set":

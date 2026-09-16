@@ -8190,7 +8190,7 @@ it.live(
   "reports thread HTTP and WebSocket transfer budgets",
   () =>
     Effect.gen(function* () {
-      const providers = [ProviderDriverKind.make("claudeAgent")] as const;
+      const providers = [ProviderDriverKind.make("opencode")] as const;
 
       const runs = yield* Effect.forEach(
         providers,

@@ -586,6 +586,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               sandbox: event.payload.sandbox,
               runtimeMode: event.payload.runtimeMode,
               usageCap: event.payload.usageCap,
+              personalityTone: event.payload.personalityTone,
               voiceEnabled: event.payload.voiceEnabled,
               channelBindings: event.payload.channelBindings,
               groupId: event.payload.groupId,
@@ -615,6 +616,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                 ? { runtimeMode: event.payload.runtimeMode }
                 : {}),
               ...(event.payload.usageCap !== undefined ? { usageCap: event.payload.usageCap } : {}),
+              ...(event.payload.personalityTone !== undefined
+                ? { personalityTone: event.payload.personalityTone }
+                : {}),
               ...(event.payload.voiceEnabled !== undefined
                 ? { voiceEnabled: event.payload.voiceEnabled }
                 : {}),
@@ -1666,6 +1670,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       if (event.type === "thread.created") {
         yield* projectionThreadSessionRepository.deleteByThreadId({
           threadId: event.payload.threadId,
+        });
+        return;
+      }
+      if (event.type === "thread.turn-resume-requested") {
+        const existing = yield* projectionThreadSessionRepository.getByThreadId({
+          threadId: event.payload.threadId,
+        });
+        if (Option.isNone(existing)) return;
+        yield* projectionThreadSessionRepository.upsert({
+          ...existing.value,
+          status: "starting",
+          lastError: null,
+          updatedAt: event.payload.createdAt,
         });
         return;
       }

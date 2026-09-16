@@ -27,6 +27,7 @@ import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
@@ -56,6 +57,7 @@ import {
   BotUsageLedger,
 } from "../../usage/BotUsageLedger.ts";
 import { AgentController } from "../../provider/Services/AgentController.ts";
+import { ProviderSessionDirectory } from "../../provider/Services/ProviderSessionDirectory.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { ProjectionBotRepository } from "../../persistence/Services/ProjectionBots.ts";
 import { ProjectionMcpServerRepository } from "../../persistence/Services/ProjectionMcpServers.ts";
@@ -101,6 +103,7 @@ type ProviderIntentEvent = Extract<
       | "thread.meta-updated"
       | "thread.runtime-mode-set"
       | "thread.turn-start-requested"
+      | "thread.turn-resume-requested"
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
@@ -132,15 +135,26 @@ function mapProviderSessionStatusToOrchestrationStatus(
   }
 }
 
-const turnStartKeyForEvent = (event: ProviderIntentEvent): string =>
+const turnRequestKeyForEvent = (event: ProviderIntentEvent): string =>
   event.commandId !== null ? `command:${event.commandId}` : `event:${event.eventId}`;
 
-const HANDLED_TURN_START_KEY_MAX = 10_000;
-const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
+const HANDLED_TURN_REQUEST_KEY_MAX = 10_000;
+const HANDLED_TURN_REQUEST_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
 const MAX_REGENERATION_ATTACHMENTS = 4;
 const MAX_THREAD_TITLE_CONTEXT_CHARS = 8_000;
 const MAX_FIRST_USER_TITLE_CONTEXT_CHARS = 2_000;
+const STARTUP_RECOVERY_INPUT = [
+  "The Akeru server restarted while you were handling the current request.",
+  "Continue the existing request from the last durable conversation state.",
+  "Inspect the current workspace and tool state before acting, and do not repeat side effects that already completed.",
+  "If an approval or question was open, recreate it only if it is still needed.",
+].join(" ");
+const MANUAL_RECOVERY_INPUT = [
+  "Resume the interrupted request from the last durable conversation state.",
+  "Inspect the current workspace and tool state before acting, and do not repeat side effects that already completed.",
+  "If an approval or question was open, recreate it only if it is still needed.",
+].join(" ");
 const THREAD_TITLE_CONTEXT_TRUNCATION_MARKER = "[Earlier content truncated]\n\n";
 const FIRST_USER_CONTEXT_TRUNCATION_MARKER = "\n[First user message truncated]";
 
@@ -353,6 +367,7 @@ const make = Effect.gen(function* () {
   const projectionBotRepository = yield* ProjectionBotRepository;
   const projectionMcpServerRepository = yield* ProjectionMcpServerRepository;
   const agentController = yield* AgentController;
+  const providerSessionDirectory = yield* Effect.serviceOption(ProviderSessionDirectory);
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -402,16 +417,16 @@ const make = Effect.gen(function* () {
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
-  const handledTurnStartKeys = yield* Cache.make<string, true>({
-    capacity: HANDLED_TURN_START_KEY_MAX,
-    timeToLive: HANDLED_TURN_START_KEY_TTL,
+  const handledTurnRequestKeys = yield* Cache.make<string, true>({
+    capacity: HANDLED_TURN_REQUEST_KEY_MAX,
+    timeToLive: HANDLED_TURN_REQUEST_KEY_TTL,
     lookup: () => Effect.succeed(true),
   });
 
-  const hasHandledTurnStartRecently = (key: string) =>
-    Cache.getOption(handledTurnStartKeys, key).pipe(
+  const hasHandledTurnRequestRecently = (key: string) =>
+    Cache.getOption(handledTurnRequestKeys, key).pipe(
       Effect.flatMap((cached) =>
-        Cache.set(handledTurnStartKeys, key, true).pipe(Effect.as(Option.isSome(cached))),
+        Cache.set(handledTurnRequestKeys, key, true).pipe(Effect.as(Option.isSome(cached))),
       ),
     );
 
@@ -969,6 +984,9 @@ const make = Effect.gen(function* () {
         mcpServers,
         ...(respondingBotId ? { botId: respondingBotId } : {}),
         ...(respondingBot ? { botName: respondingBot.name } : {}),
+        ...(respondingBot?.personalityTone !== undefined
+          ? { personalityTone: respondingBot.personalityTone }
+          : {}),
         ...(project
           ? {
               memoryAccess: {
@@ -1126,7 +1144,26 @@ const make = Effect.gen(function* () {
       return { threadId: restartedSession.threadId, engine: desiredEngine };
     }
 
-    const startedSession = yield* startProviderSession(undefined);
+    const persistedBinding = Option.isSome(providerSessionDirectory)
+      ? yield* providerSessionDirectory.value.getBinding(threadId).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider command reactor could not read resumable session binding", {
+              threadId,
+              cause: Cause.pretty(cause),
+            }).pipe(Effect.as(Option.none())),
+          ),
+        )
+      : Option.none();
+    const resumableBinding = Option.getOrUndefined(persistedBinding);
+    const resumeCursor =
+      resumableBinding?.provider === preferredProvider &&
+      resumableBinding.providerInstanceId === desiredInstanceId &&
+      resumableBinding.resumeCursor != null
+        ? resumableBinding.resumeCursor
+        : undefined;
+    const startedSession = yield* startProviderSession(
+      resumeCursor === undefined ? undefined : { resumeCursor },
+    );
     yield* bindSessionToThread(startedSession);
     threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
     threadMcpServers.set(threadId, mcpServers);
@@ -1438,8 +1475,8 @@ const make = Effect.gen(function* () {
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
-    const key = turnStartKeyForEvent(event);
-    if (yield* hasHandledTurnStartRecently(key)) {
+    const key = turnRequestKeyForEvent(event);
+    if (yield* hasHandledTurnRequestRecently(key)) {
       return;
     }
 
@@ -1730,6 +1767,73 @@ const make = Effect.gen(function* () {
       .pipe(Effect.catchCause(recoverInterruptFailure));
   });
 
+  const resumeInterruptedTurn = Effect.fn("resumeInterruptedTurn")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly createdAt: string;
+    readonly messageText: string;
+    readonly attachments?: ReadonlyArray<ChatAttachment>;
+  }) {
+    const thread = yield* resolveThreadShell(input.threadId);
+    if (!thread) return;
+    yield* buildSendTurnRequestForThread({
+      threadId: thread.id,
+      messageText: input.messageText,
+      ...(input.attachments ? { attachments: input.attachments } : {}),
+      modelSelection: thread.modelSelection,
+      interactionMode: thread.interactionMode,
+      createdAt: input.createdAt,
+    }).pipe(Effect.flatMap(agentController.sendTurn));
+  });
+
+  const processTurnResumeRequested = Effect.fn("processTurnResumeRequested")(function* (
+    event: Extract<ProviderIntentEvent, { type: "thread.turn-resume-requested" }>,
+  ) {
+    const key = turnRequestKeyForEvent(event);
+    if (yield* hasHandledTurnRequestRecently(key)) {
+      return;
+    }
+
+    const detail = Option.getOrUndefined(
+      yield* projectionSnapshotQuery.getThreadDetailById(event.payload.threadId),
+    );
+    const failedBeforeProviderAccepted = detail?.latestTurn === null;
+    const originalRequest = failedBeforeProviderAccepted
+      ? detail.messages.findLast((message) => message.role === "user")
+      : undefined;
+    yield* resumeInterruptedTurn({
+      threadId: event.payload.threadId,
+      createdAt: event.payload.createdAt,
+      messageText: originalRequest?.text ?? MANUAL_RECOVERY_INPUT,
+      ...(originalRequest?.attachments ? { attachments: originalRequest.attachments } : {}),
+    }).pipe(
+      Effect.tap(() =>
+        Effect.logInfo("provider command reactor resumed turn after user request", {
+          threadId: event.payload.threadId,
+        }),
+      ),
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : setThreadSessionErrorOnTurnStartFailure({
+              threadId: event.payload.threadId,
+              detail: formatFailureDetail(cause),
+              createdAt: event.payload.createdAt,
+            }).pipe(
+              Effect.andThen(
+                appendProviderFailureActivity({
+                  threadId: event.payload.threadId,
+                  kind: "provider.turn.start.failed",
+                  summary: "Could not resume the request",
+                  detail: formatFailureDetail(cause),
+                  turnId: null,
+                  createdAt: event.payload.createdAt,
+                }),
+              ),
+            ),
+      ),
+    );
+  });
+
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.approval-response-requested" }>,
   ) {
@@ -1989,6 +2093,9 @@ const make = Effect.gen(function* () {
       case "thread.turn-start-requested":
         yield* processTurnStartRequested(event);
         return;
+      case "thread.turn-resume-requested":
+        yield* processTurnResumeRequested(event);
+        return;
       case "thread.turn-interrupt-requested":
         yield* processTurnInterruptRequested(event);
         return;
@@ -2025,6 +2132,248 @@ const make = Effect.gen(function* () {
 
   const worker = yield* makeDrainableWorker(processDomainEventSafely);
 
+  const findPersistedTurnStart = Effect.fn("findPersistedTurnStart")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+    readonly throughSequence: number;
+  }) {
+    let cursor = 0;
+    let match: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }> | undefined;
+    while (cursor < input.throughSequence) {
+      const page = Array.from(
+        yield* Stream.runCollect(
+          orchestrationEngine.readThreadEvents({
+            threadId: input.threadId,
+            fromSequenceExclusive: cursor,
+            toSequenceInclusive: input.throughSequence,
+            limit: 500,
+          }),
+        ),
+      );
+      if (page.length === 0) break;
+      for (const event of page) {
+        if (
+          event.type === "thread.turn-start-requested" &&
+          event.payload.messageId === input.messageId
+        ) {
+          match = event;
+        }
+      }
+      const nextCursor = page.at(-1)?.sequence ?? cursor;
+      if (nextCursor <= cursor) break;
+      cursor = nextCursor;
+    }
+    return match;
+  });
+
+  const findPersistedTurnResume = Effect.fn("findPersistedTurnResume")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly throughSequence: number;
+  }) {
+    let cursor = 0;
+    let match: Extract<ProviderIntentEvent, { type: "thread.turn-resume-requested" }> | undefined;
+    while (cursor < input.throughSequence) {
+      const page = Array.from(
+        yield* Stream.runCollect(
+          orchestrationEngine.readThreadEvents({
+            threadId: input.threadId,
+            fromSequenceExclusive: cursor,
+            toSequenceInclusive: input.throughSequence,
+            limit: 500,
+          }),
+        ),
+      );
+      if (page.length === 0) break;
+      for (const event of page) {
+        if (event.type === "thread.turn-resume-requested") match = event;
+      }
+      const nextCursor = page.at(-1)?.sequence ?? cursor;
+      if (nextCursor <= cursor) break;
+      cursor = nextCursor;
+    }
+    return match;
+  });
+
+  const settleStalePendingRequests = Effect.fn("settleStalePendingRequests")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly activities: ReadonlyArray<{
+      readonly kind: string;
+      readonly payload: unknown;
+      readonly turnId: TurnId | null;
+    }>;
+    readonly createdAt: string;
+  }) {
+    const pending = new Map<
+      string,
+      { readonly kind: "approval" | "user-input"; readonly turnId: TurnId | null }
+    >();
+    for (const activity of input.activities) {
+      const payload =
+        typeof activity.payload === "object" && activity.payload !== null
+          ? (activity.payload as Record<string, unknown>)
+          : null;
+      const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
+      if (!requestId) continue;
+      if (activity.kind === "approval.requested") {
+        pending.set(requestId, { kind: "approval", turnId: activity.turnId });
+      } else if (activity.kind === "user-input.requested") {
+        pending.set(requestId, { kind: "user-input", turnId: activity.turnId });
+      } else if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
+        pending.delete(requestId);
+      } else if (
+        activity.kind === "provider.approval.respond.failed" ||
+        activity.kind === "provider.user-input.respond.failed"
+      ) {
+        const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : "";
+        if (detail.includes("stale pending") || detail.includes("unknown pending")) {
+          pending.delete(requestId);
+        }
+      }
+    }
+
+    yield* Effect.forEach(
+      pending,
+      ([requestId, request]) =>
+        serverEventId().pipe(
+          Effect.flatMap((eventId) =>
+            orchestrationEngine.dispatch({
+              type: "thread.activity.append",
+              commandId: CommandId.make(`server:restart-request-expired:${eventId}`),
+              threadId: input.threadId,
+              activity: {
+                id: eventId,
+                tone: request.kind === "approval" ? "approval" : "info",
+                kind: request.kind === "approval" ? "approval.resolved" : "user-input.resolved",
+                summary:
+                  request.kind === "approval"
+                    ? "Approval expired after restart"
+                    : "Question expired after restart",
+                payload: {
+                  requestId,
+                  outcome: "interrupted",
+                  ...(request.kind === "user-input" ? { answers: {} } : {}),
+                },
+                turnId: request.turnId,
+                createdAt: input.createdAt,
+              },
+              createdAt: input.createdAt,
+            }),
+          ),
+        ),
+      { discard: true },
+    );
+  });
+
+  const recoverStartupProviderWork = Effect.fn("recoverStartupProviderWork")(function* () {
+    const throughSequence = yield* orchestrationEngine.latestSequence;
+    const initialReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
+    const pendingTurnStarts = projectionSnapshotQuery.listPendingTurnStarts
+      ? yield* projectionSnapshotQuery.listPendingTurnStarts()
+      : [];
+    const pendingThreadIds = new Set(pendingTurnStarts.map((pending) => String(pending.threadId)));
+
+    for (const pending of pendingTurnStarts) {
+      const event = yield* findPersistedTurnStart({
+        threadId: pending.threadId,
+        messageId: pending.messageId,
+        throughSequence,
+      });
+      if (event) {
+        yield* worker.enqueue(event);
+      } else {
+        yield* Effect.logWarning("provider command reactor could not recover pending turn event", {
+          threadId: pending.threadId,
+          messageId: pending.messageId,
+        });
+      }
+    }
+
+    const pendingResumes = initialReadModel.threads.filter(
+      (thread) =>
+        thread.deletedAt === null &&
+        thread.archivedAt === null &&
+        thread.session?.status === "starting" &&
+        (thread.latestTurn === null ||
+          thread.latestTurn.state === "error" ||
+          thread.latestTurn.state === "interrupted"),
+    );
+    for (const thread of pendingResumes) {
+      const event = yield* findPersistedTurnResume({
+        threadId: thread.id,
+        throughSequence,
+      });
+      if (event) {
+        pendingThreadIds.add(String(thread.id));
+        yield* worker.enqueue(event);
+      } else {
+        yield* Effect.logWarning(
+          "provider command reactor could not recover pending resume event",
+          {
+            threadId: thread.id,
+          },
+        );
+      }
+    }
+    yield* worker.drain;
+
+    const liveThreadIds = new Set(
+      (yield* agentController.listSessions()).map((session) => String(session.threadId)),
+    );
+    const readModel = yield* projectionSnapshotQuery.getCommandReadModel();
+    const interrupted = readModel.threads.filter(
+      (thread) =>
+        thread.deletedAt === null &&
+        thread.archivedAt === null &&
+        !pendingThreadIds.has(String(thread.id)) &&
+        !liveThreadIds.has(String(thread.id)) &&
+        thread.latestTurn?.state === "running" &&
+        thread.session !== null &&
+        (thread.session.status === "starting" ||
+          thread.session.status === "running" ||
+          thread.session.activeTurnId !== null),
+    );
+
+    for (const thread of interrupted) {
+      const recoveredAt = DateTime.formatIso(yield* DateTime.now);
+      const threadDetail = yield* projectionSnapshotQuery
+        .getThreadDetailById(thread.id)
+        .pipe(Effect.map(Option.getOrUndefined));
+      yield* settleStalePendingRequests({
+        threadId: thread.id,
+        activities: threadDetail?.activities ?? [],
+        createdAt: recoveredAt,
+      });
+      yield* resumeInterruptedTurn({
+        threadId: thread.id,
+        messageText: STARTUP_RECOVERY_INPUT,
+        createdAt: recoveredAt,
+      }).pipe(
+        Effect.tap(() =>
+          Effect.logInfo("provider command reactor resumed interrupted turn", {
+            threadId: thread.id,
+            previousTurnId: thread.latestTurn?.turnId,
+          }),
+        ),
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : setThreadSessionErrorOnTurnStartFailure({
+                threadId: thread.id,
+                detail: `Automatic recovery failed. Use Resume to continue. ${formatFailureDetail(cause)}`,
+                createdAt: recoveredAt,
+              }).pipe(
+                Effect.andThen(
+                  Effect.logWarning("provider command reactor could not resume interrupted turn", {
+                    threadId: thread.id,
+                    cause: Cause.pretty(cause),
+                  }),
+                ),
+              ),
+        ),
+      );
+    }
+  });
+
   const start: ProviderCommandReactorShape["start"] = Effect.fn("start")(function* () {
     const interruptedTitleRegenerations = yield* findInterruptedThreadTitleRegenerations().pipe(
       Effect.catchCause((cause) => {
@@ -2042,6 +2391,7 @@ const make = Effect.gen(function* () {
         (event.type === "thread.meta-updated" && event.payload.regenerateTitle === true) ||
         event.type === "thread.runtime-mode-set" ||
         event.type === "thread.turn-start-requested" ||
+        event.type === "thread.turn-resume-requested" ||
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
@@ -2056,9 +2406,18 @@ const make = Effect.gen(function* () {
     const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 
-    // The domain event stream is hot, so work pending before this reactor
-    // starts cannot be resumed. Correlated completions only clear the request
-    // captured here, leaving any newer request untouched.
+    yield* recoverStartupProviderWork().pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.logWarning("provider command reactor startup recovery failed", {
+              cause: Cause.pretty(cause),
+            }),
+      ),
+    );
+
+    // Correlated completions only clear the request captured here, leaving any
+    // newer request untouched.
     const clearInterrupted = clearInterruptedThreadTitleRegenerations(
       interruptedTitleRegenerations,
     ).pipe(

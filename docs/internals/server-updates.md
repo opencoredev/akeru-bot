@@ -81,6 +81,20 @@ wait for a lifecycle ready event carrying that same ID. `committed` completes th
 when the ready server is the target version. `rolled-back` and `failed` end it immediately with the
 recorded reason. Older servers without an ID retain version-only reconnect behavior.
 
+## Active Turn Recovery
+
+Turn intent is durable before provider dispatch. On startup, the provider command reactor subscribes
+to new events first and then replays unresolved `thread.turn-start-requested` and
+`thread.turn-resume-requested` events, deduplicating replay against live delivery. If the persisted
+session says a turn was running but its in-memory controller session disappeared, Akeru expires stale
+approval and user-input requests and continues from the durable conversation state. It does not replay
+the original prompt, because that could repeat an external mutation.
+
+If automatic recovery fails, the session stays in a recoverable error state. Web and mobile show a
+Resume action that persists `thread.turn-resume-requested`; the continuation is not inserted as a
+visible user message. The provider is instructed to reconcile completed work, recreate only still-needed
+questions, and finish the interrupted request.
+
 ## Capability and Compatibility
 
 The existing additive RPC and lifecycle schemas remain compatible with older clients. New servers

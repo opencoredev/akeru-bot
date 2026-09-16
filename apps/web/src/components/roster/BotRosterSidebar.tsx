@@ -21,6 +21,7 @@ import {
   PinIcon,
   PlusIcon,
   SearchIcon,
+  SettingsIcon,
   UsersIcon,
 } from "lucide-react";
 import {
@@ -261,6 +262,7 @@ const BotRosterRow = memo(function BotRosterRow({
   lastMessage,
   isActive,
   onSelect,
+  onOpenSettings,
   pinned,
   onPin,
   canMoveUp,
@@ -272,6 +274,7 @@ const BotRosterRow = memo(function BotRosterRow({
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
   onSelect: (bot: Bot) => void;
+  onOpenSettings: (bot: Bot) => void;
   pinned: boolean;
   onPin: (pinned: boolean) => void;
   canMoveUp: boolean;
@@ -358,6 +361,10 @@ const BotRosterRow = memo(function BotRosterRow({
             }
           />
           <MenuPopup align="end">
+            <MenuItem onClick={() => onOpenSettings(bot)}>
+              <SettingsIcon />
+              Bot settings
+            </MenuItem>
             <MenuItem onClick={() => onPin(!pinned)}>
               <PinIcon />
               {pinned ? "Unpin" : "Pin"}
@@ -896,6 +903,11 @@ export default function BotRosterSidebar() {
     void navigate({ to: "/bots/$botId", params: { botId: bot.id } });
   };
 
+  const handleOpenBotSettings = (bot: Bot) => {
+    useRosterStore.getState().selectBot(bot.id);
+    void navigate({ to: "/bots/$botId/settings", params: { botId: bot.id } });
+  };
+
   const shortcutBots = useMemo(
     () => orderRosterBotsForShortcuts(bots, pinnedItems, []),
     [bots, pinnedItems],
@@ -1136,6 +1148,7 @@ export default function BotRosterSidebar() {
                                         lastMessage={lastMessageByBotId[bot.id] ?? null}
                                         isActive={!groupRouteActive && selectedBotId === bot.id}
                                         onSelect={handleSelect}
+                                        onOpenSettings={handleOpenBotSettings}
                                         pinned={pinned}
                                         onPin={(nextPinned) =>
                                           useRosterStore

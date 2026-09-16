@@ -72,6 +72,7 @@ import { ProjectionThreadMessage } from "../../persistence/Services/ProjectionTh
 import { ProjectionThreadProposedPlan } from "../../persistence/Services/ProjectionThreadProposedPlans.ts";
 import { ProjectionThreadSession } from "../../persistence/Services/ProjectionThreadSessions.ts";
 import { ProjectionThread } from "../../persistence/Services/ProjectionThreads.ts";
+import { ProjectionPendingTurnStart } from "../../persistence/Services/ProjectionTurns.ts";
 import {
   decodeThreadDetailPageCursor,
   encodeThreadDetailPageCursor,
@@ -104,6 +105,7 @@ const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
     avatar: Schema.fromJsonString(BotAvatar),
     engine: Schema.NullOr(Schema.fromJsonString(BotEngine)),
     usageCap: Schema.NullOr(Schema.fromJsonString(BotUsageCap)),
+    personalityTone: Schema.Number,
     disabledMcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)),
     channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
     voiceEnabled: Schema.Number,
@@ -443,6 +445,7 @@ function mapBotRow(row: Schema.Schema.Type<typeof ProjectionBotDbRowSchema>): Or
     sandbox: row.sandbox,
     runtimeMode: row.runtimeMode,
     usageCap: row.usageCap,
+    personalityTone: row.personalityTone,
     voiceEnabled: row.voiceEnabled === 1,
     channelBindings: row.channelBindings ?? [],
     groupId: row.groupId,
@@ -594,6 +597,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
         usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled",
+        personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
@@ -935,6 +939,27 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           AND turns.turn_id = threads.latest_turn_id
         WHERE threads.latest_turn_id IS NOT NULL
         ORDER BY turns.thread_id ASC
+      `,
+  });
+
+  const listPendingTurnStartRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionPendingTurnStart,
+    execute: () =>
+      sql`
+        SELECT
+          thread_id AS "threadId",
+          pending_message_id AS "messageId",
+          responding_bot_id AS "respondingBotId",
+          source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
+          source_proposed_plan_id AS "sourceProposedPlanId",
+          requested_at AS "requestedAt"
+        FROM projection_turns
+        WHERE turn_id IS NULL
+          AND state = 'pending'
+          AND pending_message_id IS NOT NULL
+          AND checkpoint_turn_count IS NULL
+        ORDER BY requested_at ASC, thread_id ASC
       `,
   });
 
@@ -3287,6 +3312,19 @@ pending_approval_requests AS (
     }));
   });
 
+  const listPendingTurnStarts = Effect.fn("ProjectionSnapshotQuery.listPendingTurnStarts")(
+    function* () {
+      return yield* listPendingTurnStartRows(undefined).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.listPendingTurnStarts:query",
+            "ProjectionSnapshotQuery.listPendingTurnStarts:decodeRows",
+          ),
+        ),
+      );
+    },
+  );
+
   // Contiguous turn range bounding a windowed detail read; undefined loads the
   // full thread. Resolved from a window request inside the snapshot
   // transaction (see getThreadDetailSnapshot).
@@ -3714,6 +3752,7 @@ pending_approval_requests AS (
     getThreadShellById,
     getThreadRuntimeContext,
     getTurnStartMessage,
+    listPendingTurnStarts,
     getThreadDetailById,
     getThreadDetailSnapshot,
   } satisfies ProjectionSnapshotQueryShape;

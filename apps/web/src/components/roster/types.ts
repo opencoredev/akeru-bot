@@ -34,6 +34,8 @@ export interface Bot {
   sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   usageCap: { unit: "tokens"; limit: number } | null;
+  /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */
+  personalityTone?: number;
   voiceEnabled: boolean;
   channelBindings?: ReadonlyArray<ChannelBinding>;
   groupId: string | null;

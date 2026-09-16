@@ -3,6 +3,7 @@ import {
   AKERU_DELEGATION_MAX_DEPTH,
   type AkeruDelegationRecord,
   type AkeruDelegationState,
+  BALANCED_BOT_PERSONALITY_TONE,
   BotId,
   DEFAULT_LOCAL_EXECUTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -566,6 +567,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               ? DEFAULT_LOCAL_EXECUTION_MODE
               : DEFAULT_RUNTIME_MODE),
           usageCap: command.usageCap,
+          personalityTone: command.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
           voiceEnabled: command.voiceEnabled ?? false,
           channelBindings: [],
           groupId: command.groupId,
@@ -692,6 +694,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.sandbox !== undefined ? { sandbox: command.sandbox } : {}),
           ...(command.runtimeMode !== undefined ? { runtimeMode: command.runtimeMode } : {}),
           ...(command.usageCap !== undefined ? { usageCap: command.usageCap } : {}),
+          ...(command.personalityTone !== undefined
+            ? { personalityTone: command.personalityTone }
+            : {}),
           ...(command.voiceEnabled !== undefined ? { voiceEnabled: command.voiceEnabled } : {}),
           ...(command.channelBindings !== undefined
             ? { channelBindings: command.channelBindings }
@@ -2764,6 +2769,50 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         userMessageEvent,
         turnStartRequestedEvent,
       ];
+    }
+
+    case "thread.turn.resume": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const failedBeforeProviderAccepted =
+        thread.latestTurn === null && thread.session?.status === "error";
+      if (
+        !failedBeforeProviderAccepted &&
+        (thread.latestTurn === null ||
+          (thread.latestTurn.state !== "error" && thread.latestTurn.state !== "interrupted"))
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat '${command.threadId}' does not have an interrupted request to resume.`,
+        });
+      }
+      if (
+        thread.session !== null &&
+        thread.session.status !== "error" &&
+        thread.session.status !== "interrupted" &&
+        thread.session.status !== "stopped"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat '${command.threadId}' is already active.`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.turn-resume-requested",
+        payload: {
+          threadId: command.threadId,
+          createdAt: command.createdAt,
+        },
+      };
     }
 
     case "thread.turn.interrupt": {

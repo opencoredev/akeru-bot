@@ -4495,7 +4495,12 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           type: "preset",
           preset: "claude_code",
           append: input.botId
-            ? createAkeruBotInstructions({ ...(input.botName ? { name: input.botName } : {}) })
+            ? createAkeruBotInstructions({
+                ...(input.botName ? { name: input.botName } : {}),
+                ...(input.personalityTone !== undefined
+                  ? { personalityTone: input.personalityTone }
+                  : {}),
+              })
             : createAkeruAgentInstructions(),
         },
         settingSources: [...CLAUDE_SETTING_SOURCES],

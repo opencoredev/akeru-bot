@@ -361,6 +361,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           error={
             inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
           }
+          {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
+          resuming={runtime.resuming}
         />
         {boss === null ? (
           <div className="px-4 py-2 text-sm text-muted-foreground" role="status">

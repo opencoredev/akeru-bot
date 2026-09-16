@@ -125,6 +125,11 @@ Choose meaningful test data. Use deterministic visual fixtures for repeatable UI
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
+- Every contributing change must include a Changesets decision. Run `pnpm changeset` and commit a
+  user-facing summary for a shipped change (`patch` for fixes, `minor` for compatible features,
+  `major` for breaking changes). Use `pnpm changeset --empty` for docs, tests, refactors, or
+  internal-only tooling. Select one product package; the fixed group keeps all four versions in
+  sync. The Version Packages PR is exempt because it consumes the pending changesets.
 - Merge pull requests only after the required `Repository checks` job passes. See [`docs/internals/ci.md`](docs/internals/ci.md) for CI behavior.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.

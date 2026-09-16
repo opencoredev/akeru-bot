@@ -12,7 +12,12 @@ import * as Stream from "effect/Stream";
 
 import { ServerConfig } from "../../config.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import {
+  instanceUsesSavedCredential,
+  mergeSubscriptionInstanceEnvironment,
+} from "../../subscription-auth/runtime.ts";
 import type { ProviderDriver } from "../ProviderDriver.ts";
+import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 
@@ -76,7 +81,7 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
   metadata: { displayName: "OpenCode Go", supportsMultipleInstances: false },
   configSchema: OpenCodeGoSettings,
   defaultConfig: () => decodeSettings({}),
-  create: ({ instanceId, displayName, accentColor, enabled, config }) =>
+  create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
       const auth = SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
@@ -85,6 +90,7 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
         PubSub.shutdown,
       );
       const effectiveEnabled = enabled && config.enabled;
+      const processEnv = mergeSubscriptionInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -123,6 +129,15 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
         displayName,
         accentColor,
         enabled: effectiveEnabled,
+        mastraConnection: {
+          environment: processEnv,
+          instanceEnvironment: explicitProviderInstanceEnvironment(environment),
+          useSavedCredential: instanceUsesSavedCredential("opencode-go", {
+            driver: DRIVER_KIND,
+            environment,
+            config,
+          }),
+        },
         adapter: undefined,
         textGeneration: undefined,
         snapshot: {

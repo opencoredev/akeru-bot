@@ -45,9 +45,8 @@
     "dist:desktop:win:arm64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch arm64",
     "dist:desktop:win:x64": "node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64",
     "release:smoke": "node scripts/release-smoke.ts",
-    "release:changelog": "node scripts/generate-release-changelog.ts",
-    "release:version-pr": "node scripts/update-version-pull-request.ts",
-    "tegami": "node scripts/tegami.ts",
+    "changeset": "changeset",
+    "release:version": "changeset version",
     "release:verify": "node scripts/verify-release-candidate.ts",
     "release:verify-assets": "node scripts/verify-release-assets.ts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .vite-plus apps/*/.vite-plus packages/*/.vite-plus",
@@ -55,11 +54,12 @@
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "7.28.6",
+    "@changesets/changelog-github": "0.5.2",
+    "@changesets/cli": "2.29.7",
     "@effect/tsgo": "catalog:",
     "@oxlint/plugins": "^1.63.0",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "tegami": "1.4.0",
     "vite-plus": "catalog:"
   },
   "engines": {

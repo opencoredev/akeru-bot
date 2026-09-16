@@ -53,6 +53,7 @@ import {
   createAkeruMastraAuthStorage,
   delegatedUsageReceipt,
   makeAgentControllerLive,
+  mastraConnectionIssue,
   mcpServerIdForToolName,
   recordProviderAccessHealth,
   toMcpServerConfigs,
@@ -67,11 +68,13 @@ import {
 import { withMcpRuntimeHeaders } from "../McpServerConfig.ts";
 
 const codexThreadId = ThreadId.make("thread-mastra-codex");
-const claudeThreadId = ThreadId.make("thread-legacy-claude");
+const claudeThreadId = ThreadId.make("thread-mastra-claude");
+const grokThreadId = ThreadId.make("thread-mastra-grok");
 const kimiThreadId = ThreadId.make("thread-mastra-kimi");
 const openCodeGoThreadId = ThreadId.make("thread-mastra-opencode-go");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
+const grokInstanceId = ProviderInstanceId.make("grok");
 const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
 const openCodeGoInstanceId = ProviderInstanceId.make("opencodeGo");
 
@@ -80,6 +83,79 @@ const codexSelection = {
   model: "gpt-5.6-sol",
 };
 const computerUseToolName = "builtin-computer-use_control";
+
+describe("mastraConnectionIssue", () => {
+  it("uses the exact instance transport when deciding readiness", () => {
+    assert.isUndefined(
+      mastraConnectionIssue(
+        ProviderDriverKind.make("grok"),
+        {
+          environment: { XAI_API_KEY: "ambient-key" },
+          instanceEnvironment: { XAI_API_KEY: "instance-key" },
+          useSavedCredential: false,
+        },
+        false,
+      ),
+    );
+    assert.include(
+      mastraConnectionIssue(
+        ProviderDriverKind.make("grok"),
+        {
+          environment: { XAI_API_KEY: "ambient-key" },
+          instanceEnvironment: {},
+          useSavedCredential: false,
+        },
+        true,
+      ) ?? "",
+      "XAI_API_KEY",
+    );
+  });
+
+  it("requires the provider-wide connection only when the instance opted into it", () => {
+    const connection = { environment: {}, instanceEnvironment: {}, useSavedCredential: true };
+    assert.isUndefined(
+      mastraConnectionIssue(ProviderDriverKind.make("claudeAgent"), connection, true),
+    );
+    assert.include(
+      mastraConnectionIssue(ProviderDriverKind.make("claudeAgent"), connection, false) ?? "",
+      "Connect",
+    );
+  });
+
+  it.each([
+    [ProviderDriverKind.make("codex"), { OPENAI_API_KEY: "ambient-key" }],
+    [ProviderDriverKind.make("claudeAgent"), { ANTHROPIC_API_KEY: "ambient-key" }],
+    [ProviderDriverKind.make("grok"), { XAI_API_KEY: "ambient-key" }],
+    [ProviderDriverKind.make("opencodeGo"), { OPENCODE_API_KEY: "ambient-key" }],
+  ] as const)("accepts ambient credentials for %s without a saved connection", (provider, env) => {
+    assert.isUndefined(
+      mastraConnectionIssue(
+        provider,
+        { environment: env, instanceEnvironment: {}, useSavedCredential: true },
+        false,
+      ),
+    );
+  });
+
+  it("accepts an isolated OpenCode Go inline credential", () => {
+    const environment = {
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        provider: {
+          "opencode-go": {
+            options: { apiKey: "inline-key", baseURL: "https://inline.example/v1" },
+          },
+        },
+      }),
+    };
+    assert.isUndefined(
+      mastraConnectionIssue(
+        ProviderDriverKind.make("opencodeGo"),
+        { environment, instanceEnvironment: environment, useSavedCredential: false },
+        false,
+      ),
+    );
+  });
+});
 
 function computerUseServer() {
   return {
@@ -717,9 +793,7 @@ describe("AgentControllerLive", () => {
           });
           expect(attachment).not.toHaveBeenCalled();
           expect(manager.init).toHaveBeenCalledOnce();
-          expect(bridge.startSession).toHaveBeenCalledTimes(
-            provider === "codex" || provider === "kimi" || provider === "opencodeGo" ? 0 : 1,
-          );
+          expect(bridge.startSession).toHaveBeenCalledTimes(provider === "opencode" ? 1 : 0);
           yield* controller.stopSession({ threadId });
         }),
         bridge.service,
@@ -1107,15 +1181,31 @@ describe("AgentControllerLive", () => {
           botId: BotId.make("bot-one"),
         };
 
-        yield* controller.startSession(codexThreadId, { ...input, botName: "Research bot" });
+        yield* controller.startSession(codexThreadId, {
+          ...input,
+          botName: "Research bot",
+          personalityTone: 20,
+        });
         expect(mastra.session.state.set).toHaveBeenLastCalledWith(
-          expect.objectContaining({ botConversation: true, botName: "Research bot" }),
+          expect.objectContaining({
+            botConversation: true,
+            botName: "Research bot",
+            personalityTone: 20,
+          }),
         );
 
-        yield* controller.startSession(codexThreadId, { ...input, botName: "Mina" });
+        yield* controller.startSession(codexThreadId, {
+          ...input,
+          botName: "Mina",
+          personalityTone: 80,
+        });
         expect(mastra.createSession).toHaveBeenCalledOnce();
         expect(mastra.session.state.set).toHaveBeenLastCalledWith(
-          expect.objectContaining({ botConversation: true, botName: "Mina" }),
+          expect.objectContaining({
+            botConversation: true,
+            botName: "Mina",
+            personalityTone: 80,
+          }),
         );
       }),
       bridge.service,
@@ -2026,11 +2116,14 @@ describe("AgentControllerLive", () => {
           requestId: ApprovalRequestId.make("send-tool-1"),
           decision: "decline",
         });
-        yield* controller.respondToRequest({
-          threadId: codexThreadId,
-          requestId: ApprovalRequestId.make("send-tool-1"),
-          decision: "accept",
-        });
+        const duplicateResponseError = yield* controller
+          .respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("send-tool-1"),
+            decision: "accept",
+          })
+          .pipe(Effect.flip);
+        expect(duplicateResponseError.message).toContain("no longer active");
         expect(mastra.session.respondToToolApproval).toHaveBeenCalledTimes(2);
         expect(mastra.session.respondToToolApproval).toHaveBeenLastCalledWith({
           toolCallId: "send-tool-1",
@@ -2048,11 +2141,14 @@ describe("AgentControllerLive", () => {
           result: "cancelled",
           isError: true,
         } as AgentControllerEvent);
-        yield* controller.respondToRequest({
-          threadId: codexThreadId,
-          requestId: ApprovalRequestId.make("shell-tool-stale"),
-          decision: "accept",
-        });
+        const staleResponseError = yield* controller
+          .respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("shell-tool-stale"),
+            decision: "accept",
+          })
+          .pipe(Effect.flip);
+        expect(staleResponseError.message).toContain("no longer active");
         expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
           toolCallId: "shell-tool-stale",
           decision: "approve",
@@ -3330,7 +3426,7 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
-  it.effect("keeps Claude on the existing provider adapter", () => {
+  it.effect("runs Claude through the Akeru Mastra harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
@@ -3355,11 +3451,100 @@ describe("AgentControllerLive", () => {
           input: "Use Claude.",
         });
 
-        assert.equal(result.turnId, TurnId.make("legacy-turn"));
-        expect(bridge.startSession).toHaveBeenCalledOnce();
-        expect(bridge.sendTurn).toHaveBeenCalledOnce();
-        expect(mastra.createSession).not.toHaveBeenCalled();
-        expect(mastra.sendMessage).not.toHaveBeenCalled();
+        expect(String(result.turnId)).toMatch(/^mastra-turn-/);
+        expect(bridge.startSession).not.toHaveBeenCalled();
+        expect(bridge.sendTurn).not.toHaveBeenCalled();
+        expect(mastra.createSession).toHaveBeenCalledOnce();
+        expect(mastra.session.model.switch).toHaveBeenCalledWith({
+          modelId: "anthropic/claude-fable-5",
+        });
+        expect(mastra.sendMessage).toHaveBeenCalledOnce();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("runs Grok through the Akeru Mastra harness", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: grokThreadId,
+          engine: { provider: "grok", model: "grok-code-fast-1" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(grokThreadId, {
+          threadId: grokThreadId,
+          provider: ProviderDriverKind.make("grok"),
+          providerInstanceId: grokInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+        const result = yield* controller.sendTurn({
+          threadId: grokThreadId,
+          input: "Use Grok.",
+        });
+
+        expect(String(result.turnId)).toMatch(/^mastra-turn-/);
+        expect(bridge.startSession).not.toHaveBeenCalled();
+        expect(bridge.sendTurn).not.toHaveBeenCalled();
+        expect(mastra.createSession).toHaveBeenCalledOnce();
+        expect(mastra.session.model.switch).toHaveBeenCalledWith({
+          modelId: "xai/grok-code-fast-1",
+        });
+        expect(mastra.sendMessage).toHaveBeenCalledOnce();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("adds compact personality instructions to legacy bot turns", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const threadId = ThreadId.make("thread-legacy-personality");
+        const instanceId = ProviderInstanceId.make("legacyCustom");
+        const selection = { instanceId, model: "legacy-model" };
+        yield* controller.resolveEngine({
+          threadId,
+          engine: null,
+          fallback: selection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(threadId, {
+          threadId,
+          provider: ProviderDriverKind.make("legacyCustom"),
+          providerInstanceId: instanceId,
+          modelSelection: selection,
+          runtimeMode: "full-access",
+          botId: BotId.make("bot-grok"),
+          botName: "Mina",
+          personalityTone: 20,
+        });
+        yield* controller.resolveEngine({
+          threadId,
+          engine: null,
+          fallback: selection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.sendTurn({ threadId, input: "hey what's up" });
+
+        expect(bridge.sendTurn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: expect.stringContaining("20/100, a 80% chill and 20% professional blend"),
+          }),
+        );
+        expect(bridge.sendTurn.mock.calls[0]?.[0].input).toContain("hey what's up");
       }),
       bridge.service,
       mastra.factory,
