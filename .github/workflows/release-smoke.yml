@@ -45,7 +45,7 @@ jobs:
     name: ${{ matrix.label }}
     needs: release_smoke
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       RELEASE_VERSION: ${{ inputs.version }}
     strategy:
@@ -133,6 +133,7 @@ jobs:
           esac
           printf '%s' "$APPSTORE_API_KEY_P8" > "$RUNNER_TEMP/notarytool-api-key.p8"
           chmod 600 "$RUNNER_TEMP/notarytool-api-key.p8"
+          printf 'CSC_NAME=%s\n' "${MACOS_SIGNING_IDENTITY#Developer ID Application: }" >> "$GITHUB_ENV"
 
       - name: Build signed macOS artifact
         if: matrix.platform == 'mac'
@@ -141,7 +142,6 @@ jobs:
           APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8
           APPLE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
-          CSC_NAME: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           node scripts/update-release-package-versions.ts "$RELEASE_VERSION"
           vp run dist:desktop:artifact \
