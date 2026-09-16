@@ -3510,9 +3510,9 @@ describe("AgentControllerLive", () => {
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
-        const threadId = ThreadId.make("thread-grok-personality");
-        const instanceId = ProviderInstanceId.make("grok");
-        const selection = { instanceId, model: "grok-code-fast-1" };
+        const threadId = ThreadId.make("thread-legacy-personality");
+        const instanceId = ProviderInstanceId.make("legacyCustom");
+        const selection = { instanceId, model: "legacy-model" };
         yield* controller.resolveEngine({
           threadId,
           engine: null,
@@ -3522,13 +3522,20 @@ describe("AgentControllerLive", () => {
         });
         yield* controller.startSession(threadId, {
           threadId,
-          provider: ProviderDriverKind.make("grok"),
+          provider: ProviderDriverKind.make("legacyCustom"),
           providerInstanceId: instanceId,
           modelSelection: selection,
           runtimeMode: "full-access",
           botId: BotId.make("bot-grok"),
           botName: "Mina",
           personalityTone: 20,
+        });
+        yield* controller.resolveEngine({
+          threadId,
+          engine: null,
+          fallback: selection,
+          mode: "default",
+          botConversation: true,
         });
         yield* controller.sendTurn({ threadId, input: "hey what's up" });
 

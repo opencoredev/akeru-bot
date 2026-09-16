@@ -1,10 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, type EnvironmentId } from "@t3tools/contracts";
 import { Brain02Icon, Edit02Icon, Link02Icon, WrenchIcon } from "@hugeicons/core-free-icons";
-import { useCanGoBack, useNavigate } from "@tanstack/react-router";
+import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isElectron } from "../../env";
+import { requestConfirmDialog } from "../../confirmDialog";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { botEnvironment } from "../../state/bots";
 import { environmentMcpServersAtom } from "../../state/mcpServers";
@@ -136,6 +137,20 @@ function BotSettingsForm({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
+
+  const shouldBlockNavigation = useCallback(async () => {
+    if (!draft.dirty) return false;
+    const confirmation = requestConfirmDialog("Discard unsaved bot settings?", {
+      variant: "destructive",
+    });
+    if (!confirmation) return true;
+    return !(await confirmation);
+  }, [draft.dirty]);
+  useBlocker({
+    shouldBlockFn: shouldBlockNavigation,
+    enableBeforeUnload: () => draft.dirty,
+    disabled: !draft.dirty,
+  });
 
   // Memoized because this walks the plugin catalog and does not depend on the form draft.
   const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);

@@ -64,6 +64,15 @@ describe("bot settings page", () => {
     expect(source).toContain('{draft.saving ? "Saving" : "Save"}');
   });
 
+  it("protects unsaved settings from app navigation and page unload", () => {
+    const source = read("./BotSettingsPage.tsx");
+
+    expect(source).toContain("useBlocker({");
+    expect(source).toContain('requestConfirmDialog("Discard unsaved bot settings?"');
+    expect(source).toContain("enableBeforeUnload: () => draft.dirty");
+    expect(source).toContain("disabled: !draft.dirty");
+  });
+
   it("owns the three personality choices and anchors them for deep links", () => {
     const source = read("./BotSettingsPage.tsx");
 

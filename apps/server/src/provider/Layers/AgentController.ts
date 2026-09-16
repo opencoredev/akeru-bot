@@ -1706,6 +1706,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   ...(input.engine.options ? { options: input.engine.options } : {}),
                 };
           const inspected = yield* inspectEngine(modelSelection);
+          const previous = resolvedByThread.get(String(input.threadId));
           const resolved: ResolvedEngine = {
             modelSelection,
             provider: inspected.routing.driverKind,
@@ -1713,6 +1714,10 @@ const make = (options?: AgentControllerLiveOptions) =>
             mastraModelId: mastraModelId(inspected.routing.driverKind, modelSelection.model),
             mode: input.mode,
             botConversation: input.botConversation,
+            ...(previous?.botName ? { botName: previous.botName } : {}),
+            ...(previous?.personalityTone !== undefined
+              ? { personalityTone: previous.personalityTone }
+              : {}),
           };
           resolvedByThread.set(String(input.threadId), resolved);
           const active = sessions.get(String(input.threadId));
