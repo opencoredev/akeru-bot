@@ -40,6 +40,7 @@ function loadNodeCatalogModules(): CatalogManifestModules {
   // repository catalog from the bundled location, with the packaged desktop
   // resource as a fallback.
   const candidates = [
+    new URL("../../../../plugins/entries/", import.meta.url),
     new URL("../../../plugins/entries/", import.meta.url),
     new URL("../../../apps/desktop/prod-resources/plugins/entries/", import.meta.url),
   ];
