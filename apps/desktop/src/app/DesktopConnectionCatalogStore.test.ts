@@ -120,7 +120,6 @@ describe("DesktopConnectionCatalogStore", () => {
     ),
   );
 
-
   it.effect("migrates legacy SSH, bearer profile, and credential data", () =>
     withStore(
       Effect.gen(function* () {
