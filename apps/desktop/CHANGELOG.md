@@ -1,5 +1,18 @@
 ## @t3tools/desktop@0.0.41
 
+## 0.1.2
+
+### Patch Changes
+
+- [#289](https://github.com/opencoredev/akeru-bot/pull/289) [`cedae46`](https://github.com/opencoredev/akeru-bot/commit/cedae46081f9aeff6274210b234b66ec0047225e) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Use Akeru Bot's package identity for packaged Electron safe storage instead of the legacy T3 Code keychain service.
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.1.2
+  - @t3tools/client-runtime@0.0.3
+  - @t3tools/shared@0.0.3
+  - @t3tools/ssh@0.0.3
+  - @t3tools/tailscale@0.0.3
+
 ## 0.1.1
 
 ### Patch Changes

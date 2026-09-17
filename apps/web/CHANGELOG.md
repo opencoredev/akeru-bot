@@ -1,5 +1,14 @@
 ## @t3tools/web@0.0.41
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.1.2
+  - @t3tools/client-runtime@0.0.3
+  - @t3tools/shared@0.0.3
+
 ## 0.1.1
 
 ### Patch Changes

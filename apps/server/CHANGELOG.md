@@ -1,5 +1,11 @@
 # akeru-bot
 
+## 0.1.2
+
+### Patch Changes
+
+- [#289](https://github.com/opencoredev/akeru-bot/pull/289) [`cedae46`](https://github.com/opencoredev/akeru-bot/commit/cedae46081f9aeff6274210b234b66ec0047225e) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Fix desktop startup when the bundled server loads the plugin catalog from a worktree.
+
 ## 0.1.1
 
 ## 0.1.0
