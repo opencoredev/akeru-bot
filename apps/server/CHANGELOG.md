@@ -1,4 +1,4 @@
-## akeru-bot@0.0.41
+# akeru-bot
 
 ## 0.1.1
 
