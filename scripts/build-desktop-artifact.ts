@@ -1904,6 +1904,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ],
       iconSize: 80,
       iconTextSize: 12,
+      // The release workflow asserts a primary signature on the DMG container
+      // (spctl --type open --context context:primary-signature), and
+      // electron-builder leaves DMGs unsigned by default.
+      ...(signed ? { sign: true } : {}),
     };
   }
 
