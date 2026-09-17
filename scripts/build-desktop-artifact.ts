@@ -99,6 +99,7 @@ const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* () {
 
 interface DesktopBuildIconAssets {
   readonly macIconPng: string;
+  readonly macIconComposer: string;
   readonly linuxIconPng: string;
   readonly windowsIconIco: string;
 }
@@ -1546,7 +1547,12 @@ function generateMacIconSet(
   });
 }
 
-function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: boolean) {
+function stageMacIcons(
+  stageResourcesDir: string,
+  sourcePng: string,
+  composerSource: string,
+  verbose: boolean,
+) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -1567,7 +1573,6 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
     // Stage the Icon Composer bundle so electron-builder compiles an asset
     // catalog with light, dark, and tinted variants. macOS 26 themes legacy
     // .icns icons itself, which turned the cream tile black in dark mode.
-    const composerSource = path.join(path.dirname(sourcePng), "akeru.icon");
     yield* fs.copy(composerSource, path.join(stageResourcesDir, "akeru.icon"));
 
     yield* runCommand(ChildProcess.make({})`sips -z 512 512 ${sourcePng} --out ${iconPngPath}`, {
@@ -1782,6 +1787,7 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 export function resolveDesktopBuildIconAssets(_version: string): DesktopBuildIconAssets {
   return {
     macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
+    macIconComposer: BRAND_ASSET_PATHS.productionMacIconComposer,
     linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
     windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
   };
@@ -1984,7 +1990,12 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
   verbose: boolean,
 ) {
   if (platform === "mac") {
-    yield* stageMacIcons(stageResourcesDir, iconAssets.macIconPng, verbose);
+    yield* stageMacIcons(
+      stageResourcesDir,
+      iconAssets.macIconPng,
+      iconAssets.macIconComposer,
+      verbose,
+    );
     return;
   }
 
@@ -2668,6 +2679,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     stageResourcesDir,
     {
       macIconPng: path.join(repoRoot, iconAssets.macIconPng),
+      macIconComposer: path.join(repoRoot, iconAssets.macIconComposer),
       linuxIconPng: path.join(repoRoot, iconAssets.linuxIconPng),
       windowsIconIco: path.join(repoRoot, iconAssets.windowsIconIco),
     },
