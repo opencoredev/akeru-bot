@@ -417,9 +417,6 @@ export const make = Effect.gen(function* () {
   });
 
   const migrateLegacyCatalog = Effect.gen(function* () {
-    if (!(yield* encryptionAvailable)) {
-      return Option.none<string>();
-    }
     const records = yield* savedEnvironments.getRegistry.pipe(
       Effect.mapError(
         (cause) =>
@@ -431,6 +428,12 @@ export const make = Effect.gen(function* () {
       ),
     );
     if (records.length === 0) {
+      return Option.none<string>();
+    }
+    // A brand-new install has no catalog and no legacy records. Do not touch
+    // Electron safe storage in that case: on macOS the availability check can
+    // open the keychain prompt even though there is nothing to decrypt.
+    if (!(yield* encryptionAvailable)) {
       return Option.none<string>();
     }
     const catalog = yield* migrateSavedEnvironmentRecords(records, savedEnvironments, catalogPath);

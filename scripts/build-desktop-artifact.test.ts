@@ -17,6 +17,7 @@ import {
   createStageWorkspaceConfig,
   createStagePatchedDependencies,
   createBuildConfig,
+  DESKTOP_PACKAGE_NAME,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
@@ -175,6 +176,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it("uses the Akeru Bot product name", () => {
     assert.equal(resolveDesktopProductName("0.0.17"), "Akeru Bot (Alpha)");
+  });
+
+  it("uses the Akeru package identity for Electron safe storage", () => {
+    assert.equal(DESKTOP_PACKAGE_NAME, "akeru-bot");
   });
 
   it("uses production desktop artwork", () => {
