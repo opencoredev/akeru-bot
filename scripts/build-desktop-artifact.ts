@@ -1564,6 +1564,22 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
     const iconPngPath = path.join(stageResourcesDir, "icon.png");
     const iconIcnsPath = path.join(stageResourcesDir, "icon.icns");
 
+    // Stage the Icon Composer bundle so electron-builder compiles an asset
+    // catalog with light, dark, and tinted variants. macOS 26 themes legacy
+    // .icns icons itself, which turned the cream tile black in dark mode.
+    const iconComposerSource = path.join(
+      path.dirname(path.dirname(sourcePng)),
+      "prod",
+      "akeru.icon",
+    );
+    const repoIconComposer = path.join(path.dirname(sourcePng), "akeru.icon");
+    const composerSource = (yield* fs.exists(repoIconComposer))
+      ? repoIconComposer
+      : iconComposerSource;
+    yield* fs.copy(composerSource, path.join(stageResourcesDir, "akeru.icon"), {
+      overwrite: true,
+    });
+
     yield* runCommand(ChildProcess.make({})`sips -z 512 512 ${sourcePng} --out ${iconPngPath}`, {
       label: "sips mac icon",
       verbose,
@@ -1857,7 +1873,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
-      icon: "icon.icns",
+      // The .icon bundle is preferred by electron-builder: it compiles an
+      // asset catalog for macOS 26 theming and derives the legacy icns from
+      // the same source for older systems.
+      icon: "akeru.icon",
       category: "public.app-category.developer-tools",
       extendInfo: {
         NSMicrophoneUsageDescription: "Akeru Bot uses the microphone for calls with your bots.",

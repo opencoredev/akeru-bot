@@ -1,0 +1,22 @@
+{
+  "fill": { "solid": "srgb:0.95686,0.94510,0.91765,1.00000" },
+  "fill-specializations": [
+    { "appearance": "dark", "value": "system-dark" }
+  ],
+  "groups": [
+    {
+      "name": "glyph",
+      "layers": [
+        {
+          "image-name": "glyph.png",
+          "name": "a",
+          "fill-specializations": [
+            { "appearance": "dark", "value": { "solid": "srgb:0.95686,0.94510,0.91765,1.00000" } },
+            { "appearance": "tinted", "value": { "solid": "srgb:1.00000,1.00000,1.00000,1.00000" } }
+          ]
+        }
+      ]
+    }
+  ],
+  "supported-platforms": { "squares": "shared" }
+}
