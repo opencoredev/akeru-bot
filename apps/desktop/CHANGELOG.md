@@ -1,5 +1,18 @@
 ## @t3tools/desktop@0.0.41
 
+## 0.1.1
+
+### Patch Changes
+
+- [#285](https://github.com/opencoredev/akeru-bot/pull/285) [`d266c13`](https://github.com/opencoredev/akeru-bot/commit/d266c13c7178a7fcc8b3a84b61060a6fad31c372) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The macOS app icon now ships as a layered Icon Composer asset, so macOS 26 renders proper light, dark, and tinted variants instead of theming the legacy icon into an unreadable dark-on-dark tile.
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.1.1
+  - @t3tools/client-runtime@0.0.2
+  - @t3tools/shared@0.0.2
+  - @t3tools/ssh@0.0.2
+  - @t3tools/tailscale@0.0.2
+
 ## 0.1.0
 
 ### Patch Changes
