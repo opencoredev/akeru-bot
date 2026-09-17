@@ -1,8 +1,6 @@
 {
   "fill": { "solid": "srgb:0.95686,0.94510,0.91765,1.00000" },
-  "fill-specializations": [
-    { "appearance": "dark", "value": "system-dark" }
-  ],
+  "fill-specializations": [{ "appearance": "dark", "value": "system-dark" }],
   "groups": [
     {
       "name": "glyph",
