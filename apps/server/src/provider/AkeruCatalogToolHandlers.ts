@@ -39,11 +39,17 @@ function loadNodeCatalogModules(): CatalogManifestModules {
   // one directory deeper under `apps/server/src/provider`. Resolve the
   // repository catalog from the bundled location, with the packaged desktop
   // resource as a fallback.
-  const candidates = [
-    new URL("../../../../plugins/entries/", import.meta.url),
-    new URL("../../../plugins/entries/", import.meta.url),
-    new URL("../../../apps/desktop/prod-resources/plugins/entries/", import.meta.url),
-  ];
+  const sourceTree = import.meta.url.includes("/src/provider/");
+  const candidates = sourceTree
+    ? [
+        new URL("../../../../plugins/entries/", import.meta.url),
+        new URL("../../../plugins/entries/", import.meta.url),
+      ]
+    : [
+        new URL("../../../plugins/entries/", import.meta.url),
+        new URL("../../../../plugins/entries/", import.meta.url),
+        new URL("../../../apps/desktop/prod-resources/plugins/entries/", import.meta.url),
+      ];
   const entriesUrl = candidates.find((candidate) => {
     try {
       return NodeFS.statSync(candidate).isDirectory();
