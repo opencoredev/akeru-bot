@@ -67,7 +67,7 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: macos-15", "GitHub-hosted Apple Silicon macOS runner"],
+  ["runner: macos-26", "GitHub-hosted Apple Silicon macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: tenki-standard-medium-4c-8g", "4-vCPU Tenki Linux runner"],
   [
@@ -109,7 +109,7 @@ for (const [needle, label] of [
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
-  ["runner: macos-15", "GitHub-hosted Apple Silicon macOS runner"],
+  ["runner: macos-26", "GitHub-hosted Apple Silicon macOS runner"],
   ["runner: windows-2025", "GitHub-hosted Windows runner"],
   ["runner: tenki-standard-medium-4c-8g", "Tenki Linux runner"],
   ["macOS signing credentials must be either complete or absent.", "macOS signing mode"],

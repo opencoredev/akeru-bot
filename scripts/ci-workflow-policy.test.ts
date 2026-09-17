@@ -176,7 +176,7 @@ describe("CI workflow budget", () => {
 
     expect(text).not.toContain("depot-");
     expect(text).toContain("tenki-standard-medium-4c-8g");
-    expect(text).toContain("runner: macos-15");
+    expect(text).toContain("runner: macos-26");
     expect(text).toContain("windows-2025");
     expect(Object.keys(releaseSmoke.jobs).length).toBeGreaterThan(0);
   });
