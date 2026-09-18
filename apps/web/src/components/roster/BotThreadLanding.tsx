@@ -215,7 +215,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
     presence,
   });
-  const messages = visibleBotChatMessages(runtime.messages, working);
+  const messages = useMemo(
+    () => (working ? visibleBotChatMessages(runtime.messages, true) : runtime.messages),
+    [runtime.messages, working],
+  );
   const available = bot?.archivedAt === null;
   useReplyPlaybackThread({
     environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,

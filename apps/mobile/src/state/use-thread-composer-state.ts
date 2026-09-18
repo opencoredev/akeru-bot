@@ -31,7 +31,7 @@ import {
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
-import { buildThreadFeed } from "../lib/threadActivity";
+import { createThreadFeedBuilder } from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import { appAtomRegistry } from "../state/atom-registry";
 import {
@@ -54,6 +54,8 @@ import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
+
+const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 
 export function appendReviewCommentToDraft(input: {
   readonly environmentId: EnvironmentId;
@@ -89,6 +91,7 @@ export function useThreadDraftForThread(input: {
 export function useThreadComposerState() {
   const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
+  const buildSelectedThreadFeed = useMemo(() => createThreadFeedBuilder(), []);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   const composerDrafts = useAtomValue(composerDraftsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
@@ -128,21 +131,34 @@ export function useThreadComposerState() {
     () => (selectedThreadKey ? (queuedMessagesByThreadKey[selectedThreadKey] ?? []) : []),
     [queuedMessagesByThreadKey, selectedThreadKey],
   );
-  const selectedThreadFeed = useMemo(() => {
-    if (!selectedThreadDetail) {
-      return [];
-    }
-    const submissions = selectedThreadKey
-      ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? [])
-      : [];
-    return buildThreadFeed(selectedThreadDetail, {
-      localMessages: submissions.flatMap((submission) =>
+  const selectedThreadFeedbackSubmissions = selectedThreadKey
+    ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? EMPTY_FEEDBACK_SUBMISSIONS)
+    : EMPTY_FEEDBACK_SUBMISSIONS;
+  const selectedThreadLocalMessages = useMemo(
+    () =>
+      selectedThreadFeedbackSubmissions.flatMap((submission) =>
         submission.status === "interrupted"
           ? []
           : [codexFeedbackMessage(submission), codexFeedbackMessage(submission, "assistant")],
       ),
-    });
-  }, [feedbackSubmissionsByThreadKey, selectedThreadDetail, selectedThreadKey]);
+    [selectedThreadFeedbackSubmissions],
+  );
+  const selectedThreadActivities = selectedThreadDetail?.activities;
+  const selectedThreadMessages = selectedThreadDetail?.messages;
+  const selectedThreadFeed = useMemo(() => {
+    if (!selectedThreadActivities || !selectedThreadMessages) {
+      return [];
+    }
+    return buildSelectedThreadFeed(
+      { activities: selectedThreadActivities, messages: selectedThreadMessages },
+      { localMessages: selectedThreadLocalMessages },
+    );
+  }, [
+    buildSelectedThreadFeed,
+    selectedThreadActivities,
+    selectedThreadMessages,
+    selectedThreadLocalMessages,
+  ]);
 
   const selectedDraft = selectedThreadKey ? composerDrafts[selectedThreadKey] : null;
   const draftMessage = selectedDraft?.text ?? "";

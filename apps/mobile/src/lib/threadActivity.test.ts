@@ -15,6 +15,7 @@ import {
 import {
   buildPendingUserInputAnswers,
   buildThreadFeed,
+  createThreadFeedBuilder,
   derivePendingApprovals,
   deriveThreadFeedPresentation,
   isPendingUserInputOptionSelected,
@@ -252,6 +253,196 @@ function makeThread(
 }
 
 describe("buildThreadFeed", () => {
+  it("reuses unchanged message and activity rows across text-only updates", () => {
+    const firstMessage = {
+      id: MessageId.make("message-first"),
+      role: "assistant" as const,
+      text: "Starting",
+      turnId: null,
+      streaming: false,
+      createdAt: "2026-08-31T00:00:00.000Z",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+    };
+    const latestMessage = {
+      id: MessageId.make("message-latest"),
+      role: "assistant" as const,
+      text: "Draft",
+      turnId: null,
+      streaming: true,
+      createdAt: "2026-08-31T00:00:02.000Z",
+      updatedAt: "2026-08-31T00:00:02.000Z",
+    };
+    const activity = makeActivity({
+      id: EventId.make("activity-between"),
+      kind: "runtime.warning",
+      summary: "Original warning",
+      createdAt: "2026-08-31T00:00:01.000Z",
+      payload: { message: "Original detail" },
+    });
+    const thread = makeThread({
+      id: ThreadId.make("thread-cached-feed"),
+      projectId: ProjectId.make("project-1"),
+      title: "Cached feed",
+      messages: [firstMessage, latestMessage],
+      activities: [activity],
+    });
+    const buildFeed = createThreadFeedBuilder();
+
+    const initialFeed = buildFeed(thread);
+    const initialFirstMessage = initialFeed.find((entry) => entry.id === firstMessage.id);
+    const initialLatestMessage = initialFeed.find((entry) => entry.id === latestMessage.id);
+    const initialActivityGroup = initialFeed.find((entry) => entry.type === "activity-group");
+    expect(initialActivityGroup?.type).toBe("activity-group");
+    if (initialActivityGroup?.type !== "activity-group") return;
+
+    const updatedLatestMessage = {
+      ...latestMessage,
+      text: "Finished",
+      streaming: false,
+      updatedAt: "2026-08-31T00:00:03.000Z",
+    };
+    const updatedFeed = buildFeed({
+      activities: thread.activities,
+      messages: [firstMessage, updatedLatestMessage],
+    });
+    const updatedFirstMessage = updatedFeed.find((entry) => entry.id === firstMessage.id);
+    const updatedLatestEntry = updatedFeed.find((entry) => entry.id === latestMessage.id);
+    const updatedActivityGroup = updatedFeed.find((entry) => entry.type === "activity-group");
+
+    expect(updatedFirstMessage).toBe(initialFirstMessage);
+    expect(updatedLatestEntry).not.toBe(initialLatestMessage);
+    expect(updatedLatestEntry).toMatchObject({
+      type: "message",
+      message: { text: "Finished", streaming: false },
+    });
+    expect(updatedActivityGroup?.type).toBe("activity-group");
+    if (updatedActivityGroup?.type !== "activity-group") return;
+    expect(updatedActivityGroup.activities[0]).toBe(initialActivityGroup.activities[0]);
+
+    const changedActivity = { ...activity, summary: "Changed warning" };
+    const changedFeed = buildFeed({
+      activities: [changedActivity],
+      messages: [firstMessage, updatedLatestMessage],
+    });
+    const changedActivityGroup = changedFeed.find((entry) => entry.type === "activity-group");
+    expect(changedActivityGroup?.type).toBe("activity-group");
+    if (changedActivityGroup?.type !== "activity-group") return;
+    expect(changedActivityGroup.activities[0]).not.toBe(updatedActivityGroup.activities[0]);
+    expect(changedActivityGroup.activities[0]?.summary).toBe("Changed warning");
+
+    const revertedFeed = buildFeed({
+      activities: thread.activities,
+      messages: [firstMessage, updatedLatestMessage],
+    });
+    const revertedActivityGroup = revertedFeed.find((entry) => entry.type === "activity-group");
+    expect(revertedActivityGroup?.type).toBe("activity-group");
+    if (revertedActivityGroup?.type !== "activity-group") return;
+    expect(revertedActivityGroup.activities[0]).toBe(initialActivityGroup.activities[0]);
+    expect(buildFeed({ activities: [], messages: [] })).toEqual([]);
+  });
+
+  it("orders cached activities chronologically after collapsing interleaved task updates", () => {
+    const activities = [
+      makeActivity({
+        id: EventId.make("task-progress"),
+        kind: "task.progress",
+        summary: "Task working",
+        sequence: 1,
+        createdAt: "2026-08-31T00:00:01.000Z",
+        payload: { taskId: "child" },
+      }),
+      makeActivity({
+        id: EventId.make("warning"),
+        kind: "runtime.warning",
+        summary: "Warning",
+        sequence: 2,
+        createdAt: "2026-08-31T00:00:02.000Z",
+      }),
+      makeActivity({
+        id: EventId.make("task-done"),
+        kind: "task.completed",
+        summary: "Task complete",
+        sequence: 3,
+        createdAt: "2026-08-31T00:00:03.000Z",
+        payload: { taskId: "child" },
+      }),
+    ];
+    const message = {
+      id: MessageId.make("message-middle"),
+      role: "assistant" as const,
+      text: "Update",
+      turnId: null,
+      streaming: true,
+      createdAt: "2026-08-31T00:00:02.500Z",
+      updatedAt: "2026-08-31T00:00:02.500Z",
+    };
+    const buildFeed = createThreadFeedBuilder();
+    for (const text of ["Update", "Updated text"]) {
+      expect(
+        buildFeed({ activities, messages: [{ ...message, text }] }).map((entry) => entry.id),
+      ).toEqual(["warning", "message-middle", "task-done"]);
+    }
+  });
+
+  it("reuses cached rows while prepending an older loaded page", () => {
+    const oldMessage = {
+      id: MessageId.make("message-old"),
+      role: "user" as const,
+      text: "Earlier request",
+      turnId: null,
+      streaming: false,
+      createdAt: "2026-08-31T00:00:00.000Z",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+    };
+    const latestMessage = {
+      id: MessageId.make("message-new"),
+      role: "assistant" as const,
+      text: "Latest response",
+      turnId: null,
+      streaming: false,
+      createdAt: "2026-08-31T00:00:02.000Z",
+      updatedAt: "2026-08-31T00:00:02.000Z",
+    };
+    const activities = [
+      makeActivity({
+        id: EventId.make("activity-old"),
+        kind: "runtime.warning",
+        summary: "Old warning",
+        createdAt: "2026-08-31T00:00:01.000Z",
+      }),
+      makeActivity({
+        id: EventId.make("activity-new"),
+        kind: "runtime.warning",
+        summary: "New warning",
+        createdAt: "2026-08-31T00:00:03.000Z",
+      }),
+    ];
+    const buildFeed = createThreadFeedBuilder();
+    const source = { activities, messages: [oldMessage, latestMessage] };
+
+    const latestPage = buildFeed(source, { loadedMessages: [latestMessage] });
+    expect(latestPage.map((entry) => entry.id)).toEqual(["message-new", "activity-new"]);
+    const latestMessageEntry = latestPage[0];
+    const latestActivityGroup = latestPage[1];
+    expect(latestActivityGroup?.type).toBe("activity-group");
+    if (latestActivityGroup?.type !== "activity-group") return;
+
+    const prependedPage = buildFeed(source, {
+      loadedMessages: [oldMessage, latestMessage],
+    });
+    expect(prependedPage.map((entry) => entry.id)).toEqual([
+      "message-old",
+      "activity-old",
+      "message-new",
+      "activity-new",
+    ]);
+    expect(prependedPage[2]).toBe(latestMessageEntry);
+    const prependedLatestActivity = prependedPage[3];
+    expect(prependedLatestActivity?.type).toBe("activity-group");
+    if (prependedLatestActivity?.type !== "activity-group") return;
+    expect(prependedLatestActivity.activities[0]).toBe(latestActivityGroup.activities[0]);
+  });
+
   it("attaches bot step usage to its assistant message without a duplicate work row", () => {
     const turnId = TurnId.make("turn-bot");
     const thread = makeThread({

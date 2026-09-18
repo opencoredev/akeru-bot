@@ -47,6 +47,9 @@ vi.mock("../../state/threads", () => ({ threadEnvironment: {} }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../../session-logic", () => ({ derivePendingUserInputs: () => [] }));
 vi.mock("../Sidebar.logic", () => ({ sortScopedProjectsForSidebar: () => [] }));
+vi.mock("./botConversationMessageProjection", () => ({
+  useBotConversationMessageProjection: () => ({ messages: [], lastMessageRole: null }),
+}));
 vi.mock("./rosterStore", () => ({
   useRosterStore: (selector: (state: { bots: []; groups: [] }) => unknown) =>
     selector({ bots: [], groups: [] }),

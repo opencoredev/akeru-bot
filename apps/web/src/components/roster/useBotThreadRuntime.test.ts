@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   primaryEnvironmentId: null as EnvironmentId | null,
   threadShells: [] as Array<Record<string, unknown>>,
   threadShell: null as Record<string, unknown> | null,
+  messageProjection: { messages: [], lastMessageRole: null } as {
+    messages: [];
+    lastMessageRole: "user" | "assistant" | "system" | null;
+  },
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -57,6 +61,9 @@ vi.mock("../../session-logic", () => ({
   derivePendingUserInputs: () => [],
 }));
 vi.mock("../Sidebar.logic", () => ({ sortScopedProjectsForSidebar: () => [] }));
+vi.mock("./botConversationMessageProjection", () => ({
+  useBotConversationMessageProjection: () => mocks.messageProjection,
+}));
 vi.mock("./rosterStore", () => ({
   useRosterStore: (selector: (state: { bots: []; chatPathByBotId: {} }) => unknown) =>
     selector({ bots: [], chatPathByBotId: {} }),
@@ -68,6 +75,7 @@ beforeEach(() => {
   mocks.primaryEnvironmentId = null;
   mocks.threadShells = [];
   mocks.threadShell = null;
+  mocks.messageProjection = { messages: [], lastMessageRole: null };
   mocks.derivePendingApprovals.mockReturnValue([]);
   mocks.useAtomCommand.mockReturnValue(mocks.command);
   mocks.command.mockResolvedValue({ _tag: "Success", value: undefined });
@@ -112,6 +120,31 @@ describe("bot runtime approval ownership", () => {
 });
 
 describe("bot runtime errors", () => {
+  it("keeps resume available when the narrow message projection ends with user input", () => {
+    const environmentId = EnvironmentId.make("env-a");
+    mocks.primaryEnvironmentId = environmentId;
+    mocks.threadShells = [
+      {
+        environmentId,
+        id: ThreadId.make("thread-1"),
+        botId: "bot-1",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+        archivedAt: null,
+      },
+    ];
+    mocks.threadShell = {
+      ...mocks.threadShells[0],
+      session: { status: "error" },
+      latestTurn: null,
+    };
+    mocks.messageProjection = { messages: [], lastMessageRole: "user" };
+
+    hooks.beginRender();
+    const runtime = useBotThreadRuntime("bot-1", null);
+
+    expect(runtime.canResume).toBe(true);
+  });
+
   it("surfaces the persisted provider error for a failed turn", () => {
     const environmentId = EnvironmentId.make("env-a");
     mocks.primaryEnvironmentId = environmentId;

@@ -10,7 +10,7 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, it } from "@effect/vitest";
+import { assert, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -24,6 +24,7 @@ import {
   SqlitePersistenceMemory,
 } from "../../persistence/Layers/Sqlite.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
+import { ProjectionStateRepository } from "../../persistence/Services/ProjectionState.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import {
@@ -324,6 +325,87 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
     }),
   );
 });
+
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-cursor-bulk-")))(
+  "OrchestrationProjectionPipeline",
+  (it) => {
+    it.effect("bulk-upserts every deferred projector cursor once", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const projectionStateRepository = yield* ProjectionStateRepository;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const now = "2026-01-01T00:00:00.000Z";
+        const upsertMany = vi.spyOn(projectionStateRepository, "upsertMany");
+        const upsert = vi.spyOn(projectionStateRepository, "upsert");
+
+        const savedEvent = yield* eventStore.append({
+          type: "project.created",
+          eventId: EventId.make("evt-cursor-bulk"),
+          aggregateKind: "project",
+          aggregateId: ProjectId.make("project-cursor-bulk"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-cursor-bulk"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-cursor-bulk"),
+          metadata: {},
+          payload: {
+            projectId: ProjectId.make("project-cursor-bulk"),
+            title: "Project Cursor Bulk",
+            workspaceRoot: "/tmp/project-cursor-bulk",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+        yield* projectionPipeline.projectEvent(savedEvent);
+
+        assert.equal(upsertMany.mock.calls.length, 1);
+        assert.equal(upsert.mock.calls.length, 0);
+        assert.deepEqual(
+          upsertMany.mock.calls[0]?.[0].toSorted((left, right) =>
+            left.projector.localeCompare(right.projector),
+          ),
+          Object.values(ORCHESTRATION_PROJECTOR_NAMES)
+            .map((projector) => ({
+              projector,
+              lastAppliedSequence: savedEvent.sequence,
+              updatedAt: now,
+            }))
+            .toSorted((left, right) => left.projector.localeCompare(right.projector)),
+        );
+
+        const stateRows = yield* sql<{
+          readonly projector: string;
+          readonly lastAppliedSequence: number;
+          readonly updatedAt: string;
+        }>`
+          SELECT
+            projector,
+            last_applied_sequence AS "lastAppliedSequence",
+            updated_at AS "updatedAt"
+          FROM projection_state
+          ORDER BY projector ASC
+        `;
+        assert.deepEqual(
+          stateRows,
+          Object.values(ORCHESTRATION_PROJECTOR_NAMES)
+            .map((projector) => ({
+              projector,
+              lastAppliedSequence: savedEvent.sequence,
+              updatedAt: now,
+            }))
+            .toSorted((left, right) => left.projector.localeCompare(right.projector)),
+        );
+
+        upsertMany.mockRestore();
+        upsert.mockRestore();
+      }),
+    );
+  },
+);
 
 it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-base-")))(
   "OrchestrationProjectionPipeline",
@@ -746,16 +828,152 @@ it.layer(
   );
 });
 
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-late-rollback-")))(
+  "OrchestrationProjectionPipeline",
+  (it) => {
+    it.effect("rolls back earlier projections and cursors when the last projector fails", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const now = "2026-01-01T00:00:00.000Z";
+        const later = "2026-01-01T00:00:01.000Z";
+
+        const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
+          eventStore
+            .append(event)
+            .pipe(Effect.flatMap((savedEvent) => projectionPipeline.projectEvent(savedEvent)));
+
+        yield* appendAndProject({
+          type: "project.created",
+          eventId: EventId.make("evt-late-rollback-1"),
+          aggregateKind: "project",
+          aggregateId: ProjectId.make("project-late-rollback"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-late-rollback-1"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-late-rollback-1"),
+          metadata: {},
+          payload: {
+            projectId: ProjectId.make("project-late-rollback"),
+            title: "Project Late Rollback",
+            workspaceRoot: "/tmp/project-late-rollback",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+        const threadEvent = yield* eventStore.append({
+          type: "thread.created",
+          eventId: EventId.make("evt-late-rollback-2"),
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-late-rollback"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-late-rollback-2"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-late-rollback-2"),
+          metadata: {},
+          payload: {
+            threadId: ThreadId.make("thread-late-rollback"),
+            projectId: ProjectId.make("project-late-rollback"),
+            title: "Thread Late Rollback",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* projectionPipeline.projectEvent(threadEvent);
+
+        yield* sql`
+          CREATE TRIGGER fail_late_thread_projector
+          BEFORE UPDATE ON projection_threads
+          WHEN NEW.thread_id = 'thread-late-rollback'
+          BEGIN
+            SELECT RAISE(ABORT, 'forced-late-projector-failure');
+          END;
+        `;
+
+        const result = yield* Effect.result(
+          appendAndProject({
+            type: "thread.message-sent",
+            eventId: EventId.make("evt-late-rollback-3"),
+            aggregateKind: "thread",
+            aggregateId: ThreadId.make("thread-late-rollback"),
+            occurredAt: later,
+            commandId: CommandId.make("cmd-late-rollback-3"),
+            causationEventId: null,
+            correlationId: CorrelationId.make("cmd-late-rollback-3"),
+            metadata: {},
+            payload: {
+              threadId: ThreadId.make("thread-late-rollback"),
+              messageId: MessageId.make("message-late-rollback"),
+              role: "user",
+              text: "Rollback me",
+              turnId: null,
+              streaming: false,
+              createdAt: later,
+              updatedAt: later,
+            },
+          }),
+        );
+        assert.equal(result._tag, "Failure");
+
+        const messageRows = yield* sql<{ readonly count: number }>`
+          SELECT COUNT(*) AS "count"
+          FROM projection_thread_messages
+          WHERE message_id = 'message-late-rollback'
+        `;
+        assert.deepEqual(messageRows, [{ count: 0 }]);
+
+        const threadRows = yield* sql<{
+          readonly updatedAt: string;
+          readonly latestUserMessageAt: string | null;
+        }>`
+          SELECT
+            updated_at AS "updatedAt",
+            latest_user_message_at AS "latestUserMessageAt"
+          FROM projection_threads
+          WHERE thread_id = 'thread-late-rollback'
+        `;
+        assert.deepEqual(threadRows, [{ updatedAt: now, latestUserMessageAt: null }]);
+
+        const stateRows = yield* sql<{ readonly lastAppliedSequence: number }>`
+          SELECT last_applied_sequence AS "lastAppliedSequence"
+          FROM projection_state
+        `;
+        assert.equal(stateRows.length, Object.keys(ORCHESTRATION_PROJECTOR_NAMES).length);
+        for (const row of stateRows) {
+          assert.equal(row.lastAppliedSequence, threadEvent.sequence);
+        }
+
+        yield* sql`DROP TRIGGER fail_late_thread_projector`;
+      }),
+    );
+  },
+);
+
 it.layer(
   Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-attachments-rollback-")),
 )("OrchestrationProjectionPipeline", (it) => {
-  it.effect("does not persist attachment files when projector transaction rolls back", () =>
+  it.effect("rolls back projections and defers cleanup when the bulk cursor write fails", () =>
     Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
       const eventStore = yield* OrchestrationEventStore;
       const path = yield* Path.Path;
       const sql = yield* SqlClient.SqlClient;
+      const { attachmentsDir } = yield* ServerConfig;
       const now = "2026-01-01T00:00:00.000Z";
+      const threadId = ThreadId.make("Thread Rollback.Files");
+      const attachmentId = "thread-rollback-files-00000000-0000-4000-8000-000000000001";
 
       const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
         eventStore
@@ -783,18 +1001,18 @@ it.layer(
         },
       });
 
-      yield* appendAndProject({
+      const threadEvent = yield* eventStore.append({
         type: "thread.created",
         eventId: EventId.make("evt-rollback-2"),
         aggregateKind: "thread",
-        aggregateId: ThreadId.make("thread-rollback"),
+        aggregateId: threadId,
         occurredAt: now,
         commandId: CommandId.make("cmd-rollback-2"),
         causationEventId: null,
         correlationId: CorrelationId.make("cmd-rollback-2"),
         metadata: {},
         payload: {
-          threadId: ThreadId.make("thread-rollback"),
+          threadId,
           projectId: ProjectId.make("project-rollback"),
           title: "Thread Rollback",
           modelSelection: {
@@ -808,66 +1026,165 @@ it.layer(
           updatedAt: now,
         },
       });
+      yield* projectionPipeline.projectEvent(threadEvent);
+
+      const attachmentPath = path.join(attachmentsDir, `${attachmentId}.png`);
+      yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
+      yield* fileSystem.writeFileString(attachmentPath, "keep");
 
       yield* sql`
-        CREATE TRIGGER fail_thread_messages_projection_state_update
+        CREATE TRIGGER fail_bulk_projection_state_update
         BEFORE UPDATE ON projection_state
         WHEN NEW.projector = 'projection.thread-messages'
         BEGIN
-          SELECT RAISE(ABORT, 'forced-projection-state-failure');
+          SELECT RAISE(ABORT, 'forced-bulk-projection-state-failure');
         END;
       `;
 
       const result = yield* Effect.result(
         appendAndProject({
-          type: "thread.message-sent",
+          type: "thread.deleted",
           eventId: EventId.make("evt-rollback-3"),
           aggregateKind: "thread",
-          aggregateId: ThreadId.make("thread-rollback"),
+          aggregateId: threadId,
           occurredAt: now,
           commandId: CommandId.make("cmd-rollback-3"),
           causationEventId: null,
           correlationId: CorrelationId.make("cmd-rollback-3"),
           metadata: {},
           payload: {
-            threadId: ThreadId.make("thread-rollback"),
-            messageId: MessageId.make("message-rollback"),
-            role: "user",
-            text: "Rollback me",
-            attachments: [
-              {
-                type: "image",
-                id: "thread-rollback-att-1",
-                name: "rollback.png",
-                mimeType: "image/png",
-                sizeBytes: 5,
-              },
-            ],
-            turnId: null,
-            streaming: false,
-            createdAt: now,
-            updatedAt: now,
+            threadId,
+            deletedAt: now,
           },
         }),
       );
       assert.equal(result._tag, "Failure");
 
-      const rows = yield* sql<{
-        readonly count: number;
-      }>`
-        SELECT COUNT(*) AS "count"
-        FROM projection_thread_messages
-        WHERE message_id = 'message-rollback'
+      const threadRows = yield* sql<{ readonly deletedAt: string | null }>`
+        SELECT deleted_at AS "deletedAt"
+        FROM projection_threads
+        WHERE thread_id = ${threadId}
       `;
-      assert.equal(rows[0]?.count ?? 0, 0);
+      assert.deepEqual(threadRows, [{ deletedAt: null }]);
 
-      const { attachmentsDir } = yield* ServerConfig;
-      const attachmentPath = path.join(attachmentsDir, "thread-rollback-att-1.png");
-      assert.isFalse(yield* exists(attachmentPath));
-      yield* sql`DROP TRIGGER IF EXISTS fail_thread_messages_projection_state_update`;
+      const stateRows = yield* sql<{ readonly lastAppliedSequence: number }>`
+        SELECT last_applied_sequence AS "lastAppliedSequence"
+        FROM projection_state
+      `;
+      assert.equal(stateRows.length, Object.keys(ORCHESTRATION_PROJECTOR_NAMES).length);
+      for (const row of stateRows) {
+        assert.equal(row.lastAppliedSequence, threadEvent.sequence);
+      }
+
+      assert.isTrue(yield* exists(attachmentPath));
+      yield* sql`DROP TRIGGER fail_bulk_projection_state_update`;
     }),
   );
 });
+
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-deferred-cleanup-")))(
+  "OrchestrationProjectionPipeline",
+  (it) => {
+    it.effect("returns attachment cleanup without running it before the outer commit", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const path = yield* Path.Path;
+        const sql = yield* SqlClient.SqlClient;
+        const { attachmentsDir } = yield* ServerConfig;
+        const now = "2026-01-01T00:00:00.000Z";
+        const threadId = ThreadId.make("Thread Deferred Cleanup.Files");
+        const attachmentId = "thread-deferred-cleanup-files-00000000-0000-4000-8000-000000000001";
+
+        const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
+          eventStore
+            .append(event)
+            .pipe(Effect.flatMap((savedEvent) => projectionPipeline.projectEvent(savedEvent)));
+
+        yield* appendAndProject({
+          type: "project.created",
+          eventId: EventId.make("evt-deferred-cleanup-1"),
+          aggregateKind: "project",
+          aggregateId: ProjectId.make("project-deferred-cleanup"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-deferred-cleanup-1"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-deferred-cleanup-1"),
+          metadata: {},
+          payload: {
+            projectId: ProjectId.make("project-deferred-cleanup"),
+            title: "Project Deferred Cleanup",
+            workspaceRoot: "/tmp/project-deferred-cleanup",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+        yield* appendAndProject({
+          type: "thread.created",
+          eventId: EventId.make("evt-deferred-cleanup-2"),
+          aggregateKind: "thread",
+          aggregateId: threadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-deferred-cleanup-2"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-deferred-cleanup-2"),
+          metadata: {},
+          payload: {
+            threadId,
+            projectId: ProjectId.make("project-deferred-cleanup"),
+            title: "Thread Deferred Cleanup",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+        const attachmentPath = path.join(attachmentsDir, `${attachmentId}.png`);
+        yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
+        yield* fileSystem.writeFileString(attachmentPath, "delete after commit");
+
+        const deletionEvent = yield* eventStore.append({
+          type: "thread.deleted",
+          eventId: EventId.make("evt-deferred-cleanup-3"),
+          aggregateKind: "thread",
+          aggregateId: threadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-deferred-cleanup-3"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-deferred-cleanup-3"),
+          metadata: {},
+          payload: {
+            threadId,
+            deletedAt: now,
+          },
+        });
+
+        const cleanup = yield* sql.withTransaction(
+          Effect.gen(function* () {
+            const deferredCleanup = yield* projectionPipeline.projectEventDeferred(deletionEvent);
+            assert.isTrue(yield* exists(attachmentPath));
+            // @effect-diagnostics-next-line returnEffectInGen:off
+            return deferredCleanup;
+          }),
+        );
+
+        assert.isTrue(yield* exists(attachmentPath));
+        yield* cleanup;
+        assert.isFalse(yield* exists(attachmentPath));
+      }),
+    );
+  },
+);
 
 it.layer(
   Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-attachments-overwrite-")),

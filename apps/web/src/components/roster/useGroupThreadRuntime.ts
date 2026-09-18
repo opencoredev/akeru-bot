@@ -22,7 +22,6 @@ import {
   useProjects,
   readEnvironmentSupportsFileAttachments,
   useThreadActivities,
-  useThreadMessages,
   useThreadShell,
   useThreadShells,
 } from "../../state/entities";
@@ -43,6 +42,7 @@ import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThre
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
+import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -118,7 +118,7 @@ export function useGroupThreadRuntime(groupId: string) {
     retainedThreadRef.current = { groupId, threadRef: null };
   }
   if (linkedThreadRef) retainedThreadRef.current.threadRef = linkedThreadRef;
-  const messages = useThreadMessages(linkedThreadRef);
+  const { messages, lastMessageRole } = useBotConversationMessageProjection(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(
@@ -169,7 +169,7 @@ export function useGroupThreadRuntime(groupId: string) {
       rememberedThread?.session?.status === "stopped") &&
     (rememberedThread?.latestTurn?.state === "error" ||
       rememberedThread?.latestTurn?.state === "interrupted" ||
-      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+      (rememberedThread?.latestTurn === null && lastMessageRole === "user"));
   const resume = useCallback(async (): Promise<boolean> => {
     if (!linkedThreadRef || !canResume || resuming) return false;
     setResuming(true);

@@ -92,10 +92,7 @@ import {
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
-import {
-  AKERU_BOT_TURN_INSTRUCTIONS,
-  createAkeruBotTurnInstructions,
-} from "../AkeruAgentInstructions.ts";
+import { createAkeruBotTurnInstructions } from "../AkeruAgentInstructions.ts";
 import type { ProviderInstanceRoutingInfo } from "../Services/ProviderAdapterRegistry.ts";
 import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
@@ -217,6 +214,7 @@ interface ActiveSession {
   runtimeMode: RuntimeMode;
   model: string;
   status: ProviderSession["status"];
+  turnAdmissionGeneration: number;
   activeTurn: ActiveTurn | null;
   admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
@@ -251,6 +249,7 @@ export interface AgentControllerLiveOptions {
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
   > &
     Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
+  readonly readAttachment?: (path: string) => Promise<Uint8Array>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -756,7 +755,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       readonly botId: BotId;
       readonly parentDelegation: AkeruDelegationRecord | undefined;
       readonly access: AkeruDelegationAccessGrant;
-      readonly snapshot: OrchestrationReadModel | undefined;
+      readonly delegations: OrchestrationReadModel["delegations"] | undefined;
     }): NonNullable<AkeruToolSession["delegation"]> => {
       const parent = () => {
         const turnId = sessions.get(String(input.threadId))?.activeTurn?.turnId;
@@ -779,7 +778,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       return {
         depth: input.parentDelegation?.depth ?? 0,
         activeDelegations:
-          input.snapshot?.delegations.filter(
+          input.delegations?.filter(
             (candidate) =>
               candidate.parentThreadId === input.threadId &&
               candidate.state !== "completed" &&
@@ -1750,11 +1749,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
-      const snapshot = Option.isSome(projectionSnapshotQuery)
-        ? yield* projectionSnapshotQuery.value.getSnapshot()
+      const readModel = Option.isSome(projectionSnapshotQuery)
+        ? yield* projectionSnapshotQuery.value.getCommandReadModel()
         : undefined;
-      const thread = snapshot?.threads.find((candidate) => candidate.id === threadId);
-      const parentDelegation = snapshot?.delegations.find(
+      const thread = readModel?.threads.find((candidate) => candidate.id === threadId);
+      const parentDelegation = readModel?.delegations.find(
         (candidate) =>
           candidate.childThreadId === threadId &&
           candidate.state !== "completed" &&
@@ -1763,10 +1762,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
       const respondingBotId = thread?.respondingBotId ?? thread?.botId ?? input.botId ?? null;
       const group = thread?.groupId
-        ? snapshot?.groups.find((candidate) => candidate.id === thread.groupId)
+        ? readModel?.groups.find((candidate) => candidate.id === thread.groupId)
         : undefined;
       const botId = respondingBotId ?? group?.bossBotId ?? null;
-      const bot = snapshot?.bots.find((candidate) => candidate.id === botId);
+      const bot = readModel?.bots.find((candidate) => candidate.id === botId);
       const delegatedAccess =
         delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
       const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
@@ -1884,7 +1883,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   botId,
                   parentDelegation,
                   access,
-                  snapshot,
+                  delegations: readModel?.delegations,
                 }),
               }
             : {}),
@@ -2064,7 +2063,13 @@ const make = (options?: AgentControllerLiveOptions) =>
                   request,
                 );
               },
-              delegation: delegationFor({ threadId, botId, parentDelegation, access, snapshot }),
+              delegation: delegationFor({
+                threadId,
+                botId,
+                parentDelegation,
+                access,
+                delegations: readModel?.delegations,
+              }),
             }
           : {}),
         ...(input.botId && channelRuntime
@@ -2169,6 +2174,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           runtimeMode: access.runtimeMode,
           model: resolved.modelSelection.model,
           status: "ready" as const,
+          turnAdmissionGeneration: 0,
           activeTurn: null,
           admittingTurn: null,
           pendingTurns: [],
@@ -2234,40 +2240,60 @@ const make = (options?: AgentControllerLiveOptions) =>
               : providerInput,
           );
         }
+        const turnAdmissionGeneration = active.turnAdmissionGeneration;
         if (input.timezone !== undefined) {
           active.toolSession = { ...active.toolSession, timezone: input.timezone };
           toolRuntime.registerSession(key, active.toolSession);
         }
-        const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
-          const path = resolveAttachmentPath({
-            attachmentsDir: config.attachmentsDir,
-            attachment,
-          });
-          if (path === null) {
-            return Effect.fail(
-              new AgentControllerRuntimeError({
-                operation: "sendTurn.attachments",
-                detail: `Attachment '${attachment.id}' has an invalid path.`,
-              }),
-            );
-          }
-          return Effect.try({
-            try: () => ({
-              file: {
-                data: NodeFS.readFileSync(path).toString("base64"),
-                mediaType: attachment.mimeType,
-                filename: attachment.name,
+        const attachmentFiles = yield* Effect.forEach(
+          input.attachments ?? [],
+          (attachment) => {
+            const path = resolveAttachmentPath({
+              attachmentsDir: config.attachmentsDir,
+              attachment,
+            });
+            if (path === null) {
+              return Effect.fail(
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn.attachments",
+                  detail: `Attachment '${attachment.id}' has an invalid path.`,
+                }),
+              );
+            }
+            return Effect.tryPromise({
+              try: async () => {
+                const bytes = await (options?.readAttachment ?? NodeFS.promises.readFile)(path);
+                return {
+                  file: {
+                    data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
+                      "base64",
+                    ),
+                    mediaType: attachment.mimeType,
+                    filename: attachment.name,
+                  },
+                  pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
+                };
               },
-              pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
-            }),
-            catch: (cause) =>
-              new AgentControllerRuntimeError({
-                operation: "sendTurn.attachments",
-                detail: `Could not read attachment '${attachment.id}'.`,
-                cause,
-              }),
+              catch: (cause) =>
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn.attachments",
+                  detail: `Could not read attachment '${attachment.id}'.`,
+                  cause,
+                }),
+            });
+          },
+          { concurrency: 1 },
+        );
+        if (
+          sessions.get(key) !== active ||
+          active.status === "closed" ||
+          active.turnAdmissionGeneration !== turnAdmissionGeneration
+        ) {
+          return yield* new AgentControllerRuntimeError({
+            operation: "sendTurn",
+            detail: `Mastra session for thread '${input.threadId}' is not running.`,
           });
-        });
+        }
         const content = [input.input, ...attachmentFiles.map(({ pathLine }) => pathLine)]
           .filter((part): part is string => typeof part === "string" && part.length > 0)
           .join("\n\n");
@@ -2306,6 +2332,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.interruptTurn(input);
       }
+      active.turnAdmissionGeneration += 1;
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -2573,6 +2600,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      active.turnAdmissionGeneration += 1;
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -2622,6 +2650,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
+          active.turnAdmissionGeneration += 1;
           active.pendingTurns.length = 0;
           active.admittingTurn = null;
           active.session.abort();
