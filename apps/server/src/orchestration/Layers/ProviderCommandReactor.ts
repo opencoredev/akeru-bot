@@ -2532,13 +2532,33 @@ const make = Effect.gen(function* () {
       ).pipe(Effect.tx);
     });
 
-    // Subscribe before returning, even while event handling waits for server activation.
+    // Replay the subscription gap; buffered events are not observed until processEvent runs.
+    const beforeSubscription = yield* orchestrationEngine.latestSequence;
     const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
-    yield* forkParked(Stream.runForEach(domainEvents, processEvent));
     const subscribedThrough = yield* orchestrationEngine.latestSequence;
+    const subscriptionGap = yield* Stream.runCollect(
+      orchestrationEngine.readEvents(
+        beforeSubscription,
+        subscribedThrough - beforeSubscription,
+        subscribedThrough,
+      ),
+    ).pipe(Effect.orDie);
     yield* TxRef.update(observedDomainEventSequence, (observed) =>
-      Math.max(observed, subscribedThrough),
+      Math.max(observed, beforeSubscription),
     ).pipe(Effect.tx);
+    yield* forkParked(
+      Stream.runForEach(
+        Stream.concat(
+          Stream.fromIterable(subscriptionGap),
+          domainEvents.pipe(
+            Stream.filter(
+              (event) => event.sequence <= beforeSubscription || event.sequence > subscribedThrough,
+            ),
+          ),
+        ),
+        processEvent,
+      ),
+    );
 
     yield* recoverStartupProviderWork().pipe(
       Effect.catchCause((cause) =>

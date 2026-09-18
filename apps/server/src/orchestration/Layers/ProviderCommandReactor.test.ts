@@ -72,6 +72,7 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { ServerActivation } from "../../serverActivation.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
 import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.ts";
@@ -214,6 +215,13 @@ describe("ProviderCommandReactor", () => {
     readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
     readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
+    readonly activation?: Effect.Effect<void>;
+    readonly beforeSubscribe?: (
+      engine: OrchestrationEngineService["Service"],
+    ) => Effect.Effect<void>;
+    readonly afterSubscribe?: (
+      engine: OrchestrationEngineService["Service"],
+    ) => Effect.Effect<void>;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -508,33 +516,25 @@ describe("ProviderCommandReactor", () => {
           get streamDomainEvents() {
             return engine.streamDomainEvents;
           },
-          subscribeDomainEvents:
-            input?.replayPersistedResumeOnSubscribe === true
-              ? engine.subscribeDomainEvents.pipe(
-                  Effect.flatMap((liveEvents) =>
-                    engine.latestSequence.pipe(
-                      Effect.flatMap((throughSequence) =>
-                        Stream.runCollect(
-                          engine.readThreadEvents({
-                            threadId: ThreadId.make("thread-1"),
-                            fromSequenceExclusive: 0,
-                            toSequenceInclusive: throughSequence,
-                            limit: 500,
-                          }),
-                        ).pipe(Effect.orDie),
-                      ),
-                      Effect.map((events) => {
-                        const resume = Array.from(events).findLast(
-                          (event) => event.type === "thread.turn-resume-requested",
-                        );
-                        return resume
-                          ? Stream.concat(Stream.make(resume, resume), liveEvents)
-                          : liveEvents;
-                      }),
-                    ),
-                  ),
-                )
-              : engine.subscribeDomainEvents,
+          subscribeDomainEvents: Effect.gen(function* () {
+            yield* input?.beforeSubscribe?.(engine) ?? Effect.void;
+            const liveEvents = yield* engine.subscribeDomainEvents;
+            yield* input?.afterSubscribe?.(engine) ?? Effect.void;
+            if (input?.replayPersistedResumeOnSubscribe !== true) return liveEvents;
+            const throughSequence = yield* engine.latestSequence;
+            const events = yield* Stream.runCollect(
+              engine.readThreadEvents({
+                threadId: ThreadId.make("thread-1"),
+                fromSequenceExclusive: 0,
+                toSequenceInclusive: throughSequence,
+                limit: 500,
+              }),
+            ).pipe(Effect.orDie);
+            const resume = Array.from(events).findLast(
+              (event) => event.type === "thread.turn-resume-requested",
+            );
+            return resume ? Stream.concat(Stream.make(resume, resume), liveEvents) : liveEvents;
+          }),
           latestSequence: engine.latestSequence,
         } satisfies OrchestrationEngineService["Service"];
       }),
@@ -782,10 +782,15 @@ describe("ProviderCommandReactor", () => {
     }
 
     scope = await Effect.runPromise(Scope.make("sequential"));
-    await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
+    await Effect.runPromise(
+      reactor
+        .start()
+        .pipe(Scope.provide(scope), Effect.provideService(ServerActivation, input?.activation)),
+    );
     const drain = () => Effect.runPromise(reactor.drain);
 
     return {
+      reactor,
       engine,
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       resolveEngine,
@@ -979,6 +984,61 @@ describe("ProviderCommandReactor", () => {
       yield* Effect.promise(() => harness.drain());
     }),
   );
+
+  for (const boundary of ["beforeSubscribe", "afterSubscribe"] as const) {
+    effectIt.effect(`drain awaits commands committed at ${boundary} until activation`, () =>
+      Effect.gen(function* () {
+        const activation = yield* Deferred.make<void>();
+        const drained = yield* Deferred.make<void>();
+        const harness = yield* Effect.promise(() =>
+          createHarness({
+            activation: Deferred.await(activation),
+            [boundary]: (engine: OrchestrationEngineService["Service"]) =>
+              Effect.gen(function* () {
+                const threadId = ThreadId.make("thread-1");
+                const createdAt = "2026-01-01T00:00:00.000Z";
+                yield* engine.dispatch({
+                  type: "thread.session.set",
+                  commandId: CommandId.make(`session-${boundary}`),
+                  threadId,
+                  session: {
+                    threadId,
+                    status: "ready",
+                    providerName: "codex",
+                    runtimeMode: "approval-required",
+                    activeTurnId: null,
+                    lastError: null,
+                    updatedAt: createdAt,
+                  },
+                  createdAt,
+                });
+                yield* engine.dispatch({
+                  type: "thread.approval.respond",
+                  commandId: CommandId.make(`approval-${boundary}`),
+                  threadId,
+                  requestId: asApprovalRequestId(`approval-${boundary}`),
+                  decision: "accept",
+                  createdAt,
+                });
+              }).pipe(Effect.orDie),
+          }),
+        );
+        yield* Effect.forkChild(
+          harness.reactor.drain.pipe(Effect.andThen(Deferred.succeed(drained, undefined))),
+          { startImmediately: true },
+        );
+        expect(yield* Deferred.isDone(drained)).toBe(false);
+        expect(harness.respondToRequest).not.toHaveBeenCalled();
+        yield* Deferred.succeed(activation, undefined);
+        yield* Deferred.await(drained);
+        expect(harness.respondToRequest).toHaveBeenCalledExactlyOnceWith({
+          threadId: ThreadId.make("thread-1"),
+          requestId: asApprovalRequestId(`approval-${boundary}`),
+          decision: "accept",
+        });
+      }),
+    );
+  }
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {
     const harness = await createHarness({ turnStartBeforeReactor: true });
