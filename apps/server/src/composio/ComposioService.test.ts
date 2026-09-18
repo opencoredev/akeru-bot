@@ -234,6 +234,62 @@ describe("ComposioService", () => {
     }),
   );
 
+  it.effect("reuses a hosted runtime when account and toolkit order changes", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [
+          { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+          { id: "slack-work", toolkit: { slug: "slack" }, status: "ACTIVE" },
+          { id: "gmail-home", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+        ],
+      });
+      const service = make(store, () => client);
+
+      const first = yield* service.resolveRuntimeMcpServer("thread-1");
+      vi.mocked(client.connectedAccounts.list).mockResolvedValue({
+        items: [
+          { id: "gmail-home", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+          { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+          { id: "slack-work", toolkit: { slug: "slack" }, status: "ACTIVE" },
+        ],
+        totalPages: 1,
+      } as never);
+      const reordered = yield* service.resolveRuntimeMcpServer("thread-1");
+
+      expect(reordered).toBe(first);
+      expect(createSession).toHaveBeenCalledTimes(1);
+      expect(sessionDeletes[0]).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect("replaces a hosted runtime when active account status changes", () =>
+    Effect.gen(function* () {
+      const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+      const { client, createSession, sessionDeletes } = fakeClient({
+        accounts: [
+          { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+          { id: "gmail-home", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+        ],
+      });
+      const service = make(store, () => client);
+
+      yield* service.resolveRuntimeMcpServer("thread-1");
+      vi.mocked(client.connectedAccounts.list).mockResolvedValue({
+        items: [
+          { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" },
+          { id: "gmail-home", toolkit: { slug: "gmail" }, status: "FAILED" },
+        ],
+        totalPages: 1,
+      } as never);
+      yield* service.resolveRuntimeMcpServer("thread-1");
+
+      expect(createSession).toHaveBeenCalledTimes(2);
+      expect(sessionDeletes[0]).toHaveBeenCalledTimes(1);
+      expect(sessionDeletes[1]).not.toHaveBeenCalled();
+    }),
+  );
+
   it.effect("deletes a hosted session before replacing its cached runtime", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });

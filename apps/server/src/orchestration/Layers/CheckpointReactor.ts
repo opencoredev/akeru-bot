@@ -169,14 +169,19 @@ const make = Effect.gen(function* () {
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
-  const resolveThreadProjects = Effect.fn("resolveThreadProjects")(function* (
-    projectId: ProjectId,
+  const resolveCheckpointCaptureContext = Effect.fn("resolveCheckpointCaptureContext")(function* (
+    threadId: ThreadId,
+    turnId: TurnId | null,
   ) {
-    const project = yield* projectionSnapshotQuery
-      .getProjectShellById(projectId)
+    return yield* projectionSnapshotQuery
+      .getThreadCheckpointCaptureContext(threadId, turnId)
       .pipe(Effect.map(Option.getOrUndefined));
-    return project ? [project] : [];
   });
+
+  const checkpointContextProjects = (context: {
+    readonly projectId: ProjectId;
+    readonly workspaceRoot: string;
+  }) => [{ id: context.projectId, workspaceRoot: context.workspaceRoot }];
 
   // Resolves the workspace CWD for checkpoint operations, preferring the
   // active provider session CWD and falling back to the thread/project config.
@@ -220,13 +225,6 @@ const make = Effect.gen(function* () {
   const captureAndDispatchCheckpoint = Effect.fn("captureAndDispatchCheckpoint")(function* (input: {
     readonly threadId: ThreadId;
     readonly turnId: TurnId;
-    readonly thread: {
-      readonly messages: ReadonlyArray<{
-        readonly id: MessageId;
-        readonly role: string;
-        readonly turnId: TurnId | null;
-      }>;
-    };
     readonly cwd: string;
     readonly turnCount: number;
     readonly status: "ready" | "missing" | "error";
@@ -300,11 +298,7 @@ const make = Effect.gen(function* () {
     );
 
     const assistantMessageId =
-      input.assistantMessageId ??
-      input.thread.messages
-        .toReversed()
-        .find((entry) => entry.role === "assistant" && entry.turnId === input.turnId)?.id ??
-      MessageId.make(`assistant:${input.turnId}`);
+      input.assistantMessageId ?? MessageId.make(`assistant:${input.turnId}`);
 
     yield* orchestrationEngine.dispatch({
       type: "thread.turn.diff.complete",
@@ -364,62 +358,46 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const thread = yield* resolveThreadDetail(event.threadId);
+      const thread = yield* resolveCheckpointCaptureContext(event.threadId, turnId);
       if (!thread) {
         return;
       }
 
-      // When a primary turn is active, only that turn may produce completion checkpoints.
-      if (thread.session?.activeTurnId && !sameId(thread.session.activeTurnId, turnId)) {
+      if (thread.activeTurnId && !sameId(thread.activeTurnId, turnId)) {
         return;
       }
 
-      // Only skip if a real (non-placeholder) checkpoint already exists for this turn.
-      // ProviderRuntimeIngestion may insert placeholder entries with status "missing"
-      // before this reactor runs; those must not prevent real git capture.
-      if (
-        thread.checkpoints.some(
-          (checkpoint) => checkpoint.turnId === turnId && checkpoint.status !== "missing",
-        )
-      ) {
+      if (thread.turnCheckpoint && thread.turnCheckpoint.status !== "missing") {
         return;
       }
 
-      const projects = yield* resolveThreadProjects(thread.projectId);
       const checkpointCwd = yield* resolveCheckpointCwd({
-        threadId: thread.id,
+        threadId: thread.threadId,
         thread,
-        projects,
+        projects: checkpointContextProjects(thread),
         preferSessionRuntime: true,
       });
       if (!checkpointCwd) {
         return;
       }
 
-      // If a placeholder checkpoint exists for this turn, reuse its turn count
-      // instead of incrementing past it.
-      const existingPlaceholder = thread.checkpoints.find(
-        (checkpoint) => checkpoint.turnId === turnId && checkpoint.status === "missing",
-      );
-      const currentTurnCount = thread.checkpoints.reduce(
-        (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
-        0,
-      );
+      const existingPlaceholder =
+        thread.turnCheckpoint?.status === "missing" ? thread.turnCheckpoint : null;
       const nextTurnCount = existingPlaceholder
         ? existingPlaceholder.checkpointTurnCount
-        : currentTurnCount + 1;
+        : thread.latestCheckpointTurnCount + 1;
 
       yield* captureAndDispatchCheckpoint({
-        threadId: thread.id,
+        threadId: thread.threadId,
         turnId,
-        thread,
         cwd: checkpointCwd,
         turnCount: nextTurnCount,
         status:
           event.type === "turn.aborted"
             ? "ready"
             : checkpointStatusFromRuntime(event.payload.state),
-        assistantMessageId: existingPlaceholder?.assistantMessageId ?? undefined,
+        assistantMessageId:
+          existingPlaceholder?.assistantMessageId ?? thread.latestAssistantMessageId ?? undefined,
         createdAt: event.createdAt,
       });
     },
@@ -432,27 +410,23 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const thread = yield* resolveThreadDetail(event.threadId);
+      const thread = yield* resolveCheckpointCaptureContext(event.threadId, null);
       if (!thread) {
         return;
       }
 
-      const projects = yield* resolveThreadProjects(thread.projectId);
       const checkpointCwd = yield* resolveCheckpointCwd({
-        threadId: thread.id,
+        threadId: thread.threadId,
         thread,
-        projects,
+        projects: checkpointContextProjects(thread),
         preferSessionRuntime: false,
       });
       if (!checkpointCwd) {
         return;
       }
 
-      const currentTurnCount = thread.checkpoints.reduce(
-        (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
-        0,
-      );
-      const baselineCheckpointRef = checkpointRefForThreadTurn(thread.id, currentTurnCount);
+      const currentTurnCount = thread.latestCheckpointTurnCount;
+      const baselineCheckpointRef = checkpointRefForThreadTurn(thread.threadId, currentTurnCount);
       const baselineExists = yield* checkpointStore.hasCheckpointRef({
         cwd: checkpointCwd,
         checkpointRef: baselineCheckpointRef,
@@ -467,7 +441,7 @@ const make = Effect.gen(function* () {
       });
       yield* receiptBus.publish({
         type: "checkpoint.baseline.captured",
-        threadId: thread.id,
+        threadId: thread.threadId,
         checkpointTurnCount: currentTurnCount,
         checkpointRef: baselineCheckpointRef,
         createdAt: event.createdAt,
@@ -609,26 +583,22 @@ const make = Effect.gen(function* () {
     }
 
     const threadId = event.payload.threadId;
-    const thread = yield* resolveThreadDetail(threadId);
+    const thread = yield* resolveCheckpointCaptureContext(threadId, null);
     if (!thread) {
       return;
     }
 
-    const projects = yield* resolveThreadProjects(thread.projectId);
     const checkpointCwd = yield* resolveCheckpointCwd({
       threadId,
       thread,
-      projects,
+      projects: checkpointContextProjects(thread),
       preferSessionRuntime: false,
     });
     if (!checkpointCwd) {
       return;
     }
 
-    const currentTurnCount = thread.checkpoints.reduce(
-      (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
-      0,
-    );
+    const currentTurnCount = thread.latestCheckpointTurnCount;
     const baselineCheckpointRef = checkpointRefForThreadTurn(threadId, currentTurnCount);
     const baselineExists = yield* checkpointStore.hasCheckpointRef({
       cwd: checkpointCwd,
@@ -829,20 +799,20 @@ const make = Effect.gen(function* () {
 
     if (event.type === "turn.completed" || event.type === "turn.aborted") {
       const turnId = toTurnId(event.turnId);
-      const thread = yield* resolveThreadDetail(event.threadId);
+      const thread = yield* resolveCheckpointCaptureContext(event.threadId, turnId);
       const startedTurnId = startedTurns.get(event.threadId);
       const isTrackedTurn = sameId(startedTurnId, turnId);
       if (isTrackedTurn) startedTurns.delete(event.threadId);
       if (event.type === "turn.completed") {
         yield* statusRefreshWorker.enqueue(event);
       }
-      if (isTrackedTurn || sameId(thread?.session?.activeTurnId, turnId)) {
+      if (isTrackedTurn || sameId(thread?.activeTurnId, turnId)) {
         pending.delete(event.threadId);
       }
       if (
         event.type === "turn.aborted" &&
         !isTrackedTurn &&
-        !sameId(thread?.session?.activeTurnId, turnId)
+        !sameId(thread?.activeTurnId, turnId)
       ) {
         return;
       }
@@ -918,7 +888,10 @@ const make = Effect.gen(function* () {
 
   return {
     start,
-    drain: worker.drain.pipe(Effect.andThen(statusRefreshWorker.drain)),
+    drain: worker.drain.pipe(
+      Effect.andThen(statusRefreshWorker.drain),
+      Effect.andThen(workspaceEntries.drain ?? Effect.void),
+    ),
   } satisfies CheckpointReactorShape;
 });
 

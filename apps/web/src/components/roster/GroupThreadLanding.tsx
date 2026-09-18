@@ -36,7 +36,6 @@ import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import { GroupMemberStack } from "./GroupMemberStack";
-import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
@@ -93,7 +92,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     setReplyTarget(null);
   }, [groupId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
-  const messages = visibleBotChatMessages(runtime.messages);
+  const messages = runtime.messages;
   useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: group ? runtime.linkedThreadRef?.threadId : null,

@@ -45,6 +45,7 @@ import {
   MemoryCandidateRepository,
   type MemoryCandidateRepositoryShape,
 } from "../../memory/Services/MemoryCandidateRepository.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
@@ -442,6 +443,7 @@ function makeLayer(
     | "issueMcpCredential"
     | "revokeMcpCredential"
     | "makeBotBrowser"
+    | "readAttachment"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
 ) {
@@ -489,6 +491,7 @@ function provideController<A, E>(
     | "issueMcpCredential"
     | "revokeMcpCredential"
     | "makeBotBrowser"
+    | "readAttachment"
   >,
 ) {
   return effect.pipe(
@@ -936,6 +939,39 @@ describe("AgentControllerLive", () => {
       bridge.service,
       mastra.factory,
     );
+  });
+
+  it.effect("uses the lightweight command read model when starting a session", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const getCommandReadModel = vi.fn(() =>
+      Effect.succeed({ threads: [], delegations: [], groups: [], bots: [] } as never),
+    );
+    const getSnapshot = vi.fn(() => Effect.die("full snapshot must not be read"));
+    const layer = makeLayer(bridge.service, mastra.factory).pipe(
+      Layer.provide(
+        Layer.succeed(
+          ProjectionSnapshotQuery,
+          ProjectionSnapshotQuery.of({ getCommandReadModel, getSnapshot } as never),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        cwd: process.cwd(),
+        modelSelection: codexSelection,
+        runtimeMode: "full-access",
+      });
+
+      expect(getCommandReadModel).toHaveBeenCalledOnce();
+      expect(getSnapshot).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
   it.effect("rejects conversation memory calls when the harness has no memory", () => {
@@ -2689,7 +2725,14 @@ describe("AgentControllerLive", () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-image-"));
     const attachmentsDir = NodePath.join(baseDir, "userdata", "attachments");
     NodeFS.mkdirSync(attachmentsDir, { recursive: true });
-    NodeFS.writeFileSync(NodePath.join(attachmentsDir, "image-1.png"), "image");
+    NodeFS.writeFileSync(
+      NodePath.join(attachmentsDir, "image-1.png"),
+      Buffer.from([0, 255, 1, 128]),
+    );
+    NodeFS.writeFileSync(
+      NodePath.join(attachmentsDir, "image-2.jpg"),
+      Buffer.from([222, 173, 190, 239]),
+    );
 
     return provideController(
       Effect.gen(function* () {
@@ -2712,18 +2755,30 @@ describe("AgentControllerLive", () => {
               id: "image-1",
               name: "screenshot.png",
               mimeType: "image/png",
-              sizeBytes: 5,
+              sizeBytes: 4,
+            },
+            {
+              type: "image",
+              id: "image-2",
+              name: "photo.jpg",
+              mimeType: "image/jpeg",
+              sizeBytes: 4,
             },
           ],
         });
 
         expect(mastra.sendMessage).toHaveBeenCalledWith({
-          content: `Inspect this image.\n\n[Attached image "screenshot.png" is saved at: ${NodePath.join(attachmentsDir, "image-1.png")}]`,
+          content: `Inspect this image.\n\n[Attached image "screenshot.png" is saved at: ${NodePath.join(attachmentsDir, "image-1.png")}]\n\n[Attached image "photo.jpg" is saved at: ${NodePath.join(attachmentsDir, "image-2.jpg")}]`,
           files: [
             {
-              data: "aW1hZ2U=",
+              data: "AP8BgA==",
               mediaType: "image/png",
               filename: "screenshot.png",
+            },
+            {
+              data: "3q2+7w==",
+              mediaType: "image/jpeg",
+              filename: "photo.jpg",
             },
           ],
         });
@@ -2738,6 +2793,80 @@ describe("AgentControllerLive", () => {
       baseDir,
     );
   });
+
+  for (const action of ["replace", "interrupt", "stop"] as const) {
+    it.effect(`does not enqueue an attachment turn after session ${action}`, () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+
+      return Effect.gen(function* () {
+        let markReadStarted!: () => void;
+        const readStarted = new Promise<void>((resolve) => {
+          markReadStarted = resolve;
+        });
+        let releaseRead!: (bytes: Uint8Array) => void;
+        const blockedRead = new Promise<Uint8Array>((resolve) => {
+          releaseRead = resolve;
+        });
+        const layer = makeLayer(bridge.service, mastra.factory, undefined, undefined, undefined, {
+          readAttachment: () => {
+            markReadStarted();
+            return blockedRead;
+          },
+        });
+        const program = Effect.gen(function* () {
+          const controller = yield* AgentController;
+          yield* resolveCodex(controller);
+          yield* controller.startSession(codexThreadId, {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            cwd: process.cwd(),
+            modelSelection: codexSelection,
+            runtimeMode: "full-access",
+          });
+          const sending = yield* controller
+            .sendTurn({
+              threadId: codexThreadId,
+              input: "Inspect this image.",
+              attachments: [
+                {
+                  type: "image",
+                  id: "image-1",
+                  name: "screenshot.png",
+                  mimeType: "image/png",
+                  sizeBytes: 4,
+                },
+              ],
+            })
+            .pipe(Effect.forkChild({ startImmediately: true }));
+          yield* Effect.promise(() => readStarted);
+          expect(yield* controller.listSessions()).toHaveLength(1);
+
+          if (action === "replace") {
+            yield* controller.startSession(codexThreadId, {
+              threadId: codexThreadId,
+              provider: ProviderDriverKind.make("codex"),
+              providerInstanceId: codexInstanceId,
+              cwd: NodeOS.tmpdir(),
+              modelSelection: codexSelection,
+              runtimeMode: "full-access",
+            });
+          } else if (action === "interrupt") {
+            yield* controller.interruptTurn({ threadId: codexThreadId });
+          } else {
+            yield* controller.stopSession({ threadId: codexThreadId });
+          }
+          releaseRead(new Uint8Array([0, 1, 2, 3]));
+
+          const exit = yield* Fiber.await(sending);
+          assert.isTrue(Exit.isFailure(exit));
+          expect(mastra.sendMessage).not.toHaveBeenCalled();
+        });
+        yield* program.pipe(Effect.provide(layer));
+      }).pipe(Effect.orDie);
+    });
+  }
 
   it.effect("attaches the globally installed MCP servers selected for the bot", () => {
     const bridge = makeBridge();

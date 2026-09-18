@@ -194,8 +194,13 @@ describe("ProviderCommandReactor", () => {
     readonly resumeBeforeReactor?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
-    readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
+    readonly interruptTurnEffect?: (
+      input?: unknown,
+    ) => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
+    readonly respondToRequestEffect?: (
+      input: Parameters<AgentControllerShape["respondToRequest"]>[0],
+    ) => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly startSessionEffect?: (
       session: ProviderSession,
@@ -294,7 +299,7 @@ describe("ProviderCommandReactor", () => {
           }),
     );
     const interruptTurn = vi.fn((interruptInput: unknown) =>
-      (input?.interruptTurnEffect?.() ?? Effect.void).pipe(
+      (input?.interruptTurnEffect?.(interruptInput) ?? Effect.void).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
             if (input?.interruptTurnRemovesSession !== true) {
@@ -317,7 +322,9 @@ describe("ProviderCommandReactor", () => {
         ),
       ),
     );
-    const respondToRequest = vi.fn<AgentControllerShape["respondToRequest"]>(() => Effect.void);
+    const respondToRequest = vi.fn<AgentControllerShape["respondToRequest"]>(
+      (request) => input?.respondToRequestEffect?.(request) ?? Effect.void,
+    );
     const respondToUserInput = vi.fn<AgentControllerShape["respondToUserInput"]>(() => Effect.void);
     const stopSession = vi.fn((stopInput: unknown) =>
       (input?.stopSessionEffect?.() ?? Effect.void).pipe(
@@ -870,6 +877,108 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
+
+  effectIt.effect("lets another thread approve and interrupt while session setup is blocked", () =>
+    Effect.gen(function* () {
+      const sessionSetupStarted = yield* Deferred.make<void>();
+      const releaseSessionSetup = yield* Deferred.make<void>();
+      const approvalReachedAdapter = yield* Deferred.make<void>();
+      const interruptReachedAdapter = yield* Deferred.make<void>();
+      const threadB = ThreadId.make("thread-2");
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          startSessionEffect: (session) =>
+            session.threadId === ThreadId.make("thread-1")
+              ? Deferred.succeed(sessionSetupStarted, undefined).pipe(
+                  Effect.andThen(Deferred.await(releaseSessionSetup)),
+                  Effect.as(session),
+                )
+              : Effect.succeed(session),
+          respondToRequestEffect: (request) =>
+            request.threadId === threadB
+              ? Deferred.succeed(approvalReachedAdapter, undefined).pipe(Effect.asVoid)
+              : Effect.void,
+          interruptTurnEffect: (request) =>
+            typeof request === "object" &&
+            request !== null &&
+            "threadId" in request &&
+            request.threadId === threadB
+              ? Deferred.succeed(interruptReachedAdapter, undefined).pipe(Effect.asVoid)
+              : Effect.void,
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-thread-create-2-concurrency"),
+        threadId: threadB,
+        projectId: asProjectId("project-1"),
+        title: "Thread B",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-thread-session-2-concurrency"),
+        threadId: threadB,
+        session: {
+          threadId: threadB,
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: asTurnId("turn-2"),
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-blocked-thread-1"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-blocked-thread-1"),
+          role: "user",
+          text: "block this setup",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      });
+      yield* Deferred.await(sessionSetupStarted);
+
+      yield* harness.engine.dispatch({
+        type: "thread.approval.respond",
+        commandId: CommandId.make("cmd-approval-thread-2-concurrency"),
+        threadId: threadB,
+        requestId: asApprovalRequestId("approval-thread-2-concurrency"),
+        decision: "accept",
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.turn.interrupt",
+        commandId: CommandId.make("cmd-interrupt-thread-2-concurrency"),
+        threadId: threadB,
+        turnId: asTurnId("turn-2"),
+        createdAt: now,
+      });
+
+      yield* Deferred.await(approvalReachedAdapter);
+      yield* Deferred.await(interruptReachedAdapter);
+      expect(yield* Deferred.isDone(releaseSessionSetup)).toBe(false);
+      yield* Deferred.succeed(releaseSessionSetup, undefined);
+      yield* Effect.promise(() => harness.drain());
+    }),
+  );
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {
     const harness = await createHarness({ turnStartBeforeReactor: true });
@@ -3733,7 +3842,7 @@ describe("ProviderCommandReactor", () => {
         keep: false,
         createdAt: later,
       });
-      yield* Effect.promise(() => waitFor(() => harness.interruptTurn.mock.calls.length === 1));
+      yield* Effect.promise(() => harness.drain());
       expect(harness.interruptTurn).toHaveBeenCalledWith({
         threadId: canceled.childThreadId,
         turnId: canceled.childTurnId,

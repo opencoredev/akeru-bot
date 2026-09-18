@@ -1206,6 +1206,67 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           ],
         });
       }
+
+      yield* sql`
+        INSERT INTO projection_thread_sessions (
+          thread_id, status, provider_name, runtime_mode, active_turn_id, updated_at
+        ) VALUES (
+          'thread-context', 'running', 'codex', 'full-access', 'turn-2',
+          '2026-03-02T00:00:06.000Z'
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at
+        ) VALUES
+          (
+            'assistant-context-a', 'thread-context', 'turn-2', 'assistant',
+            printf('%.*c', 100000, 'a'), 0,
+            '2026-03-02T00:00:06.000Z', '2026-03-02T00:00:06.000Z'
+          ),
+          (
+            'assistant-context-b', 'thread-context', 'turn-2', 'assistant',
+            printf('%.*c', 100000, 'b'), 0,
+            '2026-03-02T00:00:07.000Z', '2026-03-02T00:00:07.000Z'
+          )
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_proposed_plans (
+          plan_id, thread_id, turn_id, plan_markdown, created_at, updated_at
+        ) VALUES (
+          'plan-context', 'thread-context', 'turn-2', printf('%.*c', 100000, 'p'),
+          '2026-03-02T00:00:06.000Z', '2026-03-02T00:00:06.000Z'
+        )
+      `;
+
+      const captureQuery = snapshotQuery.getThreadCheckpointCaptureContext;
+      assert.ok(captureQuery);
+      const captureContext = yield* captureQuery(
+        ThreadId.make("thread-context"),
+        asTurnId("turn-2"),
+      );
+      assert.equal(captureContext._tag, "Some");
+      if (captureContext._tag === "Some") {
+        assert.deepEqual(captureContext.value, {
+          threadId: ThreadId.make("thread-context"),
+          projectId: asProjectId("project-context"),
+          workspaceRoot: "/tmp/context-workspace",
+          worktreePath: "/tmp/context-worktree",
+          activeTurnId: asTurnId("turn-2"),
+          latestCheckpointTurnCount: 2,
+          turnCheckpoint: {
+            turnId: asTurnId("turn-2"),
+            checkpointTurnCount: 2,
+            checkpointRef: asCheckpointRef("checkpoint-b"),
+            status: "ready",
+            assistantMessageId: null,
+          },
+          latestAssistantMessageId: MessageId.make("assistant-context-b"),
+        });
+        assert.equal("messages" in captureContext.value, false);
+        assert.equal("proposedPlans" in captureContext.value, false);
+        assert.equal("checkpoints" in captureContext.value, false);
+      }
     }),
   );
 

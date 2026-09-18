@@ -85,6 +85,7 @@ import {
   type ProjectionEventReplayStats,
   type ProjectionFullThreadDiffContext,
   type ProjectionSnapshotCounts,
+  type ProjectionThreadCheckpointCaptureContext,
   type ProjectionThreadCheckpointContext,
   type ProjectionThreadDetailQuery,
   type ProjectionSnapshotQueryShape,
@@ -274,6 +275,24 @@ const ProjectionThreadCheckpointContextThreadRowSchema = Schema.Struct({
   projectId: ProjectId,
   workspaceRoot: Schema.String,
   worktreePath: Schema.NullOr(Schema.String),
+});
+const ThreadCheckpointCaptureContextInput = Schema.Struct({
+  threadId: ThreadId,
+  turnId: Schema.NullOr(TurnId),
+});
+const ProjectionThreadCheckpointCaptureContextRowSchema = Schema.Struct({
+  threadId: ThreadId,
+  projectId: ProjectId,
+  workspaceRoot: Schema.String,
+  worktreePath: Schema.NullOr(Schema.String),
+  activeTurnId: Schema.NullOr(TurnId),
+  latestCheckpointTurnCount: NonNegativeInt,
+  checkpointTurnId: Schema.NullOr(TurnId),
+  checkpointTurnCount: Schema.NullOr(NonNegativeInt),
+  checkpointRef: Schema.NullOr(CheckpointRef),
+  checkpointStatus: Schema.NullOr(ProjectionCheckpoint.fields.status),
+  checkpointAssistantMessageId: Schema.NullOr(MessageId),
+  latestAssistantMessageId: Schema.NullOr(MessageId),
 });
 const FullThreadDiffContextLookupInput = Schema.Struct({
   threadId: ThreadId,
@@ -1218,6 +1237,53 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           ON projects.project_id = threads.project_id
         WHERE threads.thread_id = ${threadId}
           AND threads.deleted_at IS NULL
+        LIMIT 1
+      `,
+  });
+
+  const getThreadCheckpointCaptureContextRow = SqlSchema.findOneOption({
+    Request: ThreadCheckpointCaptureContextInput,
+    Result: ProjectionThreadCheckpointCaptureContextRowSchema,
+    execute: ({ threadId, turnId }) =>
+      sql`
+        SELECT
+          threads.thread_id AS "threadId",
+          threads.project_id AS "projectId",
+          projects.workspace_root AS "workspaceRoot",
+          threads.worktree_path AS "worktreePath",
+          sessions.active_turn_id AS "activeTurnId",
+          COALESCE((
+            SELECT MAX(checkpoint_turn_count)
+            FROM projection_turns
+            WHERE thread_id = threads.thread_id
+              AND checkpoint_turn_count IS NOT NULL
+          ), 0) AS "latestCheckpointTurnCount",
+          turn_checkpoint.turn_id AS "checkpointTurnId",
+          turn_checkpoint.checkpoint_turn_count AS "checkpointTurnCount",
+          turn_checkpoint.checkpoint_ref AS "checkpointRef",
+          turn_checkpoint.checkpoint_status AS "checkpointStatus",
+          turn_checkpoint.assistant_message_id AS "checkpointAssistantMessageId",
+          CASE WHEN ${turnId} IS NULL THEN NULL ELSE (
+            SELECT message_id
+            FROM projection_thread_messages
+            WHERE thread_id = threads.thread_id
+              AND turn_id = ${turnId}
+              AND role = 'assistant'
+            ORDER BY created_at DESC, message_id DESC
+            LIMIT 1
+          ) END AS "latestAssistantMessageId"
+        FROM projection_threads AS threads
+        INNER JOIN projection_projects AS projects
+          ON projects.project_id = threads.project_id
+        LEFT JOIN projection_thread_sessions AS sessions
+          ON sessions.thread_id = threads.thread_id
+        LEFT JOIN projection_turns AS turn_checkpoint
+          ON turn_checkpoint.thread_id = threads.thread_id
+          AND turn_checkpoint.turn_id = ${turnId}
+          AND turn_checkpoint.checkpoint_turn_count IS NOT NULL
+        WHERE threads.thread_id = ${threadId}
+          AND threads.deleted_at IS NULL
+          AND threads.archived_at IS NULL
         LIMIT 1
       `,
   });
@@ -3163,6 +3229,44 @@ pending_approval_requests AS (
       });
     });
 
+  const getThreadCheckpointCaptureContext: NonNullable<
+    ProjectionSnapshotQueryShape["getThreadCheckpointCaptureContext"]
+  > = (threadId, turnId) =>
+    getThreadCheckpointCaptureContextRow({ threadId, turnId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getThreadCheckpointCaptureContext:query",
+          "ProjectionSnapshotQuery.getThreadCheckpointCaptureContext:decodeRow",
+        ),
+      ),
+      Effect.map(
+        Option.map(
+          (row): ProjectionThreadCheckpointCaptureContext => ({
+            threadId: row.threadId,
+            projectId: row.projectId,
+            workspaceRoot: row.workspaceRoot,
+            worktreePath: row.worktreePath,
+            activeTurnId: row.activeTurnId,
+            latestCheckpointTurnCount: row.latestCheckpointTurnCount,
+            turnCheckpoint:
+              row.checkpointTurnId !== null &&
+              row.checkpointTurnCount !== null &&
+              row.checkpointRef !== null &&
+              row.checkpointStatus !== null
+                ? {
+                    turnId: row.checkpointTurnId,
+                    checkpointTurnCount: row.checkpointTurnCount,
+                    checkpointRef: row.checkpointRef,
+                    status: row.checkpointStatus,
+                    assistantMessageId: row.checkpointAssistantMessageId,
+                  }
+                : null,
+            latestAssistantMessageId: row.latestAssistantMessageId,
+          }),
+        ),
+      ),
+    );
+
   const getFullThreadDiffContext: NonNullable<
     ProjectionSnapshotQueryShape["getFullThreadDiffContext"]
   > = (threadId, toTurnCount) =>
@@ -3748,6 +3852,7 @@ pending_approval_requests AS (
     getProjectShellById,
     getFirstActiveThreadIdByProjectId,
     getThreadCheckpointContext,
+    getThreadCheckpointCaptureContext,
     getFullThreadDiffContext,
     getThreadShellById,
     getThreadRuntimeContext,
