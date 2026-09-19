@@ -665,6 +665,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
       ...(bot
         ? {
+            memoryThreadRef: {
+              environmentId: props.environmentId,
+              threadId: props.selectedThread.id,
+            },
+          }
+        : {}),
+      ...(bot
+        ? {
             botUsageCap: bot.usageCap,
             botUsageCapProviderDriver: currentModelOption?.providerDriver,
             onUpdateBotUsageCap: updateBotUsageCap,
@@ -675,8 +683,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       currentModelSelection,
       currentRuntimeMode,
       bot,
+      props.environmentId,
       props.onUpdateModelSelection,
       props.onUpdateRuntimeMode,
+      props.selectedThread.id,
       providerOptionDescriptors,
       settingsOwnerId,
       threadProviderGroups,

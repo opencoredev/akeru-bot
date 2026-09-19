@@ -8,7 +8,7 @@ Select **Export** to download an `akeru.archive` file. The archive can contain s
 MCP recipes, bots, groups, mapped project references, chat metadata, conversation text, proposed
 plans, and approval history.
 
-The export excludes secrets, provider credentials, durable memory, routines, skill assignments,
+The export excludes secrets, provider credentials, bot memory, routines, skill assignments,
 usage history, files, Git repositories, terminals, attachments, and checkpoints.
 
 ## Import
@@ -26,3 +26,7 @@ server's filesystem through that picker, so map paths from a desktop client when
 
 Keep the archive private. It can contain conversation text, project paths, bot instructions, and
 approval history even though it excludes credentials.
+
+Bot memory has its own export from the Memory screen. That archive contains the selected bot's
+Markdown files and the active chat's observations, with a preview step before restore. See
+[Bot memory](memory.md).

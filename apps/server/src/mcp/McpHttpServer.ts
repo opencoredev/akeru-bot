@@ -1,5 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -11,7 +12,12 @@ import { AiError, McpProtocol, McpSchema, McpServer, Tool } from "effect/unstabl
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
+import {
+  AKERU_MEMORY_TOOL_DESCRIPTION,
+  AkeruMemoryToolInputSchema,
+} from "../memory/BotMemoryToolHandlers.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
+import * as McpMemoryToolSession from "./McpMemoryToolSession.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import {
@@ -23,6 +29,8 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
+
+const decodeMemoryToolInput = Schema.decodeUnknownEffect(AkeruMemoryToolInputSchema);
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -208,6 +216,10 @@ const toolErrorResult = (message: string) =>
     content: [{ type: "text", text: message }],
   });
 
+class MemoryMcpExecutionError extends Data.TaggedError("MemoryMcpExecutionError")<{
+  readonly cause: unknown;
+}> {}
+
 const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPreviewStandardTools")(
   function* () {
     const server = yield* McpServer.McpServer;
@@ -362,6 +374,80 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
   });
 });
 
+const registerMemoryTool = Effect.fn("McpHttpServer.registerMemoryTool")(function* () {
+  const server = yield* McpServer.McpServer;
+  const memoryTool = Tool.make("memory", {
+    description: AKERU_MEMORY_TOOL_DESCRIPTION,
+    parameters: AkeruMemoryToolInputSchema,
+    success: Schema.Unknown,
+  });
+  yield* server.addTool({
+    tool: new McpSchema.Tool({
+      name: memoryTool.name,
+      description: Tool.getDescription(memoryTool),
+      inputSchema: normalizeProviderToolInputSchema(Tool.getJsonSchema(memoryTool)),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    }),
+    annotations: memoryTool.annotations,
+    handle: (payload) =>
+      Effect.withFiber((fiber) => {
+        const invocation = Context.getUnsafe(
+          fiber.context,
+          McpInvocationContext.McpInvocationContext,
+        );
+        const handler = McpMemoryToolSession.readMcpMemoryToolSession(invocation.threadId);
+        if (!handler) {
+          return Effect.succeed(
+            toolErrorResult(
+              invocation.capabilities.has("memory")
+                ? "Bot memory is unavailable for this chat."
+                : "This session cannot update bot memory.",
+            ),
+          );
+        }
+        return decodeMemoryToolInput(payload).pipe(
+          Effect.flatMap((input) =>
+            Effect.tryPromise({
+              try: () =>
+                handler({
+                  threadId: String(invocation.threadId),
+                  toolId: "memory",
+                  toolCallId: `mcp-memory-${invocation.providerSessionId}`,
+                  input,
+                  approvalMode: "require-grant",
+                }),
+              catch: (cause) => new MemoryMcpExecutionError({ cause }),
+            }),
+          ),
+          Effect.map(
+            (result) =>
+              new McpSchema.CallToolResult({
+                isError: false,
+                structuredContent: isRecord(result) ? result : undefined,
+                content: [{ type: "text", text: JSON.stringify(result) }],
+              }),
+          ),
+          Effect.catch((cause) =>
+            Effect.succeed(
+              toolErrorResult(
+                cause instanceof MemoryMcpExecutionError && cause.cause instanceof Error
+                  ? cause.cause.message
+                  : cause instanceof Error
+                    ? cause.message
+                    : "Memory update failed.",
+              ),
+            ),
+          ),
+        );
+      }),
+  });
+});
+
 const PreviewStandardToolkitRegistrationLive = Layer.effectDiscard(
   registerPreviewStandardTools(),
 ).pipe(Layer.provide(PreviewStandardToolkitHandlersLive));
@@ -373,6 +459,7 @@ const PreviewSnapshotRegistrationLive = Layer.effectDiscard(registerPreviewSnaps
 export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewStandardToolkitRegistrationLive,
   PreviewSnapshotRegistrationLive,
+  Layer.effectDiscard(registerMemoryTool()),
 );
 
 const McpTransportLive = McpServer.layerHttp({

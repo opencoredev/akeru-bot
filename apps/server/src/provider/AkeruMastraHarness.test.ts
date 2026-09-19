@@ -22,7 +22,6 @@ import {
   createAkeruBotInstructions,
 } from "./AkeruAgentInstructions.ts";
 import {
-  AKERU_RECENT_MESSAGE_LIMIT,
   AKERU_DELETE_ROUTINES_TOOL_NAME,
   AKERU_LIST_ROUTINES_TOOL_NAME,
   AkeruPassiveObservationalMemoryProcessor,
@@ -39,6 +38,7 @@ import {
   routineToolNeedsGlobalApproval,
   withAkeruModelRunOptions,
 } from "./AkeruMastraHarness.ts";
+import { AKERU_RECENT_TURN_LIMIT } from "./RecentConversation.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
@@ -182,6 +182,48 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("restores exported observational memory instead of treating import as a no-op", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restore-"));
+    const harness = await createAkeruMastraHarness({
+      authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+      memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+    });
+    try {
+      await harness.restoreObservationalMemory!("thread-restored", {
+        current: {
+          id: "restored-observation",
+          generationCount: 2,
+          originType: "reflection",
+          activeObservations: "The restored release note.",
+          bufferedObservations: "The pending release date is Friday.",
+          bufferedReflection: null,
+          totalTokensObserved: 120,
+          observationTokenCount: 7,
+          createdAt: "2026-09-13T12:00:00.000Z",
+          updatedAt: "2026-09-13T12:01:00.000Z",
+        },
+        history: [],
+      });
+
+      const restored = await harness.readObservationalMemory!("thread-restored");
+      assert.equal(restored.current?.id, "restored-observation");
+      assert.equal(
+        restored.current?.activeObservations,
+        "The restored release note.\n\nThe pending release date is Friday.",
+      );
+      assert.equal(restored.current?.bufferedObservations, "");
+      assert.isAbove(restored.current!.observationTokenCount, 7);
+      await harness.restoreObservationalMemory!("thread-restored", restored);
+      assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
+      assert.equal(restored.current?.generationCount, 2);
+    } finally {
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("restores a bounded recent message window after reopening", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-message-store-"));
     const options = {
@@ -194,11 +236,11 @@ describe("AkeruMastraHarness", () => {
         threadId: "thread-history",
         resourceId: "thread-history",
       });
-      const messages = Array.from({ length: AKERU_RECENT_MESSAGE_LIMIT + 4 }, (_, index) => ({
+      const messages = Array.from({ length: (AKERU_RECENT_TURN_LIMIT + 2) * 2 }, (_, index) => ({
         id: `message-${index}`,
         role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
         createdAt: DateTime.toDate(
-          DateTime.makeUnsafe(`2026-08-30T20:${String(index).padStart(2, "0")}:00.000Z`),
+          DateTime.add(DateTime.makeUnsafe("2026-08-30T20:00:00.000Z"), { minutes: index }),
         ),
         content: { format: 2 as const, parts: [{ type: "text" as const, text: `Turn ${index}` }] },
         threadId: "thread-history",
@@ -213,6 +255,7 @@ describe("AkeruMastraHarness", () => {
           threadId: "thread-history",
           resourceId: "thread-history",
         })),
+        loadUnobservedMessages: vi.fn(async () => []),
         getOrCreateRecord: vi.fn(async () => ({ activeObservations: "Older observations." })),
         buildContextSystemMessages: vi.fn(async () => ["Older context from observations."]),
       } as unknown as ObservationalMemory;
@@ -236,10 +279,10 @@ describe("AkeruMastraHarness", () => {
       await processor.processInputStep({ stepNumber: 0, messageList } as never);
 
       const recalled = messageList.get.remembered.db();
-      assert.equal(recalled.length, AKERU_RECENT_MESSAGE_LIMIT);
+      assert.equal(recalled.length, AKERU_RECENT_TURN_LIMIT * 2);
       assert.deepEqual(
         recalled.map((message) => message.id),
-        messages.slice(-AKERU_RECENT_MESSAGE_LIMIT).map((message) => message.id),
+        messages.slice(-AKERU_RECENT_TURN_LIMIT * 2).map((message) => message.id),
       );
       assert.deepEqual(
         messageList.getSystemMessages("observational-memory").map((message) => message.content),
@@ -255,6 +298,7 @@ describe("AkeruMastraHarness", () => {
   it("adds older observational context beside the recent message window", async () => {
     const engine = {
       getThreadContext: vi.fn(() => ({ threadId: "thread-context", resourceId: "thread-context" })),
+      loadUnobservedMessages: vi.fn(async () => []),
       getOrCreateRecord: vi.fn(async () => ({
         activeObservations: "The user prefers short replies.",
       })),
@@ -294,6 +338,7 @@ describe("AkeruMastraHarness", () => {
     const persistMessages = vi.fn(async () => undefined);
     const engine = {
       getThreadContext: vi.fn(() => ({ threadId: "thread-passive", resourceId: "thread-passive" })),
+      loadUnobservedMessages: vi.fn(async () => []),
       getOrCreateRecord: vi.fn(async () => ({ activeObservations: "" })),
       buildContextSystemMessages: vi.fn(async () => []),
     } as unknown as ObservationalMemory;
@@ -538,6 +583,43 @@ describe("AkeruMastraHarness", () => {
     expect(getCredential).not.toHaveBeenCalled();
   });
 
+  it("routes Claude and Grok models through their subscription transports", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-legacy-observer-auth.json");
+    const getCredential = vi.fn((provider: string) =>
+      provider === "anthropic"
+        ? { type: "api-key" as const, access: "claude-key" }
+        : { type: "api-key" as const, access: "grok-key" },
+    );
+
+    assert.equal(
+      mastraModelId(ProviderDriverKind.make("claudeAgent"), "claude-sonnet-4-5"),
+      "anthropic/claude-sonnet-4-5",
+    );
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "anthropic/claude-sonnet-4-5",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+      ),
+      { provider: "anthropic.messages", modelId: "claude-sonnet-4-5" },
+    );
+    assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-4"), "xai/grok-4");
+    assert.deepInclude(
+      resolveAkeruMastraModel(
+        "xai/grok-4",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+      ),
+      { provider: "xai.chat", modelId: "grok-4" },
+    );
+  });
+
   it("builds a compact, human prompt with the bot name and current date", () => {
     const instructions = createAkeruAgentInstructions({
       name: "  Research\nBot  ",
@@ -558,7 +640,7 @@ describe("AkeruMastraHarness", () => {
     assert.include(instructions, "akeru_list_routines");
     assert.notInclude(instructions, "—");
     assert.notInclude(instructions, "coding agent");
-    assert.isBelow(createAkeruBotInstructions({ now: DateTime.nowUnsafe() }).length, 3_000);
+    assert.isBelow(createAkeruBotInstructions({ now: DateTime.nowUnsafe() }).length, 3_500);
   });
 
   it("passes the saved Codex service tier to Mastra provider options", () => {

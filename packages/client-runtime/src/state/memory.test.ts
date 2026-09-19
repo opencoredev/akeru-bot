@@ -30,9 +30,9 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryExport)).pipe(
             Effect.as({ schemaVersion: 2 } as never),
           ),
-        [WS_METHODS.memoryMutate]: () =>
-          Effect.sync(() => calls.push(WS_METHODS.memoryMutate)).pipe(
-            Effect.as({ kind: "conversation-cleared" } as never),
+        [WS_METHODS.memoryObservationsClear]: () =>
+          Effect.sync(() => calls.push(WS_METHODS.memoryObservationsClear)).pipe(
+            Effect.as(undefined as never),
           ),
       } as unknown as WsRpcProtocolClient;
       const session: RpcSession = {
@@ -84,21 +84,21 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
       const exported = yield* Effect.promise(() =>
         atoms.exportArchive.run(registry, {
           environmentId,
-          input: { threadId, target: "thread", complete: true },
+          input: { threadId },
         }),
       );
-      const mutated = yield* Effect.promise(() =>
-        atoms.mutate.run(registry, {
+      const cleared = yield* Effect.promise(() =>
+        atoms.clearObservations.run(registry, {
           environmentId,
-          input: { threadId, mutation: { operation: "conversation.clear" } },
+          input: { threadId },
         }),
       );
 
       expect(AsyncResult.isSuccess(exported)).toBe(true);
-      expect(AsyncResult.isSuccess(mutated)).toBe(true);
-      expect(calls).toEqual([WS_METHODS.memoryExport, WS_METHODS.memoryMutate]);
+      expect(AsyncResult.isSuccess(cleared)).toBe(true);
+      expect(calls).toEqual([WS_METHODS.memoryExport, WS_METHODS.memoryObservationsClear]);
       expect(refresh).toHaveBeenCalledWith(
-        atoms.inspect({
+        atoms.inspectDocuments({
           environmentId,
           input: { threadId },
         }),

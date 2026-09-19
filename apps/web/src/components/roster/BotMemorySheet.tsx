@@ -1,271 +1,101 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import {
-  AkeruMemoryArchiveV2,
-  type AkeruMemoryCandidate,
-  type AkeruMemoryImportPreview,
-  type AkeruMemoryRevision,
-  type AkeruMemoryTargetScope,
-  type ScopedThreadRef,
+import type {
+  AkeruMemoryDocument,
+  AkeruMemoryDocumentTarget,
+  ScopedThreadRef,
 } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { BotMemoryTransfer } from "./BotMemoryTransfer";
 
 import { memoryEnvironment } from "../../state/memory";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Sheet, SheetHeader, SheetPanel, SheetPopup, SheetTitle } from "../ui/sheet";
 import { Textarea } from "../ui/textarea";
 
-const SCOPES: readonly AkeruMemoryTargetScope[] = [
-  "private",
-  "bot",
-  "project",
-  "group",
-  "workspace",
-];
-const decodeMemoryArchive = Schema.decodeUnknownEffect(AkeruMemoryArchiveV2);
-
-type ImportState = {
-  readonly threadRef: ScopedThreadRef;
-  readonly archive: AkeruMemoryArchiveV2;
-  readonly preview: AkeruMemoryImportPreview;
-};
-
-export function factEditInput(
-  threadRef: ScopedThreadRef,
-  memory: AkeruMemoryRevision,
-  fact: string,
-) {
-  return {
-    environmentId: threadRef.environmentId,
-    input: {
-      threadId: threadRef.threadId,
-      mutation: {
-        operation: "fact.edit" as const,
-        memoryId: memory.rootId,
-        expectedRevision: memory.revision,
-        fact: fact.trim(),
-      },
-    },
-  };
-}
-
-export function factDeleteInput(threadRef: ScopedThreadRef, memory: AkeruMemoryRevision) {
-  return {
-    environmentId: threadRef.environmentId,
-    input: {
-      threadId: threadRef.threadId,
-      mutation: {
-        operation: "fact.delete" as const,
-        memoryId: memory.rootId,
-        expectedRevision: memory.revision,
-      },
-    },
-  };
-}
-
-export function candidateDecisionInput(
-  threadRef: ScopedThreadRef,
-  candidate: AkeruMemoryCandidate,
-  decision: "approve" | "reject",
-  fact = candidate.fact,
-  scope = candidate.scope,
-) {
-  return {
-    environmentId: threadRef.environmentId,
-    input: {
-      threadId: threadRef.threadId,
-      mutation: {
-        operation: "candidate.decide" as const,
-        decision:
-          decision === "approve"
-            ? { candidateId: candidate.candidateId, decision, fact: fact.trim(), scope }
-            : { candidateId: candidate.candidateId, decision },
-      },
-    },
-  };
-}
-
-export function importStateForThread(state: ImportState | null, threadRef: ScopedThreadRef) {
-  return state?.threadRef.environmentId === threadRef.environmentId &&
-    state.threadRef.threadId === threadRef.threadId
-    ? state
-    : null;
-}
-
-export function importApplyInput(state: ImportState) {
-  return {
-    environmentId: state.threadRef.environmentId,
-    input: {
-      threadId: state.threadRef.threadId,
-      target: "thread" as const,
-      archive: state.archive,
-      previewHash: state.preview.previewHash,
-    },
-  };
-}
-
 export function memoryErrorMessage(error: unknown) {
-  return error instanceof Error && error.message.trim() ? error.message : "Memory request failed.";
+  return error instanceof Error ? error.message : "Memory request failed.";
 }
 
 function failureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
   return memoryErrorMessage(squashAtomCommandFailure(result));
 }
 
-function downloadArchive(archive: AkeruMemoryArchiveV2) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(archive, null, 2)], { type: "application/json" }),
-  );
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `akeru-memory-${archive.anchorThreadId}.json`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
+const documentCopy: Record<
+  AkeruMemoryDocumentTarget,
+  { readonly title: string; readonly description: string }
+> = {
+  user: { title: "USER.md", description: "Stable details this bot has learned about you." },
+  memory: {
+    title: "MEMORY.md",
+    description: "Durable notes and working preferences owned by this bot.",
+  },
+  group: {
+    title: "GROUP.md",
+    description: "This bot's private memory for the active group chat.",
+  },
+};
 
-function MemoryFact({
-  memory,
-  history,
+function MemoryDocumentEditor({
+  document,
   busy,
-  onEdit,
-  onDelete,
+  onSave,
 }: {
-  readonly memory: AkeruMemoryRevision;
-  readonly history: readonly AkeruMemoryRevision[];
+  readonly document: AkeruMemoryDocument;
   readonly busy: boolean;
-  readonly onEdit: (fact: string) => void;
-  readonly onDelete: () => void;
+  readonly onSave: (target: AkeruMemoryDocumentTarget, content: string) => Promise<boolean>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [fact, setFact] = useState(memory.fact);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [draft, setDraft] = useState(document.content);
+  useEffect(() => setDraft(document.content), [document.content, document.updatedAt]);
+  const changed = draft !== document.content;
+  const overLimit = draft.length > document.charLimit;
+  const copy = documentCopy[document.target];
 
   return (
-    <article className="rounded-lg border border-border p-3" data-testid="memory-fact">
-      {editing ? (
-        <div className="space-y-2">
-          <Textarea
-            aria-label="Memory fact"
-            value={fact}
-            rows={3}
-            onChange={(event) => setFact(event.currentTarget.value)}
-          />
-          <div className="flex justify-end gap-2">
-            <Button size="xs" variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button size="xs" disabled={busy || !fact.trim()} onClick={() => onEdit(fact)}>
-              Save
-            </Button>
-          </div>
+    <section className="space-y-2 rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">{copy.title}</h3>
+          <p className="text-xs text-muted-foreground">{copy.description}</p>
         </div>
-      ) : (
-        <>
-          <p className="whitespace-pre-wrap text-sm leading-5">{memory.fact}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline">{memory.partition.scope}</Badge>
-            <span className="text-xs text-muted-foreground">Revision {memory.revision}</span>
-            {memory.pinned ? <Badge variant="secondary">Pinned</Badge> : null}
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <Button size="xs" variant="outline" disabled={busy} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-            <Button
-              size="xs"
-              variant={confirmDelete ? "destructive" : "ghost"}
-              disabled={busy}
-              onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
-            >
-              {confirmDelete ? "Delete memory" : "Delete"}
-            </Button>
-          </div>
-        </>
-      )}
-      {history.length > 1 ? (
-        <details className="mt-3 border-t border-border pt-2 text-xs">
-          <summary className="cursor-pointer text-muted-foreground">
-            {history.length} revisions
-          </summary>
-          <ol className="mt-2 space-y-2">
-            {history.toReversed().map((revision) => (
-              <li key={revision.id}>
-                <span className="font-medium">Revision {revision.revision}</span>
-                <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{revision.fact}</p>
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
-    </article>
-  );
-}
-
-function PendingMemory({
-  candidate,
-  busy,
-  onDecide,
-}: {
-  readonly candidate: AkeruMemoryCandidate;
-  readonly busy: boolean;
-  readonly onDecide: (
-    decision: "approve" | "reject",
-    fact: string,
-    scope: AkeruMemoryTargetScope,
-  ) => void;
-}) {
-  const [fact, setFact] = useState(candidate.fact);
-  const [scope, setScope] = useState(candidate.scope);
-  return (
-    <article
-      className="space-y-2 rounded-lg border border-warning/40 bg-warning/5 p-3"
-      data-testid="pending-memory"
-    >
+        <span
+          className={
+            overLimit
+              ? "shrink-0 whitespace-nowrap text-xs text-destructive"
+              : "shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+          }
+        >
+          {draft.length.toLocaleString()} / {document.charLimit.toLocaleString()}
+        </span>
+      </div>
       <Textarea
-        aria-label="Pending memory fact"
-        value={fact}
-        rows={3}
-        onChange={(event) => setFact(event.currentTarget.value)}
+        aria-label={`Edit ${copy.title}`}
+        className="min-h-36 font-mono text-xs"
+        value={draft}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        disabled={busy}
+        spellCheck={false}
       />
-      <Select
-        value={scope}
-        onValueChange={(value) => value && setScope(value as AkeruMemoryTargetScope)}
-      >
-        <SelectTrigger aria-label="Pending memory scope">
-          <SelectValue>{scope}</SelectValue>
-        </SelectTrigger>
-        <SelectPopup>
-          {SCOPES.map((value) => (
-            <SelectItem key={value} value={value}>
-              {value}
-            </SelectItem>
-          ))}
-        </SelectPopup>
-      </Select>
       <div className="flex justify-end gap-2">
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
-          disabled={busy}
-          onClick={() => onDecide("reject", fact, scope)}
+          disabled={busy || !changed}
+          onClick={() => setDraft(document.content)}
         >
-          Reject
+          Reset
         </Button>
         <Button
-          size="xs"
-          disabled={busy || !fact.trim()}
-          onClick={() => onDecide("approve", fact, scope)}
+          size="sm"
+          disabled={busy || !changed || overLimit}
+          onClick={() => void onSave(document.target, draft)}
         >
-          Approve
+          Save
         </Button>
       </div>
-    </article>
+    </section>
   );
 }
 
@@ -280,45 +110,39 @@ export function BotMemorySheet({
 }) {
   const query = useEnvironmentQuery(
     open && threadRef
-      ? memoryEnvironment.inspect({
+      ? memoryEnvironment.inspectDocuments({
           environmentId: threadRef.environmentId,
           input: { threadId: threadRef.threadId },
         })
       : null,
   );
-  const mutate = useAtomCommand(memoryEnvironment.mutate, { reportFailure: false });
-  const exportArchive = useAtomCommand(memoryEnvironment.exportArchive, { reportFailure: false });
-  const previewImport = useAtomCommand(memoryEnvironment.previewImport, { reportFailure: false });
-  const applyImport = useAtomCommand(memoryEnvironment.applyImport, { reportFailure: false });
+  const replaceDocument = useAtomCommand(memoryEnvironment.replaceDocument, {
+    reportFailure: false,
+  });
+  const clearObservations = useAtomCommand(memoryEnvironment.clearObservations, {
+    reportFailure: false,
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [importState, setImportState] = useState<ImportState | null>(null);
   const [clearPending, setClearPending] = useState(false);
-  const currentImportState = threadRef ? importStateForThread(importState, threadRef) : null;
+  const previousObservations = query.data?.conversation.current
+    ? query.data.conversation.history.filter(
+        (item) => item.generationCount !== query.data!.conversation.current!.generationCount,
+      )
+    : [];
 
-  const runMutation = async (input: Parameters<typeof mutate>[0]) => {
+  const save = async (target: AkeruMemoryDocumentTarget, content: string) => {
+    if (!threadRef || !query.data) return false;
     setBusy(true);
     setError(null);
-    const result = await mutate(input);
+    const result = await replaceDocument({
+      environmentId: threadRef.environmentId,
+      input: { threadId: threadRef.threadId, expectedBotId: query.data.botId, target, content },
+    });
     setBusy(false);
     if (result._tag === "Failure") setError(failureMessage(result));
     return result._tag !== "Failure";
   };
-
-  if (!threadRef) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetPopup className="max-w-2xl" side="right">
-          <SheetHeader>
-            <SheetTitle>Memory</SheetTitle>
-          </SheetHeader>
-          <SheetPanel>
-            <p className="text-sm text-muted-foreground">Start a conversation to manage memory.</p>
-          </SheetPanel>
-        </SheetPopup>
-      </Sheet>
-    );
-  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -326,7 +150,10 @@ export function BotMemorySheet({
         <SheetHeader>
           <SheetTitle>Memory</SheetTitle>
         </SheetHeader>
-        <SheetPanel className="space-y-6">
+        <SheetPanel className="space-y-5">
+          {!threadRef ? (
+            <p className="text-sm text-muted-foreground">Start a conversation to manage memory.</p>
+          ) : null}
           {(error ?? query.error) ? (
             <div
               role="alert"
@@ -340,56 +167,53 @@ export function BotMemorySheet({
           ) : null}
           {query.data ? (
             <>
-              <section className="space-y-3">
-                <h3 className="text-sm font-medium">Facts</h3>
-                {query.data.durable.length ? (
-                  query.data.durable.map((memory) => (
-                    <MemoryFact
-                      key={memory.rootId}
-                      memory={memory}
-                      history={
-                        query.data?.histories.find((item) => item.rootId === memory.rootId)
-                          ?.revisions ?? [memory]
-                      }
-                      busy={busy}
-                      onEdit={(fact) => void runMutation(factEditInput(threadRef, memory, fact))}
-                      onDelete={() => void runMutation(factDeleteInput(threadRef, memory))}
-                    />
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">No saved facts.</p>
-                )}
-              </section>
+              <div
+                key={`${threadRef?.environmentId}:${threadRef?.threadId}:${query.data.botId}`}
+                className="space-y-3"
+                data-testid="memory-documents"
+              >
+                <MemoryDocumentEditor document={query.data.user} busy={busy} onSave={save} />
+                <MemoryDocumentEditor document={query.data.memory} busy={busy} onSave={save} />
+                {query.data.group ? (
+                  <MemoryDocumentEditor document={query.data.group} busy={busy} onSave={save} />
+                ) : null}
+              </div>
 
-              {query.data.pending.length ? (
-                <section className="space-y-3">
-                  <h3 className="text-sm font-medium">Pending</h3>
-                  {query.data.pending.map((candidate) => (
-                    <PendingMemory
-                      key={candidate.candidateId}
-                      candidate={candidate}
-                      busy={busy}
-                      onDecide={(decision, fact, scope) =>
-                        void runMutation(
-                          candidateDecisionInput(threadRef, candidate, decision, fact, scope),
-                        )
-                      }
-                    />
-                  ))}
-                </section>
-              ) : null}
-
-              <section className="space-y-3">
-                <h3 className="text-sm font-medium">Conversation</h3>
+              <section className="space-y-3 rounded-lg border border-border p-3">
+                <div>
+                  <h3 className="text-sm font-medium">Observational memory</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Automatic summaries of this chat. These stay separate from the Markdown files.
+                  </p>
+                </div>
                 {query.data.conversation.current ? (
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>{query.data.conversation.current.generationCount} generations</p>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-xs text-muted-foreground">
+                      {query.data.conversation.current.generationCount.toLocaleString()} generations
+                    </p>
                     <p className="whitespace-pre-wrap">
                       {query.data.conversation.current.activeObservations}
                     </p>
+                    {previousObservations.length > 0 ? (
+                      <details>
+                        <summary className="cursor-pointer text-xs text-muted-foreground">
+                          Previous observations ({previousObservations.length})
+                        </summary>
+                        <div className="mt-2 space-y-3">
+                          {previousObservations.map((item) => (
+                            <p
+                              className="whitespace-pre-wrap text-xs text-muted-foreground"
+                              key={`${item.generationCount}-${item.updatedAt}`}
+                            >
+                              {item.activeObservations}
+                            </p>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No conversation memory.</p>
+                  <p className="text-sm text-muted-foreground">No observations yet.</p>
                 )}
                 <Button
                   size="sm"
@@ -397,112 +221,28 @@ export function BotMemorySheet({
                   disabled={busy || !query.data.conversation.current}
                   onClick={() => {
                     if (!clearPending) return setClearPending(true);
-                    void runMutation({
+                    if (!threadRef) return;
+                    setBusy(true);
+                    setError(null);
+                    void clearObservations({
                       environmentId: threadRef.environmentId,
-                      input: {
-                        threadId: threadRef.threadId,
-                        mutation: { operation: "conversation.clear" },
-                      },
-                    }).then((success) => success && setClearPending(false));
+                      input: { threadId: threadRef.threadId },
+                    }).then((result) => {
+                      setBusy(false);
+                      if (result._tag === "Failure") setError(failureMessage(result));
+                      else setClearPending(false);
+                    });
                   }}
                 >
-                  {clearPending ? "Clear conversation memory" : "Clear"}
+                  {clearPending ? "Clear observations" : "Clear"}
                 </Button>
               </section>
-
-              <section className="space-y-3">
-                <h3 className="text-sm font-medium">Transfer</h3>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      setBusy(true);
-                      setError(null);
-                      void exportArchive({
-                        environmentId: threadRef.environmentId,
-                        input: { threadId: threadRef.threadId, complete: true, target: "thread" },
-                      }).then((result) => {
-                        setBusy(false);
-                        if (result._tag === "Failure") setError(failureMessage(result));
-                        else downloadArchive(result.value);
-                      });
-                    }}
-                  >
-                    Export conversation
-                  </Button>
-                  <label className="inline-flex">
-                    <Input
-                      className="sr-only"
-                      aria-label="Import memory archive"
-                      type="file"
-                      accept="application/json,.json"
-                      disabled={busy}
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0];
-                        if (!file) return;
-                        setBusy(true);
-                        setError(null);
-                        setImportState(null);
-                        void file
-                          .text()
-                          .then(JSON.parse)
-                          .then((value) => Effect.runPromise(decodeMemoryArchive(value)))
-                          .then((archive) =>
-                            previewImport({
-                              environmentId: threadRef.environmentId,
-                              input: { threadId: threadRef.threadId, target: "thread", archive },
-                            }).then((result) => {
-                              setBusy(false);
-                              if (result._tag === "Failure") setError(failureMessage(result));
-                              else setImportState({ threadRef, archive, preview: result.value });
-                            }),
-                          )
-                          .catch((cause: unknown) => {
-                            setBusy(false);
-                            setError(
-                              cause instanceof Error ? cause.message : "Invalid memory archive.",
-                            );
-                          });
-                      }}
-                    />
-                    <span className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-input px-3 text-sm">
-                      Preview import
-                    </span>
-                  </label>
-                </div>
-                {currentImportState ? (
-                  <div
-                    className="rounded-lg border border-border p-3"
-                    data-testid="memory-import-preview"
-                  >
-                    <ul className="space-y-1 text-sm">
-                      {currentImportState.preview.items.map((item) => (
-                        <li key={item.rootId}>
-                          <span className="font-medium">{item.classification}</span> {item.reason}
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      className="mt-3"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => {
-                        setBusy(true);
-                        setError(null);
-                        void applyImport(importApplyInput(currentImportState)).then((result) => {
-                          setBusy(false);
-                          if (result._tag === "Failure") setError(failureMessage(result));
-                          else setImportState(null);
-                        });
-                      }}
-                    >
-                      Apply import
-                    </Button>
-                  </div>
-                ) : null}
-              </section>
+              {threadRef ? (
+                <BotMemoryTransfer
+                  key={`${threadRef.environmentId}:${threadRef.threadId}`}
+                  threadRef={threadRef}
+                />
+              ) : null}
             </>
           ) : null}
         </SheetPanel>

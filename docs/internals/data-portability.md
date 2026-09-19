@@ -4,7 +4,11 @@ The `akeru.archive` format mirrors data that Akeru owns and can restore without 
 
 `packages/contracts/src/orchestration.ts` defines the durable read model. It contains projects, bots, groups, MCP servers, routines, routine runs, skill assignments, and threads. Thread records carry messages, proposed plans, approval activities, avatars, lifecycle state, and workspace or sandbox references. The portability layer restores approval activities as inert `approval.history` rows so an import cannot reopen a provider request.
 
-The main archive does not export or restore routines, routine runs, or skill assignments yet. Durable memory has a separate SQLite repository and a version 2 memory archive with preview and apply support.
+The main archive does not export or restore routines, routine runs, or skill assignments yet. Bot
+memory has a separate version 3 archive. It contains `USER.md`, `MEMORY.md`, the active bot-specific
+`GROUP.md` when applicable, and the active chat's observational-memory snapshot. Each payload and the
+manifest are checksummed. Import preview is bound to both the archive and current memory state, and
+apply restores the observational record rather than treating it as metadata-only.
 
 `packages/contracts/src/usage.ts` defines a read result, not an Akeru repository. `apps/server/src/usage/UsageService.ts` scans provider-owned Claude and Codex transcript files. It has no write or import operation, so the main portability archive does not include usage history.
 

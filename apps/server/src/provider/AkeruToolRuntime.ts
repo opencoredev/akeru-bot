@@ -23,10 +23,11 @@ import * as Schema from "effect/Schema";
 import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
 import { redactComputerScreenshot } from "../mcp/PreviewSnapshotRedaction.ts";
 import {
-  AkeruMemoryToolInputSchemas,
+  AKERU_MEMORY_TOOL_DESCRIPTION,
+  AkeruMemoryToolInputSchema,
   type AkeruMemoryToolHandler,
   type AkeruMemoryToolId,
-} from "../memory/MemoryToolHandlers.ts";
+} from "../memory/BotMemoryToolHandlers.ts";
 import type { AkeruCatalogToolHandler } from "./AkeruCatalogToolHandlers.ts";
 import type { AkeruBotStateRuntime } from "./AkeruBotStateRuntime.ts";
 
@@ -38,21 +39,15 @@ export interface AkeruRuntimeToolDefinition {
 }
 
 const MEMORY_TOOL_DEFINITIONS = [
-  { id: "recall_memory", description: "Search approved memory for the current turn." },
-  { id: "remember", description: "Propose a durable fact for the current user and bot context." },
-  { id: "update_memory", description: "Propose a revision to an authorized durable fact." },
-  { id: "forget_memory", description: "Forget an authorized durable fact immediately." },
+  { id: "memory", description: AKERU_MEMORY_TOOL_DESCRIPTION },
 ] as const satisfies ReadonlyArray<AkeruRuntimeToolDefinition>;
 
 const MEMORY_TOOL_INPUT_DECODERS = {
-  recall_memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.recall_memory),
-  remember: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.remember),
-  update_memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.update_memory),
-  forget_memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchemas.forget_memory),
+  memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchema),
 } as const;
 
 export function isMemoryToolId(toolId: string): toolId is AkeruMemoryToolId {
-  return Object.hasOwn(AkeruMemoryToolInputSchemas, toolId);
+  return toolId === "memory";
 }
 
 export interface AkeruToolSession {
@@ -414,7 +409,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
 
   const validatedInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
     Schema.decodeUnknownPromise(
-      isMemoryToolId(toolId) ? AkeruMemoryToolInputSchemas[toolId] : AkeruToolInputSchemas[toolId],
+      isMemoryToolId(toolId) ? AkeruMemoryToolInputSchema : AkeruToolInputSchemas[toolId],
     )(input, {
       onExcessProperty: "error",
     });
@@ -429,11 +424,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     tool: AkeruRuntimeToolDefinition,
     input: unknown,
   ) => {
-    if (tool.id === "recall_memory") return field(input, "includeSensitive") === true;
-    if (tool.id === "remember") {
-      return field(input, "scope") !== "private" || field(input, "sensitive") === true;
-    }
-    if (tool.id === "update_memory" || tool.id === "forget_memory") return true;
+    if (tool.id === "memory") return false;
     const akeruTool = tool as AkeruToolDefinition;
     ensureWorkspaceCwd(akeruTool.id, input);
     const ceiling = session.delegation?.access.approvalCeiling;

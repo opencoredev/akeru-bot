@@ -1004,6 +1004,50 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }).pipe(Effect.provide(adapterLayer));
   });
 
+  it.effect("keeps private memory context out of user-authored prompt parts", () => {
+    const instanceId = ProviderInstanceId.make("opencode_zen");
+    const adapterLayer = Layer.effect(
+      OpenCodeAdapter,
+      makeOpenCodeAdapter(openCodeAdapterTestSettings, { instanceId }),
+    ).pipe(
+      Layer.provideMerge(Layer.succeed(OpenCodeRuntime, OpenCodeRuntimeTestDouble)),
+      Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+      Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(providerSessionDirectoryTestLayer),
+      Layer.provideMerge(NodeServices.layer),
+    );
+
+    return Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-private-memory-context");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "  visible user text  ",
+        persistentMemoryContext: "private memory context",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode_zen"),
+          "anthropic/claude-sonnet-4-5",
+        ),
+      });
+
+      NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
+        sessionID: "http://127.0.0.1:9999/session",
+        model: {
+          providerID: "anthropic",
+          modelID: "claude-sonnet-4-5",
+        },
+        system: "private memory context",
+        parts: [{ type: "text", text: "  visible user text  " }],
+      });
+    }).pipe(Effect.provide(adapterLayer));
+  });
+
   it.effect("rejects sendTurn model selections for another instance id", () => {
     const instanceId = ProviderInstanceId.make("opencode_zen");
     const adapterLayer = Layer.effect(

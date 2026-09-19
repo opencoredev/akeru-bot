@@ -29,7 +29,6 @@ describe("RPC authorization scopes", () => {
   });
 
   it("separates memory reads from memory changes", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.memoryInspect)).toBe(AuthOrchestrationReadScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.memoryExport)).toBe(AuthOrchestrationReadScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.memoryImportPreview)).toBe(
       AuthOrchestrationReadScope,
@@ -37,7 +36,9 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.memoryImportApply)).toBe(
       AuthOrchestrationOperateScope,
     );
-    expect(requiredScopeForRpcMethod(WS_METHODS.memoryMutate)).toBe(AuthOrchestrationOperateScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.memoryDocumentReplace)).toBe(
+      AuthOrchestrationOperateScope,
+    );
   });
 
   it("allows bot usage reads without granting orchestration changes", () => {

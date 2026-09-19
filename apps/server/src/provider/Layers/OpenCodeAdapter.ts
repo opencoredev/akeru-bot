@@ -1847,7 +1847,7 @@ export function makeOpenCodeAdapter(
         });
       }
 
-      const text = input.input?.trim();
+      const text = input.input ?? "";
       const fileParts = toOpenCodeFileParts({
         attachments: input.attachments,
         resolveAttachmentPath: (attachment) =>
@@ -1856,7 +1856,7 @@ export function makeOpenCodeAdapter(
             attachment,
           }),
       });
-      if ((!text || text.length === 0) && fileParts.length === 0) {
+      if (text.trim().length === 0 && fileParts.length === 0) {
         return yield* new ProviderAdapterValidationError({
           provider: PROVIDER,
           operation: "sendTurn",
@@ -1897,7 +1897,8 @@ export function makeOpenCodeAdapter(
           model: parsedModel,
           ...(context.activeAgent ? { agent: context.activeAgent } : {}),
           ...(context.activeVariant ? { variant: context.activeVariant } : {}),
-          parts: [...(text ? [{ type: "text" as const, text }] : []), ...fileParts],
+          ...(input.persistentMemoryContext ? { system: input.persistentMemoryContext } : {}),
+          parts: [...(text.trim() ? [{ type: "text" as const, text }] : []), ...fileParts],
         }),
       ).pipe(
         Effect.mapError(toRequestError),

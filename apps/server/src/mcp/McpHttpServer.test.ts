@@ -11,6 +11,7 @@ import { PNG } from "pngjs";
 
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
+import * as McpMemoryToolSession from "./McpMemoryToolSession.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 
 const environmentId = EnvironmentId.make("environment-mcp-test");
@@ -103,6 +104,51 @@ it("normalizes only conflict-free scalar allOf constraints", () => {
     expect(McpHttpServer.normalizeProviderToolInputSchema(schema as never)).toEqual(schema);
   }
 });
+
+it.effect("uses the thread-scoped memory handler as the authoritative grant", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    McpMemoryToolSession.setMcpMemoryToolSession(threadId, async ({ input }) => ({
+      success: true,
+      message: "Memory updated.",
+      input,
+    }));
+
+    const result = yield* server
+      .callTool({
+        name: "memory",
+        arguments: {
+          target: "memory",
+          operations: [{ action: "add", content: "Keep answers concise." }],
+        },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent).toMatchObject({
+      success: true,
+      message: "Memory updated.",
+    });
+
+    McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
+    const denied = yield* server
+      .callTool({
+        name: "memory",
+        arguments: { target: "user", operations: [] },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(denied.isError).toBe(true);
+  }).pipe(
+    Effect.ensuring(Effect.sync(() => McpMemoryToolSession.clearMcpMemoryToolSession(threadId))),
+    Effect.provide(TestLayer),
+  ),
+);
 
 it.effect("returns bounded structural preview snapshot failures", () =>
   Effect.scoped(

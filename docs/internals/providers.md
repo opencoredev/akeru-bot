@@ -47,6 +47,10 @@ URLs take precedence and never fall back to provider-wide credentials. AgentCont
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
+All active provider paths receive bot-owned Markdown memory and participate in scope-specific
+review accounting. Mastra refreshes the files before turn admission; standard OpenCode carries
+them in its per-prompt system context. See [Memory architecture](memory.md).
+
 Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves
 `ask_user`, then converts its suspension into a user-input request. In automatic mode, it approves
 only the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action

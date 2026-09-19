@@ -15,6 +15,7 @@ import {
   BotId,
   EnvironmentId,
   EventId,
+  GroupId,
   McpServerId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -27,24 +28,22 @@ import {
   type ProviderSession,
 } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
-import {
-  EntityMemoryRepository,
-  type EntityMemoryRepositoryShape,
-} from "../../memory/Services/EntityMemoryRepository.ts";
-import {
-  MemoryCandidateRepository,
-  type MemoryCandidateRepositoryShape,
-} from "../../memory/Services/MemoryCandidateRepository.ts";
+import { BotMemoryStore } from "../../memory/BotMemory.ts";
+import { createBotMemoryToolHandler } from "../../memory/BotMemoryToolHandlers.ts";
+import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryRepository.ts";
+import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
@@ -75,6 +74,7 @@ const openCodeGoThreadId = ThreadId.make("thread-mastra-opencode-go");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
 const grokInstanceId = ProviderInstanceId.make("grok");
+const openCodeInstanceId = ProviderInstanceId.make("opencode");
 const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
 const openCodeGoInstanceId = ProviderInstanceId.make("opencodeGo");
 
@@ -204,6 +204,29 @@ function makeProviderSession(
   };
 }
 
+function completeLegacyTurnWithMemoryReview(
+  input: Parameters<ProviderServiceShape["sendTurn"]>[0],
+  turnId: TurnId,
+  successfulMemoryCalls = 1,
+) {
+  return Effect.promise(async () => {
+    if (input.persistentMemoryContext?.includes("<automatic-memory-review>")) {
+      const handler = McpMemoryToolSession.readMcpMemoryToolSession(input.threadId);
+      if (!handler) throw new Error("Foreground memory review handler was not registered.");
+      for (let call = 0; call < successfulMemoryCalls; call += 1) {
+        await handler({
+          threadId: String(input.threadId),
+          toolId: "memory",
+          toolCallId: `foreground-memory-review-${String(turnId)}-${call}`,
+          input: { target: "user", operations: [] },
+          approvalMode: "require-grant",
+        });
+      }
+    }
+    return { threadId: input.threadId, turnId };
+  });
+}
+
 function makeBridge() {
   let instanceEnabled = true;
   let disableBeforeNextDispatchAdmission = false;
@@ -313,6 +336,37 @@ function makeBridge() {
   };
 }
 
+function makeMemoryOnlyCredentialOptions() {
+  const requests: Array<{
+    readonly threadId: ThreadId;
+    readonly providerInstanceId: ProviderInstanceId;
+    readonly capabilities?: ReadonlySet<"preview" | "memory">;
+  }> = [];
+  const revoked: Array<ThreadId> = [];
+  return {
+    requests,
+    revoked,
+    issueMcpCredential: (request: (typeof requests)[number]) => {
+      requests.push(request);
+      if (request.capabilities?.has("preview")) return Effect.succeed(undefined);
+      return Effect.succeed({
+        config: {
+          environmentId: EnvironmentId.make("environment-test"),
+          threadId: request.threadId,
+          providerSessionId: `session-${String(request.threadId)}`,
+          providerInstanceId: request.providerInstanceId,
+          endpoint: "http://127.0.0.1:1/mcp",
+          authorizationHeader: "Bearer test-memory-only",
+        },
+      });
+    },
+    revokeMcpCredential: (threadId: ThreadId) =>
+      Effect.sync(() => {
+        revoked.push(threadId);
+      }),
+  };
+}
+
 function makeUsageLedger() {
   const reserve = vi.fn<BotUsageLedgerShape["reserve"]>(() => Effect.succeed({} as never));
   const settle = vi.fn<BotUsageLedgerShape["settle"]>(() => Effect.succeed({} as never));
@@ -342,13 +396,19 @@ function makeMastraHarness() {
   let state: Record<string, unknown> = {};
   let resolveSend: (() => void) | undefined;
   const rejectSends: Array<(cause: unknown) => void> = [];
-  const sendMessage = vi.fn(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        resolveSend = resolve;
-        rejectSends.push(reject);
-      }),
-  );
+  let sendMessageCount = 0;
+  const sendMessageWaiters: Array<{ readonly count: number; readonly resolve: () => void }> = [];
+  const sendMessage = vi.fn(() => {
+    sendMessageCount += 1;
+    for (const waiter of sendMessageWaiters.splice(0)) {
+      if (sendMessageCount >= waiter.count) waiter.resolve();
+      else sendMessageWaiters.push(waiter);
+    }
+    return new Promise<void>((resolve, reject) => {
+      resolveSend = resolve;
+      rejectSends.push(reject);
+    });
+  });
   const session = {
     state: {
       get: () => state,
@@ -385,6 +445,7 @@ function makeMastraHarness() {
   const createSession = vi.fn(async (_input: unknown) => session as never);
   const deleteSession = vi.fn(async () => true);
   const destroy = vi.fn(async () => undefined);
+  const observeExternalTurn = vi.fn(async () => undefined);
   const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (options) => {
     harnessOptions.push(options);
     return {
@@ -394,6 +455,7 @@ function makeMastraHarness() {
         deleteSession,
         destroy,
       },
+      observeExternalTurn,
       destroy: vi.fn(),
     };
   };
@@ -407,7 +469,12 @@ function makeMastraHarness() {
     createSession,
     deleteSession,
     sendMessage,
+    observeExternalTurn,
     emit,
+    waitForSendMessageCount: (count: number) =>
+      sendMessageCount >= count
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => sendMessageWaiters.push({ count, resolve })),
     finishSend: () => resolveSend?.(),
     rejectSend: (index: number, cause: unknown) => rejectSends[index]?.(cause),
     failSend: (cause: unknown) => rejectSends.at(-1)?.(cause),
@@ -438,10 +505,10 @@ function makeLayer(
     AgentControllerLiveOptions,
     | "resolveComputerUseServer"
     | "entityMemoryRepository"
-    | "memoryCandidateRepository"
     | "issueMcpCredential"
     | "revokeMcpCredential"
     | "makeBotBrowser"
+    | "botMemoryStore"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
 ) {
@@ -464,7 +531,6 @@ function makeLayer(
         Layer.succeed(LegacyProviderBridge, bridge),
         Layer.succeed(BotUsageLedger, usageLedger),
         Layer.mock(EntityMemoryRepository)({}),
-        Layer.mock(MemoryCandidateRepository)({}),
         ServerConfig.layerTest(
           process.cwd(),
           baseDir ?? { prefix: "akeru-mastra-controller-test-" },
@@ -485,10 +551,10 @@ function provideController<A, E>(
     AgentControllerLiveOptions,
     | "resolveComputerUseServer"
     | "entityMemoryRepository"
-    | "memoryCandidateRepository"
     | "issueMcpCredential"
     | "revokeMcpCredential"
     | "makeBotBrowser"
+    | "botMemoryStore"
   >,
 ) {
   return effect.pipe(
@@ -965,7 +1031,7 @@ describe("AgentControllerLive", () => {
     );
   });
 
-  it.effect("registers repository-backed memory tools for Mastra sessions", () => {
+  it.effect("registers the file-backed memory tool for Mastra sessions", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const access = {
@@ -979,11 +1045,6 @@ describe("AgentControllerLive", () => {
       respondingBotId: BotId.make("bot-memory-tools"),
       groupMemberBotIds: [],
     } as const;
-    const insert = vi.fn((input) => Effect.succeed(input.revision));
-    const create = vi.fn((input) => Effect.succeed(input.candidate));
-    const entityMemoryRepository = { insert } as unknown as EntityMemoryRepositoryShape;
-    const memoryCandidateRepository = { create } as unknown as MemoryCandidateRepositoryShape;
-
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -1000,68 +1061,319 @@ describe("AgentControllerLive", () => {
         const runtime = mastra.harnessOptions[0]?.toolRuntime;
         assert.isDefined(runtime);
         expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
-          expect.arrayContaining(["recall_memory", "remember", "update_memory", "forget_memory"]),
+          expect.arrayContaining(["memory"]),
         );
-        yield* Effect.promise(() =>
+        const result = yield* Effect.promise(() =>
           runtime.execute({
             threadId: String(codexThreadId),
-            toolId: "remember",
+            toolId: "memory",
             toolCallId: "private-memory",
-            input: { fact: "The user prefers vim.", scope: "private" },
+            input: {
+              target: "user",
+              operations: [{ action: "add", content: "The user prefers vim." }],
+            },
             approvalMode: "require-grant",
           }),
         );
-        const sharedMemory = {
-          threadId: String(codexThreadId),
-          toolId: "remember" as const,
-          toolCallId: "shared-memory",
-          input: { fact: "The project uses Bun.", scope: "project" },
-          approvalMode: "require-grant" as const,
-        };
-        runtime.grantApproval(sharedMemory);
-        yield* Effect.promise(() => runtime.execute(sharedMemory));
-
-        expect(insert).toHaveBeenCalledOnce();
-        expect(create).toHaveBeenCalledOnce();
-
-        const events: ProviderRuntimeEvent[] = [];
-        const eventsFiber = yield* controller.streamEvents.pipe(
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              events.push(event);
-            }),
-          ),
-          Effect.forkChild({ startImmediately: true }),
+        expect(result).toMatchObject({ success: true, message: "Memory updated.", target: "user" });
+        const recalled = yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "memory",
+            toolCallId: "read-private-memory",
+            input: { target: "user", operations: [] },
+            approvalMode: "require-grant",
+          }),
         );
-        yield* Effect.yieldNow;
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Remember this." });
-        mastra.emit({
-          type: "tool_approval_required",
-          toolCallId: "memory-approval",
-          toolName: "remember",
-          args: { fact: "The project uses Bun.", scope: "project" },
-        } as AgentControllerEvent);
-        yield* Effect.yieldNow;
-        expect(events.find((event) => event.type === "request.opened")).toMatchObject({
-          payload: {
-            options: [
-              { decision: "decline", label: "Decline" },
-              { decision: "accept", label: "Approve" },
-            ],
-          },
+        expect(recalled).toMatchObject({
+          success: true,
+          changed: false,
+          content: "The user prefers vim.",
         });
-        yield* controller.interruptTurn({ threadId: codexThreadId });
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("keeps group memory tools bound to the admitted responding bot", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-group-tool-scope-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botA = BotId.make("bot-group-active-a");
+    const botB = BotId.make("bot-group-queued-b");
+    const groupId = GroupId.make("group-tool-scope");
+    const accessFor = (botId: BotId) =>
+      ({
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: codexThreadId,
+        projectId: ProjectId.make("project-group-tool-scope"),
+        workspaceRoot: "/workspace/group-tool-scope",
+        botId,
+        groupId,
+        respondingBotId: botId,
+        groupMemberBotIds: [botA, botB],
+      }) as const;
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* Effect.promise(() =>
+          botMemoryStore.mutate({
+            ...accessFor(botB),
+            target: "user",
+            operations: [{ action: "add", content: "The user likes coffee." }],
+          }),
+        );
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: accessFor(botA),
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Bot A turn." });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: accessFor(botB),
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Bot B queued turn." });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "memory",
+            toolCallId: "active-bot-group-memory",
+            input: {
+              target: "group",
+              operations: [{ action: "add", content: "The group chose option A." }],
+            },
+            approvalMode: "require-grant",
+          }),
+        );
+
+        const activeDocument = yield* Effect.promise(() =>
+          botMemoryStore.readDocument(accessFor(botA), "group"),
+        );
+        const queuedDocument = yield* Effect.promise(() =>
+          botMemoryStore.readDocument(accessFor(botB), "group"),
+        );
+        expect(activeDocument.content).toContain("The group chose option A.");
+        expect(queuedDocument.content).not.toContain("The group chose option A.");
+
         mastra.finishSend();
-        yield* Fiber.interrupt(eventsFiber);
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(2));
+        expect(mastra.session.state.get()).toHaveProperty("persistentMemoryContext");
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Turn without memory access.",
+        });
+        mastra.finishSend();
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(3));
+        expect(mastra.session.state.get()).not.toHaveProperty("persistentMemoryContext");
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).not.toContain(
+          "memory",
+        );
+        mastra.finishSend();
       }),
       bridge.service,
       mastra.factory,
       undefined,
       undefined,
       undefined,
-      { entityMemoryRepository, memoryCandidateRepository },
+      { botMemoryStore },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+      ),
     );
   });
+
+  it.effect("releases a Mastra cadence reservation when admission is interrupted", () => {
+    vi.useFakeTimers();
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-interrupt-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-review-interrupt");
+    const renew = vi.spyOn(botMemoryStore, "renewReviewClaim");
+    const reservationReached = Promise.withResolvers<void>();
+    const reserve = botMemoryStore.reserveReviewCadence.bind(botMemoryStore);
+    vi.spyOn(botMemoryStore, "reserveReviewCadence").mockImplementation(async (reservedBotId) => {
+      const reservation = await reserve(reservedBotId);
+      reservationReached.resolve();
+      return reservation;
+    });
+
+    return provideController(
+      Effect.gen(function* () {
+        for (let prompt = 1; prompt <= 10; prompt += 1) {
+          const reservation = yield* Effect.promise(() =>
+            botMemoryStore.reserveReviewCadence(botId),
+          );
+          yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
+        }
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: {
+            tenantId: AkeruMemoryTenantId.make("local"),
+            userId: AkeruMemoryUserId.make("owner"),
+            threadId: codexThreadId,
+            projectId: ProjectId.make("project-review-interrupt"),
+            workspaceRoot: "/workspace/review-interrupt",
+            botId,
+            groupId: null,
+            respondingBotId: botId,
+            groupMemberBotIds: [],
+          },
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Interrupt admission." });
+        yield* Effect.promise(() => reservationReached.promise);
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
+        expect(renew).not.toHaveBeenCalled();
+
+        const anotherStore = new BotMemoryStore(memoryDir);
+        const next = yield* Effect.promise(() => anotherStore.reserveReviewCadence(botId));
+        yield* Effect.promise(() => anotherStore.settleReviewCadence(next, false));
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          vi.useRealTimers();
+          NodeFS.rmSync(memoryDir, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
+
+  it.effect.each([0, 1, 2])(
+    "settles a Mastra review only after one successful memory call (count: %s)",
+    (successfulMemoryCalls) => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-review-"));
+      const botMemoryStore = new BotMemoryStore(memoryDir);
+      const botId = BotId.make("bot-mastra-review");
+      const access = {
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: codexThreadId,
+        projectId: ProjectId.make("project-mastra-review"),
+        workspaceRoot: "/workspace/mastra-review",
+        botId,
+        groupId: null,
+        respondingBotId: botId,
+        groupMemberBotIds: [],
+      } as const;
+
+      return provideController(
+        Effect.gen(function* () {
+          for (let prompt = 1; prompt <= 10; prompt += 1) {
+            const reservation = yield* Effect.promise(() =>
+              botMemoryStore.reserveReviewCadence(botId),
+            );
+            yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
+          }
+          const acceptedRecorded = Promise.withResolvers<void>();
+          const settleReviewClaim = botMemoryStore.settleReviewClaim.bind(botMemoryStore);
+          vi.spyOn(botMemoryStore, "settleReviewClaim").mockImplementation(async (...args) => {
+            const result = await settleReviewClaim(...args);
+            acceptedRecorded.resolve();
+            return result;
+          });
+          const controller = yield* AgentController;
+          yield* resolveCodex(controller);
+          yield* controller.startSession(codexThreadId, {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access",
+            memoryAccess: access,
+          });
+
+          yield* controller.sendTurn({ threadId: codexThreadId, input: "The tenth prompt" });
+          yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+          expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              persistentMemoryContext: expect.stringContaining("<automatic-memory-review>"),
+            }),
+          );
+          expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              persistentMemoryContext: expect.stringContaining(
+                "GROUP.md is not available in this chat",
+              ),
+            }),
+          );
+
+          const runtime = mastra.harnessOptions[0]?.toolRuntime;
+          assert.isDefined(runtime);
+          for (let call = 0; call < successfulMemoryCalls; call += 1) {
+            yield* Effect.promise(() =>
+              runtime.execute({
+                threadId: String(codexThreadId),
+                toolId: "memory",
+                toolCallId: `automatic-review-no-op-${call}`,
+                input: { target: "user", operations: [] },
+                approvalMode: "require-grant",
+              }),
+            );
+          }
+
+          mastra.finishSend();
+          yield* Effect.promise(() => acceptedRecorded.promise);
+          assert.deepEqual(yield* Effect.promise(() => botMemoryStore.readReviewCadence(botId)), {
+            acceptedPromptCount: 11,
+            reviewedThroughPromptCount: successfulMemoryCalls === 1 ? 10 : 0,
+            dueOnNextAcceptedPrompt: successfulMemoryCalls !== 1,
+          });
+        }),
+        bridge.service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        { botMemoryStore },
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+        ),
+      );
+    },
+  );
 
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
@@ -3072,9 +3384,12 @@ describe("AgentControllerLive", () => {
     );
   });
 
-  it.effect("exposes only MCP servers in the persisted delegation grant", () => {
+  it.effect("enforces delegated MCP and memory grants for tools and prompt context", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-delegated-memory-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const readMemory = vi.spyOn(botMemoryStore, "readPromptSnapshot");
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
@@ -3110,7 +3425,7 @@ describe("AgentControllerLive", () => {
       makeMcpManager,
       undefined,
       undefined,
-      undefined,
+      { botMemoryStore },
       runtime,
     );
     const server = (id: typeof webId, name: string) => ({
@@ -3134,6 +3449,17 @@ describe("AgentControllerLive", () => {
         modelSelection: codexSelection,
         runtimeMode: "approval-required",
         mcpServers: [server(webId, "web"), server(emailId, "email")],
+        memoryAccess: {
+          tenantId: AkeruMemoryTenantId.make("local"),
+          userId: AkeruMemoryUserId.make("owner"),
+          threadId: codexThreadId,
+          projectId: ProjectId.make("delegation-memory"),
+          workspaceRoot: process.cwd(),
+          botId: BotId.make("delegated-bot"),
+          respondingBotId: BotId.make("delegated-bot"),
+          groupId: null,
+          groupMemberBotIds: [],
+        },
       });
 
       expect(session.mcpServerIds).toEqual([webId]);
@@ -3146,7 +3472,18 @@ describe("AgentControllerLive", () => {
       expect(toolIds).not.toContain("ExternalRead");
       expect(toolIds).not.toContain("CopyToBox");
       expect(toolIds).not.toContain("CopyFromBox");
-    }).pipe(Effect.provide(layer), Effect.orDie);
+      expect(toolIds).not.toContain("memory");
+      yield* controller.sendTurn({ threadId: codexThreadId, input: "Do the delegated task." });
+      expect(mastra.session.sendMessage).toHaveBeenCalled();
+      expect(readMemory).not.toHaveBeenCalled();
+      expect(mastra.session.state.get()).not.toHaveProperty("persistentMemoryContext");
+    }).pipe(
+      Effect.provide(layer),
+      Effect.orDie,
+      Effect.ensuring(
+        Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+      ),
+    );
   });
 
   it.effect("creates no workspace for a delegated sandbox denial", () => {
@@ -3547,6 +3884,512 @@ describe("AgentControllerLive", () => {
         expect(bridge.sendTurn.mock.calls[0]?.[0].input).toContain("hey what's up");
       }),
       bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect.each([0, 1, 2])(
+    "settles a legacy foreground review only after one successful memory call (count: %s)",
+    (successfulMemoryCalls) => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const credentials = makeMemoryOnlyCredentialOptions();
+      const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-cadence-"));
+      const botMemoryStore = new BotMemoryStore(memoryDir);
+      const botId = BotId.make("bot-legacy-review");
+      const groupId = GroupId.make("group-legacy-review");
+      const memoryAccess = {
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: claudeThreadId,
+        projectId: ProjectId.make("project-legacy-review"),
+        workspaceRoot: "/workspace/legacy-review",
+        botId,
+        groupId,
+        respondingBotId: botId,
+        groupMemberBotIds: [botId],
+      } as const;
+      const completedEvent: ProviderRuntimeEvent = {
+        provider: ProviderDriverKind.make("opencode"),
+        providerInstanceId: openCodeInstanceId,
+        threadId: claudeThreadId,
+        turnId: TurnId.make("legacy-turn"),
+        type: "turn.completed",
+        eventId: EventId.make("legacy-review-complete"),
+        createdAt: "2026-09-14T12:00:00.000Z",
+        payload: { state: "completed", stopReason: null },
+      };
+      bridge.sendTurn.mockImplementation((input) =>
+        completeLegacyTurnWithMemoryReview(
+          input,
+          TurnId.make("legacy-turn"),
+          successfulMemoryCalls,
+        ),
+      );
+      const service = { ...bridge.service, streamEvents: Stream.succeed(completedEvent) };
+
+      return provideController(
+        Effect.gen(function* () {
+          for (let prompt = 1; prompt <= 10; prompt += 1) {
+            const reservation = yield* Effect.promise(() =>
+              botMemoryStore.reserveReviewCadence(botId, {
+                threadId: `group-history-${prompt}`,
+                groupId: String(groupId),
+                text: `Group prompt ${prompt}`,
+              }),
+            );
+            yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
+          }
+          const controller = yield* AgentController;
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            cwd: process.cwd(),
+            runtimeMode: "approval-required",
+            botId,
+            botName: "OpenCode Review Bot",
+            memoryAccess,
+          });
+          McpMemoryToolSession.setMcpMemoryToolSession(
+            claudeThreadId,
+            createBotMemoryToolHandler(botMemoryStore, memoryAccess, new Set(["user", "group"]))
+              .memory,
+          );
+
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Threshold prompt" });
+          const context = bridge.sendTurn.mock.calls[0]?.[0].persistentMemoryContext;
+          expect(context).toContain("<automatic-memory-review>");
+          expect(context).toContain("only your GROUP.md for this active group");
+          expect(context).toContain("Never read or change another bot's group memory");
+          assert.equal(
+            (yield* Effect.promise(() => botMemoryStore.readReviewCadence(botId, String(groupId))))
+              .acceptedPromptCount,
+            10,
+          );
+
+          yield* controller.streamEvents.pipe(Stream.take(1), Stream.runDrain);
+          assert.deepEqual(
+            yield* Effect.promise(() => botMemoryStore.readReviewCadence(botId, String(groupId))),
+            {
+              acceptedPromptCount: 11,
+              reviewedThroughPromptCount: successfulMemoryCalls === 1 ? 10 : 0,
+              dueOnNextAcceptedPrompt: successfulMemoryCalls !== 1,
+            },
+          );
+        }),
+        service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        { botMemoryStore, ...credentials },
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+        ),
+      );
+    },
+  );
+
+  it.effect.each(["failed", "interrupted", "cancelled", "aborted"] as const)(
+    "keeps a legacy review due after terminal %s",
+    (terminalState) => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-failed-"));
+      const botMemoryStore = new BotMemoryStore(memoryDir);
+      const botId = BotId.make(`bot-legacy-${terminalState}`);
+      const memoryAccess = {
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: claudeThreadId,
+        projectId: ProjectId.make("project-legacy-failure"),
+        workspaceRoot: "/workspace/legacy-failure",
+        botId,
+        groupId: null,
+        respondingBotId: botId,
+        groupMemberBotIds: [],
+      } as const;
+      const event: ProviderRuntimeEvent =
+        terminalState === "aborted"
+          ? {
+              provider: ProviderDriverKind.make("opencode"),
+              providerInstanceId: openCodeInstanceId,
+              threadId: claudeThreadId,
+              turnId: TurnId.make("legacy-turn"),
+              type: "turn.aborted",
+              eventId: EventId.make("legacy-review-aborted"),
+              createdAt: "2026-09-14T12:00:00.000Z",
+              payload: { reason: "Provider aborted the turn." },
+            }
+          : {
+              provider: ProviderDriverKind.make("opencode"),
+              providerInstanceId: openCodeInstanceId,
+              threadId: claudeThreadId,
+              turnId: TurnId.make("legacy-turn"),
+              type: "turn.completed",
+              eventId: EventId.make(`legacy-review-${terminalState}`),
+              createdAt: "2026-09-14T12:00:00.000Z",
+              payload: { state: terminalState, stopReason: null },
+            };
+      const service = { ...bridge.service, streamEvents: Stream.succeed(event) };
+
+      return provideController(
+        Effect.gen(function* () {
+          for (let prompt = 1; prompt <= 10; prompt += 1) {
+            const reservation = yield* Effect.promise(() =>
+              botMemoryStore.reserveReviewCadence(botId),
+            );
+            yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
+          }
+          const controller = yield* AgentController;
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            cwd: process.cwd(),
+            runtimeMode: "approval-required",
+            memoryAccess,
+          });
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Threshold prompt" });
+          yield* controller.streamEvents.pipe(Stream.take(1), Stream.runDrain);
+
+          assert.deepEqual(yield* Effect.promise(() => botMemoryStore.readReviewCadence(botId)), {
+            acceptedPromptCount: 10,
+            reviewedThroughPromptCount: 0,
+            dueOnNextAcceptedPrompt: true,
+          });
+        }),
+        service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        { botMemoryStore },
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+        ),
+      );
+    },
+  );
+
+  it.effect("settles both same-thread legacy prompts admitted before either terminal", () =>
+    Effect.gen(function* () {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const nativeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+      const service = { ...bridge.service, streamEvents: Stream.fromPubSub(nativeEvents) };
+      const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-late-terminal-"));
+      const botMemoryStore = new BotMemoryStore(memoryDir);
+      const botId = BotId.make("bot-late-terminal");
+      const turnA = TurnId.make("legacy-turn-a");
+      const secondDispatchEntered = yield* Deferred.make<void>();
+      const releaseSecondDispatch = yield* Deferred.make<void>();
+      bridge.sendTurn
+        .mockImplementationOnce((input) =>
+          Effect.succeed({ threadId: input.threadId, turnId: turnA }),
+        )
+        .mockImplementationOnce((input) =>
+          Deferred.succeed(secondDispatchEntered, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseSecondDispatch)),
+            Effect.as({ threadId: input.threadId, turnId: turnA }),
+          ),
+        );
+      const terminal = (turnId: TurnId, eventId: string): ProviderRuntimeEvent => ({
+        provider: ProviderDriverKind.make("opencode"),
+        providerInstanceId: openCodeInstanceId,
+        threadId: claudeThreadId,
+        turnId,
+        type: "turn.completed",
+        eventId: EventId.make(eventId),
+        createdAt: "2026-09-14T12:00:00.000Z",
+        payload: { state: "completed", stopReason: null },
+      });
+
+      yield* provideController(
+        Effect.gen(function* () {
+          for (let prompt = 1; prompt <= 10; prompt += 1) {
+            const reservation = yield* Effect.promise(() =>
+              botMemoryStore.reserveReviewCadence(botId),
+            );
+            yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
+          }
+          const controller = yield* AgentController;
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            runtimeMode: "approval-required",
+            memoryAccess: {
+              tenantId: AkeruMemoryTenantId.make("local"),
+              userId: AkeruMemoryUserId.make("owner"),
+              threadId: claudeThreadId,
+              projectId: ProjectId.make("project-late-terminal"),
+              workspaceRoot: "/workspace/late-terminal",
+              botId,
+              groupId: null,
+              respondingBotId: botId,
+              groupMemberBotIds: [],
+            },
+          });
+          const terminalObserved = yield* Deferred.make<void>();
+          let observedCount = 0;
+          const streamFiber = yield* Stream.runForEach(controller.streamEvents, () => {
+            observedCount += 1;
+            return Effect.all([
+              observedCount === 2
+                ? Deferred.succeed(terminalObserved, undefined).pipe(Effect.ignore)
+                : Effect.void,
+            ]).pipe(Effect.asVoid);
+          }).pipe(Effect.forkChild({ startImmediately: true }));
+          yield* Effect.yieldNow;
+
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Turn A" });
+          const secondSend = yield* controller
+            .sendTurn({ threadId: claudeThreadId, input: "Turn B" })
+            .pipe(Effect.forkChild({ startImmediately: true }));
+          yield* Deferred.await(secondDispatchEntered);
+          const lateObserved = yield* Deferred.make<void>();
+          const lateFiber = yield* controller.streamEvents.pipe(
+            Stream.take(1),
+            Stream.runDrain,
+            Effect.andThen(Deferred.succeed(lateObserved, undefined)),
+            Effect.forkChild({ startImmediately: true }),
+          );
+          yield* Effect.yieldNow;
+          yield* PubSub.publish(nativeEvents, {
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            threadId: claudeThreadId,
+            turnId: turnA,
+            type: "content.delta",
+            eventId: EventId.make("merged-assistant-delta"),
+            createdAt: "2026-09-14T12:00:00.000Z",
+            payload: { streamKind: "assistant_text", delta: "One shared answer." },
+          });
+          yield* PubSub.publish(nativeEvents, terminal(turnA, "terminal-a"));
+          yield* Deferred.succeed(releaseSecondDispatch, undefined);
+          yield* Fiber.join(secondSend);
+          yield* Deferred.await(lateObserved);
+          yield* Deferred.await(terminalObserved);
+          assert.equal(
+            (yield* Effect.promise(() => botMemoryStore.readReviewCadence(botId)))
+              .acceptedPromptCount,
+            12,
+          );
+          expect(mastra.observeExternalTurn).toHaveBeenCalledTimes(1);
+          expect(mastra.observeExternalTurn).toHaveBeenCalledWith(
+            expect.objectContaining({
+              turnId: String(turnA),
+              userMessages: [
+                { id: expect.any(String), text: "Turn A" },
+                { id: expect.any(String), text: "Turn B" },
+              ],
+              assistant: "One shared answer.",
+            }),
+          );
+          const observedUsers = (
+            mastra.observeExternalTurn.mock.calls as unknown as ReadonlyArray<
+              readonly [{ readonly userMessages: ReadonlyArray<{ readonly id: string }> }]
+            >
+          )[0]?.[0].userMessages;
+          expect(new Set(observedUsers?.map((entry) => entry.id)).size).toBe(2);
+          yield* Fiber.interrupt(lateFiber);
+          yield* Fiber.interrupt(streamFiber);
+        }),
+        service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        { botMemoryStore },
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+        ),
+      );
+    }),
+  );
+
+  it.effect("settles a legacy terminal event that races before sendTurn returns", () =>
+    Effect.gen(function* () {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const nativeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+      const dispatchEntered = yield* Deferred.make<void>();
+      const releaseDispatch = yield* Deferred.make<void>();
+      const turnId = TurnId.make("legacy-racing-turn");
+      bridge.sendTurn.mockImplementationOnce((input) =>
+        Deferred.succeed(dispatchEntered, undefined).pipe(
+          Effect.andThen(Deferred.await(releaseDispatch)),
+          Effect.as({ threadId: input.threadId, turnId }),
+        ),
+      );
+      const memoryDir = NodeFS.mkdtempSync(
+        NodePath.join(NodeOS.tmpdir(), "akeru-racing-terminal-"),
+      );
+      const botMemoryStore = new BotMemoryStore(memoryDir);
+      const botId = BotId.make("bot-racing-terminal");
+
+      yield* provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            runtimeMode: "approval-required",
+            memoryAccess: {
+              tenantId: AkeruMemoryTenantId.make("local"),
+              userId: AkeruMemoryUserId.make("owner"),
+              threadId: claudeThreadId,
+              projectId: ProjectId.make("project-racing-terminal"),
+              workspaceRoot: "/workspace/racing-terminal",
+              botId,
+              groupId: null,
+              respondingBotId: botId,
+              groupMemberBotIds: [],
+            },
+          });
+          const processed = yield* Deferred.make<void>();
+          const streamFiber = yield* controller.streamEvents.pipe(
+            Stream.runForEach(() => Deferred.succeed(processed, undefined).pipe(Effect.ignore)),
+            Effect.forkChild({ startImmediately: true }),
+          );
+          const sendFiber = yield* controller
+            .sendTurn({ threadId: claudeThreadId, input: "Racing terminal." })
+            .pipe(Effect.forkChild({ startImmediately: true }));
+          yield* Deferred.await(dispatchEntered);
+          yield* PubSub.publish(nativeEvents, {
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            threadId: claudeThreadId,
+            turnId,
+            type: "turn.completed",
+            eventId: EventId.make("racing-terminal"),
+            createdAt: "2026-09-14T12:00:00.000Z",
+            payload: { state: "completed", stopReason: null },
+          });
+          yield* Deferred.await(processed);
+          yield* Deferred.succeed(releaseDispatch, undefined);
+          yield* Fiber.join(sendFiber);
+          assert.equal(
+            (yield* Effect.promise(() => botMemoryStore.readReviewCadence(botId)))
+              .acceptedPromptCount,
+            1,
+          );
+          yield* Fiber.interrupt(streamFiber);
+        }),
+        { ...bridge.service, streamEvents: Stream.fromPubSub(nativeEvents) },
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        { botMemoryStore },
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+        ),
+      );
+    }),
+  );
+
+  it.effect("feeds completed legacy-provider turns into observational memory", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const events: ProviderRuntimeEvent[] = [
+      {
+        provider: ProviderDriverKind.make("opencode"),
+        providerInstanceId: openCodeInstanceId,
+        threadId: claudeThreadId,
+        turnId: TurnId.make("legacy-turn"),
+        type: "content.delta",
+        eventId: EventId.make("legacy-memory-delta"),
+        createdAt: "2026-09-13T20:00:00.000Z",
+        payload: {
+          delta: "The completed legacy answer.",
+          streamKind: "assistant_text",
+        },
+      },
+      {
+        provider: ProviderDriverKind.make("opencode"),
+        providerInstanceId: openCodeInstanceId,
+        threadId: claudeThreadId,
+        turnId: TurnId.make("legacy-turn"),
+        type: "turn.completed",
+        eventId: EventId.make("legacy-memory-complete"),
+        createdAt: "2026-09-13T20:00:01.000Z",
+        payload: { state: "completed", stopReason: null },
+      },
+    ];
+    const service = { ...bridge.service, streamEvents: Stream.fromIterable(events) };
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "gpt-5.6" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "Remember this turn." });
+        yield* controller.streamEvents.pipe(Stream.take(2), Stream.runDrain);
+        yield* Effect.promise(() => new Promise<void>((resolve) => queueMicrotask(resolve)));
+
+        expect(mastra.observeExternalTurn).toHaveBeenCalledWith({
+          threadId: String(claudeThreadId),
+          turnId: "legacy-turn",
+          modelId: "opencode/gpt-5.6",
+          userMessages: [
+            {
+              id: expect.any(String),
+              text: "Remember this turn.",
+            },
+          ],
+          assistant: "The completed legacy answer.",
+          createdAt: "2026-09-13T20:00:01.000Z",
+        });
+      }),
+      service,
       mastra.factory,
     );
   });

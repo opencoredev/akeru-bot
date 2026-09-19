@@ -12,13 +12,11 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./Layers/ProjectionSna
 import * as ThreadBackgroundLiveness from "./ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "./ThreadPlanProgress.ts";
 import { EntityMemoryRepositoryLive } from "../memory/Layers/EntityMemoryRepository.ts";
-import { MemoryCandidateRepositoryLive } from "../memory/Layers/MemoryCandidateRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../memory/Services/MemoryRevisionWriteLock.ts";
 
-const MemoryRepositoriesLive = Layer.mergeAll(
-  EntityMemoryRepositoryLive,
-  MemoryCandidateRepositoryLive,
-).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+const MemoryRepositoriesLive = EntityMemoryRepositoryLive.pipe(
+  Layer.provide(MemoryRevisionWriteLockLive),
+);
 
 export const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationEventStoreLive,

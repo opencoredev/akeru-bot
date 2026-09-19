@@ -12,9 +12,9 @@ import {
 export function createMemoryEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
 ) {
-  const inspect = createEnvironmentRpcQueryAtomFamily(runtime, {
-    label: "environment-data:memory:inspect",
-    tag: WS_METHODS.memoryInspect,
+  const inspectDocuments = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:memory:documents:inspect",
+    tag: WS_METHODS.memoryDocumentsInspect,
     staleTimeMs: 5_000,
   });
   const scheduler = createAtomCommandScheduler();
@@ -28,7 +28,7 @@ export function createMemoryEnvironmentAtoms<R, E>(
       readonly input: { readonly threadId: ThreadId };
     }) => `${environmentId}:${input.threadId}`,
   };
-  const refresh = (
+  const refreshDocuments = (
     target: {
       readonly environmentId: EnvironmentId;
       readonly input: { readonly threadId: ThreadId };
@@ -37,7 +37,7 @@ export function createMemoryEnvironmentAtoms<R, E>(
   ) =>
     Effect.sync(() =>
       registry.refresh(
-        inspect({
+        inspectDocuments({
           environmentId: target.environmentId,
           input: { threadId: target.input.threadId },
         }),
@@ -45,7 +45,21 @@ export function createMemoryEnvironmentAtoms<R, E>(
     );
 
   return {
-    inspect,
+    inspectDocuments,
+    replaceDocument: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:document:replace",
+      tag: WS_METHODS.memoryDocumentReplace,
+      scheduler,
+      concurrency,
+      onSettled: refreshDocuments,
+    }),
+    clearObservations: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:observations:clear",
+      tag: WS_METHODS.memoryObservationsClear,
+      scheduler,
+      concurrency,
+      onSettled: refreshDocuments,
+    }),
     exportArchive: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:memory:export",
       tag: WS_METHODS.memoryExport,
@@ -62,14 +76,7 @@ export function createMemoryEnvironmentAtoms<R, E>(
       tag: WS_METHODS.memoryImportApply,
       scheduler,
       concurrency,
-      onSettled: refresh,
-    }),
-    mutate: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:memory:mutate",
-      tag: WS_METHODS.memoryMutate,
-      scheduler,
-      concurrency,
-      onSettled: refresh,
+      onSettled: refreshDocuments,
     }),
   };
 }

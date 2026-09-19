@@ -45,29 +45,31 @@ describe("createAkeruMastraTools", () => {
   });
 
   it("builds registered memory handlers as Mastra tools", async () => {
-    const rememberHandler = vi.fn(async () => ({ saved: true }));
-    const unavailable = vi.fn(async () => undefined);
+    const memoryHandler = vi.fn(async () => ({ saved: true }));
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-memory", {
       runtimeMode: "full-access",
       workspaceType: "none",
       memoryHandlers: {
-        recall_memory: unavailable,
-        remember: rememberHandler,
-        update_memory: unavailable,
-        forget_memory: unavailable,
+        memory: memoryHandler,
       },
     });
-    const remember = createAkeruMastraTools("thread-memory", runtime).remember as {
+    const memory = createAkeruMastraTools("thread-memory", runtime).memory as {
       readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
     };
-    if (!remember?.execute) throw new Error("Remember tool is unavailable.");
+    if (!memory?.execute) throw new Error("Memory tool is unavailable.");
 
     await expect(
-      remember.execute({ fact: "The user prefers vim.", scope: "private" }, {
-        agent: { toolCallId: "memory-1" },
-      } as never),
+      memory.execute(
+        {
+          target: "user",
+          operations: [{ action: "add", content: "The user prefers vim." }],
+        },
+        {
+          agent: { toolCallId: "memory-1" },
+        } as never,
+      ),
     ).resolves.toEqual({ saved: true });
-    expect(rememberHandler).toHaveBeenCalledOnce();
+    expect(memoryHandler).toHaveBeenCalledOnce();
   });
 });

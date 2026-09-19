@@ -99,7 +99,6 @@ import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinar
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import { EntityMemoryRepositoryLive } from "./memory/Layers/EntityMemoryRepository.ts";
-import { MemoryCandidateRepositoryLive } from "./memory/Layers/MemoryCandidateRepository.ts";
 import { MemoryRevisionWriteLockLive } from "./memory/Services/MemoryRevisionWriteLock.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
@@ -268,10 +267,9 @@ const LegacyProviderLayerLive = LegacyProviderBridgeLive.pipe(
 const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
 const McpSessionRegistryLayerLive = McpSessionRegistry.layer;
 
-export const RuntimeMemoryRepositoriesLive = Layer.mergeAll(
-  EntityMemoryRepositoryLive,
-  MemoryCandidateRepositoryLive,
-).pipe(Layer.provide(MemoryRevisionWriteLockLive));
+export const RuntimeMemoryRepositoriesLive = EntityMemoryRepositoryLive.pipe(
+  Layer.provide(MemoryRevisionWriteLockLive),
+);
 
 const RuntimeMemoryRepositoriesWithPersistenceLive = RuntimeMemoryRepositoriesLive.pipe(
   Layer.provideMerge(PersistenceLayerLive),

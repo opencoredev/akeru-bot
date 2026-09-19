@@ -41,7 +41,6 @@ import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSes
 import { ServerSettingsService } from "../src/serverSettings.ts";
 import { AgentControllerLive } from "../src/provider/Layers/AgentController.ts";
 import { EntityMemoryRepositoryLive } from "../src/memory/Layers/EntityMemoryRepository.ts";
-import { MemoryCandidateRepositoryLive } from "../src/memory/Layers/MemoryCandidateRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../src/memory/Services/MemoryRevisionWriteLock.ts";
 import { LegacyProviderBridgeLive } from "../src/provider/Layers/LegacyProviderBridge.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
@@ -268,10 +267,10 @@ export const makeOrchestrationIntegrationHarness = (
     yield* initializeGitWorkspace(workspaceDir);
 
     const persistenceLayer = makeSqlitePersistenceLive(dbPath);
-    const memoryRepositoriesLayer = Layer.mergeAll(
-      EntityMemoryRepositoryLive,
-      MemoryCandidateRepositoryLive,
-    ).pipe(Layer.provide(MemoryRevisionWriteLockLive), Layer.provide(persistenceLayer));
+    const memoryRepositoriesLayer = EntityMemoryRepositoryLive.pipe(
+      Layer.provide(MemoryRevisionWriteLockLive),
+      Layer.provide(persistenceLayer),
+    );
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionPipelineLive),
       Layer.provide(OrchestrationEventStoreLive),

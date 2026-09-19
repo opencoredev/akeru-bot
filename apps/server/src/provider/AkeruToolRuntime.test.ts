@@ -283,45 +283,33 @@ describe("AkeruToolRuntime", () => {
     }
   });
 
-  it("exposes registered memory handlers and protects sensitive writes", async () => {
-    const remember = vi.fn(async () => ({ saved: true }));
-    const unavailable = vi.fn(async () => undefined);
+  it("exposes one direct, approval-free memory tool", async () => {
+    const memory = vi.fn(async () => ({ saved: true }));
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-memory", {
       runtimeMode: "full-access",
       workspaceType: "none",
       memoryHandlers: {
-        recall_memory: unavailable,
-        remember,
-        update_memory: unavailable,
-        forget_memory: unavailable,
+        memory,
       },
     });
 
-    expect(runtime.toolsForThread("thread-memory").map((tool) => tool.id)).toEqual([
-      "recall_memory",
-      "remember",
-      "update_memory",
-      "forget_memory",
-    ]);
-    const privateWrite = {
+    expect(runtime.toolsForThread("thread-memory").map((tool) => tool.id)).toEqual(["memory"]);
+    const write = {
       threadId: "thread-memory",
-      toolId: "remember" as const,
-      toolCallId: "private-write",
-      input: { fact: "The user prefers vim.", scope: "private" },
+      toolId: "memory" as const,
+      toolCallId: "memory-write",
+      input: {
+        target: "user",
+        operations: [{ action: "add", content: "The user prefers vim." }],
+      },
       approvalMode: "require-grant" as const,
     };
-    await expect(runtime.execute(privateWrite)).resolves.toEqual({ saved: true });
-
-    const sensitiveWrite = {
-      ...privateWrite,
-      toolCallId: "sensitive-write",
-      input: { fact: "  The user prefers vim.  ", scope: "private", sensitive: true },
-    };
-    await expect(runtime.execute(sensitiveWrite)).rejects.toThrow("requires approval");
-    runtime.grantApproval(sensitiveWrite);
-    await expect(runtime.execute(sensitiveWrite)).resolves.toEqual({ saved: true });
-    expect(remember).toHaveBeenCalledTimes(2);
+    await expect(runtime.requiresApproval("thread-memory", "memory", write.input)).resolves.toBe(
+      false,
+    );
+    await expect(runtime.execute(write)).resolves.toEqual({ saved: true });
+    expect(memory).toHaveBeenCalledOnce();
   });
 
   it("exposes a narrow profile tool only for a bot-owned session", async () => {
