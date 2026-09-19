@@ -12,6 +12,17 @@ export interface LegacyMemoryMigrationReport {
   readonly alreadyComplete: boolean;
 }
 
+export function legacyMemoryMigrationAccesses(
+  access: AkeruMemoryThreadAccess,
+): ReadonlyArray<AkeruMemoryThreadAccess> {
+  const botId = access.respondingBotId ?? access.botId;
+  if (!botId || access.groupId === null) return [access];
+  return [
+    { ...access, botId, respondingBotId: botId, groupId: null, groupMemberBotIds: [] },
+    access,
+  ];
+}
+
 export function legacyMemoryMigrationKeys(access: AkeruMemoryThreadAccess): ReadonlyArray<string> {
   const botId = access.respondingBotId ?? access.botId;
   if (!botId) return [];

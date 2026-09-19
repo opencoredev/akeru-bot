@@ -73,6 +73,7 @@ import {
 } from "../../memory/BotMemoryToolHandlers.ts";
 import {
   legacyMemoryMigrationKeys,
+  legacyMemoryMigrationAccesses,
   migrateLegacyBotMemory,
 } from "../../memory/LegacyMemoryMigration.ts";
 import {
@@ -2105,18 +2106,22 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         );
         if (migrationsComplete.some((complete) => !complete)) {
-          const revisions = yield* options.entityMemoryRepository
-            .listCurrent({ access: input.memoryAccess })
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new AgentControllerRuntimeError({
-                    operation: "memory.migrate.read",
-                    detail: failureDetail(cause),
-                    cause,
-                  }),
-              ),
-            );
+          const revisions = yield* Effect.forEach(
+            legacyMemoryMigrationAccesses(input.memoryAccess),
+            (access) => options.entityMemoryRepository!.listCurrent({ access }),
+          ).pipe(
+            Effect.map((sets) => [
+              ...new Map(sets.flat().map((revision) => [revision.id, revision])).values(),
+            ]),
+            Effect.mapError(
+              (cause) =>
+                new AgentControllerRuntimeError({
+                  operation: "memory.migrate.read",
+                  detail: failureDetail(cause),
+                  cause,
+                }),
+            ),
+          );
           yield* Effect.tryPromise({
             try: () =>
               migrateLegacyBotMemory({
