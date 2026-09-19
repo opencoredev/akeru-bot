@@ -17,6 +17,102 @@ export const AKERU_MEMORY_PACKET_MAX_FACTS = 24;
 export const AKERU_MEMORY_PACKET_MAX_CHARS = 12_000;
 export const AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS = 3_000;
 
+export const AKERU_USER_MEMORY_MAX_CHARS = 1_375;
+export const AKERU_BOT_MEMORY_MAX_CHARS = 2_200;
+export const AKERU_GROUP_MEMORY_MAX_CHARS = 2_200;
+
+export const AkeruMemoryDocumentTarget = Schema.Literals(["user", "memory", "group"]);
+export type AkeruMemoryDocumentTarget = typeof AkeruMemoryDocumentTarget.Type;
+
+export const AkeruMemoryFileOperation = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("add"),
+    content: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("replace"),
+    oldText: TrimmedNonEmptyString,
+    content: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("remove"),
+    oldText: TrimmedNonEmptyString,
+  }),
+]);
+export type AkeruMemoryFileOperation = typeof AkeruMemoryFileOperation.Type;
+
+export const AkeruMemoryDocument = Schema.Struct({
+  target: AkeruMemoryDocumentTarget,
+  content: Schema.String,
+  charCount: NonNegativeInt,
+  charLimit: PositiveInt,
+  updatedAt: Schema.NullOr(IsoDateTime),
+});
+export type AkeruMemoryDocument = typeof AkeruMemoryDocument.Type;
+
+export const AkeruBotMemorySnapshot = Schema.Struct({
+  botId: BotId,
+  groupId: Schema.NullOr(GroupId),
+  user: AkeruMemoryDocument,
+  memory: AkeruMemoryDocument,
+  group: Schema.NullOr(AkeruMemoryDocument),
+});
+export type AkeruBotMemorySnapshot = typeof AkeruBotMemorySnapshot.Type;
+
+export const AkeruMemoryFileMutationInput = Schema.Struct({
+  botId: BotId,
+  groupId: Schema.NullOr(GroupId),
+  groupMemberBotIds: Schema.Array(BotId),
+  target: AkeruMemoryDocumentTarget,
+  operations: Schema.Array(AkeruMemoryFileOperation),
+});
+export type AkeruMemoryFileMutationInput = typeof AkeruMemoryFileMutationInput.Type;
+
+export const AkeruMemoryFileMutationResult = Schema.Struct({
+  document: AkeruMemoryDocument,
+  applied: PositiveInt,
+  changed: Schema.Boolean,
+});
+export type AkeruMemoryFileMutationResult = typeof AkeruMemoryFileMutationResult.Type;
+
+export const AkeruMemoryDocumentsInspectInput = Schema.Struct({ threadId: ThreadId });
+export type AkeruMemoryDocumentsInspectInput = typeof AkeruMemoryDocumentsInspectInput.Type;
+
+export const AkeruMemoryDocumentsSnapshot = Schema.Struct({
+  ...AkeruBotMemorySnapshot.fields,
+  conversation: Schema.Struct({
+    current: Schema.NullOr(
+      Schema.Struct({
+        generationCount: Schema.Number,
+        activeObservations: Schema.String,
+        createdAt: IsoDateTime,
+        updatedAt: IsoDateTime,
+      }),
+    ),
+    history: Schema.Array(
+      Schema.Struct({
+        generationCount: Schema.Number,
+        activeObservations: Schema.String,
+        createdAt: IsoDateTime,
+        updatedAt: IsoDateTime,
+      }),
+    ),
+  }),
+});
+export type AkeruMemoryDocumentsSnapshot = typeof AkeruMemoryDocumentsSnapshot.Type;
+
+export const AkeruMemoryDocumentReplaceInput = Schema.Struct({
+  threadId: ThreadId,
+  expectedBotId: BotId,
+  expectedContent: Schema.String,
+  target: AkeruMemoryDocumentTarget,
+  content: Schema.String,
+});
+export type AkeruMemoryDocumentReplaceInput = typeof AkeruMemoryDocumentReplaceInput.Type;
+
+export const AkeruMemoryObservationsClearInput = Schema.Struct({ threadId: ThreadId });
+export type AkeruMemoryObservationsClearInput = typeof AkeruMemoryObservationsClearInput.Type;
+
 export const AkeruMemoryId = TrimmedNonEmptyString.pipe(Schema.brand("AkeruMemoryId"));
 export type AkeruMemoryId = typeof AkeruMemoryId.Type;
 
@@ -244,6 +340,68 @@ export const AkeruConversationMemorySnapshot = Schema.Struct({
   history: Schema.Array(AkeruConversationMemoryRecord),
 });
 export type AkeruConversationMemorySnapshot = typeof AkeruConversationMemorySnapshot.Type;
+
+export const AkeruMarkdownMemoryArchiveDocument = Schema.Struct({
+  botId: BotId,
+  groupId: Schema.NullOr(GroupId),
+  target: AkeruMemoryDocumentTarget,
+  path: TrimmedNonEmptyString,
+  content: Schema.String,
+  sha256: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+});
+export type AkeruMarkdownMemoryArchiveDocument = typeof AkeruMarkdownMemoryArchiveDocument.Type;
+
+export const AkeruMarkdownMemoryArchiveV3 = Schema.Struct({
+  schemaVersion: Schema.Literal(3),
+  anchorThreadId: ThreadId,
+  botId: BotId,
+  groupId: Schema.NullOr(GroupId),
+  createdAt: IsoDateTime,
+  documents: Schema.Array(AkeruMarkdownMemoryArchiveDocument),
+  conversation: Schema.Struct({
+    snapshot: AkeruConversationMemorySnapshot,
+    sha256: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  }),
+  manifestSha256: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+});
+export type AkeruMarkdownMemoryArchiveV3 = typeof AkeruMarkdownMemoryArchiveV3.Type;
+
+export const AkeruMarkdownMemoryExportInput = Schema.Struct({ threadId: ThreadId });
+export type AkeruMarkdownMemoryExportInput = typeof AkeruMarkdownMemoryExportInput.Type;
+
+export const AkeruMarkdownMemoryImportPreviewInput = Schema.Struct({
+  threadId: ThreadId,
+  archive: AkeruMarkdownMemoryArchiveV3,
+});
+export type AkeruMarkdownMemoryImportPreviewInput =
+  typeof AkeruMarkdownMemoryImportPreviewInput.Type;
+
+export const AkeruMarkdownMemoryImportPreviewItem = Schema.Struct({
+  target: AkeruMemoryDocumentTarget,
+  classification: Schema.Literals(["new", "changed", "unchanged"]),
+  charCount: NonNegativeInt,
+  charLimit: PositiveInt,
+});
+export type AkeruMarkdownMemoryImportPreviewItem = typeof AkeruMarkdownMemoryImportPreviewItem.Type;
+
+export const AkeruMarkdownMemoryImportPreview = Schema.Struct({
+  previewHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  documents: Schema.Array(AkeruMarkdownMemoryImportPreviewItem),
+  restoresObservations: Schema.Boolean,
+});
+export type AkeruMarkdownMemoryImportPreview = typeof AkeruMarkdownMemoryImportPreview.Type;
+
+export const AkeruMarkdownMemoryImportApplyInput = Schema.Struct({
+  ...AkeruMarkdownMemoryImportPreviewInput.fields,
+  previewHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+});
+export type AkeruMarkdownMemoryImportApplyInput = typeof AkeruMarkdownMemoryImportApplyInput.Type;
+
+export const AkeruMarkdownMemoryImportApplyResult = Schema.Struct({
+  changedDocuments: NonNegativeInt,
+  restoredObservations: Schema.Boolean,
+});
+export type AkeruMarkdownMemoryImportApplyResult = typeof AkeruMarkdownMemoryImportApplyResult.Type;
 
 export const AkeruMemoryArchiveConversation = Schema.Struct({
   threadId: ThreadId,

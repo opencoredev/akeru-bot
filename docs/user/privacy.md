@@ -4,6 +4,10 @@ Akeru stores environment data under `~/.akeru` by default. This includes project
 profiles, settings, secrets, logs, local memory, and cached provider data. A worktree development
 server uses that worktree's `.akeru` directory instead.
 
+Named-bot memory is stored as private Markdown files on the environment server. It is sent only as
+context to the provider running that bot. Group memory is separate for every bot, not a shared group
+document. See [Bot memory](memory.md).
+
 ## Data that can leave the environment
 
 - Provider requests send the prompt, selected files, tool results, and conversation context to the

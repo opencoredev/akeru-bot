@@ -14,6 +14,7 @@ import {
   AkeruBotUsageReadError,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
+  AkeruMemoryOperationError,
   type AkeruMemoryThreadAccess,
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   AuthAccessWriteScope,
@@ -120,9 +121,12 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
-import { EntityMemoryRepository } from "./memory/Services/EntityMemoryRepository.ts";
-import { MemoryCandidateRepository } from "./memory/Services/MemoryCandidateRepository.ts";
-import { createMemoryRpcHandlers, memoryOperationError } from "./memory/MemoryRpc.ts";
+import { BotMemoryStore, type BotMemoryAccess } from "./memory/BotMemory.ts";
+import {
+  applyBotMemoryImport,
+  exportBotMemoryArchive,
+  previewBotMemoryImport,
+} from "./memory/BotMemoryArchive.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -191,6 +195,17 @@ const portabilityError = (operation: "export" | "preview" | "apply", cause: unkn
   new PortabilityArchiveError({
     operation,
     message: cause instanceof Error ? cause.message : String(cause),
+  });
+
+const memoryOperationError = (operation: string, cause: unknown) =>
+  new AkeruMemoryOperationError({
+    operation,
+    detail:
+      cause instanceof Error
+        ? cause.message
+        : typeof cause === "string"
+          ? cause
+          : "The memory operation failed.",
   });
 
 const availablePortabilityProviderIds = (providers: ReadonlyArray<ServerProvider>) =>
@@ -506,8 +521,6 @@ const makeWsRpcLayer = (
       const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
       const botUsageLedger = yield* BotUsageLedger;
       const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
-      const entityMemoryRepository = yield* Effect.serviceOption(EntityMemoryRepository);
-      const memoryCandidates = yield* Effect.serviceOption(MemoryCandidateRepository);
       const routineRepository = yield* RoutineRepository;
       const routineRuntime = yield* RoutineRuntime;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
@@ -580,6 +593,7 @@ const makeWsRpcLayer = (
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
+      const botMemoryStore = new BotMemoryStore(config.stateDir);
       const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
@@ -655,45 +669,6 @@ const makeWsRpcLayer = (
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
-      const memory =
-        Option.isSome(entityMemoryRepository) && Option.isSome(memoryCandidates)
-          ? createMemoryRpcHandlers({
-              repository: entityMemoryRepository.value,
-              candidates: memoryCandidates.value,
-              readConversation: (threadId) =>
-                agentController.readConversationMemory
-                  ? agentController
-                      .readConversationMemory(threadId)
-                      .pipe(
-                        Effect.mapError((cause) => memoryOperationError("readConversation", cause)),
-                      )
-                  : Effect.fail(
-                      memoryOperationError(
-                        "readConversation",
-                        "Conversation memory is unavailable.",
-                      ),
-                    ),
-              clearConversation: (threadId) =>
-                agentController.clearConversationMemory
-                  ? agentController
-                      .clearConversationMemory(threadId)
-                      .pipe(
-                        Effect.mapError((cause) =>
-                          memoryOperationError("clearConversation", cause),
-                        ),
-                      )
-                  : Effect.fail(
-                      memoryOperationError(
-                        "clearConversation",
-                        "Conversation memory is unavailable.",
-                      ),
-                    ),
-            })
-          : null;
-      const requireMemory = (operation: string) =>
-        memory === null
-          ? Effect.fail(memoryOperationError(operation, "Memory is unavailable."))
-          : Effect.succeed(memory);
       const resolveMemoryAccess = (operation: string, threadId: ThreadId) =>
         Effect.gen(function* () {
           const thread = yield* projectionSnapshotQuery
@@ -748,6 +723,19 @@ const makeWsRpcLayer = (
             groupMemberBotIds,
           } satisfies AkeruMemoryThreadAccess;
         });
+      const resolveBotMemoryAccess = (operation: string, threadId: ThreadId) =>
+        resolveMemoryAccess(operation, threadId).pipe(
+          Effect.flatMap((access) => {
+            const botId = access.respondingBotId ?? access.botId;
+            return botId
+              ? Effect.succeed({
+                  botId,
+                  groupId: access.groupId,
+                  groupMemberBotIds: access.groupMemberBotIds,
+                } satisfies BotMemoryAccess)
+              : Effect.fail(memoryOperationError(operation, "This chat has no responding bot."));
+          }),
+        );
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -2790,29 +2778,36 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
-        [WS_METHODS.memoryInspect]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.memoryInspect,
-            Effect.all({
-              access: resolveMemoryAccess("inspect", input.threadId),
-              memory: requireMemory("inspect"),
-            }).pipe(Effect.flatMap(({ access, memory }) => memory.inspect(access))),
-            { "rpc.aggregate": "memory" },
-          ),
         [WS_METHODS.memoryExport]: (input) =>
           observeRpcEffect(
             WS_METHODS.memoryExport,
             Effect.all({
-              access: resolveMemoryAccess("export", input.threadId),
+              access: resolveBotMemoryAccess("documents.export", input.threadId),
               createdAt: nowIso,
-              memory: requireMemory("export"),
+              conversation: agentController.readConversationMemory
+                ? agentController
+                    .readConversationMemory(input.threadId)
+                    .pipe(
+                      Effect.mapError((cause) => memoryOperationError("documents.export", cause)),
+                    )
+                : Effect.fail(
+                    memoryOperationError(
+                      "documents.export",
+                      "Observational memory is unavailable.",
+                    ),
+                  ),
             }).pipe(
-              Effect.flatMap(({ access, createdAt, memory }) =>
-                memory.exportArchive({
-                  access,
-                  target: input.target,
-                  complete: input.complete,
-                  createdAt,
+              Effect.flatMap(({ access, createdAt, conversation }) =>
+                Effect.tryPromise({
+                  try: () =>
+                    exportBotMemoryArchive({
+                      store: botMemoryStore,
+                      access,
+                      threadId: input.threadId,
+                      conversation,
+                      createdAt,
+                    }),
+                  catch: (cause) => memoryOperationError("documents.export", cause),
                 }),
               ),
             ),
@@ -2822,14 +2817,33 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.memoryImportPreview,
             Effect.all({
-              access: resolveMemoryAccess("importPreview", input.threadId),
-              memory: requireMemory("importPreview"),
+              access: resolveBotMemoryAccess("documents.importPreview", input.threadId),
+              conversation: agentController.readConversationMemory
+                ? agentController
+                    .readConversationMemory(input.threadId)
+                    .pipe(
+                      Effect.mapError((cause) =>
+                        memoryOperationError("documents.importPreview", cause),
+                      ),
+                    )
+                : Effect.fail(
+                    memoryOperationError(
+                      "documents.importPreview",
+                      "Observational memory is unavailable.",
+                    ),
+                  ),
             }).pipe(
-              Effect.flatMap(({ access, memory }) =>
-                memory.previewImport({
-                  access,
-                  target: input.target,
-                  archive: input.archive,
+              Effect.flatMap(({ access, conversation }) =>
+                Effect.tryPromise({
+                  try: () =>
+                    previewBotMemoryImport({
+                      store: botMemoryStore,
+                      access,
+                      threadId: input.threadId,
+                      archive: input.archive,
+                      currentConversation: conversation,
+                    }),
+                  catch: (cause) => memoryOperationError("documents.importPreview", cause),
                 }),
               ),
             ),
@@ -2839,27 +2853,113 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.memoryImportApply,
             Effect.all({
-              access: resolveMemoryAccess("importApply", input.threadId),
-              memory: requireMemory("importApply"),
+              access: resolveBotMemoryAccess("documents.importApply", input.threadId),
+              conversation: agentController.readConversationMemory
+                ? agentController
+                    .readConversationMemory(input.threadId)
+                    .pipe(
+                      Effect.mapError((cause) =>
+                        memoryOperationError("documents.importApply", cause),
+                      ),
+                    )
+                : Effect.fail(
+                    memoryOperationError(
+                      "documents.importApply",
+                      "Observational memory is unavailable.",
+                    ),
+                  ),
             }).pipe(
-              Effect.flatMap(({ access, memory }) =>
-                memory.applyImport({
-                  access,
-                  target: input.target,
-                  archive: input.archive,
-                  previewHash: input.previewHash,
+              Effect.flatMap(({ access, conversation }) =>
+                Effect.tryPromise({
+                  try: () =>
+                    applyBotMemoryImport({
+                      store: botMemoryStore,
+                      access,
+                      threadId: input.threadId,
+                      archive: input.archive,
+                      currentConversation: conversation,
+                      previewHash: input.previewHash,
+                      restoreConversation: (snapshot, expectedSnapshot) =>
+                        agentController.restoreConversationMemory
+                          ? Effect.runPromise(
+                              agentController.restoreConversationMemory(
+                                input.threadId,
+                                snapshot,
+                                expectedSnapshot,
+                              ),
+                            )
+                          : Promise.reject(
+                              new Error("Observational memory restoration is unavailable."),
+                            ),
+                    }),
+                  catch: (cause) => memoryOperationError("documents.importApply", cause),
                 }),
               ),
             ),
             { "rpc.aggregate": "memory" },
           ),
-        [WS_METHODS.memoryMutate]: (input) =>
+        [WS_METHODS.memoryDocumentsInspect]: (input) =>
           observeRpcEffect(
-            WS_METHODS.memoryMutate,
+            WS_METHODS.memoryDocumentsInspect,
             Effect.all({
-              access: resolveMemoryAccess("mutate", input.threadId),
-              memory: requireMemory("mutate"),
-            }).pipe(Effect.flatMap(({ access, memory }) => memory.mutate(access, input.mutation))),
+              access: resolveBotMemoryAccess("documents.inspect", input.threadId),
+              conversation: agentController.readConversationMemory
+                ? agentController
+                    .readConversationMemory(input.threadId)
+                    .pipe(
+                      Effect.mapError((cause) => memoryOperationError("documents.inspect", cause)),
+                    )
+                : Effect.fail(
+                    memoryOperationError(
+                      "documents.inspect",
+                      "Observational memory is unavailable.",
+                    ),
+                  ),
+            }).pipe(
+              Effect.flatMap(({ access, conversation }) =>
+                Effect.tryPromise({
+                  try: () => botMemoryStore.readSnapshot(access),
+                  catch: (cause) => memoryOperationError("documents.inspect", cause),
+                }).pipe(Effect.map((documents) => ({ ...documents, conversation }))),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryDocumentReplace]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryDocumentReplace,
+            resolveBotMemoryAccess("document.replace", input.threadId).pipe(
+              Effect.flatMap((access) =>
+                Effect.tryPromise({
+                  try: () =>
+                    botMemoryStore.replaceDocument(
+                      access,
+                      input.target,
+                      input.content,
+                      input.expectedBotId,
+                      input.expectedContent,
+                    ),
+                  catch: (cause) => memoryOperationError("document.replace", cause),
+                }),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryObservationsClear]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryObservationsClear,
+            agentController.clearConversationMemory
+              ? agentController
+                  .clearConversationMemory(input.threadId)
+                  .pipe(
+                    Effect.mapError((cause) => memoryOperationError("observations.clear", cause)),
+                  )
+              : Effect.fail(
+                  memoryOperationError(
+                    "observations.clear",
+                    "Observational memory is unavailable.",
+                  ),
+                ),
             { "rpc.aggregate": "memory" },
           ),
         [WS_METHODS.botUsage]: (input) =>

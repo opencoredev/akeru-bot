@@ -81,35 +81,41 @@ describe("memory and bot usage environment atoms", () => {
           resolveInspect = resolve;
         });
         const client = {
-          [WS_METHODS.memoryInspect]: () =>
+          [WS_METHODS.memoryDocumentsInspect]: () =>
             Effect.sync(() => {
               resolveInspect();
               return {
-                threadId,
-                durable: [],
-                histories: [],
-                pending: [],
+                botId: BotId.make("bot-memory"),
+                groupId: null,
+                user: {},
+                memory: {},
+                group: null,
                 conversation: { current: null, history: [] },
               } as never;
             }),
-          [WS_METHODS.memoryMutate]: () =>
-            Effect.succeed({ kind: "conversation-cleared" } as never),
+          [WS_METHODS.memoryDocumentReplace]: () => Effect.succeed({} as never),
         } as unknown as WsRpcProtocolClient;
         const atoms = createMemoryEnvironmentAtoms(yield* runtimeFor(client));
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
         const input = { environmentId, input: { threadId } };
-        const inspectAtom = atoms.inspect(input);
+        const inspectAtom = atoms.inspectDocuments(input);
         const refresh = vi.spyOn(registry, "refresh");
         const unmount = registry.mount(inspectAtom);
         yield* Effect.addFinalizer(() => Effect.sync(unmount));
         yield* Effect.promise(() => inspected);
 
         const result = yield* Effect.promise(() =>
-          atoms.mutate.run(registry, {
+          atoms.replaceDocument.run(registry, {
             environmentId,
-            input: { threadId, mutation: { operation: "conversation.clear" } },
+            input: {
+              threadId,
+              expectedBotId: BotId.make("bot-1"),
+              expectedContent: "",
+              target: "memory",
+              content: "Remember this.",
+            },
           }),
         );
         expect(AsyncResult.isSuccess(result)).toBe(true);

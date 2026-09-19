@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
@@ -21,6 +21,7 @@ import type {
   ProcessOutputResultArgs,
 } from "@mastra/core/processors";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";
+import type { ObservationalMemoryRecord } from "@mastra/core/storage";
 import { createTool, type NeedsApprovalFn } from "@mastra/core/tools";
 import { LibSQLStore } from "@mastra/libsql";
 import { Memory } from "@mastra/memory";
@@ -34,7 +35,6 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AkeruCreateRoutineInput,
   ProductFeedbackToolDraft,
-  classifyAkeruExternalCommand,
   classifyAkeruSensitivePath,
   type AkeruConversationMemorySnapshot,
   type BotPersonalityTone,
@@ -58,12 +58,13 @@ import { akeruOpenCodeGoProvider } from "./AkeruOpenCodeGoProvider.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
+import { selectRecentConversation } from "./RecentConversation.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
-export const AKERU_RECENT_MESSAGE_LIMIT = 10;
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
+const decodeCreateRoutineInput = Schema.decodeUnknownPromise(AkeruCreateRoutineInput);
 const productFeedbackToolJsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -155,6 +156,7 @@ export interface AkeruMastraState {
   readonly botConversation?: boolean;
   readonly botName?: string;
   readonly personalityTone?: BotPersonalityTone;
+  readonly persistentMemoryContext?: string;
   readonly modelOptions?: {
     readonly reasoningEffort?: string;
     readonly serviceTier?: string;
@@ -248,7 +250,21 @@ export interface AkeruMastraHarness {
     threadId: string,
     resourceId?: string,
   ) => Promise<AkeruConversationMemorySnapshot>;
+  readonly restoreObservationalMemory?: (
+    threadId: string,
+    snapshot: AkeruConversationMemorySnapshot,
+    resourceId?: string,
+    expectedSnapshot?: AkeruConversationMemorySnapshot,
+  ) => Promise<void>;
   readonly observeAfterTurn?: (input: AkeruBackgroundObservationInput) => Promise<void>;
+  readonly observeExternalTurn?: (input: {
+    readonly threadId: string;
+    readonly turnId: string;
+    readonly modelId: string;
+    readonly userMessages: ReadonlyArray<{ readonly id: string; readonly text: string }>;
+    readonly assistant: string;
+    readonly createdAt: string;
+  }) => Promise<void>;
   readonly destroy: () => void | Promise<void>;
 }
 
@@ -366,8 +382,15 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
     if (args.stepNumber !== 0) return args.messageList;
     const context = this.engine.getThreadContext(args.requestContext, args.messageList);
     if (!context) return args.messageList;
-    const recent = await this.memory.recall({ threadId: context.threadId });
-    for (const message of recent.messages) {
+    const [history, unobserved] = await Promise.all([
+      this.memory.recall({ threadId: context.threadId, perPage: false }),
+      this.engine.loadUnobservedMessages({
+        threadId: context.threadId,
+        ...(context.resourceId ? { resourceId: context.resourceId } : {}),
+      }),
+    ]);
+    const requiredMessageIds = new Set(unobserved.map((message) => message.id));
+    for (const message of selectRecentConversation(history.messages, { requiredMessageIds })) {
       if (message.role !== "system") args.messageList.add(message, "memory");
     }
     const record = await this.engine.getOrCreateRecord(context.threadId, context.resourceId);
@@ -401,6 +424,7 @@ export async function createAkeruMastraMemory(
     | "getKimiAccess"
     | "getOpenCodeGoApiKey"
     | "getSubscriptionApiKey"
+    | "getModelConnection"
     | "memoryDbPath"
   >,
 ) {
@@ -418,11 +442,12 @@ export async function createAkeruMastraMemory(
       options.getOpenCodeGoApiKey,
       undefined,
       options.getSubscriptionApiKey,
+      controllerModelConnection(requestContext, options.getModelConnection),
     );
   const memory = new Memory({
     storage,
     options: {
-      lastMessages: AKERU_RECENT_MESSAGE_LIMIT,
+      lastMessages: false,
       semanticRecall: false,
       workingMemory: { enabled: false },
       observationalMemory: false,
@@ -649,7 +674,7 @@ export function resolveAkeruInstructions(
     isBotConversation && "personalityTone" in state && typeof state.personalityTone === "number"
       ? state.personalityTone
       : undefined;
-  return isBotConversation
+  const instructions = isBotConversation
     ? createAkeruBotInstructions({
         name,
         now,
@@ -660,6 +685,14 @@ export function resolveAkeruInstructions(
         now,
         ...(personalityTone !== undefined ? { personalityTone } : {}),
       });
+  const persistentMemoryContext =
+    typeof state === "object" &&
+    state !== null &&
+    "persistentMemoryContext" in state &&
+    typeof state.persistentMemoryContext === "string"
+      ? state.persistentMemoryContext
+      : "";
+  return [instructions, persistentMemoryContext].filter(Boolean).join("\n\n");
 }
 
 export async function resolveAkeruTools(
@@ -678,7 +711,7 @@ export async function resolveAkeruTools(
         execute: async ({ skillNames, connectorNames, ...input }) =>
           options.createRoutine!(
             threadId,
-            await Schema.decodeUnknownPromise(AkeruCreateRoutineInput)(
+            await decodeCreateRoutineInput(
               {
                 ...input,
                 ...(skillNames ? { skillNames } : {}),
@@ -1088,27 +1121,11 @@ export async function createAkeruMastraHarness(
     return withAkeruModelRunOptions(approvalOptions, session.state.get());
   };
 
-  const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
+  const queueObservation = (threadId: string, resourceId: string, use: () => Promise<void>) => {
     if (closing) return Promise.reject(new Error("Akeru observational memory is closing."));
-    const resourceId = input.resourceId ?? input.threadId;
-    const key = `${input.threadId}\u0000${resourceId}`;
+    const key = `${threadId}\u0000${resourceId}`;
     const prior = observationTails.get(key) ?? Promise.resolve();
-    const work = prior
-      .catch(() => undefined)
-      .then(async () => {
-        const requestContext = new RequestContext();
-        requestContext.setRaw("controller", {
-          resourceId,
-          session: { modelId: input.modelId },
-        });
-        await observationalMemory.engine.observe({
-          threadId: input.threadId,
-          resourceId,
-          requestContext,
-          trigger: "manual",
-          hooks: input.hooks ?? observeHooks,
-        });
-      });
+    const work = prior.catch(() => undefined).then(use);
     observationTails.set(key, work);
     void work
       .finally(() => {
@@ -1118,41 +1135,170 @@ export async function createAkeruMastraHarness(
     return work;
   };
 
+  const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
+    const resourceId = input.resourceId ?? input.threadId;
+    return queueObservation(input.threadId, resourceId, async () => {
+      const requestContext = new RequestContext();
+      requestContext.setRaw("controller", { resourceId, session: { modelId: input.modelId } });
+      await observationalMemory.engine.observe({
+        threadId: input.threadId,
+        resourceId,
+        requestContext,
+        trigger: "manual",
+        hooks: input.hooks ?? observeHooks,
+      });
+    });
+  };
+
+  const observeExternalTurn: NonNullable<AkeruMastraHarness["observeExternalTurn"]> = async (
+    input,
+  ) => {
+    const existingThread = await observationalMemory.memory.getThreadById({
+      threadId: input.threadId,
+      resourceId: input.threadId,
+    });
+    if (!existingThread) {
+      await observationalMemory.memory.createThread({
+        threadId: input.threadId,
+        resourceId: input.threadId,
+      });
+    }
+    const createdAt = DateTime.toDate(DateTime.makeUnsafe(input.createdAt));
+    await observationalMemory.memory.persistMessages([
+      ...input.userMessages.map((message) => ({
+        id: `${input.turnId}:user:${message.id}`,
+        role: "user" as const,
+        content: { format: 2 as const, parts: [{ type: "text" as const, text: message.text }] },
+        createdAt,
+        threadId: input.threadId,
+        resourceId: input.threadId,
+      })),
+      {
+        id: `${input.turnId}:assistant`,
+        role: "assistant",
+        content: { format: 2, parts: [{ type: "text", text: input.assistant }] },
+        createdAt,
+        threadId: input.threadId,
+        resourceId: input.threadId,
+      },
+    ]);
+    await observeAfterTurn({
+      threadId: input.threadId,
+      resourceId: input.threadId,
+      modelId: input.modelId,
+    });
+  };
+
+  const readObservationalMemory = async (threadId: string, resourceId?: string) => {
+    const normalize = (
+      record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
+    ) => {
+      if (!record) return null;
+      return {
+        id: record.id,
+        generationCount: record.generationCount,
+        originType: record.originType,
+        activeObservations: record.activeObservations,
+        bufferedObservations: [
+          ...(record.bufferedObservationChunks?.map((chunk) => chunk.observations) ?? []),
+          ...(record.bufferedObservations ? [record.bufferedObservations] : []),
+        ].join("\n\n"),
+        bufferedReflection: record.bufferedReflection ?? null,
+        totalTokensObserved: record.totalTokensObserved,
+        observationTokenCount: record.observationTokenCount,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString(),
+      };
+    };
+    const [current, history] = await Promise.all([
+      observationalMemory.engine.getRecord(threadId, resourceId),
+      observationalMemory.engine.getHistory(threadId, resourceId, 50),
+    ]);
+    return { current: normalize(current), history: history.map((record) => normalize(record)!) };
+  };
+
   return {
     controller,
-    clearObservationalMemory: (threadId, resourceId) =>
-      observationalMemory.engine.clear(threadId, resourceId),
-    readObservationalMemory: async (threadId, resourceId) => {
-      const normalize = (
-        record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
-      ) => {
-        if (!record) return null;
-        return {
-          id: record.id,
-          generationCount: record.generationCount,
-          originType: record.originType,
-          activeObservations: record.activeObservations,
-          bufferedObservations: [
-            ...(record.bufferedObservationChunks?.map((chunk) => chunk.observations) ?? []),
-            ...(record.bufferedObservations ? [record.bufferedObservations] : []),
-          ].join("\n\n"),
-          bufferedReflection: record.bufferedReflection ?? null,
-          totalTokensObserved: record.totalTokensObserved,
-          observationTokenCount: record.observationTokenCount,
-          createdAt: record.createdAt.toISOString(),
-          updatedAt: record.updatedAt.toISOString(),
-        };
-      };
-      const [current, history] = await Promise.all([
-        observationalMemory.engine.getRecord(threadId, resourceId),
-        observationalMemory.engine.getHistory(threadId, resourceId, 50),
-      ]);
-      return { current: normalize(current), history: history.map((record) => normalize(record)!) };
-    },
+    clearObservationalMemory: (threadId, resourceId = threadId) =>
+      queueObservation(threadId, resourceId, () =>
+        observationalMemory.engine.clear(threadId, resourceId),
+      ),
+    readObservationalMemory,
+    restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) =>
+      queueObservation(threadId, resourceId, async () => {
+        const store = observationalMemory.engine.getStorage();
+        if (
+          expectedSnapshot &&
+          JSON.stringify(await readObservationalMemory(threadId, resourceId)) !==
+            JSON.stringify(expectedSnapshot)
+        ) {
+          throw new Error(
+            "Observations changed after the import preview. Preview the archive again.",
+          );
+        }
+        const originals = await store.getObservationalMemoryHistory(
+          threadId,
+          resourceId,
+          Number.MAX_SAFE_INTEGER,
+        );
+        try {
+          await store.clearObservationalMemory(threadId, resourceId);
+          const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
+          const seen = new Set<string>();
+          for (const record of records) {
+            if (seen.has(record.id)) continue;
+            seen.add(record.id);
+            await store.insertObservationalMemoryRecord({
+              id: record.id,
+              scope: "thread",
+              threadId,
+              resourceId,
+              createdAt: DateTime.toDate(DateTime.makeUnsafe(record.createdAt)),
+              updatedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
+              lastObservedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
+              originType: record.originType,
+              generationCount: record.generationCount,
+              // Archives flatten buffered chunks, so restore their text as active observations.
+              activeObservations: [record.activeObservations, record.bufferedObservations]
+                .filter(Boolean)
+                .join("\n\n"),
+              ...(record.bufferedReflection
+                ? { bufferedReflection: record.bufferedReflection }
+                : {}),
+              totalTokensObserved: record.totalTokensObserved,
+              observationTokenCount:
+                record.observationTokenCount + Math.ceil(record.bufferedObservations.length / 4),
+              pendingMessageTokens: 0,
+              isReflecting: false,
+              isObserving: false,
+              isBufferingObservation: false,
+              isBufferingReflection: false,
+              lastBufferedAtTokens: 0,
+              lastBufferedAtTime: null,
+              config: {},
+            } satisfies ObservationalMemoryRecord);
+          }
+        } catch (cause) {
+          try {
+            await store.clearObservationalMemory(threadId, resourceId);
+            for (const original of originals) await store.insertObservationalMemoryRecord(original);
+          } catch (rollbackCause) {
+            throw Object.assign(
+              new Error(
+                "Observation restore failed and the original observations could not be restored.",
+                { cause: rollbackCause },
+              ),
+              { originalError: cause },
+            );
+          }
+          throw cause;
+        }
+      }),
     observeAfterTurn,
+    observeExternalTurn,
     destroy: async () => {
       closing = true;
-      await Promise.allSettled([...observationTails.values()]);
+      await Promise.allSettled(observationTails.values());
       await observationalMemory.close();
     },
   };

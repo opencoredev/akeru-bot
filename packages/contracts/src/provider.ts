@@ -74,6 +74,8 @@ export const ProviderSessionStartInput = Schema.Struct({
   botSandboxEnvironment: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   botSandboxBrowserSharing: Schema.optional(BotSandboxBrowserSharing),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
+  /** Server-owned system context fixed when the native provider session starts. */
+  persistentMemoryContext: Schema.optional(Schema.String),
   runtimeMode: RuntimeMode,
 });
 export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
@@ -89,6 +91,12 @@ export const ProviderSendTurnInput = Schema.Struct({
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
   timezone: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * Server-owned context refreshed immediately before dispatch. Clients never
+   * populate this field; provider adapters keep it separate from the user's
+   * message while constructing their native prompt.
+   */
+  persistentMemoryContext: Schema.optional(Schema.String),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 

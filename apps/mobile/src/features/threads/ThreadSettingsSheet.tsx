@@ -1,9 +1,11 @@
 import type {
   BotUsageCap,
+  EnvironmentId,
   ModelSelection,
   ProviderOptionDescriptor,
   ProviderOptionSelection,
   RuntimeMode,
+  ThreadId,
 } from "@t3tools/contracts";
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
@@ -61,6 +63,7 @@ import {
   providerSectionIsCollapsed,
 } from "./thread-settings-sheet-state";
 import { resolveBotUsageCapForProvider } from "./botStepUsage";
+import { ThreadMemoryScreen } from "./ThreadMemoryScreen";
 
 /**
  * Everyday harnesses start expanded; every other provider (OpenRouter catalogs
@@ -280,7 +283,8 @@ function SwitchRow(props: {
 
 type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
-  | { readonly kind: "runtime" };
+  | { readonly kind: "runtime" }
+  | { readonly kind: "memory" };
 
 type ThreadSettingsSessionProps = {
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
@@ -293,6 +297,10 @@ type ThreadSettingsSessionProps = {
   readonly botUsageCap?: BotUsageCap | null;
   readonly botUsageCapProviderDriver?: string;
   readonly onUpdateBotUsageCap?: (input: string) => Promise<boolean>;
+  readonly memoryThreadRef?: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: ThreadId;
+  };
 };
 
 export type ExistingThreadSettingsRouteSession = ThreadSettingsSessionProps & {
@@ -362,6 +370,7 @@ type ThreadSettingsSessionValue = {
   readonly setShowLegacy: (showLegacy: boolean) => void;
   readonly setBotUsageCapInput: (input: string) => void;
   readonly toggleProvider: (providerKey: string) => void;
+  readonly memoryThreadRef: ThreadSettingsSessionProps["memoryThreadRef"];
 };
 
 const ThreadSettingsSessionContext = createContext<ThreadSettingsSessionValue | null>(null);
@@ -504,6 +513,7 @@ function ThreadSettingsSessionProvider(
       setShowLegacy: setShowLegacyToggle,
       setBotUsageCapInput,
       toggleProvider,
+      memoryThreadRef: props.memoryThreadRef,
     }),
     [
       applyOptionChange,
@@ -524,6 +534,7 @@ function ThreadSettingsSessionProvider(
       props.onUpdateRuntimeMode,
       props.providerGroups,
       props.runtimeMode,
+      props.memoryThreadRef,
       searchQuery,
       showLegacyToggle,
       toggleProvider,
@@ -745,7 +756,7 @@ function ThreadSettingsOptionsItem(props: {
         })}
         <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
           <DisclosureRow
-            isLast={session.botUsageCapInput === undefined}
+            isLast={session.botUsageCapInput === undefined && !session.memoryThreadRef}
             label="Runtime"
             value={
               RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
@@ -753,6 +764,16 @@ function ThreadSettingsOptionsItem(props: {
             onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
           />
         </Animated.View>
+        {session.memoryThreadRef ? (
+          <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
+            <DisclosureRow
+              isLast={session.botUsageCapInput === undefined}
+              label="Memory"
+              value="Markdown and observations"
+              onPress={() => props.onOpenSubmenu({ kind: "memory" })}
+            />
+          </Animated.View>
+        ) : null}
         {session.botUsageCapInput !== undefined && session.botUsageCapAvailable ? (
           <View className="min-h-14 flex-row items-center gap-3 bg-card px-4 py-2">
             <Text className="text-sm font-t3-medium text-foreground">Token hard stop</Text>
@@ -981,6 +1002,10 @@ function ThreadSettingsChoiceContent(props: {
 type ThreadSettingsPickerStackParams = {
   ThreadSettingsModels: undefined;
   ThreadSettingsChoice: ThreadSettingsSubmenuPage & { readonly title: string };
+  ThreadSettingsMemory: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: ThreadId;
+  };
 };
 
 type ThreadSettingsPickerPresentation = {
@@ -1113,6 +1138,12 @@ function ThreadSettingsModelsScreen() {
       />
       <ThreadSettingsMainContent
         onOpenSubmenu={(submenu) => {
+          if (submenu.kind === "memory") {
+            if (session.memoryThreadRef) {
+              navigation.navigate("ThreadSettingsMemory", session.memoryThreadRef);
+            }
+            return;
+          }
           const title =
             submenu.kind === "runtime"
               ? "Runtime"
@@ -1233,6 +1264,11 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
           name="ThreadSettingsModels"
           component={ThreadSettingsModelsScreen}
           options={{ headerBackVisible: false, title: "Chat settings" }}
+        />
+        <ThreadSettingsPickerStack.Screen
+          name="ThreadSettingsMemory"
+          component={ThreadMemoryScreen}
+          options={{ title: "Memory" }}
         />
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsChoice"

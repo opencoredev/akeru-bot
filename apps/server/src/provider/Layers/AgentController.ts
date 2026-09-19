@@ -42,6 +42,7 @@ import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type AkeruDelegationAccessGrant,
   type AkeruDelegationRecord,
+  type AkeruMemoryDocumentTarget,
   type AkeruMemoryThreadAccess,
   type OrchestrationCommand,
   type OrchestrationReadModel,
@@ -61,18 +62,29 @@ import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
-import { createMemoryToolHandlers } from "../../memory/MemoryToolHandlers.ts";
+import {
+  BotMemoryStore,
+  formatBotMemoryPrompt,
+  type BotMemoryAccess,
+} from "../../memory/BotMemory.ts";
+import {
+  createBotMemoryToolHandler,
+  type AkeruMemoryToolHandler,
+} from "../../memory/BotMemoryToolHandlers.ts";
+import {
+  legacyMemoryMigrationKeys,
+  legacyMemoryMigrationAccesses,
+  migrateLegacyBotMemory,
+} from "../../memory/LegacyMemoryMigration.ts";
 import {
   EntityMemoryRepository,
   type EntityMemoryRepositoryShape,
 } from "../../memory/Services/EntityMemoryRepository.ts";
-import {
-  MemoryCandidateRepository,
-  type MemoryCandidateRepositoryShape,
-} from "../../memory/Services/MemoryCandidateRepository.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
+import * as McpInvocationContext from "../../mcp/McpInvocationContext.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
@@ -92,13 +104,11 @@ import {
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
-import {
-  AKERU_BOT_TURN_INSTRUCTIONS,
-  createAkeruBotTurnInstructions,
-} from "../AkeruAgentInstructions.ts";
+import { createAkeruBotTurnInstructions } from "../AkeruAgentInstructions.ts";
 import type { ProviderInstanceRoutingInfo } from "../Services/ProviderAdapterRegistry.ts";
 import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
 import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
+import { AkeruMemoryTurnHarness, type AkeruMemoryTurn } from "../AkeruMemoryTurnHarness.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
@@ -204,6 +214,9 @@ interface PendingTurn {
   readonly turnId: TurnId;
   readonly message: Parameters<MastraSession["sendMessage"]>[0];
   readonly botUsage: AgentControllerSendTurnInput["botUsage"];
+  readonly toolSession: AkeruToolSession;
+  readonly memoryAccess: BotMemoryAccess | undefined;
+  readonly reviewInput: string;
 }
 
 interface ActiveSession {
@@ -224,6 +237,9 @@ interface ActiveSession {
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
   readonly connectorSessionApprovals: Set<string>;
   toolSession: AkeruToolSession;
+  memoryAccess: BotMemoryAccess | undefined;
+  configuredToolSession: AkeruToolSession;
+  configuredMemoryAccess: BotMemoryAccess | undefined;
   readonly workspaceResourceKey: string;
   readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
@@ -232,6 +248,32 @@ interface ActiveSession {
 interface PendingApproval {
   readonly toolName: string;
   readonly action: string;
+}
+
+interface LegacyTurnMemoryState {
+  readonly observationPromptId: string;
+  observationRecorded: boolean;
+  readonly seenEventIds: Set<string>;
+  readonly user: string;
+  readonly modelId: string;
+  turnId: string | undefined;
+  dispatchReturned: boolean;
+  readonly earlyEvents: Array<ProviderRuntimeEvent>;
+  assistant: string;
+  readonly memoryTurn: AkeruMemoryTurn | undefined;
+  priorMemoryHandler?: AkeruMemoryToolHandler;
+  reviewMemoryHandler?: AkeruMemoryToolHandler;
+}
+
+interface LegacyResourceIdentity {
+  readonly workspaceResourceKey: string;
+  readonly cwd: string | undefined;
+  readonly provider: ProviderDriverKind;
+  readonly providerInstanceId: ProviderInstanceId;
+  memoryAccess: BotMemoryAccess | undefined;
+  readonly botName: string | undefined;
+  readonly personalityTone: BotPersonalityTone;
+  readonly memoryAccessKey: string | undefined;
 }
 
 export interface AgentControllerLiveOptions {
@@ -245,7 +287,7 @@ export interface AgentControllerLiveOptions {
   readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
   readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
   readonly entityMemoryRepository?: EntityMemoryRepositoryShape;
-  readonly memoryCandidateRepository?: MemoryCandidateRepositoryShape;
+  readonly botMemoryStore?: BotMemoryStore;
   readonly delegationRuntime?: Pick<
     AkeruDelegationRuntime,
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
@@ -599,23 +641,47 @@ const make = (options?: AgentControllerLiveOptions) =>
         : McpSessionRegistry.revokeActiveMcpThread);
     const clearPreviewMcpSession = (threadId: ThreadId) =>
       revokeMcpCredential(threadId).pipe(
-        Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            McpProviderSession.clearMcpProviderSession(threadId);
+            McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
+          }),
+        ),
       );
-    const preparePreviewMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
+    const preparePreviewMcpSession = (
+      threadId: ThreadId,
+      providerInstanceId: ProviderInstanceId,
+      memoryHandler?: AkeruMemoryToolHandler,
+    ) =>
       Effect.gen(function* () {
-        const enabled = Option.isSome(serverSettings)
+        const previewEnabled = Option.isSome(serverSettings)
           ? yield* serverSettings.value.getSettings.pipe(
               Effect.map((settings) => settings.enableAgentBrowserAccess),
               Effect.orElseSucceed(() => false),
             )
           : true;
-        if (!enabled) {
+        const capabilities = new Set<McpInvocationContext.McpCapability>([
+          ...(previewEnabled ? (["preview"] as const) : []),
+          ...(memoryHandler ? (["memory"] as const) : []),
+        ]);
+        if (capabilities.size === 0) {
           yield* clearPreviewMcpSession(threadId);
           return;
         }
-        const credential = yield* issueMcpCredential({ threadId, providerInstanceId });
+        const credential = yield* issueMcpCredential({
+          threadId,
+          providerInstanceId,
+          capabilities,
+        });
         if (credential) {
-          yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
+          yield* Effect.sync(() => {
+            McpProviderSession.setMcpProviderSession(credential.config);
+            if (memoryHandler) {
+              McpMemoryToolSession.setMcpMemoryToolSession(threadId, memoryHandler);
+            } else {
+              McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
+            }
+          });
         }
       });
     let channelRuntime: AkeruChannelRuntime | undefined;
@@ -688,6 +754,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         : {}),
     });
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
+    const botMemoryStore = options?.botMemoryStore ?? new BotMemoryStore(config.stateDir);
+    const memoryTurnHarness = new AkeruMemoryTurnHarness(botMemoryStore);
     const toolRuntime = createAkeruToolRuntime({
       onUserActionRequired: (input) => {
         recordUserActionIncident(botInbox, input);
@@ -726,30 +794,155 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       },
     });
+    const memoryAccessFor = (
+      access: AkeruMemoryThreadAccess | undefined,
+    ): BotMemoryAccess | undefined => {
+      const botId = access?.respondingBotId ?? access?.botId;
+      return access && botId
+        ? {
+            botId,
+            groupId: access.groupId,
+            groupMemberBotIds: access.groupMemberBotIds,
+          }
+        : undefined;
+    };
     const memoryHandlers = (
       access: AkeruMemoryThreadAccess | undefined,
       allowedScopes?: AkeruDelegationAccessGrant["memoryScopes"],
-    ) =>
-      access && options?.entityMemoryRepository && options.memoryCandidateRepository
-        ? createMemoryToolHandlers(
-            options.entityMemoryRepository,
-            options.memoryCandidateRepository,
-            access,
-            undefined,
-            allowedScopes,
-          )
+    ) => {
+      const resolved = memoryAccessFor(access);
+      if (!resolved) return undefined;
+      const scopes = new Set(allowedScopes ?? ["private", "bot", "group"]);
+      const targets = new Set<AkeruMemoryDocumentTarget>();
+      if (scopes.has("private")) targets.add("user");
+      if (scopes.has("bot")) targets.add("memory");
+      if (resolved.groupId !== null && scopes.has("group")) targets.add("group");
+      return targets.size > 0
+        ? createBotMemoryToolHandler(botMemoryStore, resolved, targets)
         : undefined;
-    const legacyResourceIdentity = new Map<
-      string,
-      {
-        readonly workspaceResourceKey: string;
-        readonly cwd: string | undefined;
-        readonly provider: ProviderDriverKind;
-        readonly providerInstanceId: ProviderInstanceId;
-        readonly botName: string | undefined;
-        readonly personalityTone: BotPersonalityTone;
+    };
+    const memoryAccessKey = (access: BotMemoryAccess | undefined): string | undefined =>
+      access ? `${access.botId}:${access.groupId ?? "private"}` : undefined;
+    const legacyResourceIdentity = new Map<string, LegacyResourceIdentity>();
+    const legacyTurnMemory = new Map<string, Array<LegacyTurnMemoryState>>();
+    const legacyPending = (key: string) => legacyTurnMemory.get(key) ?? [];
+    const addLegacyPending = (key: string, pending: LegacyTurnMemoryState) =>
+      legacyTurnMemory.set(key, [...legacyPending(key), pending]);
+    const removeLegacyPending = (key: string, pending: LegacyTurnMemoryState) => {
+      const remaining = legacyPending(key).filter((entry) => entry !== pending);
+      if (remaining.length > 0) legacyTurnMemory.set(key, remaining);
+      else legacyTurnMemory.delete(key);
+    };
+    const hasLegacyPending = (key: string, pending: LegacyTurnMemoryState) =>
+      legacyPending(key).includes(pending);
+    const restoreLegacyMemoryHandler = (key: string, pending: LegacyTurnMemoryState) => {
+      if (
+        !pending.reviewMemoryHandler ||
+        McpMemoryToolSession.readMcpMemoryToolSession(ThreadId.make(key)) !==
+          pending.reviewMemoryHandler
+      ) {
+        return;
       }
-    >();
+      if (pending.priorMemoryHandler) {
+        McpMemoryToolSession.setMcpMemoryToolSession(
+          ThreadId.make(key),
+          pending.priorMemoryHandler,
+        );
+      } else {
+        McpMemoryToolSession.clearMcpMemoryToolSession(ThreadId.make(key));
+      }
+    };
+    const legacyBufferedTerminals = new Map<string, Map<string, ProviderRuntimeEvent>>();
+    const mastraMemoryTurns = new Map<string, AkeruMemoryTurn>();
+    const mastraReservationKey = (threadId: ThreadId, turnId: TurnId) =>
+      `${String(threadId)}:${String(turnId)}`;
+    const releaseMastraReservations = (threadId: ThreadId) =>
+      Effect.forEach(
+        [...mastraMemoryTurns.entries()].filter(([key]) => key.startsWith(`${String(threadId)}:`)),
+        ([key, memoryTurn]) =>
+          Effect.tryPromise(() => memoryTurn.abandon()).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                if (mastraMemoryTurns.get(key) === memoryTurn) {
+                  mastraMemoryTurns.delete(key);
+                }
+              }),
+            ),
+            Effect.ignoreCause({ log: true }),
+          ),
+        { discard: true },
+      );
+    const settleLegacyTurnMemory = (
+      key: string,
+      pending: LegacyTurnMemoryState,
+      event: ProviderRuntimeEvent,
+    ) =>
+      Effect.gen(function* () {
+        if (!hasLegacyPending(key, pending)) return;
+        const foregroundSucceeded =
+          event.type === "turn.completed" && event.payload.state === "completed";
+        if (!foregroundSucceeded) {
+          restoreLegacyMemoryHandler(key, pending);
+          removeLegacyPending(key, pending);
+          if (pending.memoryTurn) {
+            yield* Effect.tryPromise(() =>
+              pending.memoryTurn!.finishForeground(false, "foreground"),
+            ).pipe(Effect.ignoreCause({ log: true }));
+          }
+          return;
+        }
+        if (pending.memoryTurn) {
+          yield* Effect.tryPromise(() =>
+            pending.memoryTurn!.finishForeground(true, "foreground"),
+          ).pipe(Effect.ignoreCause({ log: true }));
+        }
+        const mergedPrompts = legacyPending(key).filter(
+          (entry) => entry.turnId !== undefined && entry.turnId === pending.turnId,
+        );
+        if (
+          mergedPrompts[0] === pending &&
+          !pending.observationRecorded &&
+          mergedPrompts.some((entry) => entry.assistant.trim()) &&
+          bundle.observeExternalTurn
+        ) {
+          for (const entry of mergedPrompts) entry.observationRecorded = true;
+          const assistant = mergedPrompts
+            .map((entry) => entry.assistant)
+            .toSorted((left, right) => right.length - left.length)[0]!;
+          void bundle
+            .observeExternalTurn({
+              threadId: key,
+              turnId: pending.turnId ?? `legacy-${event.eventId}`,
+              modelId: pending.modelId,
+              userMessages: mergedPrompts.map((entry) => ({
+                id: entry.observationPromptId,
+                text: entry.user,
+              })),
+              assistant,
+              createdAt: event.createdAt,
+            })
+            .catch(() => undefined);
+        }
+        removeLegacyPending(key, pending);
+        if (pending.memoryTurn?.reviewIncluded) {
+          restoreLegacyMemoryHandler(key, pending);
+        }
+      });
+    const drainLegacyTerminals = (key: string) =>
+      Effect.gen(function* () {
+        const pendingTurns = legacyPending(key);
+        if (pendingTurns.some((pending) => !pending.dispatchReturned)) return;
+        const terminals = legacyBufferedTerminals.get(key);
+        if (!terminals) return;
+        for (const [turnId, terminal] of terminals) {
+          const matching = legacyPending(key).filter((pending) => pending.turnId === turnId);
+          for (const pending of matching) {
+            yield* settleLegacyTurnMemory(key, pending, terminal);
+          }
+          terminals.delete(turnId);
+        }
+        if (terminals.size === 0) legacyBufferedTerminals.delete(key);
+      });
     let delegationRuntime = options?.delegationRuntime;
     const delegationFor = (input: {
       readonly threadId: ThreadId;
@@ -1203,9 +1396,71 @@ const make = (options?: AgentControllerLiveOptions) =>
     const startAdmittedPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
       const { threadId, turnId, message } = pending;
       if (active.admittingTurn?.turnId !== turnId) return;
-      active.admittingTurn = null;
-      beginPendingTurn(active, pending);
-      const dispatch = active.session.sendMessage(message);
+      active.toolSession = pending.toolSession;
+      active.memoryAccess = pending.memoryAccess;
+      let dispatch: Promise<void>;
+      if (!active.memoryAccess) {
+        toolRuntime.registerSession(String(threadId), active.toolSession);
+        active.admittingTurn = null;
+        beginPendingTurn(active, pending);
+        const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
+        dispatch = persistentMemoryContext
+          ? active.session.state
+              .set(stateWithoutMemory)
+              .then(() => active.session.sendMessage(message))
+          : active.session.sendMessage(message);
+      } else {
+        dispatch = (async () => {
+          const memoryAccess = active.memoryAccess!;
+          const memoryTurn = await memoryTurnHarness.admit({
+            access: memoryAccess,
+            input: {
+              threadId: String(threadId),
+              groupId: memoryAccess.groupId === null ? null : String(memoryAccess.groupId),
+              text: pending.reviewInput.slice(0, 4_000),
+            },
+          });
+          const reservationKey = mastraReservationKey(threadId, turnId);
+          mastraMemoryTurns.set(reservationKey, memoryTurn);
+          let accepted = false;
+          let reviewToolSession: AkeruToolSession | undefined;
+          try {
+            const memoryHandler = pending.toolSession.memoryHandlers?.memory;
+            if (memoryTurn.reviewIncluded && memoryHandler) {
+              reviewToolSession = {
+                ...pending.toolSession,
+                memoryHandlers: {
+                  memory: memoryTurn.wrapMemoryHandler(memoryHandler),
+                },
+              };
+              active.toolSession = reviewToolSession;
+            }
+            toolRuntime.registerSession(String(threadId), active.toolSession);
+            const currentState = active.session.state.get();
+            const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
+              currentState;
+            const persistentMemoryContext = memoryTurn.context;
+            await active.session.state.set({
+              ...stateWithoutMemory,
+              ...(persistentMemoryContext ? { persistentMemoryContext } : {}),
+            });
+            if (active.admittingTurn?.turnId !== turnId) return;
+            active.admittingTurn = null;
+            beginPendingTurn(active, pending);
+            await active.session.sendMessage(message);
+            accepted = true;
+          } finally {
+            await memoryTurn.finishForeground(accepted, "foreground");
+            if (reviewToolSession && active.toolSession === reviewToolSession) {
+              active.toolSession = active.configuredToolSession;
+              toolRuntime.registerSession(String(threadId), active.toolSession);
+            }
+            if (mastraMemoryTurns.get(reservationKey) === memoryTurn) {
+              mastraMemoryTurns.delete(reservationKey);
+            }
+          }
+        })();
+      }
       void dispatch
         .then(() => {
           const turn = active.activeTurn;
@@ -1840,6 +2095,49 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: "Computer Use requires a Codex bot.",
         });
       }
+      const migrationBotId = input.memoryAccess?.respondingBotId ?? input.memoryAccess?.botId;
+      if (migrationBotId && input.memoryAccess && options?.entityMemoryRepository) {
+        const migrationKeys = legacyMemoryMigrationKeys(input.memoryAccess);
+        const migrationsComplete = yield* Effect.promise(() =>
+          Promise.all(
+            migrationKeys.map((migrationKey) =>
+              botMemoryStore.isMigrationComplete(migrationBotId, migrationKey),
+            ),
+          ),
+        );
+        if (migrationsComplete.some((complete) => !complete)) {
+          const revisions = yield* Effect.forEach(
+            legacyMemoryMigrationAccesses(input.memoryAccess),
+            (access) => options.entityMemoryRepository!.listCurrent({ access }),
+          ).pipe(
+            Effect.map((sets) => [
+              ...new Map(sets.flat().map((revision) => [revision.id, revision])).values(),
+            ]),
+            Effect.mapError(
+              (cause) =>
+                new AgentControllerRuntimeError({
+                  operation: "memory.migrate.read",
+                  detail: failureDetail(cause),
+                  cause,
+                }),
+            ),
+          );
+          yield* Effect.tryPromise({
+            try: () =>
+              migrateLegacyBotMemory({
+                store: botMemoryStore,
+                access: input.memoryAccess!,
+                revisions,
+              }),
+            catch: (cause) =>
+              new AgentControllerRuntimeError({
+                operation: "memory.migrate",
+                detail: failureDetail(cause),
+                cause,
+              }),
+          });
+        }
+      }
       if (
         existing?.workspaceResourceKey === workspaceResourceKey &&
         existing.cwd === input.cwd &&
@@ -1859,7 +2157,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             personalityTone,
           }),
         );
-        const toolSession = { ...existing.toolSession };
+        const toolSession = { ...existing.configuredToolSession };
         delete toolSession.botId;
         delete toolSession.botName;
         delete toolSession.billedBotId;
@@ -1870,7 +2168,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           access.memoryScopes.length > 0
             ? memoryHandlers(input.memoryAccess, access.memoryScopes)
             : undefined;
-        existing.toolSession = {
+        const configuredToolSession: AkeruToolSession = {
           ...toolSession,
           runtimeMode: access.runtimeMode,
           ...(botId ? { botId } : {}),
@@ -1890,10 +2188,23 @@ const make = (options?: AgentControllerLiveOptions) =>
             : {}),
           ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
         };
-        toolRuntime.registerSession(key, existing.toolSession);
+        existing.configuredToolSession = configuredToolSession;
+        existing.configuredMemoryAccess = delegatedAccess
+          ? undefined
+          : memoryAccessFor(input.memoryAccess);
+        if (!existing.activeTurn && !existing.admittingTurn && existing.pendingTurns.length === 0) {
+          existing.toolSession = configuredToolSession;
+          existing.memoryAccess = existing.configuredMemoryAccess;
+          toolRuntime.registerSession(key, existing.toolSession);
+        }
         return toProviderSession(threadId, existing);
       }
       const existingLegacy = legacyResourceIdentity.get(key);
+      const nextMemoryAccess = delegatedAccess ? undefined : memoryAccessFor(input.memoryAccess);
+      const nextMemoryHandlers =
+        access.memoryScopes.length > 0
+          ? memoryHandlers(input.memoryAccess, access.memoryScopes)
+          : undefined;
       if (
         !existing &&
         resolved &&
@@ -1902,12 +2213,21 @@ const make = (options?: AgentControllerLiveOptions) =>
         existingLegacy.provider === resolved.provider &&
         existingLegacy.providerInstanceId === resolved.providerInstanceId &&
         existingLegacy.botName === input.botName &&
-        existingLegacy.personalityTone === personalityTone
+        existingLegacy.personalityTone === personalityTone &&
+        existingLegacy.memoryAccessKey === memoryAccessKey(nextMemoryAccess)
       ) {
         const live = (yield* legacyProviderBridge.listSessions()).find(
           (session) => session.threadId === threadId,
         );
-        if (live) return live;
+        if (live) {
+          existingLegacy.memoryAccess = nextMemoryAccess;
+          if (nextMemoryHandlers?.memory) {
+            McpMemoryToolSession.setMcpMemoryToolSession(threadId, nextMemoryHandlers.memory);
+          } else {
+            McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
+          }
+          return live;
+        }
         yield* runMastra("resources.release", () => sessionResources.release(key)).pipe(
           Effect.ignoreCause({ log: true }),
         );
@@ -1927,8 +2247,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: `Provider '${resolved.provider}' cannot enforce delegated access.`,
         });
       }
-      if (usesMastraCode(resolved.provider) && !(delegatedAccess && access.sandbox === null)) {
-        yield* preparePreviewMcpSession(threadId, resolved.providerInstanceId);
+      if (!(delegatedAccess && access.sandbox === null)) {
+        yield* preparePreviewMcpSession(
+          threadId,
+          resolved.providerInstanceId,
+          usesMastraCode(resolved.provider) ? undefined : nextMemoryHandlers?.memory,
+        );
       }
       const resources =
         delegatedAccess && access.sandbox === null
@@ -1952,8 +2276,17 @@ const make = (options?: AgentControllerLiveOptions) =>
               }),
             ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {
+        const frozenMemoryContext = nextMemoryAccess
+          ? formatBotMemoryPrompt(
+              yield* Effect.promise(() => botMemoryStore.readPromptSnapshot(nextMemoryAccess)),
+            )
+          : "";
         return yield* legacyProviderBridge
-          .startSession(threadId, { ...input, personalityTone })
+          .startSession(threadId, {
+            ...input,
+            personalityTone,
+            ...(frozenMemoryContext ? { persistentMemoryContext: frozenMemoryContext } : {}),
+          })
           .pipe(
             Effect.tap((session) =>
               Effect.sync(() => {
@@ -1964,6 +2297,8 @@ const make = (options?: AgentControllerLiveOptions) =>
                   providerInstanceId: resolved.providerInstanceId,
                   botName: input.botName,
                   personalityTone,
+                  memoryAccess: nextMemoryAccess,
+                  memoryAccessKey: memoryAccessKey(nextMemoryAccess),
                 });
                 return session;
               }),
@@ -1980,10 +2315,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         "workspace" in resources && access.hasUserComputer && workspaceType === "local" && input.cwd
           ? resources.workspace
           : undefined;
-      const registeredMemoryHandlers =
-        access.memoryScopes.length > 0
-          ? memoryHandlers(input.memoryAccess, access.memoryScopes)
-          : undefined;
+      const registeredMemoryHandlers = nextMemoryHandlers;
       const mcpManager = sessionResources.getMcpManager(key);
       const mcpDependencies =
         input.botId && input.botName
@@ -2176,6 +2508,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           approvalRequests: new Map(),
           connectorSessionApprovals: new Set<string>(),
           toolSession,
+          memoryAccess: nextMemoryAccess,
+          configuredToolSession: toolSession,
+          configuredMemoryAccess: nextMemoryAccess,
           workspaceResourceKey,
           pendingApprovals: new Map<string, PendingApproval>(),
           unsubscribe,
@@ -2215,28 +2550,118 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           }
           const { botUsage: _, ...providerInput } = input;
-          return yield* legacyProviderBridge.sendTurn(
-            resolved?.botConversation === true && String(resolved.provider) !== "claudeAgent"
-              ? {
-                  ...providerInput,
-                  input: [
-                    createAkeruBotTurnInstructions({
-                      ...(resolved.botName ? { name: resolved.botName } : {}),
-                      ...(resolved.personalityTone !== undefined
-                        ? { personalityTone: resolved.personalityTone }
-                        : {}),
-                    }),
-                    providerInput.input,
-                  ]
-                    .filter(Boolean)
-                    .join("\n\n"),
-                }
-              : providerInput,
-          );
+          const memoryAccess = legacyResourceIdentity.get(key)?.memoryAccess;
+          const conversation = bundle.readObservationalMemory
+            ? yield* runMastra("memory.read", () => bundle.readObservationalMemory!(key, key))
+            : undefined;
+          const observationContext = conversation?.current?.activeObservations
+            ? [
+                "<thread-observations>",
+                conversation.current.activeObservations,
+                "</thread-observations>",
+              ].join("\n")
+            : "";
+          const memoryTurn = memoryAccess
+            ? yield* Effect.promise(() =>
+                memoryTurnHarness.admit({
+                  access: memoryAccess,
+                  input: {
+                    threadId: key,
+                    groupId: memoryAccess.groupId === null ? null : String(memoryAccess.groupId),
+                    text: (providerInput.input ?? "").slice(0, 4_000),
+                  },
+                }),
+              )
+            : undefined;
+          const pendingMemory: LegacyTurnMemoryState = {
+            observationPromptId: NodeCrypto.randomUUID(),
+            observationRecorded: false,
+            seenEventIds: new Set(),
+            user: providerInput.input ?? "",
+            modelId: resolved?.mastraModelId ?? "openai/gpt-5.6-sol",
+            turnId: undefined,
+            dispatchReturned: false,
+            earlyEvents: [],
+            assistant: "",
+            memoryTurn,
+          };
+          if (memoryTurn?.reviewIncluded) {
+            const priorMemoryHandler = McpMemoryToolSession.readMcpMemoryToolSession(
+              input.threadId,
+            );
+            if (priorMemoryHandler) {
+              const reviewMemoryHandler = memoryTurn.wrapMemoryHandler(priorMemoryHandler);
+              pendingMemory.priorMemoryHandler = priorMemoryHandler;
+              pendingMemory.reviewMemoryHandler = reviewMemoryHandler;
+              McpMemoryToolSession.setMcpMemoryToolSession(input.threadId, reviewMemoryHandler);
+            }
+          }
+          addLegacyPending(key, pendingMemory);
+          const turnInstructions = resolved?.botConversation
+            ? createAkeruBotTurnInstructions({
+                ...(resolved.botName ? { name: resolved.botName } : {}),
+                ...(resolved.personalityTone !== undefined
+                  ? { personalityTone: resolved.personalityTone }
+                  : {}),
+              })
+            : "";
+          const providerContext = [
+            resolved?.provider === "opencode" ? turnInstructions : "",
+            memoryTurn?.context,
+            observationContext,
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+          return yield* legacyProviderBridge
+            .sendTurn({
+              ...providerInput,
+              ...(turnInstructions && resolved?.provider !== "opencode"
+                ? { input: [turnInstructions, providerInput.input].filter(Boolean).join("\n\n") }
+                : {}),
+              ...(providerContext ? { persistentMemoryContext: providerContext } : {}),
+            })
+            .pipe(
+              Effect.tap((result) =>
+                Effect.gen(function* () {
+                  if (!hasLegacyPending(key, pendingMemory)) return;
+                  pendingMemory.turnId = String(result.turnId);
+                  pendingMemory.dispatchReturned = true;
+                  for (const event of pendingMemory.earlyEvents) {
+                    if (String(event.turnId) !== pendingMemory.turnId) continue;
+                    if (
+                      event.type === "content.delta" &&
+                      event.payload.streamKind === "assistant_text"
+                    ) {
+                      pendingMemory.assistant += event.payload.delta;
+                    }
+                  }
+                  pendingMemory.earlyEvents.length = 0;
+                  yield* drainLegacyTerminals(key);
+                }),
+              ),
+              Effect.tapError(() =>
+                Effect.gen(function* () {
+                  if (hasLegacyPending(key, pendingMemory)) {
+                    restoreLegacyMemoryHandler(key, pendingMemory);
+                    removeLegacyPending(key, pendingMemory);
+                  }
+                  if (memoryTurn) {
+                    yield* Effect.promise(() => memoryTurn.abandon());
+                  }
+                  yield* drainLegacyTerminals(key);
+                }),
+              ),
+            );
         }
         if (input.timezone !== undefined) {
-          active.toolSession = { ...active.toolSession, timezone: input.timezone };
-          toolRuntime.registerSession(key, active.toolSession);
+          active.configuredToolSession = {
+            ...active.configuredToolSession,
+            timezone: input.timezone,
+          };
+          if (!active.activeTurn && !active.admittingTurn && active.pendingTurns.length === 0) {
+            active.toolSession = active.configuredToolSession;
+            toolRuntime.registerSession(key, active.toolSession);
+          }
         }
         const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
           const path = resolveAttachmentPath({
@@ -2278,6 +2703,9 @@ const make = (options?: AgentControllerLiveOptions) =>
           turnId,
           message: { content, ...(files.length > 0 ? { files } : {}) },
           botUsage: input.botUsage,
+          toolSession: active.configuredToolSession,
+          memoryAccess: active.configuredMemoryAccess,
+          reviewInput: input.input ?? "",
         });
         if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();
@@ -2304,11 +2732,31 @@ const make = (options?: AgentControllerLiveOptions) =>
         ) {
           return;
         }
-        return yield* legacyProviderBridge.interruptTurn(input);
+        return yield* legacyProviderBridge.interruptTurn(input).pipe(
+          Effect.ensuring(
+            Effect.gen(function* () {
+              const pendingTurns = legacyPending(key);
+              for (const pending of pendingTurns) restoreLegacyMemoryHandler(key, pending);
+              legacyTurnMemory.delete(key);
+              legacyBufferedTerminals.delete(key);
+              yield* Effect.forEach(
+                pendingTurns,
+                (pendingMemory) =>
+                  pendingMemory.memoryTurn
+                    ? Effect.tryPromise(() => pendingMemory.memoryTurn!.abandon()).pipe(
+                        Effect.ignoreCause({ log: true }),
+                      )
+                    : Effect.void,
+                { discard: true },
+              );
+            }),
+          ),
+        );
       }
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
+      yield* releaseMastraReservations(input.threadId);
       finishTurn(input.threadId, active, "interrupted");
     });
 
@@ -2549,12 +2997,27 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (!active) {
         const legacySessions = yield* legacyProviderBridge.listSessions();
         if (legacySessions.some((session) => session.threadId === input.threadId)) {
+          const pendingTurns = legacyPending(key);
+          for (const pending of pendingTurns) restoreLegacyMemoryHandler(key, pending);
+          legacyTurnMemory.delete(key);
+          legacyBufferedTerminals.delete(key);
+          yield* Effect.forEach(
+            pendingTurns,
+            (pendingMemory) =>
+              pendingMemory.memoryTurn
+                ? Effect.tryPromise(() => pendingMemory.memoryTurn!.abandon()).pipe(
+                    Effect.ignoreCause({ log: true }),
+                  )
+                : Effect.void,
+            { discard: true },
+          );
           yield* legacyProviderBridge.stopSession(input).pipe(
             Effect.ensuring(
               Effect.gen(function* () {
                 yield* runMastra("resources.release", () =>
                   sessionResources.release(key, { destroy: destroyResources }),
                 ).pipe(Effect.ignoreCause({ log: true }));
+                yield* clearPreviewMcpSession(input.threadId);
                 legacyResourceIdentity.delete(key);
               }),
             ),
@@ -2576,6 +3039,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
+      yield* releaseMastraReservations(input.threadId);
       if (active.activeTurn) {
         finishTurn(input.threadId, active, "interrupted");
       } else {
@@ -2629,12 +3093,27 @@ const make = (options?: AgentControllerLiveOptions) =>
             finishTurn(ThreadId.make(threadId), active, "interrupted");
           }
           active.unsubscribe();
+          yield* releaseMastraReservations(ThreadId.make(threadId));
           yield* runMastra("deleteSession", () =>
             bundle.controller.deleteSession({ resourceId: threadId }),
           ).pipe(Effect.ignoreCause({ log: true }));
           yield* clearPreviewMcpSession(ThreadId.make(threadId));
           toolRuntime.unregisterSession(threadId);
         }
+        for (const threadId of legacyResourceIdentity.keys()) {
+          yield* clearPreviewMcpSession(ThreadId.make(threadId));
+        }
+        for (const pendingTurns of legacyTurnMemory.values()) {
+          for (const pending of pendingTurns) {
+            if (pending.memoryTurn) {
+              yield* Effect.tryPromise(() => pending.memoryTurn!.abandon()).pipe(
+                Effect.ignoreCause({ log: true }),
+              );
+            }
+          }
+        }
+        legacyTurnMemory.clear();
+        legacyBufferedTerminals.clear();
         legacyResourceIdentity.clear();
         sessions.clear();
         for (const waiter of childWaiters.values()) {
@@ -2731,6 +3210,22 @@ const make = (options?: AgentControllerLiveOptions) =>
                 detail: "Conversation memory is unavailable.",
               }),
             ),
+      restoreConversationMemory: (threadId, snapshot, expectedSnapshot) =>
+        bundle.restoreObservationalMemory
+          ? runMastra("memory.restore", () =>
+              bundle.restoreObservationalMemory!(
+                String(threadId),
+                snapshot,
+                String(threadId),
+                expectedSnapshot,
+              ),
+            )
+          : Effect.fail(
+              new AgentControllerRuntimeError({
+                operation: "memory.restore",
+                detail: "Conversation memory restoration is unavailable.",
+              }),
+            ),
       resolveEngine,
       inspectEngine,
       startSession,
@@ -2754,8 +3249,48 @@ const make = (options?: AgentControllerLiveOptions) =>
           Stream.fromPubSub(runtimeEvents),
         ).pipe(
           Stream.tap((event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               recordProviderAccessHealth(subscriptionAuth, event);
+              const key = String(event.threadId);
+              if (sessions.has(key)) return;
+              const pendingTurns = legacyPending(key);
+              if (pendingTurns.length === 0) return;
+              const unseenPending = pendingTurns.filter(
+                (pending) => !pending.seenEventIds.has(String(event.eventId)),
+              );
+              if (unseenPending.length === 0) return;
+              for (const pending of unseenPending) {
+                pending.seenEventIds.add(String(event.eventId));
+              }
+              if (event.type === "turn.completed" || event.type === "turn.aborted") {
+                if (!event.turnId) return;
+                const terminals = legacyBufferedTerminals.get(key) ?? new Map();
+                terminals.set(String(event.turnId), event);
+                legacyBufferedTerminals.set(key, terminals);
+                for (const pending of unseenPending) {
+                  if (!pending.dispatchReturned) {
+                    pending.earlyEvents.push(event);
+                  }
+                }
+                yield* drainLegacyTerminals(key);
+                return;
+              }
+              for (const pending of unseenPending) {
+                if (!pending.dispatchReturned) {
+                  if (event.type === "content.delta") {
+                    pending.earlyEvents.push(event);
+                  }
+                  continue;
+                }
+                if (!event.turnId || String(event.turnId) !== pending.turnId) continue;
+                if (
+                  event.type === "content.delta" &&
+                  event.payload.streamKind === "assistant_text"
+                ) {
+                  pending.assistant += event.payload.delta;
+                  continue;
+                }
+              }
             }),
           ),
         );
@@ -2795,7 +3330,6 @@ export const AgentControllerLive = Layer.effect(
   AgentController,
   Effect.gen(function* () {
     const entityMemoryRepository = yield* EntityMemoryRepository;
-    const memoryCandidateRepository = yield* MemoryCandidateRepository;
-    return yield* make({ entityMemoryRepository, memoryCandidateRepository });
+    return yield* make({ entityMemoryRepository });
   }),
 );

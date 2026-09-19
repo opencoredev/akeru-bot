@@ -9,12 +9,10 @@ import {
   type AkeruRuntimeToolId,
   type AkeruToolRuntime,
 } from "./AkeruToolRuntime.ts";
-import { AkeruMemoryToolInputSchemas } from "../memory/MemoryToolHandlers.ts";
+import { AkeruMemoryToolInputSchema } from "../memory/BotMemoryToolHandlers.ts";
 
 function inputSchema(toolId: AkeruRuntimeToolId) {
-  return isMemoryToolId(toolId)
-    ? AkeruMemoryToolInputSchemas[toolId]
-    : AkeruToolInputSchemas[toolId];
+  return isMemoryToolId(toolId) ? AkeruMemoryToolInputSchema : AkeruToolInputSchemas[toolId];
 }
 
 function omitNullValues(input: unknown): unknown {

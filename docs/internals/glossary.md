@@ -49,6 +49,18 @@ The live sidebar is `BotRosterSidebar`. Pins and the main Bots list are a client
 
 A user-visible log item attached to a thread. In [the contracts][1], activities cover important non-message events like approvals, tool actions, and failures. They are projected into thread state in [projector.ts][4].
 
+#### Bot memory
+
+Small, server-owned Markdown context attached to one named bot: `USER.md`, `MEMORY.md`, and one
+bot-specific `GROUP.md` per group. It is distinct from bot instructions and thread observational
+memory. See [memory architecture](memory.md).
+
+#### Observational memory
+
+An automatically generated, inspectable summary of older content in one thread. It complements the
+recent complete-turn window and never acts as a writable group-wide memory store. See
+[memory architecture](memory.md).
+
 ### Orchestration
 
 Orchestration is the server-side domain layer that turns runtime activity into stable app state. The main entry point is [OrchestrationEngine.ts][7], with core logic in [decider.ts][8] and [projector.ts][4].

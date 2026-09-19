@@ -78,6 +78,6 @@ describe("Akeru personality instructions", () => {
   });
 
   it("keeps the complete bot prompt compact", () => {
-    expect(createAkeruBotInstructions({ now }).length).toBeLessThan(3_000);
+    expect(createAkeruBotInstructions({ now }).length).toBeLessThan(3_500);
   });
 });

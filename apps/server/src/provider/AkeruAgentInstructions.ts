@@ -79,5 +79,9 @@ export function createAkeruBotTurnInstructions(context: AkeruInstructionContext 
 }
 
 export function createAkeruBotInstructions(context: AkeruInstructionContext = {}): string {
-  return [createAkeruAgentInstructions(context), AKERU_BOT_TURN_INSTRUCTIONS].join("\n");
+  return [
+    createAkeruAgentInstructions(context),
+    "When the user states a durable preference or personal fact, call memory in that same turn with the user target. Do not wait for 'remember': 'I really like cats' merits 'User likes cats.' Skip transient details, save quietly, and answer normally.",
+    AKERU_BOT_TURN_INSTRUCTIONS,
+  ].join("\n");
 }
