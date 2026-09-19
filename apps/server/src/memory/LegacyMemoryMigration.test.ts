@@ -93,46 +93,56 @@ afterEach(async () => {
 });
 
 describe("legacy Markdown memory migration", () => {
-  it("loads private partitions on a group-first upgrade before recording the private marker", async () => {
-    const store = await fixture();
-    const groupAccess = access();
-    const available = [
-      revision("private-user", "bot-user", "Keep my concise-answer preference."),
-      revision("private-bot", "bot", "Keep this bot's convention."),
-      revision("group-note", "group", "Keep the group note."),
-    ];
-    const revisions: AkeruMemoryRevision[] = [];
-    for (const scopeAccess of legacyMemoryMigrationAccesses(groupAccess)) {
-      const partitions = await Effect.runPromise(resolveAuthorizedMemoryPartitions(scopeAccess));
-      revisions.push(
-        ...available.filter((fact) =>
-          partitions.some((partition) => partition.scope === fact.partition.scope),
-        ),
-      );
-    }
-    await migrateLegacyBotMemory({ store, access: groupAccess, revisions });
-    const snapshot = await store.readSnapshot({
-      botId: BotId.make("bot-1"),
-      groupId: groupAccess.groupId,
-      groupMemberBotIds: groupAccess.groupMemberBotIds,
-    });
-    assert.equal(snapshot.user.content, "Keep my concise-answer preference.");
-    assert.equal(snapshot.memory.content, "Keep this bot's convention.");
-    assert.equal(snapshot.group?.content, "Keep the group note.");
-    const privateAccess = legacyMemoryMigrationAccesses(groupAccess)[0]!;
-    const reports = await migrateLegacyBotMemory({ store, access: privateAccess, revisions: [] });
-    assert.isTrue(reports[0]!.alreadyComplete);
-    assert.equal(
-      (
-        await store.readSnapshot({
-          botId: BotId.make("bot-1"),
-          groupId: null,
-          groupMemberBotIds: [],
-        })
-      ).user.content,
-      snapshot.user.content,
-    );
-  });
+  it.effect(
+    "loads private partitions on a group-first upgrade before recording the private marker",
+    () =>
+      Effect.gen(function* () {
+        const groupAccess = access();
+        const available = [
+          revision("private-user", "bot-user", "Keep my concise-answer preference."),
+          revision("private-bot", "bot", "Keep this bot's convention."),
+          revision("group-note", "group", "Keep the group note."),
+        ];
+        const revisions: AkeruMemoryRevision[] = [];
+        for (const scopeAccess of legacyMemoryMigrationAccesses(groupAccess)) {
+          const partitions = yield* resolveAuthorizedMemoryPartitions(scopeAccess);
+          revisions.push(
+            ...available.filter((fact) =>
+              partitions.some((partition) => partition.scope === fact.partition.scope),
+            ),
+          );
+        }
+        yield* Effect.promise(async () => {
+          const store = await fixture();
+          await migrateLegacyBotMemory({ store, access: groupAccess, revisions });
+          const snapshot = await store.readSnapshot({
+            botId: BotId.make("bot-1"),
+            groupId: groupAccess.groupId,
+            groupMemberBotIds: groupAccess.groupMemberBotIds,
+          });
+          assert.equal(snapshot.user.content, "Keep my concise-answer preference.");
+          assert.equal(snapshot.memory.content, "Keep this bot's convention.");
+          assert.equal(snapshot.group?.content, "Keep the group note.");
+          const privateAccess = legacyMemoryMigrationAccesses(groupAccess)[0]!;
+          const reports = await migrateLegacyBotMemory({
+            store,
+            access: privateAccess,
+            revisions: [],
+          });
+          assert.isTrue(reports[0]!.alreadyComplete);
+          assert.equal(
+            (
+              await store.readSnapshot({
+                botId: BotId.make("bot-1"),
+                groupId: null,
+                groupMemberBotIds: [],
+              })
+            ).user.content,
+            snapshot.user.content,
+          );
+        });
+      }),
+  );
 
   it("maps approved user, bot, and active-group facts to the responding bot", async () => {
     const store = await fixture();
