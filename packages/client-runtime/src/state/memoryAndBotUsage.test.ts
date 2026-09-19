@@ -112,6 +112,7 @@ describe("memory and bot usage environment atoms", () => {
             input: {
               threadId,
               expectedBotId: BotId.make("bot-1"),
+              expectedContent: "",
               target: "memory",
               content: "Remember this.",
             },

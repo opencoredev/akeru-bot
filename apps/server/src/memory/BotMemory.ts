@@ -1,7 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalTimers:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
+import * as NodeTimers from "node:timers";
 import * as NodeTimersPromises from "node:timers/promises";
 
 import {
@@ -436,6 +438,18 @@ async function withFileLock<A>(
       await handle.writeFile(token, "utf8");
       await handle.sync();
     } catch (cause) {
+      if (handle) {
+        const owned = await handle.stat().catch(() => null);
+        const current = await NodeFS.lstat(lockPath).catch(() => null);
+        if (owned && current && owned.ino === current.ino && owned.dev === current.dev) {
+          await NodeFS.unlink(lockPath).catch(() => undefined);
+        }
+        await handle.close().catch(() => undefined);
+        handle = undefined;
+        throw new BotMemoryError("io-error", "Could not initialize the memory file lock.", {
+          cause,
+        });
+      }
       if ((cause as NodeJS.ErrnoException).code !== "EEXIST") {
         throw new BotMemoryError("io-error", "Could not acquire the memory file lock.", { cause });
       }
@@ -454,9 +468,15 @@ async function withFileLock<A>(
     }
   }
 
+  const lease = NodeTimers.setInterval(() => {
+    const now = DateTime.toDate(DateTime.nowUnsafe());
+    void handle?.utimes(now, now).catch(() => undefined);
+  }, LOCK_STALE_AFTER_MS / 3);
+  lease.unref();
   try {
     return await use();
   } finally {
+    NodeTimers.clearInterval(lease);
     await handle.close().catch(() => undefined);
     const owner = await NodeFS.readFile(lockPath, "utf8").catch(() => "");
     if (owner === token) await NodeFS.unlink(lockPath).catch(() => undefined);
@@ -817,6 +837,7 @@ export class BotMemoryStore {
     target: AkeruMemoryDocumentTarget,
     content: string,
     expectedBotId: BotId = access.botId,
+    expectedContent?: string,
   ): Promise<AkeruMemoryDocument> {
     if (access.botId !== expectedBotId) {
       throw new BotMemoryError(
@@ -828,12 +849,85 @@ export class BotMemoryStore {
     const { normalized } = this.validateDocumentReplacement(access, target, content);
     return withFileLock(this.memoryRoot, resolved.filePath, async () => {
       const before = await this.readResolved(resolved);
+      if (expectedContent !== undefined && expectedContent !== renderEntries(before.entries)) {
+        throw new BotMemoryError(
+          "invalid-operation",
+          "Memory changed since you opened it. Reopen memory before saving.",
+        );
+      }
       if (normalized !== renderEntries(before.entries)) {
         await writeAtomically(this.memoryRoot, resolved.filePath, normalized);
         return this.toDocument(resolved, await this.readResolved(resolved));
       }
       return this.toDocument(resolved, before);
     });
+  }
+
+  async withDocumentTransaction<A>(
+    access: BotMemoryAccess,
+    use: (
+      replace: (target: AkeruMemoryDocumentTarget, content: string) => Promise<void>,
+    ) => Promise<A>,
+  ): Promise<A> {
+    const targets: AkeruMemoryDocumentTarget[] = [
+      "user",
+      "memory",
+      ...(access.groupId === null ? [] : ["group" as const]),
+    ];
+    const documents = targets
+      .map((target) => this.resolve(access, target))
+      .sort((a, b) => a.filePath.localeCompare(b.filePath));
+    const lock = async (index: number): Promise<A> => {
+      const document = documents[index];
+      if (document) return withFileLock(this.memoryRoot, document.filePath, () => lock(index + 1));
+      const originals = new Map<
+        AkeruMemoryDocumentTarget,
+        { readonly resolved: ResolvedDocument; readonly content: string | null }
+      >();
+      for (const resolved of documents) {
+        await this.readResolved(resolved);
+        const content = await NodeFS.readFile(resolved.filePath, "utf8").catch(
+          (cause: NodeJS.ErrnoException) => {
+            if (cause.code === "ENOENT") return null;
+            throw cause;
+          },
+        );
+        originals.set(resolved.target, { resolved, content });
+      }
+      const touched = new Set<AkeruMemoryDocumentTarget>();
+      try {
+        return await use(async (target, content) => {
+          const original = originals.get(target);
+          if (!original)
+            throw new BotMemoryError("access-denied", "Memory target is outside this transaction.");
+          const { normalized } = this.validateDocumentReplacement(access, target, content);
+          touched.add(target);
+          await writeAtomically(this.memoryRoot, original.resolved.filePath, normalized);
+        });
+      } catch (cause) {
+        const failures: unknown[] = [];
+        for (const target of touched) {
+          const original = originals.get(target)!;
+          try {
+            if (original.content === null)
+              await NodeFS.rm(original.resolved.filePath, { force: true });
+            else
+              await writeAtomically(this.memoryRoot, original.resolved.filePath, original.content);
+          } catch (rollbackCause) {
+            failures.push(rollbackCause);
+          }
+        }
+        if (failures.length > 0)
+          throw Object.assign(
+            new Error("Memory import failed and its original files could not all be restored.", {
+              cause,
+            }),
+            { rollbackErrors: failures },
+          );
+        throw cause;
+      }
+    };
+    return lock(0);
   }
 
   validateDocumentReplacement(

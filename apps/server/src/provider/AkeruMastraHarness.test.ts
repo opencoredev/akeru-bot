@@ -215,9 +215,52 @@ describe("AkeruMastraHarness", () => {
       );
       assert.equal(restored.current?.bufferedObservations, "");
       assert.isAbove(restored.current!.observationTokenCount, 7);
-      await harness.restoreObservationalMemory!("thread-restored", restored);
+      await Promise.all([
+        harness.restoreObservationalMemory!("thread-restored", restored),
+        harness.restoreObservationalMemory!("thread-restored", restored),
+      ]);
       assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
       assert.equal(restored.current?.generationCount, 2);
+      await harness.restoreObservationalMemory!("other-thread", {
+        current: { ...restored.current!, id: "occupied-observation" },
+        history: [],
+      });
+      await expect(
+        harness.restoreObservationalMemory!(
+          "thread-restored",
+          {
+            current: { ...restored.current!, id: "occupied-observation" },
+            history: [],
+          },
+          "thread-restored",
+          restored,
+        ),
+      ).rejects.toThrow();
+      assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
+      assert.equal(
+        (await harness.readObservationalMemory!("other-thread")).current?.id,
+        "occupied-observation",
+      );
+      const newer = {
+        current: {
+          ...restored.current!,
+          activeObservations: "New observations completed after preview.",
+        },
+        history: [],
+      };
+      const priorRestore = harness.restoreObservationalMemory!("thread-restored", newer);
+      const staleRestore = harness.restoreObservationalMemory!(
+        "thread-restored",
+        restored,
+        "thread-restored",
+        restored,
+      );
+      await expect(staleRestore).rejects.toThrow("Observations changed after the import preview");
+      await priorRestore;
+      assert.equal(
+        (await harness.readObservationalMemory!("thread-restored")).current?.activeObservations,
+        newer.current.activeObservations,
+      );
     } finally {
       await harness.destroy();
       NodeFS.rmSync(directory, { recursive: true, force: true });

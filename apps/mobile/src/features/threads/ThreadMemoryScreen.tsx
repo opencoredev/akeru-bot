@@ -37,7 +37,11 @@ const titles: Record<AkeruMemoryDocumentTarget, string> = {
 function MemoryEditor(props: {
   readonly document: AkeruMemoryDocument;
   readonly busy: boolean;
-  readonly onSave: (target: AkeruMemoryDocumentTarget, content: string) => Promise<void>;
+  readonly onSave: (
+    target: AkeruMemoryDocumentTarget,
+    content: string,
+    expectedContent: string,
+  ) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(props.document.content);
   const borderColor = useThemeColor("--color-border");
@@ -81,7 +85,7 @@ function MemoryEditor(props: {
           accessibilityRole="button"
           className="rounded-xl bg-accent px-4 py-2 active:opacity-70 disabled:opacity-40"
           disabled={props.busy || !changed || overLimit}
-          onPress={() => void props.onSave(props.document.target, draft)}
+          onPress={() => void props.onSave(props.document.target, draft, props.document.content)}
         >
           <Text className="font-t3-bold text-accent-foreground">Save</Text>
         </Pressable>
@@ -110,12 +114,16 @@ export function ThreadMemoryScreen() {
       )
     : [];
 
-  const save = async (target: AkeruMemoryDocumentTarget, content: string) => {
+  const save = async (
+    target: AkeruMemoryDocumentTarget,
+    content: string,
+    expectedContent: string,
+  ) => {
     if (!query.data) return;
     setBusy(true);
     const result = await replaceDocument({
       environmentId,
-      input: { threadId, expectedBotId: query.data.botId, target, content },
+      input: { threadId, expectedBotId: query.data.botId, expectedContent, target, content },
     });
     setBusy(false);
     if (result._tag === "Failure") {

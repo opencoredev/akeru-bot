@@ -89,6 +89,7 @@ export interface AgentControllerShape {
   readonly restoreConversationMemory?: (
     threadId: ThreadId,
     snapshot: AkeruConversationMemorySnapshot,
+    expectedSnapshot?: AkeruConversationMemorySnapshot,
   ) => Effect.Effect<void, AgentControllerError>;
 
   /** Resolve a thread's selected mode and model to an available Akeru provider instance. */

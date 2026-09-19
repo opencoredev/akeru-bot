@@ -104,6 +104,7 @@ export type AkeruMemoryDocumentsSnapshot = typeof AkeruMemoryDocumentsSnapshot.T
 export const AkeruMemoryDocumentReplaceInput = Schema.Struct({
   threadId: ThreadId,
   expectedBotId: BotId,
+  expectedContent: Schema.String,
   target: AkeruMemoryDocumentTarget,
   content: Schema.String,
 });

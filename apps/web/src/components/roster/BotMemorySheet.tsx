@@ -14,6 +14,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Sheet, SheetHeader, SheetPanel, SheetPopup, SheetTitle } from "../ui/sheet";
 import { Textarea } from "../ui/textarea";
+import { toastManager } from "../ui/toast";
 
 export function memoryErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Memory request failed.";
@@ -45,7 +46,11 @@ function MemoryDocumentEditor({
 }: {
   readonly document: AkeruMemoryDocument;
   readonly busy: boolean;
-  readonly onSave: (target: AkeruMemoryDocumentTarget, content: string) => Promise<boolean>;
+  readonly onSave: (
+    target: AkeruMemoryDocumentTarget,
+    content: string,
+    expectedContent: string,
+  ) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(document.content);
   useEffect(() => setDraft(document.content), [document.content, document.updatedAt]);
@@ -90,7 +95,7 @@ function MemoryDocumentEditor({
         <Button
           size="sm"
           disabled={busy || !changed || overLimit}
-          onClick={() => void onSave(document.target, draft)}
+          onClick={() => void onSave(document.target, draft, document.content)}
         >
           Save
         </Button>
@@ -131,16 +136,30 @@ export function BotMemorySheet({
       )
     : [];
 
-  const save = async (target: AkeruMemoryDocumentTarget, content: string) => {
+  const save = async (
+    target: AkeruMemoryDocumentTarget,
+    content: string,
+    expectedContent: string,
+  ) => {
     if (!threadRef || !query.data) return false;
     setBusy(true);
     setError(null);
     const result = await replaceDocument({
       environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId, expectedBotId: query.data.botId, target, content },
+      input: {
+        threadId: threadRef.threadId,
+        expectedBotId: query.data.botId,
+        expectedContent,
+        target,
+        content,
+      },
     });
     setBusy(false);
-    if (result._tag === "Failure") setError(failureMessage(result));
+    if (result._tag === "Failure") {
+      const message = failureMessage(result);
+      setError(message);
+      toastManager.add({ type: "error", title: "Could not save memory", description: message });
+    }
     return result._tag !== "Failure";
   };
 
@@ -229,8 +248,15 @@ export function BotMemorySheet({
                       input: { threadId: threadRef.threadId },
                     }).then((result) => {
                       setBusy(false);
-                      if (result._tag === "Failure") setError(failureMessage(result));
-                      else setClearPending(false);
+                      if (result._tag === "Failure") {
+                        const message = failureMessage(result);
+                        setError(message);
+                        toastManager.add({
+                          type: "error",
+                          title: "Could not save memory",
+                          description: message,
+                        });
+                      } else setClearPending(false);
                     });
                   }}
                 >

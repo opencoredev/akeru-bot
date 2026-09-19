@@ -5,7 +5,8 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { afterEach, assert, describe, expect, it } from "@effect/vitest";
-import { BotId, GroupId } from "@t3tools/contracts";
+import { vi } from "vite-plus/test";
+import { BotId, GroupId, type AkeruMemoryDocument } from "@t3tools/contracts";
 
 import {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
@@ -13,6 +14,11 @@ import {
   BOT_MEMORY_ENTRY_DELIMITER,
   BotMemoryStore,
 } from "./BotMemory.ts";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, open: vi.fn(actual.open) };
+});
 
 const NodeFS = NodeFSP;
 
@@ -593,6 +599,72 @@ describe("BotMemoryStore", () => {
       assert.equal((await store.readDocument(second, target)).content, "Updated second bot notes.");
     },
   );
+
+  it("rejects a stale editor draft after a concurrent write", async () => {
+    const store = await fixture();
+    const access = privateAccess();
+    await store.replaceDocument(access, "memory", "Original notes.");
+    const snapshot = await store.readDocument(access, "memory");
+    await store.replaceDocument(access, "memory", "Newer notes.", access.botId, snapshot.content);
+    await expect(
+      store.replaceDocument(access, "memory", "Stale draft.", access.botId, snapshot.content),
+    ).rejects.toMatchObject({ code: "invalid-operation" });
+    assert.equal((await store.readDocument(access, "memory")).content, "Newer notes.");
+  });
+
+  it.each(["writeFile", "sync"] as const)(
+    "cleans up a failed lock %s before retry",
+    async (method) => {
+      const store = await fixture();
+      const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+      let acquired: NodeFSP.FileHandle | undefined;
+      vi.mocked(NodeFS.open).mockImplementationOnce(async (...args) => {
+        acquired = await actual.open(...args);
+        vi.spyOn(acquired, method).mockRejectedValueOnce(
+          new Error("Simulated lock initialization failure"),
+        );
+        return acquired;
+      });
+      await expect(
+        store.replaceDocument(privateAccess(), "memory", "First attempt."),
+      ).rejects.toMatchObject({ code: "io-error" });
+      await expect(acquired!.stat()).rejects.toThrow();
+      await expect(
+        NodeFS.stat(NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md.lock")),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await store.replaceDocument(privateAccess(), "memory", "Retry succeeds.");
+      assert.equal(
+        (await store.readDocument(privateAccess(), "memory")).content,
+        "Retry succeeds.",
+      );
+    },
+  );
+
+  it("rolls back transaction writes before allowing a competing editor save", async () => {
+    const store = await fixture();
+    const access = privateAccess();
+    await store.replaceDocument(access, "memory", "Original notes.");
+    let competing: Promise<AkeruMemoryDocument> | undefined;
+    await expect(
+      store.withDocumentTransaction(access, async (replace) => {
+        await replace("user", "New file from import.");
+        await replace("memory", "Imported notes.");
+        competing = store.replaceDocument(
+          access,
+          "memory",
+          "Concurrent editor notes.",
+          access.botId,
+          "Original notes.",
+        );
+        throw new Error("Later import step failed");
+      }),
+    ).rejects.toThrow("Later import step failed");
+    await competing;
+    assert.equal((await store.readDocument(access, "memory")).content, "Concurrent editor notes.");
+    await expect(
+      NodeFS.stat(NodePath.join(store.memoryRoot, "bots", "bot-1", "USER.md")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
 
   it("archives a group file instead of deleting it", async () => {
     const store = await fixture();

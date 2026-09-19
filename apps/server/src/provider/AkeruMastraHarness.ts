@@ -254,6 +254,7 @@ export interface AkeruMastraHarness {
     threadId: string,
     snapshot: AkeruConversationMemorySnapshot,
     resourceId?: string,
+    expectedSnapshot?: AkeruConversationMemorySnapshot,
   ) => Promise<void>;
   readonly observeAfterTurn?: (input: AkeruBackgroundObservationInput) => Promise<void>;
   readonly observeExternalTurn?: (input: {
@@ -1120,27 +1121,11 @@ export async function createAkeruMastraHarness(
     return withAkeruModelRunOptions(approvalOptions, session.state.get());
   };
 
-  const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
+  const queueObservation = (threadId: string, resourceId: string, use: () => Promise<void>) => {
     if (closing) return Promise.reject(new Error("Akeru observational memory is closing."));
-    const resourceId = input.resourceId ?? input.threadId;
-    const key = `${input.threadId}\u0000${resourceId}`;
+    const key = `${threadId}\u0000${resourceId}`;
     const prior = observationTails.get(key) ?? Promise.resolve();
-    const work = prior
-      .catch(() => undefined)
-      .then(async () => {
-        const requestContext = new RequestContext();
-        requestContext.setRaw("controller", {
-          resourceId,
-          session: { modelId: input.modelId },
-        });
-        await observationalMemory.engine.observe({
-          threadId: input.threadId,
-          resourceId,
-          requestContext,
-          trigger: "manual",
-          hooks: input.hooks ?? observeHooks,
-        });
-      });
+    const work = prior.catch(() => undefined).then(use);
     observationTails.set(key, work);
     void work
       .finally(() => {
@@ -1148,6 +1133,21 @@ export async function createAkeruMastraHarness(
       })
       .catch(() => undefined);
     return work;
+  };
+
+  const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
+    const resourceId = input.resourceId ?? input.threadId;
+    return queueObservation(input.threadId, resourceId, async () => {
+      const requestContext = new RequestContext();
+      requestContext.setRaw("controller", { resourceId, session: { modelId: input.modelId } });
+      await observationalMemory.engine.observe({
+        threadId: input.threadId,
+        resourceId,
+        requestContext,
+        trigger: "manual",
+        hooks: input.hooks ?? observeHooks,
+      });
+    });
   };
 
   const observeExternalTurn: NonNullable<AkeruMastraHarness["observeExternalTurn"]> = async (
@@ -1189,74 +1189,111 @@ export async function createAkeruMastraHarness(
     });
   };
 
+  const readObservationalMemory = async (threadId: string, resourceId?: string) => {
+    const normalize = (
+      record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
+    ) => {
+      if (!record) return null;
+      return {
+        id: record.id,
+        generationCount: record.generationCount,
+        originType: record.originType,
+        activeObservations: record.activeObservations,
+        bufferedObservations: [
+          ...(record.bufferedObservationChunks?.map((chunk) => chunk.observations) ?? []),
+          ...(record.bufferedObservations ? [record.bufferedObservations] : []),
+        ].join("\n\n"),
+        bufferedReflection: record.bufferedReflection ?? null,
+        totalTokensObserved: record.totalTokensObserved,
+        observationTokenCount: record.observationTokenCount,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString(),
+      };
+    };
+    const [current, history] = await Promise.all([
+      observationalMemory.engine.getRecord(threadId, resourceId),
+      observationalMemory.engine.getHistory(threadId, resourceId, 50),
+    ]);
+    return { current: normalize(current), history: history.map((record) => normalize(record)!) };
+  };
+
   return {
     controller,
-    clearObservationalMemory: (threadId, resourceId) =>
-      observationalMemory.engine.clear(threadId, resourceId),
-    readObservationalMemory: async (threadId, resourceId) => {
-      const normalize = (
-        record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
-      ) => {
-        if (!record) return null;
-        return {
-          id: record.id,
-          generationCount: record.generationCount,
-          originType: record.originType,
-          activeObservations: record.activeObservations,
-          bufferedObservations: [
-            ...(record.bufferedObservationChunks?.map((chunk) => chunk.observations) ?? []),
-            ...(record.bufferedObservations ? [record.bufferedObservations] : []),
-          ].join("\n\n"),
-          bufferedReflection: record.bufferedReflection ?? null,
-          totalTokensObserved: record.totalTokensObserved,
-          observationTokenCount: record.observationTokenCount,
-          createdAt: record.createdAt.toISOString(),
-          updatedAt: record.updatedAt.toISOString(),
-        };
-      };
-      const [current, history] = await Promise.all([
-        observationalMemory.engine.getRecord(threadId, resourceId),
-        observationalMemory.engine.getHistory(threadId, resourceId, 50),
-      ]);
-      return { current: normalize(current), history: history.map((record) => normalize(record)!) };
-    },
-    restoreObservationalMemory: async (threadId, snapshot, resourceId = threadId) => {
-      const store = observationalMemory.engine.getStorage();
-      await store.clearObservationalMemory(threadId, resourceId);
-      const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
-      const seen = new Set<string>();
-      for (const record of records) {
-        if (seen.has(record.id)) continue;
-        seen.add(record.id);
-        await store.insertObservationalMemoryRecord({
-          id: record.id,
-          scope: "thread",
+    clearObservationalMemory: (threadId, resourceId = threadId) =>
+      queueObservation(threadId, resourceId, () =>
+        observationalMemory.engine.clear(threadId, resourceId),
+      ),
+    readObservationalMemory,
+    restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) =>
+      queueObservation(threadId, resourceId, async () => {
+        const store = observationalMemory.engine.getStorage();
+        if (
+          expectedSnapshot &&
+          JSON.stringify(await readObservationalMemory(threadId, resourceId)) !==
+            JSON.stringify(expectedSnapshot)
+        ) {
+          throw new Error(
+            "Observations changed after the import preview. Preview the archive again.",
+          );
+        }
+        const originals = await store.getObservationalMemoryHistory(
           threadId,
           resourceId,
-          createdAt: DateTime.toDate(DateTime.makeUnsafe(record.createdAt)),
-          updatedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
-          lastObservedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
-          originType: record.originType,
-          generationCount: record.generationCount,
-          // Archives flatten buffered chunks, so restore their text as active observations.
-          activeObservations: [record.activeObservations, record.bufferedObservations]
-            .filter(Boolean)
-            .join("\n\n"),
-          ...(record.bufferedReflection ? { bufferedReflection: record.bufferedReflection } : {}),
-          totalTokensObserved: record.totalTokensObserved,
-          observationTokenCount:
-            record.observationTokenCount + Math.ceil(record.bufferedObservations.length / 4),
-          pendingMessageTokens: 0,
-          isReflecting: false,
-          isObserving: false,
-          isBufferingObservation: false,
-          isBufferingReflection: false,
-          lastBufferedAtTokens: 0,
-          lastBufferedAtTime: null,
-          config: {},
-        } satisfies ObservationalMemoryRecord);
-      }
-    },
+          Number.MAX_SAFE_INTEGER,
+        );
+        try {
+          await store.clearObservationalMemory(threadId, resourceId);
+          const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
+          const seen = new Set<string>();
+          for (const record of records) {
+            if (seen.has(record.id)) continue;
+            seen.add(record.id);
+            await store.insertObservationalMemoryRecord({
+              id: record.id,
+              scope: "thread",
+              threadId,
+              resourceId,
+              createdAt: DateTime.toDate(DateTime.makeUnsafe(record.createdAt)),
+              updatedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
+              lastObservedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
+              originType: record.originType,
+              generationCount: record.generationCount,
+              // Archives flatten buffered chunks, so restore their text as active observations.
+              activeObservations: [record.activeObservations, record.bufferedObservations]
+                .filter(Boolean)
+                .join("\n\n"),
+              ...(record.bufferedReflection
+                ? { bufferedReflection: record.bufferedReflection }
+                : {}),
+              totalTokensObserved: record.totalTokensObserved,
+              observationTokenCount:
+                record.observationTokenCount + Math.ceil(record.bufferedObservations.length / 4),
+              pendingMessageTokens: 0,
+              isReflecting: false,
+              isObserving: false,
+              isBufferingObservation: false,
+              isBufferingReflection: false,
+              lastBufferedAtTokens: 0,
+              lastBufferedAtTime: null,
+              config: {},
+            } satisfies ObservationalMemoryRecord);
+          }
+        } catch (cause) {
+          try {
+            await store.clearObservationalMemory(threadId, resourceId);
+            for (const original of originals) await store.insertObservationalMemoryRecord(original);
+          } catch (rollbackCause) {
+            throw Object.assign(
+              new Error(
+                "Observation restore failed and the original observations could not be restored.",
+                { cause: rollbackCause },
+              ),
+              { originalError: cause },
+            );
+          }
+          throw cause;
+        }
+      }),
     observeAfterTurn,
     observeExternalTurn,
     destroy: async () => {

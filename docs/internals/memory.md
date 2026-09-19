@@ -94,7 +94,8 @@ Unicode controls, private keys, and recognizable credential prefixes. Hand-edite
 when read for a prompt; unsafe entries are replaced by a visible blocked marker without modifying the
 source file. Oversized documents are withheld with a bounded marker. The final sanitized content
 is also checked against the limit, because blocked-entry notices can expand the original text.
-Editor writes include the displayed snapshot's bot ID and reject a changed owner before writing.
+Editor writes include the displayed snapshot's bot ID and original content. The server checks both
+under the file lock and rejects changes made since the editor loaded.
 
 ## Legacy migration
 
@@ -113,6 +114,10 @@ without re-running its private migration.
 The memory archive schema is version 3. It binds file paths, scope IDs, file checksums, the
 observational snapshot checksum, and a manifest checksum. Preview validates all files and produces a
 hash of the archive plus current destination state. Apply recomputes it and refuses stale previews.
+Import holds all affected file locks and captures original files before applying changes. A failed
+write or observation restore rolls back the attempted changes before releasing the locks. File
+locks renew their lease while held. Observation restores and clears share the per-thread background
+observation queue.
 Observation records are cleared and reinserted through Mastra's storage adapter when restoration is
 required. Imports must target the archive's original thread. Flattened buffered observations are
 promoted into active observations on restore so Mastra's chunk-based storage retains their text.

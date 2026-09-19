@@ -199,23 +199,32 @@ export async function applyBotMemoryImport(input: {
   readonly archive: AkeruMarkdownMemoryArchiveV3Value;
   readonly currentConversation: AkeruConversationMemorySnapshot;
   readonly previewHash: string;
-  readonly restoreConversation: (snapshot: AkeruConversationMemorySnapshot) => Promise<void>;
+  /** Restores or rolls back atomically, rejecting a stale expected snapshot before mutation. */
+  readonly restoreConversation: (
+    snapshot: AkeruConversationMemorySnapshot,
+    expectedSnapshot: AkeruConversationMemorySnapshot,
+  ) => Promise<void>;
 }): Promise<AkeruMarkdownMemoryImportApplyResult> {
-  const prepared = await prepareImport(input);
-  if (prepared.previewHash !== input.previewHash) {
-    throw new BotMemoryError(
-      "invalid-operation",
-      "Memory changed after the import preview. Preview the archive again.",
-    );
-  }
-  let changedDocuments = 0;
-  for (const document of prepared.prepared) {
-    if (document.classification === "unchanged") continue;
-    await input.store.replaceDocument(input.access, document.target, document.content);
-    changedDocuments += 1;
-  }
-  if (prepared.observationsChanged) {
-    await input.restoreConversation(input.archive.conversation.snapshot);
-  }
-  return { changedDocuments, restoredObservations: prepared.observationsChanged };
+  return input.store.withDocumentTransaction(input.access, async (replace) => {
+    const prepared = await prepareImport(input);
+    if (prepared.previewHash !== input.previewHash) {
+      throw new BotMemoryError(
+        "invalid-operation",
+        "Memory changed after the import preview. Preview the archive again.",
+      );
+    }
+    let changedDocuments = 0;
+    for (const document of prepared.prepared) {
+      if (document.classification === "unchanged") continue;
+      await replace(document.target, document.content);
+      changedDocuments += 1;
+    }
+    if (prepared.observationsChanged) {
+      await input.restoreConversation(
+        input.archive.conversation.snapshot,
+        input.currentConversation,
+      );
+    }
+    return { changedDocuments, restoredObservations: prepared.observationsChanged };
+  });
 }

@@ -3205,10 +3205,15 @@ const make = (options?: AgentControllerLiveOptions) =>
                 detail: "Conversation memory is unavailable.",
               }),
             ),
-      restoreConversationMemory: (threadId, snapshot) =>
+      restoreConversationMemory: (threadId, snapshot, expectedSnapshot) =>
         bundle.restoreObservationalMemory
           ? runMastra("memory.restore", () =>
-              bundle.restoreObservationalMemory!(String(threadId), snapshot, String(threadId)),
+              bundle.restoreObservationalMemory!(
+                String(threadId),
+                snapshot,
+                String(threadId),
+                expectedSnapshot,
+              ),
             )
           : Effect.fail(
               new AgentControllerRuntimeError({

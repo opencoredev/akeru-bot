@@ -2879,10 +2879,14 @@ const makeWsRpcLayer = (
                       archive: input.archive,
                       currentConversation: conversation,
                       previewHash: input.previewHash,
-                      restoreConversation: (snapshot) =>
+                      restoreConversation: (snapshot, expectedSnapshot) =>
                         agentController.restoreConversationMemory
                           ? Effect.runPromise(
-                              agentController.restoreConversationMemory(input.threadId, snapshot),
+                              agentController.restoreConversationMemory(
+                                input.threadId,
+                                snapshot,
+                                expectedSnapshot,
+                              ),
                             )
                           : Promise.reject(
                               new Error("Observational memory restoration is unavailable."),
@@ -2933,6 +2937,7 @@ const makeWsRpcLayer = (
                       input.target,
                       input.content,
                       input.expectedBotId,
+                      input.expectedContent,
                     ),
                   catch: (cause) => memoryOperationError("document.replace", cause),
                 }),

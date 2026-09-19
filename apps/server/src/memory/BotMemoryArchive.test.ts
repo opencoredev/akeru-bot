@@ -117,7 +117,39 @@ describe("Markdown memory archive", () => {
       (await destination.readDocument(access, "group")).content,
       "Imported group context.",
     );
-    expect(restoreConversation).toHaveBeenCalledWith(conversation);
+    expect(restoreConversation).toHaveBeenCalledWith(conversation, emptyConversation);
+  });
+
+  it("rolls back changed documents when the atomic observation restore fails", async () => {
+    const store = await fixture();
+    await store.replaceDocument(access, "user", "Archived user notes.");
+    await store.replaceDocument(access, "memory", "Archived work notes.");
+    const archive = await exportBotMemoryArchive({
+      store,
+      access,
+      threadId: ThreadId.make("thread-1"),
+      conversation,
+      createdAt: "2026-09-13T12:02:00.000Z",
+    });
+    await store.replaceDocument(access, "user", "Original user notes.");
+    await store.replaceDocument(access, "memory", "Original work notes.");
+    const input = {
+      store,
+      access,
+      threadId: ThreadId.make("thread-1"),
+      archive,
+      currentConversation: emptyConversation,
+    };
+    const preview = await previewBotMemoryImport(input);
+    const restoreConversation = vi
+      .fn(async (_snapshot: AkeruConversationMemorySnapshot) => undefined)
+      .mockRejectedValueOnce(new Error("Transient observation write failure"));
+    await expect(
+      applyBotMemoryImport({ ...input, previewHash: preview.previewHash, restoreConversation }),
+    ).rejects.toThrow("Transient observation write failure");
+    expect(restoreConversation).toHaveBeenLastCalledWith(conversation, emptyConversation);
+    assert.equal((await store.readDocument(access, "user")).content, "Original user notes.");
+    assert.equal((await store.readDocument(access, "memory")).content, "Original work notes.");
   });
 
   it("rejects cross-chat imports before changing notes or clearing observations", async () => {
