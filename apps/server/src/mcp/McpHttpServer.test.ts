@@ -105,14 +105,29 @@ it("normalizes only conflict-free scalar allOf constraints", () => {
   }
 });
 
-it.effect("uses the thread-scoped memory handler as the authoritative grant", () =>
+it.effect("requires both memory capability and a thread-scoped handler", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
-    McpMemoryToolSession.setMcpMemoryToolSession(threadId, async ({ input }) => ({
-      success: true,
-      message: "Memory updated.",
-      input,
-    }));
+    let calls = 0;
+    McpMemoryToolSession.setMcpMemoryToolSession(threadId, async ({ input }) => {
+      calls += 1;
+      return { success: true, message: "Memory updated.", input };
+    });
+    const memoryInvocation = { ...invocation, capabilities: new Set(["memory"] as const) };
+    const previewOnly = yield* server
+      .callTool({
+        name: "memory",
+        arguments: {
+          target: "memory",
+          operations: [{ action: "add", content: "Unauthorized note." }],
+        },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(previewOnly.isError).toBe(true);
+    expect(calls).toBe(0);
 
     const result = yield* server
       .callTool({
@@ -123,11 +138,12 @@ it.effect("uses the thread-scoped memory handler as the authoritative grant", ()
         },
       })
       .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provideService(McpInvocationContext.McpInvocationContext, memoryInvocation),
         Effect.provideService(McpSchema.McpServerClient, client),
       );
 
     expect(result.isError).toBe(false);
+    expect(calls).toBe(1);
     expect(result.structuredContent).toMatchObject({
       success: true,
       message: "Memory updated.",
@@ -140,7 +156,7 @@ it.effect("uses the thread-scoped memory handler as the authoritative grant", ()
         arguments: { target: "user", operations: [] },
       })
       .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provideService(McpInvocationContext.McpInvocationContext, memoryInvocation),
         Effect.provideService(McpSchema.McpServerClient, client),
       );
     expect(denied.isError).toBe(true);

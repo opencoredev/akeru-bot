@@ -400,15 +400,12 @@ const registerMemoryTool = Effect.fn("McpHttpServer.registerMemoryTool")(functio
           fiber.context,
           McpInvocationContext.McpInvocationContext,
         );
+        if (!invocation.capabilities.has("memory")) {
+          return Effect.succeed(toolErrorResult("This session cannot update bot memory."));
+        }
         const handler = McpMemoryToolSession.readMcpMemoryToolSession(invocation.threadId);
         if (!handler) {
-          return Effect.succeed(
-            toolErrorResult(
-              invocation.capabilities.has("memory")
-                ? "Bot memory is unavailable for this chat."
-                : "This session cannot update bot memory.",
-            ),
-          );
+          return Effect.succeed(toolErrorResult("Bot memory is unavailable for this chat."));
         }
         return decodeMemoryToolInput(payload).pipe(
           Effect.flatMap((input) =>
