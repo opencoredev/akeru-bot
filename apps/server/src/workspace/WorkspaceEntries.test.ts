@@ -4,6 +4,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { FileFinder } from "@ff-labs/fff-node";
 import { it, afterEach, describe, expect } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -89,6 +90,138 @@ const appendSeparator = (input: string) =>
       ? input
       : `${input}${platform === "win32" ? "\\" : "/"}`,
   );
+
+describe("workspace refresh worker", () => {
+  it.effect("allows publication and other workspaces while a scan is blocked", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const startedA = yield* Deferred.make<void>();
+        const startedB = yield* Deferred.make<void>();
+        const releaseA = yield* Deferred.make<void>();
+        const releaseB = yield* Deferred.make<void>();
+        const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker((cwd) =>
+          cwd === "/a"
+            ? Deferred.succeed(startedA, undefined).pipe(Effect.andThen(Deferred.await(releaseA)))
+            : Deferred.succeed(startedB, undefined).pipe(Effect.andThen(Deferred.await(releaseB))),
+        );
+
+        yield* worker.request("/a");
+        yield* Deferred.await(startedA);
+        yield* worker.request("/b");
+        yield* Deferred.await(startedB);
+
+        const bFresh = yield* Deferred.make<void>();
+        yield* worker
+          .awaitCurrent("/b")
+          .pipe(Effect.andThen(Deferred.succeed(bFresh, undefined)), Effect.forkScoped);
+        yield* Deferred.succeed(releaseB, undefined);
+        yield* Deferred.await(bFresh);
+        expect(yield* Deferred.isDone(releaseA)).toBe(false);
+
+        const drained = yield* Deferred.make<void>();
+        yield* worker.drain.pipe(
+          Effect.andThen(Deferred.succeed(drained, undefined)),
+          Effect.forkScoped,
+        );
+        expect(yield* Deferred.isDone(drained)).toBe(false);
+        yield* Deferred.succeed(releaseA, undefined);
+        yield* Deferred.await(drained);
+      }),
+    ),
+  );
+
+  it.effect("coalesces requests during a scan into one follow-up generation", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const firstStarted = yield* Deferred.make<void>();
+        const secondStarted = yield* Deferred.make<void>();
+        const releaseFirst = yield* Deferred.make<void>();
+        const releaseSecond = yield* Deferred.make<void>();
+        let scans = 0;
+        const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker(() => {
+          scans += 1;
+          return scans === 1
+            ? Deferred.succeed(firstStarted, undefined).pipe(
+                Effect.andThen(Deferred.await(releaseFirst)),
+              )
+            : Deferred.succeed(secondStarted, undefined).pipe(
+                Effect.andThen(Deferred.await(releaseSecond)),
+              );
+        });
+
+        yield* worker.request("/workspace");
+        yield* Deferred.await(firstStarted);
+        yield* worker.request("/workspace");
+        yield* worker.request("/workspace");
+        yield* Deferred.succeed(releaseFirst, undefined);
+        yield* Deferred.await(secondStarted);
+        expect(scans).toBe(2);
+
+        const fresh = yield* Deferred.make<void>();
+        yield* worker
+          .awaitCurrent("/workspace")
+          .pipe(Effect.andThen(Deferred.succeed(fresh, undefined)), Effect.forkScoped);
+        expect(yield* Deferred.isDone(fresh)).toBe(false);
+        yield* Deferred.succeed(releaseSecond, undefined);
+        yield* Deferred.await(fresh);
+        yield* worker.drain;
+        expect(scans).toBe(2);
+      }),
+    ),
+  );
+
+  it.effect("bounds concurrent scans and can refresh an idle workspace again", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const twoStarted = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        let active = 0;
+        let maximum = 0;
+        let scans = 0;
+        const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker(() =>
+          Effect.gen(function* () {
+            scans += 1;
+            active += 1;
+            maximum = Math.max(maximum, active);
+            if (active === 2) yield* Deferred.succeed(twoStarted, undefined);
+            yield* Deferred.await(release);
+            active -= 1;
+          }),
+        );
+        for (const cwd of ["/a", "/b", "/c", "/d"]) yield* worker.request(cwd);
+        yield* Deferred.await(twoStarted);
+        yield* Deferred.succeed(release, undefined);
+        yield* worker.drain;
+        expect(maximum).toBe(2);
+        expect(scans).toBe(4);
+        yield* worker.request("/a");
+        yield* worker.awaitCurrent("/a");
+        yield* worker.drain;
+        expect(scans).toBe(5);
+      }),
+    ),
+  );
+
+  it.effect("completes failed generations and remains drainable", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        let scans = 0;
+        const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker(() =>
+          Effect.sync(() => {
+            scans += 1;
+            if (scans === 1) throw new Error("scan failed");
+          }),
+        );
+
+        yield* worker.request("/workspace");
+        yield* worker.drain;
+        yield* worker.request("/workspace");
+        yield* worker.drain;
+        expect(scans).toBe(2);
+      }),
+    ),
+  );
+});
 
 it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
   afterEach(() => {
@@ -328,6 +461,21 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
             expect.objectContaining({ path: "src/components/Composer.tsx" }),
           ]),
         );
+      }),
+    );
+
+    it.effect("waits for a queued refresh before listing newly created files", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-refresh-freshness-" });
+        yield* writeTextFile(cwd, "before.ts", "export {};\n");
+
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        yield* workspaceEntries.list({ cwd });
+        yield* writeTextFile(cwd, "after.ts", "export {};\n");
+        yield* workspaceEntries.refresh(cwd);
+
+        const result = yield* workspaceEntries.list({ cwd });
+        expect(result.entries).toContainEqual({ path: "after.ts", kind: "file" });
       }),
     );
 

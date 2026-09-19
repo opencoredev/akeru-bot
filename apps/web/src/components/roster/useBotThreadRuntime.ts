@@ -20,7 +20,6 @@ import {
   useProjects,
   readEnvironmentSupportsFileAttachments,
   useThreadActivities,
-  useThreadMessages,
   useThreadShell,
   useThreadShells,
 } from "../../state/entities";
@@ -47,6 +46,7 @@ import {
 import { useRosterStore } from "./rosterStore";
 import { ensureLocalApi } from "../../localApi";
 import { resolveBotFileAttachment } from "./botFileAttachment";
+import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -117,7 +117,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   if (linkedThreadRef) {
     retainedThreadRef.current.threadRef = linkedThreadRef;
   }
-  const messages = useThreadMessages(linkedThreadRef);
+  const { messages, lastMessageRole } = useBotConversationMessageProjection(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   useEffect(() => {
@@ -184,7 +184,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       rememberedThread?.session?.status === "stopped") &&
     (rememberedThread?.latestTurn?.state === "error" ||
       rememberedThread?.latestTurn?.state === "interrupted" ||
-      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+      (rememberedThread?.latestTurn === null && lastMessageRole === "user"));
   const resume = useCallback(async (): Promise<boolean> => {
     if (!linkedThreadRef || !canResume || resuming) return false;
     setResuming(true);

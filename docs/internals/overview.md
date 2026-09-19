@@ -84,11 +84,14 @@ reconciles.
 activity payloads in 25-row primary-key batches and project each batch before the next read. Shell
 summary refresh uses SQL aggregates for latest user-message time, pending approval count, and
 actionable-plan status, plus user-input lifecycle rows only. Provider command metadata paths use
-thread shells; turn start uses a single-message query. Runtime ingestion uses a joined thread
-context and keyed message, plan, and task-activity lookups instead of hydrating a full thread.
-`upsertMany` exists for projector cursors. Runtime `projectEvent` still commits each projector
-separately because attachment cleanup runs after each projector transaction. Combining those
-commits is shared with checkpoint attachment-transaction work and is not done here.
+thread shells; turn start uses a single-message query. Session setup resolves bot and delegation
+metadata through the command read model rather than loading all conversation histories. Runtime
+ingestion uses a joined thread context and keyed message, plan, and task-activity lookups instead of
+hydrating a full thread.
+
+Normal command projection runs every projector in order and advances their cursors with one
+`upsertMany` statement inside the command transaction. Attachment cleanup remains deferred until
+after commit. Bootstrap replay retains independent per-projector cursors and transactions.
 
 Command and event names live in [`orchestration.ts`][contracts]. Some commands are client
 dispatchable (`thread.create`, `thread.turn.start`, `thread.approval.respond`); others are internal
@@ -101,15 +104,20 @@ does not define turn end.
 
 ## Drainable workers
 
-Follow-up work runs asynchronously in queue-backed workers built on [`DrainableWorker`][worker]:
+Follow-up work runs asynchronously in scoped, queue-backed workers:
 [`ProviderRuntimeIngestion`][ingest] normalizes provider runtime streams into orchestration commands,
 [`ProviderCommandReactor`][cmd] dispatches provider calls in response to intent events, and
 [`CheckpointReactor`][checkpoint] captures and reverts workspace checkpoints.
 
-`DrainableWorker` pairs a transactional queue with a transactional count of outstanding items.
-`enqueue` atomically offers and increments; processing always decrements. `drain` retries until the
-count reaches zero, so a test can await "queue empty and current item finished" instead of sleeping.
-Each of the three services exposes `drain` for exactly this.
+[`DrainableWorker`][worker] pairs a transactional queue with a transactional count of outstanding
+items. `enqueue` atomically offers and increments; processing always decrements. `drain` retries
+until the count reaches zero, so a test can await "queue empty and current item finished" instead
+of sleeping. Each of the three services exposes `drain` for exactly this.
+
+Provider commands use a bounded pool of per-thread lanes. A lane processes one event at a time in
+FIFO order, including starts, stops, approvals, and restrictive delegation cleanup. Independent
+threads can progress while another session is starting. The reactor's drain includes every lane;
+the orchestration engine's durable command ordering is unchanged.
 
 Runtime receipts are a test-only mechanism. `RuntimeReceiptBusLive` in
 [`RuntimeReceiptBus.ts`][receipts] publishes nothing; only the test layer is PubSub-backed. Do not
@@ -138,6 +146,13 @@ captures state as hidden Git refs through the VCS driver's checkpoint operations
 baseline capture, completed-turn capture, diff projection, and reverting both the workspace and the
 provider conversation. The storage contract is `VcsCheckpointOps` in
 [`VcsDriver.ts`](../../apps/server/src/vcs/VcsDriver.ts), implemented for Git in the same directory.
+
+Capture uses a bounded metadata query for the current turn rather than loading conversation bodies,
+plans, or checkpoint file lists. Revert keeps its richer history query. Workspace index refreshes
+run separately from checkpoint capture and diff publication, with at most two scans active at once.
+Refresh requests coalesce by workspace; a request arriving during a scan schedules a follow-up
+generation. Search and file-list requests await the latest dirty generation before reading, and the
+checkpoint reactor's drain also waits for these refreshes.
 
 ## Startup
 

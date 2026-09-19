@@ -1353,74 +1353,176 @@ export function buildPendingUserInputAnswers(
   return answers;
 }
 
-export function buildThreadFeed(
-  thread: OrchestrationThread,
-  options?: {
-    readonly loadedMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
-    readonly localMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
-  },
+interface ThreadFeedOptions {
+  readonly loadedMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
+  readonly localMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
+}
+
+type ThreadFeedSource = Pick<OrchestrationThread, "activities" | "messages">;
+
+interface ActivityFeedDerivation {
+  readonly botStepMeters: ReadonlyMap<string, BotStepMeterData>;
+  readonly entries: ReadonlyArray<Extract<RawThreadFeedEntry, { type: "activity" }>>;
+}
+
+function deriveActivityFeed(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): ActivityFeedDerivation {
+  const botStepMeters = buildBotStepMeters(activities);
+  const entries = deriveWorkLogEntries(activities).map<
+    Extract<RawThreadFeedEntry, { type: "activity" }>
+  >((entry) => {
+    const summary = workEntryHeading(entry);
+    const detail = workEntryPreview(entry);
+    const getFullDetail = memoizeValue(() => buildWorkEntryExpandedBody(entry));
+    const getCopyText = memoizeValue(() =>
+      [summary, detail, getFullDetail()]
+        .filter((value, index, values): value is string => {
+          return Boolean(value) && values.indexOf(value) === index;
+        })
+        .join("\n"),
+    );
+    return {
+      type: "activity",
+      id: entry.id,
+      createdAt: entry.createdAt,
+      turnId: entry.turnId,
+      activity: {
+        id: entry.id,
+        createdAt: entry.createdAt,
+        turnId: entry.turnId,
+        summary,
+        detail,
+        canExpand: workEntryHasExpandedBody(entry),
+        getFullDetail,
+        getCopyText,
+        icon: workEntryIcon(entry),
+        toolLike: workLogEntryIsToolLike(entry),
+        status: workEntryStatus(entry),
+      },
+    };
+  });
+  return {
+    botStepMeters,
+    entries: Arr.sortWith(entries, (entry) => new Date(entry.createdAt), Order.Date),
+  };
+}
+
+function mergeFeedEntries(
+  messages: ReadonlyArray<Extract<RawThreadFeedEntry, { type: "message" }>>,
+  activities: ReadonlyArray<Extract<RawThreadFeedEntry, { type: "activity" }>>,
+): RawThreadFeedEntry[] {
+  const entries: RawThreadFeedEntry[] = [];
+  let messageIndex = 0;
+  let activityIndex = 0;
+
+  while (messageIndex < messages.length && activityIndex < activities.length) {
+    const message = messages[messageIndex];
+    const activity = activities[activityIndex];
+    if (!message || !activity) break;
+    if (new Date(message.createdAt).getTime() <= new Date(activity.createdAt).getTime()) {
+      entries.push(message);
+      messageIndex += 1;
+    } else {
+      entries.push(activity);
+      activityIndex += 1;
+    }
+  }
+
+  entries.push(...messages.slice(messageIndex), ...activities.slice(activityIndex));
+  return entries;
+}
+
+function buildThreadFeedFromDerivation(
+  thread: ThreadFeedSource,
+  options: ThreadFeedOptions | undefined,
+  activityFeed: ActivityFeedDerivation,
+  wrapMessage: (
+    message: OrchestrationThread["messages"][number],
+    botStepMeter: BotStepMeterData | undefined,
+  ) => Extract<RawThreadFeedEntry, { type: "message" }>,
 ): ThreadFeedEntry[] {
   const loadedMessages = options?.loadedMessages ?? thread.messages;
   const messages = options?.localMessages
     ? [...loadedMessages, ...options.localMessages]
     : loadedMessages;
-  const oldestLoadedMessageCreatedAt =
-    options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
-  const botStepMeters = buildBotStepMeters(thread.activities);
-  const workLogEntries = deriveWorkLogEntries(thread.activities);
-  const entries = Arr.sortWith(
-    [
-      ...messages.map<RawThreadFeedEntry>((message) => ({
-        type: "message",
-        id: message.id,
-        createdAt: message.createdAt,
+  const messageEntries = Arr.sortWith(
+    messages.map((message) =>
+      wrapMessage(
         message,
-        ...(message.turnId === null ? {} : { botStepMeter: botStepMeters.get(message.turnId) }),
-      })),
-      ...workLogEntries
-        .filter((entry) => {
-          if (options?.loadedMessages === undefined) {
-            return true;
-          }
-          return (
-            oldestLoadedMessageCreatedAt === null || entry.createdAt >= oldestLoadedMessageCreatedAt
-          );
-        })
-        .map<RawThreadFeedEntry>((entry) => {
-          const summary = workEntryHeading(entry);
-          const detail = workEntryPreview(entry);
-          const getFullDetail = memoizeValue(() => buildWorkEntryExpandedBody(entry));
-          const getCopyText = memoizeValue(() =>
-            [summary, detail, getFullDetail()]
-              .filter((value, index, values): value is string => {
-                return Boolean(value) && values.indexOf(value) === index;
-              })
-              .join("\n"),
-          );
-          return {
-            type: "activity",
-            id: entry.id,
-            createdAt: entry.createdAt,
-            turnId: entry.turnId,
-            activity: {
-              id: entry.id,
-              createdAt: entry.createdAt,
-              turnId: entry.turnId,
-              summary,
-              detail,
-              canExpand: workEntryHasExpandedBody(entry),
-              getFullDetail,
-              getCopyText,
-              icon: workEntryIcon(entry),
-              toolLike: workLogEntryIsToolLike(entry),
-              status: workEntryStatus(entry),
-            },
-          };
-        }),
-    ],
-    (s) => new Date(s.createdAt),
+        message.turnId === null ? undefined : activityFeed.botStepMeters.get(message.turnId),
+      ),
+    ),
+    (entry) => new Date(entry.createdAt),
     Order.Date,
   );
+  const oldestLoadedMessageCreatedAt =
+    options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
+  const activityEntries =
+    options?.loadedMessages === undefined
+      ? activityFeed.entries
+      : activityFeed.entries.filter(
+          (entry) =>
+            oldestLoadedMessageCreatedAt === null ||
+            entry.createdAt >= oldestLoadedMessageCreatedAt,
+        );
 
-  return groupAdjacentActivities(entries);
+  return groupAdjacentActivities(mergeFeedEntries(messageEntries, activityEntries));
+}
+
+function makeMessageEntry(
+  message: OrchestrationThread["messages"][number],
+  botStepMeter: BotStepMeterData | undefined,
+): Extract<RawThreadFeedEntry, { type: "message" }> {
+  return {
+    type: "message",
+    id: message.id,
+    createdAt: message.createdAt,
+    message,
+    ...(message.turnId === null ? {} : { botStepMeter }),
+  };
+}
+
+export function createThreadFeedBuilder() {
+  const activityCache = new WeakMap<
+    ReadonlyArray<OrchestrationThreadActivity>,
+    ActivityFeedDerivation
+  >();
+  const messageCache = new WeakMap<
+    OrchestrationThread["messages"][number],
+    {
+      readonly botStepMeter: BotStepMeterData | undefined;
+      readonly entry: Extract<RawThreadFeedEntry, { type: "message" }>;
+    }
+  >();
+
+  return (thread: ThreadFeedSource, options?: ThreadFeedOptions): ThreadFeedEntry[] => {
+    let activityFeed = activityCache.get(thread.activities);
+    if (!activityFeed) {
+      activityFeed = deriveActivityFeed(thread.activities);
+      activityCache.set(thread.activities, activityFeed);
+    }
+
+    return buildThreadFeedFromDerivation(thread, options, activityFeed, (message, botStepMeter) => {
+      const cached = messageCache.get(message);
+      if (cached !== undefined && cached.botStepMeter === botStepMeter) {
+        return cached.entry;
+      }
+      const entry = makeMessageEntry(message, botStepMeter);
+      messageCache.set(message, { botStepMeter, entry });
+      return entry;
+    });
+  };
+}
+
+export function buildThreadFeed(
+  thread: OrchestrationThread,
+  options?: ThreadFeedOptions,
+): ThreadFeedEntry[] {
+  return buildThreadFeedFromDerivation(
+    thread,
+    options,
+    deriveActivityFeed(thread.activities),
+    makeMessageEntry,
+  );
 }

@@ -27,6 +27,7 @@ import type {
   ProjectId,
   RuntimeMode,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
@@ -55,6 +56,23 @@ export interface ProjectionThreadCheckpointContext {
   readonly workspaceRoot: string;
   readonly worktreePath: string | null;
   readonly checkpoints: ReadonlyArray<OrchestrationCheckpointSummary>;
+}
+
+export interface ProjectionThreadCheckpointCaptureContext {
+  readonly threadId: ThreadId;
+  readonly projectId: ProjectId;
+  readonly workspaceRoot: string;
+  readonly worktreePath: string | null;
+  readonly activeTurnId: TurnId | null;
+  readonly latestCheckpointTurnCount: number;
+  readonly turnCheckpoint: {
+    readonly turnId: TurnId;
+    readonly checkpointTurnCount: number;
+    readonly checkpointRef: CheckpointRef;
+    readonly status: OrchestrationCheckpointSummary["status"];
+    readonly assistantMessageId: MessageId | null;
+  } | null;
+  readonly latestAssistantMessageId: MessageId | null;
 }
 
 export interface ProjectionFullThreadDiffContext {
@@ -198,6 +216,18 @@ export interface ProjectionSnapshotQueryShape {
   readonly getThreadCheckpointContext: (
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<ProjectionThreadCheckpointContext>, ProjectionRepositoryError>;
+
+  /**
+   * Read the bounded context needed to capture a turn checkpoint. Passing a
+   * turn id also resolves that turn's checkpoint and latest assistant message.
+   */
+  readonly getThreadCheckpointCaptureContext: (
+    threadId: ThreadId,
+    turnId: TurnId | null,
+  ) => Effect.Effect<
+    Option.Option<ProjectionThreadCheckpointCaptureContext>,
+    ProjectionRepositoryError
+  >;
 
   /**
    * Read only the narrow context needed to compute a full-thread diff from
