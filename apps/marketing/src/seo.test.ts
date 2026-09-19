@@ -29,9 +29,9 @@ describe("marketing search metadata", () => {
   it("keeps search metadata while preserving the original home page", () => {
     const home = sourceFile("pages/index.astro");
 
-    expect(home).toContain('title="Akeru Bot | Open-source AI coding bot desktop app"');
-    expect(home).toContain('description="Run Claude, Codex, Grok, Kimi, and OpenCode coding bots');
-    expect(home).toContain('<h1 class="hero-title">AI teammates that run on your machine</h1>');
+    expect(home).toContain('title="Akeru Bot | Open-source Grok Bot alternative"');
+    expect(home).toContain('description="Run named Grok bots in an open-source desktop app');
+    expect(home).toContain('<h1 class="hero-title">An open-source Grok Bot alternative</h1>');
     expect(home).toContain('<h2 class="section-title">Every bot has its own setup</h2>');
   });
 

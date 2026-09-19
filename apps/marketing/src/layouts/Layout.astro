@@ -17,7 +17,7 @@ interface Props {
 
 const {
   title = "Akeru Bot",
-  description = "Open-source AI teammates that run on your machine. Each bot keeps its own tools, instructions, and memory, on your Claude, Codex, Grok, Kimi, or OpenCode subscription.",
+  description = "An open-source Grok Bot alternative that runs on your machine. Each bot keeps its own tools, instructions, and memory, with the provider subscription you choose.",
   socialTitle,
   socialType = "website",
   articlePublishedTime,
@@ -37,7 +37,7 @@ const socialImageUrl = new URL("/og-v2.jpg", siteOrigin);
 const socialImageAlt = "Meet Akeru Bot. Each bot keeps its own tools and its own memory.";
 const year = new Date().getFullYear();
 const softwareDescription =
-  "Open-source desktop and web application for running coding bots with separate tools, plugins, instructions, and long-term memory.";
+  "Open-source desktop and web application for running named Grok bots with separate tools, plugins, instructions, and long-term memory.";
 const structuredData = [
   {
     "@context": "https://schema.org",
@@ -162,8 +162,8 @@ const structuredData = [
           <div class="footer-brand-block">
             <a href="/" class="footer-brand">akeru</a>
             <p class="footer-desc">
-              Open source AI teammates. Bring your own Claude, Codex, Grok, Kimi, or OpenCode
-              subscription.
+              Open-source Grok Bot alternative. Bring your own provider subscription and run the
+              environment where you choose. Akeru also supports Claude, Codex, Kimi, and OpenCode.
             </p>
           </div>
           <div class="footer-cols">
