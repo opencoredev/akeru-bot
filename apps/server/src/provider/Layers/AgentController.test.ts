@@ -3248,18 +3248,22 @@ describe("AgentControllerLive", () => {
         expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
           expect.arrayContaining(["preview_status", "preview_open", "preview_snapshot"]),
         );
-        await expect(
-          runtime.requiresApproval(String(codexThreadId), "preview_status", {}),
-        ).resolves.toBe(false);
-        await expect(
-          runtime.execute({
-            threadId: String(codexThreadId),
-            toolId: "preview_status",
-            toolCallId: "preview-status-1",
-            input: {},
-            approvalMode: "require-grant",
-          }),
-        ).resolves.toEqual({ available: true });
+        expect(
+          yield* Effect.promise(() =>
+            runtime.requiresApproval(String(codexThreadId), "preview_status", {}),
+          ),
+        ).toBe(false);
+        expect(
+          yield* Effect.promise(() =>
+            runtime.execute({
+              threadId: String(codexThreadId),
+              toolId: "preview_status",
+              toolCallId: "preview-status-1",
+              input: {},
+              approvalMode: "require-grant",
+            }),
+          ),
+        ).toEqual({ available: true });
       }),
       bridge.service,
       mastra.factory,
