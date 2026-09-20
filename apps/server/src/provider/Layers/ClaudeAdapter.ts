@@ -4471,7 +4471,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...toClaudeMcpServers(input.mcpServers ?? []),
         ...(mcpSession
           ? {
-              "t3-code": {
+              akeru: {
                 type: "http" as const,
                 url: mcpSession.endpoint,
                 headers: { Authorization: mcpSession.authorizationHeader },

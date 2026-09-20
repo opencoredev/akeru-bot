@@ -1,6 +1,10 @@
 import { assert, it } from "@effect/vitest";
 
-import { applyPreferredCodexDefaultModel, mapCodexModelCapabilities } from "./CodexProvider.ts";
+import {
+  applyPreferredCodexDefaultModel,
+  buildCodexInitializeParams,
+  mapCodexModelCapabilities,
+} from "./CodexProvider.ts";
 
 it("maps current Codex model capability fields", () => {
   const capabilities = mapCodexModelCapabilities({
@@ -143,4 +147,11 @@ it("ignores custom models that shadow a preferred slug", () => {
   ]);
 
   assert.deepStrictEqual(models.find((model) => model.isDefault)?.slug, "gpt-5.4");
+});
+
+it("identifies the app-server client as Akeru Desktop", () => {
+  const { clientInfo } = buildCodexInitializeParams();
+
+  assert.strictEqual(clientInfo.name, "akeru_desktop");
+  assert.strictEqual(clientInfo.title, "Akeru Bot Desktop");
 });

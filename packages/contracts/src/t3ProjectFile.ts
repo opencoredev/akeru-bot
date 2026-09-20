@@ -8,7 +8,7 @@ import { ProjectScriptIcon } from "./orchestration.ts";
 export const T3_PROJECT_FILE_NAME = "t3.json";
 
 /** Public URL of the published JSON Schema for {@link T3ProjectFile}. */
-export const T3_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json";
+export const T3_PROJECT_FILE_SCHEMA_URL = "https://www.akeru-bot.com/v1/schema/t3.json";
 
 const T3_PROJECT_FILE_PATH_MAX_LENGTH = 512;
 const T3_PROJECT_FILE_MAX_SCRIPTS = 50;
@@ -90,6 +90,6 @@ export const T3ProjectFile = Schema.Struct({
 }).annotate({
   title: "Akeru project file",
   description:
-    "Checked-in project configuration for Akeru Bot (t3.json at the repository root). See https://t3.codes for documentation.",
+    "Checked-in project configuration for Akeru Bot (t3.json at the repository root). See https://www.akeru-bot.com for documentation.",
 });
 export type T3ProjectFile = typeof T3ProjectFile.Type;

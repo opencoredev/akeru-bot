@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
+import { T3_PROJECT_FILE_SCHEMA_URL } from "@t3tools/contracts";
+
 import {
   buildT3ProjectFileJsonSchema,
   parseT3ProjectFile,
@@ -14,7 +16,8 @@ describe("buildT3ProjectFileJsonSchema", () => {
     const schema = buildT3ProjectFileJsonSchema();
 
     expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
-    expect(schema.$id).toBe("https://t3.codes/schema/t3.json");
+    expect(schema.$id).toBe(T3_PROJECT_FILE_SCHEMA_URL);
+    expect(schema.$id).toBe("https://www.akeru-bot.com/v1/schema/t3.json");
     expect(schema.type).toBe("object");
     expect(schema.additionalProperties).toBe(false);
   });
@@ -82,6 +85,15 @@ describe("parseT3ProjectFile", () => {
   it("returns the decoded file for valid contents", () => {
     expect(parseT3ProjectFile('{ "defaultThreadEnvMode": "worktree" }')).toEqual({
       defaultThreadEnvMode: "worktree",
+    });
+  });
+
+  it("accepts files that still list the legacy t3.codes $schema", () => {
+    expect(
+      parseT3ProjectFile('{ "$schema": "https://t3.codes/schema/t3.json", "iconPath": "logo.svg" }'),
+    ).toEqual({
+      $schema: "https://t3.codes/schema/t3.json",
+      iconPath: "logo.svg",
     });
   });
 

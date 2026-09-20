@@ -700,7 +700,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
               ? [
                   {
                     type: "http" as const,
-                    name: "t3-code",
+                    name: "akeru",
                     url: mcpSession.endpoint,
                     headers: [
                       {
@@ -722,7 +722,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             childProcessSpawner,
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: "akeru", version: "0.0.0" },
             ...(mcpServers.length > 0 ? { mcpServers } : {}),
             ...acpNativeLoggers,
           }).pipe(

@@ -109,6 +109,9 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
 
           const requests = readJsonRpcRequests(requestLogPath);
           expect(
+            requests.find((request) => request.method === "initialize")?.params?.clientInfo,
+          ).toMatchObject({ name: "akeru-git-text", version: "0.0.0" });
+          expect(
             requests.find((request) => request.method === "initialize")?.params?.clientCapabilities,
           ).toMatchObject({
             fs: { readTextFile: false, writeTextFile: false },

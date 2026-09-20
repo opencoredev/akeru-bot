@@ -345,11 +345,12 @@ export function createDevRunnerEnv({
     }
 
     // A dev-runner server is never launcher-managed. When the shell that runs
-    // this script was itself spawned by the machine's managed t3 service (an
-    // agent working inside T3 Code), these leak through and the child server
-    // fails startup with "The service launcher started a different t3 version"
-    // (serviceLauncherClient.ts resolveStartup).
+    // this script was itself spawned by the machine's managed Akeru Bot service
+    // (an agent working inside Akeru Bot), these leak through and the child
+    // server fails startup with "The service launcher started a different Akeru
+    // Bot version" (serviceLauncherClient.ts resolveStartup).
     delete output.T3_SERVICE_LAUNCHER_CONTEXT;
+    delete output.AKERU_BOOT_SERVICE_UNIT;
     delete output.T3_BOOT_SERVICE_UNIT;
 
     if (!isDesktopMode) {

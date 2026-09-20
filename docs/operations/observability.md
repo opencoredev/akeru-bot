@@ -524,7 +524,7 @@ OTLP export (`T3CODE_OTLP_*` names are compatibility aliases; the product home i
 - `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
 - `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
 - `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_SERVICE_NAME`: service name, default `t3-server` (compatibility default)
+- `T3CODE_OTLP_SERVICE_NAME`: service name, default `akeru-server`
 
 If the OTLP URLs are unset, local tracing still works and metrics stay in-process only.
 

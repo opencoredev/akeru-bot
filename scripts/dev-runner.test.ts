@@ -234,6 +234,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           mode: "dev",
           baseEnv: {
             T3_SERVICE_LAUNCHER_CONTEXT: '{"childVersion":"9.9.9"}',
+            AKERU_BOOT_SERVICE_UNIT: "akeru-bot.service",
             T3_BOOT_SERVICE_UNIT: "t3code.service",
           },
           serverOffset: 0,
@@ -248,6 +249,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         });
 
         assert.equal(env.T3_SERVICE_LAUNCHER_CONTEXT, undefined);
+        assert.equal(env.AKERU_BOOT_SERVICE_UNIT, undefined);
         assert.equal(env.T3_BOOT_SERVICE_UNIT, undefined);
       }),
     );

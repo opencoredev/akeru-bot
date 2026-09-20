@@ -3058,7 +3058,7 @@ describe("AgentControllerLive", () => {
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ "builtin-exa_search": {}, "t3-code_preview_status": {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {}, akeru_preview_status: {} })),
       getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
@@ -3092,7 +3092,7 @@ describe("AgentControllerLive", () => {
         expect(makeMcpManagerMock).toHaveBeenCalledOnce();
         expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
           "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
-          "t3-code": {
+          akeru: {
             url: "http://127.0.0.1:15070/mcp",
             headers: { Authorization: "Bearer preview-test" },
           },

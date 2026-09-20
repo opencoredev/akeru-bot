@@ -515,7 +515,7 @@ const buildAppUnderTest = (options?: {
       otlpTracesUrl: undefined,
       otlpMetricsUrl: undefined,
       otlpExportIntervalMs: 10_000,
-      otlpServiceName: "t3-server",
+      otlpServiceName: "akeru-server",
       mode: "desktop",
       port: 0,
       host: "127.0.0.1",
@@ -1873,6 +1873,24 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.equal(response.status, 200);
       assert.deepEqual(body, testEnvironmentDescriptor);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("serves the same public environment descriptor on the Akeru well-known path", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const akeruUrl = yield* getHttpServerUrl("/.well-known/akeru/environment");
+      const t3Url = yield* getHttpServerUrl("/.well-known/t3/environment");
+      const akeruResponse = yield* fetchEffect(akeruUrl);
+      const t3Response = yield* fetchEffect(t3Url);
+      const akeruBody = yield* responseJsonEffect<typeof testEnvironmentDescriptor>(akeruResponse);
+      const t3Body = yield* responseJsonEffect<typeof testEnvironmentDescriptor>(t3Response);
+
+      assert.equal(akeruResponse.status, 200);
+      assert.equal(t3Response.status, 200);
+      assert.deepEqual(akeruBody, testEnvironmentDescriptor);
+      assert.deepEqual(t3Body, akeruBody);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

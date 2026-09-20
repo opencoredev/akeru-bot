@@ -111,13 +111,23 @@ const testDescriptor = {
   capabilities: { repositoryIdentity: true },
 };
 
-const withDescriptorServer = <A, E, R>(run: (origin: string) => Effect.Effect<A, E, R>) =>
+const withDescriptorServer = <A, E, R>(
+  run: (origin: string) => Effect.Effect<A, E, R>,
+  options?: {
+    readonly descriptorsByPath?: Record<string, typeof testDescriptor>;
+  },
+) =>
   Effect.acquireUseRelease(
     Effect.callback<NodeHttp.Server>((resume) => {
+      const descriptorsByPath = options?.descriptorsByPath ?? {
+        "/.well-known/akeru/environment": testDescriptor,
+        "/.well-known/t3/environment": testDescriptor,
+      };
       const server = NodeHttp.createServer((request, response) => {
-        if (request.url === "/.well-known/t3/environment") {
+        const descriptor = request.url === undefined ? undefined : descriptorsByPath[request.url];
+        if (descriptor !== undefined) {
           response.writeHead(200, { "content-type": "application/json" });
-          response.end(JSON.stringify(testDescriptor));
+          response.end(JSON.stringify(descriptor));
           return;
         }
         response.writeHead(404);
@@ -170,6 +180,61 @@ describe("akeru pair", () => {
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "akeru pair");
       }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("prefers the Akeru well-known path when both answer", () =>
+    withDescriptorServer(
+      (origin) =>
+        Effect.gen(function* () {
+          const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-akeru-"));
+          const port = Number(new URL(origin).port);
+          const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+          yield* persistServerRuntimeState({
+            path: statePath,
+            state: yield* makePersistedServerRuntimeState({
+              config: { host: "127.0.0.1", devUrl: undefined },
+              port,
+            }),
+          });
+
+          const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
+
+          assert.include(output, `Pairing with akeru-pair (${origin})`);
+        }),
+      {
+        descriptorsByPath: {
+          "/.well-known/akeru/environment": { ...testDescriptor, label: "akeru-pair" },
+          "/.well-known/t3/environment": { ...testDescriptor, label: "t3-pair" },
+        },
+      },
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("falls back to the T3 well-known path when Akeru is missing", () =>
+    withDescriptorServer(
+      (origin) =>
+        Effect.gen(function* () {
+          const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-t3-"));
+          const port = Number(new URL(origin).port);
+          const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+          yield* persistServerRuntimeState({
+            path: statePath,
+            state: yield* makePersistedServerRuntimeState({
+              config: { host: "127.0.0.1", devUrl: undefined },
+              port,
+            }),
+          });
+
+          const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
+
+          assert.include(output, `Pairing with t3-pair (${origin})`);
+        }),
+      {
+        descriptorsByPath: {
+          "/.well-known/t3/environment": { ...testDescriptor, label: "t3-pair" },
+        },
+      },
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 

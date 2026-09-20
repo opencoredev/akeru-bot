@@ -74,6 +74,9 @@ glab auth login
 
 ### Bitbucket
 
+Akeru reads Bitbucket credentials from the environment server. The `T3CODE_BITBUCKET_*` names are
+compatibility aliases and still work.
+
 Set a Bitbucket access token:
 
 ```bash

@@ -1245,7 +1245,7 @@ describe("deriveWorkLogEntries", () => {
   it("preserves MCP server, tool, arguments, and results for expanded display", () => {
     const item = {
       type: "mcpToolCall",
-      server: "t3-code",
+      server: "akeru",
       tool: "preview_status",
       arguments: {},
       status: "completed",
@@ -1255,17 +1255,17 @@ describe("deriveWorkLogEntries", () => {
       makeActivity({
         id: "mcp-tool-done",
         kind: "tool.completed",
-        summary: "t3-code · preview_status",
+        summary: "akeru · preview_status",
         payload: {
           itemType: "mcp_tool_call",
-          title: "t3-code · preview_status",
+          title: "akeru · preview_status",
           data: { item },
         },
       }),
     ];
 
     const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.toolTitle).toBe("t3-code · preview_status");
+    expect(entry?.toolTitle).toBe("akeru · preview_status");
     expect(entry?.toolData).toEqual(item);
   });
 

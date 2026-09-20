@@ -473,7 +473,14 @@ describe("checkCursorProviderStatus", () => {
       "gpt-5.4",
       "claude-opus-4-6",
     ]);
-    await expect(runNode(waitForFileContent(requestLogPath))).resolves.toContain("initialize");
+    const requests = (await runNode(waitForFileContent(requestLogPath)))
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
+    expect(
+      requests.find((request) => request.method === "initialize")?.params?.clientInfo,
+    ).toMatchObject({ name: "akeru-provider-probe", version: "0.0.0" });
   });
 });
 

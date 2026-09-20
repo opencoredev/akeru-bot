@@ -66,8 +66,19 @@ export interface AkeruSessionResourcesOptions {
   ) => Record<string, McpServerConfig>;
 }
 
-const T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
-const T3_CODE_PREVIEW_TOOL_PREFIX = `${T3_CODE_PREVIEW_MCP_SERVER_NAME}_`;
+const AKERU_PREVIEW_MCP_SERVER_NAME = "akeru";
+const LEGACY_T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
+const PREVIEW_MCP_TOOL_PREFIXES = [
+  `${AKERU_PREVIEW_MCP_SERVER_NAME}_`,
+  `${LEGACY_T3_CODE_PREVIEW_MCP_SERVER_NAME}_`,
+] as const;
+
+function stripPreviewMcpToolPrefix(name: string): string {
+  for (const prefix of PREVIEW_MCP_TOOL_PREFIXES) {
+    if (name.startsWith(prefix)) return name.slice(prefix.length);
+  }
+  return name;
+}
 
 export class AkeruSessionResources {
   private readonly options: AkeruSessionResourcesOptions;
@@ -221,7 +232,7 @@ export class AkeruSessionResources {
           : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
         if (previewMcpServerConfig) {
-          configs[T3_CODE_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
+          configs[AKERU_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
         }
         if (usesComputer) {
           if (!this.options.hostPlatform) {
@@ -291,9 +302,7 @@ export class AkeruSessionResources {
     };
     return Object.fromEntries(
       Object.entries(tools).map(([name, tool]) => {
-        const exposedName = name.startsWith(T3_CODE_PREVIEW_TOOL_PREFIX)
-          ? name.slice(T3_CODE_PREVIEW_TOOL_PREFIX.length)
-          : name;
+        const exposedName = stripPreviewMcpToolPrefix(name);
         const execute = Reflect.get(tool, "execute") as unknown;
         if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
           return [exposedName, tool];

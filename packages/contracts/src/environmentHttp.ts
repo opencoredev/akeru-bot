@@ -332,11 +332,23 @@ export const AuthOtherClientSessionsRevokeResult = Schema.Struct({
 });
 export type AuthOtherClientSessionsRevokeResult = typeof AuthOtherClientSessionsRevokeResult.Type;
 
-export class EnvironmentMetadataHttpApi extends HttpApiGroup.make("metadata").add(
-  HttpApiEndpoint.get("descriptor", "/.well-known/t3/environment", {
-    success: ExecutionEnvironmentDescriptor,
-  }),
-) {}
+/** Canonical well-known path for the public environment descriptor. */
+export const AKERU_ENVIRONMENT_DESCRIPTOR_PATH = "/.well-known/akeru/environment" as const;
+
+/** Compatibility alias for older T3 Code clients; same handler as the Akeru path. */
+export const T3_ENVIRONMENT_DESCRIPTOR_PATH = "/.well-known/t3/environment" as const;
+
+export class EnvironmentMetadataHttpApi extends HttpApiGroup.make("metadata")
+  .add(
+    HttpApiEndpoint.get("descriptor", AKERU_ENVIRONMENT_DESCRIPTOR_PATH, {
+      success: ExecutionEnvironmentDescriptor,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("descriptorT3", T3_ENVIRONMENT_DESCRIPTOR_PATH, {
+      success: ExecutionEnvironmentDescriptor,
+    }),
+  ) {}
 
 export class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
   .add(

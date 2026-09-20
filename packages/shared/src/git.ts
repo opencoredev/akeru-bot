@@ -10,13 +10,18 @@ import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { detectSourceControlProviderFromRemoteUrl } from "./sourceControl.ts";
 
-export const WORKTREE_BRANCH_PREFIX = "t3code";
-// Canonical form is `t3code/<8 hex>`. Older mobile builds generated `t3code/<uuid>`
-// via Crypto.randomUUID() (always RFC 4122 v4), so the matcher also accepts exactly
-// that shape — version nibble `4`, variant nibble `[89ab]` — to keep those threads
-// eligible for branch regeneration without loosening beyond what was ever generated.
+export const WORKTREE_BRANCH_PREFIX = "akeru";
+const LEGACY_WORKTREE_BRANCH_PREFIX = "t3code";
+const TEMP_WORKTREE_HEX8 = "[0-9a-f]{8}";
+const TEMP_WORKTREE_UUID_V4 = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+// Canonical form is `akeru/<8 hex>`. Older threads used `t3code/<8 hex>`. Older
+// mobile builds generated `t3code/<uuid>` via Crypto.randomUUID() (always RFC
+// 4122 v4), so detection also accepts exactly that t3code shape — version nibble
+// `4`, variant nibble `[89ab]` — to keep those threads eligible for regeneration
+// and cleanup. New akeru branches are 8-hex only; the uuid matcher is for old
+// t3code branches only.
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(
-  `^${WORKTREE_BRANCH_PREFIX}\\/(?:[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$`,
+  `^(?:${WORKTREE_BRANCH_PREFIX}\\/${TEMP_WORKTREE_HEX8}|${LEGACY_WORKTREE_BRANCH_PREFIX}\\/(?:${TEMP_WORKTREE_HEX8}|${TEMP_WORKTREE_UUID_V4}))$`,
 );
 
 /**

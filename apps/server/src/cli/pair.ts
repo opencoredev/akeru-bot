@@ -10,9 +10,11 @@
  * HTTPS and pairs through the tailnet URL instead.
  */
 import {
+  AKERU_ENVIRONMENT_DESCRIPTOR_PATH,
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
   PortSchema,
+  T3_ENVIRONMENT_DESCRIPTOR_PATH,
 } from "@t3tools/contracts";
 import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
 import {
@@ -55,7 +57,6 @@ import {
 } from "../startupAccess.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
 
-const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
 const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
 // Tailscale provisions an HTTPS certificate on the first request to a fresh
 // serve mapping, which can take a few seconds.
@@ -193,21 +194,23 @@ export const formatPairOutput = (input: {
   ].join("\n");
 
 /**
- * Three outcomes, because they drive different decisions: a T3 descriptor
- * (pair with it), nothing answering (safe to configure Tailscale Serve), or
- * something answering that is not a T3 server (do NOT overwrite its mapping).
+ * Three outcomes, because they drive different decisions: an environment
+ * descriptor (pair with it), nothing answering (safe to configure Tailscale
+ * Serve), or something answering that is not an Akeru/T3 server (do NOT
+ * overwrite its mapping).
  */
 type EnvironmentProbeResult =
   | { readonly _tag: "descriptor"; readonly descriptor: ExecutionEnvironmentDescriptor }
   | { readonly _tag: "unreachable" }
   | { readonly _tag: "not-a-t3-server" };
 
-const probeEnvironmentDescriptor = (
+const probeEnvironmentDescriptorAt = (
   baseUrl: string,
+  path: string,
 ): Effect.Effect<EnvironmentProbeResult, never, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
-    const request = HttpClientRequest.get(new URL(WELL_KNOWN_ENVIRONMENT_PATH, baseUrl).toString());
+    const request = HttpClientRequest.get(new URL(path, baseUrl).toString());
     const response = yield* client.execute(request).pipe(
       Effect.timeout(PAIR_PROBE_TIMEOUT),
       // Transport failure or timeout: nothing (reachable) is listening there.
@@ -228,6 +231,18 @@ const probeEnvironmentDescriptor = (
     );
     return { _tag: "descriptor", descriptor } as const;
   }).pipe(Effect.catch((outcome) => Effect.succeed(outcome)));
+
+const probeEnvironmentDescriptor = (
+  baseUrl: string,
+): Effect.Effect<EnvironmentProbeResult, never, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const akeru = yield* probeEnvironmentDescriptorAt(baseUrl, AKERU_ENVIRONMENT_DESCRIPTOR_PATH);
+    if (akeru._tag === "descriptor" || akeru._tag === "unreachable") {
+      return akeru;
+    }
+    const t3 = yield* probeEnvironmentDescriptorAt(baseUrl, T3_ENVIRONMENT_DESCRIPTOR_PATH);
+    return t3._tag === "descriptor" ? t3 : akeru;
+  });
 
 // signal 0 delivers nothing; it only reports whether the pid exists. EPERM
 // means it exists but belongs to another user, which still counts as alive.
@@ -331,7 +346,7 @@ const makePairServerConfig = Effect.fn(function* (input: {
     otlpTracesUrl: undefined,
     otlpMetricsUrl: undefined,
     otlpExportIntervalMs: 10_000,
-    otlpServiceName: "t3-server",
+    otlpServiceName: "akeru-server",
     mode: "web",
     port: state.port,
     host: state.host,

@@ -19,6 +19,10 @@ const ProjectVcsConfig = Schema.Struct({
 });
 const ProjectVcsConfigJson = fromLenientJson(ProjectVcsConfig);
 const decodeProjectVcsConfigJson = Schema.decodeUnknownEffect(ProjectVcsConfigJson);
+const PROJECT_VCS_CONFIG_RELATIVE_PATHS = [
+  [".akeru", "vcs.json"],
+  [".t3code", "vcs.json"],
+] as const;
 
 type ProjectVcsConfigFile = typeof ProjectVcsConfig.Type;
 
@@ -71,23 +75,25 @@ export const make = Effect.gen(function* () {
   const findConfigPath = Effect.fn("VcsProjectConfig.findConfigPath")(function* (cwd: string) {
     let current = cwd;
     while (true) {
-      const candidate = path.join(current, ".t3code", "vcs.json");
-      const exists = yield* fileSystem.exists(candidate).pipe(
-        Effect.mapError(
-          (cause) =>
-            new VcsProjectConfigError({
-              operation: "inspect",
-              cwd,
-              configPath: candidate,
-              cause,
-            }),
-        ),
-        Effect.catchTags({
-          VcsProjectConfigError: (error) => logVcsProjectConfigError(error).pipe(Effect.as(false)),
-        }),
-      );
-      if (exists) {
-        return Option.some(candidate);
+      for (const relativePath of PROJECT_VCS_CONFIG_RELATIVE_PATHS) {
+        const candidate = path.join(current, ...relativePath);
+        const exists = yield* fileSystem.exists(candidate).pipe(
+          Effect.mapError(
+            (cause) =>
+              new VcsProjectConfigError({
+                operation: "inspect",
+                cwd,
+                configPath: candidate,
+                cause,
+              }),
+          ),
+          Effect.catchTags({
+            VcsProjectConfigError: (error) => logVcsProjectConfigError(error).pipe(Effect.as(false)),
+          }),
+        );
+        if (exists) {
+          return Option.some(candidate);
+        }
       }
 
       const parent = path.dirname(current);

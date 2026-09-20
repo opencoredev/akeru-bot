@@ -41,14 +41,15 @@ An older launcher can require one local `service update` before remote rollback 
 
 ## Linux
 
-Linux installs a systemd user unit at `~/.config/systemd/user/t3code.service`. Installation enables
-lingering, so the service starts at boot and remains available after you log out.
+Linux installs a systemd user unit at `~/.config/systemd/user/akeru-bot.service`. Installation enables
+lingering, so the service starts at boot and remains available after you log out. An older
+`t3code.service` is stopped and removed the next time you install.
 
 ## macOS
 
 macOS installs a launch agent at
-`~/Library/LaunchAgents/com.t3tools.t3code.service.plist`. It starts when you log in and stops when
-you log out.
+`~/Library/LaunchAgents/dev.leodoes.akeru.service.plist`. It starts when you log in and stops when
+you log out. An older `com.t3tools.t3code.service` is stopped and removed the next time you install.
 
 For an unattended Mac, keep the Mac awake and configure an account to log in after restart. FileVault
 can prevent automatic login.

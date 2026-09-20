@@ -136,13 +136,13 @@ export const serverEnvironmentHttpApiLayer = HttpApiBuilder.group(
   "metadata",
   Effect.fnUntraced(function* (handlers) {
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
-    return handlers.handle(
-      "descriptor",
-      Effect.fn("environment.metadata.descriptor")(function* (args) {
-        yield* annotateEnvironmentRequest(args.endpoint.name);
-        return yield* serverEnvironment.getDescriptor;
-      }),
-    );
+    const serveDescriptor = Effect.fn("environment.metadata.descriptor")(function* (args: {
+      readonly endpoint: { readonly name: string };
+    }) {
+      yield* annotateEnvironmentRequest(args.endpoint.name);
+      return yield* serverEnvironment.getDescriptor;
+    });
+    return handlers.handle("descriptor", serveDescriptor).handle("descriptorT3", serveDescriptor);
   }),
 );
 

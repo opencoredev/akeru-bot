@@ -682,6 +682,64 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           item: {
             type: "mcpToolCall",
             id: "mcp_1",
+            server: "akeru",
+            tool: "preview_status",
+            arguments: {},
+            durationMs: 12,
+            error: null,
+            result: { content: [{ type: "text", text: "attached" }] },
+            status: "completed",
+          },
+        },
+      });
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.itemType, "mcp_tool_call");
+      NodeAssert.equal(firstEvent.value.payload.title, "akeru · preview_status");
+      NodeAssert.deepStrictEqual(firstEvent.value.payload.data, {
+        completedAtMs: 1_778_000_000_000,
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: {
+          type: "mcpToolCall",
+          id: "mcp_1",
+          server: "akeru",
+          tool: "preview_status",
+          arguments: {},
+          durationMs: 12,
+          error: null,
+          result: { content: [{ type: "text", text: "attached" }] },
+          status: "completed",
+        },
+      });
+    }),
+  );
+
+  it.effect("still labels historical t3-code MCP lifecycle entries", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-mcp-legacy-complete"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("mcp_legacy_1"),
+        payload: {
+          completedAtMs: 1_778_000_000_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "mcpToolCall",
+            id: "mcp_legacy_1",
             server: "t3-code",
             tool: "preview_status",
             arguments: {},
@@ -700,22 +758,10 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       }
       NodeAssert.equal(firstEvent.value.payload.itemType, "mcp_tool_call");
       NodeAssert.equal(firstEvent.value.payload.title, "t3-code · preview_status");
-      NodeAssert.deepStrictEqual(firstEvent.value.payload.data, {
-        completedAtMs: 1_778_000_000_000,
-        threadId: "thread-1",
-        turnId: "turn-1",
-        item: {
-          type: "mcpToolCall",
-          id: "mcp_1",
-          server: "t3-code",
-          tool: "preview_status",
-          arguments: {},
-          durationMs: 12,
-          error: null,
-          result: { content: [{ type: "text", text: "attached" }] },
-          status: "completed",
-        },
-      });
+      NodeAssert.equal(
+        (firstEvent.value.payload.data as { item: { server: string } }).item.server,
+        "t3-code",
+      );
     }),
   );
 

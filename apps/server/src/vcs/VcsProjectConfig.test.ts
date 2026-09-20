@@ -16,18 +16,29 @@ const TestLayer = VcsProjectConfig.layer.pipe(
 describe("VcsProjectConfig", () => {
   it("keeps operation context and the original cause on config errors", () => {
     const cause = new Error("permission denied");
-    const error = new VcsProjectConfig.VcsProjectConfigError({
+    const akeruError = new VcsProjectConfig.VcsProjectConfigError({
       operation: "read",
+      cwd: "/repo/packages/app",
+      configPath: "/repo/.akeru/vcs.json",
+      cause,
+    });
+
+    assert.equal(akeruError.operation, "read");
+    assert.equal(akeruError.cwd, "/repo/packages/app");
+    assert.equal(akeruError.configPath, "/repo/.akeru/vcs.json");
+    assert.strictEqual(akeruError.cause, cause);
+    assert.equal(akeruError.message, "Failed to read VCS project config at /repo/.akeru/vcs.json.");
+
+    const t3codeError = new VcsProjectConfig.VcsProjectConfigError({
+      operation: "inspect",
       cwd: "/repo/packages/app",
       configPath: "/repo/.t3code/vcs.json",
       cause,
     });
-
-    assert.equal(error.operation, "read");
-    assert.equal(error.cwd, "/repo/packages/app");
-    assert.equal(error.configPath, "/repo/.t3code/vcs.json");
-    assert.strictEqual(error.cause, cause);
-    assert.equal(error.message, "Failed to read VCS project config at /repo/.t3code/vcs.json.");
+    assert.equal(
+      t3codeError.message,
+      "Failed to inspect VCS project config at /repo/.t3code/vcs.json.",
+    );
   });
 
   it.layer(TestLayer)("uses an explicit requested VCS kind before config", (it) => {
@@ -38,6 +49,32 @@ describe("VcsProjectConfig", () => {
           cwd: "/repo",
           requestedKind: "jj",
         });
+
+        assert.equal(kind, "jj");
+      }),
+    );
+  });
+
+  it.layer(TestLayer)("discovers .akeru/vcs.json from nested workspaces", (it) => {
+    it.effect("returns the configured kind", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-vcs-config-test-",
+        });
+        const configDir = path.join(root, ".akeru");
+        const nested = path.join(root, "packages", "app");
+        yield* fileSystem.makeDirectory(configDir, { recursive: true });
+        yield* fileSystem.makeDirectory(nested, { recursive: true });
+        yield* fileSystem.writeFileString(
+          path.join(configDir, "vcs.json"),
+          // @effect-diagnostics-next-line preferSchemaOverJson:off
+          JSON.stringify({ vcs: { kind: "jj" } }),
+        );
+
+        const config = yield* VcsProjectConfig.VcsProjectConfig;
+        const kind = yield* config.resolveKind({ cwd: nested });
 
         assert.equal(kind, "jj");
       }),
@@ -70,6 +107,37 @@ describe("VcsProjectConfig", () => {
     );
   });
 
+  it.layer(TestLayer)("prefers .akeru/vcs.json over .t3code/vcs.json when both exist", (it) => {
+    it.effect("returns the akeru configured kind", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-vcs-config-test-",
+        });
+        const akeruConfigDir = path.join(root, ".akeru");
+        const t3codeConfigDir = path.join(root, ".t3code");
+        yield* fileSystem.makeDirectory(akeruConfigDir, { recursive: true });
+        yield* fileSystem.makeDirectory(t3codeConfigDir, { recursive: true });
+        yield* fileSystem.writeFileString(
+          path.join(akeruConfigDir, "vcs.json"),
+          // @effect-diagnostics-next-line preferSchemaOverJson:off
+          JSON.stringify({ vcs: { kind: "jj" } }),
+        );
+        yield* fileSystem.writeFileString(
+          path.join(t3codeConfigDir, "vcs.json"),
+          // @effect-diagnostics-next-line preferSchemaOverJson:off
+          JSON.stringify({ vcs: { kind: "git" } }),
+        );
+
+        const config = yield* VcsProjectConfig.VcsProjectConfig;
+        const kind = yield* config.resolveKind({ cwd: root });
+
+        assert.equal(kind, "jj");
+      }),
+    );
+  });
+
   it.layer(TestLayer)("continues to parent configs after a candidate inspect failure", (it) => {
     it.effect("logs the failed candidate and returns the parent config", () => {
       const messages: unknown[] = [];
@@ -96,17 +164,30 @@ describe("VcsProjectConfig", () => {
         const kind = yield* config.resolveKind({ cwd });
 
         assert.equal(kind, "jj");
-        const failedCandidate = path.join(cwd, ".t3code", "vcs.json");
-        const [error] = messages[0] as ReadonlyArray<unknown>;
-        assert.instanceOf(error, VcsProjectConfig.VcsProjectConfigError);
+        const failedAkeruCandidate = path.join(cwd, ".akeru", "vcs.json");
+        const failedT3codeCandidate = path.join(cwd, ".t3code", "vcs.json");
+        const [akeruError] = messages[0] as ReadonlyArray<unknown>;
+        assert.instanceOf(akeruError, VcsProjectConfig.VcsProjectConfigError);
         assert.equal(
-          error.message,
-          "Failed to inspect VCS project config at " + failedCandidate + ".",
+          akeruError.message,
+          "Failed to inspect VCS project config at " + failedAkeruCandidate + ".",
         );
-        assert.deepInclude(error, {
+        assert.deepInclude(akeruError, {
           operation: "inspect",
           cwd,
-          configPath: failedCandidate,
+          configPath: failedAkeruCandidate,
+          _tag: "VcsProjectConfigError",
+        });
+        const [t3codeError] = messages[1] as ReadonlyArray<unknown>;
+        assert.instanceOf(t3codeError, VcsProjectConfig.VcsProjectConfigError);
+        assert.equal(
+          t3codeError.message,
+          "Failed to inspect VCS project config at " + failedT3codeCandidate + ".",
+        );
+        assert.deepInclude(t3codeError, {
+          operation: "inspect",
+          cwd,
+          configPath: failedT3codeCandidate,
           _tag: "VcsProjectConfigError",
         });
       }).pipe(Effect.provide(Logger.layer([logger], { mergeWithExisting: false })));
@@ -141,7 +222,7 @@ describe("VcsProjectConfig", () => {
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
-        const configDir = path.join(root, ".t3code");
+        const configDir = path.join(root, ".akeru");
         yield* fileSystem.makeDirectory(configDir, { recursive: true });
         yield* fileSystem.writeFileString(path.join(configDir, "vcs.json"), "{not json");
 

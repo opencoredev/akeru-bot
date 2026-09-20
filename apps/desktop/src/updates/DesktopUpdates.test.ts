@@ -736,6 +736,74 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
+  it.effect("disables automatic updates when AKERU_DISABLE_AUTO_UPDATE is set", () => {
+    const harness = makeHarness({
+      env: { AKERU_DISABLE_AUTO_UPDATE: "true" },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+
+        const reason = yield* updates.disabledReason;
+        assert.isTrue(Option.isSome(reason));
+        if (Option.isSome(reason)) {
+          assert.equal(reason.value, "Automatic updates are disabled by an environment setting.");
+          assert.notInclude(reason.value, "T3CODE_DISABLE_AUTO_UPDATE");
+        }
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("still honors T3CODE_DISABLE_AUTO_UPDATE as a compatibility alias", () => {
+    const harness = makeHarness({
+      env: { T3CODE_DISABLE_AUTO_UPDATE: "true" },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+
+        const reason = yield* updates.disabledReason;
+        assert.isTrue(Option.isSome(reason));
+        if (Option.isSome(reason)) {
+          assert.equal(reason.value, "Automatic updates are disabled by an environment setting.");
+          assert.notInclude(reason.value, "T3CODE_DISABLE_AUTO_UPDATE");
+        }
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("disables automatic updates when either disable flag is set", () => {
+    const harness = makeHarness({
+      env: {
+        AKERU_DISABLE_AUTO_UPDATE: "false",
+        T3CODE_DISABLE_AUTO_UPDATE: "true",
+      },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect("fails channel changes with a typed error while a check is in progress", () =>
     Effect.gen(function* () {
       const checkStarted = yield* Deferred.make<void>();

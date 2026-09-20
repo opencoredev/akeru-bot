@@ -13,7 +13,7 @@ describe("hostedPairing", () => {
   });
 
   it("reads hosted pairing host and query token parameters", () => {
-    const url = new URL("https://app.t3.codes/pair?host=100.64.1.2:3773&token=ABCD1234");
+    const url = new URL("https://example.test/pair?host=100.64.1.2:3773&token=ABCD1234");
 
     expect(readHostedPairingRequest(url)).toEqual({
       host: "100.64.1.2:3773",
@@ -24,7 +24,7 @@ describe("hostedPairing", () => {
   });
 
   it("prefers hash tokens so generated hosted links do not put credentials in search params", () => {
-    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.t3.codes");
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://hosted.example.test");
 
     const url = new URL(
       buildHostedPairingUrl({
@@ -34,7 +34,7 @@ describe("hostedPairing", () => {
       }),
     );
 
-    expect(url.origin).toBe("https://preview.t3.codes");
+    expect(url.origin).toBe("https://hosted.example.test");
     expect(url.pathname).toBe("/pair");
     expect(url.searchParams.get("host")).toBe("https://backend.example.com:3773");
     expect(url.searchParams.get("label")).toBe("Workstation");
@@ -44,23 +44,32 @@ describe("hostedPairing", () => {
 
   it("ignores incomplete hosted pairing requests", () => {
     expect(
-      hasHostedPairingRequest(new URL("https://app.t3.codes/pair?host=backend.example.com")),
+      hasHostedPairingRequest(new URL("https://example.test/pair?host=backend.example.com")),
     ).toBe(false);
-    expect(hasHostedPairingRequest(new URL("https://app.t3.codes/pair?token=ABCD1234"))).toBe(
+    expect(hasHostedPairingRequest(new URL("https://example.test/pair?token=ABCD1234"))).toBe(
       false,
     );
   });
 
-  it("detects the hosted static app only when no backend URL is configured", () => {
-    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.t3.codes");
+  it("does not treat any origin as a hosted static app when VITE_HOSTED_APP_URL is unset", () => {
+    vi.stubEnv("VITE_HOSTED_APP_URL", "");
     vi.stubEnv("VITE_HTTP_URL", "");
     vi.stubEnv("VITE_WS_URL", "");
 
-    expect(isHostedStaticApp(new URL("https://preview.t3.codes/"))).toBe(true);
-    expect(isHostedStaticApp(new URL("https://preview.t3.codes/pair"))).toBe(true);
+    expect(isHostedStaticApp(new URL("https://example.test/"))).toBe(false);
+    expect(isHostedStaticApp(new URL("https://example.test/pair"))).toBe(false);
+  });
+
+  it("detects the hosted static app only when no backend URL is configured", () => {
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://hosted.example.test");
+    vi.stubEnv("VITE_HTTP_URL", "");
+    vi.stubEnv("VITE_WS_URL", "");
+
+    expect(isHostedStaticApp(new URL("https://hosted.example.test/"))).toBe(true);
+    expect(isHostedStaticApp(new URL("https://hosted.example.test/pair"))).toBe(true);
     expect(isHostedStaticApp(new URL("https://backend.example.com/"))).toBe(false);
 
     vi.stubEnv("VITE_HTTP_URL", "https://backend.example.com");
-    expect(isHostedStaticApp(new URL("https://preview.t3.codes/"))).toBe(false);
+    expect(isHostedStaticApp(new URL("https://hosted.example.test/"))).toBe(false);
   });
 });

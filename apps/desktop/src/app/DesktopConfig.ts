@@ -49,7 +49,10 @@ export const DesktopConfig = Config.all({
     Config.withDefault(10_000),
   ),
   appImagePath: trimmedString("APPIMAGE"),
-  disableAutoUpdate: optionalBoolean("T3CODE_DISABLE_AUTO_UPDATE"),
+  disableAutoUpdate: Config.all({
+    akeru: optionalBoolean("AKERU_DISABLE_AUTO_UPDATE"),
+    t3: optionalBoolean("T3CODE_DISABLE_AUTO_UPDATE"),
+  }).pipe(Config.map(({ akeru, t3 }) => akeru || t3)),
   mockUpdates: optionalBoolean("T3CODE_DESKTOP_MOCK_UPDATES"),
   mockUpdateServerPort: Config.port("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
     Config.withDefault(3000),

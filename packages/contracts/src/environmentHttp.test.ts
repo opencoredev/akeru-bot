@@ -1,15 +1,31 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AKERU_ENVIRONMENT_DESCRIPTOR_PATH,
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
+  EnvironmentMetadataHttpApi,
   EnvironmentOperationForbiddenError,
   EnvironmentRequestInvalidError,
   EnvironmentResourceNotFoundError,
   EnvironmentScopeRequiredError,
+  T3_ENVIRONMENT_DESCRIPTOR_PATH,
 } from "./environmentHttp.ts";
 
 const traceId = "trace-1";
+
+describe("environment HTTP metadata", () => {
+  it("publishes the Akeru discovery path and keeps the T3 alias", () => {
+    expect(AKERU_ENVIRONMENT_DESCRIPTOR_PATH).toBe("/.well-known/akeru/environment");
+    expect(T3_ENVIRONMENT_DESCRIPTOR_PATH).toBe("/.well-known/t3/environment");
+    expect(EnvironmentMetadataHttpApi.endpoints.descriptor.path).toBe(
+      AKERU_ENVIRONMENT_DESCRIPTOR_PATH,
+    );
+    expect(EnvironmentMetadataHttpApi.endpoints.descriptorT3.path).toBe(
+      T3_ENVIRONMENT_DESCRIPTOR_PATH,
+    );
+  });
+});
 
 describe("environment HTTP errors", () => {
   // A client squashes the cause and shows `message`; an empty one becomes a generic

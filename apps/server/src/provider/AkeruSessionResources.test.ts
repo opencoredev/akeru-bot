@@ -275,15 +275,15 @@ describe("AkeruSessionResources", () => {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({
-        "t3-code_preview_status": previewStatus,
-        "t3-code_preview_snapshot": previewSnapshot,
+        akeru_preview_status: previewStatus,
+        akeru_preview_snapshot: previewSnapshot,
       })),
       getServerStatuses: vi.fn(() => [
         {
-          name: "t3-code",
+          name: "akeru",
           connected: true,
           toolCount: 2,
-          toolNames: ["t3-code_preview_status", "t3-code_preview_snapshot"],
+          toolNames: ["akeru_preview_status", "akeru_preview_snapshot"],
         },
       ]),
     };
@@ -310,13 +310,53 @@ describe("AkeruSessionResources", () => {
     expect(getPreviewMcpServerConfig).toHaveBeenCalledExactlyOnceWith("preview-thread");
     expect(makeMcpManager).toHaveBeenCalledOnce();
     expect(makeMcpManager.mock.calls[0]?.[2]).toEqual({
-      "t3-code": {
+      akeru: {
         url: "http://127.0.0.1:4000/mcp",
         headers: { Authorization: "Bearer preview-token" },
       },
     });
     expect(botBrowser.attachment).not.toHaveBeenCalled();
     expect(resources.getConnectorTools("preview-thread")).toEqual({
+      preview_status: previewStatus,
+      preview_snapshot: previewSnapshot,
+    });
+
+    await resources.shutdown();
+  });
+
+  it("still exposes preview tools when the MCP manager uses the historical t3-code prefix", async () => {
+    const previewStatus = { execute: vi.fn(async () => ({ attached: true })) };
+    const previewSnapshot = { execute: vi.fn(async () => ({ url: "https://example.com" })) };
+    const manager = {
+      init: vi.fn(async () => undefined),
+      disconnect: vi.fn(async () => undefined),
+      getTools: vi.fn(() => ({
+        "t3-code_preview_status": previewStatus,
+        "t3-code_preview_snapshot": previewSnapshot,
+      })),
+      getServerStatuses: vi.fn(() => [
+        {
+          name: "t3-code",
+          connected: true,
+          toolCount: 2,
+          toolNames: ["t3-code_preview_status", "t3-code_preview_snapshot"],
+        },
+      ]),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      getPreviewMcpServerConfig: () => ({
+        url: "http://127.0.0.1:4000/mcp",
+        headers: { Authorization: "Bearer preview-token" },
+      }),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "legacy-preview-thread" });
+    expect(resources.getConnectorTools("legacy-preview-thread")).toEqual({
       preview_status: previewStatus,
       preview_snapshot: previewSnapshot,
     });

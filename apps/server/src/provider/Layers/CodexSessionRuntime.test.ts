@@ -505,7 +505,7 @@ describe("T3 browser developer instructions", () => {
       codexDefaultModeDeveloperInstructions(true),
       codexPlanModeDeveloperInstructions(true),
     ]) {
-      NodeAssert.match(instructions, /t3-code/);
+      NodeAssert.match(instructions, /akeru/);
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
