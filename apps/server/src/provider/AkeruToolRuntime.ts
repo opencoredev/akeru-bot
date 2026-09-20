@@ -28,10 +28,17 @@ import {
   type AkeruMemoryToolHandler,
   type AkeruMemoryToolId,
 } from "../memory/BotMemoryToolHandlers.ts";
+import {
+  AkeruPreviewToolInputSchemas,
+  PREVIEW_TOOL_DEFINITIONS,
+  isPreviewToolId,
+  type AkeruPreviewToolHandler,
+  type AkeruPreviewToolId,
+} from "../preview/PreviewToolHandlers.ts";
 import type { AkeruCatalogToolHandler } from "./AkeruCatalogToolHandlers.ts";
 import type { AkeruBotStateRuntime } from "./AkeruBotStateRuntime.ts";
 
-export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
+export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId | AkeruPreviewToolId;
 
 export interface AkeruRuntimeToolDefinition {
   readonly id: AkeruRuntimeToolId;
@@ -45,6 +52,18 @@ const MEMORY_TOOL_DEFINITIONS = [
 const MEMORY_TOOL_INPUT_DECODERS = {
   memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchema),
 } as const;
+
+const PREVIEW_TOOL_INPUT_DECODERS = Object.fromEntries(
+  (Object.keys(AkeruPreviewToolInputSchemas) as Array<AkeruPreviewToolId>).map((toolId) => [
+    toolId,
+    Schema.decodeUnknownSync(AkeruPreviewToolInputSchemas[toolId]),
+  ]),
+) as {
+  readonly [K in AkeruPreviewToolId]: (
+    input: unknown,
+    options?: { readonly onExcessProperty?: "error" },
+  ) => unknown;
+};
 
 export function isMemoryToolId(toolId: string): toolId is AkeruMemoryToolId {
   return toolId === "memory";
@@ -60,6 +79,7 @@ export interface AkeruToolSession {
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
   readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;
+  readonly previewHandlers?: Record<AkeruPreviewToolId, AkeruPreviewToolHandler>;
   readonly delegation?: {
     readonly depth: number;
     readonly activeDelegations: number;
@@ -402,14 +422,20 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           }
         : {}),
     });
-    return session.memoryHandlers
-      ? [...workspaceTools, ...MEMORY_TOOL_DEFINITIONS]
-      : workspaceTools;
+    return [
+      ...workspaceTools,
+      ...(session.memoryHandlers ? MEMORY_TOOL_DEFINITIONS : []),
+      ...(session.previewHandlers ? PREVIEW_TOOL_DEFINITIONS : []),
+    ];
   };
 
   const validatedInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
     Schema.decodeUnknownPromise(
-      isMemoryToolId(toolId) ? AkeruMemoryToolInputSchema : AkeruToolInputSchemas[toolId],
+      isMemoryToolId(toolId)
+        ? AkeruMemoryToolInputSchema
+        : isPreviewToolId(toolId)
+          ? AkeruPreviewToolInputSchemas[toolId]
+          : AkeruToolInputSchemas[toolId],
     )(input, {
       onExcessProperty: "error",
     });
@@ -417,14 +443,16 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
   const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
     isMemoryToolId(toolId)
       ? MEMORY_TOOL_INPUT_DECODERS[toolId](input, { onExcessProperty: "error" })
-      : decodeAkeruToolInput(toolId, input);
+      : isPreviewToolId(toolId)
+        ? PREVIEW_TOOL_INPUT_DECODERS[toolId](input, { onExcessProperty: "error" })
+        : decodeAkeruToolInput(toolId, input);
 
   const requiresApproval = async (
     session: AkeruToolSession,
     tool: AkeruRuntimeToolDefinition,
     input: unknown,
   ) => {
-    if (tool.id === "memory") return false;
+    if (tool.id === "memory" || isPreviewToolId(tool.id)) return false;
     const akeruTool = tool as AkeruToolDefinition;
     ensureWorkspaceCwd(akeruTool.id, input);
     const ceiling = session.delegation?.access.approvalCeiling;
@@ -504,6 +532,11 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         const catalogHandler = session.catalogHandlers?.[input.toolId as AkeruToolId];
         if (isMemoryToolId(input.toolId)) {
           const handler = session.memoryHandlers?.[input.toolId];
+          if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
+          failureCode = "internal";
+          result = await handler({ ...input, toolId: input.toolId, input: decoded });
+        } else if (isPreviewToolId(input.toolId)) {
+          const handler = session.previewHandlers?.[input.toolId];
           if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
           failureCode = "internal";
           result = await handler({ ...input, toolId: input.toolId, input: decoded });

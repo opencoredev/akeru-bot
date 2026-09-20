@@ -47,6 +47,10 @@ URLs take precedence and never fall back to provider-wide credentials. AgentCont
 maps Mastra message, tool, approval, usage, completion, and error events to
 `ProviderRuntimeEvent`.
 
+On this path, collaborative browser (`preview_*`) tools are sibling harness tools,
+not a product MCP server. Leftover non-Mastra adapters still attach the `/mcp`
+toolkit. See [collaborative-browser.md](./collaborative-browser.md).
+
 All active provider paths receive bot-owned Markdown memory and participate in scope-specific
 review accounting. Mastra refreshes the files before turn admission; standard OpenCode carries
 them in its per-prompt system context. See [Memory architecture](memory.md).

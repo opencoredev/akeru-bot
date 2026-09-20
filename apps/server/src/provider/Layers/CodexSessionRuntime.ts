@@ -595,7 +595,7 @@ export function buildTurnStartParams(input: {
   readonly serviceTier?: CodexServiceTier;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
   readonly interactionMode?: ProviderInteractionMode;
-  /** Defaults to true so callers that predate the agent-access gate are unchanged. */
+  /** Whether preview tools are in this turn's tool list. Defaults to true so callers that predate the agent-access gate are unchanged. */
   readonly browserToolsAvailable?: boolean;
 }): Effect.Effect<
   CodexTurnStartParamsWithCollaborationMode,
@@ -2114,9 +2114,8 @@ export const makeCodexSessionRuntime = (
             ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
             ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
-            // Derived from the session's own MCP configuration rather than the
-            // setting, so the prompt describes the tools this turn actually
-            // has even if the setting changed after the session started.
+            // Leftover Codex CLI path: this flag still comes from MCP args,
+            // but it only means preview tools are in this turn's tool list.
             browserToolsAvailable: hasConfiguredMcpServer(options.appServerArgs),
           });
           const rawResponse = yield* client.raw.request("turn/start", params);

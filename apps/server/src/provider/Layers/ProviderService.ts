@@ -236,14 +236,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   /**
-   * Attach the `t3-code` MCP server to the session that is about to start.
-   *
-   * This is the only place a credential is minted, so withholding one here is
-   * what disables agent browser access everywhere: every adapter already
-   * treats a missing session as "no MCP server", and the `/mcp` endpoint
-   * accepts nothing but tokens issued from this path.
-   */
-  /**
    * Deny on an unreadable settings file rather than letting the read failure
    * escape: adding `ServerSettingsError` to `ProviderServiceError` would widen
    * a union every caller handles, for a branch that only decides whether one
@@ -261,6 +253,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     ),
   );
 
+  /**
+   * Leftover-adapter path (Claude/Grok/OpenCode/Codex CLI / Cursor): mint a
+   * credential so those CLIs can attach `t3-code` HTTP MCP. They have no
+   * AkeruToolRuntime. Mastra providers (codex, claudeAgent, grok, kimi,
+   * opencodeGo) get `preview_*` as native harness tools and do not need this
+   * extra MCP client. Withholding the credential still disables leftover-adapter
+   * browser access.
+   */
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
       if (!(yield* agentBrowserAccessEnabled)) {

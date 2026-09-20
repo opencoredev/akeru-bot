@@ -1734,6 +1734,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                   ...(options?.environment ?? process.env),
                   T3_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
                 },
+                // Leftover Codex CLI has no AkeruToolRuntime; historical MCP server id.
                 appServerArgs: [
                   "-c",
                   `mcp_servers.t3-code.url=${mcpSession.endpoint}`,

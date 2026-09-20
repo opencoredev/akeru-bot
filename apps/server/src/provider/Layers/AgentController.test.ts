@@ -39,6 +39,8 @@ import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
+import * as ServerEnvironment from "../../environment/ServerEnvironment.ts";
+import * as PreviewAutomationBroker from "../../mcp/PreviewAutomationBroker.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { BotMemoryStore } from "../../memory/BotMemory.ts";
 import { createBotMemoryToolHandler } from "../../memory/BotMemoryToolHandlers.ts";
@@ -77,6 +79,27 @@ const grokInstanceId = ProviderInstanceId.make("grok");
 const openCodeInstanceId = ProviderInstanceId.make("opencode");
 const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
 const openCodeGoInstanceId = ProviderInstanceId.make("opencodeGo");
+
+function previewRuntimeLayer() {
+  return Layer.mergeAll(
+    Layer.succeed(
+      ServerEnvironment.ServerEnvironment,
+      ServerEnvironment.ServerEnvironment.of({
+        getEnvironmentId: Effect.succeed(EnvironmentId.make("environment-test")),
+        getDescriptor: Effect.die("unused"),
+      }),
+    ),
+    Layer.succeed(
+      PreviewAutomationBroker.PreviewAutomationBroker,
+      PreviewAutomationBroker.PreviewAutomationBroker.of({
+        connect: () => Effect.succeed(Stream.empty),
+        focusHost: () => Effect.void,
+        respond: () => Effect.void,
+        invoke: () => Effect.succeed({ available: true }),
+      }),
+    ),
+  );
+}
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -531,6 +554,7 @@ function makeLayer(
         Layer.succeed(LegacyProviderBridge, bridge),
         Layer.succeed(BotUsageLedger, usageLedger),
         Layer.mock(EntityMemoryRepository)({}),
+        previewRuntimeLayer(),
         ServerConfig.layerTest(
           process.cwd(),
           baseDir ?? { prefix: "akeru-mastra-controller-test-" },
@@ -1382,6 +1406,7 @@ describe("AgentControllerLive", () => {
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
           Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          previewRuntimeLayer(),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-real-controller-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -3058,7 +3083,7 @@ describe("AgentControllerLive", () => {
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ "builtin-exa_search": {}, "t3-code_preview_status": {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {} })),
       getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
@@ -3092,20 +3117,20 @@ describe("AgentControllerLive", () => {
         expect(makeMcpManagerMock).toHaveBeenCalledOnce();
         expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
           "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
-          "t3-code": {
-            url: "http://127.0.0.1:15070/mcp",
-            headers: { Authorization: "Bearer preview-test" },
-          },
         });
         expect(mcpManager.init).toHaveBeenCalledOnce();
         assert.property(
           mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
           "builtin-exa_search",
         );
-        assert.property(
-          mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId)),
+        expect(mastra.harnessOptions[0]?.getThreadTools(String(codexThreadId))).not.toHaveProperty(
           "preview_status",
         );
+        expect(
+          mastra.harnessOptions[0]?.toolRuntime
+            .toolsForThread(String(codexThreadId))
+            .map((tool) => tool.id),
+        ).toContain("preview_status");
         expect(mastra.session.permissions.setForTool).toHaveBeenCalledWith({
           toolName: "builtin-exa_search",
           policy: "ask",
@@ -3198,6 +3223,46 @@ describe("AgentControllerLive", () => {
           }),
         revokeMcpCredential: () => Effect.void,
       },
+    );
+  });
+
+  it.effect("registers native preview tools on the Mastra harness", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
+          expect.arrayContaining(["preview_status", "preview_open", "preview_snapshot"]),
+        );
+        await expect(
+          runtime.requiresApproval(String(codexThreadId), "preview_status", {}),
+        ).resolves.toBe(false);
+        await expect(
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "preview_status",
+            toolCallId: "preview-status-1",
+            input: {},
+            approvalMode: "require-grant",
+          }),
+        ).resolves.toEqual({ available: true });
+      }),
+      bridge.service,
+      mastra.factory,
     );
   });
 
@@ -3577,6 +3642,7 @@ describe("AgentControllerLive", () => {
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
           Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          previewRuntimeLayer(),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-remote-sandbox-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -3645,6 +3711,7 @@ describe("AgentControllerLive", () => {
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
           Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          previewRuntimeLayer(),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-resource-finalizer-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -3736,6 +3803,7 @@ describe("AgentControllerLive", () => {
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
           Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          previewRuntimeLayer(),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-same-workspace-test-",
           }).pipe(Layer.provide(NodeServices.layer)),

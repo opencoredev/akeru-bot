@@ -499,13 +499,13 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 });
 
-describe("T3 browser developer instructions", () => {
+describe("Akeru collaborative browser developer instructions", () => {
   it("prefers the product-native preview tools in both collaboration modes", () => {
     for (const instructions of [
       codexDefaultModeDeveloperInstructions(true),
       codexPlanModeDeveloperInstructions(true),
     ]) {
-      NodeAssert.match(instructions, /t3-code/);
+      NodeAssert.match(instructions, /preview_\*/);
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
@@ -529,7 +529,7 @@ describe("T3 browser developer instructions", () => {
     }
   });
 
-  it("tracks the turn's MCP configuration rather than defaulting to on", () => {
+  it("tracks whether preview tools are in this turn's tool list rather than defaulting to on", () => {
     const runtime = { model: "gpt-5.3-codex", reasoningEffort: "high" };
     NodeAssert.match(buildCodexDeveloperInstructions("default", runtime, true), /preview_open/);
     NodeAssert.doesNotMatch(

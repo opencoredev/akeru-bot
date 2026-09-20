@@ -1,7 +1,6 @@
 import * as Effect from "effect/Effect";
 import type {
   PreviewAutomationOperation,
-  PreviewAutomationOpenInput,
   PreviewAutomationRecordingArtifact,
   PreviewAutomationRecordingStatus,
   PreviewAutomationResizeResult,
@@ -13,26 +12,14 @@ import type {
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
+import {
+  normalizePreviewOpenInput,
+  preparePreviewToolInvocation,
+  type AkeruPreviewToolId,
+} from "../../../preview/PreviewToolHandlers.ts";
 import { PreviewSnapshotToolkit, PreviewStandardToolkit, PreviewToolkit } from "./tools.ts";
 
-/**
- * Collapses the `show` alias onto `open` and defaults tab reuse.
- *
- * Deliberately leaves an unstated `open` unstated. Whether a preview the agent
- * said nothing about surfaces is the user's `browserAutoShowFloatingPreview`
- * preference, which is desktop-local and unreadable from here — filling in
- * `true` would silently override it for every `preview_open`.
- */
-export function normalizePreviewOpenInput(
-  input: PreviewAutomationOpenInput,
-): PreviewAutomationOpenInput {
-  const open = input.open ?? input.show;
-  return {
-    ...input,
-    ...(open === undefined ? {} : { open, show: open }),
-    reuseExistingTab: input.reuseExistingTab ?? true,
-  };
-}
+export { normalizePreviewOpenInput };
 
 const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
   operation: PreviewAutomationOperation,
@@ -55,46 +42,41 @@ const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
   });
 });
 
-const invokeTargeted = <A>(
-  operation: PreviewAutomationOperation,
-  input: {
-    readonly tabId?: PreviewTabId | undefined;
-    readonly [key: string]: unknown;
-  },
-  timeoutMs?: number,
-) => {
-  const { tabId, ...operationInput } = input;
-  return invoke<A>(operation, operationInput, timeoutMs, tabId);
+const invokePreviewTool = <A>(toolId: AkeruPreviewToolId, input: unknown) => {
+  const invocation = preparePreviewToolInvocation(toolId, input ?? {});
+  return invoke<A>(
+    invocation.operation,
+    invocation.input,
+    invocation.timeoutMs,
+    invocation.tabId,
+  ).pipe(
+    Effect.map((result) => {
+      if (invocation.emptyResult) return {} as A;
+      if (invocation.nullishEvaluate) return (result ?? null) as A;
+      return result;
+    }),
+  );
 };
 
 const handlers = {
-  preview_status: (input) => invokeTargeted<PreviewAutomationStatus>("status", input ?? {}),
-  preview_open: (input) =>
-    invokeTargeted<PreviewAutomationStatus>("open", normalizePreviewOpenInput(input)),
-  preview_navigate: (input) =>
-    invokeTargeted<PreviewAutomationStatus>("navigate", input, input.timeoutMs),
-  preview_resize: (input) =>
-    invokeTargeted<PreviewAutomationResizeResult>("resize", input, input.timeoutMs),
+  preview_status: (input) => invokePreviewTool<PreviewAutomationStatus>("preview_status", input),
+  preview_open: (input) => invokePreviewTool<PreviewAutomationStatus>("preview_open", input),
+  preview_navigate: (input) => invokePreviewTool<PreviewAutomationStatus>("preview_navigate", input),
+  preview_resize: (input) => invokePreviewTool<PreviewAutomationResizeResult>("preview_resize", input),
   preview_set_appearance: (input) =>
-    invokeTargeted<PreviewAutomationSetColorSchemeResult>("setColorScheme", input),
-  preview_snapshot: (input) => {
-    // Output selection is MCP-only; the browser still produces a complete snapshot.
-    const { includeImage: _includeImage, ...operationInput } = input ?? {};
-    return invokeTargeted<PreviewAutomationSnapshot>("snapshot", operationInput);
-  },
-  preview_click: (input) =>
-    invokeTargeted<void>("click", input, input.timeoutMs).pipe(Effect.as({})),
-  preview_type: (input) => invokeTargeted<void>("type", input, input.timeoutMs).pipe(Effect.as({})),
-  preview_press: (input) => invokeTargeted<void>("press", input).pipe(Effect.as({})),
-  preview_scroll: (input) => invokeTargeted<void>("scroll", input).pipe(Effect.as({})),
-  preview_evaluate: (input) =>
-    invokeTargeted<unknown>("evaluate", input).pipe(Effect.map((result) => result ?? null)),
-  preview_wait_for: (input) =>
-    invokeTargeted<void>("waitFor", input, input.timeoutMs).pipe(Effect.as({})),
+    invokePreviewTool<PreviewAutomationSetColorSchemeResult>("preview_set_appearance", input),
+  preview_snapshot: (input) =>
+    invokePreviewTool<PreviewAutomationSnapshot>("preview_snapshot", input),
+  preview_click: (input) => invokePreviewTool<Record<string, never>>("preview_click", input),
+  preview_type: (input) => invokePreviewTool<Record<string, never>>("preview_type", input),
+  preview_press: (input) => invokePreviewTool<Record<string, never>>("preview_press", input),
+  preview_scroll: (input) => invokePreviewTool<Record<string, never>>("preview_scroll", input),
+  preview_evaluate: (input) => invokePreviewTool<unknown>("preview_evaluate", input),
+  preview_wait_for: (input) => invokePreviewTool<Record<string, never>>("preview_wait_for", input),
   preview_recording_start: (input) =>
-    invokeTargeted<PreviewAutomationRecordingStatus>("recordingStart", input ?? {}),
+    invokePreviewTool<PreviewAutomationRecordingStatus>("preview_recording_start", input),
   preview_recording_stop: (input) =>
-    invokeTargeted<PreviewAutomationRecordingArtifact>("recordingStop", input ?? {}),
+    invokePreviewTool<PreviewAutomationRecordingArtifact>("preview_recording_stop", input),
 } satisfies Parameters<typeof PreviewToolkit.toLayer>[0];
 
 const { preview_snapshot, ...standardHandlers } = handlers;

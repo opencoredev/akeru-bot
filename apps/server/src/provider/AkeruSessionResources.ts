@@ -59,15 +59,11 @@ export interface AkeruSessionResourcesOptions {
   readonly hostPlatform?: NodeJS.Platform;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
   readonly onMcpServerConnectionFailure?: (serverId: McpServer["id"]) => void;
-  readonly getPreviewMcpServerConfig?: (threadId: string) => McpServerConfig | undefined;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
     browser?: BotBrowserAttachment,
   ) => Record<string, McpServerConfig>;
 }
-
-const T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
-const T3_CODE_PREVIEW_TOOL_PREFIX = `${T3_CODE_PREVIEW_MCP_SERVER_NAME}_`;
 
 export class AkeruSessionResources {
   private readonly options: AkeruSessionResourcesOptions;
@@ -212,17 +208,13 @@ export class AkeruSessionResources {
         throw cause;
       }
 
-      const previewMcpServerConfig = this.options.getPreviewMcpServerConfig?.(key);
-      if (input.mcpServers.length > 0 || previewMcpServerConfig) {
+      if (input.mcpServers.length > 0) {
         const attachment = input.mcpServers.some((server) =>
           mcpServerNeedsBrowserAttachment(server, remote),
         )
           ? await browser.attachment()
           : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
-        if (previewMcpServerConfig) {
-          configs[T3_CODE_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
-        }
         if (usesComputer) {
           if (!this.options.hostPlatform) {
             throw new Error("Computer Use host platform is unavailable.");
@@ -291,15 +283,12 @@ export class AkeruSessionResources {
     };
     return Object.fromEntries(
       Object.entries(tools).map(([name, tool]) => {
-        const exposedName = name.startsWith(T3_CODE_PREVIEW_TOOL_PREFIX)
-          ? name.slice(T3_CODE_PREVIEW_TOOL_PREFIX.length)
-          : name;
         const execute = Reflect.get(tool, "execute") as unknown;
         if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
-          return [exposedName, tool];
+          return [name, tool];
         }
         return [
-          exposedName,
+          name,
           {
             ...tool,
             execute: async (...args: readonly unknown[]) => {

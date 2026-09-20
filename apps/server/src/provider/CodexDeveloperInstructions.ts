@@ -1,14 +1,14 @@
 import type { ProviderInteractionMode } from "@t3tools/contracts";
 
-const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
+const PREVIEW_BROWSER_TOOL_INSTRUCTIONS = `
 
 ## Akeru Bot collaborative browser
 
-You are running inside Akeru Bot. The \`t3-code\` MCP server is the product-native collaborative browser shared with the user. When it exposes \`preview_*\` tools, prefer those tools for browser navigation, inspection, interaction, screenshots, and recordings.
+You are running inside Akeru Bot. The \`preview_*\` tools are the product-native collaborative browser shared with the user. Prefer those tools for browser navigation, inspection, interaction, screenshots, and recordings.
 
 For browser work, first call \`preview_status\`. If no automation-capable preview is attached, call \`preview_open\` before concluding that the browser is unavailable. Then use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 
-Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T3 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T3 preview tool call should be inspected and retried with corrected arguments when the error is actionable.
+Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed preview tool call should be inspected and retried with corrected arguments when the error is actionable.
 `;
 
 /**
@@ -19,7 +19,7 @@ Do not switch to global browser skills, Chrome, Node REPL browser automation, st
  * the only browser automation it still has.
  */
 const browserToolInstructions = (browserToolsAvailable: boolean): string =>
-  browserToolsAvailable ? T3_CODE_BROWSER_TOOL_INSTRUCTIONS : "";
+  browserToolsAvailable ? PREVIEW_BROWSER_TOOL_INSTRUCTIONS : "";
 
 export const codexPlanModeDeveloperInstructions = (
   browserToolsAvailable: boolean,
@@ -184,9 +184,9 @@ export function buildCodexDeveloperInstructions(
   interactionMode: ProviderInteractionMode,
   runtime: CodexRuntimeInfo,
   /**
-   * Whether the `t3-code` MCP server is attached to this turn. Callers derive
-   * it from the session's actual MCP configuration rather than re-reading the
-   * setting, so the prompt cannot claim tools the turn doesn't have.
+   * Whether preview tools are in this turn's tool list. Callers must treat
+   * this as tool-list availability, not as "t3-code MCP is attached". The
+   * leftover Codex CLI path may still derive the flag from MCP args.
    */
   browserToolsAvailable = true,
 ): string {

@@ -4471,6 +4471,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...toClaudeMcpServers(input.mcpServers ?? []),
         ...(mcpSession
           ? {
+              // Leftover Claude CLI has no AkeruToolRuntime; historical MCP server id.
               "t3-code": {
                 type: "http" as const,
                 url: mcpSession.endpoint,

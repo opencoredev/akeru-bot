@@ -62,6 +62,7 @@ import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
+import * as ServerEnvironment from "../../environment/ServerEnvironment.ts";
 import {
   BotMemoryStore,
   formatBotMemoryPrompt,
@@ -86,6 +87,8 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import * as McpInvocationContext from "../../mcp/McpInvocationContext.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import * as PreviewAutomationBroker from "../../mcp/PreviewAutomationBroker.ts";
+import { createPreviewToolHandlers } from "../../preview/PreviewToolHandlers.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import { AKERU_TURN_USAGE_RESERVATION_TOKENS, BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import { persistAkeruPreviewSnapshot } from "../AkeruPreviewSnapshotAttachment.ts";
@@ -607,6 +610,9 @@ const make = (options?: AgentControllerLiveOptions) =>
     const botUsageLedger = yield* BotUsageLedger;
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
+    const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+    const environmentId = yield* serverEnvironment.getEnvironmentId;
     const runtimeContext = yield* Effect.context<never>();
     const runPromise = Effect.runPromiseWith(runtimeContext);
     const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
@@ -684,6 +690,39 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
       });
+    const previewHandlersFor = Effect.fn("AgentController.previewHandlersFor")(function* (
+      threadId: ThreadId,
+      providerInstanceId: ProviderInstanceId,
+    ) {
+      const previewEnabled = Option.isSome(serverSettings)
+        ? yield* serverSettings.value.getSettings.pipe(
+            Effect.map((settings) => settings.enableAgentBrowserAccess),
+            Effect.orElseSucceed(() => false),
+          )
+        : true;
+      if (!previewEnabled) return undefined;
+      const issuedAt = Date.now();
+      const capabilities = new Set<McpInvocationContext.McpCapability>(["preview"]);
+      const providerSessionId = `native-preview:${threadId}`;
+      return createPreviewToolHandlers((input) =>
+        runPromise(
+          previewAutomationBroker.invoke({
+            scope: {
+              environmentId,
+              threadId,
+              providerSessionId,
+              providerInstanceId,
+              capabilities,
+              issuedAt,
+            },
+            operation: input.operation,
+            input: input.input,
+            ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+            ...(input.tabId === undefined ? {} : { tabId: input.tabId }),
+          }),
+        ),
+      );
+    });
     let channelRuntime: AkeruChannelRuntime | undefined;
     let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
     let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
@@ -734,15 +773,6 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
       hostPlatform,
-      getPreviewMcpServerConfig: (threadId) => {
-        const session = McpProviderSession.readMcpProviderSession(ThreadId.make(threadId));
-        return session
-          ? {
-              url: session.endpoint,
-              headers: { Authorization: session.authorizationHeader },
-            }
-          : undefined;
-      },
       toMcpServerConfigs,
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
@@ -1432,6 +1462,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                 memoryHandlers: {
                   memory: memoryTurn.wrapMemoryHandler(memoryHandler),
                 },
+                ...(pending.toolSession.previewHandlers
+                  ? { previewHandlers: pending.toolSession.previewHandlers }
+                  : {}),
               };
               active.toolSession = reviewToolSession;
             }
@@ -2138,6 +2171,10 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
       }
+      const nextPreviewHandlers =
+        usesMastraCode(resolved.provider) && !(delegatedAccess && access.sandbox === null)
+          ? yield* previewHandlersFor(threadId, resolved.providerInstanceId)
+          : undefined;
       if (
         existing?.workspaceResourceKey === workspaceResourceKey &&
         existing.cwd === input.cwd &&
@@ -2163,6 +2200,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.billedBotId;
         delete toolSession.delegation;
         delete toolSession.memoryHandlers;
+        delete toolSession.previewHandlers;
         delete toolSession.botState;
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
@@ -2174,6 +2212,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(botId ? { botId } : {}),
           ...(input.botName ? { botName: input.botName } : {}),
           ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
+          ...(nextPreviewHandlers ? { previewHandlers: nextPreviewHandlers } : {}),
           ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
           ...(delegationRuntime && botId
             ? {
@@ -2247,11 +2286,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           detail: `Provider '${resolved.provider}' cannot enforce delegated access.`,
         });
       }
-      if (!(delegatedAccess && access.sandbox === null)) {
+      if (!usesMastraCode(resolved.provider) && !(delegatedAccess && access.sandbox === null)) {
         yield* preparePreviewMcpSession(
           threadId,
           resolved.providerInstanceId,
-          usesMastraCode(resolved.provider) ? undefined : nextMemoryHandlers?.memory,
+          nextMemoryHandlers?.memory,
         );
       }
       const resources =
@@ -2329,6 +2368,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(workspace ? { workspace } : {}),
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
+        ...(nextPreviewHandlers ? { previewHandlers: nextPreviewHandlers } : {}),
         ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
         catalogHandlers: createAkeruCatalogToolHandlers(
           mcpManager,

@@ -1,6 +1,7 @@
 import { AKERU_TOOL_CATALOG } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { createPreviewToolHandlers } from "../preview/PreviewToolHandlers.ts";
 import { createAkeruToolRuntime, type AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 
@@ -71,5 +72,29 @@ describe("createAkeruMastraTools", () => {
       ),
     ).resolves.toEqual({ saved: true });
     expect(memoryHandler).toHaveBeenCalledOnce();
+  });
+
+  it("builds registered preview handlers as Mastra tools", async () => {
+    const invoke = vi.fn(async () => ({ available: true }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-preview", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      previewHandlers: createPreviewToolHandlers(invoke),
+    });
+    const previewStatus = createAkeruMastraTools("thread-preview", runtime).preview_status as {
+      readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+    if (!previewStatus?.execute) throw new Error("Preview status tool is unavailable.");
+
+    await expect(
+      previewStatus.execute(
+        {},
+        {
+          agent: { toolCallId: "preview-1" },
+        } as never,
+      ),
+    ).resolves.toEqual({ available: true });
+    expect(invoke).toHaveBeenCalledOnce();
   });
 });

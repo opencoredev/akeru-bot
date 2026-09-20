@@ -698,6 +698,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             ...toAcpMcpServers(input.mcpServers ?? []),
             ...(mcpSession
               ? [
+                  // Leftover Grok CLI has no AkeruToolRuntime; historical MCP server id.
                   {
                     type: "http" as const,
                     name: "t3-code",

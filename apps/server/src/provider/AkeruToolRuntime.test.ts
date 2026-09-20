@@ -13,6 +13,10 @@ import { PNG } from "pngjs";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { BotId, ThreadId, type AkeruToolReceipt } from "@t3tools/contracts";
 
+import {
+  AKERU_PREVIEW_TOOL_IDS,
+  createPreviewToolHandlers,
+} from "../preview/PreviewToolHandlers.ts";
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 
 vi.mock("@mastra/core/workspace", async (importOriginal) => {
@@ -310,6 +314,53 @@ describe("AkeruToolRuntime", () => {
     );
     await expect(runtime.execute(write)).resolves.toEqual({ saved: true });
     expect(memory).toHaveBeenCalledOnce();
+  });
+
+  it("exposes approval-free preview tools when handlers are registered", async () => {
+    const invoke = vi.fn(async ({ operation }: { readonly operation: string }) => {
+      if (operation === "status") return { available: true };
+      if (operation === "open") return { opened: true };
+      return { ok: true };
+    });
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-preview", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      previewHandlers: createPreviewToolHandlers(invoke),
+    });
+    runtime.registerSession("thread-no-preview", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+    });
+
+    expect(runtime.toolsForThread("thread-preview").map((tool) => tool.id)).toEqual([
+      ...AKERU_PREVIEW_TOOL_IDS,
+    ]);
+    await expect(
+      runtime.requiresApproval("thread-preview", "preview_status", {}),
+    ).resolves.toBe(false);
+    await expect(
+      runtime.execute({
+        threadId: "thread-preview",
+        toolId: "preview_status",
+        toolCallId: "preview-status",
+        input: {},
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ available: true });
+    await expect(
+      runtime.execute({
+        threadId: "thread-preview",
+        toolId: "preview_open",
+        toolCallId: "preview-open",
+        input: {},
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ opened: true });
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(runtime.toolsForThread("thread-no-preview").map((tool) => tool.id)).not.toContain(
+      "preview_status",
+    );
   });
 
   it("exposes a narrow profile tool only for a bot-owned session", async () => {

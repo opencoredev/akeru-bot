@@ -4,15 +4,23 @@ import { AkeruToolInputSchemas } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
 
+import { AkeruMemoryToolInputSchema } from "../memory/BotMemoryToolHandlers.ts";
+import {
+  AkeruPreviewToolInputSchemas,
+  isPreviewToolId,
+} from "../preview/PreviewToolHandlers.ts";
 import {
   isMemoryToolId,
   type AkeruRuntimeToolId,
   type AkeruToolRuntime,
 } from "./AkeruToolRuntime.ts";
-import { AkeruMemoryToolInputSchema } from "../memory/BotMemoryToolHandlers.ts";
 
 function inputSchema(toolId: AkeruRuntimeToolId) {
-  return isMemoryToolId(toolId) ? AkeruMemoryToolInputSchema : AkeruToolInputSchemas[toolId];
+  return isMemoryToolId(toolId)
+    ? AkeruMemoryToolInputSchema
+    : isPreviewToolId(toolId)
+      ? AkeruPreviewToolInputSchemas[toolId]
+      : AkeruToolInputSchemas[toolId];
 }
 
 function omitNullValues(input: unknown): unknown {

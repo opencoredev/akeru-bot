@@ -1623,6 +1623,7 @@ export function makeOpenCodeAdapter(
               );
               const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
               if (mcpSession && !server.external) {
+                // Leftover OpenCode CLI has no AkeruToolRuntime; historical MCP server id.
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
                     name: "t3-code",

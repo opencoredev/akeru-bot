@@ -5,9 +5,12 @@ import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { McpServerId } from "@t3tools/contracts";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vite-plus/test";
 
-import { AkeruSessionResources } from "./AkeruSessionResources.ts";
+import {
+  AkeruSessionResources,
+  type AkeruSessionResourcesOptions,
+} from "./AkeruSessionResources.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
 import { createBotBrowser } from "./botBrowser.ts";
 import {
@@ -268,22 +271,18 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it("exposes the authenticated product preview tools without a plugin connection", async () => {
-    const previewStatus = { execute: vi.fn(async () => ({ attached: true })) };
-    const previewSnapshot = { execute: vi.fn(async () => ({ url: "https://example.com" })) };
+  it("attaches user MCP servers without injecting a product preview server", async () => {
+    const search = {};
     const manager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({
-        "t3-code_preview_status": previewStatus,
-        "t3-code_preview_snapshot": previewSnapshot,
-      })),
+      getTools: vi.fn(() => ({ exa_search: search })),
       getServerStatuses: vi.fn(() => [
         {
-          name: "t3-code",
+          name: String(exaServer.id),
           connected: true,
-          toolCount: 2,
-          toolNames: ["t3-code_preview_status", "t3-code_preview_snapshot"],
+          toolCount: 1,
+          toolNames: ["exa_search"],
         },
       ]),
     };
@@ -291,9 +290,8 @@ describe("AkeruSessionResources", () => {
       (_projectDir: string, _configDirName?: string, _servers?: Record<string, unknown>) =>
         manager as never,
     );
-    const getPreviewMcpServerConfig = vi.fn(() => ({
-      url: "http://127.0.0.1:4000/mcp",
-      headers: { Authorization: "Bearer preview-token" },
+    const toMcpServerConfigs = vi.fn(() => ({
+      [String(exaServer.id)]: { url: "https://mcp.exa.ai/mcp" },
     }));
     const botBrowser = browser();
     const resources = new AkeruSessionResources({
@@ -301,25 +299,49 @@ describe("AkeruSessionResources", () => {
       makeRemoteWorkspace: async () => workspace(),
       makeBotBrowser: () => botBrowser,
       makeMcpManager,
-      getPreviewMcpServerConfig,
-      toMcpServerConfigs: () => ({}),
+      toMcpServerConfigs,
     });
 
-    await resources.acquire({ ...remoteInput, threadId: "preview-thread" });
+    await resources.acquire({
+      ...remoteInput,
+      threadId: "user-mcp",
+      mcpServers: [exaServer],
+    });
 
-    expect(getPreviewMcpServerConfig).toHaveBeenCalledExactlyOnceWith("preview-thread");
+    expect(toMcpServerConfigs).toHaveBeenCalledWith([exaServer], undefined);
     expect(makeMcpManager).toHaveBeenCalledOnce();
-    expect(makeMcpManager.mock.calls[0]?.[2]).toEqual({
-      "t3-code": {
-        url: "http://127.0.0.1:4000/mcp",
-        headers: { Authorization: "Bearer preview-token" },
-      },
+    const mcpServers = makeMcpManager.mock.calls[0]?.[2];
+    expect(mcpServers).toEqual({
+      [String(exaServer.id)]: { url: "https://mcp.exa.ai/mcp" },
     });
+    expect(mcpServers).not.toHaveProperty("t3-code");
     expect(botBrowser.attachment).not.toHaveBeenCalled();
-    expect(resources.getConnectorTools("preview-thread")).toEqual({
-      preview_status: previewStatus,
-      preview_snapshot: previewSnapshot,
+    expect(resources.getConnectorTools("user-mcp")).toEqual({ exa_search: search });
+    expect(resources.getMcpManager("user-mcp")).toBe(manager);
+
+    await resources.shutdown();
+  });
+
+  it("does not start an MCP manager or inject a t3-code preview server when no user servers are present", async () => {
+    const makeMcpManager = vi.fn();
+    const toMcpServerConfigs = vi.fn(() => ({
+      "t3-code": { url: "http://127.0.0.1:4000/mcp" },
+    }));
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager,
+      toMcpServerConfigs,
     });
+
+    await resources.acquire({ ...remoteInput, threadId: "no-mcp" });
+
+    expect(toMcpServerConfigs).not.toHaveBeenCalled();
+    expect(makeMcpManager).not.toHaveBeenCalled();
+    expect(resources.getMcpManager("no-mcp")).toBeUndefined();
+    expect(resources.getConnectorTools("no-mcp")).toEqual({});
+    expectTypeOf<AkeruSessionResourcesOptions>().not.toHaveProperty("getPreviewMcpServerConfig");
 
     await resources.shutdown();
   });

@@ -147,6 +147,10 @@ A point-in-time view of state. The word is used in multiple layers, including or
 
 The per-driver list of current model slugs that decides which models land in the model picker's legacy section. Bundled at `apps/server/src/provider/model-manifest.json` and refreshed at runtime from the same file on `main`, so classification updates ship as commits instead of releases. See the [provider architecture][16] model manifest section.
 
+#### Collaborative browser
+
+The thread-bound preview automation surface (`preview_*` tools). Mastra sessions register them as sibling harness tools, like `memory`, from [`AkeruToolRuntime.ts`][26] and [`PreviewToolHandlers.ts`][27] when `enableAgentBrowserAccess` is on. They are not in `AkeruToolId`. Leftover non-Mastra adapters still reach the same [`PreviewAutomationBroker.ts`][28] through the `/mcp` toolkit. See [collaborative-browser.md](./collaborative-browser.md).
+
 ### Checkpointing
 
 Checkpointing captures workspace state over time so the app can diff turns and restore earlier points. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
@@ -183,6 +187,7 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 
 - [Architecture overview][24]
 - [Provider architecture][16]
+- [Collaborative browser](./collaborative-browser.md)
 - [Permission modes][18]
 - [Workspace layout][2]
 
@@ -211,3 +216,6 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 [23]: ../../apps/server/src/checkpointing/Diffs.ts
 [24]: ./overview.md
 [25]: ../../apps/server/src/provider/Services/AgentController.ts
+[26]: ../../apps/server/src/provider/AkeruToolRuntime.ts
+[27]: ../../apps/server/src/preview/PreviewToolHandlers.ts
+[28]: ../../apps/server/src/mcp/PreviewAutomationBroker.ts
