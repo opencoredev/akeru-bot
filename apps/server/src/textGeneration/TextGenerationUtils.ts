@@ -60,7 +60,7 @@ export function sanitizeThreadTitle(raw: string): string {
     .replace(/\s+/g, " ");
 
   if (!normalized || normalized.trim().length === 0) {
-    return "New chat";
+    return "New conversation";
   }
 
   if (normalized.length <= 50) {

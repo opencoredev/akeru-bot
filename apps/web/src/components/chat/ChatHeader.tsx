@@ -303,7 +303,7 @@ export const ChatHeader = memo(function ChatHeader({
                   render={
                     <button
                       type="button"
-                      aria-label={`New chat in ${activeProjectName}`}
+                      aria-label={`New conversation in ${activeProjectName}`}
                       onClick={onNewThreadInProject}
                       className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     />
@@ -317,7 +317,7 @@ export const ChatHeader = memo(function ChatHeader({
                   />
                   <span className="max-w-40 truncate">{activeProjectName}</span>
                 </TooltipTrigger>
-                <TooltipPopup side="top">New chat in {activeProjectName}</TooltipPopup>
+                <TooltipPopup side="top">New conversation in {activeProjectName}</TooltipPopup>
               </Tooltip>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator />

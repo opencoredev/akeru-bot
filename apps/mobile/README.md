@@ -15,9 +15,12 @@ This app has two variants:
 
 Run commands from `apps/mobile`.
 
-T3 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
-repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
-[`../../.env.example`](../../.env.example).
+The app connects to an Akeru environment server. After you install a client, pair it with a running
+server using the pairing URL or QR code that server prints (`npx akeru-bot pair` on the server
+machine). See [Remote access](../../docs/user/remote-access.md).
+
+Optional public configuration for local builds belongs in the repository-root `.env` or `.env.local`,
+not an `apps/mobile/.env` file. See [`../../.env.example`](../../.env.example).
 
 ## Development
 
@@ -81,10 +84,6 @@ node ../../scripts/mobile-native-static-check.ts
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
 ## EAS Builds
-
-For the production EAS environment, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
-`T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
-as EAS environment variables. Expo config maps the canonical values into the mobile build.
 
 Create a cloud dev-client build:
 

@@ -825,10 +825,10 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           />
         </SettingsSection>
 
-        <SettingsSection title="New chats">
+        <SettingsSection title="New conversations">
           <SettingsRow
             title="Model"
-            description="New chats in this project start with this model. Applies to every checkout in this group."
+            description="New conversations in this project start with this model. Applies to every checkout in this group."
             resetAction={
               storedSelection !== null ? (
                 <SettingResetButton
@@ -881,7 +881,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           />
           <SettingsRow
             title="Workspace"
-            description="Where new chats in this project start. Overrides t3.json and the global default; applies to every checkout in this group."
+            description="Where new conversations in this project start. Overrides t3.json and the global default; applies to every checkout in this group."
             resetAction={
               storedEnvMode !== null ? (
                 <SettingResetButton
@@ -901,7 +901,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                   }
                 }}
               >
-                <SelectTrigger aria-label="New-chat workspace">
+                <SelectTrigger aria-label="New-conversation workspace">
                   <SelectValue>
                     {storedEnvMode === null
                       ? group.memberProjects.length > 1
@@ -974,8 +974,8 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
               </Tooltip>
               <div className="shrink-0 border-l border-border/60 px-2 tabular-nums">
                 {selectedCheckoutThreadCount === 1
-                  ? "1 chat"
-                  : `${selectedCheckoutThreadCount} chats`}
+                  ? "1 conversation"
+                  : `${selectedCheckoutThreadCount} conversations`}
               </div>
             </div>
           </div>

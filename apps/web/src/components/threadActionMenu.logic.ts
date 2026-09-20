@@ -56,7 +56,7 @@ export function buildThreadActionMenuItems(
       ? [
           {
             id: "new-thread-on-branch" as const,
-            label: `New chat on ${state.branch}`,
+            label: `New conversation on ${state.branch}`,
             icon: "message-square-plus",
           },
         ]

@@ -32,7 +32,9 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
     <>
       <NativeStackScreenOptions
         options={{
-          title: Array.isArray(params.title) ? params.title[0] : (params.title ?? "New chat"),
+          title: Array.isArray(params.title)
+            ? params.title[0]
+            : (params.title ?? "New conversation"),
         }}
       />
       <NewTaskDraftScreen

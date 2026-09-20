@@ -231,7 +231,7 @@ server.listen(0, "127.0.0.1", () => {
           });
           // Redirect only the state directory. Never use the developer's SSH state.
           const isolatedScript = script.replace(
-            /^STATE_DIR=.*$/mu,
+            /^STATE_DIR=.*$/gmu,
             'STATE_DIR="$T3_TEST_STATE_DIR"',
           );
           assert.notEqual(isolatedScript, script);

@@ -4,7 +4,7 @@ Akeru Mobile includes these themes:
 
 - Akeru Classic
 - Akeru Paper
-- Akeru Chat
+- Akeru
 - Grove
 - Ocean
 - Ember

@@ -41,7 +41,10 @@ describe("marketing search metadata", () => {
 
     expect(home).toContain('<span id="download-label">All downloads</span>');
     expect(home).not.toContain('class="btn-primary" data-os="mac"');
-    expect(home).toContain("Your environment owns the chats, bot profiles, and memory.");
+    expect(home).toContain(
+      "Work with your bots from the desktop app, any browser on your network, or your phone.",
+    );
+    expect(home).toContain("Your environment owns the conversations, bot profiles, and memory.");
     expect(home).not.toContain("Everything stays on your machine");
     expect(home).not.toContain("no hosted service");
     expect(download).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none;/);

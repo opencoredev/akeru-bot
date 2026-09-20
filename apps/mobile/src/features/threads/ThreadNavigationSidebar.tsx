@@ -579,7 +579,7 @@ function ThreadNavigationSidebarPane(
           {
             id: "environment:all",
             title: "All environments",
-            subtitle: "Show chats from every environment",
+            subtitle: "Show conversations from every environment",
             state: options.selectedEnvironmentId === null ? "on" : "off",
           },
           ...environments.map((environment) => ({
@@ -602,7 +602,7 @@ function ThreadNavigationSidebarPane(
                 {
                   id: "project:all",
                   title: "All projects",
-                  subtitle: "Show chats from every project",
+                  subtitle: "Show conversations from every project",
                   state: selectedProjectKey === null ? "on" : "off",
                 },
                 ...projectFilterOptions.map((project) => ({
@@ -630,7 +630,7 @@ function ThreadNavigationSidebarPane(
             },
             {
               id: "thread-sort",
-              title: "Sort chats",
+              title: "Sort conversations",
               subactions: THREAD_SORT_OPTIONS.map((option) => ({
                 id: `thread-sort:${option.value}`,
                 title: option.label,
@@ -1268,7 +1268,7 @@ function ThreadNavigationSidebarPane(
           />
           <View className="flex-row items-center gap-2.5">
             <ControlPillMenu actions={listMenuActions} onPressAction={handleListMenuAction}>
-              <SidebarFilterButton accessibilityLabel="Filter and sort chats" icon={filterIcon} />
+              <SidebarFilterButton accessibilityLabel="Filter and sort conversations" icon={filterIcon} />
             </ControlPillMenu>
             <SidebarHeaderActions onOpenSettings={props.onOpenSettings} />
           </View>

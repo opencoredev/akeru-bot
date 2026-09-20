@@ -12,7 +12,8 @@ import type { ProviderStatus, RequestHealthStatus, SubscriptionProviderId } from
 const SUBSCRIPTION_ACCESS = [
   { id: "chatgpt", label: "ChatGPT", provider: "openai-codex" },
   { id: "claude-max", label: "Claude Max", provider: "anthropic" },
-  { id: "cursor-pro", label: "Cursor Pro", provider: "cursor" },
+  // Historical usage series only. Cursor is not a built-in Akeru provider.
+  { id: "cursor-pro", label: "Cursor Pro (historical)", provider: "cursor" },
 ] as const;
 
 const SUBSCRIPTION_DRIVER: Readonly<Record<SubscriptionProviderId, string>> = {

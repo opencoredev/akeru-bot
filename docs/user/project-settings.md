@@ -1,7 +1,7 @@
 # Customize a project icon
 
-Akeru finds a project icon from `t3.json`, common favicon and app-icon paths, and icon links in HTML
-files.
+Akeru finds a project icon from the Akeru project file (`t3.json` is the compatibility filename),
+common favicon and app-icon paths, and icon links in HTML files.
 
 To choose another file:
 

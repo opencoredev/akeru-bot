@@ -3455,7 +3455,7 @@ export default function Sidebar() {
                         className="relative focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                         onClick={handleNewThreadClick}
                         disabled={projects.length === 0}
-                        aria-label="New chat"
+                        aria-label="New conversation"
                       />
                     }
                   >
@@ -3470,20 +3470,20 @@ export default function Sidebar() {
                       <span className="flex flex-col gap-0.5">
                         <span>
                           {newThreadShortcutLabel
-                            ? `New chat (${newThreadShortcutLabel})`
-                            : "New chat"}
+                            ? `New conversation (${newThreadShortcutLabel})`
+                            : "New conversation"}
                         </span>
                         <span className="text-muted-foreground">
-                          New chat in current project: Shift+click
+                          New conversation in current project: Shift+click
                           {newThreadInProjectShortcutLabel
                             ? ` (${newThreadInProjectShortcutLabel})`
                             : ""}
                         </span>
                       </span>
                     ) : newThreadShortcutLabel ? (
-                      `New chat (${newThreadShortcutLabel})`
+                      `New conversation (${newThreadShortcutLabel})`
                     ) : (
-                      "New chat"
+                      "New conversation"
                     )}
                   </TooltipPopup>
                 </Tooltip>

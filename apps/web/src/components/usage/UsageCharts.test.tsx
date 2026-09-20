@@ -1,7 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { UsagePlanMeters } from "./UsageCharts";
+import { PLAN_PROVIDER_ORDER, UsagePlanMeters } from "./UsageCharts";
+
+describe("PLAN_PROVIDER_ORDER", () => {
+  it("lists current Akeru plan providers without Cursor", () => {
+    expect(PLAN_PROVIDER_ORDER).toEqual([
+      "openai-codex",
+      "anthropic",
+      "xai",
+      "kimi-for-coding",
+      "opencode-go",
+    ]);
+  });
+});
 
 describe("UsagePlanMeters", () => {
   it("renders the ChatGPT logo without a public asset request", () => {

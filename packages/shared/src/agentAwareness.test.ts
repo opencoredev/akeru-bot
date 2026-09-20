@@ -95,7 +95,7 @@ describe("projectThreadAwareness", () => {
 
     expect(state).toMatchObject({
       phase: "running",
-      headline: "Agent is working",
+      headline: "Bot is working",
       detail: "Codex is active.",
       modelTitle: "gpt-5.4",
       deepLink: "/threads/env-1/thread-1",
@@ -173,7 +173,7 @@ describe("projectThreadAwareness", () => {
 
     expect(state).toMatchObject({
       phase: "failed",
-      headline: "Agent failed",
+      headline: "Bot failed",
       detail: "Provider process exited.",
     });
   });

@@ -191,6 +191,21 @@ describe("ssh tunnel scripts", () => {
     assert.include(buildRemoteLaunchScript(), "wait_ready");
     assert.include(buildRemoteLaunchScript(), '"$RUNNER_FILE" serve --host 127.0.0.1');
     assert.include(buildRemoteLaunchScript(), '--base-dir "$DEFAULT_SERVER_HOME"');
+    assert.include(buildRemoteLaunchScript(), 'STATE_DIR="$HOME/.akeru/ssh-launch/$STATE_KEY"');
+    assert.include(buildRemoteLaunchScript(), 'DEFAULT_SERVER_HOME="$HOME/.akeru"');
+    assert.include(
+      buildRemoteLaunchScript(),
+      'DEFAULT_RUNTIME_FILE="$DEFAULT_SERVER_HOME/userdata/server-runtime.json"',
+    );
+    assert.include(buildRemoteLaunchScript(), 'RUNNER_FILE="$STATE_DIR/run-akeru.sh"');
+    assert.include(buildRemoteLaunchScript(), 'RUNNER_NEXT="$STATE_DIR/run-akeru.next.$$"');
+    assert.include(
+      buildRemoteLaunchScript(),
+      'if [ ! -d "$STATE_DIR" ] && [ -d "$HOME/.t3/ssh-launch/$STATE_KEY" ]; then',
+    );
+    assert.include(buildRemoteLaunchScript(), 'mv "$HOME/.t3/ssh-launch/$STATE_KEY" "$STATE_DIR"');
+    assert.notInclude(buildRemoteLaunchScript(), 'DEFAULT_SERVER_HOME="$HOME/.t3"');
+    assert.notInclude(buildRemoteLaunchScript(), 'RUNNER_FILE="$STATE_DIR/run-t3.sh"');
     assert.notInclude(buildRemoteLaunchScript(), "server-home");
     assert.include(buildRemoteLaunchScript(), "Remote Akeru Bot server did not become ready");
     assert.include(buildRemoteLaunchScript(), 'wait_ready "60000"');
@@ -202,6 +217,16 @@ describe("ssh tunnel scripts", () => {
       '"$RUNNER_FILE" auth pairing create --base-dir "$PAIRING_BASE_DIR" --json',
     );
     assert.include(buildRemotePairingScript(target), 'PAIRING_BASE_DIR="$DEFAULT_SERVER_HOME"');
+    assert.include(
+      buildRemotePairingScript(target),
+      'STATE_DIR="$HOME/.akeru/ssh-launch/$STATE_KEY"',
+    );
+    assert.include(buildRemotePairingScript(target), 'DEFAULT_SERVER_HOME="$HOME/.akeru"');
+    assert.include(buildRemotePairingScript(target), 'RUNNER_FILE="$STATE_DIR/run-akeru.sh"');
+    assert.include(
+      buildRemotePairingScript(target),
+      'mv "$HOME/.t3/ssh-launch/$STATE_KEY" "$STATE_DIR"',
+    );
     assert.notInclude(buildRemotePairingScript(target), "server-home");
     assert.include(buildRemotePairingScript(target, { packageSpec: "t3@nightly" }), "t3@nightly");
     assert.include(
@@ -210,9 +235,10 @@ describe("ssh tunnel scripts", () => {
     );
     assert.include(buildRemoteStopScript(target), 'kill "$REMOTE_PID" 2>/dev/null || true');
     assert.include(buildRemoteStopScript(target), 'rm -f "$PID_FILE" "$PORT_FILE" "$MANAGED_FILE"');
+    assert.include(buildRemoteStopScript(target), 'STATE_DIR="$HOME/.akeru/ssh-launch/$STATE_KEY"');
     assert.include(
-      buildRemoteLaunchScript(),
-      'DEFAULT_RUNTIME_FILE="$DEFAULT_SERVER_HOME/userdata/server-runtime.json"',
+      buildRemoteStopScript(target),
+      'STATE_DIR="$HOME/.t3/ssh-launch/$STATE_KEY"',
     );
     assert.include(buildRemoteLaunchScript(), "resolve_default_runtime_port()");
     assert.include(

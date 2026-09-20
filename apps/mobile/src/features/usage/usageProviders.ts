@@ -4,6 +4,9 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 /**
  * Series and table order. The chart stacks providers from the bottom in this
  * order, so it also fixes which band sits on top of the bars.
+ *
+ * Cursor stays for historical usage series only. It is not a built-in Akeru
+ * provider and must not appear in connectable or available-provider lists.
  */
 export const PROVIDER_ORDER: readonly UsageProviderKind[] = [
   "codex",
@@ -17,7 +20,7 @@ export const PROVIDER_ORDER: readonly UsageProviderKind[] = [
 export const PROVIDER_LABEL: Record<UsageProviderKind, string> = {
   claude: "Claude",
   codex: "Codex",
-  cursor: "Cursor",
+  cursor: "Cursor (historical)",
   grok: "Grok",
   kimi: "Kimi For Coding",
   opencode: "OpenCode",

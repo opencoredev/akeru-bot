@@ -777,7 +777,7 @@ export function NewTaskDraftScreen(props: {
         {Platform.OS === "android" ? (
           <>
             <NativeStackScreenOptions options={{ headerShown: false }} />
-            <AndroidScreenHeader title="New chat" onBack={() => navigation.goBack()} />
+            <AndroidScreenHeader title="New conversation" onBack={() => navigation.goBack()} />
           </>
         ) : (
           <NativeStackScreenOptions options={{ title: "Loading chat" }} />
@@ -1018,7 +1018,11 @@ export function NewTaskDraftScreen(props: {
           </ComposerToolbarScroller>
           <ComposerToolbarButton
             accessibilityLabel={
-              flow.submitting ? "Starting chat" : environmentConnected ? "Start chat" : "Queue chat"
+              flow.submitting
+                ? "Starting conversation"
+                : environmentConnected
+                  ? "Start conversation"
+                  : "Queue conversation"
             }
             disabled={!canStart}
             icon={environmentConnected ? "arrow.up" : "tray.and.arrow.up"}
@@ -1035,7 +1039,7 @@ export function NewTaskDraftScreen(props: {
     return (
       <View className="flex-1 bg-sheet" collapsable={false}>
         <NativeStackScreenOptions options={{ headerShown: false }} />
-        <AndroidScreenHeader title="New chat" onBack={closeNewTask} />
+        <AndroidScreenHeader title="New conversation" onBack={closeNewTask} />
         {heroViewport}
 
         <KeyboardStickyView

@@ -464,7 +464,7 @@ function IosHomeHeader(props: HomeHeaderProps) {
           </NativeHeaderToolbar.Menu>
           <NativeHeaderToolbar.Spacer flexible />
           <NativeHeaderToolbar.Button
-            accessibilityLabel="New chat"
+            accessibilityLabel="New conversation"
             icon="square.and.pencil"
             onPress={props.onStartNewTask}
             separateBackground

@@ -38,7 +38,7 @@ function BotIndexRedirect() {
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <Empty className="flex-1">
         <EmptyHeader>
-          <EmptyTitle>Create a bot to start chatting</EmptyTitle>
+          <EmptyTitle>Create your first teammate bot</EmptyTitle>
         </EmptyHeader>
       </Empty>
     </SidebarInset>

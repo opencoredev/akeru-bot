@@ -20,6 +20,9 @@ type UsageProviderPresentation = {
  * Exhaustive presentation for providers supported by the usage contract.
  * Declaration order is reused by every chart and table, so adding a provider
  * only requires its contract support and one entry here.
+ *
+ * Cursor stays for historical usage series only. It is not a built-in Akeru
+ * provider and must not appear in connectable or available-provider lists.
  */
 export const PROVIDER_PRESENTATION = {
   codex: {
@@ -33,7 +36,7 @@ export const PROVIDER_PRESENTATION = {
     mark: ClaudeAI,
   },
   cursor: {
-    label: "Cursor",
+    label: "Cursor (historical)",
     color: "#a78bfa",
     mark: CursorIcon,
   },

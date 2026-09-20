@@ -2,7 +2,7 @@ import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-typ
 
 const SHOWCASE_LOCAL_ENVIRONMENT_DISPLAY_URLS: Readonly<Record<string, string>> = {
   "Moonbase Terminal": "https://moonbase.tail9f3a.ts.net/",
-  "Suspense Station": "https://suspense-vps.hel1.t3.sh/",
+  "Suspense Station": "https://suspense.example.com/",
   "Kernel Cabin": "http://100.82.16.5:3773/",
 };
 

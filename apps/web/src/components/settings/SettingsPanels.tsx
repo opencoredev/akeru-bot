@@ -2457,16 +2457,16 @@ export function ArchivedThreadsPanel() {
                   <ArchiveIcon className="size-3.5 text-muted-foreground" />
                 )}
                 {isLoadingArchive
-                  ? "Loading archived chats"
+                  ? "Loading archived conversations"
                   : archiveError
-                    ? "Could not load archived chats"
-                    : "No archived chats"}
+                    ? "Could not load archived conversations"
+                    : "No archived conversations"}
               </span>
             }
             description={
               isLoadingArchive
                 ? "Checking connected environments."
-                : (archiveError ?? "Archived chats will appear here.")
+                : (archiveError ?? "Archived conversations will appear here.")
             }
           />
         </SettingsSection>

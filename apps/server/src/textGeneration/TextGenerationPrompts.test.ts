@@ -258,7 +258,7 @@ describe("sanitizeThreadTitle", () => {
     expect(sanitizeThreadTitle('{"title": "  Fix   reconnect failures  "}')).toBe(
       "Fix reconnect failures",
     );
-    expect(sanitizeThreadTitle('{"title": "  "}')).toBe("New chat");
+    expect(sanitizeThreadTitle('{"title": "  "}')).toBe("New conversation");
     expect(
       sanitizeThreadTitle(
         '{"title": "Reconnect failures after restart because the session state does not recover"}',

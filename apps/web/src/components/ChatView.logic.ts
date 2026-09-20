@@ -157,7 +157,7 @@ export function buildLocalDraftThread(
     id: threadId,
     environmentId: draftThread.environmentId,
     projectId: draftThread.projectId,
-    title: "New chat",
+    title: "New conversation",
     modelSelection: fallbackModelSelection,
     runtimeMode: draftThread.runtimeMode,
     interactionMode: draftThread.interactionMode,

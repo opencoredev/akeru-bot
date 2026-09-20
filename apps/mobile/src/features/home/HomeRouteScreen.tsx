@@ -116,7 +116,7 @@ export function HomeRouteScreen() {
         <WorkspaceSidebarToolbar
           afterSidebarButton={
             <NativeHeaderToolbar.Button
-              accessibilityLabel="New chat"
+              accessibilityLabel="New conversation"
               icon="square.and.pencil"
               onPress={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
             />

@@ -16,7 +16,7 @@ import {
 } from "./CommandPalette.logic";
 
 describe("command palette product language", () => {
-  it("uses conversation language for history and search", () => {
+  it("uses bot-first language for history and search", () => {
     expect(
       buildRootGroups({
         actionItems: [],
@@ -31,9 +31,9 @@ describe("command palette product language", () => {
           },
         ],
       })[0]?.label,
-    ).toBe("Recent conversations");
+    ).toBe("Recent work");
     expect(getCommandPaletteInputPlaceholder("root")).toBe(
-      "Search commands, projects, and conversations...",
+      "Search commands, projects, and bots...",
     );
   });
 });
@@ -312,6 +312,7 @@ describe("buildThreadActionItems", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.value).toBe("threads-search");
+    expect(groups[0]?.label).toBe("Work");
     expect(groups[0]?.items.map((item) => item.value)).toEqual([
       "thread:thread-title-match",
       "thread:thread-context-match",
@@ -321,7 +322,7 @@ describe("buildThreadActionItems", () => {
   it("preserves thread project-name matches when there is no stronger title match", () => {
     const group: CommandPaletteGroup = {
       value: "threads-search",
-      label: "Conversations",
+      label: "Work",
       items: [
         {
           kind: "action",

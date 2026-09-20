@@ -311,7 +311,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "archive",
-    title: "Archived chats",
+    title: "Archived conversations",
     to: "/settings/archived",
   },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;

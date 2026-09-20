@@ -1,4 +1,4 @@
-# Run Akeru in the background
+# Run Akeru Bot in the background
 
 Linux and macOS can run the command-line server as a service for the current user.
 
@@ -28,12 +28,12 @@ Stop it and remove it from startup:
 npx akeru-bot@latest service uninstall
 ```
 
-An update restarts Akeru. Let active bot work and terminal commands finish first. Wait when another
-local or remote update is already running.
+An update restarts Akeru Bot. Let active bot work and terminal commands finish first. Wait when
+another local or remote update is already running.
 
 ## Updates and rollback
 
-The service uses a stable launcher and installs exact Akeru versions separately. Before a remote
+The service uses a stable launcher and installs exact Akeru Bot versions separately. Before a remote
 candidate starts, the launcher snapshots the database. A failed candidate can return to the previous
 server and database without rewriting the service definition.
 

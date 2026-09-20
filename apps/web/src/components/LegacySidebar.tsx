@@ -2151,7 +2151,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const clicked = await api.contextMenu.show(
         [
           ...(thread.branch
-            ? [{ id: "new-thread-on-branch", label: `New chat on ${thread.branch}` }]
+            ? [{ id: "new-thread-on-branch", label: `New conversation on ${thread.branch}` }]
             : []),
           { id: "rename", label: "Rename chat" },
           { id: "mark-unread", label: "Mark unread" },
@@ -2357,7 +2357,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             }
           />
           <TooltipPopup side="top">
-            {newThreadShortcutLabel ? `New chat (${newThreadShortcutLabel})` : "New chat"}
+            {newThreadShortcutLabel
+              ? `New conversation (${newThreadShortcutLabel})`
+              : "New conversation"}
           </TooltipPopup>
         </Tooltip>
       </div>

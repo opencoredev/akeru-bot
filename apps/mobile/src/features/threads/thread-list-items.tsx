@@ -124,7 +124,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: !props.collapsed }}
-        accessibilityLabel={`${props.title}, ${props.threadCount} chats`}
+        accessibilityLabel={`${props.title}, ${props.threadCount} conversations`}
         accessibilityHint={props.collapsed ? "Expands the project" : "Collapses the project"}
         className={
           compact ? "flex-1 flex-row items-center gap-2.5" : "flex-1 flex-row items-center gap-2"
@@ -162,7 +162,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
       </Pressable>
       {showNewThreadButton ? (
         <Pressable
-          accessibilityLabel={`Create new chat in ${props.title}`}
+          accessibilityLabel={`Create new conversation in ${props.title}`}
           accessibilityRole="button"
           hitSlop={{ ...verticalHitSlop, left: 10, right: 14 }}
           onPress={handleNewThread}

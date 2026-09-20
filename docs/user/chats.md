@@ -1,34 +1,37 @@
-# Organize chats
+# A bot's conversations
 
-Use a chat's menu to settle, snooze, wake, archive, delete, pin, or unpin it.
+Each bot keeps a history of conversations. Use a conversation's menu to settle, snooze, wake,
+archive, delete, pin, or unpin it.
 
-## Active and settled chats
+## Active and settled conversations
 
-Akeru settles a chat only when you select **Settle chat**. Inactivity and pull request state do not
-move chats to the settled list.
+Akeru settles a conversation only when you select **Settle chat**. Inactivity and pull request
+state do not move conversations to the settled list.
 
-Settling a pinned chat also removes its pin. **Un-settle chat** returns the chat to the top of the
-active list without changing its timestamps.
+Settling a pinned conversation also removes its pin. **Un-settle chat** returns the conversation
+to the top of the active list without changing its timestamps.
 
-Use **Snooze** to hide a chat until its wake time. Use **Wake chat** to return it early.
+Use **Snooze** to hide a conversation until its wake time. Use **Wake chat** to return it early.
 
 ## Pinned order
 
-Pinned chats appear above active bot work across projects and environments. On web and desktop, drag a
-pinned chat to reorder it. On mobile, open its menu and select **Move up** or **Move down**.
+Pinned conversations appear above active bot work across projects and environments. On web and
+desktop, drag a pinned conversation to reorder it. On mobile, open its menu and select **Move up**
+or **Move down**.
 
-The environment server stores the order. An older server can still pin a chat but keeps its default
-newest-first order until it is updated.
+The environment server stores the order. An older server can still pin a conversation but keeps
+its default newest-first order until it is updated.
 
 ## Link a pull request
 
-Right-click a pull-request link and select **Link to chat**. Select **Unlink from chat** from the same
-menu to remove it. Linked review state appears with the chat.
+Right-click a pull-request link and select **Link to chat**. Select **Unlink from chat** from the
+same menu to remove it. Linked review state appears with the conversation.
 
 ## Regenerate a title
 
-Open the chat menu and select **Regenerate title**. The action changes to **Regenerating…** until the
-new title is ready. Akeru hides this action when the environment server is too old to support it.
+Open the conversation menu and select **Regenerate title**. The action changes to **Regenerating…**
+until the new title is ready. Akeru hides this action when the environment server is too old to
+support it.
 
 ## Read a reply aloud
 

@@ -59,9 +59,9 @@ export function SettingsSidebarNav() {
       <SidebarFooter className="p-[var(--sidebar-content-inset)]">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => go("/")} tooltip="Back to chats">
+            <SidebarMenuButton onClick={() => go("/")} tooltip="Back to bots">
               <ArrowLeftIcon />
-              <span className="group-data-[collapsible=icon]:hidden">Back to chats</span>
+              <span className="group-data-[collapsible=icon]:hidden">Back to bots</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

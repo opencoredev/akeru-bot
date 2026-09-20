@@ -119,17 +119,17 @@ function resolveThreadAwarenessPhase(
 function headlineForPhase(phase: AgentAwarenessPhase): string {
   switch (phase) {
     case "starting":
-      return "Starting agent";
+      return "Starting bot";
     case "running":
-      return "Agent is working";
+      return "Bot is working";
     case "waiting_for_approval":
       return "Approval needed";
     case "waiting_for_input":
       return "Waiting for input";
     case "completed":
-      return "Agent finished";
+      return "Bot finished";
     case "failed":
-      return "Agent failed";
+      return "Bot failed";
     case "stale":
       return "Update delayed";
   }

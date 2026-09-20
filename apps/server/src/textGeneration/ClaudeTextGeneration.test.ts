@@ -534,7 +534,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             },
           });
 
-          expect(generated.title).toBe("New chat");
+          expect(generated.title).toBe("New conversation");
         }),
     ),
   );

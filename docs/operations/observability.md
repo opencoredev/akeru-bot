@@ -10,7 +10,10 @@ Akeru Bot has one server-side observability model:
 
 The local trace file is the persisted source of truth for normal local launches. Those launches do not
 write a separate server log file, but SSH-managed launches also persist the remote process's
-stdout/stderr at `~/.t3/ssh-launch/<state>/server.log`.
+stdout/stderr at `~/.akeru/ssh-launch/<state>/server.log`.
+
+Operator environment variables still use `T3CODE_*` names as compatibility aliases. The product home
+directory is `~/.akeru`.
 
 ## Where To Find Things
 
@@ -21,7 +24,7 @@ Logs are human-facing:
 - destination: stdout
 - format: `Logger.consolePretty()`
 - normal local persistence: none
-- SSH-managed launch persistence: `~/.t3/ssh-launch/<state>/server.log`
+- SSH-managed launch persistence: `~/.akeru/ssh-launch/<state>/server.log`
 
 If you want a log message to show up in the trace file, emit it inside an active span with `Effect.log...`. `Logger.tracerLogger` will attach it as a span event.
 
@@ -115,7 +118,7 @@ Default Grafana login:
 ```bash
 export T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
 export T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export T3CODE_OTLP_SERVICE_NAME=t3-local
+export T3CODE_OTLP_SERVICE_NAME=akeru-local
 ```
 
 Optional:
@@ -154,7 +157,7 @@ macOS app bundle example:
 ```bash
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+T3CODE_OTLP_SERVICE_NAME=akeru-desktop \
 "/Applications/Akeru Bot (Alpha).app/Contents/MacOS/Akeru Bot (Alpha)"
 ```
 
@@ -163,7 +166,7 @@ Direct binary example:
 ```bash
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+T3CODE_OTLP_SERVICE_NAME=akeru-desktop \
 ./path/to/your/desktop-app-binary
 ```
 
@@ -299,7 +302,7 @@ Recommended flow in Grafana:
 
 Good first searches:
 
-- service name such as `t3-local`, `t3-dev`, or `t3-desktop`
+- service name such as `akeru-local`, `akeru-dev`, or `akeru-desktop`
 - span names like `sendTurn` or a Git operation such as `GitVcsDriver.statusDetails.status`
 - Git spans whose `git.operation` attribute identifies the operation
 - orchestration spans with attributes like `orchestration.command_type`
@@ -516,12 +519,12 @@ Local trace file:
 - `T3CODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
 - `T3CODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
 
-OTLP export:
+OTLP export (`T3CODE_OTLP_*` names are compatibility aliases; the product home is `~/.akeru`):
 
 - `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
 - `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
 - `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_SERVICE_NAME`: service name, default `t3-server`
+- `T3CODE_OTLP_SERVICE_NAME`: service name, default `t3-server` (compatibility default)
 
 If the OTLP URLs are unset, local tracing still works and metrics stay in-process only.
 

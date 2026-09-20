@@ -60,7 +60,7 @@ describe("buildThreadActionMenuItems", () => {
 
     expect(labels).toEqual(
       expect.arrayContaining([
-        "New chat on main",
+        "New conversation on main",
         "Pin chat",
         "Settle chat",
         "Rename chat",

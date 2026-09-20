@@ -29,12 +29,14 @@ The slash menu includes skills by default. Turn off **Show skills in slash menu*
 commands when the same skill is already available.
 
 On Claude, picking a skill from the `$` menu is sent as a trailing `/name` command so Claude Code
-runs that skill. Codex still reads `$name` natively. The message you see in the chat stays `$name`.
+runs that skill. Codex still reads `$name` natively. The message you see in the conversation stays
+`$name`.
 
 ## Start bot work in the background
 
-From a new chat on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux. Akeru
-starts the chat, opens another new chat, and shows an **Open** action for the bot work in progress.
+From a new conversation with the current bot on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter`
+on Windows and Linux. Akeru starts that conversation, opens another conversation with the same bot,
+and shows an **Open** action for the bot work in progress.
 
-The background chat keeps the selected workspace mode and base branch. If **New worktree** is
-selected, each background chat creates a separate worktree.
+The background conversation keeps the selected workspace mode and base branch. If **New worktree**
+is selected, each background conversation creates a separate worktree.

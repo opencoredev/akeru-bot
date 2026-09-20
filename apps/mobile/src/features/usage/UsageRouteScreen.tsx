@@ -15,7 +15,7 @@ import { SettingsSection } from "../settings/components/SettingsSection";
 const PLAN_LABELS = {
   "openai-codex": "ChatGPT",
   anthropic: "Claude",
-  cursor: "Cursor",
+  cursor: "Cursor (historical)",
   xai: "Grok",
   "kimi-for-coding": "Kimi For Coding",
   "opencode-go": "OpenCode Go",
@@ -27,7 +27,9 @@ export function UsageRouteScreen() {
   const [usageWindow] = useState(() => makeWindow(30));
   const { merged, environments, isPending, isPartial, refresh } = useUsage(usageWindow);
   const refreshing = environments.some((entry) => entry.isPending && entry.summary !== null);
-  const planLimits = merged.planLimits.filter((entry) => entry.status === "ok");
+  const planLimits = merged.planLimits.filter(
+    (entry) => entry.status === "ok" && entry.provider !== "cursor",
+  );
 
   useEffect(() => {
     const timer = setInterval(

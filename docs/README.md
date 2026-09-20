@@ -10,7 +10,7 @@
 - [Configure sandboxes](./user/sandboxes.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Terminal history](./user/terminal.md)
-- [Organizing chats](./user/chats.md)
+- [A bot's conversations](./user/chats.md)
 - [Bot memory](./user/memory.md)
 - [Sending product feedback](./user/product-feedback.md)
 - [Plugins](./user/plugins.md)

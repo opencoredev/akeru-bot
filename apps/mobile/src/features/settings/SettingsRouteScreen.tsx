@@ -289,6 +289,7 @@ function LegacySettingsSection() {
         <SettingsSwitchRow
           icon="sidebar.left"
           label="Legacy Chat List"
+          subtitle="Use the old conversation list."
           value={!threadListV2Enabled}
           onValueChange={(value) => savePreferences({ legacyThreadListEnabled: value })}
         />
@@ -418,7 +419,7 @@ function capitalize(value: string): string {
 
 function ArchivedThreadsSettingsSection() {
   return (
-    <SettingsSection title="Chats">
+    <SettingsSection title="Conversations">
       <SettingsRow icon="archivebox" label="Archived conversations" target="SettingsArchive" />
     </SettingsSection>
   );

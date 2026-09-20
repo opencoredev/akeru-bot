@@ -13,8 +13,7 @@ Download the current installer from
 - Windows: Windows 10 or 11 x64 installer
 - Linux: x86_64 AppImage
 
-Open the app, add a project, then open **Settings > Providers** to connect an account. The desktop
-app manages the local server.
+Open the app. The desktop app manages the local server.
 
 ## Command-line server
 
@@ -34,6 +33,12 @@ npx akeru-bot@latest --help
 
 Use the [background service](./background-service.md) when the server must stay available after you
 close the terminal.
+
+## First run
+
+1. Connect a provider under **Settings > Providers**.
+2. Create a bot and give it a name.
+3. Send that bot a message.
 
 ## Connect a subscription
 
@@ -83,10 +88,10 @@ the saved connection from the environment.
 ## What Akeru runs
 
 Codex and Kimi use Akeru's custom Mastra-based runtime. Akeru supplies the workspace, memory,
-plugins, approval rules, and subscription access for each chat.
+plugins, approval rules, and subscription access for each bot.
 
 Claude, Grok, and OpenCode use their provider adapters. OpenCode Go uses Akeru's Mastra-based runtime.
-Both paths keep provider-specific session and permission behavior behind the same Akeru chat interface.
+Both paths keep provider-specific session and permission behavior behind the same Akeru conversation.
 
 ## Next steps
 

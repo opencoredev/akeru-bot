@@ -190,8 +190,8 @@ function deriveEmptyState(props: {
   }
 
   return {
-    title: "No chats yet",
-    detail: "Start a chat in one of your connected projects.",
+    title: "No conversations yet",
+    detail: "Message this bot to get started.",
     loading: false,
   };
 }
@@ -1011,7 +1011,7 @@ export function HomeScreen(props: HomeScreenProps) {
   /* Empty states */
   // The signal must ignore the search/environment filters: an active query
   // that matches nothing needs the in-list "No results" state, not the
-  // full-page "No chats yet". Settled threads are unarchived live shells,
+  // full-page "No conversations yet". Settled threads are unarchived live shells,
   // so the v1 check already covers v2.
   const hasAnyThreads =
     props.threads.some((thread) => thread.archivedAt === null) || props.pendingTasks.length > 0;
@@ -1076,7 +1076,7 @@ export function HomeScreen(props: HomeScreenProps) {
         detail="Choose another environment or start a new chat."
       />
     ) : (
-      <EmptyState title="No chats yet" detail="Start a chat to begin a coding session." />
+      <EmptyState title="No conversations yet" detail="Message this bot to get started." />
     )
   ) : null;
   // Self-contained: v1's listEmpty keys off projectGroups, which ignores the

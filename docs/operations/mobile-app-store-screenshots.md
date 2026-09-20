@@ -2,7 +2,7 @@
 
 > For maintainers. Using Akeru Bot? See [docs/user](../user/).
 
-The screenshot harness runs the real mobile application against three disposable local T3
+The screenshot harness runs the real mobile application against three disposable local Akeru
 environments. It creates an isolated base directory and server for each environment, real Git
 projects with deterministic content, seeded orchestration projections, and persisted terminal
 history. The app pairs with every server through its normal connection flow and React Navigation
@@ -20,7 +20,7 @@ From the repository root:
 
 The command:
 
-1. Creates three temporary T3 base directories and starts a local server for each on an available
+1. Creates three temporary Akeru base directories and starts a local server for each on an available
    port.
 2. Creates Akeru Bot, React, and Linux Git repositories with recognizable favicons, feature branches,
    and a deterministic Akeru Bot review diff.
@@ -50,15 +50,17 @@ shared across every checkout. The readiness check only verifies that the port is
 verify process ownership. Concurrent screenshot harnesses in different worktrees can therefore
 collide or attach to the wrong Metro process.
 
-Every configured device defaults to dark appearance and the `t3-code` palette, so plain
-`pnpm screenshots:mobile` produces 30 dark PNGs. Pass `--appearance light`, `--appearance dark`, or
-`--appearance both` to override the configured appearance; `both` produces 60 PNGs.
+Every configured device defaults to dark appearance and the default Akeru mobile palette
+(`t3-code`), so plain `pnpm screenshots:mobile` produces 30 dark PNGs. Pass `--appearance light`,
+`--appearance dark`, or `--appearance both` to override the configured appearance; `both` produces
+60 PNGs.
 
-Pass `--theme <id>` (repeatable) or `--theme all` to capture the app's other palettes: `t3-code`,
-`akeru-paper`, `t3-chat`, `grove`, `ocean`, `ember`, and `iris`. The runner hands the palette to the
-app as a launch argument, the app applies it to both color schemes, and a scene only reports itself
-ready once the requested palette is active — so a capture can never show the previous theme.
-`--theme all` multiplies the run by seven; only the native build is shared.
+Pass `--theme <id>` (repeatable) or `--theme all` to capture the app's other palettes. The default
+Akeru mobile palette id is `t3-code`; the others are `akeru-paper`, `t3-chat`, `grove`, `ocean`,
+`ember`, and `iris`. The runner hands the palette to the app as a launch argument, the app applies it
+to both color schemes, and a scene only reports itself ready once the requested palette is active —
+so a capture can never show the previous theme. `--theme all` multiplies the run by seven; only the
+native build is shared.
 
 The default matrix is:
 
@@ -102,8 +104,8 @@ appearance settings can never drift apart.
 
 Run the `Mobile Showcase Screenshots` workflow from GitHub's Actions tab, choose `all`, `ios`, or
 `android`, select `light`, `dark`, or `both`, and pick a palette (or `all`, which raises each job's
-timeout from 60 to 300 minutes). The default dispatch captures both appearances of the `t3-code`
-palette and runs iOS and Android concurrently: iPhone and iPad capture on a
+timeout from 60 to 300 minutes). The default dispatch captures both appearances of the default Akeru
+mobile palette (`t3-code`) and runs iOS and Android concurrently: iPhone and iPad capture on a
 12-vCPU Blacksmith macOS runner, while Android phone, 7-inch tablet, and 10-inch tablet capture on a
 16-vCPU Blacksmith Linux runner with a KVM-accelerated x86_64 emulator.
 
@@ -182,7 +184,7 @@ currently open for editing, so reconnecting the seeded environments cannot deliv
 before the screenshot is taken.
 
 The Environments capture presents the three local fixture transports as a Tailscale HTTPS hostname,
-a Helsinki VPS hostname, and a Tailnet IPv4 address. This display-only substitution keeps the cards
+an example.com hostname, and a Tailnet IPv4 address. This display-only substitution keeps the cards
 remote-first while the harness retains reliable loopback connections to its ephemeral servers.
 
 ## Local prerequisites

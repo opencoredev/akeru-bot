@@ -95,7 +95,6 @@ describe("provider access capabilities", () => {
   it.each([
     ["openai-codex", "chatgpt", "expired"],
     ["anthropic", "claude-max", "revoked"],
-    ["cursor", "cursor-pro", "recovered"],
   ] as const)("reports %s subscription access on the %s row", (provider, rowId, health) => {
     const capabilities = buildProviderAccessCapabilities(
       [{ ...baseSubscription, provider, health }],
@@ -106,6 +105,20 @@ describe("provider access capabilities", () => {
       health,
       apiAccess: "separate",
     });
+  });
+
+  it("keeps historical Cursor Pro on the cursor-pro row without advertising it as a built-in", () => {
+    const capabilities = buildProviderAccessCapabilities(
+      [{ ...baseSubscription, provider: "cursor", health: "recovered" }],
+      [],
+    );
+
+    expect(capabilities.find((item) => item.id === "cursor-pro")).toMatchObject({
+      health: "recovered",
+      apiAccess: "separate",
+      label: "Cursor Pro (historical)",
+    });
+    expect(capabilities.find((item) => item.id === "cursor-pro")?.label).not.toBe("Cursor Pro");
   });
 
   it("does not call detected OAuth or a detected CLI healthy", () => {

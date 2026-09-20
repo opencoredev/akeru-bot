@@ -29,7 +29,7 @@ export const PLAN_PROVIDER_PRESENTATION: Record<
 > = {
   "openai-codex": { label: "ChatGPT", icon: OpenAI, color: "green" },
   anthropic: { label: "Claude", icon: ClaudeAI, color: "orange" },
-  cursor: { label: "Cursor", icon: CursorIcon, color: "blue" },
+  cursor: { label: "Cursor (historical)", icon: CursorIcon, color: "blue" },
   xai: { label: "Grok", icon: GrokIcon, color: "grey" },
   "kimi-for-coding": {
     label: "Kimi For Coding",
@@ -42,7 +42,6 @@ export const PLAN_PROVIDER_PRESENTATION: Record<
 export const PLAN_PROVIDER_ORDER: readonly SubscriptionProviderId[] = [
   "openai-codex",
   "anthropic",
-  "cursor",
   "xai",
   "kimi-for-coding",
   "opencode-go",

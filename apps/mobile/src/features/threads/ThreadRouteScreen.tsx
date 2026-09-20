@@ -677,7 +677,7 @@ function ThreadRouteContent(
         type: "button" as const,
       }),
       withNativeGlassHeaderItem({
-        accessibilityLabel: "New chat",
+        accessibilityLabel: "New conversation",
         icon: { name: "square.and.pencil", type: "sfSymbol" as const },
         identifier: "thread-left-new-task",
         onPress: () => navigation.navigate("NewTaskSheet", { screen: "NewTask" }),

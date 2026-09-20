@@ -603,7 +603,9 @@ export function ArchivedThreadsScreen(props: {
     return (
       <EmptyState
         detail={
-          isFiltered ? "Try another search or environment." : "Chats you archive will appear here."
+          isFiltered
+            ? "Try another search or environment."
+            : "Conversations you archive will appear here."
         }
         title={isFiltered ? "No matching conversations" : "No archived conversations"}
       />

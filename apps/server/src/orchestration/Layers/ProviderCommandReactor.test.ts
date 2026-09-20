@@ -1788,7 +1788,7 @@ describe("ProviderCommandReactor", () => {
   it("keeps the current title when regeneration returns the fallback", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
-    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "New chat" }));
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "New conversation" }));
 
     await harness.runEffect(
       harness.engine.dispatch({
