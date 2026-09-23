@@ -3,8 +3,9 @@
  *
  * Ported from Mastra Code (mastra-ai/mastra, `mastracode/sdk/src/auth`),
  * Apache-2.0. A provider here is a consumer subscription (Claude Pro/Max,
- * ChatGPT, Cursor, Kimi For Coding, X Premium, or OpenCode Go) that the agent
- * runtime uses. Most providers use OAuth. OpenCode Go uses an API key.
+ * ChatGPT, Kimi For Coding, X Premium, or OpenCode Go) that the agent runtime
+ * uses. Legacy Cursor records still decode, but Cursor authentication is
+ * unavailable. Most providers use OAuth. OpenCode Go uses an API key.
  */
 
 export interface OAuthCredentials {
