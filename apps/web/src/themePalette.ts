@@ -217,6 +217,16 @@ function parseStoredThemes(storedThemes: ReadonlyArray<unknown>): ReadonlyArray<
   return themes;
 }
 
+/** Best-effort cleanup of a superseded storage key. A failed removal leaves a
+ * harmless duplicate behind and must not fail the operation that already
+ * landed. */
+export function removeLegacyStorageKey(key: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {}
+}
+
 function readCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {
   if (typeof window === "undefined") {
     return { status: "ready", storedThemes: [], themes: [] };
@@ -1516,7 +1526,7 @@ function saveCustomThemes(
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(storedThemes));
-    window.localStorage.removeItem(LEGACY_CUSTOM_THEMES_STORAGE_KEY);
+    removeLegacyStorageKey(LEGACY_CUSTOM_THEMES_STORAGE_KEY);
     customThemeLibrarySnapshot = { status: "ready", storedThemes, themes };
   } catch (cause) {
     throw new ThemeLibraryStorageError({

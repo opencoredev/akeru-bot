@@ -38,6 +38,7 @@ import {
   OCEAN_THEME,
   updateCustomTheme,
   CUSTOM_THEMES_STORAGE_KEY,
+  LEGACY_CUSTOM_THEMES_STORAGE_KEY,
   createManagedThemeColors,
   createVividThemeColors,
   getDefaultThemeColors,
@@ -1175,5 +1176,68 @@ describe("stored theme preferences", () => {
 
     vi.unstubAllGlobals();
     invalidateCustomThemes();
+  });
+  it("removes the legacy storage key when saving custom themes", () => {
+    const stored = new Map<string, string>([
+      [LEGACY_CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([])],
+    ]);
+    const removeItem = vi.fn((key: string) => stored.delete(key));
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem,
+      },
+    });
+    invalidateCustomThemes();
+    try {
+      installCustomTheme(
+        parseThemeFile({
+          version: THEME_FILE_VERSION,
+          id: "legacy-cleanup",
+          name: "Legacy Cleanup",
+          appearance: "dark",
+          colors: { canvas: "#101010" },
+        }),
+      );
+      expect(removeItem).toHaveBeenCalledWith(LEGACY_CUSTOM_THEMES_STORAGE_KEY);
+      expect(stored.has(LEGACY_CUSTOM_THEMES_STORAGE_KEY)).toBe(false);
+      expect(getCustomThemes().map((theme) => theme.id)).toEqual(["legacy-cleanup"]);
+    } finally {
+      vi.unstubAllGlobals();
+      invalidateCustomThemes();
+    }
+  });
+
+  it("still saves when legacy key removal throws", () => {
+    const stored = new Map<string, string>([
+      [LEGACY_CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([])],
+    ]);
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {
+          throw new Error("storage blocked");
+        },
+      },
+    });
+    invalidateCustomThemes();
+    try {
+      const theme = installCustomTheme(
+        parseThemeFile({
+          version: THEME_FILE_VERSION,
+          id: "resilient-save",
+          name: "Resilient Save",
+          appearance: "light",
+          colors: { canvas: "#fafafa" },
+        }),
+      );
+      expect(theme.id).toBe("resilient-save");
+      expect(getCustomThemes().map((entry) => entry.id)).toEqual(["resilient-save"]);
+    } finally {
+      vi.unstubAllGlobals();
+      invalidateCustomThemes();
+    }
   });
 });

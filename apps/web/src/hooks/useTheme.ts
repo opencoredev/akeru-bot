@@ -10,6 +10,7 @@ import {
   isKnownThemePreference,
   getThemePreferenceMode,
   parseThemeHalves,
+  removeLegacyStorageKey,
   resolveDesktopTheme,
   resolveThemeAppearance,
   resolveThemeHalf,
@@ -164,7 +165,6 @@ function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): voi
     // The legacy follow-system flag is read-only migration input now; the
     // mode key is the single source of truth.
     window.localStorage.setItem(THEME_APPEARANCE_MODE_STORAGE_KEY, appearanceMode);
-    window.localStorage.removeItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
   } catch (cause) {
     throw new ThemeStorageError({
       operation: "write",
@@ -172,6 +172,7 @@ function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): voi
       cause,
     });
   }
+  removeLegacyStorageKey(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
 }
 
 export function readThemePreference(): Theme {
@@ -206,11 +207,7 @@ export function writeThemePreference(theme: Theme): void {
       cause,
     });
   }
-  try {
-    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-  } catch {
-    // The saved key wins on read, so a leftover legacy theme is harmless.
-  }
+  removeLegacyStorageKey(LEGACY_STORAGE_KEY);
 }
 
 function getStored(): Theme {
@@ -511,7 +508,7 @@ export function useTheme() {
         window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY);
       window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
-      window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
+      removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
       try {
         writeThemePreference(next);
       } catch (cause) {
@@ -594,10 +591,8 @@ export function useTheme() {
         else next[appearance] = themeId;
         if (next.light === undefined && next.dark === undefined) {
           window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
-          window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
         } else {
           window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, JSON.stringify(next));
-          window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
         }
       } catch (cause) {
         const error = new ThemeStorageError({
@@ -612,6 +607,7 @@ export function useTheme() {
         });
         return false;
       }
+      removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
       applyTheme(getStored(), true);
       emitChange();
       return true;
@@ -623,7 +619,6 @@ export function useTheme() {
     if (typeof window === "undefined") return false;
     try {
       window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
-      window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
     } catch (cause) {
       const error = new ThemeStorageError({
         operation: "write",
@@ -637,6 +632,7 @@ export function useTheme() {
       });
       return false;
     }
+    removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
     applyTheme(getStored(), true);
     emitChange();
     return true;

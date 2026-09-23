@@ -270,3 +270,106 @@ describe("theme failure handling", () => {
     }
   });
 });
+
+describe("legacy key cleanup", () => {
+  function legacyThrowingStorage(initial: Record<string, string> = {}): Storage {
+    const store = new Map(Object.entries(initial));
+    return createStorage({
+      getItem: (key) => store.get(key) ?? null,
+      setItem: (key, value) => {
+        store.set(key, value);
+      },
+      removeItem: (key) => {
+        if (key.startsWith("t3code:")) throw new Error("legacy removal blocked");
+        store.delete(key);
+      },
+    });
+  }
+
+  function mockReactStore() {
+    vi.doMock("react", () => ({
+      useCallback: <A>(callback: A) => callback,
+      useEffect: () => undefined,
+      useSyncExternalStore: (
+        _subscribe: (listener: () => void) => () => void,
+        getSnapshot: () => unknown,
+      ) => getSnapshot(),
+    }));
+  }
+
+  it("keeps the theme preference write when legacy cleanup throws", async () => {
+    const storage = legacyThrowingStorage({ "t3code:theme": "akeru-chat" });
+    vi.stubGlobal("window", { localStorage: storage });
+
+    const { writeThemePreference } = await import("./useTheme");
+
+    expect(() => writeThemePreference("ocean")).not.toThrow();
+    expect(storage.getItem("akeru:theme")).toBe("ocean");
+  });
+
+  it("keeps the appearance mode write when legacy cleanup throws", async () => {
+    const storage = legacyThrowingStorage();
+    mockReactStore();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+
+    const { useTheme } = await import("./useTheme");
+
+    expect(useTheme().setAppearanceMode("dark")).toBe(true);
+    expect(storage.getItem("akeru:theme-appearance-mode")).toBe("dark");
+  });
+
+  it("keeps the theme half write when legacy cleanup throws", async () => {
+    const storage = legacyThrowingStorage();
+    mockReactStore();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+
+    const { useTheme } = await import("./useTheme");
+
+    expect(useTheme().setThemeHalf("light", "ocean")).toBe(true);
+    expect(storage.getItem("akeru:theme-halves:v1")).toBe(JSON.stringify({ light: "ocean" }));
+  });
+
+  it("keeps the theme choice when legacy cleanup throws", async () => {
+    const storage = legacyThrowingStorage({
+      "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),
+    });
+    mockReactStore();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+
+    const { useTheme } = await import("./useTheme");
+
+    expect(useTheme().setTheme("grove")).toBe(true);
+    expect(storage.getItem("akeru:theme")).toBe("grove");
+    expect(storage.getItem("akeru:theme-halves:v1")).toBeNull();
+  });
+
+  it("keeps cleared theme halves when legacy cleanup throws", async () => {
+    const storage = legacyThrowingStorage({
+      "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),
+      "t3code:theme-halves:v1": JSON.stringify({ dark: "ember" }),
+    });
+    mockReactStore();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+
+    const { useTheme } = await import("./useTheme");
+
+    expect(useTheme().clearThemeHalves()).toBe(true);
+    expect(storage.getItem("akeru:theme-halves:v1")).toBeNull();
+  });
+});
