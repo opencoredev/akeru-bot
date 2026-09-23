@@ -208,6 +208,10 @@ describe("ProviderCommandReactor", () => {
       ProviderAdapterRequestError
     >;
     readonly botEngine?: { readonly provider: string; readonly model: string } | null;
+    readonly secondBot?: {
+      readonly engine: { readonly provider: string; readonly model: string };
+      readonly modelSelection?: ModelSelection;
+    };
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
@@ -664,6 +668,42 @@ describe("ProviderCommandReactor", () => {
           runtimeMode: "approval-required",
           usageCap: input.botUsageCap ?? null,
           groupId: null,
+          createdAt: now,
+        }),
+      );
+    }
+    if (input?.secondBot !== undefined) {
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "bot.create",
+          commandId: CommandId.make("cmd-bot-create-2"),
+          botId: BotId.make("bot-2"),
+          name: "Second bot",
+          title: "Second bot",
+          avatar: { kind: "dither", seed: "second-bot" },
+          engine: input.secondBot.engine,
+          sandbox: "local",
+          runtimeMode: "approval-required",
+          usageCap: null,
+          groupId: null,
+          createdAt: now,
+        }),
+      );
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("cmd-thread-create-2"),
+          threadId: ThreadId.make("thread-2"),
+          projectId: asProjectId("project-1"),
+          botId: BotId.make("bot-2"),
+          title: "Thread 2",
+          modelSelection:
+            input.secondBot.modelSelection ??
+            createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-sol"),
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
           createdAt: now,
         }),
       );
@@ -4692,5 +4732,73 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
     expect(thread?.session?.activeTurnId).toBeNull();
+  });
+
+  it("routes two bots on the same provider instance to their own saved models", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5.6-sol" },
+      secondBot: { engine: { provider: "codex", model: "gpt-5.6-codex-mini" } },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-1-model"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-1-model"),
+          role: "user",
+          text: "bot one turn",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-2-model"),
+        threadId: ThreadId.make("thread-2"),
+        message: {
+          messageId: asMessageId("user-message-bot-2-model"),
+          role: "user",
+          text: "bot two turn",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+    await harness.drain();
+
+    const sessionModels = Object.fromEntries(
+      harness.startSession.mock.calls.map((call) => [
+        String((call[1] as { threadId: ThreadId }).threadId),
+        (call[1] as { modelSelection?: ModelSelection }).modelSelection,
+      ]),
+    );
+    expect(sessionModels["thread-1"]).toMatchObject({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.6-sol",
+    });
+    expect(sessionModels["thread-2"]).toMatchObject({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.6-codex-mini",
+    });
+
+    const turnModels = Object.fromEntries(
+      harness.sendTurn.mock.calls.map((call) => [
+        String((call[0] as { threadId: ThreadId }).threadId),
+        (call[0] as { modelSelection?: ModelSelection }).modelSelection,
+      ]),
+    );
+    expect(turnModels["thread-1"]).toMatchObject({ model: "gpt-5.6-sol" });
+    expect(turnModels["thread-2"]).toMatchObject({ model: "gpt-5.6-codex-mini" });
   });
 });

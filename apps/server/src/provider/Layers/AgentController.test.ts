@@ -202,7 +202,7 @@ function computerUseMcpManager() {
 
 function makeProviderSession(
   threadId: ThreadId,
-  provider: "codex" | "claudeAgent",
+  provider: "codex" | "claudeAgent" | "opencode",
 ): ProviderSession {
   return {
     provider: ProviderDriverKind.make(provider),
@@ -210,7 +210,12 @@ function makeProviderSession(
     threadId,
     status: "ready",
     runtimeMode: "full-access",
-    model: provider === "codex" ? "gpt-5.6-sol" : "claude-fable-5",
+    model:
+      provider === "codex"
+        ? "gpt-5.6-sol"
+        : provider === "opencode"
+          ? "anthropic/claude-sonnet-4-5"
+          : "claude-fable-5",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -248,7 +253,7 @@ function makeBridge() {
   let markNextDispatchAdmissionReached: (() => void) | undefined;
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
-      makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : "claudeAgent"),
+      makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : String(input.provider) === "opencode" ? "opencode" : "claudeAgent"),
     ),
   );
   const sendTurn = vi.fn<ProviderServiceShape["sendTurn"]>((input) =>
@@ -406,6 +411,9 @@ function makeUsageLedger() {
   };
 }
 
+// makeMastraHarness returns one shared Session double for every createSession call.
+// Multi-thread tests must install their own factory (see "routes two bots on the same
+// Codex instance") or the same session spies would collapse every thread together.
 function makeMastraHarness() {
   const harnessOptions: Array<
     Parameters<NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>>[0]
@@ -5457,5 +5465,360 @@ describe("AgentControllerLive", () => {
       bridge.service,
       mastra.factory,
     );
+  });
+
+  describe("per-driver wire-format model routing", () => {
+    const mastraWireCases = [
+      {
+        provider: ProviderDriverKind.make("codex"),
+        threadId: codexThreadId,
+        instanceId: codexInstanceId,
+        model: "gpt-5.6-sol",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "serviceTier", value: "priority" },
+        ] as const,
+        wireModelId: "openai/gpt-5.6-sol",
+        modelOptions: { reasoningEffort: "high", serviceTier: "priority" },
+      },
+      {
+        provider: ProviderDriverKind.make("claudeAgent"),
+        threadId: claudeThreadId,
+        instanceId: claudeInstanceId,
+        model: "claude-opus-4-6",
+        options: [{ id: "effort", value: "max" }] as const,
+        wireModelId: "anthropic/claude-opus-4-6",
+        modelOptions: undefined,
+      },
+      {
+        provider: ProviderDriverKind.make("grok"),
+        threadId: grokThreadId,
+        instanceId: grokInstanceId,
+        model: "grok-4.20-beta",
+        options: undefined,
+        wireModelId: "xai/grok-4.20-beta",
+        modelOptions: undefined,
+      },
+      {
+        provider: ProviderDriverKind.make("kimi"),
+        threadId: kimiThreadId,
+        instanceId: kimiInstanceId,
+        model: "k2-thinking",
+        options: undefined,
+        wireModelId: "kimi-for-coding/k2-thinking",
+        modelOptions: undefined,
+      },
+      {
+        provider: ProviderDriverKind.make("opencodeGo"),
+        threadId: openCodeGoThreadId,
+        instanceId: openCodeGoInstanceId,
+        model: "gpt-5.6-luna",
+        options: undefined,
+        wireModelId: "opencode-go/gpt-5.6-luna",
+        modelOptions: undefined,
+      },
+    ] as const;
+
+    for (const testCase of mastraWireCases) {
+      it.effect(`sends the saved ${testCase.provider} model to the Mastra wire`, () => {
+        const bridge = makeBridge();
+        const mastra = makeMastraHarness();
+        const modelSelection = {
+          instanceId: testCase.instanceId,
+          model: testCase.model,
+          ...(testCase.options ? { options: [...testCase.options] } : {}),
+        };
+        return provideController(
+          Effect.gen(function* () {
+            const controller = yield* AgentController;
+            yield* controller.resolveEngine({
+              threadId: testCase.threadId,
+              engine: {
+                provider: String(testCase.instanceId),
+                model: testCase.model,
+                ...(testCase.options ? { options: [...testCase.options] } : {}),
+              },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            });
+            const session = yield* controller.startSession(testCase.threadId, {
+              threadId: testCase.threadId,
+              provider: testCase.provider,
+              providerInstanceId: testCase.instanceId,
+              cwd: process.cwd(),
+              modelSelection,
+              runtimeMode: "approval-required",
+            });
+            assert.equal(session.provider, testCase.provider);
+            assert.equal(session.model, testCase.model);
+
+            yield* controller.sendTurn({ threadId: testCase.threadId, input: "Route me." });
+            yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+            mastra.finishSend();
+            yield* Effect.yieldNow;
+
+            expect(mastra.session.model.switch).toHaveBeenCalledWith({
+              modelId: testCase.wireModelId,
+            });
+            if (testCase.modelOptions !== undefined) {
+              expect(mastra.session.state.set).toHaveBeenLastCalledWith(
+                expect.objectContaining({ modelOptions: testCase.modelOptions }),
+              );
+            }
+            expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Route me." });
+            expect(bridge.startSession).not.toHaveBeenCalled();
+            expect(bridge.sendTurn).not.toHaveBeenCalled();
+          }),
+          bridge.service,
+          mastra.factory,
+        );
+      });
+    }
+
+    it.effect("sends the saved OpenCode model to the legacy bridge", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const modelSelection = {
+        instanceId: openCodeInstanceId,
+        model: "anthropic/claude-sonnet-4-5",
+        options: [
+          { id: "agent", value: "build" },
+          { id: "variant", value: "high" },
+        ],
+      };
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: {
+              provider: String(openCodeInstanceId),
+              model: "anthropic/claude-sonnet-4-5",
+              options: [
+                { id: "agent", value: "build" },
+                { id: "variant", value: "high" },
+              ],
+            },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          const session = yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            cwd: process.cwd(),
+            modelSelection,
+            runtimeMode: "approval-required",
+          });
+          assert.equal(session.provider, "opencode");
+
+          yield* controller.sendTurn({
+            threadId: claudeThreadId,
+            input: "Route me.",
+            modelSelection,
+          });
+
+          expect(bridge.startSession).toHaveBeenCalledOnce();
+          expect(bridge.startSession.mock.calls[0]?.[1]).toMatchObject({ modelSelection });
+          const sentInput = bridge.sendTurn.mock.calls[0]?.[0];
+          expect(sentInput?.threadId).toBe(claudeThreadId);
+          expect(sentInput?.modelSelection).toEqual(modelSelection);
+          expect(mastra.sendMessage).not.toHaveBeenCalled();
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
+    it.effect.each([
+      { provider: "codex", instanceId: "codex-isolated", issue: "This Codex instance needs OPENAI_API_KEY" },
+      { provider: "claudeAgent", instanceId: "claudeAgent-isolated", issue: "This Claude instance needs an API key or auth token" },
+      { provider: "grok", instanceId: "grok-isolated", issue: "This Grok instance needs XAI_API_KEY" },
+      { provider: "kimi", instanceId: "kimi-isolated", issue: "Custom Kimi credentials are not supported" },
+      { provider: "opencodeGo", instanceId: "opencodeGo-isolated", issue: "This OpenCode Go instance needs OPENCODE_API_KEY" },
+    ] as const)(
+      "fails closed for $provider when no credential transport is configured",
+      ({ provider, instanceId: instanceSlug, issue: expectedIssue }) => {
+        const bridge = makeBridge();
+        const mastra = makeMastraHarness();
+        const instanceId = ProviderInstanceId.make(instanceSlug);
+        const threadId = ThreadId.make(`thread-${provider.toLowerCase()}-isolated`);
+        const service: ProviderServiceShape = {
+          ...bridge.service,
+          getInstanceInfo: (candidate) =>
+            Effect.succeed({
+              instanceId: candidate,
+              driverKind: ProviderDriverKind.make(provider),
+              displayName: undefined,
+              enabled: true,
+              continuationIdentity: {
+                driverKind: ProviderDriverKind.make(provider),
+                continuationKey: `${provider}:instance:${candidate}`,
+              },
+              mastraConnection: {
+                environment: {},
+                instanceEnvironment: {},
+                useSavedCredential: false,
+              },
+            }),
+        };
+        return provideController(
+          Effect.gen(function* () {
+            const controller = yield* AgentController;
+            const error = yield* controller
+              .resolveEngine({
+                threadId,
+                engine: { provider, model: "removed-model" },
+                fallback: codexSelection,
+                mode: "default",
+                botConversation: true,
+              })
+              .pipe(Effect.flip);
+
+            assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
+            if (error._tag === "AgentControllerUnsupportedEngineError") {
+              assert.include(error.detail, `Provider instance '${provider}' is not available.`);
+              const causeMessage =
+                error.cause instanceof Error ? error.cause.message : String(error.cause ?? "");
+              assert.include(causeMessage, expectedIssue);
+            }
+            expect(bridge.startSession).not.toHaveBeenCalled();
+            expect(bridge.sendTurn).not.toHaveBeenCalled();
+            expect(mastra.session.model.switch).not.toHaveBeenCalled();
+          }),
+          service,
+          mastra.factory,
+        );
+      },
+    );
+
+    it.effect("fails closed for a disabled saved provider instead of rerouting", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          bridge.setInstanceEnabled(false);
+          const error = yield* controller
+            .resolveEngine({
+              threadId: claudeThreadId,
+              engine: { provider: String(claudeInstanceId), model: "claude-opus-4-6" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            })
+            .pipe(Effect.flip);
+
+          assert.equal(error._tag, "ProviderValidationError");
+          if (error._tag === "ProviderValidationError") {
+            assert.include(error.issue, "disabled in Akeru Bot settings");
+          }
+          expect(bridge.startSession).not.toHaveBeenCalled();
+          expect(bridge.sendTurn).not.toHaveBeenCalled();
+          expect(mastra.session.model.switch).not.toHaveBeenCalled();
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
+    it.effect("routes two bots on the same Codex instance to different models", () => {
+      const bridge = makeBridge();
+      const sessionsByThread = new Map<
+        string,
+        {
+          model: { switch: ReturnType<typeof vi.fn> };
+          sendMessage: ReturnType<typeof vi.fn>;
+        }
+      >();
+      const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async () => {
+        return {
+          controller: {
+            init: vi.fn(async () => undefined),
+            createSession: vi.fn(async (input: { readonly id: string }) => {
+              const switchSpy = vi.fn(async () => undefined);
+              const sendMessage = vi.fn(() => Promise.resolve());
+              sessionsByThread.set(input.id, {
+                model: { switch: switchSpy },
+                sendMessage,
+              });
+              return {
+                state: {
+                  get: () => ({}),
+                  set: vi.fn(async () => undefined),
+                },
+                mode: {
+                  get: () => "build",
+                  switch: vi.fn(async () => undefined),
+                },
+                model: { get: () => "", switch: switchSpy },
+                permissions: {
+                  setForCategory: vi.fn(async () => undefined),
+                  setForTool: vi.fn(async () => undefined),
+                },
+                grantTool: vi.fn(),
+                subscribe: vi.fn(() => () => undefined),
+                sendMessage,
+                abort: vi.fn(),
+                respondToToolApproval: vi.fn(),
+                respondToToolSuspension: vi.fn(async () => undefined),
+              } as unknown as Session<Record<string, unknown>>;
+            }),
+            deleteSession: vi.fn(async () => true),
+            destroy: vi.fn(async () => undefined),
+          },
+          observeExternalTurn: vi.fn(async () => undefined),
+          destroy: vi.fn(),
+        };
+      };
+      const codexWorkThread = ThreadId.make("thread-codex-work");
+      const codexReviewThread = ThreadId.make("thread-codex-review");
+
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          for (const [threadId, model] of [
+            [codexWorkThread, "gpt-5.6-sol"],
+            [codexReviewThread, "gpt-5.6-codex-mini"],
+          ] as const) {
+            yield* controller.resolveEngine({
+              threadId,
+              engine: { provider: "codex", model },
+              fallback: { instanceId: codexInstanceId, model },
+              mode: "default",
+              botConversation: true,
+            });
+            yield* controller.startSession(threadId, {
+              threadId,
+              provider: ProviderDriverKind.make("codex"),
+              providerInstanceId: codexInstanceId,
+              cwd: process.cwd(),
+              modelSelection: { instanceId: codexInstanceId, model },
+              runtimeMode: "approval-required",
+            });
+            yield* controller.sendTurn({ threadId, input: `Use ${model}.` });
+          }
+
+          expect(sessionsByThread.get(String(codexWorkThread))?.model.switch).toHaveBeenCalledWith(
+            { modelId: "openai/gpt-5.6-sol" },
+          );
+          expect(sessionsByThread.get(String(codexReviewThread))?.model.switch).toHaveBeenCalledWith(
+            { modelId: "openai/gpt-5.6-codex-mini" },
+          );
+          expect(sessionsByThread.get(String(codexWorkThread))?.sendMessage).toHaveBeenCalledWith({
+            content: "Use gpt-5.6-sol.",
+          });
+          expect(sessionsByThread.get(String(codexReviewThread))?.sendMessage).toHaveBeenCalledWith(
+            { content: "Use gpt-5.6-codex-mini." },
+          );
+          expect(bridge.startSession).not.toHaveBeenCalled();
+          expect(bridge.sendTurn).not.toHaveBeenCalled();
+        }),
+        bridge.service,
+        factory,
+      );
+    });
   });
 });
