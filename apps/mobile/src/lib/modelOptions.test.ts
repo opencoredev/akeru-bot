@@ -324,7 +324,7 @@ describe("resolveModelSendBlock", () => {
     const block = resolveModelSendBlock(
       claude({ auth: { status: "unauthenticated" }, unavailability: "missing-login" }),
       selection,
-      zh.translate,
+      zh.t,
     );
     expect(block).toMatchObject({ title: "Claude 未连接", action: "providers" });
   });

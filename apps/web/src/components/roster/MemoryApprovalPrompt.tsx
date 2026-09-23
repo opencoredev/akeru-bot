@@ -109,6 +109,13 @@ export function MemoryApprovalPrompt({
           onChange={(event) =>
             setDraft({ candidateId: approval.candidateId, fact: event.target.value })
           }
+          onKeyDown={(event) => {
+            // Escape cancels the edit like the Cancel button; an IME keeps its own Escape.
+            if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setDraft(null);
+          }}
         />
       ) : (
         <p className="mt-2 text-sm whitespace-pre-wrap text-foreground">{approval.fact}</p>

@@ -7,13 +7,15 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { catalogRegistry, createTranslator } from "./i18n/index.ts";
 import {
   latestTurnFailure,
   presentProviderUnavailability,
   providerAvailabilityReason,
+  providerUnavailabilitySummary,
   type ProviderAvailabilityReason,
 } from "./providerAvailability.ts";
+import { createTranslator } from "./i18n/index.ts";
+import { zhCNCatalog } from "./i18n/zh-CN.ts";
 
 const provider = (overrides: Partial<ServerProvider> = {}): ServerProvider => ({
   instanceId: ProviderInstanceId.make("claude"),
@@ -145,29 +147,38 @@ describe("presentProviderUnavailability", () => {
     ).toBe("usage");
   });
 
-  it("renders every reason in the active interface language", async () => {
-    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+  it("renders every reason in the active interface language", () => {
+    const zh = createTranslator("zh-CN", zhCNCatalog).t;
     for (const reason of reasons) {
       const english = presentProviderUnavailability({ reason, providerName: "Claude" });
-      const presentation = presentProviderUnavailability({
-        reason,
-        providerName: "Claude",
-        translate: zh.translate,
-      });
+      const presentation = presentProviderUnavailability({ reason, providerName: "Claude" }, zh);
       expect(presentation.title, reason).not.toBe(english.title);
       expect(presentation.description, reason).not.toBe(english.description);
       expect(presentation.action).toBe(english.action);
     }
+  });
+
+  it("translates named and unnamed providers without splicing a generic noun", () => {
+    const zh = createTranslator("zh-CN", zhCNCatalog).t;
     expect(
-      presentProviderUnavailability({
-        reason: "missing-login",
-        providerName: "Claude",
-        translate: zh.translate,
-      }),
+      presentProviderUnavailability({ reason: "expired-login", providerName: "Codex" }, zh),
     ).toMatchObject({
-      title: "Claude 未连接",
-      description: "请在“设置 > 提供商”中连接你的 Claude 账号。",
+      title: "Codex 登录已过期",
+      description: "请在“设置 > 提供商”中重新连接 Codex，然后重新发送消息。",
     });
+    expect(presentProviderUnavailability({ reason: "missing-login" }, zh)).toMatchObject({
+      title: "提供商未连接",
+      description: "请在“设置 > 提供商”中连接你的提供商账户。",
+    });
+    expect(
+      providerUnavailabilitySummary(
+        { reason: "unsupported-model", providerName: "Claude", modelName: "Claude Sonnet" },
+        zh,
+      ),
+    ).toBe("Claude Sonnet 在 Claude 上不可用。请为此机器人选择其他模型。");
+    expect(presentProviderUnavailability({ reason: "missing-login" }).title).toBe(
+      "The provider is not connected",
+    );
   });
 
   it("keeps a bounded provider detail for the technical details", () => {

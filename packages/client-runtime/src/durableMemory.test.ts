@@ -304,6 +304,29 @@ describe("durable fact actions", () => {
     ).toBe("其他 3 个机器人");
   });
 
+  it("reads the audience naturally when it mixes Chinese and Latin bot names", () => {
+    const bots = {
+      currentBotId: "bot-1",
+      botNames: new Map([
+        ["bot-2", "Iris"],
+        ["bot-3", "小明"],
+      ]),
+    };
+    const available = (affectedBotIds: ReadonlyArray<string>, locale: "en" | "zh-CN") => {
+      const i18n =
+        locale === "en" ? createTranslator("en") : createTranslator("zh-CN", zhCNCatalog);
+      const label = durableFactBotsLabel(fact({ affectedBotIds } as never), bots, i18n) ?? "";
+      return i18n.t("Available to {bots}", { bots: label });
+    };
+    // The label trails a full-width colon, so a Latin name never touches Chinese text.
+    expect(available(["bot-1"], "zh-CN")).toBe("使用范围：此机器人");
+    expect(available(["bot-1", "bot-2", "bot-3"], "zh-CN")).toBe("使用范围：此机器人、Iris、小明");
+    expect(available(["bot-2"], "zh-CN")).toBe("使用范围：Iris");
+    expect(available(["bot-8", "bot-9"], "zh-CN")).toBe("使用范围：其他 2 个机器人");
+    expect(available(["bot-1"], "en")).toBe("Available to this bot");
+    expect(available(["bot-1", "bot-2"], "en")).toBe("Available to this bot, Iris");
+  });
+
   it("builds each mutation against the revision the user saw", () => {
     const current = fact();
     const target = { memoryId: "root-1", expectedRevision: 3 };

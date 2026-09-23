@@ -173,7 +173,12 @@ export function InboxIncidentRow({
           ) : (
             <CircleAlertIcon className="size-4 text-destructive" />
           )}
-          {item.botName} · {item.taskOrRoutine} · {copy.kind}
+          <span>
+            {item.botName} · {item.taskOrRoutine} · {copy.kind}
+          </span>
+          {copy.sensitive ? (
+            <span className="text-xs font-normal text-muted-foreground">· {copy.sensitive}</span>
+          ) : null}
         </span>
       }
       description={copy.detail}

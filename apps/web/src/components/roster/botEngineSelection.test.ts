@@ -1,6 +1,6 @@
+import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
 import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
-import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
@@ -68,9 +68,41 @@ describe("resolveStickyBotEngine", () => {
     });
   });
 
-  it("explains a missing provider in the active interface language", async () => {
-    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
-    expect(botEngineUnavailability(null, [], zh.translate)).toMatchObject({
+  it("explains a selected engine that cannot run in each locale", async () => {
+    const expired = {
+      ...makeComposerTestProvider(),
+      displayName: "Codex",
+      unavailability: "expired-login" as const,
+    };
+    const signedIn = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+    const signedOut = deriveProviderInstanceEntries([expired]);
+    const instanceId = signedOut[0]!.instanceId;
+    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!()).t;
+
+    expect(botEngineUnavailability({ instanceId, model: "gpt-5-codex" }, signedOut)).toMatchObject({
+      reason: "expired-login",
+      title: "Codex sign-in expired",
+      description: "Reconnect Codex in Settings > Providers, then send your message again.",
+    });
+    expect(
+      botEngineUnavailability({ instanceId, model: "gpt-5-codex" }, signedOut, zh),
+    ).toMatchObject({
+      title: "Codex 登录已过期",
+      description: "请在“设置 > 提供商”中重新连接 Codex，然后重新发送消息。",
+    });
+    expect(botEngineUnavailability({ instanceId, model: "gpt-4-retired" }, signedIn)).toMatchObject(
+      {
+        reason: "unsupported-model",
+        description: "Pick another model for this bot.",
+      },
+    );
+    expect(
+      botEngineUnavailability({ instanceId, model: "gpt-4-retired" }, signedIn, zh),
+    ).toMatchObject({
+      title: expect.stringMatching(/^gpt-4-retired 在 .+ 上不可用$/),
+      description: "请为此机器人选择其他模型。",
+    });
+    expect(botEngineUnavailability(null, signedIn, zh)).toMatchObject({
       reason: "missing-provider",
       title: "未连接任何提供商",
       description: "请在“设置 > 提供商”中连接一个提供商，以便此机器人回复。",

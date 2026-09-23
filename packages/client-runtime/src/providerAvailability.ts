@@ -4,7 +4,7 @@ import type {
   ServerProviderUnavailability,
 } from "@t3tools/contracts";
 
-import { translate as translateMessage, type TranslationParams } from "./i18n/index.ts";
+import { createTranslator, type MessageKey, type TranslationParams } from "./i18n/index.ts";
 
 /**
  * Why a provider instance cannot run a turn right now. The server's turn
@@ -54,76 +54,77 @@ export function providerAvailabilityReason(
   return null;
 }
 
-/** A client's active translator. The default renders English. */
-export type ProviderAvailabilityTranslate = (message: string, params?: TranslationParams) => string;
+/** Translates presentation copy. Defaults to English so callers without a locale keep working. */
+export type ProviderAvailabilityTranslate = (
+  message: MessageKey,
+  params?: TranslationParams,
+) => string;
 
-const english: ProviderAvailabilityTranslate = (message, params) =>
-  translateMessage("en", message, params);
+const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;
 
-export function presentProviderUnavailability(input: {
-  readonly reason: ProviderAvailabilityReason;
-  /** Omit when the failure did not say which provider it came from. */
-  readonly providerName?: string | null | undefined;
-  readonly modelName?: string | null | undefined;
-  readonly detail?: string | null | undefined;
-  readonly translate?: ProviderAvailabilityTranslate | undefined;
-}): ProviderAvailabilityPresentation {
-  const translate = input.translate ?? english;
-  const known = input.providerName;
-  // Subject, mid-sentence, possessive, and title forms for a known or unknown provider.
-  const name = known ?? translate("The provider");
-  const who = known ?? translate("the provider");
-  const yours = known
-    ? translate("your {provider}", { provider: known })
-    : translate("your provider");
-  const label = known ?? translate("Provider");
+export function presentProviderUnavailability(
+  input: {
+    readonly reason: ProviderAvailabilityReason;
+    /** Omit when the failure did not say which provider it came from. */
+    readonly providerName?: string | null | undefined;
+    readonly modelName?: string | null | undefined;
+    readonly detail?: string | null | undefined;
+  },
+  t: ProviderAvailabilityTranslate = englishTranslate,
+): ProviderAvailabilityPresentation {
+  const provider = input.providerName;
+  // Each sentence has its own key for an unknown provider, so no locale has to
+  // splice a generic noun into a template written around a proper name.
+  const named = (known: MessageKey, unknown: MessageKey, params: TranslationParams = {}) =>
+    provider ? t(known, { ...params, provider }) : t(unknown, params);
   const technicalDetails = boundedDetail(input.detail);
   switch (input.reason) {
     case "missing-provider":
       return {
-        title: translate("{provider} is not set up", { provider: name }),
-        description: translate(
+        title: named("{provider} is not set up", "The provider is not set up"),
+        description: named(
           "Add {provider} in Settings > Providers, or pick another model for this bot.",
-          { provider: who },
+          "Add the provider in Settings > Providers, or pick another model for this bot.",
         ),
         technicalDetails,
         action: "providers",
       };
     case "disabled":
       return {
-        title: translate("{provider} is turned off", { provider: name }),
-        description: translate(
+        title: named("{provider} is turned off", "The provider is turned off"),
+        description: named(
           "Turn {provider} on in Settings > Providers, then send your message again.",
-          { provider: who },
+          "Turn the provider on in Settings > Providers, then send your message again.",
         ),
         technicalDetails,
         action: "providers",
       };
     case "not-installed":
       return {
-        title: translate("{provider} is not installed", { provider: name }),
-        description: translate(
+        title: named("{provider} is not installed", "The provider is not installed"),
+        description: named(
           "Install {provider} from Settings > Providers, or pick another model for this bot.",
-          { provider: who },
+          "Install the provider from Settings > Providers, or pick another model for this bot.",
         ),
         technicalDetails,
         action: "providers",
       };
     case "missing-login":
       return {
-        title: translate("{provider} is not connected", { provider: name }),
-        description: translate("Connect {account} account in Settings > Providers.", {
-          account: yours,
-        }),
+        title: named("{provider} is not connected", "The provider is not connected"),
+        description: named(
+          "Connect your {provider} account in Settings > Providers.",
+          "Connect your provider account in Settings > Providers.",
+        ),
         technicalDetails,
         action: "providers",
       };
     case "expired-login":
       return {
-        title: translate("{provider} sign-in expired", { provider: label }),
-        description: translate(
+        title: named("{provider} sign-in expired", "Provider sign-in expired"),
+        description: named(
           "Reconnect {provider} in Settings > Providers, then send your message again.",
-          { provider: who },
+          "Reconnect the provider in Settings > Providers, then send your message again.",
         ),
         technicalDetails,
         action: "providers",
@@ -131,36 +132,40 @@ export function presentProviderUnavailability(input: {
     case "unsupported-model":
       return {
         title: input.modelName
-          ? translate("{model} is not available on {provider}", {
-              model: input.modelName,
-              provider: who,
-            })
-          : translate("This model is not available on {provider}", { provider: who }),
-        description: translate("Pick another model for this bot."),
+          ? named(
+              "{model} is not available on {provider}",
+              "{model} is not available on the provider",
+              { model: input.modelName },
+            )
+          : named(
+              "This model is not available on {provider}",
+              "This model is not available on the provider",
+            ),
+        description: t("Pick another model for this bot."),
         technicalDetails,
         action: "none",
       };
     case "limit-reached":
       return {
-        title: translate("{provider} limit reached", { provider: label }),
-        description: translate(
+        title: named("{provider} limit reached", "Provider limit reached"),
+        description: named(
           "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
-          { provider: known ?? translate("provider") },
+          "Your provider plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
         ),
         technicalDetails,
         action: "none",
       };
     case "usage-cap":
       return {
-        title: translate("Akeru usage cap reached"),
-        description: translate("Raise this bot's usage cap in its settings to keep chatting."),
+        title: t("Akeru usage cap reached"),
+        description: t("Raise this bot's usage cap in its settings to keep chatting."),
         technicalDetails,
         action: "usage",
       };
     case "temporary-failure":
       return {
-        title: translate("{provider} could not respond", { provider: name }),
-        description: translate("Send your message again in a moment."),
+        title: named("{provider} could not respond", "The provider could not respond"),
+        description: t("Send your message again in a moment."),
         technicalDetails,
         action: "none",
       };
@@ -170,9 +175,18 @@ export function presentProviderUnavailability(input: {
 /** One sentence for a disabled picker row or a Send tooltip. */
 export function providerUnavailabilitySummary(
   input: Parameters<typeof presentProviderUnavailability>[0],
+  t: ProviderAvailabilityTranslate = englishTranslate,
 ): string {
-  const presentation = presentProviderUnavailability(input);
-  return (input.translate ?? english)("{title}. {description}", {
+  const presentation = presentProviderUnavailability(input, t);
+  return joinProviderUnavailability(presentation, t);
+}
+
+/** A presentation's title and next step as one sentence, punctuated for the locale. */
+export function joinProviderUnavailability(
+  presentation: Pick<ProviderAvailabilityPresentation, "title" | "description">,
+  t: ProviderAvailabilityTranslate = englishTranslate,
+): string {
+  return t("{title}. {description}", {
     title: presentation.title,
     description: presentation.description,
   });

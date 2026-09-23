@@ -27,18 +27,15 @@ import {
 } from "@t3tools/contracts";
 
 import {
+  joinProviderUnavailability,
   presentProviderUnavailability,
   providerAvailabilityReason,
   type ProviderAvailabilityPresentation,
   type ProviderAvailabilityReason,
   type ProviderAvailabilityTranslate,
 } from "@t3tools/client-runtime/provider-availability";
-import { translate as translateMessage } from "@t3tools/client-runtime/i18n";
 
 import { formatProviderDriverKindLabel } from "./providerModels";
-
-const english: ProviderAvailabilityTranslate = (message, params) =>
-  translateMessage("en", message, params);
 
 /**
  * Local-only placeholder used while a draft has no provider it can safely
@@ -137,24 +134,22 @@ export function providerInstanceUnavailability(
     readonly model?: string | null;
     readonly modelName?: string | null;
     readonly providerName?: string;
-    /** The active translator; omit for English. */
-    readonly translate?: ProviderAvailabilityTranslate;
+    readonly t?: ProviderAvailabilityTranslate | undefined;
   } = {},
 ): (ProviderAvailabilityPresentation & { readonly reason: ProviderAvailabilityReason }) | null {
   const reason = providerInstanceAvailabilityReason(entry, options.model);
   if (!reason) return null;
   return {
     reason,
-    ...presentProviderUnavailability({
-      reason,
-      providerName:
-        entry?.displayName ??
-        options.providerName ??
-        (options.translate ?? english)("This provider"),
-      modelName: options.modelName ?? options.model,
-      detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
-      translate: options.translate,
-    }),
+    ...presentProviderUnavailability(
+      {
+        reason,
+        providerName: entry?.displayName ?? options.providerName,
+        modelName: options.modelName ?? options.model,
+        detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
+      },
+      options.t,
+    ),
   };
 }
 
@@ -165,16 +160,11 @@ export function providerInstanceUnavailableReason(
     readonly model?: string | null;
     readonly modelName?: string | null;
     readonly providerName?: string;
-    /** The active translator; omit for English. */
-    readonly translate?: ProviderAvailabilityTranslate;
+    readonly t?: ProviderAvailabilityTranslate | undefined;
   } = {},
 ): string | null {
   const presentation = providerInstanceUnavailability(entry, options);
-  if (!presentation) return null;
-  return (options.translate ?? english)("{title}. {description}", {
-    title: presentation.title,
-    description: presentation.description,
-  });
+  return presentation ? joinProviderUnavailability(presentation, options.t) : null;
 }
 
 /**
@@ -184,11 +174,11 @@ export function providerInstanceUnavailableReason(
  */
 export function providerInstancePickerBlockReason(
   entry: ProviderInstanceEntry,
-  translate?: ProviderAvailabilityTranslate,
+  t?: ProviderAvailabilityTranslate,
 ): string | null {
   const reason = providerInstanceAvailabilityReason(entry);
   if (!reason || reason === "temporary-failure") return null;
-  return providerInstanceUnavailableReason(entry, translate ? { translate } : {});
+  return providerInstanceUnavailableReason(entry, { t });
 }
 
 /**

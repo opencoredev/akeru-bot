@@ -100,6 +100,7 @@ export function useBotProfileDraft(
   onSave?: (input: BotProfileUpdate) => Promise<boolean>,
 ) {
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const { t } = useI18n();
   const settings = usePrimarySettings();
 
   const [name, setName] = useState(bot.name);
@@ -174,7 +175,6 @@ export function useBotProfileDraft(
       ),
     [model, provider, providers, settings],
   );
-  const { t } = useI18n();
   const engineUnavailability = useMemo(
     () =>
       botEngineUnavailability(

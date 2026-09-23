@@ -27,6 +27,22 @@ vi.mock("react/compiler-runtime", async () => {
   return { c: reactHookHarness.useMemoCache };
 });
 
+const i18nLocale = vi.hoisted(() => ({ current: "en" as "en" | "zh-CN" }));
+
+vi.mock("../../i18n", async () => {
+  const { catalogRegistry, createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translators = {
+    en: createTranslator("en"),
+    "zh-CN": createTranslator("zh-CN", await catalogRegistry["zh-CN"]!()),
+  };
+  return {
+    useI18n: () => {
+      const translator = translators[i18nLocale.current];
+      return { ...translator, t: translator.translate };
+    },
+  };
+});
+
 import { BotSandboxBrowserSharingSettings } from "./SettingsPanels";
 
 function renderSetting(
@@ -54,7 +70,10 @@ function call(handler: unknown, ...args: ReadonlyArray<unknown>) {
 }
 
 describe("BotSandboxBrowserSharingSettings", () => {
-  beforeEach(() => hooks.reset());
+  beforeEach(() => {
+    hooks.reset();
+    i18nLocale.current = "en";
+  });
 
   it("asks before changing the workspace mode", () => {
     const onChange = vi.fn();
@@ -68,6 +87,28 @@ describe("BotSandboxBrowserSharingSettings", () => {
     expect(onChange).not.toHaveBeenCalled();
     call(findElement(tree, (props) => props.children === "Change mode").props.onClick);
     expect(onChange).toHaveBeenCalledWith("shared");
+  });
+
+  it("asks in Chinese before changing the workspace mode", () => {
+    i18nLocale.current = "zh-CN";
+    const onChange = vi.fn();
+    let tree = renderSetting("shared", onChange);
+    call(
+      findElement(tree, (props) => props.onValueChange !== undefined).props.onValueChange,
+      "separate",
+    );
+    tree = renderSetting("shared", onChange);
+
+    findElement(tree, (props) => props.children === "更改机器人工作区模式？");
+    findElement(
+      tree,
+      (props) =>
+        typeof props.children === "string" &&
+        props.children.includes("会为每个机器人创建独立的工作区和浏览器"),
+    );
+    findElement(tree, (props) => props.children === "取消");
+    call(findElement(tree, (props) => props.children === "更改模式").props.onClick);
+    expect(onChange).toHaveBeenCalledWith("separate");
   });
 
   it("ignores invalid values", () => {

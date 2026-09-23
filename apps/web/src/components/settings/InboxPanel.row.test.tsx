@@ -40,6 +40,16 @@ vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => async () 
 
 import { InboxIncidentRow } from "./InboxPanel";
 
+const approvalRequest = {
+  candidateId: AkeruMemoryCandidateId.make("candidate-1"),
+  fact: "Deploys happen on Fridays.",
+  scope: "project",
+  sensitive: false,
+  sourceThreadId: ThreadId.make("thread-ada"),
+  authorBotId: BotId.make("bot-ada"),
+  affectedBotIds: [BotId.make("bot-ada")],
+} as const;
+
 const memoryItem: BotInboxItem = {
   id: "incident-1",
   incidentKey: "memory-approval:candidate-1",
@@ -54,15 +64,7 @@ const memoryItem: BotInboxItem = {
   firstSeenAt: "2026-09-20T10:00:00.000Z",
   lastSeenAt: "2026-09-20T10:00:00.000Z",
   occurrenceCount: 1,
-  memoryApproval: {
-    candidateId: AkeruMemoryCandidateId.make("candidate-1"),
-    fact: "Deploys happen on Fridays.",
-    scope: "project",
-    sensitive: false,
-    sourceThreadId: ThreadId.make("thread-ada"),
-    authorBotId: BotId.make("bot-ada"),
-    affectedBotIds: [BotId.make("bot-ada")],
-  },
+  memoryApproval: approvalRequest,
 };
 
 const render = (item: BotInboxItem) =>
@@ -86,6 +88,18 @@ describe("InboxIncidentRow", () => {
     expect(markup).not.toContain("Approve or reject this memory.");
     expect(markup).toContain(">Reject</button>");
     expect(markup).toContain(">Approve</button>");
+    expect(markup).not.toContain("Sensitive");
+  });
+
+  it("marks sensitive memory approvals like the chat card", () => {
+    const markup = render({
+      ...memoryItem,
+      memoryApproval: { ...approvalRequest, sensitive: true },
+    });
+    // The marker is its own flex child behind the row's separator, never fused to the kind label.
+    expect(markup).toMatch(
+      /Memory approval<\/span><span class="[^"]*">· Sensitive, always needs approval<\/span>/,
+    );
   });
 
   it("keeps the server copy for other items", () => {

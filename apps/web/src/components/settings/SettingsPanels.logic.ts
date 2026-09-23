@@ -9,6 +9,11 @@ import type {
   SidebarProjectGroupingMode,
   UnifiedSettings,
 } from "@t3tools/contracts";
+import {
+  createTranslator,
+  type MessageKey,
+  type TranslationParams,
+} from "@t3tools/client-runtime/i18n";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import {
   getBackgroundActivityBaseProfile,
@@ -18,6 +23,8 @@ import {
 } from "@t3tools/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
+
+const englishTranslate = createTranslator("en").t;
 
 export function isProjectGroupingEnabled(mode: SidebarProjectGroupingMode): boolean {
   return mode !== "separate";
@@ -217,12 +224,6 @@ function collapseOtelSignalsUrl(input: {
   return `${tracesBase}/{traces,metrics}`;
 }
 
-type DiagnosticsTranslate = (message: string, params?: Record<string, string>) => string;
-
-const englishDiagnostics: DiagnosticsTranslate = (message, params = {}) =>
-  message.replace(/\{(\w+)\}/g, (placeholder, name: string) => params[name] ?? placeholder);
-
-/** Pass the active translator for display; the default returns English. */
 export function formatDiagnosticsDescription(
   input: {
     readonly localTracingEnabled: boolean;
@@ -231,34 +232,32 @@ export function formatDiagnosticsDescription(
     readonly otlpMetricsEnabled: boolean;
     readonly otlpMetricsUrl?: string | undefined;
   },
-  translate: DiagnosticsTranslate = englishDiagnostics,
+  t: (message: MessageKey, params?: TranslationParams) => string = englishTranslate,
 ): string {
-  const mode = input.localTracingEnabled
-    ? translate("Local trace file.")
-    : translate("Terminal logs only.");
+  const mode = input.localTracingEnabled ? t("Local trace file") : t("Terminal logs only");
   const tracesUrl = input.otlpTracesEnabled ? input.otlpTracesUrl : undefined;
   const metricsUrl = input.otlpMetricsEnabled ? input.otlpMetricsUrl : undefined;
 
   if (tracesUrl && metricsUrl) {
     const collapsedUrl = collapseOtelSignalsUrl({ tracesUrl, metricsUrl });
-    const exporting = collapsedUrl
-      ? translate("Exporting OTEL to {url}.", { url: collapsedUrl })
-      : translate("Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.", {
+    return collapsedUrl
+      ? t("{mode}. Exporting OTEL to {url}.", { mode, url: collapsedUrl })
+      : t("{mode}. Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.", {
+          mode,
           tracesUrl,
           metricsUrl,
         });
-    return `${mode} ${exporting}`;
   }
 
   if (tracesUrl) {
-    return `${mode} ${translate("Exporting OTEL traces to {url}.", { url: tracesUrl })}`;
+    return t("{mode}. Exporting OTEL traces to {url}.", { mode, url: tracesUrl });
   }
 
   if (metricsUrl) {
-    return `${mode} ${translate("Exporting OTEL metrics to {url}.", { url: metricsUrl })}`;
+    return t("{mode}. Exporting OTEL metrics to {url}.", { mode, url: metricsUrl });
   }
 
-  return mode;
+  return t("{mode}.", { mode });
 }
 
 export function buildProviderInstanceUpdatePatch(input: {

@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1283,
+  "directMessageCount": 1333,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -116,6 +116,8 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "BACKGROUND_ACTIVITY_PROFILE_LABELS.balanced)}",
       "BACKGROUND_ACTIVITY_PROFILE_LABELS.performance)}",
       "BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"])}",
+      "label)}</span>",
+      "label)}",
       "BOT_SANDBOX_BROWSER_SHARING_LABELS[value])}</SelectValue>",
       "BOT_SANDBOX_BROWSER_SHARING_LABELS.shared)}",
       "BOT_SANDBOX_BROWSER_SHARING_LABELS.separate)}",
@@ -130,7 +132,6 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "BACKGROUND_ACTIVITY_PROFILE_LABELS.performance)}",
       "BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"])}",
       "BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS.advanced)}",
-      "'Leave empty to use "~/" when the Add Project browser opens.')}",
       "QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}",
       "label)}",
     ],
@@ -142,9 +143,17 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "item.label)}",
       "item.label)}",
     ],
+    "packages/client-runtime/src/botInbox.ts": [
+      "MEMORY_APPROVAL_ACTIONS[approval.scope]),",
+      "botInboxKindLabel(item.kind)),",
+    ],
     "packages/client-runtime/src/durableMemory.ts": [
       "label)\`.",
       "MEMORY_APPROVAL_HEADINGS[scope]);",
+    ],
+    "packages/client-runtime/src/providerAvailability.ts": [
+      "known, { ...params, provider }) : t(unknown, params);",
+      "unknown, params);",
     ],
   },
   "finiteSources": {
@@ -438,7 +447,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/routes/__root.tsx",
     "apps/web/src/routes/_chat.bots.$botId.tsx",
     "apps/web/src/routes/_chat.index.tsx",
+    "packages/client-runtime/src/botInbox.ts",
     "packages/client-runtime/src/durableMemory.ts",
+    "packages/client-runtime/src/errors/threadErrorPresentation.ts",
     "packages/client-runtime/src/imageGeneration.ts",
     "packages/client-runtime/src/providerAvailability.ts",
   ],

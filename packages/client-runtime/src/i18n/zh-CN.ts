@@ -1431,147 +1431,6 @@ export const zhCNCatalog: TranslationCatalog = {
   "“{name}” was canceled": "“{name}”已取消",
   "“{name}” failed": "“{name}”失败",
   "“{name}” finished": "“{name}”已完成",
-  "Back to chats": "返回聊天",
-  "Settings breadcrumb": "设置导航路径",
-  "12-hour": "12 小时制",
-  "24-hour": "24 小时制",
-  Shared: "共享",
-  Separate: "独立",
-  Performance: "性能",
-  "Battery saver": "省电",
-  Hold: "长按",
-  "Double press": "连按两次",
-  Direct: "直接退出",
-  "Pauses background probes when clients are idle, the host is locked, or low power mode is active.":
-    "客户端空闲、主机锁定或处于低电量模式时暂停后台探测。",
-  "Allows scoped background probes while any subscribed client remains connected.":
-    "只要有已订阅的客户端保持连接，就允许有限范围的后台探测。",
-  "Also pauses background probes when the host or client is on battery.":
-    "主机或客户端使用电池供电时也会暂停后台探测。",
-  "Uses custom background intervals with the selected shared power policy. Current shared policy: {policy}.":
-    "使用自定义后台间隔，并沿用所选的共享电源策略。当前共享策略：{policy}。",
-  Download: "下载",
-  "Up to Date": "已是最新",
-  "Check for Updates": "检查更新",
-  "Update available.": "有可用更新。",
-  "Current version of the application.": "应用的当前版本。",
-  "Legacy features": "旧版功能",
-  "Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode.":
-    "在输入框中恢复构建/计划切换，以及 /plan 和 /default 命令和 Shift+Tab 快捷键。关闭时，所有聊天都以构建模式运行。",
-  "Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior.":
-    "逐个 token 显示助手输出，而不是按完整段落显示。不推荐：速度明显更慢，长回复也更难阅读。仅为兼容旧行为而保留。",
-  "Turn on token-by-token output?": "开启逐 token 输出？",
-  "It is significantly slower than the default buffered output and hurts the reading experience. This switch exists only for backwards compatibility.":
-    "它比默认的缓冲输出慢得多，并会影响阅读体验。此开关仅为向后兼容而保留。",
-  "Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile.":
-    "共享模式下所有机器人使用同一个沙盒和浏览器。独立模式下每个机器人拥有自己的沙盒和浏览器配置。",
-  "sandbox and browser sharing": "沙盒与浏览器共享",
-  "Change bot workspace mode?": "更改机器人工作区模式？",
-  "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move.":
-    "正在进行的机器人工作保留当前工作区。下一轮起，每个机器人将移入共享的工作区和浏览器。文件和 Cookie 不会迁移。",
-  "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace.":
-    "正在进行的机器人工作保留当前工作区。下一轮起，将为每个机器人创建独立的工作区和浏览器。共享的文件和 Cookie 保留在共享工作区中。",
-  "Change mode": "更改模式",
-  "System default follows your browser or OS clock preference.":
-    "系统默认会跟随浏览器或操作系统的时钟偏好。",
-  "time format": "时间格式",
-  "Timestamp format": "时间戳格式",
-  "How often the Usage page reloads plan limits.": "用量页面重新加载套餐额度的频率。",
-  "usage refresh": "用量刷新",
-  "{minutes} min": "{minutes} 分钟",
-  "Set whether the diff panel ignores whitespace-only edits by default.":
-    "设置差异面板是否默认忽略仅空白字符的修改。",
-  "diff whitespace changes": "差异空白修改",
-  "Hide whitespace changes by default": "默认隐藏空白修改",
-  "Also include skills in the / command menu. Skills always appear when you type $.":
-    "在 / 命令菜单中也显示技能。输入 $ 时始终会显示技能。",
-  "skills in slash menu": "斜杠菜单中的技能",
-  "Check installed provider CLIs for newer available versions.":
-    "检查已安装的提供商 CLI 是否有更新版本。",
-  "provider update checks": "提供商更新检查",
-  "Check provider versions": "检查提供商版本",
-  "Background activity": "后台活动",
-  "This shared policy gates background work such as Git refreshes and provider health probes after their individual intervals elapse.":
-    "此共享策略决定 Git 刷新和提供商健康探测等后台任务在各自的间隔到期后是否运行。",
-  "background activity": "后台活动",
-  "Background activity profile": "后台活动配置",
-  "Configure advanced background activity": "配置高级后台活动",
-  "Configure background activity": "配置后台活动",
-  "Auto review runs safe actions and asks before sensitive ones.":
-    "自动审核会直接运行安全操作，敏感操作前会先询问。",
-  "local execution": "本地执行",
-  "Full access": "完全访问",
-  "Ask first": "先询问",
-  "Auto review": "自动审核",
-  'Leave empty to use "~/" when the Add Project browser opens.':
-    "留空则在打开“添加项目”浏览器时使用“~/”。",
-  "add project base directory": "添加项目的起始目录",
-  "Add project base directory": "添加项目的起始目录",
-  "Hold mode also quits on two quick presses.": "长按模式下快速按两次也会退出。",
-  "quit shortcut behavior": "退出快捷键行为",
-  "Quit shortcut behavior": "退出快捷键行为",
-  "Used when bot work or source control work does not have its own model.":
-    "当机器人工作或源代码管理工作没有指定模型时使用。",
-  "text generation model": "文本生成模型",
-  "Feedback endpoint": "反馈端点",
-  "Use HTTPS or loopback HTTP.": "请使用 HTTPS 或回环地址 HTTP。",
-  "View diagnostics": "查看诊断",
-  "Local trace file.": "本地跟踪文件。",
-  "Terminal logs only.": "仅终端日志。",
-  "Exporting OTEL to {url}.": "正在将 OTEL 导出到 {url}。",
-  "Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.":
-    "正在将 OTEL 跟踪导出到 {tracesUrl}，指标导出到 {metricsUrl}。",
-  "Exporting OTEL traces to {url}.": "正在将 OTEL 跟踪导出到 {url}。",
-  "Exporting OTEL metrics to {url}.": "正在将 OTEL 指标导出到 {url}。",
-  "Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included.":
-    "导出 Akeru 设置、项目关联和历史记录，或在其他环境中恢复它们。不包含项目文件和凭据。",
-  "Reading...": "正在读取...",
-  Import: "导入",
-  "Exporting...": "正在导出...",
-  Export: "导出",
-  "Import Akeru archive": "导入 Akeru 归档",
-  "The provider": "提供商",
-  "the provider": "提供商",
-  "your {provider}": "你的 {provider}",
-  "your provider": "你的提供商",
-  provider: "提供商",
-  "This provider": "此提供商",
-  "{provider} is not set up": "{provider} 尚未设置",
-  "Add {provider} in Settings > Providers, or pick another model for this bot.":
-    "请在“设置 > 提供商”中添加 {provider}，或为此机器人选择其他模型。",
-  "{provider} is turned off": "{provider} 已关闭",
-  "Turn {provider} on in Settings > Providers, then send your message again.":
-    "请在“设置 > 提供商”中开启 {provider}，然后重新发送消息。",
-  "{provider} is not installed": "{provider} 尚未安装",
-  "Install {provider} from Settings > Providers, or pick another model for this bot.":
-    "请在“设置 > 提供商”中安装 {provider}，或为此机器人选择其他模型。",
-  "{provider} is not connected": "{provider} 未连接",
-  "Connect {account} account in Settings > Providers.": "请在“设置 > 提供商”中连接{account} 账号。",
-  "{provider} sign-in expired": "{provider} 登录已过期",
-  "Reconnect {provider} in Settings > Providers, then send your message again.":
-    "请在“设置 > 提供商”中重新连接 {provider}，然后重新发送消息。",
-  "{model} is not available on {provider}": "{model} 在 {provider} 上不可用",
-  "This model is not available on {provider}": "此模型在 {provider} 上不可用",
-  "Pick another model for this bot.": "请为此机器人选择其他模型。",
-  "{provider} limit reached": "{provider} 已达到限额",
-  "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.":
-    "你的 {provider} 套餐已达到用量或速率限制。请等待限额重置后重新发送消息。",
-  "Akeru usage cap reached": "已达到 Akeru 用量上限",
-  "Raise this bot's usage cap in its settings to keep chatting.":
-    "请在此机器人的设置中提高用量上限以继续聊天。",
-  "{provider} could not respond": "{provider} 无法响应",
-  "Send your message again in a moment.": "请稍后重新发送消息。",
-  "{title}. {description}": "{title}。{description}",
-  "Connect a provider in Settings > Providers so this bot can reply.":
-    "请在“设置 > 提供商”中连接一个提供商，以便此机器人回复。",
-  "{title}.": "{title}。",
-  "Automatically read new replies in this chat on this device":
-    "在此设备上自动朗读此聊天中的新回复",
-  "Only new completed replies are read. History is never replayed. Your selected speech service may charge for audio.":
-    "只朗读新完成的回复，不会重放历史记录。你选择的语音服务可能会对音频收费。",
-  "This preference could not be saved on this device.": "无法在此设备上保存此偏好设置。",
-  "Could not open the sign-in page. Try Open sign-in again.":
-    "无法打开登录页面。请再次点击“打开登录”。",
   "Run provider command": "运行提供方命令",
   "Run provider skill": "运行提供方技能",
   "{scope} skill": "{scope} 技能",
@@ -1596,7 +1455,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "{botName} wants to save this": "{botName} 想保存这条内容",
   "A bot wants to save this": "有机器人想保存这条内容",
   "Sensitive, always needs approval": "敏感内容，始终需要批准",
-  "Available to {bots}": "可供 {bots} 使用",
+  "Available to {bots}": "使用范围：{bots}",
   "Save to private memory?": "要保存到私有记忆吗？",
   "Save to this bot's memory?": "要保存到此机器人的记忆吗？",
   "Save to project memory?": "要保存到项目记忆吗？",
@@ -1607,4 +1466,241 @@ export const zhCNCatalog: TranslationCatalog = {
   "Save to project memory": "保存到项目记忆",
   "Save to group memory": "保存到群组记忆",
   "Save to workspace memory": "保存到工作区记忆",
+  "Back to chats": "返回聊天",
+  "Timestamp format": "时间戳格式",
+  Shared: "共享",
+  Separate: "独立",
+  "12-hour": "12 小时制",
+  "24-hour": "24 小时制",
+  "{count} min": "{count} 分钟",
+  "Background Activity": "后台活动",
+  "Tune the shared power policy and the background intervals that feed it.":
+    "调整共享的电源策略，以及为其提供数据的后台间隔。",
+  "Shared policy": "共享策略",
+  "Shared background policy": "共享后台策略",
+  "Controls whether background work may run after a subscribed interval fires.":
+    "控制订阅的间隔触发后，是否允许运行后台工作。",
+  "Git fetch interval": "Git 拉取间隔",
+  "Git fetch interval in seconds": "Git 拉取间隔（秒）",
+  "Decrease Git fetch interval": "缩短 Git 拉取间隔",
+  "Increase Git fetch interval": "延长 Git 拉取间隔",
+  "Refresh remote branch status in the background.": "在后台刷新远程分支状态。",
+  "Provider health interval": "提供商健康检查间隔",
+  "Provider health interval in seconds": "提供商健康检查间隔（秒）",
+  "Decrease provider health interval": "缩短提供商健康检查间隔",
+  "Increase provider health interval": "延长提供商健康检查间隔",
+  "Refresh provider availability, versions, auth state, and model metadata.":
+    "刷新提供商的可用性、版本、认证状态和模型元数据。",
+  "Host power monitor": "主机电源监测",
+  "Active host power interval in seconds": "活跃时主机电源监测间隔（秒）",
+  "Decrease active host power interval": "缩短活跃时主机电源监测间隔",
+  "Increase active host power interval": "延长活跃时主机电源监测间隔",
+  "Poll host power state while clients are active.": "客户端活跃时轮询主机电源状态。",
+  "Idle host monitor": "空闲主机监测",
+  "Idle host power interval in seconds": "空闲时主机电源监测间隔（秒）",
+  "Decrease idle host power interval": "缩短空闲时主机电源监测间隔",
+  "Increase idle host power interval": "延长空闲时主机电源监测间隔",
+  "Poll host power state when no foreground client is active.":
+    "没有活跃的前台客户端时轮询主机电源状态。",
+  seconds: "秒",
+  "Pause when host is locked": "主机锁定时暂停",
+  "Pause on host low power": "主机低电量模式时暂停",
+  "Pause on client low power": "客户端低电量模式时暂停",
+  "Pause on battery": "使用电池时暂停",
+  "Reset all": "全部重置",
+  Additions: "新增",
+  Changes: "更改",
+  Choose: "选择",
+  "Archive exported": "归档已导出",
+  "Archive partly restored": "归档已部分恢复",
+  "Archive restored": "归档已恢复",
+  "Could not choose project folder": "无法选择项目文件夹",
+  "Could not export archive": "无法导出归档",
+  "Could not import archive": "无法导入归档",
+  "Could not preview archive": "无法预览归档",
+  "Could not read archive": "无法读取归档",
+  "Could not use project folder": "无法使用该项目文件夹",
+  "{count} restored.": "已恢复 {count} 项。",
+  "{count} skipped.": "已跳过 {count} 项。",
+  "{count} failed.": "{count} 项失败。",
+  "{count} partly restored.": "{count} 项部分恢复。",
+  "Enter an absolute folder path, or open Akeru Bot on desktop.":
+    "请输入文件夹的绝对路径，或在桌面版中打开 Akeru Bot。",
+  "{filename}. Review what Akeru Bot will restore on this environment.":
+    "{filename}。请查看 Akeru Bot 将在此环境中恢复的内容。",
+  "Folder picker unavailable": "文件夹选择器不可用",
+  "Missing providers": "缺少的提供商",
+  "Not restored": "未恢复",
+  "Not restored.": "未恢复。",
+  "Partly restored.": "部分恢复。",
+  "Not transferred": "未迁移",
+  "Project locations": "项目位置",
+  "Choose an existing folder for each project. Akeru Bot links the project to the folder without copying its files.":
+    "为每个项目选择一个现有文件夹。Akeru Bot 会将项目关联到该文件夹，不会复制其中的文件。",
+  "After restore, sign in to providers and reconnect imported MCP servers on this device.":
+    "恢复后，请在此设备上登录提供商，并重新连接导入的 MCP 服务器。",
+  "Restore failures": "恢复失败的项目",
+  "Restore preview": "恢复预览",
+  "Restoring...": "正在恢复…",
+  "The command failed.": "命令执行失败。",
+  "The file could not be read.": "无法读取该文件。",
+  "The folder could not be selected.": "无法选择该文件夹。",
+  "Change bot workspace mode?": "更改机器人工作区模式？",
+  "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move.":
+    "进行中的机器人工作会保留当前工作区。从下一轮开始，每个机器人都会改用共享的工作区和浏览器。文件和 Cookie 不会迁移。",
+  "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace.":
+    "进行中的机器人工作会保留当前工作区。从下一轮开始，会为每个机器人创建独立的工作区和浏览器。共享的文件和 Cookie 仍留在共享工作区中。",
+  "Change mode": "更改模式",
+  "sandbox and browser sharing": "沙盒和浏览器共享",
+  "time format": "时间格式",
+  "How often the Usage page reloads plan limits.": "“用量”页面重新加载套餐限额的频率。",
+  "usage refresh": "用量刷新",
+  "Set whether the diff panel ignores whitespace-only edits by default.":
+    "设置差异面板是否默认忽略仅涉及空白字符的修改。",
+  "diff whitespace changes": "差异中的空白修改",
+  "Hide whitespace changes by default": "默认隐藏空白修改",
+  "skills in slash menu": "斜杠菜单中的技能",
+  "Check installed provider CLIs for newer available versions.":
+    "检查已安装的提供商 CLI 是否有可用的新版本。",
+  "Settings breadcrumb": "设置导航路径",
+  "Battery saver": "省电",
+  Hold: "长按",
+  "Double press": "连按两次",
+  Direct: "直接退出",
+  Download: "下载",
+  "Up to Date": "已是最新",
+  "Check for Updates": "检查更新",
+  "Update available.": "有可用更新。",
+  "Current version of the application.": "应用的当前版本。",
+  "Legacy features": "旧版功能",
+  "Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior.":
+    "逐个 token 显示助手输出，而不是按完整段落显示。不推荐：速度明显更慢，长回复也更难阅读。仅为兼容旧行为而保留。",
+  "Turn on token-by-token output?": "开启逐 token 输出？",
+  "Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile.":
+    "共享模式下所有机器人使用同一个沙盒和浏览器。独立模式下每个机器人拥有自己的沙盒和浏览器配置。",
+  "System default follows your browser or OS clock preference.":
+    "系统默认会跟随浏览器或操作系统的时钟偏好。",
+  "Also include skills in the / command menu. Skills always appear when you type $.":
+    "在 / 命令菜单中也显示技能。输入 $ 时始终会显示技能。",
+  "provider update checks": "提供商更新检查",
+  "Check provider versions": "检查提供商版本",
+  "Background activity": "后台活动",
+  "This shared policy gates background work such as Git refreshes and provider health probes after their individual intervals elapse.":
+    "Git 刷新、提供商健康探测等后台任务在各自的间隔到期后，由这项共享策略决定是否运行。",
+  "Pauses background probes when clients are idle, the host is locked, or low power mode is active.":
+    "客户端空闲、主机锁定或处于低电量模式时，暂停后台探测。",
+  "Allows scoped background probes while any subscribed client remains connected.":
+    "只要仍有已订阅的客户端保持连接，就允许限定范围的后台探测。",
+  "Also pauses background probes when the host or client is on battery.":
+    "主机或客户端使用电池供电时，也会暂停后台探测。",
+  "Uses custom background intervals with the selected shared power policy. Current shared policy: {profile}.":
+    "按所选的共享电源策略使用自定义后台间隔。当前共享策略：{profile}。",
+  Performance: "性能优先",
+  "background activity": "后台活动",
+  "Background activity profile": "后台活动配置",
+  "Configure advanced background activity": "配置高级后台活动",
+  "Configure background activity": "配置后台活动",
+  "Auto review runs safe actions and asks before sensitive ones.":
+    "“自动审查”会直接执行安全操作，执行敏感操作前先询问。",
+  "local execution": "本地执行",
+  "Full access": "完全访问",
+  "Ask first": "先询问",
+  "Leave empty to open the Add Project browser in ~/.": "留空时，“添加项目”浏览器从 ~/ 打开。",
+  "add project base directory": "添加项目的起始目录",
+  "Add project base directory": "添加项目的起始目录",
+  "quit shortcut behavior": "退出快捷键行为",
+  "Quit shortcut behavior": "退出快捷键行为",
+  "Used when bot work or source control work does not have its own model.":
+    "当机器人工作或源代码管理工作没有指定模型时使用。",
+  "text generation model": "文本生成模型",
+  "Feedback endpoint": "反馈端点",
+  "Use HTTPS or loopback HTTP.": "请使用 HTTPS 或回环 HTTP 地址。",
+  "View diagnostics": "查看诊断信息",
+  "Local trace file": "本地跟踪文件",
+  "Terminal logs only": "仅终端日志",
+  "{mode}. Exporting OTEL to {url}.": "{mode}。正在将 OTEL 导出到 {url}。",
+  "{mode}. Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.":
+    "{mode}。正在将 OTEL 跟踪导出到 {tracesUrl}，将指标导出到 {metricsUrl}。",
+  "{mode}. Exporting OTEL traces to {url}.": "{mode}。正在将 OTEL 跟踪导出到 {url}。",
+  "{mode}. Exporting OTEL metrics to {url}.": "{mode}。正在将 OTEL 指标导出到 {url}。",
+  "{mode}.": "{mode}。",
+  "Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode.":
+    "恢复输入框中的“构建/计划”切换，以及 /plan、/default 命令和 Shift+Tab 快捷键。关闭时，所有聊天都以构建模式运行。",
+  "It is significantly slower than the default buffered output and hurts the reading experience. This switch exists only for backwards compatibility.":
+    "它比默认的缓冲输出慢得多，也会影响阅读体验。此开关仅为向后兼容而保留。",
+  Import: "导入",
+  Export: "导出",
+  "Reading...": "正在读取…",
+  "Exporting...": "正在导出…",
+  "Import Akeru archive": "导入 Akeru 归档",
+  "The request stopped before it could finish.": "请求在完成前已停止。",
+  "{provider} is not set up": "{provider} 尚未设置",
+  "The provider is not set up": "提供商尚未设置",
+  "Add {provider} in Settings > Providers, or pick another model for this bot.":
+    "请在“设置 > 提供商”中添加 {provider}，或为此机器人选择其他模型。",
+  "Add the provider in Settings > Providers, or pick another model for this bot.":
+    "请在“设置 > 提供商”中添加提供商，或为此机器人选择其他模型。",
+  "{provider} is turned off": "{provider} 已关闭",
+  "The provider is turned off": "提供商已关闭",
+  "Turn {provider} on in Settings > Providers, then send your message again.":
+    "请在“设置 > 提供商”中开启 {provider}，然后重新发送消息。",
+  "Turn the provider on in Settings > Providers, then send your message again.":
+    "请在“设置 > 提供商”中开启提供商，然后重新发送消息。",
+  "{provider} is not installed": "{provider} 未安装",
+  "The provider is not installed": "提供商未安装",
+  "Install {provider} from Settings > Providers, or pick another model for this bot.":
+    "请在“设置 > 提供商”中安装 {provider}，或为此机器人选择其他模型。",
+  "Install the provider from Settings > Providers, or pick another model for this bot.":
+    "请在“设置 > 提供商”中安装提供商，或为此机器人选择其他模型。",
+  "{provider} is not connected": "{provider} 未连接",
+  "The provider is not connected": "提供商未连接",
+  "Connect your {provider} account in Settings > Providers.":
+    "请在“设置 > 提供商”中连接你的 {provider} 账户。",
+  "Connect your provider account in Settings > Providers.":
+    "请在“设置 > 提供商”中连接你的提供商账户。",
+  "{provider} sign-in expired": "{provider} 登录已过期",
+  "Reconnect {provider} in Settings > Providers, then send your message again.":
+    "请在“设置 > 提供商”中重新连接 {provider}，然后重新发送消息。",
+  "Reconnect the provider in Settings > Providers, then send your message again.":
+    "请在“设置 > 提供商”中重新连接提供商，然后重新发送消息。",
+  "{model} is not available on {provider}": "{model} 在 {provider} 上不可用",
+  "{model} is not available on the provider": "{model} 在该提供商上不可用",
+  "This model is not available on {provider}": "此模型在 {provider} 上不可用",
+  "This model is not available on the provider": "此模型在该提供商上不可用",
+  "Pick another model for this bot.": "请为此机器人选择其他模型。",
+  "{provider} limit reached": "{provider} 已达到限额",
+  "Provider limit reached": "提供商已达到限额",
+  "Your provider plan hit its usage or rate limit. Wait for it to reset, then send your message again.":
+    "你的提供商套餐已达到用量或速率限制。请等待重置后重新发送消息。",
+  "Auto review": "自动审查",
+  "Hold mode also quits on two quick presses.": "长按模式下快速按两次也会退出。",
+  "Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included.":
+    "导出 Akeru 设置、项目关联和历史记录，或在其他环境中恢复它们。不包含项目文件和凭据。",
+  "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.":
+    "你的 {provider} 套餐已达到用量或速率限制。请等待限额重置后重新发送消息。",
+  "Akeru usage cap reached": "已达到 Akeru 用量上限",
+  "Raise this bot's usage cap in its settings to keep chatting.":
+    "请在此机器人的设置中提高用量上限以继续聊天。",
+  "{provider} could not respond": "{provider} 无法响应",
+  "The provider could not respond": "提供商无法响应",
+  "Send your message again in a moment.": "请稍后重新发送消息。",
+  "{title}. {description}": "{title}。{description}",
+  "This bot is archived": "此机器人已归档",
+  "Restore it from the roster to chat with it again.": "从机器人列表中恢复它即可继续聊天。",
+  "Connection interrupted": "连接中断",
+  "Check the environment connection, then send your message again.":
+    "请检查环境连接，然后重新发送消息。",
+  "The bot couldn’t finish that request": "机器人未能完成该请求",
+  "Try sending it again. If it keeps happening, send feedback with the technical details.":
+    "请重新发送。如果问题持续出现，请附上技术详情发送反馈。",
+  "Connect a provider in Settings > Providers so this bot can reply.":
+    "请在“设置 > 提供商”中连接一个提供商，以便此机器人回复。",
+  "{title}.": "{title}。",
+  "Automatically read new replies in this chat on this device":
+    "在此设备上自动朗读此聊天中的新回复",
+  "Only new completed replies are read. History is never replayed. Your selected speech service may charge for audio.":
+    "只朗读新完成的回复，不会重放历史记录。你选择的语音服务可能会对音频收费。",
+  "This preference could not be saved on this device.": "无法在此设备上保存此偏好设置。",
+  "Could not open the sign-in page. Try Open sign-in again.":
+    "无法打开登录页面。请再次点击“打开登录”。",
 };

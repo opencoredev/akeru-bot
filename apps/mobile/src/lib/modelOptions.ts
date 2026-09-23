@@ -11,11 +11,11 @@ import {
 } from "@t3tools/client-runtime/provider-auth";
 import {
   presentProviderUnavailability,
+  type ProviderAvailabilityTranslate,
   providerAvailabilityReason,
   providerUnavailabilitySummary,
   type ProviderAvailabilityPresentation,
   type ProviderAvailabilityReason,
-  type ProviderAvailabilityTranslate,
 } from "@t3tools/client-runtime/provider-availability";
 import {
   buildProviderOptionSelectionsFromDescriptors,
@@ -61,7 +61,7 @@ function providerDisplayLabel(provider: {
 export function resolveModelSendBlock(
   config: T3ServerConfig | null | undefined,
   selection: ModelSelection,
-  translate?: ProviderAvailabilityTranslate,
+  t?: ProviderAvailabilityTranslate,
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ProviderAvailabilityPresentation | null {
   if (!config) return null;
@@ -85,15 +85,17 @@ export function resolveModelSendBlock(
   const modelName =
     provider?.models.find((candidate) => candidate.slug === selection.model)?.name ??
     selection.model;
-  return presentProviderUnavailability({
-    reason,
-    providerName: providerDisplayLabel(
-      provider ?? { driver: selection.instanceId, instanceId: selection.instanceId },
-    ),
-    modelName,
-    detail: provider?.unavailabilityDetail ?? provider?.message,
-    translate,
-  });
+  return presentProviderUnavailability(
+    {
+      reason,
+      providerName: providerDisplayLabel(
+        provider ?? { driver: selection.instanceId, instanceId: selection.instanceId },
+      ),
+      modelName,
+      detail: provider?.unavailabilityDetail ?? provider?.message,
+    },
+    t,
+  );
 }
 
 function normalizeSelectionOptions(
@@ -176,7 +178,7 @@ export function buildModelOptions(
   config: T3ServerConfig | null | undefined,
   fallbackModelSelection: ModelSelection | null,
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
-  translate?: ProviderAvailabilityTranslate,
+  t?: ProviderAvailabilityTranslate,
 ): ReadonlyArray<ModelOption> {
   const options = new Map<string, ModelOption>();
 
@@ -209,12 +211,7 @@ export function buildModelOptions(
   ): string | null =>
     reason === null
       ? null
-      : providerUnavailabilitySummary({
-          reason,
-          providerName: providerLabel,
-          modelName,
-          translate,
-        });
+      : providerUnavailabilitySummary({ reason, providerName: providerLabel, modelName }, t);
 
   for (const provider of allProviders) {
     const providerLabel = providerDisplayLabel(provider);

@@ -269,7 +269,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
             <BotTurnFailureRow
               botName={activeBot?.name ?? group.name}
-              title={presentThreadError(runtime.turnFailure.message, failureContext).title}
+              title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
             />
           ) : null}
           {delegations.map((delegation) => (

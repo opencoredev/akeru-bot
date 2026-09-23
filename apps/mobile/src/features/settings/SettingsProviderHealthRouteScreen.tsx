@@ -105,6 +105,9 @@ function BotInbox({
                 label={item.memoryApproval ? t("Memory to save") : t("Last failure")}
                 value={copy.detail}
               />
+              {copy.sensitive ? (
+                <Text className="text-xs text-foreground-muted">{copy.sensitive}</Text>
+              ) : null}
               <Field label={t("Next action")} value={copy.nextAction} />
               {inboxItemAction(item) === "memory-approval" ? (
                 <View className="flex-row gap-2">

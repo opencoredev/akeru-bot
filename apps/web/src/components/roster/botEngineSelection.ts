@@ -7,7 +7,8 @@ import {
   type ServerProviderUnavailability,
   type UnifiedSettings,
 } from "@t3tools/contracts";
-import { translate as translateMessage } from "@t3tools/client-runtime/i18n";
+
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import type { ProviderAvailabilityTranslate } from "@t3tools/client-runtime/provider-availability";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
@@ -65,6 +66,8 @@ export function resolveStickyBotEngine(input: {
   };
 }
 
+const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;
+
 /**
  * Why the bot's engine cannot run a turn right now, or null when it can. Feeds
  * the disabled Send button and the inline message above the composer.
@@ -72,14 +75,13 @@ export function resolveStickyBotEngine(input: {
 export function botEngineUnavailability(
   selection: ModelSelection | null,
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
-  translate: ProviderAvailabilityTranslate = (message, params) =>
-    translateMessage("en", message, params),
+  t: ProviderAvailabilityTranslate = englishTranslate,
 ) {
   if (!selection) {
     return {
       reason: "missing-provider" as const,
-      title: translate("No provider is connected"),
-      description: translate("Connect a provider in Settings > Providers so this bot can reply."),
+      title: t("No provider is connected"),
+      description: t("Connect a provider in Settings > Providers so this bot can reply."),
       technicalDetails: "",
       action: "providers" as const,
     };
@@ -91,7 +93,7 @@ export function botEngineUnavailability(
     model: selection.model,
     modelName,
     providerName: formatProviderDriverKindLabel(ProviderDriverKind.make(selection.instanceId)),
-    translate,
+    t,
   });
 }
 

@@ -579,7 +579,7 @@ export function BotThreadLanding({
             {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
               <BotTurnFailureRow
                 botName={bot.name}
-                title={presentThreadError(runtime.turnFailure.message, failureContext).title}
+                title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
               />
             ) : null}
             {delegations.map((delegation) => (

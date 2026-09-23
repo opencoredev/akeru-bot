@@ -32,25 +32,33 @@ export function botInboxKindLabel(kind: BotInboxItem["kind"]): MessageKey {
 }
 
 /**
- * The kind label, detail, and next step an inbox row shows. Memory approvals render from
- * their structured payload so the copy follows the interface language and names the fact
- * once. The server's English prose in lastFailure and nextAction stays for older clients.
+ * The kind label, detail, next step, and sensitivity note an inbox row shows. Memory
+ * approvals render from their structured payload so the copy follows the interface language
+ * and names the fact once. The server's English prose in lastFailure and nextAction stays
+ * for older clients. `sensitive` is null unless the fact always needs approval.
  */
 export function botInboxItemCopy(
   item: BotInboxItem,
   t: (message: MessageKey, params?: TranslationParams) => string,
-): { readonly kind: string; readonly detail: string; readonly nextAction: string } {
+): {
+  readonly kind: string;
+  readonly detail: string;
+  readonly nextAction: string;
+  readonly sensitive: string | null;
+} {
   const approval = item.memoryApproval;
   if (approval) {
     return {
       kind: t("Memory approval"),
       detail: approval.fact,
       nextAction: t(MEMORY_APPROVAL_ACTIONS[approval.scope]),
+      sensitive: approval.sensitive ? t("Sensitive, always needs approval") : null,
     };
   }
   return {
     kind: t(botInboxKindLabel(item.kind)),
     detail: item.lastFailure,
     nextAction: item.nextAction,
+    sensitive: null,
   };
 }

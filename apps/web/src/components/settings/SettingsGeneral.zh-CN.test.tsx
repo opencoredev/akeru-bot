@@ -68,7 +68,7 @@ describe("settings in Simplified Chinese", () => {
       "后台活动",
       "平衡",
       "本地执行",
-      "自动审核",
+      "自动审查",
       "版本",
       "发送反馈",
     ]) {

@@ -412,9 +412,9 @@ const SEARCH_ITEMS_BY_ID = Object.fromEntries(
 /**
  * `id` and `title` props for the element a search item anchors to. Panels
  * spread (or pick from) this instead of restating the strings, so the catalog
- * and the rendered settings cannot drift apart.
+ * and the rendered settings cannot drift apart. Pass the active translator so
+ * the title follows the interface language.
  */
-/** Pass the active translator so the row title follows the interface language. */
 export function searchableSetting(
   id: SettingsSearchItemId,
   translate: (message: string) => string = (message) => message,

@@ -1,6 +1,7 @@
 import { ArrowLeftIcon } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { AppIcon } from "../ui/app-icon";
 import {
@@ -15,13 +16,12 @@ import {
 import { SidebarChromeHeader } from "../sidebar/SidebarChrome";
 import { SETTINGS_NAV_GROUPS } from "./SettingsDialog";
 import { isElectron } from "../../env";
-import { useI18n } from "../../i18n";
 
 export function SettingsSidebarNav() {
+  const { t } = useI18n();
   const pathname = useLocation({ select: (location) => location.pathname });
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { t } = useI18n();
   const go = (to: string) => {
     if (isMobile) setOpenMobile(false);
     void navigate({ to });

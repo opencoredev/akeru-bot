@@ -40,19 +40,20 @@ describe("selectOpenBotInboxItems", () => {
 });
 
 describe("botInboxItemCopy", () => {
+  const memoryApproval = {
+    candidateId: AkeruMemoryCandidateId.make("candidate-1"),
+    fact: "Standups start at ten.",
+    scope: "group",
+    sensitive: true,
+    sourceThreadId: ThreadId.make("thread-1"),
+    authorBotId: BotId.make("bot-1"),
+    affectedBotIds: [BotId.make("bot-1")],
+  } as const;
   const memoryItem = incident({
     kind: "approval-request",
     lastFailure: "Save to group memory: Standups start at ten.",
     nextAction: "Approve or reject this memory.",
-    memoryApproval: {
-      candidateId: AkeruMemoryCandidateId.make("candidate-1"),
-      fact: "Standups start at ten.",
-      scope: "group",
-      sensitive: true,
-      sourceThreadId: ThreadId.make("thread-1"),
-      authorBotId: BotId.make("bot-1"),
-      affectedBotIds: [BotId.make("bot-1")],
-    },
+    memoryApproval,
   });
 
   it("renders memory approvals from the request instead of the server prose", () => {
@@ -60,12 +61,23 @@ describe("botInboxItemCopy", () => {
       kind: "Memory approval",
       detail: "Standups start at ten.",
       nextAction: "Save to group memory",
+      sensitive: "Sensitive, always needs approval",
     });
     expect(botInboxItemCopy(memoryItem, createTranslator("zh-CN", zhCNCatalog).t)).toEqual({
       kind: "记忆批准",
       detail: "Standups start at ten.",
       nextAction: "保存到群组记忆",
+      sensitive: "敏感内容，始终需要批准",
     });
+  });
+
+  it("omits the sensitivity note for ordinary memory approvals", () => {
+    expect(
+      botInboxItemCopy(
+        incident({ memoryApproval: { ...memoryApproval, sensitive: false } }),
+        createTranslator("en").t,
+      ).sensitive,
+    ).toBeNull();
   });
 
   it("keeps the server copy for other items", () => {
@@ -73,6 +85,7 @@ describe("botInboxItemCopy", () => {
       kind: "Provider connection failed",
       detail: "The request failed.",
       nextAction: "Reconnect the provider.",
+      sensitive: null,
     });
   });
 });

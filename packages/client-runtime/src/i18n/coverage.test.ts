@@ -144,12 +144,14 @@ describe("discovered interface message coverage", () => {
       "apps/mobile/src/features/updates/app-updates.ts",
       "apps/web/src/components/onboarding/desktopOnboarding.logic.ts",
       "apps/web/src/components/onboarding/goalPlan.logic.ts",
+      "packages/client-runtime/src/botInbox.ts",
       "packages/client-runtime/src/durableMemory.ts",
+      "packages/client-runtime/src/errors/threadErrorPresentation.ts",
       "packages/client-runtime/src/imageGeneration.ts",
-      "apps/web/src/components/roster/routineReceipts.ts",
-      "apps/web/src/components/settings/SettingsPanels.logic.ts",
       "packages/client-runtime/src/providerAvailability.ts",
       "apps/web/src/components/roster/botEngineSelection.ts",
+      "apps/web/src/components/roster/routineReceipts.ts",
+      "apps/web/src/components/settings/SettingsPanels.logic.ts",
     ].sort();
     const missing: string[] = [];
     const expressions: Record<string, string[]> = {};

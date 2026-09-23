@@ -11,6 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
   mutateFact: vi.fn(async (_input: unknown) => ({ _tag: "Success" as const })),
+  // State the next render starts from, in hook order; empty means each hook's initial value.
+  states: [] as unknown[],
+  setState: vi.fn((_value: unknown) => {}),
 }));
 
 // Hooks run outside a renderer so the element tree exposes each button handler.
@@ -19,7 +22,10 @@ vi.mock("react", async (importOriginal) => {
   return {
     ...actual,
     useMemo: <T,>(factory: () => T) => factory(),
-    useState: <T,>(initial: T) => [initial, () => {}],
+    useState: <T,>(initial: T) => [
+      mocks.states.length > 0 ? mocks.states.shift() : initial,
+      mocks.setState,
+    ],
   };
 });
 vi.mock("@effect/atom-react", () => ({
@@ -35,9 +41,26 @@ vi.mock("../../state/memory", () => ({ memoryEnvironment: { mutateFact: Symbol("
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => mocks.mutateFact }));
 
 import { Button } from "../ui/button";
+import { Textarea } from "../ui/textarea";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 
 type ButtonElement = ReactElement<{ children: ReactNode; onClick: () => void }>;
+
+type TextareaElement = ReactElement<{
+  onKeyDown: (event: {
+    key: string;
+    nativeEvent: { isComposing: boolean };
+    preventDefault: () => void;
+    stopPropagation: () => void;
+  }) => void;
+}>;
+
+function textarea(node: ReactNode): TextareaElement | undefined {
+  if (Array.isArray(node)) return node.map(textarea).find(Boolean);
+  if (!isValidElement<{ children?: ReactNode }>(node)) return undefined;
+  if (node.type === Textarea) return node as TextareaElement;
+  return textarea(node.props.children);
+}
 
 function buttons(node: ReactNode): ButtonElement[] {
   if (Array.isArray(node)) return node.flatMap(buttons);
@@ -66,7 +89,11 @@ const approval = (
 });
 
 describe("MemoryApprovalPrompt", () => {
-  beforeEach(() => mocks.mutateFact.mockClear());
+  beforeEach(() => {
+    mocks.mutateFact.mockClear();
+    mocks.setState.mockClear();
+    mocks.states = [];
+  });
 
   it("shows the oldest pending fact with who can read it", () => {
     const markup = renderToStaticMarkup(
@@ -130,5 +157,35 @@ describe("MemoryApprovalPrompt", () => {
         mutation: { operation: "candidate.decide", decision },
       },
     });
+  });
+
+  it("cancels an edit on Escape without letting the key reach other UI", () => {
+    const escape = (isComposing: boolean) => {
+      mocks.states = [{ candidateId: "candidate-1", fact: "Deploys happen on Mondays." }];
+      mocks.setState.mockClear();
+      const tree = MemoryApprovalPrompt({
+        threadRef,
+        approvals: [approval("candidate-1")],
+        currentBotId: "bot-ada",
+      });
+      const event = {
+        key: "Escape",
+        nativeEvent: { isComposing },
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      };
+      textarea(tree)?.props.onKeyDown(event);
+      return event;
+    };
+
+    const event = escape(false);
+    expect(mocks.setState).toHaveBeenCalledWith(null);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+
+    // Escape that closes an IME candidate list leaves the edit open.
+    const composing = escape(true);
+    expect(mocks.setState).not.toHaveBeenCalled();
+    expect(composing.stopPropagation).not.toHaveBeenCalled();
   });
 });

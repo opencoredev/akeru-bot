@@ -7,8 +7,10 @@ import {
 import {
   presentProviderUnavailability,
   type ProviderAvailabilityPresentation,
+  type ProviderAvailabilityTranslate,
   type ProviderAvailabilityReason,
 } from "../providerAvailability.ts";
+import { createTranslator } from "../i18n/index.ts";
 
 /**
  * Turns a raw provider or orchestration error into chat-facing copy shared by
@@ -35,21 +37,27 @@ function boundedTechnicalDetails(error: string): string {
   return withoutLocalPaths.slice(0, 600);
 }
 
+const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;
+
 export function presentThreadError(
   error: string,
   context: ThreadErrorContext = {},
+  t: ProviderAvailabilityTranslate = englishTranslate,
 ): ThreadErrorPresentation {
   const present = (
     reason: ProviderAvailabilityReason,
     name: string | null | undefined = context.providerName,
     detail = boundedTechnicalDetails(error),
   ) =>
-    presentProviderUnavailability({
-      reason,
-      providerName: name,
-      modelName: context.modelName,
-      detail,
-    });
+    presentProviderUnavailability(
+      {
+        reason,
+        providerName: name,
+        modelName: context.modelName,
+        detail,
+      },
+      t,
+    );
 
   // A temporary failure is the server's catch-all, so the text below can
   // still say more about it than the category can.
@@ -68,8 +76,8 @@ export function presentThreadError(
 
   if (/Bot '[^']+' is archived/.test(error)) {
     return {
-      title: "This bot is archived",
-      description: "Restore it from the roster to chat with it again.",
+      title: t("This bot is archived"),
+      description: t("Restore it from the roster to chat with it again."),
       technicalDetails: boundedTechnicalDetails(error),
       action: "none",
     };
@@ -85,17 +93,18 @@ export function presentThreadError(
 
   if (/network|connection|socket|fetch failed|disconnected/i.test(error)) {
     return {
-      title: "Connection interrupted",
-      description: "Check the environment connection, then send your message again.",
+      title: t("Connection interrupted"),
+      description: t("Check the environment connection, then send your message again."),
       technicalDetails: boundedTechnicalDetails(error),
       action: "none",
     };
   }
 
   return {
-    title: "The bot couldn’t finish that request",
-    description:
+    title: t("The bot couldn’t finish that request"),
+    description: t(
       "Try sending it again. If it keeps happening, send feedback with the technical details.",
+    ),
     technicalDetails: boundedTechnicalDetails(error),
     action: "feedback",
   };

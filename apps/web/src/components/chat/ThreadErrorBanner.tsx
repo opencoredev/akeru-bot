@@ -69,7 +69,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
     return null;
   }
 
-  const presentation = presentThreadError(error, context);
+  const presentation = presentThreadError(error, context, t);
   const dismiss = () => {
     dismissThreadErrorBannerForSession(bannerKey);
     setLocallyDismissedKey(bannerKey);
