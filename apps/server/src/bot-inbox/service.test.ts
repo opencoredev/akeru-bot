@@ -86,6 +86,7 @@ describe("bot inbox incidents", () => {
 
     expect(next.id).not.toBe(first.id);
     expect(service.list().map((item) => item.status)).toEqual(["open", "resolved"]);
+    expect(next.occurrenceCount).toBe(2);
     expect(new BotInboxService(filePath).list()).toHaveLength(2);
   });
 

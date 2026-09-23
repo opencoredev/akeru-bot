@@ -88,13 +88,14 @@ export class BotInboxService {
       return updated;
     }
 
+    const previous = this.items.findLast((item) => item.incidentKey === incident.incidentKey);
     const created: BotInboxItem = {
       id: NodeCrypto.randomUUID(),
       ...incident,
       status: "open",
       firstSeenAt: seenAt,
       lastSeenAt: seenAt,
-      occurrenceCount: 1,
+      occurrenceCount: (previous?.occurrenceCount ?? 0) + 1,
     };
     this.items.push(created);
     this.save();
@@ -114,6 +115,19 @@ export class BotInboxService {
     if (existingIndex < 0) return this.upsert(incident);
 
     const existing = this.items[existingIndex]!;
+    if (existing.status === "resolved") {
+      const { resolvedAt: _resolvedAt, acknowledgedAt: _acknowledgedAt, ...active } = existing;
+      const reopened: BotInboxItem = {
+        ...active,
+        ...incident,
+        status: "open",
+        lastSeenAt: this.now(),
+        occurrenceCount: existing.occurrenceCount + 1,
+      };
+      this.items[existingIndex] = reopened;
+      this.save();
+      return reopened;
+    }
     if (
       existing.kind === incident.kind &&
       existing.botId === incident.botId &&

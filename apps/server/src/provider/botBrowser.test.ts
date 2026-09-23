@@ -147,20 +147,24 @@ describe("sandbox bot browser", () => {
   });
 
   it("creates and reconnects one remote browser while preserving its current URL", async () => {
-    const executeCommand = vi.fn(async (command: string, args: string[] = []) => ({
-      exitCode: 0,
-      stdout:
-        command === "uname"
-          ? args[0] === "-s"
-            ? "Linux\n"
-            : "x86_64\n"
-          : command === "sh"
-            ? "4242\n"
-            : "",
-      stderr: "",
-      success: true,
-      executionTimeMs: 1,
-    }));
+    const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
+      if (command === "sh" && args[1]?.includes("while kill"))
+        return await new Promise<never>(() => {});
+      return {
+        exitCode: 0,
+        stdout:
+          command === "uname"
+            ? args[0] === "-s"
+              ? "Linux\n"
+              : "x86_64\n"
+            : command === "sh"
+              ? "4242\n"
+              : "",
+        stderr: "",
+        success: true,
+        executionTimeMs: 1,
+      };
+    });
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: {
@@ -206,7 +210,7 @@ describe("sandbox bot browser", () => {
       expect(browserEndpoint).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
       await executeTool(browser.tools.browser_snapshot, {});
-      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(1);
+      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
       await expect(browser.attachment()).resolves.toMatchObject({
         browserUrl: "https://9223-e2b.example",
         requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
@@ -221,7 +225,7 @@ describe("sandbox bot browser", () => {
 
       expect(browserEndpoint).toHaveBeenNthCalledWith(1, 9223);
       expect(browserEndpoint).toHaveBeenNthCalledWith(2, 9223);
-      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
+      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(4);
       expect(messages).toContainEqual(
         expect.objectContaining({
           method: "tools/call",
@@ -255,5 +259,78 @@ describe("sandbox bot browser", () => {
 
     await expect(browser.attachment()).rejects.toThrow("has no Akeru browser adapter");
     await browser.close();
+  });
+
+  it("reports a browser startup failure exactly once", async () => {
+    const onFailure = vi.fn();
+    const browser = createBotBrowser({
+      threadId: "startup-failure",
+      workspace: new Workspace({
+        filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+        sandbox: {
+          id: "local",
+          provider: "local",
+          executeCommand: vi.fn(),
+        } as unknown as WorkspaceSandbox,
+      }),
+      cacheDir: "/tmp/unused-remote-browser-cache",
+      onFailure,
+    });
+
+    await expect(browser.attachment()).rejects.toThrow("cannot host a sandbox browser");
+    expect(onFailure).toHaveBeenCalledOnce();
+    await browser.close();
+  });
+
+  it("reports a remote browser process exit through its liveness waiter", async () => {
+    let finishMonitor!: () => void;
+    const monitor = new Promise<void>((resolve) => (finishMonitor = resolve));
+    let failureReceipt!: () => void;
+    const failureObserved = new Promise<void>((resolve) => (failureReceipt = resolve));
+    const onFailure = vi.fn(() => failureReceipt());
+    const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
+      if (command === "uname") {
+        return {
+          exitCode: 0,
+          stdout: `${args[0] === "-s" ? "Linux" : "x86_64"}\n`,
+          stderr: "",
+          success: true,
+          executionTimeMs: 1,
+        };
+      }
+      if (command === "sh" && args[1]?.includes("while kill")) {
+        await monitor;
+        return { exitCode: 0, stdout: "", stderr: "", success: true, executionTimeMs: 1 };
+      }
+      return { exitCode: 0, stdout: "4242\n", stderr: "", success: true, executionTimeMs: 1 };
+    });
+    const workspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: { id: "remote", provider: "e2b", executeCommand } as unknown as WorkspaceSandbox,
+    });
+    vi.stubGlobal(
+      "fetch",
+      async (_url: string | URL, init?: RequestInit) =>
+        new Response(JSON.stringify({ result: { content: [{ text: "ok" }] } }), {
+          status: 200,
+          headers: init?.method === "POST" ? { "mcp-session-id": "session" } : {},
+        }),
+    );
+    const browser = createBotBrowser({
+      threadId: "remote-exit",
+      workspace,
+      cacheDir: "/tmp/unused-remote-browser-cache",
+      browserEndpoint: async () => ({ url: "https://remote.example", requestHeaders: {} }),
+      onFailure,
+    });
+    try {
+      await executeTool(browser.tools.browser_snapshot, {});
+      finishMonitor();
+      await failureObserved;
+      expect(onFailure).toHaveBeenCalledOnce();
+    } finally {
+      await browser.close();
+      vi.unstubAllGlobals();
+    }
   });
 });

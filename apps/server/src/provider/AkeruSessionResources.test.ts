@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { McpServerId } from "@t3tools/contracts";
+import { BotId, McpServerId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
@@ -133,6 +133,75 @@ describe("AkeruSessionResources", () => {
     expect(sharedBrowser.reconnect).toHaveBeenCalledOnce();
     await resources.shutdown();
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
+  });
+
+  it("attributes shared browser failures and recovery to every active bot", async () => {
+    const browserFailure = vi.fn();
+    const browserReady = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    let onReady!: () => void;
+    const sharedBrowser = browser();
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser: (input) => {
+        onFailure = input.onFailure!;
+        onReady = input.onReady!;
+        return sharedBrowser;
+      },
+      onBrowserFailure: browserFailure,
+      onBrowserReady: browserReady,
+      toMcpServerConfigs: () => ({}),
+    });
+    const first = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "bot-a",
+      botId: BotId.make("bot-a"),
+      botName: "A",
+      taskOrRoutine: "Task A",
+    };
+    const second = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "bot-b",
+      botId: BotId.make("bot-b"),
+      botName: "B",
+      taskOrRoutine: "Task B",
+    };
+    await resources.acquire(first);
+    await resources.acquire(second);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure.mock.calls.map(([value]) => value.botId)).toEqual([
+      first.botId,
+      second.botId,
+    ]);
+    onReady();
+    expect(browserReady.mock.calls.map(([botId]) => botId)).toEqual([first.botId, second.botId]);
+    await resources.shutdown();
+  });
+
+  it("retains attribution while another chat for the same bot is active", async () => {
+    const browserFailure = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser: (input) => {
+        onFailure = input.onFailure!;
+        return browser();
+      },
+      onBrowserFailure: browserFailure,
+      toMcpServerConfigs: () => ({}),
+    });
+    const botId = BotId.make("bot-same");
+    const first = { ...remoteInput, botSandbox: null, threadId: "chat-a", botId };
+    const second = { ...remoteInput, botSandbox: null, threadId: "chat-b", botId };
+    await resources.acquire(first);
+    await resources.acquire(second);
+    await resources.release(first.threadId);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    expect(browserFailure.mock.calls[0]?.[0].botId).toBe(botId);
+    await resources.shutdown();
   });
 
   it.each(["local", "vercel", "e2b", "daytona", "upstash"] as const)(

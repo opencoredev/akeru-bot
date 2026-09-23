@@ -60,6 +60,7 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import { recordBrowserFailure, resolveBrowserFailure } from "../../bot-inbox/browserIncidents.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
 import {
@@ -731,6 +732,7 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
     const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
       hostPlatform,
@@ -746,6 +748,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       toMcpServerConfigs,
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
+      onBrowserFailure: (input) => recordBrowserFailure(botInbox, input),
+      onBrowserReady: (botId) => resolveBrowserFailure(botInbox, botId),
       ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
@@ -753,7 +757,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         ? { resolveComputerUseServer: options.resolveComputerUseServer }
         : {}),
     });
-    const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const botMemoryStore = options?.botMemoryStore ?? new BotMemoryStore(config.stateDir);
     const memoryTurnHarness = new AkeruMemoryTurnHarness(botMemoryStore);
     const toolRuntime = createAkeruToolRuntime({
@@ -2013,6 +2016,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           bot: undefined,
           botId: fallbackBotId,
           activeChildDelegations: 0,
+          threadTitle: undefined,
         };
       }
       const query = projectionSnapshotQuery.value;
@@ -2033,6 +2037,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           activeChildDelegations: delegations.filter(
             (candidate) => candidate.parentThreadId === threadId,
           ).length,
+          threadTitle: thread?.title,
         };
       }
       const snapshot = yield* query.getCommandReadModel();
@@ -2051,6 +2056,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         activeChildDelegations: snapshot.delegations.filter(
           (candidate) => candidate.parentThreadId === threadId && isOpenDelegation(candidate),
         ).length,
+        threadTitle: thread?.title,
       };
     });
 
@@ -2058,7 +2064,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
-      const { parentDelegation, bot, botId, activeChildDelegations } =
+      const { parentDelegation, bot, botId, activeChildDelegations, threadTitle } =
         yield* readSessionStartContext(threadId, input.botId ?? null);
       const delegatedAccess =
         delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
@@ -2311,6 +2317,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                   ? { userComputerCwd: input.cwd }
                   : {}),
                 mcpServers,
+                ...(botId ? { botId } : {}),
+                ...(bot?.name ? { botName: bot.name } : {}),
+                taskOrRoutine: threadTitle ?? "Browser task",
               }),
             ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {

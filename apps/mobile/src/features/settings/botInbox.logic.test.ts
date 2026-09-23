@@ -69,5 +69,6 @@ describe("canResolveInboxItem", () => {
   it("keeps connector incidents open until their dependency recovers", () => {
     expect(canResolveInboxItem(incident())).toBe(false);
     expect(canResolveInboxItem(incident({ kind: "approval-request" }))).toBe(true);
+    expect(canResolveInboxItem(incident({ kind: "browser-dead" }))).toBe(true);
   });
 });

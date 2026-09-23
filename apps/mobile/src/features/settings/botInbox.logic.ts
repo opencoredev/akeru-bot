@@ -11,7 +11,7 @@ export type SettingsInboxView =
   | { readonly kind: "ready"; readonly items: ReadonlyArray<BotInboxItem> };
 
 export function canResolveInboxItem(item: BotInboxItem): boolean {
-  return item.kind === "approval-request";
+  return item.kind === "approval-request" || item.kind === "browser-dead";
 }
 
 export function settingsInboxView(query: SettingsInboxQuery): SettingsInboxView {

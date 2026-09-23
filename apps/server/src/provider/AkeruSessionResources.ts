@@ -9,7 +9,7 @@ import {
   type McpServerConfig,
 } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
-import type { BotSandbox, McpServer } from "@t3tools/contracts";
+import type { BotId, BotSandbox, McpServer } from "@t3tools/contracts";
 
 import {
   createBotBrowser,
@@ -42,6 +42,9 @@ export interface AkeruSessionResourceInput {
   readonly sandboxEnvironment?: Readonly<Record<string, string>>;
   readonly userComputerCwd?: string;
   readonly mcpServers: readonly McpServer[];
+  readonly botId?: BotId;
+  readonly botName?: string;
+  readonly taskOrRoutine?: string;
 }
 
 export interface AkeruSessionResourceView {
@@ -59,11 +62,25 @@ export interface AkeruSessionResourcesOptions {
   readonly hostPlatform?: NodeJS.Platform;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
   readonly onMcpServerConnectionFailure?: (serverId: McpServer["id"]) => void;
+  readonly onBrowserFailure?: (input: {
+    readonly botId: BotId;
+    readonly botName: string;
+    readonly taskOrRoutine: string;
+    readonly detail: string;
+  }) => void;
+  readonly onBrowserReady?: (botId: BotId) => void;
   readonly getPreviewMcpServerConfig?: (threadId: string) => McpServerConfig | undefined;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
     browser?: BotBrowserAttachment,
   ) => Record<string, McpServerConfig>;
+}
+
+interface BrowserAttribution {
+  readonly botId: BotId;
+  readonly botName: string;
+  readonly taskOrRoutine: string;
+  references: number;
 }
 
 const T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
@@ -82,6 +99,8 @@ export class AkeruSessionResources {
   private readonly browserReferences = new Map<string, number>();
   private readonly browserDestroyRequests = new Set<string>();
   private readonly browserReconnects = new Map<string, Promise<void>>();
+  private readonly browserAttributions = new Map<string, Map<string, BrowserAttribution>>();
+  private readonly browserThreadBots = new Map<string, string>();
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
   private controllingThreadId: string | undefined;
   private shuttingDown = false;
@@ -179,6 +198,26 @@ export class AkeruSessionResources {
       }
 
       const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
+      if (input.botId) {
+        const attributions =
+          this.browserAttributions.get(input.workspaceResourceKey) ??
+          new Map<string, BrowserAttribution>();
+        const botKey = String(input.botId);
+        const existingAttribution = attributions.get(botKey);
+        attributions.set(
+          botKey,
+          existingAttribution
+            ? { ...existingAttribution, references: existingAttribution.references + 1 }
+            : {
+                botId: input.botId,
+                botName: input.botName ?? "Bot",
+                taskOrRoutine: input.taskOrRoutine ?? "Browser task",
+                references: 1,
+              },
+        );
+        this.browserAttributions.set(input.workspaceResourceKey, attributions);
+        this.browserThreadBots.set(key, String(input.botId));
+      }
       const browser =
         existingBrowser ??
         (this.options.makeBotBrowser ?? createBotBrowser)({
@@ -187,6 +226,15 @@ export class AkeruSessionResources {
           cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
           ...(workspaceLease.workspace.browserEndpoint
             ? { browserEndpoint: workspaceLease.workspace.browserEndpoint }
+            : {}),
+          ...(this.options.onBrowserFailure
+            ? {
+                onFailure: (error: unknown) =>
+                  this.reportBrowserFailure(input.workspaceResourceKey, error),
+              }
+            : {}),
+          ...(this.options.onBrowserReady
+            ? { onReady: () => this.resolveBrowserFailures(input.workspaceResourceKey) }
             : {}),
         });
 
@@ -366,6 +414,13 @@ export class AkeruSessionResources {
     this.threadBrowsers.delete(threadId);
     this.browserResourceKeys.delete(threadId);
     if (browser && resourceKey) {
+      const botKey = this.browserThreadBots.get(threadId);
+      this.browserThreadBots.delete(threadId);
+      if (botKey) {
+        const attribution = this.browserAttributions.get(resourceKey)?.get(botKey);
+        if (attribution && attribution.references > 1) attribution.references -= 1;
+        else this.browserAttributions.get(resourceKey)?.delete(botKey);
+      }
       if (options?.destroy) this.browserDestroyRequests.add(resourceKey);
       const references = Math.max(0, (this.browserReferences.get(resourceKey) ?? 1) - 1);
       if (references > 0) {
@@ -404,12 +459,26 @@ export class AkeruSessionResources {
     this.resourceBrowsers.delete(resourceKey);
     this.browserReferences.delete(resourceKey);
     this.browserDestroyRequests.delete(resourceKey);
+    this.browserAttributions.delete(resourceKey);
     for (const [threadId, key] of this.browserResourceKeys) {
       if (key !== resourceKey) continue;
       this.browserResourceKeys.delete(threadId);
       this.threadBrowsers.delete(threadId);
     }
     await browser.close().catch(() => undefined);
+  }
+
+  private reportBrowserFailure(resourceKey: string, error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {
+      this.options.onBrowserFailure?.({ ...attribution, detail });
+    }
+  }
+
+  private resolveBrowserFailures(resourceKey: string): void {
+    for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {
+      this.options.onBrowserReady?.(attribution.botId);
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -428,5 +497,7 @@ export class AkeruSessionResources {
     this.browserReferences.clear();
     this.browserDestroyRequests.clear();
     this.browserReconnects.clear();
+    this.browserAttributions.clear();
+    this.browserThreadBots.clear();
   }
 }
