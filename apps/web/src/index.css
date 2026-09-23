@@ -2598,6 +2598,12 @@ code {
   }
 }
 
+/* A shimmer that settles after two sweeps, for status lines that may hold
+   through a long wait and must not repaint the whole time. */
+.bot-status-shimmer-finite {
+  animation-iteration-count: 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bot-status-shimmer {
     animation: none;

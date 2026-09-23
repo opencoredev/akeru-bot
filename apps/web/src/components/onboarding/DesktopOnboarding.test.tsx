@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   next: vi.fn(),
   open: vi.fn(),
+  navigate: vi.fn(),
   form: null as ComponentProps<typeof ProviderApiKeyForm> | null,
   input: null as { onChange: (event: { currentTarget: { value: string } }) => void } | null,
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   connected: false,
 }));
 
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => {
     if (atom === "shell") return { status: "live" };

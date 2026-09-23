@@ -2,6 +2,21 @@
 
 Open a bot, then use the panel beside the conversation to edit it.
 
+## Initial setup
+
+Setup connects a subscription, then asks one question: what you want help with. Answer it in your
+own words, in a sentence or two. Select one of the examples to fill in an answer you can rewrite.
+
+From that answer your bot proposes where it will start, as a short numbered plan, along with the one
+detail it will come back to you for later. Select **Edit** to reword your answer and get a new plan,
+or **Looks right** to move on to naming your bot.
+
+The last step drafts your first message from that plan. Edit it if you like, then send it. Once your
+bot has started on it, the chat opens with your message already in it, and setup fades away.
+
+Setup does not ask where the work should go, how often it should run, or which actions it may
+take on its own. Your bot raises those when it reaches the point of needing them.
+
 ## Skip initial setup
 
 Select **Skip setup** on any setup step, then confirm **Skip setup** in the dialog.

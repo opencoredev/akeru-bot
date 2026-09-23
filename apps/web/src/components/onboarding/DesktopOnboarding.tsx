@@ -43,12 +43,12 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { BotAvatarView } from "../roster/BotAvatarView";
 import { AvatarColorPicker } from "../roster/AvatarColorPicker";
-import { BotPromptComposer } from "../roster/BotPromptComposer";
 import { writeBotDraft } from "../roster/botDraftStore";
 import { DEFAULT_BOT_RUNTIME_MODE } from "../roster/botSandbox";
 import { BLOB_SHAPES } from "../roster/roster.logic";
 import { useRosterStore } from "../roster/rosterStore";
-import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
+import { OnboardingGoalStep } from "./OnboardingGoalStep";
+import { OnboardingPreview } from "./OnboardingPreview";
 import {
   apiKeyStartInput,
   apiKeyValidationError,
@@ -57,25 +57,37 @@ import {
 import { ProviderApiKeyForm } from "../settings/ProvidersPanel";
 import { SUBSCRIPTION_PROVIDERS } from "../settings/subscriptionProviders";
 import {
+  canStartDesktopOnboardingReveal,
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
   DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY,
+  DESKTOP_ONBOARDING_DESTINATION_TIMEOUT_MS,
+  DESKTOP_ONBOARDING_REVEAL_DURATION_MS,
+  DESKTOP_ONBOARDING_STEPS,
   DESKTOP_ONBOARDING_STORAGE_KEY,
-  DESKTOP_ONBOARDING_USE_CASES,
   type DesktopOnboardingDraft,
+  desktopOnboardingHandoffStages,
+  type DesktopOnboardingHandoffPhase,
   desktopOnboardingModelSelection,
+  desktopOnboardingProgress,
+  clearDesktopOnboardingHandoff,
   markDesktopOnboardingCompleted,
+  markDesktopOnboardingHandoffStarted,
+  takeDesktopOnboardingHandoff,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
   resolveDesktopOnboardingCreationReadiness,
-  resolveDesktopOnboardingUseCase,
   shouldShowDesktopOnboarding,
-  stepNumber,
 } from "./desktopOnboarding.logic";
+import { desktopOnboardingBotBrief } from "./goalPlan.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 const EASE = [0.23, 1, 0.32, 1] as const;
 const LEAVE = [0.4, 0, 1, 1] as const;
+/** --ease-smooth-out. Carries the setup surface out over the workspace. */
+const SMOOTH_OUT = [0.22, 1, 0.36, 1] as const;
+/** Seconds. Has to match the wait the reveal leaves before it unmounts setup. */
+const REVEAL_DURATION = DESKTOP_ONBOARDING_REVEAL_DURATION_MS / 1000;
 const FOCUSABLE_SELECTOR = [
   "a[href]",
   "button:not([disabled])",
@@ -307,7 +319,7 @@ export function SubscriptionStep({
   if (keyMode) {
     return (
       <div className="space-y-4">
-        <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
+        <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
           Connect {selected.label} with an API key
         </h1>
         <ProviderApiKeyForm
@@ -333,7 +345,7 @@ export function SubscriptionStep({
   if (activeLogin) {
     return (
       <div className="space-y-4">
-        <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
+        <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
           Finish connecting {selected.label}
         </h1>
         <p className="text-sm leading-6 text-muted-foreground">
@@ -399,7 +411,7 @@ export function SubscriptionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
+        <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
           Connect your provider
         </h1>
       </div>
@@ -492,33 +504,29 @@ function IdentityStep({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
-          Make it yours
+      <div className="space-y-2">
+        <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
+          Give it a name
         </h1>
+        <p className="text-sm leading-6 text-muted-foreground">
+          You will call on this bot by name every day. Pick one that sounds like a teammate.
+        </p>
       </div>
-      <div className="flex flex-col items-center gap-4">
-        <BotAvatarView
-          avatar={draft.avatar}
-          name={draft.name || "Your bot"}
-          className="size-20 shrink-0"
+      <label className="flex w-full flex-col gap-2 text-sm font-medium">
+        Name
+        <Input
+          autoFocus
+          size="lg"
+          value={draft.name}
+          maxLength={80}
+          placeholder="Nova, Scout, Dispatch…"
+          onChange={(event) => onChange({ ...draft, name: event.currentTarget.value })}
         />
-        <label className="flex w-full flex-col gap-2 text-sm font-medium">
-          Name
-          <Input
-            autoFocus
-            size="lg"
-            value={draft.name}
-            maxLength={80}
-            placeholder="Name your bot"
-            onChange={(event) => onChange({ ...draft, name: event.currentTarget.value })}
-          />
-        </label>
-      </div>
+      </label>
       <section aria-label="Avatar" className="space-y-5 border-t pt-5">
         <div className="space-y-3">
-          <h2 className="text-center text-xs font-medium text-muted-foreground">Shape</h2>
-          <div className="mx-auto grid w-fit max-w-full grid-cols-8 gap-1.5">
+          <h2 className="text-xs font-medium text-muted-foreground">Shape</h2>
+          <div className="grid grid-cols-8 gap-1.5">
             {BLOB_SHAPES.map((shape) => (
               <button
                 key={shape}
@@ -526,7 +534,7 @@ function IdentityStep({
                 aria-label={`${shape} avatar`}
                 aria-pressed={draft.avatar.shape === shape}
                 onClick={() => onChange({ ...draft, avatar: { ...draft.avatar, shape } })}
-                className={`flex size-9 items-center justify-center rounded-lg border border-transparent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
+                className={`flex aspect-square items-center justify-center rounded-lg border border-transparent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
                   draft.avatar.shape === shape ? "border-border bg-accent" : "hover:bg-accent/60"
                 }`}
               >
@@ -540,9 +548,8 @@ function IdentityStep({
           </div>
         </div>
         <div className="space-y-3">
-          <h2 className="text-center text-xs font-medium text-muted-foreground">Color</h2>
+          <h2 className="text-xs font-medium text-muted-foreground">Color</h2>
           <AvatarColorPicker
-            className="mx-auto"
             value={draft.avatar.color}
             onChange={(color) => onChange({ ...draft, avatar: { ...draft.avatar, color } })}
           />
@@ -580,208 +587,12 @@ function IdentityStep({
   );
 }
 
-function UseCaseStep({
-  draft,
-  onChange,
-  onBack,
-  onContinue,
-}: {
-  readonly draft: DesktopOnboardingDraft;
-  readonly onChange: (draft: DesktopOnboardingDraft) => void;
-  readonly onBack: () => void;
-  readonly onContinue: () => void;
-}) {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
-        What should it help with?
-      </h1>
-      <div className="grid gap-2" role="radiogroup" aria-label="First use case">
-        {DESKTOP_ONBOARDING_USE_CASES.map((useCase) => {
-          const selected = useCase.id === draft.useCaseId;
-          return (
-            <button
-              key={useCase.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange({ ...draft, useCaseId: useCase.id })}
-              className={`rounded-xl border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
-                selected
-                  ? "border-foreground/30 bg-foreground/[0.06]"
-                  : "border-border/65 bg-background/35 hover:bg-foreground/[0.035]"
-              }`}
-            >
-              <span className="block text-sm font-medium">{useCase.label}</span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                {useCase.description}
-              </span>
-            </button>
-          );
-        })}
-        {draft.useCaseId === "custom" ? (
-          <Input
-            autoFocus
-            value={draft.customUseCase}
-            maxLength={240}
-            placeholder="What should your bot do?"
-            aria-label="Custom use case"
-            onChange={(event) => onChange({ ...draft, customUseCase: event.currentTarget.value })}
-          />
-        ) : null}
-      </div>
-      <div className="flex gap-2">
-        <Button size="icon" variant="ghost-muted" aria-label="Back" onClick={onBack}>
-          <ArrowLeftIcon className="size-4" />
-        </Button>
-        <Button
-          className="h-10 flex-1 rounded-xl"
-          disabled={draft.useCaseId === "custom" && !draft.customUseCase.trim()}
-          onClick={onContinue}
-        >
-          Continue
-          <ArrowRightIcon className="size-4" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function FirstMessageComposer({
-  botId,
-  botName,
-  captureMode,
-  modelSelection,
-  onComplete,
-}: {
-  readonly botId: string;
-  readonly botName: string;
-  readonly captureMode: boolean;
-  readonly modelSelection: ReturnType<typeof desktopOnboardingModelSelection>;
-  readonly onComplete: (message: string) => void;
-}) {
-  const runtime = useBotThreadRuntime(botId, modelSelection);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <div className="w-full">
-      <BotPromptComposer
-        botName={botName}
-        draftKey={`onboarding:${botId}`}
-        disabled={!captureMode && (!runtime.botReady || runtime.defaultProject === null)}
-        onSubmit={async (prompt, files) => {
-          if (captureMode) {
-            onComplete(prompt);
-            return true;
-          }
-          const sent = await runtime.send(prompt, files);
-          if (!sent) {
-            setError(runtime.error ?? "Could not send the message.");
-            return false;
-          }
-          onComplete(prompt);
-          return true;
-        }}
-      />
-      {error ? <p className="px-5 pt-2 text-xs text-destructive">{error}</p> : null}
-    </div>
-  );
-}
-
-function ConversationPreview({
-  draft,
-  message,
-  createdBotReady,
-  captureMode,
-  modelSelection,
-  onMessageSent,
-}: {
-  readonly draft: DesktopOnboardingDraft;
-  readonly message: string | null;
-  readonly createdBotReady: boolean;
-  readonly captureMode: boolean;
-  readonly modelSelection: ReturnType<typeof desktopOnboardingModelSelection>;
-  readonly onMessageSent: (message: string) => void;
-}) {
-  const messageStep = draft.step === "message";
-  return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/65 px-5">
-        <BotAvatarView avatar={draft.avatar} name={draft.name || "Your bot"} className="size-7" />
-        <span className="truncate text-sm font-medium">{draft.name || "Your bot"}</span>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 items-center justify-center px-8">
-          {message ? (
-            <div className="w-full max-w-2xl space-y-8">
-              <div className="ml-auto max-w-[78%] rounded-2xl rounded-br-md bg-foreground px-4 py-3 text-sm text-background shadow-sm">
-                {message}
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <BotAvatarView
-                  avatar={draft.avatar}
-                  name={draft.name}
-                  state="working"
-                  className="size-7"
-                />
-                <span>{draft.name} is getting started</span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center text-center">
-              <motion.div
-                layout
-                transition={{ duration: 0.35, ease: EASE }}
-                className="flex size-24 items-center justify-center rounded-[2rem] border border-border/55 bg-card/35 shadow-[0_24px_70px_-36px_rgba(0,0,0,0.45)]"
-              >
-                <BotAvatarView
-                  avatar={draft.avatar}
-                  name={draft.name || "Your bot"}
-                  className="size-16"
-                />
-              </motion.div>
-              <motion.h2 layout className="mt-5 text-xl font-medium tracking-[-0.02em]">
-                {draft.name || "Your bot"}
-              </motion.h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {messageStep ? "Send the first message" : "Your bot is taking shape"}
-              </p>
-            </div>
-          )}
-        </div>
-        <div className="shrink-0 pb-5">
-          {messageStep && draft.botId && createdBotReady ? (
-            <FirstMessageComposer
-              botId={draft.botId}
-              botName={draft.name}
-              captureMode={captureMode}
-              modelSelection={modelSelection}
-              onComplete={onMessageSent}
-            />
-          ) : (
-            <BotPromptComposer
-              botName={draft.name || "your bot"}
-              disabled
-              readOnly
-              onSubmit={async () => false}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function OnboardingSurface({
   initialDraft,
   environmentId,
   captureMode,
   onFinished,
-}: {
-  readonly initialDraft: DesktopOnboardingDraft;
-  readonly environmentId: EnvironmentId;
-  readonly captureMode: boolean;
-  readonly onFinished: () => void;
-}) {
+}: DesktopOnboardingSurfaceProps) {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
   const createBot = useAtomCommand(botEnvironment.create, { reportFailure: false });
@@ -790,9 +601,16 @@ function OnboardingSurface({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [finishing, setFinishing] = useState(false);
+  const [handoff, setHandoff] = useState<DesktopOnboardingHandoffPhase | null>(null);
+  /** The chat route has committed, so the workspace is the layer behind setup. */
+  const [routeOpened, setRouteOpened] = useState(false);
+  /** The sent message and its turn are in the state the chat renders from. */
+  const [messageObserved, setMessageObserved] = useState(false);
+  const [revealTimedOut, setRevealTimedOut] = useState(false);
+  const observeDestination = useCallback(() => setMessageObserved(true), []);
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const handoffTimers = useRef<number[]>([]);
   const readyBotIdRef = useRef<string | null>(null);
   const rosterBot = useRosterStore((state) =>
     draft.botId ? state.bots.find((bot) => bot.id === draft.botId) : undefined,
@@ -800,6 +618,16 @@ function OnboardingSurface({
   const providerReadiness = useMemo(
     () => resolveDesktopOnboardingCreationReadiness(draft.providerId, providers),
     [draft.providerId, providers],
+  );
+
+  /** Reduced motion skips the handoff choreography and reveals at once. */
+  const instantHandoff = reducedMotion === true;
+
+  useEffect(
+    () => () => {
+      for (const timer of handoffTimers.current) window.clearTimeout(timer);
+    },
+    [],
   );
 
   useEffect(() => {
@@ -877,7 +705,7 @@ function OnboardingSurface({
     setCreating(true);
     setCreateError(null);
     const botId = BotId.make(`bot-${randomUUID()}`);
-    const useCase = resolveDesktopOnboardingUseCase(draft.useCaseId, draft.customUseCase);
+    const goal = desktopOnboardingBotBrief(draft.goal);
     if (providerReadiness.status !== "ready") {
       setCreating(false);
       return;
@@ -889,7 +717,7 @@ function OnboardingSurface({
         name: draft.name.trim(),
         title: "Assistant",
         label: null,
-        description: useCase.description,
+        description: goal.description,
         avatar: draft.avatar,
         engine: providerReadiness.engine,
         sandbox: null,
@@ -904,23 +732,84 @@ function OnboardingSurface({
       setCreateError("Could not create your bot.");
       return;
     }
-    writeBotDraft(`onboarding:${botId}`, useCase.prompt);
+    writeBotDraft(`onboarding:${botId}`, goal.prompt);
     updateDraft({ ...draft, step: "message", botId });
   };
 
+  /**
+   * Whether the workspace behind setup is showing the chat the user just
+   * started: the chat route has committed and the sent message is visible in
+   * the state that route renders from. Capture mode never sends, so it only
+   * waits for the route. A draft with no bot has no destination to wait on.
+   * Setup cannot reach the send without one, but the overlay still has to
+   * lift if it ever does.
+   */
+  const destinationReady =
+    draft.botId === null || (routeOpened && (captureMode || messageObserved));
+
+  /**
+   * Hands the user from setup to the workspace. The message lands, the bot
+   * wakes, and the workspace is opened behind setup, which stays fully opaque
+   * until that workspace is genuinely showing the conversation. A clock cannot
+   * know when a projection arrives, so nothing here guesses at one.
+   */
   const finish = (firstMessage: string) => {
     setMessage(firstMessage);
-    setFinishing(true);
-    markDesktopOnboardingCompleted(window.localStorage);
-    const delay = reducedMotion ? 0 : 560;
-    window.setTimeout(() => {
-      if (draft.botId) {
-        useRosterStore.getState().selectBot(draft.botId);
-        void navigate({ to: "/bots/$botId", params: { botId: draft.botId }, replace: true });
-      }
-      onFinished();
-    }, delay);
+    setHandoff("sending");
+    if (draft.botId) markDesktopOnboardingHandoffStarted(window.localStorage, draft.botId);
+    else markDesktopOnboardingCompleted(window.localStorage);
+    for (const stage of desktopOnboardingHandoffStages(instantHandoff)) {
+      if (stage.phase === "sending") continue;
+      handoffTimers.current.push(
+        window.setTimeout(() => {
+          setHandoff(stage.phase);
+          if (stage.phase !== "opening" || !draft.botId) return;
+          useRosterStore.getState().selectBot(draft.botId);
+          const opened = () => {
+            clearDesktopOnboardingHandoff(window.localStorage);
+            setRouteOpened(true);
+          };
+          void navigate({ to: "/bots/$botId", params: { botId: draft.botId }, replace: true }).then(
+            opened,
+            opened,
+          );
+        }, stage.atMs),
+      );
+    }
+    // Failure safety, never the normal path: a destination that never reports
+    // itself (a stalled projection, a dropped socket) must not leave the
+    // user stuck behind an overlay that will not lift.
+    handoffTimers.current.push(
+      window.setTimeout(() => setRevealTimedOut(true), DESKTOP_ONBOARDING_DESTINATION_TIMEOUT_MS),
+    );
   };
+
+  /**
+   * The reveal. It starts from readiness rather than from the send, so the
+   * fade always lands on a painted conversation, and it owns the rest of the
+   * handoff: setup unmounts on the fade's last frame, never before it.
+   */
+  useEffect(() => {
+    if (
+      !canStartDesktopOnboardingReveal({
+        phase: handoff,
+        destinationReady,
+        timedOut: revealTimedOut,
+      })
+    ) {
+      return;
+    }
+    setHandoff("revealing");
+    handoffTimers.current.push(
+      window.setTimeout(
+        () => {
+          setHandoff("done");
+          onFinished();
+        },
+        instantHandoff ? 0 : DESKTOP_ONBOARDING_REVEAL_DURATION_MS,
+      ),
+    );
+  }, [destinationReady, handoff, instantHandoff, onFinished, revealTimedOut]);
 
   const skip = () => {
     setSkipConfirmOpen(false);
@@ -928,7 +817,12 @@ function OnboardingSurface({
     onFinished();
   };
 
-  const step = stepNumber(draft.step);
+  const progress = desktopOnboardingProgress(draft.step);
+  // Page-side-by-side with the exit slide switched off. The workspace mounts
+  // behind setup at `opening` and paints while setup still covers it, then the
+  // whole surface fades off it as one opaque layer. Nothing inside animates
+  // out, so no piece of setup reads as leaving on its own.
+  const revealing = handoff === "revealing" || handoff === "done";
   return createPortal(
     <motion.div
       ref={surfaceRef}
@@ -937,43 +831,54 @@ function OnboardingSurface({
       aria-modal="true"
       aria-label="Set up Akeru Bot"
       tabIndex={-1}
-      className="fixed inset-0 z-[10000] flex overflow-hidden bg-background text-foreground"
+      className="fixed inset-0 z-[10000] flex flex-col overflow-hidden bg-background text-foreground lg:flex-row"
+      style={{ pointerEvents: revealing ? "none" : "auto" }}
       initial={reducedMotion ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: reducedMotion ? 0 : 0.18, ease: LEAVE }}
+      animate={{ opacity: revealing ? 0 : 1 }}
+      // The reveal fade already took the surface to nothing, and `done` fires
+      // the instant it lands, so unmounting has nothing left to animate.
+      exit={{ opacity: 0, transition: { duration: 0 } }}
+      transition={{
+        duration: revealing ? (instantHandoff ? 0 : REVEAL_DURATION) : reducedMotion ? 0 : 0.18,
+        ease: revealing ? SMOOTH_OUT : LEAVE,
+      }}
     >
-      <motion.aside
-        className="relative z-10 flex w-[38%] min-w-[390px] max-w-[540px] shrink-0 flex-col border-r border-border/70 bg-card/45 px-10 pb-10 pt-8 backdrop-blur-xl"
-        animate={finishing ? { x: "-102%", opacity: 0 } : { x: 0, opacity: 1 }}
-        transition={{ duration: reducedMotion ? 0 : 0.42, ease: finishing ? LEAVE : EASE }}
-      >
-        <div className="flex items-center justify-between">
+      <aside className="relative z-10 flex min-h-0 w-full min-w-0 flex-1 flex-col border-b border-border/70 bg-card/45 px-6 pb-6 pt-6 backdrop-blur-xl lg:w-[38%] lg:min-w-[380px] lg:max-w-[540px] lg:flex-none lg:border-b-0 lg:border-r lg:px-10 lg:pb-10 lg:pt-8">
+        <div className="space-y-5">
           <span className="text-sm font-semibold tracking-[-0.015em]">Akeru Bot</span>
-          <div
-            className="flex items-center gap-1.5"
-            role="progressbar"
-            aria-label="Setup progress"
-            aria-valuemin={1}
-            aria-valuemax={4}
-            aria-valuenow={step}
-            aria-valuetext={`Step ${step} of 4`}
-          >
-            {[1, 2, 3, 4].map((value) => (
-              <span
-                key={value}
-                className={`h-1.5 rounded-full transition-all duration-300 motion-reduce:transition-none ${
-                  value === step ? "w-6 bg-foreground" : "w-1.5 bg-foreground/20"
-                }`}
-              />
-            ))}
-          </div>
+          <ol className="flex items-start gap-2" aria-label="Setup steps">
+            {DESKTOP_ONBOARDING_STEPS.map((definition, index) => {
+              const position = index + 1;
+              const current = position === progress.number;
+              const reached = position <= progress.number;
+              return (
+                <li
+                  key={definition.id}
+                  className="flex min-w-0 flex-1 flex-col gap-1.5"
+                  aria-current={current ? "step" : undefined}
+                >
+                  <span
+                    className={`h-1 rounded-full transition-colors duration-300 motion-reduce:transition-none ${
+                      reached ? "bg-foreground" : "bg-foreground/15"
+                    }`}
+                  />
+                  <span
+                    className={`truncate text-[11px] leading-4 transition-colors duration-300 motion-reduce:transition-none ${
+                      current ? "font-medium text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    {definition.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
         </div>
-        <div className="flex flex-1 items-center py-10">
+        <div className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain py-5 pe-1 lg:py-6">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={draft.step}
-              className="w-full"
+              className="my-auto w-full py-4"
               initial={reducedMotion ? false : { opacity: 0, x: 18 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -12 }}
@@ -985,10 +890,10 @@ function OnboardingSurface({
                   draft={draft}
                   captureMode={captureMode}
                   onChange={updateDraft}
-                  onContinue={() => updateDraft({ ...draft, step: "use-case" })}
+                  onContinue={() => updateDraft({ ...draft, step: "goal" })}
                 />
-              ) : draft.step === "use-case" ? (
-                <UseCaseStep
+              ) : draft.step === "goal" ? (
+                <OnboardingGoalStep
                   draft={draft}
                   onChange={updateDraft}
                   onBack={() => updateDraft({ ...draft, step: "subscription" })}
@@ -1001,21 +906,22 @@ function OnboardingSurface({
                   providerReadiness={providerReadiness}
                   error={createError}
                   onChange={updateDraft}
-                  onBack={() => updateDraft({ ...draft, step: "use-case" })}
+                  onBack={() => updateDraft({ ...draft, step: "goal" })}
                   onContinue={() => void create()}
                 />
               ) : (
                 <div className="space-y-4">
-                  <h1 className="text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.035em]">
-                    Start with {draft.name}
+                  <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
+                    Say hello to {draft.name}
                   </h1>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Edit the suggested message, then send it. This becomes the real conversation.
+                    Your goal and the plan for it, written out. Edit it however you like, then send.
+                    This is the real conversation, not a demo.
                   </p>
                   {!rosterBot ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
-                      Starting {draft.name}
+                      Waking up {draft.name}
                     </div>
                   ) : null}
                 </div>
@@ -1024,31 +930,31 @@ function OnboardingSurface({
           </AnimatePresence>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">Step {step} of 4</p>
+          <p className="text-xs text-muted-foreground">{progress.label}</p>
           <Button
             size="xs"
             variant="ghost-muted"
-            disabled={creating || finishing}
+            disabled={creating || handoff !== null}
             onClick={() => setSkipConfirmOpen(true)}
           >
             Skip setup
           </Button>
         </div>
-      </motion.aside>
-      <motion.div
-        className="flex min-w-0 flex-1"
-        animate={finishing ? { x: 0, scale: 1 } : { x: 0, scale: 1 }}
-        transition={{ duration: reducedMotion ? 0 : 0.42, ease: EASE }}
+      </aside>
+      <div
+        className={`min-h-0 min-w-0 flex-1 ${draft.step === "message" ? "flex" : "hidden lg:flex"}`}
       >
-        <ConversationPreview
+        <OnboardingPreview
           draft={draft}
           message={message}
           createdBotReady={rosterBot !== undefined}
           captureMode={captureMode}
+          handoff={handoff}
           modelSelection={desktopOnboardingModelSelection(rosterBot?.engine ?? null)}
           onMessageSent={finish}
+          onDestinationReady={observeDestination}
         />
-      </motion.div>
+      </div>
       <AlertDialog open={skipConfirmOpen} onOpenChange={setSkipConfirmOpen}>
         <AlertDialogPopup portalContainer={surfaceRef}>
           <AlertDialogHeader>
@@ -1080,6 +986,7 @@ export function DesktopOnboarding({
 }: {
   readonly Surface?: ComponentType<DesktopOnboardingSurfaceProps>;
 } = {}) {
+  const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const atomKey = environmentId ?? NO_ENVIRONMENT;
   const rosterLoaded = useAtomValue(environmentShell.stateValueAtom(atomKey)).status === "live";
@@ -1121,6 +1028,15 @@ export function DesktopOnboarding({
   }
 
   const show = shouldStart && initialDraftRef.current !== null;
+
+  // A reload between sending the first message and opening its chat lands
+  // here with setup already complete. Finish the trip to that chat once.
+  useEffect(() => {
+    const botId = takeDesktopOnboardingHandoff(window.localStorage);
+    if (!botId) return;
+    useRosterStore.getState().selectBot(botId);
+    void navigate({ to: "/bots/$botId", params: { botId }, replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     if (!rosterLoaded || serverBots.length === 0 || initialDraftRef.current !== null) return;
