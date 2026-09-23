@@ -258,6 +258,8 @@ function trimOptional(value: string | null | undefined): string | undefined {
 }
 
 function flattenOpenCodeSkills(input: OpenCodeInventory): ReadonlyArray<ServerProviderSkill> {
+  // The OpenCode SDK's `/skill` endpoint and `debug skill` CLI only return
+  // name, description, and location — there is no icon field to map.
   const skills: ServerProviderSkill[] = [];
   for (const skill of input.skills ?? []) {
     const name = trimOptional(skill.name);

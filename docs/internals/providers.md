@@ -118,6 +118,14 @@ thread workspace so a failed probe is not cached as empty. Composer cwd refresh 
 machine snapshot until a client calls `snapshotForCwd`. Cursor composer wiring from the same
 upstream PR is not in this change.
 
+`ServerProviderSkill` carries an optional `icon` (an emoji or a short glyph name from skill
+frontmatter or provider metadata, e.g. the Codex app-server's interface icon paths). Clients
+fall back to a source-kind glyph when a skill has no icon, so older servers that omit the
+field decode fine. Driver coverage: Codex maps `interface.iconSmall ?? iconLarge`, Claude
+reads an `icon` key from SKILL.md frontmatter, Grok forwards `icon` from `grok inspect`,
+OpenCode's `/skill` endpoint reports no icon field, and Kimi For Coding has no skill-loading
+mechanism so its catalog is intentionally empty.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and

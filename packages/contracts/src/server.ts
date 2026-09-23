@@ -93,6 +93,13 @@ export const ServerProviderSkill = Schema.Struct({
   enabled: Schema.Boolean,
   displayName: Schema.optional(TrimmedNonEmptyString),
   shortDescription: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * Optional per-skill icon reported by the provider: an emoji or a short
+   * named glyph from skill frontmatter or provider metadata (e.g. the Codex
+   * app-server's interface icon). Clients fall back to a source-kind glyph
+   * when absent, so older servers can omit it without breaking decode.
+   */
+  icon: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 

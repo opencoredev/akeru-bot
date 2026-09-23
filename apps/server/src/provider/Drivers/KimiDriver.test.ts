@@ -49,6 +49,9 @@ describe("KimiDriver", () => {
               expect.objectContaining({ slug: "k3" }),
               expect.objectContaining({ slug: "k3-256k" }),
             ]),
+            // Kimi For Coding has no skill-loading mechanism, so the catalog
+            // is intentionally empty rather than silently missing.
+            skills: [],
           });
         }),
       ),

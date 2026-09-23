@@ -1,6 +1,7 @@
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
@@ -251,14 +252,40 @@ function appendCustomCodexModels(
   return customEntries.length === 0 ? models : [...models, ...customEntries];
 }
 
-function parseCodexSkillsListResponse(
+/**
+ * Canonicalize a cwd for comparison against `skills/list` entries. The
+ * app-server records real paths, so a symlinked or otherwise unnormalized
+ * requested cwd would never match without this. When realpath fails (the
+ * directory does not exist yet) the raw path is used so the entry can still
+ * match an equally raw reported cwd. Runs on the Effect FileSystem so a
+ * slow or unreachable filesystem never blocks the server event loop.
+ */
+const realPathOrSelf = (fileSystem: FileSystem.FileSystem, cwd: string): Effect.Effect<string> =>
+  fileSystem.realPath(cwd).pipe(Effect.orElseSucceed(() => cwd));
+
+export const parseCodexSkillsListResponse = Effect.fn("parseCodexSkillsListResponse")(function* (
   response: CodexSchema.V2SkillsListResponse,
   cwd: string,
-): ReadonlyArray<ServerProviderSkill> {
-  const matchingEntry = response.data.find((entry) => entry.cwd === cwd);
-  const skills = matchingEntry
-    ? matchingEntry.skills
-    : response.data.flatMap((entry) => entry.skills);
+): Effect.fn.Return<ReadonlyArray<ServerProviderSkill>, never, FileSystem.FileSystem> {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const canonicalCwd = yield* realPathOrSelf(fileSystem, cwd);
+  // Resolve each distinct reported root once; a workspace appearing in
+  // multiple entries only pays for a single realpath.
+  const distinctRoots = [...new Set(response.data.map((entry) => entry.cwd))];
+  const canonicalRoots = new Map(
+    yield* Effect.forEach(
+      distinctRoots,
+      (root) => Effect.map(realPathOrSelf(fileSystem, root), (real) => [root, real] as const),
+      { concurrency: "unbounded" },
+    ),
+  );
+  const matchingEntry = response.data.find(
+    (entry) => canonicalRoots.get(entry.cwd) === canonicalCwd,
+  );
+  // No matching entry means the provider reported nothing for this
+  // workspace. Never union the other workspaces' catalogs: skills from
+  // unrelated directories are not skills this provider would load here.
+  const skills = matchingEntry ? matchingEntry.skills : [];
 
   return skills.map((skill) => {
     const shortDescription =
@@ -282,10 +309,16 @@ function parseCodexSkillsListResponse(
     if (shortDescription) {
       parsedSkill.shortDescription = shortDescription;
     }
+    // Prefer the small icon asset path; fall back to the large one when the
+    // provider only ships a single size.
+    const icon = skill.interface?.iconSmall ?? skill.interface?.iconLarge ?? undefined;
+    if (icon) {
+      parsedSkill.icon = icon;
+    }
 
     return parsedSkill;
   });
-}
+});
 
 const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   client: CodexClient.CodexAppServerClient["Service"],
@@ -410,7 +443,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     models: applyPreferredCodexDefaultModel(
       appendCustomCodexModels(models, input.customModels ?? []),
     ),
-    skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),
+    skills: yield* parseCodexSkillsListResponse(skillsResponse, input.cwd),
   } satisfies CodexAppServerProviderSnapshot;
 });
 
@@ -511,13 +544,13 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   }) => Effect.Effect<
     CodexAppServerProviderSnapshot,
     CodexErrors.CodexAppServerError,
-    ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Scope.Scope
   > = probeCodexAppServerProvider,
   environment?: NodeJS.ProcessEnv,
 ): Effect.fn.Return<
   ServerProviderDraft,
   ServerSettingsError,
-  ChildProcessSpawner.ChildProcessSpawner
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
 > {
   const resolvedEnvironment = environment ?? process.env;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);

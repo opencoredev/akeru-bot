@@ -79,6 +79,10 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
           availability: "available",
           models: models(config.customModels),
           slashCommands: [],
+          // Kimi For Coding has no skill-loading mechanism — its CLI exposes
+          // no skill catalog to report (unlike `skills/list`, `grok inspect`,
+          // or Claude Code's SKILL.md roots), so the `$` picker correctly
+          // stays empty for this provider.
           skills: [],
         } satisfies ServerProvider;
       });
