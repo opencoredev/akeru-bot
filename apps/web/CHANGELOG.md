@@ -1,5 +1,20 @@
 ## @t3tools/web@0.0.41
 
+## 0.2.0
+
+### Minor Changes
+
+- [#296](https://github.com/opencoredev/akeru-bot/pull/296) [`268ea1a`](https://github.com/opencoredev/akeru-bot/commit/268ea1a3feb0f6713b3dfde8e6b4e72242e77877) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Bot avatars are now flat shapes in a brighter palette, with slanted eyes cut out of the body. Bots on an older preset color move to the matching new one. A working bot sways, glances down at its work, and turns its face around its body now and then. Pointing at a bot widens its eyes and makes them follow the pointer. Resting bots stay still apart from an occasional blink or glance, and all motion respects your reduced-motion setting. Dithered avatars are gone: the picker no longer offers generated identicons or a dither filter, and bots that had one now show a shape.
+
+### Patch Changes
+
+- [#292](https://github.com/opencoredev/akeru-bot/pull/292) [`0693f24`](https://github.com/opencoredev/akeru-bot/commit/0693f24f28145a5fc7cfe32563c5b9a11f8467a7) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Reposition Akeru Bot's public messaging as an open-source, self-hosted Grok Bot alternative.
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.2.0
+  - @t3tools/client-runtime@0.0.3
+  - @t3tools/shared@0.0.3
+
 ## 0.1.1
 
 ### Patch Changes

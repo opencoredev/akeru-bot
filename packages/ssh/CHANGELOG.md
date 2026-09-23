@@ -1,5 +1,13 @@
 # @t3tools/ssh
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3tools/contracts@0.2.0
+  - @t3tools/shared@0.0.3
+
 ## 0.0.2
 
 ### Patch Changes
