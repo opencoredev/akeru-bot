@@ -112,6 +112,8 @@ export interface RoutinePanelProps {
   readonly connectorOptions?: readonly string[];
   readonly busyRoutineId?: string | null;
   readonly onCreate?: (draft: RoutineAdapterDraft) => void | Promise<void>;
+  /** True when routines cannot be created yet because the bot's chat has not started. */
+  readonly createNeedsChat?: boolean;
   readonly onUpdate?: (routineId: string, draft: RoutineAdapterDraft) => void | Promise<void>;
   readonly onDryRun?: (routineId: string) => void;
   readonly onApproveProcedure?: (routineId: string) => void;
@@ -859,6 +861,7 @@ export function RoutinePanel({
   projectOptions = EMPTY_PROJECT_OPTIONS,
   busyRoutineId = null,
   onCreate,
+  createNeedsChat = false,
   onUpdate,
   onDelete,
   ...actions
@@ -993,7 +996,12 @@ export function RoutinePanel({
             </Button>
           ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
-            {t("Or ask {botName} in chat to set one up.", { botName })}
+            {!onCreate && createNeedsChat
+              ? t(
+                  "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.",
+                  { botName },
+                )
+              : t("Or ask {botName} in chat to set one up.", { botName })}
           </p>
         </div>
       ) : (

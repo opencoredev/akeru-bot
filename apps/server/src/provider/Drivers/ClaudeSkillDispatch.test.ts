@@ -39,4 +39,75 @@ describe("planClaudeSkillDispatch", () => {
   it("does not treat a dollar amount glued to a word as a skill", () => {
     expect(planClaudeSkillDispatch("cost is 5$implement", SKILLS)).toBeUndefined();
   });
+
+  it("keeps prices literal", () => {
+    expect(planClaudeSkillDispatch("it costs $5 or $ 10, not $5.99", SKILLS)).toBeUndefined();
+  });
+
+  it("keeps known skill names inside quotes literal", () => {
+    expect(planClaudeSkillDispatch("printf ' $implement '", SKILLS)).toBeUndefined();
+    expect(planClaudeSkillDispatch('echo "run $implement now"', SKILLS)).toBeUndefined();
+  });
+
+  it("keeps a $skill after an escaped quote inside a double-quoted string literal", () => {
+    expect(planClaudeSkillDispatch('echo "run \\" $implement"', SKILLS)).toBeUndefined();
+  });
+
+  it("keeps a $skill inside a multiline double-quoted string literal", () => {
+    expect(
+      planClaudeSkillDispatch('echo "first\n$implement\nlast"', SKILLS),
+    ).toBeUndefined();
+  });
+
+  it("keeps a $skill inside a multiline single-quoted string literal", () => {
+    expect(
+      planClaudeSkillDispatch("echo 'first\n$implement\nlast'", SKILLS),
+    ).toBeUndefined();
+  });
+
+  it("still dispatches a real mention after a properly closed multiline quote", () => {
+    expect(
+      planClaudeSkillDispatch('echo "first\nline"\n$implement the fix', SKILLS),
+    ).toEqual({
+      leadingText: 'echo "first\nline"',
+      commandText: "/implement the fix",
+      skillName: "implement",
+    });
+    expect(
+      planClaudeSkillDispatch("echo 'first\nline'\n$implement the fix", SKILLS),
+    ).toEqual({
+      leadingText: "echo 'first\nline'",
+      commandText: "/implement the fix",
+      skillName: "implement",
+    });
+  });
+
+  it("keeps known skill names inside inline and fenced code literal", () => {
+    expect(planClaudeSkillDispatch("run `echo $implement` first", SKILLS)).toBeUndefined();
+    expect(planClaudeSkillDispatch("run ``a ` $implement`` first", SKILLS)).toBeUndefined();
+    expect(
+      planClaudeSkillDispatch("see this:\n```sh\necho $implement\n```\nthanks", SKILLS),
+    ).toBeUndefined();
+    expect(planClaudeSkillDispatch("unclosed:\n~~~\n$implement", SKILLS)).toBeUndefined();
+  });
+
+  it("still dispatches a real mention next to quoted, coded, or apostrophe text", () => {
+    expect(
+      planClaudeSkillDispatch(
+        "don't wait, it's fine: `echo $review` and \"$review\" then $implement it",
+        SKILLS,
+      ),
+    ).toEqual({
+      leadingText: 'don\'t wait, it\'s fine: `echo $review` and "$review" then',
+      commandText: "/implement it",
+      skillName: "implement",
+    });
+    expect(
+      planClaudeSkillDispatch("```\n$review\n```\n$implement the fix", SKILLS),
+    ).toEqual({
+      leadingText: "```\n$review\n```",
+      commandText: "/implement the fix",
+      skillName: "implement",
+    });
+  });
 });

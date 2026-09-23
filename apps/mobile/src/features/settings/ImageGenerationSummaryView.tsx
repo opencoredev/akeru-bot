@@ -17,6 +17,7 @@ import {
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
+import { useMobileI18n } from "../../lib/i18n";
 import { relativeTime } from "../../lib/time";
 import { SettingsSection } from "./components/SettingsSection";
 
@@ -48,6 +49,7 @@ export function ImageGenerationSummaryView({
   readonly query: ImageProvidersQueryView;
   readonly onRetry: () => void;
 }) {
+  const { t } = useMobileI18n();
   const statuses = new Map(query.data?.providers.map((status) => [status.provider, status]) ?? []);
   const loadFailed = query.data === null && query.error !== null;
   const defaultProvider = effectiveDefaultProvider(settings);
@@ -75,6 +77,8 @@ export function ImageGenerationSummaryView({
           const status = statuses.get(provider);
           const enabled = isImageProviderEnabled(settings, provider);
           const health = imageProviderHealthDisplay(status, enabled, loadFailed);
+          // A missing subscription is one fact, so the row states it once.
+          const disconnected = status !== undefined && !status.connected;
           return (
             <View
               key={provider}
@@ -86,14 +90,20 @@ export function ImageGenerationSummaryView({
                 <Text className="text-base font-t3-medium text-foreground">
                   {IMAGE_PROVIDER_LABELS[provider]}
                 </Text>
-                <Text className={`text-sm font-t3-medium ${HEALTH_TEXT_CLASS[health.variant]}`}>
-                  {health.label}
-                </Text>
+                {disconnected ? null : (
+                  <Text className={`text-sm font-t3-medium ${HEALTH_TEXT_CLASS[health.variant]}`}>
+                    {health.label}
+                  </Text>
+                )}
               </View>
-              {status ? (
+              {disconnected ? (
+                <Text className="text-sm text-foreground-muted">
+                  {imageProviderAccessLabel(status, t)}
+                </Text>
+              ) : status ? (
                 <>
                   <Text className="text-sm text-foreground-muted">
-                    {imageProviderAccessLabel(status)}
+                    {imageProviderAccessLabel(status, t)}
                   </Text>
                   <Text className="text-sm text-foreground-muted">
                     {imageProviderOperationsLabel(status)} ·{" "}

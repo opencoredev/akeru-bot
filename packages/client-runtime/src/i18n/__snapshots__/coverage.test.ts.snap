@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1165,
+  "directMessageCount": 1174,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -108,6 +108,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "group.label)}",
       "item.label)}</span>",
     ],
+    "apps/web/src/components/settings/SettingsRoutePage.tsx": [
+      "navLabel);",
+    ],
     "packages/client-runtime/src/durableMemory.ts": [
       "label)\`.",
     ],
@@ -170,7 +173,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "Connections",
       "Advanced",
       "Source control",
-      "Errors",
+      "Bot inbox",
       "Diagnostics",
     ],
     "SettingsDialog: item.title (SETTINGS_SEARCH_ITEMS)": [
@@ -257,6 +260,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/home/useThreadListActions.ts",
     "apps/mobile/src/features/layout/WorkspaceEmptyDetail.tsx",
     "apps/mobile/src/features/projects/AddProjectScreen.tsx",
+    "apps/mobile/src/features/settings/ImageGenerationSummaryView.tsx",
     "apps/mobile/src/features/settings/LanguageSettingsSection.tsx",
     "apps/mobile/src/features/settings/MobilePolicyNotice.tsx",
     "apps/mobile/src/features/settings/ProviderConnections.tsx",
@@ -322,6 +326,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/chat/SentMessageText.tsx",
     "apps/web/src/components/chat/ThreadErrorBanner.tsx",
     "apps/web/src/components/chat/TraitsPicker.tsx",
+    "apps/web/src/components/chat/composerProviderMenuItems.ts",
     "apps/web/src/components/onboarding/DesktopOnboarding.tsx",
     "apps/web/src/components/onboarding/OnboardingGoalStep.tsx",
     "apps/web/src/components/onboarding/OnboardingHandoff.tsx",
@@ -346,6 +351,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/BotModelPicker.tsx",
     "apps/web/src/components/roster/BotPersonalityToneField.tsx",
     "apps/web/src/components/roster/BotPromptAttachments.tsx",
+    "apps/web/src/components/roster/BotPromptCommandMenu.tsx",
     "apps/web/src/components/roster/BotPromptComposer.tsx",
     "apps/web/src/components/roster/BotPromptMentions.tsx",
     "apps/web/src/components/roster/BotRosterSidebar.tsx",
@@ -368,12 +374,14 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/botSandbox.ts",
     "apps/web/src/components/roster/routineReceipts.ts",
     "apps/web/src/components/settings/ConnectionsSettings.tsx",
+    "apps/web/src/components/settings/ImageGenerationSettings.tsx",
     "apps/web/src/components/settings/InboxPanel.tsx",
     "apps/web/src/components/settings/LanguageSetting.tsx",
     "apps/web/src/components/settings/PrivacySettings.tsx",
     "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
     "apps/web/src/components/settings/SettingsDialog.tsx",
     "apps/web/src/components/settings/SettingsPanels.tsx",
+    "apps/web/src/components/settings/SettingsRoutePage.tsx",
     "apps/web/src/components/settings/settingsLayout.tsx",
     "apps/web/src/components/sidebar/SidebarChrome.tsx",
     "apps/web/src/components/sidebar/SidebarProviderUpdatePill.tsx",
@@ -383,6 +391,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/routes/_chat.bots.$botId.tsx",
     "apps/web/src/routes/_chat.index.tsx",
     "packages/client-runtime/src/durableMemory.ts",
+    "packages/client-runtime/src/imageGeneration.ts",
   ],
 }
 `;

@@ -188,6 +188,7 @@ function BotThreadRouteView() {
             busyRoutineId,
             // A new routine reports back into the bot's own chat, so it can only be
             // created once that thread exists.
+            createNeedsChat: threadRef === null,
             ...(threadRef
               ? {
                   onCreate: async (draft: RoutineAdapterDraft) => {

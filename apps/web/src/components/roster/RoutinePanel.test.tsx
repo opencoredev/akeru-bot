@@ -198,6 +198,23 @@ describe("RoutinePanel", () => {
     expect(relativeRunTime("not a date", now)).toBe("");
   });
 
+  it("explains that a new bot's chat must start before a routine can be added", () => {
+    const markup = renderToStaticMarkup(
+      <RoutinePanel botName="Rivet" status="ready" routines={[]} createNeedsChat />,
+    );
+    expect(markup).not.toContain("New routine");
+    expect(markup).toContain(
+      "Routines report to your chat with Rivet. Send Rivet a message to start the chat, then add a routine here.",
+    );
+    expect(markup).not.toContain("ask Rivet");
+
+    const ready = renderToStaticMarkup(
+      <RoutinePanel botName="Scout" status="ready" routines={[]} onCreate={() => {}} />,
+    );
+    expect(ready).toContain("New routine");
+    expect(ready).toContain("Or ask Scout in chat to set one up.");
+  });
+
   it("offers a header-level New routine button once the list is non-empty", () => {
     const markup = renderToStaticMarkup(
       <RoutinePanel botName="Akeru" status="ready" routines={[routine]} onCreate={() => {}} />,

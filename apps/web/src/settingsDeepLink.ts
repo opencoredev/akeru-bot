@@ -29,7 +29,7 @@ const destinations: Readonly<
   privacy: { section: "privacy", label: "Privacy" },
   connections: { section: "connections", label: "Connections" },
   "source-control": { section: "source-control", label: "Source control" },
-  "bot-inbox": { section: "inbox", label: "Errors" },
+  "bot-inbox": { section: "inbox", label: "Bot inbox" },
   diagnostics: { section: "diagnostics", label: "Diagnostics" },
 };
 

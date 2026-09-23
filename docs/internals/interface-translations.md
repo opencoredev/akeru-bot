@@ -47,7 +47,7 @@ English extraction is incremental. A catalog's existence is not evidence that ev
 | Routines                            | Routine panel, routine form, and routine receipts in chat                     | No routine screen                                     |
 | Approved non-English catalogs       | Simplified Chinese (`zh-CN`)                                                  | Simplified Chinese (`zh-CN`)                          |
 
-The coverage test scans every file that imports `useI18n` or `useMobileI18n`, plus a short explicit list of plain modules that translate through a passed-in or module-level translator: `CommandPalette.logic.ts`, the mobile `app-updates.ts`, the onboarding logic modules, `durableMemory.ts` in client-runtime, and `routineReceipts.ts`. Plural forms passed to `plural` are extracted as messages too. Mobile code outside React uses `translateOutsideReact` from `apps/mobile/src/lib/i18n.tsx`, which follows the mounted language provider.
+The coverage test scans every file that imports `useI18n` or `useMobileI18n`, plus a short explicit list of plain modules that translate through a passed-in or module-level translator: `CommandPalette.logic.ts`, `composerProviderMenuItems.ts`, the mobile `app-updates.ts`, the onboarding logic modules, `durableMemory.ts` and `imageGeneration.ts` in client-runtime, and `routineReceipts.ts`. Plural forms passed to `plural` are extracted as messages too. Mobile code outside React uses `translateOutsideReact` from `apps/mobile/src/lib/i18n.tsx`, which follows the mounted language provider.
 
 ### Untranslated exceptions
 

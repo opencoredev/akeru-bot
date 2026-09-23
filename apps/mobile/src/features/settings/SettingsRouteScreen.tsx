@@ -214,7 +214,7 @@ function ErrorsSettingsSection({
     <SettingsSection title={t("Health")}>
       <SettingsRow
         icon="exclamationmark.triangle"
-        label={t("Errors")}
+        label={t("Bot inbox")}
         onPress={() =>
           navigation.navigate("SettingsSheet", {
             screen: "SettingsContent",

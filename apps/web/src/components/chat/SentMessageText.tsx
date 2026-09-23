@@ -1,3 +1,4 @@
+import type { ServerProviderSkill } from "@t3tools/contracts";
 import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 import { AtSignIcon, CornerDownRightIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
@@ -11,18 +12,26 @@ import {
 } from "../composerInlineChip";
 import { useRosterStore } from "../roster/rosterStore";
 import { parseReplyPrompt } from "./MessageControls";
+import { SkillInlineText } from "./SkillInlineText";
 
 /**
  * Renders the text of a sent message. A reply serialized by `buildReplyPrompt` keeps a
  * durable backlink to what it answered: one compact quoted line above the body, instead
- * of the raw `>` markdown the provider receives.
+ * of the raw `>` markdown the provider receives. `$name` tokens that match `skills` render
+ * as skill chips, like the classic chat.
  */
-export function SentMessageText({ text }: { readonly text: string }) {
+export function SentMessageText({
+  text,
+  skills = NO_SKILLS,
+}: {
+  readonly text: string;
+  readonly skills?: ReadonlyArray<ServerProviderSkill> | undefined;
+}) {
   const reply = parseReplyPrompt(text);
   if (!reply) {
     return (
       <p className="whitespace-pre-wrap">
-        <MentionText text={text} />
+        <MentionText text={text} skills={skills} />
       </p>
     );
   }
@@ -39,27 +48,37 @@ export function SentMessageText({ text }: { readonly text: string }) {
       </div>
       {reply.body ? (
         <p className="whitespace-pre-wrap">
-          <MentionText text={reply.body} />
+          <MentionText text={reply.body} skills={skills} />
         </p>
       ) : null}
     </>
   );
 }
 
-/** Shows `@browser`, `@chat:<id>`, and `@bot:<id>` as chips; copying still yields the raw token. */
-function MentionText({ text }: { readonly text: string }) {
+const NO_SKILLS: ReadonlyArray<ServerProviderSkill> = [];
+
+/** Shows `@browser`, `@chat:<id>`, `@bot:<id>`, and known `$skill` tokens as chips; copying still yields the raw token. */
+function MentionText({
+  text,
+  skills,
+}: {
+  readonly text: string;
+  readonly skills: ReadonlyArray<ServerProviderSkill>;
+}) {
   const { t } = useI18n();
+  const plain = (segment: string, key: number) =>
+    skills.length === 0 ? segment : <SkillInlineText key={key} text={segment} skills={skills} />;
   const tokens = collectComposerInlineTokens(`${text}\n`).filter(
     (token) =>
       token.type === "browser-mention" ||
       token.type === "thread-mention" ||
       token.type === "bot-mention",
   );
-  if (tokens.length === 0) return text;
+  if (tokens.length === 0) return plain(text, 0);
   const nodes: ReactNode[] = [];
   let cursor = 0;
   for (const token of tokens) {
-    if (token.start > cursor) nodes.push(text.slice(cursor, token.start));
+    if (token.start > cursor) nodes.push(plain(text.slice(cursor, token.start), -token.start - 1));
     nodes.push(
       token.type === "browser-mention" ? (
         <MentionChip key={token.start} source={token.source} label={t("Browser")} icon="browser" />
@@ -71,7 +90,7 @@ function MentionText({ text }: { readonly text: string }) {
     );
     cursor = token.end;
   }
-  if (cursor < text.length) nodes.push(text.slice(cursor));
+  if (cursor < text.length) nodes.push(plain(text.slice(cursor), -text.length - 2));
   return nodes;
 }
 

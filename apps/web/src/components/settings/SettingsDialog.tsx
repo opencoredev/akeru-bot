@@ -191,7 +191,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     label: "Advanced",
     items: [
       { section: "source-control", label: "Source control", icon: GitBranchIcon },
-      { section: "inbox", label: "Errors", icon: AlertCircleIcon },
+      { section: "inbox", label: "Bot inbox", icon: AlertCircleIcon },
       { section: "diagnostics", label: "Diagnostics", icon: Bug02Icon },
     ],
   },

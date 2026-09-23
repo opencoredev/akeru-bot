@@ -48,4 +48,20 @@ describe("SentMessageText", () => {
     expect(markup).toContain('data-markdown-copy="@bot:bot-gone"');
     expect(markup).toContain("Unknown bot");
   });
+
+  it("renders known $skill tokens as skill chips and leaves unknown ones as text", () => {
+    const markup = renderToStaticMarkup(
+      <SentMessageText
+        text="use $review then $missing with @browser"
+        skills={[
+          { name: "review", displayName: "Review", path: "/skills/review", enabled: true },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('data-markdown-copy="$review"');
+    expect(markup).toContain("Review");
+    expect(markup).toContain("$missing");
+    expect(markup).toContain('data-markdown-copy="@browser"');
+  });
 });

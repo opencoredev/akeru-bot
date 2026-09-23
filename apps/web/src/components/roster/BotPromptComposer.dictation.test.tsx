@@ -48,6 +48,7 @@ vi.mock("motion/react", () => ({
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
 vi.mock("../../state/server", () => ({ primaryServerKeybindingsAtom: Symbol("keybindings") }));
+vi.mock("./BotPromptCommandMenu", () => ({ BotPromptCommandMenu: () => null }));
 vi.mock("../../composerDraftStore", () => ({ hydrateImagesFromPersisted: () => [] }));
 vi.mock("../../lib/imageCompression", () => ({ compressImageForStash: vi.fn() }));
 vi.mock("../../promptStashStore", () => ({

@@ -100,6 +100,9 @@ Open **Routines** in the bot panel. Add a routine, procedure, schedule, timezone
 and connectors. Select **Test** to test the routine, then approve the procedure before you enable its
 schedule.
 
+A routine reports to the bot's chat, so a new bot needs one message before you can add a routine
+from the panel. You can also ask the bot in chat to set one up.
+
 Each routine card shows its schedule, status, and latest result. Select a card to see when it runs,
 its latest run, its instructions, and its workspace. You can run, pause, resume, edit, or delete the
 routine there, then select the back button to return to the list. A procedure change needs approval
@@ -112,8 +115,8 @@ The chat loads recent routine notes first. Select **Load older routine notes** a
 to bring earlier runs into view.
 
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
-adds one item to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived
-bot does not resume its routines.
+adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. Fix the dependency,
+then resume the routine. Restoring an archived bot does not resume its routines.
 
 ## Tools
 

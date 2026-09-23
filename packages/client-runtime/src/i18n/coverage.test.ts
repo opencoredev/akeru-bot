@@ -140,10 +140,12 @@ describe("discovered interface message coverage", () => {
       ...discover("apps/mobile/src"),
       ...discover("apps/web/src"),
       "apps/web/src/components/CommandPalette.logic.ts",
+      "apps/web/src/components/chat/composerProviderMenuItems.ts",
       "apps/mobile/src/features/updates/app-updates.ts",
       "apps/web/src/components/onboarding/desktopOnboarding.logic.ts",
       "apps/web/src/components/onboarding/goalPlan.logic.ts",
       "packages/client-runtime/src/durableMemory.ts",
+      "packages/client-runtime/src/imageGeneration.ts",
       "apps/web/src/components/roster/routineReceipts.ts",
     ].sort();
     const missing: string[] = [];

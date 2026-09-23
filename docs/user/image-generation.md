@@ -15,6 +15,8 @@ subscription is connected and enabled, its health, supported operations, the las
 health test, and any reported failure. The last image field stays empty until
 image creation is available.
 
+A row without a connected subscription says only that, next to **Connect**.
+
 While the rows load, they read **Checking**. If Akeru cannot reach the
 environment, they read **Unavailable** and the page offers **Retry**.
 
@@ -50,5 +52,6 @@ Image settings are not in the chat composer.
 
 Mobile shows the saved setup under **Settings > Image generation**, including
 connection health, supported operations, the last test, failures, and suggested
-next steps. If the status cannot load, select **Try again**. Change image
-settings from the desktop or web app.
+next steps. A provider without a subscription shows that it is not connected.
+If the status cannot load, select **Try again**. Change image settings from
+the desktop or web app.

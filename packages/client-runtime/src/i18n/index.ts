@@ -1480,6 +1480,8 @@ export const englishCatalog = {
   "Routines are recurring tasks {botName} runs on a schedule.":
     "Routines are recurring tasks {botName} runs on a schedule.",
   "Or ask {botName} in chat to set one up.": "Or ask {botName} in chat to set one up.",
+  "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.":
+    "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.",
   "Delete routine “{name}”?": "Delete routine “{name}”?",
   "This removes the schedule and its run history.":
     "This removes the schedule and its run history.",
@@ -1491,6 +1493,16 @@ export const englishCatalog = {
   "“{name}” was canceled": "“{name}” was canceled",
   "“{name}” failed": "“{name}” failed",
   "“{name}” finished": "“{name}” finished",
+  "Run provider command": "Run provider command",
+  "Run provider skill": "Run provider skill",
+  "{scope} skill": "{scope} skill",
+  "No skills found. Try / to browse provider commands.":
+    "No skills found. Try / to browse provider commands.",
+  "No matching command.": "No matching command.",
+  "Checking subscription": "Checking subscription",
+  "{provider} subscription detected": "{provider} subscription detected",
+  "No {provider} subscription connected": "No {provider} subscription connected",
+  "Connect {provider} subscription": "Connect {provider} subscription",
 } as const;
 
 export type MessageKey = keyof typeof englishCatalog;

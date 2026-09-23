@@ -9,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
+import type { ComposerProviderCatalog } from "../chat/composerProviderMenuItems";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import {
   providerInstanceUnavailability,
@@ -110,5 +111,19 @@ export function botEngineFailureContext(
       entry?.models.find((model) => model.slug === selection?.model)?.name ??
       selection?.model ??
       null,
+  };
+}
+
+/** The skills and commands of the instance a bot answers with, for the composer's `$` and `/` menus. */
+export function botEngineCatalog(
+  selection: ModelSelection | null,
+  instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+): ComposerProviderCatalog | null {
+  const entry = instanceEntries.find((candidate) => candidate.instanceId === selection?.instanceId);
+  if (!entry) return null;
+  return {
+    provider: entry.driverKind,
+    skills: entry.snapshot.skills,
+    slashCommands: entry.snapshot.slashCommands,
   };
 }

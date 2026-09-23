@@ -7,6 +7,12 @@ import {
   type ImageProviderStatus,
 } from "@t3tools/contracts";
 
+import { createTranslator, type MessageKey, type TranslationParams } from "./i18n/index.ts";
+
+type ImageGenerationTranslate = (message: MessageKey, params?: TranslationParams) => string;
+
+const englishTranslate: ImageGenerationTranslate = createTranslator("en").t;
+
 export const IMAGE_PROVIDER_LABELS: Readonly<Record<ImageProviderId, string>> = {
   chatgpt: "ChatGPT",
   grok: "Grok",
@@ -68,10 +74,16 @@ export function imageProviderHealthDisplay(
   return { label: "Not tested", variant: "warning" };
 }
 
-export function imageProviderAccessLabel(status: ImageProviderStatus | undefined): string {
-  if (!status) return "Checking subscription";
-  const label = IMAGE_PROVIDER_LABELS[status.provider];
-  return status.connected ? `${label} subscription detected` : `No ${label} subscription connected`;
+/** Clients pass their active translator; plain callers get English. */
+export function imageProviderAccessLabel(
+  status: ImageProviderStatus | undefined,
+  t: ImageGenerationTranslate = englishTranslate,
+): string {
+  if (!status) return t("Checking subscription");
+  const provider = IMAGE_PROVIDER_LABELS[status.provider];
+  return status.connected
+    ? t("{provider} subscription detected", { provider })
+    : t("No {provider} subscription connected", { provider });
 }
 
 export function imageProviderOperationsLabel(status: ImageProviderStatus): string {

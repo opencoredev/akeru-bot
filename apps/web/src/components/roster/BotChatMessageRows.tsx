@@ -6,6 +6,7 @@ import type {
   MessageId,
   OrchestrationMessage,
   ScopedThreadRef,
+  ServerProviderSkill,
   ThreadId,
 } from "@t3tools/contracts";
 import type { ReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
@@ -400,6 +401,7 @@ export const UserMessageRow = memo(function UserMessageRow({
   startsGroup,
   replyLabel,
   showChannelOrigin,
+  skills,
   environmentId,
   currentPersonId,
   onReply,
@@ -410,6 +412,8 @@ export const UserMessageRow = memo(function UserMessageRow({
   readonly startsGroup: boolean;
   readonly replyLabel: string;
   readonly showChannelOrigin: boolean;
+  /** Provider skills whose `$name` tokens render as skill chips. */
+  readonly skills: ReadonlyArray<ServerProviderSkill> | undefined;
   readonly environmentId: EnvironmentId | null;
   readonly currentPersonId: string | null | undefined;
   readonly onReply: MessageReplyHandler;
@@ -447,7 +451,7 @@ export const UserMessageRow = memo(function UserMessageRow({
               {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
             </div>
           ) : null}
-          {message.text ? <SentMessageText text={message.text} /> : null}
+          {message.text ? <SentMessageText text={message.text} skills={skills} /> : null}
           {message.attachments?.length ? (
             <div className={message.text ? "mt-2" : undefined}>
               <BotMessageAttachments

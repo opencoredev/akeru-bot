@@ -15,6 +15,11 @@ vi.mock("react-native", () => ({
   View: "div",
 }));
 vi.mock("../../components/AppText", () => ({ AppText: "span" }));
+vi.mock("../../lib/i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
+});
 vi.mock("./components/SettingsSection", () => ({
   SettingsSection: ({
     title,
@@ -109,5 +114,21 @@ describe("mobile image generation summary", () => {
     );
     expect(markup).toContain("Disabled");
     expect(markup).not.toMatch(/>(On|Off) ·/);
+  });
+
+  it("states a missing subscription once", () => {
+    const markup = render({
+      data: {
+        providers: [
+          status("chatgpt", { connected: false, repairAction: "Connect ChatGPT subscription" }),
+          status("grok"),
+        ],
+      },
+      error: null,
+      isPending: false,
+    });
+    expect(markup).toContain("No ChatGPT subscription connected");
+    expect(markup).not.toContain("Not connected");
+    expect(markup).not.toContain("Next step: Connect ChatGPT subscription");
   });
 });

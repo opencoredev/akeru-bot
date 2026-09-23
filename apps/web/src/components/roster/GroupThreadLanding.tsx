@@ -89,6 +89,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     respondingEngine.instanceEntries,
     runtime.failure?.unavailability,
   );
+  const members = group
+    ? groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null)
+    : [];
+  const boss = group ? resolveAvailableGroupBoss(members, group.bossBotId) : null;
+  // The boss answers a group message first, so its provider's `$` skills and `/` commands are offered.
+  const bossCatalog = useBotEngineAvailability(boss?.engine ?? null).catalog;
   const noProviderNoticeId = useId();
   const replyPlayback = useOptionalReplyPlayback();
   const voiceCall = useOptionalVoiceCall();
@@ -150,8 +156,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   if (!group) return null;
   const currentPersonId = peopleIdentity.current?.id;
-  const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
-  const boss = resolveAvailableGroupBoss(members, group.bossBotId);
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
   const inboxItems = selectOpenBotInboxItems(
     inboxQuery.data?.inbox ?? [],
@@ -236,6 +240,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     startsGroup={startsGroup}
                     replyLabel={current ? "you" : "participant"}
                     showChannelOrigin={false}
+                    skills={bossCatalog?.skills}
                     environmentId={environmentId}
                     currentPersonId={currentPersonId}
                     onReply={replyTo}
@@ -298,6 +303,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         ) : null}
         <BotPromptComposer
           mentionScope={mentionScope}
+          commandCatalog={bossCatalog}
           botName={group.name}
           draftKey={`group:${group.id}`}
           busy={working && pendingApproval === null}

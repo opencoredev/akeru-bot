@@ -19,7 +19,7 @@ describe("settings deep links", () => {
     ["privacy", "privacy", null, "Privacy"],
     ["connections", "connections", null, "Connections"],
     ["source-control", "source-control", null, "Source control"],
-    ["bot-inbox", "inbox", null, "Errors"],
+    ["bot-inbox", "inbox", null, "Bot inbox"],
     ["diagnostics", "diagnostics", null, "Diagnostics"],
   ] as const)("maps %s to %s and target %s", (id, section, targetId, label) => {
     expect(parseSettingsDeepLink(`grokbot://app/v1/settings?id=${id}`)).toEqual({

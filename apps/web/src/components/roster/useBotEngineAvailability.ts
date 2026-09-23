@@ -10,12 +10,16 @@ import {
   sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { primaryServerProvidersAtom } from "../../state/server";
-import { botEngineUnavailability, resolveStickyBotEngine } from "./botEngineSelection";
+import {
+  botEngineCatalog,
+  botEngineUnavailability,
+  resolveStickyBotEngine,
+} from "./botEngineSelection";
 
 /**
  * The engine a bot answers with and whether it can run right now. `blocked`
  * turns off Send and calls; a temporary failure does not block, since the next
- * attempt may succeed.
+ * attempt may succeed. `catalog` holds the skills and commands the `$` and `/` menus offer.
  */
 export function useBotEngineAvailability(engine: BotEngine | null) {
   const settings = usePrimarySettings();
@@ -36,6 +40,7 @@ export function useBotEngineAvailability(engine: BotEngine | null) {
     return {
       instanceEntries,
       selection,
+      catalog: botEngineCatalog(selection, instanceEntries),
       unavailability,
       blocked: unavailability !== null && unavailability.reason !== "temporary-failure",
     };

@@ -12,7 +12,6 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
 import { botEnvironment, environmentPeopleAtom } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { primaryServerKeybindingsAtom } from "../../state/server";
-import { SettingsRow } from "../settings/settingsLayout";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -374,34 +373,31 @@ function GroupEditor({
           </section>
         ) : null}
       </div>
-      <div className="mt-6 -mx-2">
-        <SettingsRow
-          title={t("Delete group")}
-          control={
-            <Button
-              disabled={busy}
-              variant="destructive"
-              onClick={async () => {
-                const confirmed = await ensureLocalApi().dialogs.confirm(
-                  t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
-                  { variant: "destructive", confirmLabel: t("Delete group") },
-                );
-                if (!confirmed) return;
-                const success = await run(
-                  () =>
-                    deleteGroup({
-                      environmentId,
-                      input: { groupId: GroupId.make(group.id) },
-                    }),
-                  t("Could not delete group"),
-                );
-                if (success) onDeleted();
-              }}
-            >
-              {t("Delete")}
-            </Button>
-          }
-        />
+      {/* A plain row: SettingsRow reserves a 10rem control column that wraps this title in the sidebar. */}
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium whitespace-nowrap">{t("Delete group")}</h3>
+        <Button
+          disabled={busy}
+          variant="destructive"
+          onClick={async () => {
+            const confirmed = await ensureLocalApi().dialogs.confirm(
+              t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
+              { variant: "destructive", confirmLabel: t("Delete group") },
+            );
+            if (!confirmed) return;
+            const success = await run(
+              () =>
+                deleteGroup({
+                  environmentId,
+                  input: { groupId: GroupId.make(group.id) },
+                }),
+              t("Could not delete group"),
+            );
+            if (success) onDeleted();
+          }}
+        >
+          {t("Delete")}
+        </Button>
       </div>
     </div>
   );

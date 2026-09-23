@@ -61,6 +61,9 @@ import {
   type BotPromptMentionItem,
   removeBotPromptMention,
 } from "./botPromptMentions.logic";
+import { applyBotPromptCommand, botPromptCommandTrigger } from "./botPromptCommands.logic";
+import { BotPromptCommandMenu, type BotPromptCommandMenuHandle } from "./BotPromptCommandMenu";
+import type { ComposerProviderCatalog } from "../chat/composerProviderMenuItems";
 import {
   BotPromptMentionChips,
   BotPromptMentionMenu,
@@ -167,6 +170,7 @@ export function BotPromptComposer({
   readOnly = false,
   mentionBots = EMPTY_MENTION_BOTS,
   mentionScope = null,
+  commandCatalog = null,
   activitySlot = null,
   busy = false,
   pendingActionSlot = null,
@@ -183,6 +187,8 @@ export function BotPromptComposer({
   mentionBots?: ReadonlyArray<MentionBot>;
   /** Enables `@browser` and `@chat:` mentions for this chat's environment. */
   mentionScope?: BotPromptMentionScope | null;
+  /** The answering provider's skills and commands, offered by the `$` and `/` pickers. */
+  commandCatalog?: ComposerProviderCatalog | null;
   /** Live turn status, docked above the prompt box where it stays visible without scrolling. */
   activitySlot?: ReactNode;
   /** A turn is still running, so sending again would queue behind it. */
@@ -224,9 +230,11 @@ export function BotPromptComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const mentionMenuRef = useRef<BotPromptMentionMenuHandle>(null);
+  const commandMenuRef = useRef<BotPromptCommandMenuHandle>(null);
   const mentionListboxId = useId();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissedMentionStart, setDismissedMentionStart] = useState<number | null>(null);
+  const [dismissedCommandStart, setDismissedCommandStart] = useState<number | null>(null);
   const [activeMentionOptionId, setActiveMentionOptionId] = useState<string | null>(null);
   const revisionRef = useRef(0);
   const stashPulseTimeoutRef = useRef<number | null>(null);
@@ -302,6 +310,38 @@ export function BotPromptComposer({
     },
     [persistDraft],
   );
+  const candidateCommandTrigger =
+    !readOnly && commandCatalog !== null && caret !== null
+      ? botPromptCommandTrigger(draft, caret)
+      : null;
+  const commandTrigger =
+    candidateCommandTrigger && candidateCommandTrigger.rangeStart !== dismissedCommandStart
+      ? candidateCommandTrigger
+      : null;
+  const selectCommand = useCallback(
+    (inserted: string) => {
+      const input = promptInputRef.current;
+      if (!input || input.selectionStart === null) return;
+      const trigger = botPromptCommandTrigger(input.value, input.selectionStart);
+      if (!trigger) return;
+      const next = applyBotPromptCommand(input.value, trigger, inserted);
+      persistDraft(next.text);
+      setCaret(next.caret);
+      window.requestAnimationFrame(() => {
+        promptInputRef.current?.focus();
+        promptInputRef.current?.setSelectionRange(next.caret, next.caret);
+      });
+    },
+    [persistDraft],
+  );
+  const closeCommandMenu = useCallback(() => {
+    const input = promptInputRef.current;
+    const trigger =
+      input && input.selectionStart !== null
+        ? botPromptCommandTrigger(input.value, input.selectionStart)
+        : null;
+    setDismissedCommandStart(trigger?.rangeStart ?? null);
+  }, []);
   const closeMentionMenu = useCallback(() => {
     const input = promptInputRef.current;
     const trigger =
@@ -750,6 +790,15 @@ export function BotPromptComposer({
               onActiveOptionChange={setActiveMentionOptionId}
             />
           ) : null}
+          {commandTrigger && commandCatalog ? (
+            <BotPromptCommandMenu
+              ref={commandMenuRef}
+              trigger={commandTrigger}
+              catalog={commandCatalog}
+              onSelect={selectCommand}
+              onClose={closeCommandMenu}
+            />
+          ) : null}
           <div
             data-testid="bot-prompt-composer"
             data-expanded={expanded || undefined}
@@ -823,11 +872,17 @@ export function BotPromptComposer({
                 if (botPromptMentionTrigger(value, selectionStart) === null) {
                   setDismissedMentionStart(null);
                 }
+                if (botPromptCommandTrigger(value, selectionStart) === null) {
+                  setDismissedCommandStart(null);
+                }
               }}
               onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
               onBlur={() => setCaret(null)}
               onKeyDown={(event) => {
-                if (mentionTrigger && mentionMenuRef.current?.handleKeyDown(event)) {
+                if (
+                  (mentionTrigger && mentionMenuRef.current?.handleKeyDown(event)) ||
+                  (commandTrigger && commandMenuRef.current?.handleKeyDown(event))
+                ) {
                   event.preventDefault();
                   event.stopPropagation();
                   return;

@@ -94,8 +94,10 @@ describe("image provider row", () => {
 
   it("offers Connect and blocks enabling when no subscription is connected", () => {
     const markup = renderRow(status("missing", { connected: false }), false);
-    expect(markup).toContain("Not connected");
     expect(markup).toContain("No Grok subscription connected");
+    expect(markup).not.toContain("Not connected");
+    expect(markup).not.toContain("Next step");
+    expect(markup).not.toContain("Supports image generation");
     expect(markup).toContain("Connect Grok subscription");
     expect(markup).not.toContain("Disconnect Grok subscription");
     expect(markup).toMatch(

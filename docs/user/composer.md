@@ -25,6 +25,9 @@ emoji when it has one, or a glyph for where the skill came from. The source labe
 Project, Personal, System, or Provider. A selected skill appears as a tinted chip in the composer
 with the same emoji, and sends as `$name`.
 
+Bot chats and group chats have the same `/` and `$` menus. A bot chat lists the skills and
+commands of the bot's provider. A group chat lists those of the group's boss, who answers first.
+
 The slash menu includes skills by default. Turn off **Show skills in slash menu** under
 **Settings > General** to keep it command-only. Slash-menu skill results use the
 `/skill:Skill Name` label and insert the same `$name` token. Akeru hides duplicate native provider

@@ -13,6 +13,7 @@ import { LoaderIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { requestConfirmDialog } from "../../confirmDialog";
+import { useI18n } from "../../i18n";
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
 import { openSettings, useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { serverEnvironment } from "../../state/server";
@@ -219,10 +220,13 @@ export function ImageProviderRow({
   readonly onDisconnect: () => void;
   readonly onConnect: () => void;
 }) {
+  const { t } = useI18n();
   const label = IMAGE_PROVIDER_LABELS[provider];
   const health = imageProviderHealthDisplay(status, enabled, loadFailed);
   const connected = status?.connected === true;
   const needsReconnect = status?.health === "revoked" || status?.health === "expired";
+  // A missing subscription is one fact: the description says it and Connect fixes it.
+  const disconnected = status !== undefined && !connected;
 
   return (
     <SettingsRow
@@ -235,20 +239,22 @@ export function ImageProviderRow({
             className="size-4 shrink-0 brightness-0 dark:invert"
           />
           {label}
-          <Badge variant={health.variant} className="h-4 px-1.5 text-[10px]">
-            {health.label}
-          </Badge>
+          {disconnected ? null : (
+            <Badge variant={health.variant} className="h-4 px-1.5 text-[10px]">
+              {health.label}
+            </Badge>
+          )}
         </span>
       }
       description={
         status
-          ? imageProviderAccessLabel(status)
+          ? imageProviderAccessLabel(status, t)
           : loadFailed
             ? "Could not load provider status."
             : "Loading provider status…"
       }
       status={
-        status ? (
+        status && !disconnected ? (
           <div className="space-y-0.5">
             <div>
               {imageProviderOperationsLabel(status)}
@@ -307,9 +313,9 @@ export function ImageProviderRow({
               variant="outline"
               disabled={!status}
               onClick={onConnect}
-              aria-label={`Connect ${label} subscription`}
+              aria-label={t("Connect {provider} subscription", { provider: label })}
             >
-              Connect
+              {t("Connect")}
             </Button>
           )}
           <Switch

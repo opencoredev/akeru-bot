@@ -138,7 +138,7 @@ describe("ChatMarkdown settings chips", () => {
     );
 
     expect(html).toContain("chat-markdown-settings-link");
-    expect(html).toContain("Open Settings &gt; Errors");
+    expect(html).toContain("Open Settings &gt; Bot inbox");
     expect(html).not.toContain('target="_blank"');
   });
 });

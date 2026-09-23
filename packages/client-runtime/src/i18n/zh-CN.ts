@@ -1419,6 +1419,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Routines are recurring tasks {botName} runs on a schedule.":
     "例行任务是 {botName} 按计划重复执行的任务。",
   "Or ask {botName} in chat to set one up.": "也可以在聊天中让 {botName} 帮你设置。",
+  "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.":
+    "例行任务会汇报到你与 {botName} 的聊天中。先给 {botName} 发一条消息开始聊天，再回到这里添加例行任务。",
   "Delete routine “{name}”?": "要删除例行任务“{name}”吗？",
   "This removes the schedule and its run history.": "这会删除计划及其运行记录。",
   "Edit routine": "编辑例行任务",
@@ -1429,4 +1431,13 @@ export const zhCNCatalog: TranslationCatalog = {
   "“{name}” was canceled": "“{name}”已取消",
   "“{name}” failed": "“{name}”失败",
   "“{name}” finished": "“{name}”已完成",
+  "Run provider command": "运行提供方命令",
+  "Run provider skill": "运行提供方技能",
+  "{scope} skill": "{scope} 技能",
+  "No skills found. Try / to browse provider commands.": "未找到技能。试试输入 / 浏览提供方命令。",
+  "No matching command.": "没有匹配的命令。",
+  "Checking subscription": "正在检查订阅",
+  "{provider} subscription detected": "已检测到 {provider} 订阅",
+  "No {provider} subscription connected": "未连接 {provider} 订阅",
+  "Connect {provider} subscription": "连接 {provider} 订阅",
 };

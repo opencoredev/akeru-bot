@@ -149,6 +149,7 @@ export function BotThreadLanding({
     selection: stickyEngine,
     unavailability: engineUnavailability,
     blocked: sendBlocked,
+    catalog: engineCatalog,
   } = useBotEngineAvailability(bot?.engine ?? null);
   const runtime = useBotThreadRuntime(botId, stickyEngine);
   const mentionScope = useBotPromptMentionScope({
@@ -519,6 +520,7 @@ export function BotThreadLanding({
                               startsGroup={startsGroup}
                               replyLabel="you"
                               showChannelOrigin
+                              skills={engineCatalog?.skills}
                               environmentId={environmentId}
                               currentPersonId={currentPersonId}
                               onReply={replyTo}
@@ -619,6 +621,7 @@ export function BotThreadLanding({
           ) : null}
           <BotPromptComposer
             mentionScope={mentionScope}
+            commandCatalog={engineCatalog}
             botName={bot.name}
             draftKey={bot.id}
             busy={working && pendingApproval === null}
