@@ -90,6 +90,171 @@ describe("bot inbox incidents", () => {
     expect(new BotInboxService(filePath).list()).toHaveLength(2);
   });
 
+  it("does not reopen for the same failure timestamp it was resolved against", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+    ]);
+    const failing = {
+      ...incident,
+      lastFailedRequestAt: "2026-08-30T20:00:00.000Z",
+    };
+    service.ensureOpen(failing);
+    const item = service.list()[0]!;
+
+    expect(service.resolveById(item.id)).toBe(true);
+    service.ensureOpen(failing);
+
+    expect(service.list()).toEqual([
+      expect.objectContaining({ id: item.id, status: "resolved" }),
+    ]);
+  });
+
+  it("reopens an acknowledged incident when a newer failure arrives", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+      "2026-08-30T20:03:00.000Z",
+    ]);
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
+    const item = service.list()[0]!;
+    service.resolveById(item.id);
+
+    const reopened = service.ensureOpen({
+      ...incident,
+      lastFailedRequestAt: "2026-08-30T20:02:00.000Z",
+      lastFailure: "Grok rejected the second ACP request.",
+    });
+
+    expect(reopened.id).toBe(item.id);
+    expect(reopened.status).toBe("open");
+    expect(reopened.occurrenceCount).toBe(2);
+    expect(reopened.lastFailure).toBe("Grok rejected the second ACP request.");
+    expect(reopened.resolvedAt).toBeUndefined();
+  });
+
+  it("stays resolved when the sync carries no failure timestamp", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+    ]);
+    service.ensureOpen(incident);
+    const item = service.list()[0]!;
+
+    expect(service.resolveById(item.id)).toBe(true);
+    service.ensureOpen(incident);
+
+    expect(service.list()).toEqual([
+      expect.objectContaining({ id: item.id, status: "resolved" }),
+    ]);
+  });
+
+  it("reopens through resolveById when a newer failure timestamp arrives", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+    ]);
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
+    const item = service.list()[0]!;
+    service.resolveById(item.id);
+
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
+    expect(service.list()[0]?.status).toBe("resolved");
+
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:01:30.000Z" });
+    expect(service.list()[0]).toEqual(
+      expect.objectContaining({ id: item.id, status: "open", occurrenceCount: 2 }),
+    );
+  });
+
+  it("reopens a skewed provider failure that is newer than the stored failure", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+    ]);
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
+    const item = service.list()[0]!;
+    // Local resolution clock runs ahead of the provider's failure timestamps.
+    service.resolveById(item.id);
+
+    const reopened = service.ensureOpen({
+      ...incident,
+      lastFailedRequestAt: "2026-08-30T20:00:30.000Z",
+    });
+
+    expect(reopened.id).toBe(item.id);
+    expect(reopened.status).toBe("open");
+    expect(reopened.occurrenceCount).toBe(2);
+  });
+
+  it("baselines a resolved legacy item on its first timestamped failure", () => {
+    const { filePath, service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+      "2026-08-30T20:03:00.000Z",
+    ]);
+    service.ensureOpen(incident);
+    const item = service.list()[0]!;
+    service.resolveById(item.id);
+
+    // Simulate a record written before failure timestamps existed.
+    const legacy = service
+      .list()
+      .map(({ lastFailedRequestAt: _f, resolvedFailureAt: _r, ...rest }) => rest);
+    NodeFS.writeFileSync(filePath, JSON.stringify(legacy));
+
+    // The first timestamped report is the failure it was resolved against:
+    // record the baseline and keep the incident closed.
+    const baselined = service.ensureOpen({
+      ...incident,
+      lastFailedRequestAt: "2026-08-30T20:00:00.000Z",
+    });
+    expect(baselined.status).toBe("resolved");
+    expect(baselined.resolvedFailureAt).toBe("2026-08-30T20:00:00.000Z");
+
+    // A strictly newer failure is genuinely new and reopens it.
+    const reopened = service.ensureOpen({
+      ...incident,
+      lastFailedRequestAt: "2026-08-30T20:02:00.000Z",
+    });
+    expect(reopened.id).toBe(item.id);
+    expect(reopened.status).toBe("open");
+    expect(reopened.occurrenceCount).toBe(2);
+  });
+
+  it("reopens a resolved browser-dead incident for a new death", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+    ]);
+    const dead = {
+      ...incident,
+      incidentKey: "browser:bot-akeru",
+      kind: "browser-dead" as const,
+      lastFailure: "The managed browser exited.",
+    };
+    service.ensureOpen(dead);
+    const item = service.list()[0]!;
+    service.resolveById(item.id);
+
+    const reopened = service.ensureOpen({
+      ...dead,
+      lastFailure: "The managed browser exited again.",
+    });
+
+    expect(reopened.id).toBe(item.id);
+    expect(reopened.status).toBe("open");
+    expect(reopened.occurrenceCount).toBe(2);
+    expect(reopened.lastFailure).toBe("The managed browser exited again.");
+  });
+
   it("resolves an open incident by id", () => {
     const { service } = makeService(["2026-08-30T20:00:00.000Z", "2026-08-30T20:01:00.000Z"]);
     const item = service.upsert(incident);

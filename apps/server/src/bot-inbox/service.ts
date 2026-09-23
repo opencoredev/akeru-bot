@@ -29,12 +29,23 @@ export interface BotInboxItem {
   readonly lastSeenAt: string;
   readonly resolvedAt?: string;
   readonly acknowledgedAt?: string;
+  // Provider-reported failure timestamp, when the caller knows it. Resolution
+  // snapshots it so the same persisted failure cannot reopen a closed incident.
+  readonly lastFailedRequestAt?: string;
+  readonly resolvedFailureAt?: string;
   readonly occurrenceCount: number;
 }
 
 export type BotInboxIncident = Pick<
   BotInboxItem,
-  "incidentKey" | "kind" | "botId" | "botName" | "taskOrRoutine" | "lastFailure" | "nextAction"
+  | "incidentKey"
+  | "kind"
+  | "botId"
+  | "botName"
+  | "taskOrRoutine"
+  | "lastFailure"
+  | "nextAction"
+  | "lastFailedRequestAt"
 >;
 
 export class BotInboxService {
@@ -116,7 +127,50 @@ export class BotInboxService {
 
     const existing = this.items[existingIndex]!;
     if (existing.status === "resolved") {
-      return existing;
+      // Reopen in place only when the reported failure is genuinely newer than
+      // the one the item was closed against. Comparisons use provider failure
+      // timestamps, never the local resolution time, so clock skew cannot hide
+      // a new failure. Kinds that represent discrete lifecycle events
+      // (browser-dead) carry no timestamp and always reopen; recurring kinds
+      // (connector, approval, routine) must not resurrect on every sync.
+      const failureAt = incident.lastFailedRequestAt;
+      const storedFailureAt =
+        existing.resolvedFailureAt ?? existing.lastFailedRequestAt ?? null;
+      const timestampedReopenAllowed =
+        incident.kind === "browser-dead" ||
+        incident.kind === "silence-watchdog-failure";
+      if (failureAt === undefined) {
+        if (!timestampedReopenAllowed) return existing;
+      } else if (storedFailureAt !== null) {
+        if (failureAt <= storedFailureAt) return existing;
+      } else {
+        // Legacy rows carry no provider timestamp at all, so the first reported
+        // failure is ambiguous: it may be the one the item was resolved on.
+        // Adopt it as the baseline and reopen only on a strictly newer one.
+        const baselined: BotInboxItem = {
+          ...existing,
+          resolvedFailureAt: failureAt,
+        };
+        this.items[existingIndex] = baselined;
+        this.save();
+        return baselined;
+      }
+      const {
+        resolvedAt: _resolvedAt,
+        acknowledgedAt: _acknowledgedAt,
+        resolvedFailureAt: _resolvedFailureAt,
+        ...active
+      } = existing;
+      const reopened: BotInboxItem = {
+        ...active,
+        ...incident,
+        status: "open",
+        lastSeenAt: this.now(),
+        occurrenceCount: existing.occurrenceCount + 1,
+      };
+      this.items[existingIndex] = reopened;
+      this.save();
+      return reopened;
     }
     if (
       existing.kind === incident.kind &&
@@ -157,6 +211,9 @@ export class BotInboxService {
         status: "resolved",
         resolvedAt,
         lastSeenAt: resolvedAt,
+        ...(item.lastFailedRequestAt !== undefined
+          ? { resolvedFailureAt: item.lastFailedRequestAt }
+          : {}),
       };
     });
     if (changed) this.save();
@@ -176,6 +233,9 @@ export class BotInboxService {
         resolvedAt,
         lastSeenAt: resolvedAt,
         acknowledgedAt: resolvedAt,
+        ...(item.lastFailedRequestAt !== undefined
+          ? { resolvedFailureAt: item.lastFailedRequestAt }
+          : {}),
       };
     });
     if (changed) this.save();
