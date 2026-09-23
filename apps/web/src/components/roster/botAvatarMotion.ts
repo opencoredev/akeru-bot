@@ -140,13 +140,14 @@ export class BotMotion {
   }
 
   tick(dtSeconds: number, input: MotionInput): { frame: MotionFrame; active: boolean } {
+    if (input.reducedMotion) return { frame: this.rest(), active: false };
     const dt = Math.min(dtSeconds, 1 / 20);
     this.clock += dt;
     const now = this.clock;
     const t = now + this.phase;
     const beating = now < this.beatUntil;
     this.working = input.working;
-    const lively = !input.reducedMotion && (input.working || input.hovered || beating);
+    const lively = input.working || input.hovered || beating;
 
     // Pose targets.
     if (lively && input.working) {
@@ -282,6 +283,22 @@ export class BotMotion {
       !this.squint;
     if (!lively && resting) this.scheduleIdle();
     return { frame, active: lively || !resting };
+  }
+
+  /** Drops every pending motion and snaps to the rest frame. */
+  private rest(): MotionFrame {
+    for (const s of [this.roll, this.offsetX, this.offsetY, this.lookX, this.lookY, this.pull]) {
+      s.x = s.t = s.v = 0;
+    }
+    for (const s of [this.squash, this.eyeWidth, this.eyeHeight]) {
+      s.x = s.t = 1;
+      s.v = 0;
+    }
+    this.followX = this.followY = 0;
+    this.saccade = { x: 0, y: 0 };
+    this.blink = this.squint = this.spin = null;
+    this.beatUntil = -1;
+    return REST_FRAME;
   }
 
   private scheduleIdle() {

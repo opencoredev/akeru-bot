@@ -54,6 +54,15 @@ describe("BotMotion", () => {
     expect(active).toBe(false);
     expect(frame.roll).toBe(0);
   });
+
+  it("drops a pending idle beat when reduced motion is on", () => {
+    const motion = new BotMotion(0.3);
+    motion.beat(1600);
+    const { frame, active } = motion.tick(1 / 60, { ...rest, reducedMotion: true });
+    expect(active).toBe(false);
+    expect(frame.eyeHeight).toEqual([1, 1]);
+    expect(motion.tick(1 / 60, rest).active).toBe(false);
+  });
 });
 
 describe("wrapOnBelt", () => {

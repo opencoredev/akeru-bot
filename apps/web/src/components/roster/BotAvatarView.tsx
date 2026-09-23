@@ -238,6 +238,7 @@ function BlobAvatar({
       pointer = null;
       wake();
     };
+    reducedMotion.addEventListener("change", wake);
     hoverTarget.addEventListener("pointerenter", onEnter);
     hoverTarget.addEventListener("pointermove", onMove);
     hoverTarget.addEventListener("pointerleave", onLeave);
@@ -250,6 +251,7 @@ function BlobAvatar({
     wake();
 
     return () => {
+      reducedMotion.removeEventListener("change", wake);
       hoverTarget.removeEventListener("pointerenter", onEnter);
       hoverTarget.removeEventListener("pointermove", onMove);
       hoverTarget.removeEventListener("pointerleave", onLeave);
