@@ -1,4 +1,9 @@
-import { CommandId, MessageId, type OrchestrationCommand } from "@t3tools/contracts";
+import {
+  AkeruUsageReservationId,
+  CommandId,
+  MessageId,
+  type OrchestrationCommand,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -13,6 +18,7 @@ import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSna
 import { ProjectionBotRepository } from "../persistence/Services/ProjectionBots.ts";
 import { ProjectionMcpServerRepository } from "../persistence/Services/ProjectionMcpServers.ts";
 import { ProviderRegistry } from "../provider/Services/ProviderRegistry.ts";
+import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import {
   RoutineRuntimeAdapter,
   type RoutineDependencyFailure,
@@ -51,6 +57,7 @@ const make = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const inbox = BotInboxService.forSecretsDir(config.secretsDir);
   const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+  const botUsageLedger = yield* BotUsageLedger;
 
   const dispatch = (command: OrchestrationCommand) => engine.dispatch(command);
 
@@ -263,6 +270,23 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const threadRef = routine.targetThreadId;
       const createdAt = DateTime.formatIso(yield* DateTime.now);
+      const bot = yield* bots.getById({ botId: routine.botId });
+      if (Option.isSome(bot)) {
+        yield* botUsageLedger.recordMeasurement({
+          reservationId: AkeruUsageReservationId.make(`routine:${run.id}`),
+          sourceKey: `routine:${run.id}`,
+          botId: routine.botId,
+          threadId: threadRef,
+          turnId: null,
+          category: "routine",
+          inputTokens: 0,
+          outputTokens: 0,
+          reasoningTokens: null,
+          provider: null,
+          model: bot.value.engine?.model ?? null,
+          createdAt,
+        });
+      }
       yield* dispatch({
         type: "routine.run.start",
         commandId: CommandId.make(`server:routine.start:${run.id}`),

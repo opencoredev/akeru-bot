@@ -3396,7 +3396,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         description: null,
         disabledMcpServerIds: [],
         avatar: { kind: "dither" as const, seed: "usage-bot" },
-        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        engine: { provider: "codex-work", model: "gpt-5.6-sol" },
         sandbox: "local",
         runtimeMode: "approval-required" as const,
         usageCap: { unit: "tokens" as const, limit: 64_000 },
@@ -3410,6 +3410,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       yield* buildAppUnderTest({
         layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([
+              { instanceId: "codex-work", driver: "codex" } as never,
+            ]),
+          },
           projectionBots: {
             getById: ({ botId: requestedBotId }) =>
               Effect.succeed(requestedBotId === botId ? Option.some(bot) : Option.none()),

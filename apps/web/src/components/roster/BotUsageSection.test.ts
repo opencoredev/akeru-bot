@@ -36,7 +36,7 @@ const snapshot = {
   entries: [],
   usageCap: { unit: "tokens", limit: 20_000 },
   estimatedCost: { status: "available", usd: 1.25 },
-  subscriptionPool: { status: "available", used: 4_000, limit: 10_000, unit: "tokens" },
+  subscriptionPool: { status: "available", used: 34, limit: 100, unit: "percent" },
 } as const;
 
 describe("formatUsageMeasurement", () => {
@@ -95,9 +95,9 @@ describe("formatUsageMeasurement", () => {
     ]) {
       expect(markup).toContain(value);
     }
-    expect(markup).toContain("12,345 / 20,000");
+    expect(markup).toContain("12,345 / 20,000 tokens");
     expect(markup).toContain("$1.25");
-    expect(markup).toContain("4,000 / 10,000 tokens");
+    expect(markup).toContain("34% of pool");
     expect(markup).toContain("Reserved");
     expect(markup).toContain("750");
     expect(markup).not.toContain("Some provider usage is unavailable.");

@@ -1036,6 +1036,37 @@ describe("ProviderRuntimeIngestion", () => {
     });
   });
 
+  it("releases a cancelled completed turn after partial usage", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = asTurnId("turn-cancelled-completed");
+    await harness.reserveBotUsage(turnId);
+
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-cancelled-completed-usage"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      payload: { usage: { usedTokens: 150, inputTokens: 100, outputTokens: 50 } },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-cancelled-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: { state: "cancelled", stopReason: "cancelled" },
+    });
+    await harness.drain();
+
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.consumedTokens).toBe(0);
+    expect(usage.reservedTokens).toBe(0);
+    expect(usage.entries[0]).toMatchObject({ state: "released" });
+  });
+
   it("does not charge a replacement reservation from stale turn events", async () => {
     const harness = await createHarness({ botOwned: true });
     const replacementTurnId = asTurnId("turn-replacement");

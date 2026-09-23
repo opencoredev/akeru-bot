@@ -2281,6 +2281,8 @@ describe("AgentControllerLive", () => {
   it.effect("records human handoff requests in the bot inbox", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+    const usageLedger = makeUsageLedger();
+    usageLedger.reserve.mockImplementation(() => Effect.die("usage reserve failed"));
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-handoff-inbox-"));
     return provideController(
       Effect.gen(function* () {
@@ -2342,6 +2344,7 @@ describe("AgentControllerLive", () => {
       mastra.factory,
       undefined,
       baseDir,
+      usageLedger.service,
     ).pipe(
       Effect.ensuring(Effect.sync(() => NodeFS.rmSync(baseDir, { recursive: true, force: true }))),
     );

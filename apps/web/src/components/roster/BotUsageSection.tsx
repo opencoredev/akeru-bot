@@ -63,19 +63,25 @@ export function BotUsageSection({
             <span className="text-muted-foreground">Cap</span>
             <span className="text-right">
               {snapshot.usageCap
-                ? `${snapshot.consumedTokens.toLocaleString()} / ${snapshot.usageCap.limit.toLocaleString()}`
+                ? `${snapshot.consumedTokens.toLocaleString()} / ${snapshot.usageCap.limit.toLocaleString()} tokens`
                 : "No cap"}
             </span>
             <span className="text-muted-foreground">Estimated cost</span>
             <span className="text-right">
               {snapshot.estimatedCost.status === "available"
-                ? `$${snapshot.estimatedCost.usd.toLocaleString()}`
+                ? `$${snapshot.estimatedCost.usd.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
                 : "Unavailable"}
+            </span>
+            <span className="col-span-2 text-xs text-muted-foreground">
+              Estimated from reported model usage; this is not subscription spend.
             </span>
             <span className="text-muted-foreground">Subscription pool</span>
             <span className="text-right">
               {snapshot.subscriptionPool.status === "available"
-                ? `${snapshot.subscriptionPool.used.toLocaleString()} / ${snapshot.subscriptionPool.limit.toLocaleString()} ${snapshot.subscriptionPool.unit}`
+                ? `${snapshot.subscriptionPool.used.toLocaleString()}% of pool`
                 : "Unavailable"}
             </span>
             {snapshot.reservedTokens > 0 ? (

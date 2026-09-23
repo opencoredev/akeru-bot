@@ -101,6 +101,8 @@ export interface AkeruToolRuntimeOptions {
     readonly authorizationUrl?: string;
   }) => void | Promise<void>;
   readonly now?: () => string;
+  readonly onToolStart?: (input: AkeruToolExecution, session: AkeruToolSession) => Promise<void>;
+  readonly onToolFinish?: (input: AkeruToolExecution, session: AkeruToolSession) => Promise<void>;
 }
 
 export interface AkeruToolExecution {
@@ -473,10 +475,13 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     execute: async (input) => {
       let failureCode: NonNullable<AkeruToolReceipt["failureCode"]> = "internal";
       emitReceipt(input, "start");
+      let executionSession: AkeruToolSession | undefined;
       try {
         failureCode = "not_found";
         const session = sessions.get(input.threadId);
         if (!session) throw new Error(`Tool session '${input.threadId}' is not registered.`);
+        executionSession = session;
+        await options?.onToolStart?.(input, session);
         const tool = toolsForThread(input.threadId).find(
           (candidate) => candidate.id === input.toolId,
         );
@@ -769,6 +774,8 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       } catch (cause) {
         emitReceipt(input, "failure", { failureCode, summary: "Tool execution failed." });
         throw cause;
+      } finally {
+        if (executionSession) await options?.onToolFinish?.(input, executionSession);
       }
     },
   };

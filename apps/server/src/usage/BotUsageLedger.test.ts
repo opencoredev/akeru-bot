@@ -14,6 +14,7 @@ import {
   SqlitePersistenceMemory,
 } from "../persistence/Layers/Sqlite.ts";
 import { BotUsageLedger, BotUsageLedgerLive, type ReserveBotUsageInput } from "./BotUsageLedger.ts";
+import { parseRateTable, priceUsage } from "./usagePricing.ts";
 
 const layer = BotUsageLedgerLive.pipe(Layer.provideMerge(SqlitePersistenceMemory));
 
@@ -218,6 +219,89 @@ it.layer(layer)("BotUsageLedger", (it) => {
         summary.entries[0]?.unavailableReason,
         "Provider completed without token usage.",
       );
+    }),
+  );
+
+  it.effect("releases a cancelled turn without consuming its cap", () =>
+    Effect.gen(function* () {
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-cancelled");
+      yield* ledger.reserve(reserveInput("cancelled", { botId, maximumTokens: 500, capLimit: 500 }));
+      yield* ledger.finalizeForTurn({
+        botId,
+        threadId: ThreadId.make("thread-1"),
+        turnId: TurnId.make("turn-cancelled"),
+        settledAt: "2026-08-30T20:01:00.000Z",
+        cancelled: true,
+      });
+      const summary = yield* ledger.summarize(botId);
+      assert.equal(summary.consumedTokens, 0);
+      assert.equal(summary.reservedTokens, 0);
+      assert.equal(summary.entries[0]?.state, "released");
+    }),
+  );
+
+  it.effect("records tool and routine writers and includes their priced tokens in the cap", () =>
+    Effect.gen(function* () {
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-tool-routine");
+      const tool = yield* ledger.reserve(
+        reserveInput("tool-entry", {
+          botId,
+          category: "tool",
+          maximumTokens: 100,
+          capLimit: 100,
+        }),
+      );
+      yield* ledger.settle({
+        reservationId: tool.reservationId,
+        state: "reported",
+        inputTokens: 20,
+        outputTokens: 20,
+        reasoningTokens: null,
+        settledAt: "2026-08-30T20:01:00.000Z",
+      });
+      yield* ledger.recordMeasurement({
+        reservationId: AkeruUsageReservationId.make("routine-entry"),
+        sourceKey: "routine:run-1",
+        botId,
+        threadId: ThreadId.make("thread-1"),
+        turnId: null,
+        category: "routine",
+        inputTokens: 10,
+        outputTokens: 10,
+        reasoningTokens: null,
+        provider: ProviderDriverKind.make("codex"),
+        model: "gpt-5.6-sol",
+        createdAt: "2026-08-30T20:02:00.000Z",
+      });
+      const summary = yield* ledger.summarize(botId);
+      assert.deepEqual(
+        summary.entries.map((entry) => entry.category).sort(),
+        ["routine", "tool"],
+      );
+      assert.equal(summary.consumedTokens, 60);
+      const cost = priceUsage(
+        parseRateTable({ "gpt-5.6-sol": { input_cost_per_token: 1, output_cost_per_token: 2 } }),
+        "gpt-5.6-sol",
+        {
+          uncachedInputTokens: 30,
+          cachedInputTokens: 0,
+          cacheCreationTokens: 0,
+          outputTokens: 30,
+          reasoningTokens: 0,
+        },
+        null,
+      );
+      assert.equal(cost.costUsd, 90);
+      const remaining = yield* ledger.reserve(
+        reserveInput("cap-after-tool", { botId, maximumTokens: 41, capLimit: 100 }),
+      );
+      assert.equal(remaining.reservedTokens, 40);
+      const rejected = yield* ledger
+        .reserve(reserveInput("cap-after-tool-2", { botId, maximumTokens: 1, capLimit: 100 }))
+        .pipe(Effect.exit);
+      assert.equal(rejected._tag, "Failure");
     }),
   );
 

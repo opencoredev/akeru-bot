@@ -1792,12 +1792,21 @@ const make = Effect.gen(function* () {
         canReconcileUsage &&
         (event.type === "turn.completed" || event.type === "turn.aborted")
       ) {
+        const cancelled =
+          event.type === "turn.aborted" ||
+          (event.type === "turn.completed" &&
+            (event.payload.state === "cancelled" ||
+              event.payload.state === "interrupted" ||
+              (event.payload.stopReason !== null &&
+                event.payload.stopReason !== undefined &&
+                /cancel|abort|interrupt|killed|stopped/i.test(event.payload.stopReason))));
         yield* botUsageLedger
           .finalizeForTurn({
             botId: respondingBotId,
             threadId: thread.id,
             turnId: eventTurnId,
             settledAt: now,
+            cancelled,
           })
           .pipe(
             Effect.catchCause((cause) =>

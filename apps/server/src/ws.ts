@@ -180,6 +180,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { BotUsageLedger } from "./usage/BotUsageLedger.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import { readPlanLimits } from "./usage/usagePlanLimits.ts";
 import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -3179,16 +3180,68 @@ const makeWsRpcLayer = (
                     }),
                 ),
               );
+              const pricedEntries = summary.entries.filter(
+                (entry) =>
+                  entry.state === "reported" && entry.model !== null && entry.inputTokens !== null,
+              );
+              const priced = yield* Effect.forEach(pricedEntries, (entry) =>
+                usage.priceStepUsage({
+                  model: entry.model!,
+                  totals: {
+                    uncachedInputTokens: entry.inputTokens!,
+                    cachedInputTokens: 0,
+                    cacheCreationTokens: 0,
+                    outputTokens: entry.outputTokens ?? 0,
+                    reasoningTokens: Math.min(entry.reasoningTokens ?? 0, entry.outputTokens ?? 0),
+                  },
+                  reportedCostUsd: null,
+                }),
+              );
+              const estimatedCost =
+                pricedEntries.length > 0 && priced.every((entry) => entry.costSource !== "unpriced")
+                  ? {
+                      status: "available" as const,
+                      usd: priced.reduce((total, entry) => total + entry.costUsd, 0),
+                    }
+                  : { status: "unavailable" as const, usd: null };
+              const driverConnection: Record<string, string> = {
+                claude: "anthropic",
+                claudeAgent: "anthropic",
+                codex: "openai-codex",
+                cursor: "cursor",
+                grok: "xai",
+                kimi: "kimi-for-coding",
+                opencode: "opencode-go",
+                opencodeGo: "opencode-go",
+              };
+              const providers = yield* providerRegistry.getProviders;
+              const driver = bot.value.engine
+                ? providers.find((provider) => provider.instanceId === bot.value.engine?.provider)
+                    ?.driver ?? bot.value.engine.provider
+                : undefined;
+              const connection = driver === undefined ? undefined : driverConnection[driver];
+              const planLimits = yield* Effect.promise(() =>
+                readPlanLimits((provider) => subscriptionAuth.getPlanAccessToken(provider)),
+              ).pipe(Effect.catchCause(() => Effect.succeed([])));
+              const plan = connection === undefined
+                ? undefined
+                : planLimits.find((limits) => limits.provider === connection);
+              const window = plan?.status === "ok"
+                ? plan.windows.find((candidate) => candidate.kind === "session") ?? plan.windows[0]
+                : undefined;
+              const subscriptionPool = window
+                ? {
+                    status: "available" as const,
+                    used: Math.round(window.usedPercent),
+                    limit: 100,
+                    unit: "percent",
+                  }
+                : { status: "unavailable" as const, used: null, limit: null, unit: null };
               return {
                 ...summary,
                 usageCap: bot.value.usageCap,
-                estimatedCost: { status: "unavailable", usd: null },
-                subscriptionPool: {
-                  status: "unavailable",
-                  used: null,
-                  limit: null,
-                  unit: null,
-                },
+                estimatedCost,
+                subscriptionPool,
               };
             }),
             { "rpc.aggregate": "bot" },

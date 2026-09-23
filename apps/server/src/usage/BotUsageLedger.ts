@@ -103,6 +103,7 @@ export interface BotUsageLedgerShape {
     readonly threadId: ThreadId;
     readonly turnId: TurnId;
     readonly settledAt: string;
+    readonly cancelled?: boolean;
   }) => Effect.Effect<
     ReadonlyArray<AkeruUsageEntry>,
     Exclude<BotUsageLedgerError, BotUsageCapExceeded>
@@ -435,6 +436,32 @@ const make = Effect.gen(function* () {
             const rows = yield* selectEntryForTurn(sql, input.botId, input.threadId, input.turnId);
             const current = rows[0];
             if (!current) return [];
+            if (input.cancelled) {
+              const reportedTokens =
+                current.state === "reported"
+                  ? (current.inputTokens ?? 0) + (current.outputTokens ?? 0)
+                  : 0;
+              if (current.heldTokens > 0 || reportedTokens > 0) {
+                yield* sql`
+                  UPDATE akeru_bot_usage_balances
+                  SET reserved_tokens = reserved_tokens - ${current.heldTokens},
+                      consumed_tokens = consumed_tokens - ${reportedTokens},
+                      updated_at = ${input.settledAt}
+                  WHERE bot_id = ${current.botId}
+                `;
+              }
+              yield* sql`
+                UPDATE akeru_bot_usage_entries
+                SET state = 'released', held_tokens = 0,
+                    input_tokens = NULL, output_tokens = NULL, reasoning_tokens = NULL,
+                    unavailable_reason = NULL, settled_at = ${input.settledAt}
+                WHERE reservation_id = ${current.reservationId}
+              `;
+              const released = yield* selectEntryByReservation(sql, current.reservationId);
+              return [
+                yield* decodeEntry(released[0]!),
+              ];
+            }
             if (current.state === "reserved") {
               return [
                 yield* settleCurrent(current, {
