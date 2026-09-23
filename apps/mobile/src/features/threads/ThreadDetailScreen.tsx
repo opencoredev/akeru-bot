@@ -1,5 +1,5 @@
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { presentThreadError } from "@t3tools/client-runtime/errors";
+import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
@@ -15,8 +15,10 @@ import type {
   RuntimeMode,
   ServerConfig as T3ServerConfig,
   ThreadId,
+  ServerProviderUnavailability,
   UserInputQuestion,
 } from "@t3tools/contracts";
+import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@t3tools/contracts";
 import * as Haptics from "expo-haptics";
 import {
   memo,
@@ -120,6 +122,8 @@ export interface ThreadDetailScreenProps {
   readonly onStopThread: () => void;
   readonly onResumeThread: () => void;
   readonly canResumeThread: boolean;
+  /** Why the last request failed, when the server recorded a category. */
+  readonly resumeFailureUnavailability?: ServerProviderUnavailability | null;
   readonly resumingThread: boolean;
   readonly onSendMessage: () => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
@@ -491,6 +495,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const contentMaxWidth = isSplitLayout ? CHAT_CONTENT_MAX_WIDTH : undefined;
   const selectedInstanceId = props.selectedThread.modelSelection.instanceId;
   useStreamingHaptics(props.selectedThread.id, props.selectedThreadFeed);
+  const selectedProvider = props.serverConfig?.providers.find(
+    (provider) => provider.instanceId === selectedInstanceId,
+  );
+  const selectedProviderName =
+    selectedProvider?.displayName ??
+    PROVIDER_DISPLAY_NAMES[
+      selectedProvider?.driver ?? ProviderDriverKind.make(selectedInstanceId)
+    ] ??
+    selectedInstanceId;
   const selectedProviderSkills = useMemo(
     () =>
       props.serverConfig?.providers.find((provider) => provider.instanceId === selectedInstanceId)
@@ -745,7 +758,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
               {props.canResumeThread ? (
                 <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-                  <ResumeErrorSummary error={props.selectedThread.session?.lastError ?? null} />
+                  <ResumeErrorSummary
+                    error={props.selectedThread.session?.lastError ?? null}
+                    context={{
+                      unavailability: props.resumeFailureUnavailability ?? null,
+                      providerName: selectedProviderName,
+                      modelName: props.selectedThread.modelSelection.model,
+                    }}
+                  />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Resume interrupted request"
@@ -840,15 +860,18 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   );
 });
 
-function ResumeErrorSummary(props: { readonly error: string | null }) {
-  if (!props.error) {
+function ResumeErrorSummary(props: {
+  readonly error: string | null;
+  readonly context: ThreadErrorContext;
+}) {
+  if (!props.error && !props.context.unavailability) {
     return (
       <Text className="min-w-0 flex-1 text-sm text-foreground">
         The request stopped before it could finish.
       </Text>
     );
   }
-  const presentation = presentThreadError(props.error);
+  const presentation = presentThreadError(props.error ?? "", props.context);
   return (
     <View className="min-w-0 flex-1 gap-0.5">
       <Text className="text-sm font-semibold text-foreground">{presentation.title}</Text>

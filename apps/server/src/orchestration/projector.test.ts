@@ -308,6 +308,76 @@ describe("orchestration projector", () => {
     expect(next.threads).toEqual([]);
   });
 
+  it.effect("clears a failed session's category when the turn resumes", () =>
+    Effect.gen(function* () {
+      const at = "2026-02-23T08:00:00.000Z";
+      const created = yield* projectEvent(
+        createEmptyReadModel(at),
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: at,
+          commandId: "cmd-create",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-1",
+            title: "demo",
+            modelSelection: { provider: ProviderDriverKind.make("codex"), model: "gpt-5.3-codex" },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: at,
+            updatedAt: at,
+          },
+        }),
+      );
+      const failed = yield* projectEvent(
+        created,
+        makeEvent({
+          sequence: 2,
+          type: "thread.session-set",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: at,
+          commandId: "cmd-failed",
+          payload: {
+            threadId: "thread-1",
+            session: {
+              threadId: "thread-1",
+              status: "error",
+              providerName: "codex",
+              runtimeMode: "full-access",
+              activeTurnId: null,
+              lastError: "rate limit exceeded",
+              unavailability: "limit-reached",
+              updatedAt: at,
+            },
+          },
+        }),
+      );
+      expect(failed.threads[0]?.session?.unavailability).toBe("limit-reached");
+
+      const resumed = yield* projectEvent(
+        failed,
+        makeEvent({
+          sequence: 3,
+          type: "thread.turn-resume-requested",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: at,
+          commandId: "cmd-resume",
+          payload: { threadId: "thread-1", createdAt: at },
+        }),
+      );
+      const session = resumed.threads[0]?.session;
+      expect(session?.status).toBe("starting");
+      expect(session?.lastError).toBeNull();
+      expect(session?.unavailability).toBeUndefined();
+    }),
+  );
+
   it("tracks latest turn id from session lifecycle events", async () => {
     const createdAt = "2026-02-23T08:00:00.000Z";
     const startedAt = "2026-02-23T08:00:05.000Z";

@@ -1,12 +1,13 @@
 import { CircleAlertIcon, XIcon } from "lucide-react";
 import { memo, useState } from "react";
 
-import { presentThreadError } from "@t3tools/client-runtime/errors";
+import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 
 import { openProductFeedbackWithPrefill } from "../../productFeedbackStore";
-import { openSettings } from "../../settingsDialogStore";
 import { Button } from "../ui/button";
+import { ProviderRepairAction } from "./ProviderUnavailableNotice";
 
 export function threadErrorFeedbackDraft(error: string): string {
   const presentation = presentThreadError(error);
@@ -44,9 +45,16 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   onDismiss,
   onResume,
   resuming = false,
+  context,
+  environmentId = null,
+  onOpenUsage,
 }: {
   error: string | null;
   threadKey: string;
+  /** The failure's category and names, when the server reported them. */
+  context?: ThreadErrorContext;
+  environmentId?: EnvironmentId | null;
+  onOpenUsage?: () => void;
   onDismiss?: () => void;
   onResume?: () => void;
   resuming?: boolean;
@@ -61,7 +69,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
     return null;
   }
 
-  const presentation = presentThreadError(error);
+  const presentation = presentThreadError(error, context);
   const dismiss = () => {
     dismissThreadErrorBannerForSession(bannerKey);
     setLocallyDismissedKey(bannerKey);
@@ -100,16 +108,11 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
                   {resuming ? "Resuming…" : "Resume"}
                 </Button>
               ) : null}
-              {presentation.action === "providers" ? (
-                <Button
-                  size="xs"
-                  type="button"
-                  variant="outline"
-                  onClick={() => openSettings("providers")}
-                >
-                  Open providers
-                </Button>
-              ) : null}
+              <ProviderRepairAction
+                action={presentation.action}
+                environmentId={environmentId}
+                onOpenUsage={onOpenUsage}
+              />
               {presentation.action === "feedback" ? (
                 <Button
                   size="xs"

@@ -1,6 +1,9 @@
 import { type ProviderInstanceId } from "@t3tools/contracts";
 
-import type { ProviderInstanceEntry } from "../../providerInstances";
+import {
+  providerInstancePickerBlockReason,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { getTriggerDisplayModelName, type ModelEsque } from "../chat/providerIconUtils";
 
@@ -8,19 +11,23 @@ export interface BotModelChoice {
   readonly instanceId: ProviderInstanceId;
   readonly model: string;
   readonly label: string;
+  /** Why this model cannot be picked right now, or null when it can. */
+  readonly disabledReason: string | null;
 }
 
 export function buildBotModelChoices(
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>,
 ): ReadonlyArray<BotModelChoice> {
-  return instanceEntries.flatMap((entry) =>
-    (modelOptionsByInstance.get(entry.instanceId) ?? []).map((model) => ({
+  return instanceEntries.flatMap((entry) => {
+    const disabledReason = providerInstancePickerBlockReason(entry);
+    return (modelOptionsByInstance.get(entry.instanceId) ?? []).map((model) => ({
       instanceId: entry.instanceId,
       model: model.slug,
       label: getTriggerDisplayModelName(model),
-    })),
-  );
+      disabledReason,
+    }));
+  });
 }
 
 /** The established T3 model menu, scoped to model selection for one bot. */

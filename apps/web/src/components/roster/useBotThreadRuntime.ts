@@ -1,6 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
   type ApprovalRequestId,
@@ -47,14 +46,14 @@ import {
 import { useRosterStore } from "./rosterStore";
 import { ensureLocalApi } from "../../localApi";
 import { resolveBotFileAttachment } from "./botFileAttachment";
-import { latestThreadRuntimeError } from "./threadRuntimeWarning.logic";
+import {
+  type BotThreadFailure,
+  commandFailure,
+  latestBotThreadFailure,
+  localFailure,
+} from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
-
-function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
-  const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "Could not send the message.";
-}
 
 function threadTitle(prompt: string, files: readonly File[]): string {
   const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
@@ -180,7 +179,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     Record<string, PendingUserInputDraftAnswer>
   >({});
   const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<BotThreadFailure | null>(null);
   const [resuming, setResuming] = useState(false);
   const canResume =
     linkedThreadRef !== null &&
@@ -200,7 +199,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     });
     setResuming(false);
     if (result._tag === "Failure") {
-      setError(errorMessage(result));
+      setError(commandFailure(result));
       return false;
     }
     return true;
@@ -226,7 +225,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       if (result._tag === "Failure") {
         respondingRequestIdsRef.current.delete(requestId);
         setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-        setError(errorMessage(result));
+        setError(commandFailure(result));
         return false;
       }
       return true;
@@ -303,16 +302,16 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         return submitPendingUserInput(pendingUserInput.requestId, answers);
       }
       if (!botReady) {
-        setError("The bot is still connecting.");
+        setError(localFailure("The bot is still connecting."));
         return Promise.resolve(false);
       }
       if (!activeProject) {
-        setError("Add a project before you message a bot.");
+        setError(localFailure("Add a project before you message a bot."));
         return Promise.resolve(false);
       }
       const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);
       if (unsupported) {
-        setError(`This file type is not supported: ${unsupported.name}`);
+        setError(localFailure(`This file type is not supported: ${unsupported.name}`));
         return Promise.resolve(false);
       }
 
@@ -345,14 +344,14 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           const currentThreadRef =
             retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
           if (!currentThreadRef) {
-            setError("Could not send the message.");
+            setError(localFailure("Could not send the message."));
             return false;
           }
           if (
             files.some((file) => resolveBotFileAttachment(file)?.type === "file") &&
             !readEnvironmentSupportsFileAttachments(activeProject.environmentId)
           ) {
-            setError("Update the connected Akeru server to attach files.");
+            setError(localFailure("Update the connected Akeru server to attach files."));
             return false;
           }
           if (rememberedThread && rememberedThread.runtimeMode !== runtimeMode) {
@@ -361,7 +360,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               input: { threadId: currentThreadRef.threadId, runtimeMode },
             });
             if (modeResult._tag === "Failure") {
-              setError(errorMessage(modeResult));
+              setError(commandFailure(modeResult));
               return false;
             }
           }
@@ -386,7 +385,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             }),
           });
           if (startResult._tag === "Failure") {
-            setError(errorMessage(startResult));
+            setError(commandFailure(startResult));
             return false;
           }
 
@@ -403,7 +402,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           });
           return true;
         } catch (cause) {
-          setError(cause instanceof Error ? cause.message : "Could not send the message.");
+          setError(
+            localFailure(cause instanceof Error ? cause.message : "Could not send the message."),
+          );
           return false;
         } finally {
           queuedSendCountRef.current -= 1;
@@ -527,17 +528,28 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     submitPendingUserInput,
   ]);
 
+  const lastUserMessageAt = messages?.findLast((message) => message.role === "user")?.createdAt;
+  const session = rememberedThread?.session ?? null;
+  const failure: BotThreadFailure | null =
+    error ??
+    latestBotThreadFailure({
+      activities,
+      latestTurn: rememberedThread?.latestTurn ?? null,
+      session,
+      lastUserMessageAt: lastUserMessageAt ?? null,
+    }) ??
+    (session?.lastError
+      ? { message: session.lastError, unavailability: session.unavailability ?? null }
+      : null);
+
   return {
     appendTranscript,
     bootstrapped,
     botReady,
     canResume,
     defaultProject: activeProject,
-    error:
-      error ??
-      latestThreadRuntimeError(activities, rememberedThread?.latestTurn ?? null) ??
-      rememberedThread?.session?.lastError ??
-      null,
+    error: failure?.message ?? null,
+    failure,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,

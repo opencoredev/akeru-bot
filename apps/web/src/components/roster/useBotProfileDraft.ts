@@ -22,6 +22,7 @@ import {
 } from "../../providerInstances";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { shouldRenderTraitsControls } from "../chat/TraitsPicker";
+import { botEngineUnavailability } from "./botEngineSelection";
 import { canonicalizeBotPersonalityTone } from "./botPersonalityTone";
 import { botSandboxChoice, type BotSandboxChoice } from "./botSandbox";
 import type { Bot } from "./types";
@@ -132,8 +133,11 @@ export function useBotProfileDraft(
     [providers, settings],
   );
   const [provider, setProvider] = useState(bot.engine?.provider ?? defaultSelection.instanceId);
+  // The saved instance wins even when it cannot run, so the picker keeps showing
+  // the bot's real choice; `engineUnavailability` says why it is blocked.
   const activeEntry = useMemo(
     () =>
+      instanceEntries.find((entry) => entry.instanceId === provider) ??
       resolveSelectableProviderInstanceEntry(instanceEntries, ProviderInstanceId.make(provider)),
     [instanceEntries, provider],
   );
@@ -162,6 +166,14 @@ export function useBotProfileDraft(
         model,
       ),
     [model, provider, providers, settings],
+  );
+  const engineUnavailability = useMemo(
+    () =>
+      botEngineUnavailability(
+        activeEntry && model ? { instanceId: activeEntry.instanceId, model } : null,
+        instanceEntries,
+      ),
+    [activeEntry, instanceEntries, model],
   );
 
   useEffect(() => {
@@ -270,6 +282,7 @@ export function useBotProfileDraft(
     instanceEntries,
     defaultSelection,
     activeEntry,
+    engineUnavailability,
     modelOptionsByInstance,
     showModelOptions,
 

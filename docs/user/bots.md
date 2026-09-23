@@ -32,9 +32,27 @@ empty, the main view shows **Create bot**.
 
 You can change the bot's avatar, name, label, description, model, voice access, and enabled tools.
 Select **Save** to apply the changes. The model button in the composer shows which model answers the
-next message. Select it to change the bot's model without leaving the chat. If the provider stops
-offering the bot's model, the button keeps showing it and marks it unavailable until you choose
-another one.
+next message. Select it to change the bot's model without leaving the chat. The model list also
+shows providers that cannot run right now, such as one that is signed out or turned off. Their
+models are dimmed and say why.
+
+A bot keeps its model when that model stops working. Akeru never switches it for you. Instead, the
+chat, the bot's settings, and its details panel mark the model unavailable, and **Send** stays off
+until you fix the cause or pick another model. A note above the composer names the provider, says
+what went wrong, and gives one next step:
+
+| Cause                                                | Next step                                           |
+| ---------------------------------------------------- | --------------------------------------------------- |
+| Provider is not set up, turned off, or not installed | Open **Settings > Providers**                       |
+| Account is not connected, or its sign-in expired     | Connect or reconnect it in **Settings > Providers** |
+| Provider no longer offers the model                  | Pick another model for the bot                      |
+| Your provider plan hit its usage or rate limit       | Wait for the limit to reset                         |
+| The bot hit its Akeru usage cap                      | Raise the cap in the bot's settings                 |
+
+When you connect or turn on a provider, its models become available right away. You do not need to
+restart Akeru. A brief provider error does not turn **Send** off, so you can try again. The same
+check covers new-bot setup and the voice call button. On mobile, the composer shows the same note
+and keeps **Send** off.
 
 In a group chat, you can still message a member with a configured provider even when the boss
 cannot reply. Mention that member in your message to direct the turn to them.
@@ -138,9 +156,11 @@ work that is still running always stay. For finished, failed, or canceled work, 
 read the full result.
 
 When a request fails, the chat shows a short card that says what went wrong and what to do next. A
-provider that is turned off or signed out gets an **Open providers** button. When the cause is
-unknown, select **Send feedback** to report it with its details. Expand **Technical details** to see
-the underlying error, or select **Resume** when an interrupted request can continue. On mobile, the resume card
+provider that is turned off or signed out gets a **Settings > Providers** link. An Akeru usage cap
+gets a **Bot settings** button. When the cause is unknown, select **Send feedback** to report it
+with its details. Expand **Technical details** to see the underlying error, or select **Resume**
+when an interrupted request can continue. If your message was saved but the bot never started, the
+chat says so under your message instead of leaving the reply empty. Group chats do the same and name the bot that was asked to reply. On mobile, the resume card
 shows the same summary.
 
 ## Voice calls

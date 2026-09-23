@@ -383,6 +383,50 @@ describe("instance-scoped model selection", () => {
       model: "openai/gpt-5.5",
     });
   });
+
+  it("does not default new work to a signed-out provider", () => {
+    const providers: ServerProvider[] = [
+      {
+        ...provider({ instanceId: "claudeAgent", models: ["claude-sonnet-4-6"] }),
+        auth: { status: "unauthenticated" },
+        unavailability: "missing-login",
+      },
+      provider({ instanceId: "codex", models: ["gpt-5.5"] }),
+    ];
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      textGenerationModelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    };
+
+    expect(resolveAppModelSelectionState(settings, providers).instanceId).toBe(
+      ProviderInstanceId.make("codex"),
+    );
+  });
+
+  it("keeps a provider with a temporary failure as the default", () => {
+    const providers: ServerProvider[] = [
+      {
+        ...provider({ instanceId: "claudeAgent", models: ["claude-sonnet-4-6"] }),
+        unavailability: "temporary-failure",
+      },
+      provider({ instanceId: "codex", models: ["gpt-5.5"] }),
+    ];
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      textGenerationModelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    };
+
+    expect(resolveAppModelSelectionState(settings, providers)).toEqual({
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: "claude-sonnet-4-6",
+    });
+  });
 });
 
 describe("withoutPlanAgentSelection", () => {

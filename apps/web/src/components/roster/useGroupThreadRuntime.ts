@@ -1,6 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
   type BotEngine,
@@ -54,14 +53,14 @@ import {
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
-import { latestThreadRuntimeError } from "./threadRuntimeWarning.logic";
+import {
+  type BotThreadFailure,
+  commandFailure,
+  latestBotThreadFailure,
+  localFailure,
+} from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
-
-function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
-  const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "Could not send the message.";
-}
 
 function threadTitle(prompt: string, files: readonly File[]): string {
   const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
@@ -190,7 +189,7 @@ export function useGroupThreadRuntime(groupId: string) {
     Record<string, PendingUserInputDraftAnswer>
   >({});
   const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<BotThreadFailure | null>(null);
   const [resuming, setResuming] = useState(false);
   const canResume =
     linkedThreadRef !== null &&
@@ -210,7 +209,7 @@ export function useGroupThreadRuntime(groupId: string) {
     });
     setResuming(false);
     if (result._tag === "Failure") {
-      setError(errorMessage(result));
+      setError(commandFailure(result));
       return false;
     }
     return true;
@@ -233,7 +232,7 @@ export function useGroupThreadRuntime(groupId: string) {
       if (result._tag === "Failure") {
         respondingRequestIdsRef.current.delete(requestId);
         setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-        setError(errorMessage(result));
+        setError(commandFailure(result));
         return false;
       }
       return true;
@@ -262,23 +261,23 @@ export function useGroupThreadRuntime(groupId: string) {
         return submitPendingUserInput(pendingUserInput.requestId, answers);
       }
       if (!groupReady || !group) {
-        setError("The group is still connecting.");
+        setError(localFailure("The group is still connecting."));
         return false;
       }
       if (!activeProject) {
-        setError("Add a project before you message a group.");
+        setError(localFailure("Add a project before you message a group."));
         return false;
       }
       const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);
       if (unsupported) {
-        setError(`This file type is not supported: ${unsupported.name}`);
+        setError(localFailure(`This file type is not supported: ${unsupported.name}`));
         return false;
       }
       if (
         files.some((file) => resolveBotFileAttachment(file)?.type === "file") &&
         !readEnvironmentSupportsFileAttachments(activeProject.environmentId)
       ) {
-        setError("Update the connected Akeru server to attach files.");
+        setError(localFailure("Update the connected Akeru server to attach files."));
         return false;
       }
 
@@ -288,7 +287,7 @@ export function useGroupThreadRuntime(groupId: string) {
           bot.id === respondingBotId && bot.archivedAt === null && groupContainsBot(group, bot.id),
       );
       if (!respondingBot) {
-        setError("Choose a current group member.");
+        setError(localFailure("Choose a current group member."));
         return false;
       }
       const modelSelection = groupModelSelection(
@@ -306,7 +305,9 @@ export function useGroupThreadRuntime(groupId: string) {
         )
       ) {
         setError(
-          "Mention a group member with a connected provider, or connect the boss's provider.",
+          localFailure(
+            "Mention a group member with a connected provider, or connect the boss's provider.",
+          ),
         );
         return false;
       }
@@ -349,7 +350,7 @@ export function useGroupThreadRuntime(groupId: string) {
               input: { threadId, runtimeMode },
             });
             if (modeResult._tag === "Failure") {
-              setError(errorMessage(modeResult));
+              setError(commandFailure(modeResult));
               return false;
             }
           }
@@ -375,7 +376,7 @@ export function useGroupThreadRuntime(groupId: string) {
             }),
           });
           if (result._tag === "Failure") {
-            setError(errorMessage(result));
+            setError(commandFailure(result));
             return false;
           }
           retained.threadRef = scopeThreadRef(environmentId, threadId);
@@ -384,7 +385,9 @@ export function useGroupThreadRuntime(groupId: string) {
           }
           return true;
         } catch (cause) {
-          setError(cause instanceof Error ? cause.message : "Could not send the message.");
+          setError(
+            localFailure(cause instanceof Error ? cause.message : "Could not send the message."),
+          );
           return false;
         } finally {
           queuedSendCountRef.current -= 1;
@@ -505,16 +508,26 @@ export function useGroupThreadRuntime(groupId: string) {
         )
       );
     });
+  const session = rememberedThread?.session ?? null;
+  const failure: BotThreadFailure | null =
+    error ??
+    latestBotThreadFailure({
+      activities,
+      latestTurn: rememberedThread?.latestTurn ?? null,
+      session,
+      lastUserMessageAt:
+        messages?.findLast((message) => message.role === "user")?.createdAt ?? null,
+    }) ??
+    (session?.lastError
+      ? { message: session.lastError, unavailability: session.unavailability ?? null }
+      : null);
 
   return {
     bootstrapped,
     canResume,
     defaultProject: activeProject,
-    error:
-      error ??
-      latestThreadRuntimeError(activities, rememberedThread?.latestTurn ?? null) ??
-      rememberedThread?.session?.lastError ??
-      null,
+    error: failure?.message ?? null,
+    failure,
     groupReady,
     providerAvailable,
     linkedThreadRef,

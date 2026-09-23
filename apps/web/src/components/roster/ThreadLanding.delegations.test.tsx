@@ -44,6 +44,7 @@ vi.mock("react", async (importOriginal) => {
     ...actual,
     useCallback: reactHookHarness.useCallback,
     useEffect: () => undefined,
+    useId: () => "test-id",
     useMemo: reactHookHarness.useMemo,
     useRef: reactHookHarness.useRef,
     useState: reactHookHarness.useState,
@@ -118,7 +119,14 @@ vi.mock("./useRosterPendingApproval", () => ({
     respond: vi.fn(),
   }),
 }));
-vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
+vi.mock("./useBotEngineAvailability", () => ({
+  useBotEngineAvailability: () => ({
+    instanceEntries: [],
+    selection: null,
+    unavailability: null,
+    blocked: false,
+  }),
+}));
 vi.mock("./botPresence", () => ({
   useBotPresence: () => "idle",
   useGroupPresence: () => "idle",

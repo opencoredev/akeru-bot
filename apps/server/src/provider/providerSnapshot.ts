@@ -258,6 +258,18 @@ export function buildBooleanOptionDescriptor(input: {
   };
 }
 
+// Probes also report informational messages ("not checked yet", upgrade
+// notices) on usable providers. Only an error probe falls back to
+// "temporary-failure"; other states count only when the message names a
+// specific cause.
+function probeUnavailability(driver: string, probe: ProviderProbeResult) {
+  if (probe.message && probe.status !== "ready") {
+    const category = providerUnavailabilityFromDetail(driver, probe.message);
+    if (probe.status === "error" || category !== "temporary-failure") return category;
+  }
+  return probe.auth.status === "unauthenticated" ? ("missing-login" as const) : undefined;
+}
+
 export function buildServerProvider(input: {
   driver?: ProviderDriverKind;
   presentation: ServerProviderPresentation;
@@ -275,12 +287,7 @@ export function buildServerProvider(input: {
         checkedAt: input.checkedAt,
       })
     : undefined;
-  const unavailability =
-    input.probe.auth.status === "unauthenticated"
-      ? "missing-login"
-      : input.probe.status === "error" && input.probe.message
-        ? providerUnavailabilityFromDetail(input.driver ?? "unknown", input.probe.message)
-        : undefined;
+  const unavailability = probeUnavailability(input.driver ?? "unknown", input.probe);
   return {
     displayName: input.presentation.displayName,
     ...(input.presentation.badgeLabel ? { badgeLabel: input.presentation.badgeLabel } : {}),

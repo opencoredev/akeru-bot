@@ -39,7 +39,14 @@ vi.mock("../../providerInstances", () => ({
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
-vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
+vi.mock("./useBotEngineAvailability", () => ({
+  useBotEngineAvailability: () => ({
+    instanceEntries: [],
+    selection: null,
+    unavailability: null,
+    blocked: false,
+  }),
+}));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) =>
     atom === "people" ? { current: null, host: null } : atom === "snapshot" ? mocks.snapshot : null,

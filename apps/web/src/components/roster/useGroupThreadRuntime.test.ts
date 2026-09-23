@@ -434,4 +434,38 @@ describe("group runtime errors", () => {
 
     expect(runtime.error).toBe("Provider rejected the request.");
   });
+
+  it("keeps the server's failure category so the chat can name the fix", () => {
+    mocks.threadShells = [
+      {
+        environmentId: mocks.primaryEnvironmentId,
+        id: ThreadId.make("thread-1"),
+        groupId: "group-1",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+        archivedAt: null,
+      },
+    ];
+    mocks.threadShell = {
+      ...mocks.threadShells[0],
+      latestTurn: {
+        turnId: "turn-1",
+        state: "error",
+        requestedAt: "2026-09-13T00:00:00.000Z",
+        startedAt: null,
+        completedAt: "2026-09-13T00:00:01.000Z",
+        errorMessage: "Claude authentication failed.",
+        unavailability: "expired-login",
+      },
+      session: { status: "error", lastError: "Claude authentication failed." },
+    };
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.failure).toEqual({
+      message: "Claude authentication failed.",
+      unavailability: "expired-login",
+    });
+    expect(runtime.error).toBe("Claude authentication failed.");
+  });
 });

@@ -7,27 +7,20 @@ import { cn } from "~/lib/utils";
 import {
   isProviderInstancePickerReady,
   isProviderInstancePickerSelectable,
+  providerInstanceUnavailableReason,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 
 /**
- * Build the hover tooltip for an instance button. Mirrors the old
- * kind-based copy but uses the entry's configured `displayName` so custom
- * instances get their user-authored name (e.g. "Codex Personal — Unavailable.").
+ * Hover tooltip for an instance that cannot run turns right now. The rail
+ * stays browsable so the user can see which models it would offer.
  */
 function describeUnavailableInstance(entry: ProviderInstanceEntry): string {
-  const label = entry.displayName;
-  if (!entry.enabled || entry.status === "disabled") {
-    return `${label} — Disabled in settings.`;
-  }
-  if (entry.status === "ready" && entry.isAvailable) {
-    return label;
-  }
-  const kind =
-    entry.status === "error" ? "Unavailable" : entry.status === "warning" ? "Limited" : "Not ready";
-  const msg = entry.snapshot.message?.trim();
-  return msg ? `${label} — ${kind}. ${msg}` : `${label} — ${kind}.`;
+  return (
+    providerInstanceUnavailableReason(entry) ??
+    (entry.snapshot.message?.trim() || `${entry.displayName} is not ready yet.`)
+  );
 }
 
 const SELECTED_INDICATOR_CLASS =
@@ -137,25 +130,29 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const isUnavailable = !isProviderInstancePickerSelectable(entry);
             const isNotReady = !isProviderInstancePickerReady(entry);
             const isContextDisabled = props.disabledInstanceIds?.has(entry.instanceId) ?? false;
-            const isDisabled = isUnavailable || isContextDisabled;
+            // Unavailable instances stay clickable so their models can be
+            // browsed; the rows themselves render disabled with the reason.
+            const isDisabled = isContextDisabled;
             const isSelected = props.selectedInstanceId === entry.instanceId;
             const isHovered = hoveredInstanceId === entry.instanceId;
             const showNewBadge = props.newBadgeInstanceIds?.has(entry.instanceId) ?? false;
             const showInstanceBadge = shouldShowInstanceBadge(entry, props.instanceEntries);
 
-            const tooltip = isNotReady
-              ? describeUnavailableInstance(entry)
-              : isContextDisabled
-                ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
-                : showNewBadge
-                  ? `${entry.displayName} — New`
-                  : entry.displayName;
+            const tooltip =
+              isUnavailable || isNotReady
+                ? describeUnavailableInstance(entry)
+                : isContextDisabled
+                  ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
+                  : showNewBadge
+                    ? `${entry.displayName}, new`
+                    : entry.displayName;
 
             const button = (
               <button
                 className={cn(
                   "relative isolate flex w-full cursor-pointer aspect-square items-center justify-center rounded-md transition-colors hover:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] focus-visible:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] focus-visible:outline-none",
                   isDisabled && "opacity-50 cursor-not-allowed hover:bg-transparent",
+                  !isDisabled && isUnavailable && "opacity-60",
                 )}
                 data-provider-accent-color={entry.accentColor}
                 onClick={() => !isDisabled && handleSelect(entry.instanceId)}
@@ -170,7 +167,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                 disabled={isDisabled}
                 type="button"
                 aria-label={
-                  isDisabled
+                  isDisabled || isUnavailable
                     ? tooltip
                     : showNewBadge
                       ? `${entry.displayName}, new`

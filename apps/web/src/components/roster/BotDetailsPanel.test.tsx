@@ -6,6 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   BotDetailsPanel,
+  BotOverview,
   parseBotUsageCapInput,
   reduceBotDetailsPanelState,
   resolveBotUsageCapForProvider,
@@ -56,6 +57,17 @@ describe("BotDetailsPanel", () => {
     expect(markup).not.toContain("mock data");
     expect(markup).not.toContain("border-b border-border");
     expect(markup).toContain("rounded-xl border border-border");
+  });
+
+  it("keeps an unavailable model on the overview and says why", () => {
+    const markup = renderToStaticMarkup(
+      <BotOverview
+        bot={{ ...bot, engine: { provider: "claudeAgent", model: "claude-fable-5" } }}
+        modelUnavailable="Claude is not connected"
+      />,
+    );
+    expect(markup).toContain("claude-fable-5");
+    expect(markup).toContain("Unavailable: Claude is not connected");
   });
 
   it("sets, clears, and rejects invalid hard stops", () => {

@@ -72,6 +72,10 @@
       "types": "./src/imageGeneration.ts",
       "default": "./src/imageGeneration.ts"
     },
+    "./provider-availability": {
+      "types": "./src/providerAvailability.ts",
+      "default": "./src/providerAvailability.ts"
+    },
     "./settings-deep-link": {
       "types": "./src/settingsDeepLink.ts",
       "default": "./src/settingsDeepLink.ts"

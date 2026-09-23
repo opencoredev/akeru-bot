@@ -1,0 +1,199 @@
+import type {
+  OrchestrationThreadActivity,
+  ServerProvider,
+  ServerProviderUnavailability,
+} from "@t3tools/contracts";
+
+/**
+ * Why a provider instance cannot run a turn right now. The server's turn
+ * preflight uses the same order, so a client that shows a reason shows the one
+ * the server would refuse with.
+ */
+export type ProviderAvailabilityReason =
+  | ServerProviderUnavailability
+  | "disabled"
+  | "not-installed"
+  | "missing-provider";
+
+/** One next step. Clients map "providers" to Settings > Providers and "usage" to bot usage settings. */
+export type ProviderAvailabilityAction = "providers" | "usage" | "feedback" | "none";
+
+export interface ProviderAvailabilityPresentation {
+  readonly title: string;
+  readonly description: string;
+  readonly technicalDetails: string;
+  readonly action: ProviderAvailabilityAction;
+}
+
+export function providerAvailabilityReason(
+  provider: ServerProvider | undefined,
+  model?: string | null,
+): ProviderAvailabilityReason | null {
+  if (!provider) return "missing-provider";
+  if (!provider.enabled) return "disabled";
+  if (provider.unavailability) return provider.unavailability;
+  if (!provider.installed || provider.availability === "unavailable") return "not-installed";
+  if (provider.auth.status === "unauthenticated") return "missing-login";
+  if (
+    model &&
+    provider.models.length > 0 &&
+    !provider.models.some((candidate) => candidate.slug === model)
+  ) {
+    return "unsupported-model";
+  }
+  return null;
+}
+
+export function presentProviderUnavailability(input: {
+  readonly reason: ProviderAvailabilityReason;
+  /** Omit when the failure did not say which provider it came from. */
+  readonly providerName?: string | null | undefined;
+  readonly modelName?: string | null | undefined;
+  readonly detail?: string | null | undefined;
+}): ProviderAvailabilityPresentation {
+  const known = input.providerName;
+  // Subject, mid-sentence, possessive, and title forms for a known or unknown provider.
+  const name = known ?? "The provider";
+  const who = known ?? "the provider";
+  const yours = known ? `your ${known}` : "your provider";
+  const label = known ?? "Provider";
+  const technicalDetails = boundedDetail(input.detail);
+  switch (input.reason) {
+    case "missing-provider":
+      return {
+        title: `${name} is not set up`,
+        description: `Add ${who} in Settings > Providers, or pick another model for this bot.`,
+        technicalDetails,
+        action: "providers",
+      };
+    case "disabled":
+      return {
+        title: `${name} is turned off`,
+        description: `Turn ${who} on in Settings > Providers, then send your message again.`,
+        technicalDetails,
+        action: "providers",
+      };
+    case "not-installed":
+      return {
+        title: `${name} is not installed`,
+        description: `Install ${who} from Settings > Providers, or pick another model for this bot.`,
+        technicalDetails,
+        action: "providers",
+      };
+    case "missing-login":
+      return {
+        title: `${name} is not connected`,
+        description: `Connect ${yours} account in Settings > Providers.`,
+        technicalDetails,
+        action: "providers",
+      };
+    case "expired-login":
+      return {
+        title: `${label} sign-in expired`,
+        description: `Reconnect ${who} in Settings > Providers, then send your message again.`,
+        technicalDetails,
+        action: "providers",
+      };
+    case "unsupported-model":
+      return {
+        title: input.modelName
+          ? `${input.modelName} is not available on ${who}`
+          : `This model is not available on ${who}`,
+        description: "Pick another model for this bot.",
+        technicalDetails,
+        action: "none",
+      };
+    case "limit-reached":
+      return {
+        title: `${label} limit reached`,
+        description: `Your ${known ?? "provider"} plan hit its usage or rate limit. Wait for it to reset, then send your message again.`,
+        technicalDetails,
+        action: "none",
+      };
+    case "usage-cap":
+      return {
+        title: "Akeru usage cap reached",
+        description: "Raise this bot's usage cap in its settings to keep chatting.",
+        technicalDetails,
+        action: "usage",
+      };
+    case "temporary-failure":
+      return {
+        title: `${name} could not respond`,
+        description: "Send your message again in a moment.",
+        technicalDetails,
+        action: "none",
+      };
+  }
+}
+
+/** One sentence for a disabled picker row or a Send tooltip. */
+export function providerUnavailabilitySummary(
+  input: Parameters<typeof presentProviderUnavailability>[0],
+): string {
+  const presentation = presentProviderUnavailability(input);
+  return `${presentation.title}. ${presentation.description}`;
+}
+
+const TURN_FAILURE_KINDS = new Set(["provider.turn.start.failed", "runtime.error"]);
+
+/**
+ * The newest turn failure recorded in a chat's activity log, if it came after
+ * the chat's latest user message. The activity is authoritative: the persisted
+ * session keeps only the raw error text, not its category.
+ */
+export function latestTurnFailure(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  since?: string | null,
+): {
+  readonly detail: string;
+  readonly unavailability: ServerProviderUnavailability | null;
+} | null {
+  const newestFirst = activities.toSorted(
+    (left, right) =>
+      (right.sequence ?? -1) - (left.sequence ?? -1) ||
+      right.createdAt.localeCompare(left.createdAt),
+  );
+  for (const activity of newestFirst) {
+    if (since && activity.createdAt < since) return null;
+    if (!TURN_FAILURE_KINDS.has(activity.kind)) continue;
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : {};
+    const detail =
+      typeof payload.detail === "string"
+        ? payload.detail
+        : typeof payload.message === "string"
+          ? payload.message
+          : activity.summary;
+    return {
+      detail,
+      unavailability: isServerProviderUnavailability(payload.unavailability)
+        ? payload.unavailability
+        : null,
+    };
+  }
+  return null;
+}
+
+const UNAVAILABILITY_VALUES = new Set<string>([
+  "missing-login",
+  "expired-login",
+  "unsupported-model",
+  "limit-reached",
+  "usage-cap",
+  "temporary-failure",
+]);
+
+/** Narrows an unknown wire value, such as an error field or activity payload, to a failure category. */
+export function isServerProviderUnavailability(
+  value: unknown,
+): value is ServerProviderUnavailability {
+  return typeof value === "string" && UNAVAILABILITY_VALUES.has(value);
+}
+
+function boundedDetail(detail: string | null | undefined): string {
+  const firstLine = detail?.split("\n", 1)[0]?.trim() ?? "";
+  return firstLine.replace(/file:\/\/\/[^\s)]+/g, "file://…").slice(0, 600);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { ProviderDriverKind, type ModelCapabilities } from "@t3tools/contracts";
+import { type ModelCapabilities, ProviderDriverKind } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
@@ -58,6 +58,69 @@ describe("providerUnavailabilityFromDetail", () => {
     ["codex", "socket closed", "temporary-failure"],
   ])("maps %s provider detail", (driver, detail, category) => {
     expect(providerUnavailabilityFromDetail(driver, detail)).toBe(category);
+  });
+});
+
+describe("buildServerProvider unavailability", () => {
+  const build = (probe: Parameters<typeof buildServerProvider>[0]["probe"]) =>
+    buildServerProvider({
+      driver: ProviderDriverKind.make("claudeAgent"),
+      presentation: { displayName: "Claude" },
+      enabled: true,
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      models: [],
+      probe,
+    });
+  const authenticated = { status: "authenticated" as const };
+
+  it("ignores informational messages on usable providers", () => {
+    expect(
+      build({
+        installed: true,
+        version: "1.0.0",
+        status: "ready",
+        auth: authenticated,
+        message: "A newer Claude CLI is available.",
+      }).unavailability,
+    ).toBeUndefined();
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "warning",
+        auth: authenticated,
+        message: "Provider status has not been checked in this session yet.",
+      }).unavailability,
+    ).toBeUndefined();
+  });
+
+  it("keeps specific causes on warnings and any cause on errors", () => {
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "warning",
+        auth: authenticated,
+        message: "rate limit exceeded",
+      }).unavailability,
+    ).toBe("limit-reached");
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "error",
+        auth: authenticated,
+        message: "socket closed",
+      }).unavailability,
+    ).toBe("temporary-failure");
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "ready",
+        auth: { status: "unauthenticated" },
+      }).unavailability,
+    ).toBe("missing-login");
   });
 });
 

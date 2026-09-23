@@ -56,7 +56,7 @@ import {
 import { ControlPill } from "../../components/ControlPill";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
-import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
+import { buildModelOptions, groupByProvider, resolveModelSendBlock } from "../../lib/modelOptions";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { RemoteClientConnectionState } from "../../lib/connection";
@@ -322,7 +322,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // Opening and presentation count as active so the composer stays expanded
   // while focus moves between its native editor and the settings picker.
   const isExpanded = isFocused || settingsSheetPresentation.isActive;
-  const canSend = hasContent;
+  // The chat keeps its saved model even when it cannot run; Send stays off
+  // and the reason shows above the composer until the provider is repaired.
+  const sendBlock = useMemo(
+    () => resolveModelSendBlock(props.serverConfig, props.selectedThread.modelSelection),
+    [props.serverConfig, props.selectedThread.modelSelection],
+  );
+  const canSend = hasContent && sendBlock === null;
+  const sendBlockHint = sendBlock ? `${sendBlock.title}. ${sendBlock.description}` : undefined;
 
   // Notify the parent from the derived value, not focus events: the parent
   // sizes the feed inset from this, and blur-during-sheet would otherwise
@@ -794,6 +801,17 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             status={connectionStatus}
             onPress={props.onReconnectEnvironment}
           />
+        ) : sendBlock ? (
+          <View
+            accessibilityRole="alert"
+            className="absolute inset-x-0 bottom-full pb-2"
+            pointerEvents="none"
+          >
+            <Text className="text-center text-xs text-foreground-muted">
+              <Text className="text-xs font-t3-bold text-foreground">{sendBlock.title}.</Text>{" "}
+              {sendBlock.description}
+            </Text>
+          </View>
         ) : null}
 
         <ComposerSurface
@@ -926,6 +944,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 <ControlPill icon="stop.fill" variant="danger" onPress={props.onStopThread} />
               ) : (
                 <ControlPill
+                  accessibilityLabel={sendLabel}
+                  accessibilityHint={sendBlockHint}
                   icon="arrow.up"
                   variant="primary"
                   disabled={!canSend}
@@ -969,6 +989,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               </ComposerToolbarScroller>
               <ComposerToolbarButton
                 accessibilityLabel={sendLabel}
+                accessibilityHint={sendBlockHint}
                 icon="arrow.up"
                 variant="primary"
                 disabled={!canSend}

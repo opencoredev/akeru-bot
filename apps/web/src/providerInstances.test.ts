@@ -8,6 +8,8 @@ import {
   isProviderInstancePickerReady,
   isProviderInstancePickerSelectable,
   isProviderInstancePickerVisible,
+  providerInstancePickerBlockReason,
+  providerInstanceUnavailableReason,
   resolveDefaultProviderModelSelection,
   resolveSelectableProviderInstance,
   resolveProviderDriverKindForInstanceSelection,
@@ -129,7 +131,7 @@ describe("isProviderInstancePickerSelectable", () => {
 });
 
 describe("isProviderInstancePickerVisible", () => {
-  it("keeps selectable instances in the rail and removes inactive instances", () => {
+  it("shows every enabled instance, including ones that cannot run yet", () => {
     const [enabledEntry, disabledEntry, missingEntry, signedOutEntry] =
       deriveProviderInstanceEntries([
         provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
@@ -152,8 +154,63 @@ describe("isProviderInstancePickerVisible", () => {
 
     expect(enabledEntry && isProviderInstancePickerVisible(enabledEntry)).toBe(true);
     expect(disabledEntry && isProviderInstancePickerVisible(disabledEntry)).toBe(false);
-    expect(missingEntry && isProviderInstancePickerVisible(missingEntry)).toBe(false);
-    expect(signedOutEntry && isProviderInstancePickerVisible(signedOutEntry)).toBe(false);
+    expect(missingEntry && isProviderInstancePickerVisible(missingEntry)).toBe(true);
+    expect(signedOutEntry && isProviderInstancePickerVisible(signedOutEntry)).toBe(true);
+    expect(signedOutEntry && isProviderInstancePickerSelectable(signedOutEntry)).toBe(false);
+  });
+});
+
+describe("providerInstanceUnavailableReason", () => {
+  it("names the provider and the next action for each blocking state", () => {
+    const [ready, signedOut, missing, limited, flaky] = deriveProviderInstanceEntries([
+      provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
+      provider({
+        provider: ProviderDriverKind.make("claudeAgent"),
+        instanceId: "claudeAgent",
+        authStatus: "unauthenticated",
+      }),
+      provider({
+        provider: ProviderDriverKind.make("kimi"),
+        instanceId: "kimi",
+        installed: false,
+      }),
+      {
+        ...provider({ provider: ProviderDriverKind.make("grok"), instanceId: "grok" }),
+        unavailability: "limit-reached",
+      },
+      {
+        ...provider({ provider: ProviderDriverKind.make("opencodeGo"), instanceId: "opencodeGo" }),
+        unavailability: "temporary-failure",
+      },
+    ]);
+
+    expect(providerInstanceUnavailableReason(ready)).toBeNull();
+    expect(providerInstanceUnavailableReason(signedOut)).toMatch(
+      /not connected.*Settings > Providers/,
+    );
+    expect(providerInstanceUnavailableReason(missing)).toMatch(/not installed/);
+    expect(providerInstanceUnavailableReason(limited)).toMatch(/limit reached/);
+    expect(providerInstanceUnavailableReason(undefined, { providerName: "Codex" })).toMatch(
+      /Codex is not set up/,
+    );
+
+    expect(limited && providerInstancePickerBlockReason(limited)).toMatch(/limit reached/);
+    expect(flaky && providerInstancePickerBlockReason(flaky)).toBeNull();
+    expect(flaky && isProviderInstancePickerSelectable(flaky)).toBe(true);
+  });
+
+  it("flags a saved model the provider no longer offers", () => {
+    const [entry] = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("codex"),
+        instanceId: "codex",
+        models: [model("gpt-5.5")],
+      }),
+    ]);
+    expect(providerInstanceUnavailableReason(entry, { model: "gpt-5.5" })).toBeNull();
+    expect(providerInstanceUnavailableReason(entry, { model: "retired-model" })).toMatch(
+      /retired-model is not available on/,
+    );
   });
 });
 

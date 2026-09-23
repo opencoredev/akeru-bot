@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
+import { presentThreadError } from "@t3tools/client-runtime/errors";
 import { type EnvironmentId } from "@t3tools/contracts";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
@@ -16,6 +17,7 @@ import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageContro
 import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
+import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
@@ -38,17 +40,25 @@ import {
   UserMessageRow,
   useMessageReactionUpdater,
 } from "./BotChatMessageRows";
+import { BotTurnFailureRow } from "./BotTurnFailureRow";
+import { botEngineFailureContext } from "./botEngineSelection";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
+import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
+const NO_PROVIDER_PRESENTATION = {
+  title: "No provider is connected",
+  description: "Connect a provider in Settings > Providers so this group can reply.",
+  action: "providers",
+} as const;
 
 export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
   members: ReadonlyArray<T>,
@@ -67,6 +77,15 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  const respondingBot = bots.find((bot) => bot.id === runtime.respondingBotId) ?? null;
+  // Names the provider behind a failed reply, like a bot chat does.
+  const respondingEngine = useBotEngineAvailability(respondingBot?.engine ?? null);
+  const failureContext = botEngineFailureContext(
+    respondingEngine.selection,
+    respondingEngine.instanceEntries,
+    runtime.failure?.unavailability,
+  );
+  const noProviderNoticeId = useId();
   const replyPlayback = useOptionalReplyPlayback();
   const voiceCall = useOptionalVoiceCall();
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
@@ -218,6 +237,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               );
             })
           )}
+          {!working && runtime.failure && messages.at(-1)?.role === "user" ? (
+            <BotTurnFailureRow
+              botName={activeBot?.name ?? group.name}
+              title={presentThreadError(runtime.failure.message, failureContext).title}
+            />
+          ) : null}
           {delegations.map((delegation) => (
             <DelegationCard
               key={delegation.delegationId}
@@ -241,9 +266,19 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           error={
             inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
           }
+          context={failureContext}
+          environmentId={environmentId}
           {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
           resuming={runtime.resuming}
         />
+        {!runtime.providerAvailable ? (
+          <ProviderUnavailableNotice
+            id={noProviderNoticeId}
+            className="mx-auto mt-2 w-[min(46rem,calc(100%-2rem))]"
+            presentation={NO_PROVIDER_PRESENTATION}
+            environmentId={environmentId}
+          />
+        ) : null}
         {boss === null ? (
           <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
             Choose an active group boss in the group sidebar.
@@ -299,6 +334,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
           replyPreview={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
+          sendBlockedDescriptionId={runtime.providerAvailable ? undefined : noProviderNoticeId}
           onSubmit={async (prompt, files, respondingBotId) => {
             const sent = await runtime.send(
               buildReplyPrompt(replyTarget, prompt),
@@ -309,11 +345,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             return sent;
           }}
         />
-        {!runtime.providerAvailable ? (
-          <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
-            Connect at least one provider before you message this group.
-          </p>
-        ) : null}
       </div>
     </SidebarInset>
   );

@@ -49,6 +49,11 @@ export function parseSettingsDeepLinkId(href: string | undefined): SettingsDeepL
   return settingsDeepLinkIds.has(id) ? (id as SettingsDeepLinkId) : null;
 }
 
+/** The in-app link a Settings chip opens, e.g. for "providers". */
+export function settingsDeepLinkHref(id: SettingsDeepLinkId): string {
+  return `grokbot://app/v1/settings?id=${id}`;
+}
+
 /**
  * True for any in-app link, valid or not. Clients never hand one to the OS or
  * a browser; an href that fails `parseSettingsDeepLinkId` renders inert.

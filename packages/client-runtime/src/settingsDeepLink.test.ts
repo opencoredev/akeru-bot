@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isAppDeepLink, parseSettingsDeepLinkId } from "./settingsDeepLink.js";
+import {
+  isAppDeepLink,
+  parseSettingsDeepLinkId,
+  settingsDeepLinkHref,
+} from "./settingsDeepLink.js";
 
 describe("isAppDeepLink", () => {
   it("treats every grokbot link as in-app, including rejected ones", () => {
@@ -9,6 +13,13 @@ describe("isAppDeepLink", () => {
     expect(isAppDeepLink("grokbot://evil/v1/settings?id=voice")).toBe(true);
     expect(isAppDeepLink("https://example.com")).toBe(false);
     expect(isAppDeepLink("mailto:a@example.com")).toBe(false);
+  });
+});
+
+describe("settingsDeepLinkHref", () => {
+  it("builds a link that parses back to the same Settings section", () => {
+    expect(settingsDeepLinkHref("providers")).toBe("grokbot://app/v1/settings?id=providers");
+    expect(parseSettingsDeepLinkId(settingsDeepLinkHref("providers"))).toBe("providers");
   });
 });
 

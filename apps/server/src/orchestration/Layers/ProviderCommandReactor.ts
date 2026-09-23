@@ -121,6 +121,14 @@ type ProviderIntentEvent = Extract<
   }
 >;
 
+// A failure category describes the failure that set it. Session updates for
+// any other reason start from a copy without it so a stale category never
+// outlives its failure.
+function withoutUnavailability(session: OrchestrationSession): OrchestrationSession {
+  const { unavailability: _unavailability, ...rest } = session;
+  return rest;
+}
+
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
@@ -618,12 +626,14 @@ const make = Effect.gen(function* () {
     yield* setThreadSession({
       threadId: input.threadId,
       session: {
-        ...(session ?? {
-          threadId: input.threadId,
-          providerName: null,
-          providerInstanceId: thread.modelSelection.instanceId,
-          runtimeMode: thread.runtimeMode,
-        }),
+        ...(session
+          ? withoutUnavailability(session)
+          : {
+              threadId: input.threadId,
+              providerName: null,
+              providerInstanceId: thread.modelSelection.instanceId,
+              runtimeMode: thread.runtimeMode,
+            }),
         status: session?.status === "stopped" ? "stopped" : "error",
         activeTurnId: null,
         lastError: input.detail,
@@ -1769,7 +1779,7 @@ const make = Effect.gen(function* () {
         yield* setThreadSession({
           threadId: event.payload.threadId,
           session: {
-            ...stoppedSession,
+            ...withoutUnavailability(stoppedSession),
             status: "stopped",
             activeTurnId: null,
             lastError: detail,
@@ -1915,7 +1925,7 @@ const make = Effect.gen(function* () {
             yield* setThreadSession({
               threadId: event.payload.threadId,
               session: {
-                ...session,
+                ...withoutUnavailability(session),
                 status: "error",
                 activeTurnId: null,
                 lastError: detail,
@@ -1984,7 +1994,7 @@ const make = Effect.gen(function* () {
                 yield* setThreadSession({
                   threadId: event.payload.threadId,
                   session: {
-                    ...thread.session,
+                    ...withoutUnavailability(thread.session),
                     status: "error",
                     activeTurnId: null,
                     lastError: detail,

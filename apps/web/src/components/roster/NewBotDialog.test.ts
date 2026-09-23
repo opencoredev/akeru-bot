@@ -17,4 +17,9 @@ describe("NewBotDialog", () => {
     expect(source).toContain("disabled:text-muted-foreground");
     expect(source).toContain("disabled:opacity-100");
   });
+
+  it("warns when no provider can run the new bot's default model", () => {
+    expect(source).toContain("useBotEngineAvailability(null)");
+    expect(source).toContain("<ProviderUnavailableNotice");
+  });
 });

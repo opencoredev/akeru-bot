@@ -6,7 +6,11 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { activeThreadRuntimeWarning, latestThreadRuntimeError } from "./threadRuntimeWarning.logic";
+import {
+  activeThreadRuntimeWarning,
+  latestBotThreadFailure,
+  latestThreadRuntimeError,
+} from "./threadRuntimeWarning.logic";
 
 const turnId = TurnId.make("turn-warning");
 const timestamp = "2026-09-11T12:00:00.000Z";
@@ -122,5 +126,81 @@ describe("latestThreadRuntimeError", () => {
 
   it("does not surface an old error for a running turn", () => {
     expect(latestThreadRuntimeError([warning], runningTurn)).toBeNull();
+  });
+});
+
+describe("latestBotThreadFailure", () => {
+  const laterTimestamp = "2026-09-11T12:05:00.000Z";
+  const startFailed: OrchestrationThreadActivity = {
+    ...warning,
+    id: EventId.make("activity-start-failed"),
+    kind: "provider.turn.start.failed",
+    tone: "error",
+    turnId: null,
+    summary: "Provider turn start failed",
+    payload: { detail: "Claude is not signed in.", unavailability: "missing-login" },
+    createdAt: laterTimestamp,
+  };
+
+  it("explains a request the provider never started", () => {
+    expect(
+      latestBotThreadFailure({
+        activities: [startFailed],
+        latestTurn: null,
+        session: { status: "error", lastError: "Claude is not signed in." },
+        lastUserMessageAt: laterTimestamp,
+      }),
+    ).toEqual({ message: "Claude is not signed in.", unavailability: "missing-login" });
+  });
+
+  it("explains a newer request after an earlier turn completed", () => {
+    const completedTurn = { ...runningTurn, state: "completed" as const, completedAt: timestamp };
+    expect(
+      latestBotThreadFailure({
+        activities: [startFailed],
+        latestTurn: completedTurn,
+        session: { status: "error", lastError: "Claude is not signed in." },
+        lastUserMessageAt: laterTimestamp,
+      }),
+    ).toEqual({ message: "Claude is not signed in.", unavailability: "missing-login" });
+  });
+
+  it("keeps a failed turn's category", () => {
+    const failedTurn = {
+      ...runningTurn,
+      state: "error" as const,
+      completedAt: timestamp,
+      unavailability: "limit-reached" as const,
+    };
+    expect(
+      latestBotThreadFailure({
+        activities: [
+          {
+            ...warning,
+            kind: "runtime.error",
+            tone: "error",
+            payload: { message: "The usage limit has been reached" },
+          },
+        ],
+        latestTurn: failedTurn,
+        session: null,
+        lastUserMessageAt: timestamp,
+      }),
+    ).toEqual({
+      message: "The usage limit has been reached",
+      unavailability: "limit-reached",
+    });
+  });
+
+  it("stays quiet once the request has a reply", () => {
+    const completedTurn = { ...runningTurn, state: "completed" as const, completedAt: timestamp };
+    expect(
+      latestBotThreadFailure({
+        activities: [startFailed],
+        latestTurn: completedTurn,
+        session: { status: "ready", lastError: null },
+        lastUserMessageAt: timestamp,
+      }),
+    ).toBeNull();
   });
 });

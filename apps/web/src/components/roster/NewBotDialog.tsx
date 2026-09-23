@@ -1,7 +1,9 @@
 import { useState } from "react";
 
 import { cn } from "../../lib/utils";
+import { usePrimaryEnvironmentId } from "../../state/environments";
 import { readFileAsDataUrl } from "../ChatView.logic";
+import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
@@ -9,6 +11,7 @@ import { AvatarColorPicker } from "./AvatarColorPicker";
 import { BotAvatarView } from "./BotAvatarView";
 import { BLOB_SHAPES, randomBotAvatar } from "./roster.logic";
 import type { BotAvatar } from "./types";
+import { useBotEngineAvailability } from "./useBotEngineAvailability";
 
 /** A compact bot creation form with all required choices in one view. */
 export function NewBotDialog({
@@ -27,6 +30,10 @@ export function NewBotDialog({
   const [blobAvatar, setBlobAvatar] = useState(() => randomBotAvatar());
   const [avatar, setAvatar] = useState<BotAvatar>(() => blobAvatar);
   const trimmedName = name.trim();
+  const environmentId = usePrimaryEnvironmentId();
+  // A new bot answers with the app default. When no provider can run it, say so
+  // here; the bot is still created and can reply once a provider connects.
+  const defaultEngine = useBotEngineAvailability(null);
 
   const updateBlobAvatar = (next: typeof blobAvatar) => {
     setBlobAvatar(next);
@@ -60,6 +67,12 @@ export function NewBotDialog({
           </header>
 
           <div className="space-y-6 px-6 py-6">
+            {defaultEngine.blocked && defaultEngine.unavailability ? (
+              <ProviderUnavailableNotice
+                presentation={defaultEngine.unavailability}
+                environmentId={environmentId}
+              />
+            ) : null}
             <div className="flex items-center gap-4">
               <BotAvatarView avatar={avatar} name={trimmedName} className="size-16 shrink-0" />
               <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium text-foreground">

@@ -3,7 +3,7 @@ import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3
 
 import { preflightProvider } from "./providerPreflight.ts";
 
-const provider: ServerProvider = {
+const codexProvider: ServerProvider = {
   instanceId: ProviderInstanceId.make("codex"),
   driver: ProviderDriverKind.make("codex"),
   enabled: true,
@@ -34,7 +34,7 @@ const preflightAfterFailure = (
   },
 ) =>
   preflightProvider({
-    providers: [provider],
+    providers: [codexProvider],
     providerId: "codex",
     model: options.model ?? "gpt-new",
     now: options.now,
@@ -98,5 +98,68 @@ describe("preflightProvider recorded request failures", () => {
     expect(preflightAfterFailure("Refresh token expired", { now: at(60 * 60_000) })?.category).toBe(
       "expired-login",
     );
+  });
+});
+
+const provider = (overrides: Partial<ServerProvider> = {}): ServerProvider => ({
+  instanceId: ProviderInstanceId.make("claude"),
+  driver: ProviderDriverKind.make("claudeAgent"),
+  displayName: "Claude",
+  enabled: true,
+  installed: true,
+  version: "1.0.0",
+  status: "ready",
+  auth: { status: "authenticated" },
+  checkedAt: "2026-01-01T00:00:00.000Z",
+  models: [{ slug: "claude-sonnet", name: "Claude Sonnet", isCustom: false, capabilities: null }],
+  slashCommands: [],
+  skills: [],
+  ...overrides,
+});
+
+const preflight = (snapshot: ServerProvider, model = "claude-sonnet") =>
+  preflightProvider({
+    providers: [snapshot],
+    providerId: "claude",
+    model,
+    now: Date.parse("2026-01-01T00:00:00.000Z"),
+  });
+
+describe("preflightProvider", () => {
+  it("lets a ready provider with a listed model through", () => {
+    expect(preflight(provider())).toBeUndefined();
+  });
+
+  it("reports a disabled provider before any stale probe failure", () => {
+    expect(
+      preflight(
+        provider({
+          enabled: false,
+          status: "disabled",
+          unavailability: "temporary-failure",
+          unavailabilityDetail: "socket closed",
+        }),
+      ),
+    ).toEqual({
+      category: "temporary-failure",
+      detail: "Claude is turned off in Settings > Providers.",
+      repairAction: "providers",
+    });
+  });
+
+  it("points login failures at Providers and usage caps at usage", () => {
+    expect(
+      preflight(provider({ unavailability: "expired-login", unavailabilityDetail: "expired" })),
+    ).toEqual({ category: "expired-login", detail: "expired", repairAction: "providers" });
+    expect(
+      preflight(provider({ unavailability: "usage-cap", unavailabilityDetail: "cap" })),
+    ).toEqual({ category: "usage-cap", detail: "cap", repairAction: "usage" });
+    expect(preflight(provider({ auth: { status: "unauthenticated" } }))?.category).toBe(
+      "missing-login",
+    );
+  });
+
+  it("rejects a model the provider no longer lists", () => {
+    expect(preflight(provider(), "claude-9")?.category).toBe("unsupported-model");
   });
 });

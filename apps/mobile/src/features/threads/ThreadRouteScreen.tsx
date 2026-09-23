@@ -10,6 +10,7 @@ import {
 } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
+import { latestTurnFailure } from "@t3tools/client-runtime/provider-availability";
 import {
   EnvironmentId,
   PLACEHOLDER_THREAD_TITLE,
@@ -212,6 +213,19 @@ function ThreadRouteContent(
     useThreadSelection();
   const selectedThreadDetailState = props.selectedThreadDetailState;
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
+  // The session keeps only the raw error text, so the failure category comes
+  // from the turn or the start-failed activity when the session lacks it.
+  const resumeFailureUnavailability = useMemo(
+    () =>
+      selectedThread?.latestTurn?.unavailability ??
+      selectedThread?.session?.unavailability ??
+      latestTurnFailure(
+        selectedThreadDetail?.activities ?? [],
+        selectedThreadDetail?.messages.findLast((message) => message.role === "user")?.createdAt,
+      )?.unavailability ??
+      null,
+    [selectedThread, selectedThreadDetail],
+  );
   // "Load earlier turns" header state for windowed (paginated) thread loads.
   const loadEarlierTurns = useMemo(() => {
     if (selectedThread === null || !threadHasOlderTurns(selectedThreadDetailState)) {
@@ -887,6 +901,7 @@ function ThreadRouteContent(
               (selectedThread.latestTurn === null &&
                 selectedThreadDetail?.messages.at(-1)?.role === "user"))
           }
+          resumeFailureUnavailability={resumeFailureUnavailability}
           resumingThread={resumingThread}
           onSendMessage={composer.onSendMessage}
           onReconnectEnvironment={handleReconnectEnvironment}

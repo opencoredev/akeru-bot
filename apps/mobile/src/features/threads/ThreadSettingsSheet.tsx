@@ -97,11 +97,14 @@ function ModelRow(props: {
   readonly isLast: boolean;
 }) {
   const checkmarkColor = useThemeColor("--color-icon");
+  const disabledReason = props.option.disabledReason;
   return (
     <Pressable
       accessibilityLabel={props.option.label}
+      accessibilityHint={disabledReason ?? undefined}
       accessibilityRole="radio"
-      accessibilityState={{ checked: props.selected }}
+      accessibilityState={{ checked: props.selected, disabled: disabledReason !== null }}
+      disabled={disabledReason !== null}
       onPress={props.onPress}
       className={cn(
         "mx-4 min-h-11 flex-row items-center gap-2 bg-card px-4 py-2 active:bg-subtle",
@@ -109,9 +112,16 @@ function ModelRow(props: {
         props.isLast ? "rounded-b-2xl" : "border-b border-border-subtle",
       )}
     >
-      <Text className="min-w-0 shrink text-base font-t3-medium text-foreground" numberOfLines={1}>
-        {props.option.label}
-      </Text>
+      <View className={cn("min-w-0 shrink", disabledReason && "opacity-60")}>
+        <Text className="text-base font-t3-medium text-foreground" numberOfLines={1}>
+          {props.option.label}
+        </Text>
+        {disabledReason ? (
+          <Text className="text-xs text-foreground-muted" numberOfLines={2}>
+            {disabledReason}
+          </Text>
+        ) : null}
+      </View>
       {props.option.isDefault ? (
         <View className="rounded-md bg-subtle-strong px-1.5 py-0.5">
           <Text className="text-3xs font-t3-bold text-foreground-muted">Default</Text>
@@ -474,6 +484,7 @@ function ThreadSettingsSessionProvider(
 
   const pressModel = useCallback(
     (option: ModelOption) => {
+      if (option.disabledReason) return;
       void Haptics.selectionAsync();
       setPendingModel((current) =>
         pendingModelAfterPress({

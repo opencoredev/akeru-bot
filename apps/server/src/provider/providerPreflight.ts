@@ -34,6 +34,25 @@ const recordedFailureStillBlocks = (
   return Number.isFinite(retryAt) && now < retryAt;
 };
 
+export interface ProviderPreflightVerdict {
+  readonly category: ServerProviderUnavailability;
+  readonly detail: string;
+  readonly repairAction?: "providers" | "usage";
+}
+
+const SUBSCRIPTION_PROVIDER_BY_DRIVER: Record<string, string> = {
+  codex: "openai-codex",
+  claudeAgent: "anthropic",
+  grok: "xai",
+  kimi: "kimi-for-coding",
+  opencodeGo: "opencode-go",
+};
+
+/**
+ * Decides whether a turn can start on a provider instance before any work is
+ * dispatched. Returns undefined when the turn may proceed. The order matters:
+ * a provider the user turned off reports that, not a stale probe failure.
+ */
 export const preflightProvider = (input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly providerId: string;
@@ -47,7 +66,7 @@ export const preflightProvider = (input: {
       }
     | undefined;
   readonly now: number;
-}): { readonly category: ServerProviderUnavailability; readonly detail: string } | undefined => {
+}): ProviderPreflightVerdict | undefined => {
   const provider = input.providers.find((candidate) => candidate.instanceId === input.providerId);
   if (!provider) {
     return {
@@ -55,14 +74,15 @@ export const preflightProvider = (input: {
       detail: `Provider '${input.providerId}' is unavailable.`,
     };
   }
-  const subscriptionProviderByDriver: Record<string, string> = {
-    codex: "openai-codex",
-    claudeAgent: "anthropic",
-    grok: "xai",
-    kimi: "kimi-for-coding",
-    opencodeGo: "opencode-go",
-  };
-  const subscriptionId = subscriptionProviderByDriver[provider.driver];
+  const name = provider.displayName ?? provider.driver;
+  if (!provider.enabled) {
+    return {
+      category: "temporary-failure",
+      detail: provider.unavailableReason ?? `${name} is turned off in Settings > Providers.`,
+      repairAction: "providers",
+    };
+  }
+  const subscriptionId = SUBSCRIPTION_PROVIDER_BY_DRIVER[provider.driver];
   const subscription = input.subscriptionStatuses?.find(
     (status) => status.provider === subscriptionId,
   );
@@ -74,47 +94,63 @@ export const preflightProvider = (input: {
     return {
       category: health === "revoked" ? "expired-login" : "missing-login",
       detail: subscription?.reconnectAction ?? "Connect this provider.",
+      repairAction: "providers",
     };
   }
-  if (health === "expired")
-    return { category: "expired-login", detail: "Provider login has expired." };
+  if (health === "expired") {
+    return {
+      category: "expired-login",
+      detail: "Provider login has expired.",
+      repairAction: "providers",
+    };
+  }
   if (health === "failed" || health === "failed-first-request") {
     const failure = requestHealth?.lastFailedRequest ?? subscription?.lastFailedRequest;
     const detail = failure?.message ?? "The provider request failed.";
     const category = providerUnavailabilityFromDetail(provider.driver, detail);
     const nextRetryAt = requestHealth ? requestHealth.nextRetryAt : subscription?.nextRetryAt;
     if (recordedFailureStillBlocks(category, failure, nextRetryAt, input.model, input.now)) {
-      return { category, detail };
+      return withRepair(category, detail);
     }
   }
   if (provider.unavailability && provider.unavailability !== "temporary-failure") {
-    return {
-      category: provider.unavailability,
-      detail:
-        provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
-    };
+    return withRepair(
+      provider.unavailability,
+      provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
+    );
   }
   if (
-    !provider.enabled ||
     !provider.installed ||
     (provider.availability === "unavailable" && provider.status !== "error")
   ) {
     return {
       category: "temporary-failure",
       detail: provider.unavailableReason ?? "Provider is unavailable.",
+      repairAction: "providers",
     };
   }
   if (provider.auth.status === "unauthenticated") {
     return {
       category: "missing-login",
       detail: "Sign in to this provider before starting a chat.",
+      repairAction: "providers",
     };
   }
   if (provider.models.length > 0 && !provider.models.some((model) => model.slug === input.model)) {
     return {
       category: "unsupported-model",
-      detail: `Model '${input.model}' is not available for ${provider.displayName ?? provider.driver}.`,
+      detail: `Model '${input.model}' is not available for ${name}.`,
     };
   }
   return undefined;
 };
+
+const withRepair = (
+  category: ServerProviderUnavailability,
+  detail: string,
+): ProviderPreflightVerdict =>
+  category === "missing-login" || category === "expired-login"
+    ? { category, detail, repairAction: "providers" }
+    : category === "usage-cap"
+      ? { category, detail, repairAction: "usage" }
+      : { category, detail };

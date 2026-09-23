@@ -18,6 +18,7 @@ import {
 
 import type { Bot } from "../roster/types";
 import { resolveStickyBotEngine } from "../roster/botEngineSelection";
+import { useBotEngineAvailability } from "../roster/useBotEngineAvailability";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
 import { useRosterStore } from "../roster/rosterStore";
 import { Button } from "../ui/button";
@@ -726,17 +727,21 @@ export function BotVoiceCallButtonView({
   bot,
   active,
   disabled,
+  disabledReason = null,
   globallyEnabled,
   onClick,
 }: {
   readonly bot: Bot;
   readonly active: boolean;
   readonly disabled: boolean;
+  /** Why a call cannot start, shown with the button. */
+  readonly disabledReason?: string | null;
   readonly globallyEnabled: boolean;
   readonly onClick: () => void;
 }) {
   if (!globallyEnabled || !bot.voiceEnabled) return null;
   const label = active ? `Return to call with ${bot.name}` : `Call ${bot.name}`;
+  const description = disabled && disabledReason ? `${label}. ${disabledReason}` : label;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -745,7 +750,7 @@ export function BotVoiceCallButtonView({
             type="button"
             size="icon-sm"
             variant="ghost"
-            aria-label={label}
+            aria-label={description}
             disabled={disabled}
             onClick={onClick}
           />
@@ -753,7 +758,7 @@ export function BotVoiceCallButtonView({
       >
         <AppIcon icon={CallIcon} />
       </TooltipTrigger>
-      <TooltipPopup side="bottom">{label}</TooltipPopup>
+      <TooltipPopup side="bottom">{description}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -767,11 +772,15 @@ export function BotVoiceCallButton({
 }) {
   const { activeCall, startingBotId, startOrReturn } = useVoiceCall();
   const globallyEnabled = usePrimarySettings((settings) => settings.voice.enabled);
+  const engine = useBotEngineAvailability(bot.engine);
+  const active = activeCall?.botId === bot.id;
+  const blocked = engine.blocked && !active;
   return (
     <BotVoiceCallButtonView
       bot={bot}
-      active={activeCall?.botId === bot.id}
-      disabled={disabled || startingBotId !== null}
+      active={active}
+      disabled={disabled || blocked || startingBotId !== null}
+      disabledReason={blocked ? (engine.unavailability?.title ?? null) : null}
       globallyEnabled={globallyEnabled}
       onClick={() => startOrReturn(bot)}
     />

@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { presentThreadError } from "@t3tools/client-runtime/errors";
 import {
   BotId,
   type EnvironmentId,
@@ -7,12 +8,11 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, Clock3Icon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 
-import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
 import { resolveAppModelSelectionState } from "../../modelSelection";
@@ -23,7 +23,7 @@ import {
 } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
-import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentSessionState } from "../../state/session";
@@ -50,10 +50,13 @@ import {
   isBotConversationWorking,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
-import { resolveStickyBotEngine } from "./botEngineSelection";
+import { botEngineFailureContext } from "./botEngineSelection";
+import { BotTurnFailureRow } from "./BotTurnFailureRow";
+import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
+import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
@@ -135,37 +138,25 @@ export function BotThreadLanding({
   const environmentId = usePrimaryEnvironmentId();
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
   const canManageChannelBindings = canManageChannels(channelSession.data);
-  const settings = usePrimarySettings();
-  const providers = useAtomValue(primaryServerProvidersAtom);
   const bots = useRosterStore((state) => state.bots);
   const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
   const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
   const bot = routedBot.status === "available" ? routedBot.bot : undefined;
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
-  const configuredEngine = bot?.engine ?? null;
-  const instanceEntries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
-      ),
-    [providers, settings],
-  );
-  const defaultSelection = useMemo(
-    () => resolveAppModelSelectionState(settings, providers),
-    [providers, settings],
-  );
-  const stickyEngine = useMemo(
-    () =>
-      resolveStickyBotEngine({
-        engine: configuredEngine,
-        instanceEntries,
-        settings,
-        providers,
-        defaultSelection,
-      }),
-    [configuredEngine, defaultSelection, instanceEntries, providers, settings],
-  );
+  const {
+    instanceEntries,
+    selection: stickyEngine,
+    unavailability: engineUnavailability,
+    blocked: sendBlocked,
+  } = useBotEngineAvailability(bot?.engine ?? null);
   const runtime = useBotThreadRuntime(botId, stickyEngine);
+  const engineNoticeId = useId();
+  const failureContext = botEngineFailureContext(
+    stickyEngine,
+    instanceEntries,
+    runtime.failure?.unavailability,
+  );
+  const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
@@ -566,6 +557,12 @@ export function BotThreadLanding({
                 </div>
               </div>
             ) : null}
+            {!working && runtime.failure && messages.at(-1)?.role === "user" ? (
+              <BotTurnFailureRow
+                botName={bot.name}
+                title={presentThreadError(runtime.failure.message, failureContext).title}
+              />
+            ) : null}
             {delegations.map((delegation) => (
               <DelegationCard
                 key={delegation.delegationId}
@@ -587,11 +584,26 @@ export function BotThreadLanding({
           <ThreadErrorBanner
             threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? bot.id}`}
             error={
-              inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
+              inboxItems.some((item) => item.lastFailure === runtime.error) ||
+              (sendBlocked && runtime.failure?.unavailability === engineUnavailability?.reason)
+                ? null
+                : runtime.error
             }
+            context={failureContext}
+            environmentId={environmentId}
+            onOpenUsage={openBotSettings}
             {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
             resuming={runtime.resuming}
           />
+          {sendBlocked && engineUnavailability ? (
+            <ProviderUnavailableNotice
+              id={engineNoticeId}
+              className="mx-auto mt-2 w-[min(46rem,calc(100%-2rem))]"
+              presentation={engineUnavailability}
+              environmentId={environmentId}
+              onOpenUsage={openBotSettings}
+            />
+          ) : null}
           <BotPromptComposer
             botName={bot.name}
             draftKey={bot.id}
@@ -627,24 +639,21 @@ export function BotThreadLanding({
               runtime.respondingRequestIds.length > 0 ||
               voiceCall.activeCall?.botId === bot.id ||
               voiceCall.startingBotId === bot.id ||
-              stickyEngine === null ||
+              sendBlocked ||
               !runtime.botReady ||
               !runtime.bootstrapped ||
               runtime.defaultProject === null
             }
             replyPreview={replyTarget}
             onCancelReply={() => setReplyTarget(null)}
+            sendBlockedDescriptionId={sendBlocked ? engineNoticeId : undefined}
             onSubmit={async (prompt, files) => {
               const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
               if (sent) setReplyTarget(null);
               return sent;
             }}
           />
-          {stickyEngine === null ? (
-            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
-              Enable a provider before you message this bot.
-            </p>
-          ) : !runtime.botReady ? (
+          {sendBlocked ? null : !runtime.botReady ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">Connecting bot…</p>
           ) : runtime.bootstrapped && runtime.defaultProject === null ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">

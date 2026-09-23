@@ -450,8 +450,8 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const selectedModel =
     draftModelSelection ??
     projectDefaultModelSelection ??
-    modelOptions.find((option) => option.isDefault)?.selection ??
-    modelOptions[0]?.selection ??
+    modelOptions.find((option) => option.isDefault && option.disabledReason === null)?.selection ??
+    modelOptions.find((option) => option.disabledReason === null)?.selection ??
     null;
   const selectedModelKey = selectedModel
     ? `${selectedModel.instanceId}:${selectedModel.model}`
@@ -479,7 +479,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         return;
       }
       const option = modelOptions.find((candidate) => candidate.key === key);
-      if (!option) {
+      if (!option || option.disabledReason) {
         return;
       }
       updateComposerDraftSettings(selectedProjectDraftKey, {

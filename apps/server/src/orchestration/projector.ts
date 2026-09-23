@@ -1154,11 +1154,12 @@ export function projectEvent(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
           if (!thread?.session) return nextBase;
+          const { unavailability: _staleUnavailability, ...session } = thread.session;
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
               session: {
-                ...thread.session,
+                ...session,
                 status: "starting",
                 lastError: null,
                 updatedAt: payload.createdAt,

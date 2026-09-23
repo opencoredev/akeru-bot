@@ -201,6 +201,8 @@ import { preflightProvider } from "./provider/providerPreflight.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 const isMcpServerAuthenticationError = Schema.is(McpServerAuthenticationError);
 
+
+
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
 
@@ -1939,10 +1941,7 @@ const makeWsRpcLayer = (
                     return yield* new OrchestrationDispatchCommandError({
                       message: verdict.detail,
                       unavailability: verdict.category,
-                      repairAction:
-                        verdict.category === "missing-login" || verdict.category === "expired-login"
-                          ? "providers"
-                          : undefined,
+                      ...(verdict.repairAction ? { repairAction: verdict.repairAction } : {}),
                     });
                   }
                 }

@@ -160,6 +160,7 @@ export function BotPromptComposer({
   placeholder,
   replyPreview,
   onCancelReply,
+  sendBlockedDescriptionId,
   onSubmit,
 }: {
   botName: string;
@@ -176,6 +177,8 @@ export function BotPromptComposer({
   placeholder?: string;
   replyPreview?: { readonly label: string; readonly text: string } | null;
   onCancelReply?: () => void;
+  /** Id of the element explaining why Send is off, announced with the Send button. */
+  sendBlockedDescriptionId?: string | undefined;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
   const prefersReducedMotion = useReducedMotion();
@@ -734,7 +737,11 @@ export function BotPromptComposer({
             <button
               type="submit"
               aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
-              aria-describedby={mentionHint ? mentionHintId : undefined}
+              aria-describedby={
+                [mentionHint ? mentionHintId : null, disabled ? sendBlockedDescriptionId : null]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               data-busy={showBusyMeter || undefined}
               disabled={!canSubmit || mentionHint !== null}
               className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-25 data-busy:opacity-70"

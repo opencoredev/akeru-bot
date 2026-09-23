@@ -1,15 +1,19 @@
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { makeComposerTestProvider } from "../../test/chatComposerProps";
-import { resolveStickyBotEngine } from "./botEngineSelection";
+import {
+  botEngineFailureContext,
+  botEngineUnavailability,
+  resolveStickyBotEngine,
+} from "./botEngineSelection";
 
 const settings = DEFAULT_UNIFIED_SETTINGS;
 
 describe("resolveStickyBotEngine", () => {
-  it("preserves the saved engine when every provider is disabled", () => {
+  it("keeps a saved engine whose provider is turned off and explains why", () => {
     const providers = [
       {
         ...makeComposerTestProvider(),
@@ -31,6 +35,77 @@ describe("resolveStickyBotEngine", () => {
         defaultSelection: { instanceId, model: "gpt-5.6-sol" },
       }),
     ).toEqual({ instanceId, model: "gpt-5.6-sol" });
+    expect(
+      botEngineUnavailability({ instanceId, model: "gpt-5.6-sol" }, instanceEntries),
+    ).toMatchObject({ reason: "disabled", action: "providers" });
+  });
+
+  it("returns no engine for a bot without one when no provider can run", () => {
+    const providers = [
+      {
+        ...makeComposerTestProvider(),
+        enabled: false,
+        installed: false,
+        status: "disabled" as const,
+        auth: { status: "unknown" as const },
+      },
+    ];
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const instanceId = instanceEntries[0]!.instanceId;
+    expect(
+      resolveStickyBotEngine({
+        engine: null,
+        instanceEntries,
+        settings,
+        providers,
+        defaultSelection: { instanceId, model: "gpt-5.6-sol" },
+      }),
+    ).toBeNull();
+    expect(botEngineUnavailability(null, instanceEntries)).toMatchObject({
+      reason: "missing-provider",
+    });
+  });
+
+  it("does not rewrite a signed-out engine to another provider", () => {
+    const signedOut = {
+      ...makeComposerTestProvider(),
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      auth: { status: "unauthenticated" as const },
+      models: [
+        {
+          slug: "claude-opus-5-5",
+          name: "Claude Opus 5.5",
+          isCustom: false,
+          capabilities: {},
+        },
+      ],
+    };
+    const providers = [makeComposerTestProvider(), signedOut];
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const engine = { provider: signedOut.instanceId, model: "claude-opus-5-5" };
+
+    const resolved = resolveStickyBotEngine({
+      engine,
+      instanceEntries,
+      settings,
+      providers,
+      defaultSelection: { instanceId: instanceEntries[0]!.instanceId, model: "gpt-5.6-sol" },
+    });
+
+    expect(resolved).toEqual({ instanceId: signedOut.instanceId, model: "claude-opus-5-5" });
+    const unavailable = botEngineUnavailability(resolved, instanceEntries);
+    expect(unavailable).toMatchObject({ reason: "missing-login", action: "providers" });
+    expect(unavailable?.title).toContain("is not connected");
+  });
+
+  it("flags a saved model the provider no longer lists", () => {
+    const providers = [makeComposerTestProvider()];
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const instanceId = instanceEntries[0]!.instanceId;
+    expect(
+      botEngineUnavailability({ instanceId, model: "retired-model" }, instanceEntries),
+    ).toMatchObject({ reason: "unsupported-model", action: "none" });
   });
 
   it("does not show a fallback provider for a bot with an unavailable saved engine", () => {
@@ -115,6 +190,31 @@ describe("resolveStickyBotEngine", () => {
       instanceId,
       model: "gpt-5.6-sol",
       options: [{ id: "reasoningEffort", value: "medium" }],
+    });
+  });
+});
+
+describe("botEngineFailureContext", () => {
+  it("names the provider and model behind a failed reply", () => {
+    const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+    const entry = instanceEntries[0]!;
+    const model = entry.models[0]!;
+
+    expect(
+      botEngineFailureContext(
+        { instanceId: entry.instanceId, model: model.slug },
+        instanceEntries,
+        "missing-login",
+      ),
+    ).toEqual({
+      unavailability: "missing-login",
+      providerName: entry.displayName,
+      modelName: model.name,
+    });
+    expect(botEngineFailureContext(null, instanceEntries, undefined)).toEqual({
+      unavailability: null,
+      providerName: null,
+      modelName: null,
     });
   });
 });

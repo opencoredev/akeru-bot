@@ -5,9 +5,33 @@ import { presentThreadError } from "./threadErrorPresentation.ts";
 describe("presentThreadError", () => {
   it("explains provider usage-limit failures instead of showing a generic error", () => {
     expect(presentThreadError("The usage limit has been reached")).toMatchObject({
-      title: "Request limit reached",
-      description: "Wait a moment, then send your message again.",
+      title: "Provider limit reached",
+      description:
+        "Your provider plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
       action: "none",
+    });
+  });
+
+  it("gives an uncategorized failure the same copy as its category", () => {
+    const context = { providerName: "Claude" };
+    expect(presentThreadError("401 Unauthorized", context)).toEqual(
+      presentThreadError("401 Unauthorized", { ...context, unavailability: "missing-login" }),
+    );
+    expect(presentThreadError("401 Unauthorized", context)).toMatchObject({
+      title: "Claude is not connected",
+      description: "Connect your Claude account in Settings > Providers.",
+      action: "providers",
+    });
+    expect(presentThreadError("Too many requests", { providerName: "Grok" }).title).toBe(
+      "Grok limit reached",
+    );
+  });
+
+  it("names a disabled provider from the error when the chat does not know it", () => {
+    expect(presentThreadError("Provider instance 'kimi' is disabled.")).toMatchObject({
+      title: "Kimi For Coding is turned off",
+      description: "Turn Kimi For Coding on in Settings > Providers, then send your message again.",
+      action: "providers",
     });
   });
 
@@ -45,5 +69,21 @@ describe("presentThreadError", () => {
       description: "Restore it from the roster to chat with it again.",
       action: "none",
     });
+  });
+
+  it("uses the server's failure category when it has one", () => {
+    expect(
+      presentThreadError("OAuth token expired", {
+        unavailability: "expired-login",
+        providerName: "Claude",
+      }),
+    ).toMatchObject({
+      title: "Claude sign-in expired",
+      technicalDetails: "OAuth token expired",
+      action: "providers",
+    });
+    expect(
+      presentThreadError("WebSocket disconnected", { unavailability: "temporary-failure" }).title,
+    ).toBe("Connection interrupted");
   });
 });

@@ -38,6 +38,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
+import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { AvatarPickerDialog } from "./AvatarPickerDialog";
 import { BotAvatarView } from "./BotAvatarView";
@@ -322,10 +323,18 @@ function BotSettingsForm({
                   onChange={draft.selectModel}
                 />
               ) : (
-                <span className="text-sm text-muted-foreground">Connect a provider</span>
+                <span className="text-sm text-muted-foreground">No model yet</span>
               )
             }
-          />
+          >
+            {draft.engineUnavailability ? (
+              <ProviderUnavailableNotice
+                className="mt-3 mb-2.5 max-w-2xl"
+                presentation={draft.engineUnavailability}
+                environmentId={environmentId}
+              />
+            ) : null}
+          </SettingsRow>
 
           {draft.showModelOptions && draft.activeEntry ? (
             <SettingsRow

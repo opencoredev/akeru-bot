@@ -1,22 +1,31 @@
-/** Turns a raw provider or orchestration error into chat-facing copy shared by web and mobile. */
-export interface ThreadErrorPresentation {
-  readonly title: string;
-  readonly description: string;
-  readonly technicalDetails: string;
-  /** Only an unexplained failure asks for feedback; known causes name their own fix. */
-  readonly action: "providers" | "feedback" | "none";
+import {
+  PROVIDER_DISPLAY_NAMES,
+  type ProviderDriverKind,
+  type ServerProviderUnavailability,
+} from "@t3tools/contracts";
+
+import {
+  presentProviderUnavailability,
+  type ProviderAvailabilityPresentation,
+  type ProviderAvailabilityReason,
+} from "../providerAvailability.ts";
+
+/**
+ * Turns a raw provider or orchestration error into chat-facing copy shared by
+ * web and mobile. Only an unexplained failure asks for feedback; known causes
+ * name their own fix.
+ */
+export type ThreadErrorPresentation = ProviderAvailabilityPresentation;
+
+/** What the server knew about a failure beyond its text. */
+export interface ThreadErrorContext {
+  readonly unavailability?: ServerProviderUnavailability | null | undefined;
+  readonly providerName?: string | null | undefined;
+  readonly modelName?: string | null | undefined;
 }
 
-const PROVIDER_NAMES: Readonly<Record<string, string>> = {
-  claude: "Claude",
-  codex: "Codex",
-  grok: "Grok",
-  kimi: "Kimi For Coding",
-  opencode: "OpenCode",
-};
-
 function providerName(id: string): string {
-  return PROVIDER_NAMES[id.toLowerCase()] ?? id;
+  return PROVIDER_DISPLAY_NAMES[id.toLowerCase() as ProviderDriverKind] ?? id;
 }
 
 function boundedTechnicalDetails(error: string): string {
@@ -26,16 +35,35 @@ function boundedTechnicalDetails(error: string): string {
   return withoutLocalPaths.slice(0, 600);
 }
 
-export function presentThreadError(error: string): ThreadErrorPresentation {
+export function presentThreadError(
+  error: string,
+  context: ThreadErrorContext = {},
+): ThreadErrorPresentation {
+  const present = (
+    reason: ProviderAvailabilityReason,
+    name: string | null | undefined = context.providerName,
+    detail = boundedTechnicalDetails(error),
+  ) =>
+    presentProviderUnavailability({
+      reason,
+      providerName: name,
+      modelName: context.modelName,
+      detail,
+    });
+
+  // A temporary failure is the server's catch-all, so the text below can
+  // still say more about it than the category can.
+  if (context.unavailability && context.unavailability !== "temporary-failure") {
+    return present(context.unavailability);
+  }
+
   const disabledProvider = error.match(/Provider instance ['"]([^'"]+)['"] is disabled/i);
   if (disabledProvider?.[1]) {
-    const name = providerName(disabledProvider[1]);
-    return {
-      title: `${name} is turned off`,
-      description: `Enable ${name} in Settings, then send your message again.`,
-      technicalDetails: `Provider instance “${disabledProvider[1]}” is disabled.`,
-      action: "providers",
-    };
+    return present(
+      "disabled",
+      context.providerName ?? providerName(disabledProvider[1]),
+      `Provider instance “${disabledProvider[1]}” is disabled.`,
+    );
   }
 
   if (/Bot '[^']+' is archived/.test(error)) {
@@ -48,21 +76,11 @@ export function presentThreadError(error: string): ThreadErrorPresentation {
   }
 
   if (/rate.?limit|usage limit|too many requests|quota exceeded/i.test(error)) {
-    return {
-      title: "Request limit reached",
-      description: "Wait a moment, then send your message again.",
-      technicalDetails: boundedTechnicalDetails(error),
-      action: "none",
-    };
+    return present("limit-reached");
   }
 
   if (/not authenticated|authentication required|unauthorized|invalid api key/i.test(error)) {
-    return {
-      title: "Provider sign-in required",
-      description: "Reconnect the provider in Settings, then try again.",
-      technicalDetails: boundedTechnicalDetails(error),
-      action: "providers",
-    };
+    return present("missing-login");
   }
 
   if (/network|connection|socket|fetch failed|disconnected/i.test(error)) {

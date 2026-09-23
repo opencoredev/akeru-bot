@@ -129,7 +129,7 @@ describe("ThreadErrorBanner", () => {
 
     expect(presentThreadError(error)).toEqual({
       title: "Codex is turned off",
-      description: "Enable Codex in Settings, then send your message again.",
+      description: "Turn Codex on in Settings > Providers, then send your message again.",
       technicalDetails: "Provider instance “codex” is disabled.",
       action: "providers",
     });
@@ -138,9 +138,24 @@ describe("ThreadErrorBanner", () => {
       <ThreadErrorBanner error={error} threadKey="env:thread-disabled-provider" />,
     );
     expect(markup).toContain("Codex is turned off");
-    expect(markup).toContain("Open providers");
+    expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
     expect(markup).not.toContain("Send feedback");
     expect(markup).not.toContain("AgentController.inspectEngine");
     expect(markup).not.toContain("/home/leo");
+  });
+
+  it("uses the server's failure category to name the provider and the fix", () => {
+    const markup = renderToStaticMarkup(
+      <ThreadErrorBanner
+        error="Claude authentication failed."
+        threadKey="env:thread-expired"
+        context={{ unavailability: "expired-login", providerName: "Claude" }}
+      />,
+    );
+
+    expect(markup).toContain("Claude sign-in expired");
+    expect(markup).toContain("Reconnect Claude in Settings &gt; Providers");
+    expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
+    expect(markup).not.toContain("Send feedback");
   });
 });
