@@ -22,6 +22,7 @@ const destinations: Readonly<
   providers: { section: "providers", label: "Providers" },
   channels: { section: "channels", label: "Bot channels" },
   voice: { section: "voice", label: "Voice" },
+  "image-generation": { section: "image-generation", label: "Image generation" },
   browser: { section: "browser", label: "Browser" },
   plugins: { section: "plugins", label: "Plugins" },
   sandbox: { section: "sandbox", label: "Sandbox" },

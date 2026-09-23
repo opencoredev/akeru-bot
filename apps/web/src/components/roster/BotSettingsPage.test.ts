@@ -3,6 +3,8 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import { BOT_IMAGE_PROVIDER_DEFAULT, botImageProviderFromSelectValue } from "./useBotProfileDraft";
+
 function read(relativePath: string): string {
   return NodeFS.readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
@@ -160,5 +162,20 @@ describe("global settings stay global", () => {
     // The bot owns only its own participation.
     expect(botSettings).toContain("draft.voiceEnabled");
     expect(botSettings).not.toContain("updateSettings(");
+  });
+});
+
+describe("per-bot image provider", () => {
+  it("maps select values to the saved provider and treats unknown values as the default", () => {
+    expect(botImageProviderFromSelectValue(BOT_IMAGE_PROVIDER_DEFAULT)).toBeNull();
+    expect(botImageProviderFromSelectValue("grok")).toBe("grok");
+    expect(botImageProviderFromSelectValue("chatgpt")).toBe("chatgpt");
+    expect(botImageProviderFromSelectValue("dall-e")).toBeNull();
+  });
+
+  it("keeps image settings out of the chat composer", () => {
+    const composer = read("./BotPromptComposer.tsx");
+    expect(composer).not.toContain("imageProvider");
+    expect(composer).not.toContain("image-generation");
   });
 });

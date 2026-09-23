@@ -4,7 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { resolveMobileSettingsDestination } from "./settingsDeepLink";
 
 describe("mobile Settings chat links", () => {
-  it.each(["local-execution", "bot-inbox", "providers"] as const)(
+  it.each(["local-execution", "bot-inbox", "providers", "image-generation"] as const)(
     "opens the %s health target",
     (target) => {
       expect(resolveMobileSettingsDestination(`grokbot://app/v1/settings?id=${target}`)).toEqual({

@@ -9,6 +9,7 @@ export type SettingsPath =
   | "/settings/channels"
   | "/settings/sandbox"
   | "/settings/voice"
+  | "/settings/image-generation"
   | "/settings/privacy"
   | "/settings/source-control"
   | "/settings/connections"
@@ -38,6 +39,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/channels": "Channels",
   "/settings/sandbox": "Sandbox",
   "/settings/voice": "Voice",
+  "/settings/image-generation": "Image generation",
   "/settings/privacy": "Privacy",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
@@ -184,6 +186,35 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "voice-selection",
     title: "Voice selection",
     to: "/settings/voice",
+  },
+  {
+    id: "image-generation",
+    title: "Image generation",
+    to: "/settings/image-generation",
+    keywords: ["images", "pictures", "ChatGPT", "Grok", "health test"],
+  },
+  {
+    id: "image-provider-chatgpt",
+    title: "ChatGPT images",
+    to: "/settings/image-generation",
+    keywords: ["image", "OpenAI", "subscription"],
+  },
+  {
+    id: "image-provider-grok",
+    title: "Grok images",
+    to: "/settings/image-generation",
+    keywords: ["image", "xAI", "subscription"],
+  },
+  {
+    id: "image-default-provider",
+    title: "Default image provider",
+    to: "/settings/image-generation",
+  },
+  {
+    id: "image-fallback-order",
+    title: "Image fallback order",
+    to: "/settings/image-generation",
+    keywords: ["retry", "backup"],
   },
   {
     id: "voice-read-aloud",

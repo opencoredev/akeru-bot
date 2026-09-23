@@ -10,6 +10,11 @@ export interface SubscriptionProviderDefinition {
   readonly icon: Icon | string;
 }
 
+/** Row anchor in Providers settings, so other pages can open Settings on one provider. */
+export function subscriptionProviderTargetId(id: SubscriptionProviderId): string {
+  return `subscription-provider-${id}`;
+}
+
 export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] = [
   {
     id: "openai-codex",

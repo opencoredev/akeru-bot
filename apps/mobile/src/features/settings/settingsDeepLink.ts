@@ -3,7 +3,11 @@ import {
   type SettingsDeepLinkId,
 } from "@t3tools/client-runtime/settings-deep-link";
 
-export type MobileSettingsHealthTarget = "local-execution" | "bot-inbox" | "providers";
+export type MobileSettingsHealthTarget =
+  | "local-execution"
+  | "bot-inbox"
+  | "providers"
+  | "image-generation";
 
 /**
  * Where a chat Settings chip lands on mobile. Mobile has fewer Settings screens
@@ -25,6 +29,7 @@ const destinations: Readonly<Record<SettingsDeepLinkId, MobileSettingsDestinatio
   providers: { kind: "health", target: "providers" },
   channels: HOME,
   voice: HOME,
+  "image-generation": { kind: "health", target: "image-generation" },
   browser: HOME,
   plugins: HOME,
   sandbox: HOME,

@@ -22,6 +22,7 @@ export const SETTINGS_SECTIONS = [
   "channels",
   "sandbox",
   "voice",
+  "image-generation",
   "privacy",
   "connections",
   "keybindings",

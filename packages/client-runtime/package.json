@@ -68,6 +68,10 @@
       "types": "./src/channelPresentation.ts",
       "default": "./src/channelPresentation.ts"
     },
+    "./image-generation": {
+      "types": "./src/imageGeneration.ts",
+      "default": "./src/imageGeneration.ts"
+    },
     "./settings-deep-link": {
       "types": "./src/settingsDeepLink.ts",
       "default": "./src/settingsDeepLink.ts"

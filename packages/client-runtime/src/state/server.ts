@@ -804,6 +804,12 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.routinesListThreadRuns,
       staleTimeMs: 0,
     }),
+    imageProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:image-providers",
+      tag: WS_METHODS.imageProviderList,
+      staleTimeMs: 5_000,
+
+    }),
     composioStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:composio-status",
       tag: WS_METHODS.composioGetStatus,
@@ -901,6 +907,10 @@ export function createServerEnvironmentAtoms<R, E>(
     testSubscriptionAuth: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:subscription-auth:health-test",
       tag: WS_METHODS.subscriptionAuthHealthTest,
+    }),
+    testImageProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:image-provider:health-test",
+      tag: WS_METHODS.imageProviderHealthTest,
     }),
     startVoiceCall: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice-call:start",

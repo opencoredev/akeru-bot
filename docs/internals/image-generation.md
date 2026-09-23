@@ -1,6 +1,6 @@
 # Image generation providers
 
-Akeru's Image generation settings manage two provider rows, ChatGPT and Grok. Each row reports detected access, health, supported operations, last failure, a repair action, and an enabled flag. The generation tool itself ships separately (milestone decision D5); until then `lastGenerationAt` has no producer and clients should render it as "No generations yet".
+Akeru's Image generation settings manage two provider rows, ChatGPT and Grok. Each row reports detected access, health, supported operations, last failure, a repair action, and an enabled flag. The generation tool itself ships separately (milestone decision D5); until then `lastGenerationAt` has no producer and clients render it as "No images generated yet".
 
 ## Credentials
 
@@ -24,3 +24,7 @@ Request health is recorded in `subscription-auth.json.health` under `image:chatg
 - `imageProvider.healthTest` (operate scope) runs the real request and returns the refreshed rows.
 
 Global enable/default/fallback changes go through `server.updateSettings`; connect/disconnect goes through the existing `subscriptionAuth` methods on `openai-codex` and `xai`.
+
+## Clients
+
+Shared row logic lives in `@t3tools/client-runtime/image-generation`: the health badge (a row reads healthy only after `healthTest.status === "passed"`), toggle patches that keep the default and fallback order coherent with what the server normalizes, and fallback-order validation. Web renders the editable page at the `image-generation` settings section, which is also the `image-generation` deep-link id. Mobile maps that id to a read-only summary. The bot editor saves `imageProvider` through `bot.update`; the chat composer has no image controls.

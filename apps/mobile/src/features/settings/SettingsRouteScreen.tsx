@@ -152,19 +152,34 @@ function ProviderSettingsSection({
           Open Settings from an environment to connect a provider.
         </Text>
       ) : (
-        <SettingsRow
-          icon="key"
-          label="Provider connections"
-          onPress={() =>
-            navigation.navigate("SettingsSheet", {
-              screen: "SettingsContent",
-              params: {
-                screen: "SettingsProviderHealth",
-                params: { environmentId, target: "providers" },
-              },
-            })
-          }
-        />
+        <>
+          <SettingsRow
+            icon="key"
+            label="Provider connections"
+            onPress={() =>
+              navigation.navigate("SettingsSheet", {
+                screen: "SettingsContent",
+                params: {
+                  screen: "SettingsProviderHealth",
+                  params: { environmentId, target: "providers" },
+                },
+              })
+            }
+          />
+          <SettingsRow
+            icon="photo"
+            label="Image generation"
+            onPress={() =>
+              navigation.navigate("SettingsSheet", {
+                screen: "SettingsContent",
+                params: {
+                  screen: "SettingsProviderHealth",
+                  params: { environmentId, target: "image-generation" },
+                },
+              })
+            }
+          />
+        </>
       )}
     </SettingsSection>
   );

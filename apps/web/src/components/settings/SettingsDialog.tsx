@@ -6,6 +6,7 @@ import {
   Bug02Icon,
   GitBranchIcon,
   HardDriveIcon,
+  Image01Icon,
   KeyboardIcon,
   Link02Icon,
   Message01Icon,
@@ -61,6 +62,9 @@ const KeybindingsSettingsPanel = lazy(async () => ({
 const SourceControlSettingsPanel = lazy(async () => ({
   default: (await import("./SourceControlSettings")).SourceControlSettingsPanel,
 }));
+const ImageGenerationSettingsPanel = lazy(async () => ({
+  default: (await import("./ImageGenerationSettings")).ImageGenerationSettingsPanel,
+}));
 const DiagnosticsSettingsPanel = lazy(async () => ({
   default: (await import("./DiagnosticsSettings")).DiagnosticsSettingsPanel,
 }));
@@ -75,6 +79,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   channels: BotChannelsSettingsPanel,
   sandbox: SandboxSettingsPanel,
   voice: VoiceSettingsPanel,
+  "image-generation": ImageGenerationSettingsPanel,
   privacy: PrivacySettingsPanel,
   connections: ConnectionsSettings,
   keybindings: KeybindingsSettingsPanel,
@@ -157,6 +162,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       { section: "providers", label: "Providers", icon: BotIcon },
       { section: "channels", label: "Bot channels", icon: Message01Icon },
       { section: "voice", label: "Voice", icon: CallIcon },
+      { section: "image-generation", label: "Image generation", icon: Image01Icon },
     ],
   },
   {

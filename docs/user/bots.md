@@ -153,3 +153,9 @@ shows the same summary.
 Akeru uses the microphone and speaker on the current computer. Only one call can run at a time. The
 call bar stays visible when you open another bot. Select it to return to the call, or select hang up
 to end the call.
+
+## Image generation
+
+Open the bot's settings and choose a provider under **Workspace > Image generation**, or keep
+**Use global default**. This does not change the bot's chat model. See
+[Image generation](image-generation.md).

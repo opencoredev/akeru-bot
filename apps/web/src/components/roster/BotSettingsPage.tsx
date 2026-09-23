@@ -1,16 +1,29 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type EnvironmentId } from "@t3tools/contracts";
+import {
+  BotId,
+  IMAGE_PROVIDER_IDS,
+  type EnvironmentId,
+  type ImageProviderId,
+} from "@t3tools/contracts";
+import {
+  botImageProviderOptionLabel,
+  globalDefaultOptionLabel,
+} from "@t3tools/client-runtime/image-generation";
 import { Brain02Icon, Edit02Icon, Link02Icon, WrenchIcon } from "@hugeicons/core-free-icons";
 import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isElectron } from "../../env";
 import { requestConfirmDialog } from "../../confirmDialog";
+import { useEnvironmentSettings } from "../../hooks/useSettings";
+import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { botEnvironment } from "../../state/bots";
 import { environmentMcpServersAtom } from "../../state/mcpServers";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { SidebarInset } from "../ui/sidebar";
 import {
   WorkspaceBreadcrumb,
@@ -37,7 +50,12 @@ import { BotUsageSection } from "./BotUsageSection";
 import { BOT_SANDBOX_OPTIONS, botSandboxLabel } from "./botSandbox";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRef } from "./useBotThreadRef";
-import { useBotProfileDraft, type BotProfileUpdate } from "./useBotProfileDraft";
+import {
+  BOT_IMAGE_PROVIDER_DEFAULT,
+  botImageProviderFromSelectValue,
+  useBotProfileDraft,
+  type BotProfileUpdate,
+} from "./useBotProfileDraft";
 import type { Bot } from "./types";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -131,6 +149,19 @@ function BotSettingsForm({
 }) {
   const environmentId = usePrimaryEnvironmentId();
   const mcpServers = useAtomValue(environmentMcpServersAtom(environmentId ?? NO_ENVIRONMENT));
+  const imageSettings = useEnvironmentSettings(
+    environmentId ?? NO_ENVIRONMENT,
+    (settings) => settings.imageGeneration,
+  );
+  const imageProviders = useEnvironmentQuery(
+    environmentId ? serverEnvironment.imageProviders({ environmentId, input: {} }) : null,
+  );
+  const imageProviderLabel = (provider: ImageProviderId) =>
+    botImageProviderOptionLabel(
+      provider,
+      imageSettings,
+      imageProviders.data?.providers.find((status) => status.provider === provider),
+    );
   const threadRef = useBotThreadRef(bot.id);
   const draft = useBotProfileDraft(bot, onSave);
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -398,6 +429,49 @@ function BotSettingsForm({
                   ? "No workspace tools"
                   : `${enabledToolCount} of ${tools.length} enabled`}
               </Button>
+            }
+          />
+
+          <SettingsRow
+            title="Image generation"
+            description="Which subscription this bot uses to create images. The chat model above stays the same."
+            control={
+              <div className="flex items-center gap-1.5">
+                <Select
+                  value={draft.imageProvider ?? BOT_IMAGE_PROVIDER_DEFAULT}
+                  onValueChange={(value) => {
+                    draft.setImageProvider(botImageProviderFromSelectValue(value));
+                    draft.markChanged();
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-56" aria-label="Image provider">
+                    <SelectValue>
+                      {draft.imageProvider
+                        ? imageProviderLabel(draft.imageProvider)
+                        : globalDefaultOptionLabel(imageSettings)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value={BOT_IMAGE_PROVIDER_DEFAULT}>
+                      {globalDefaultOptionLabel(imageSettings)}
+                    </SelectItem>
+                    {IMAGE_PROVIDER_IDS.map((provider) => (
+                      <SelectItem key={provider} value={provider}>
+                        {imageProviderLabel(provider)}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+                <Button
+                  variant="ghost-muted"
+                  size="xs"
+                  type="button"
+                  onClick={() => openSettings("image-generation", null, environmentId)}
+                  aria-label="Open image generation settings"
+                >
+                  Image settings
+                </Button>
+              </div>
             }
           />
 

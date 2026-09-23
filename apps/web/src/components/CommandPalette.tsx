@@ -39,6 +39,7 @@ import {
   FileSearchIcon,
   FolderIcon,
   FolderPlusIcon,
+  ImageIcon,
   LinkIcon,
   MessageCircleIcon,
   PaletteIcon,
@@ -1494,6 +1495,17 @@ function OpenCommandPaletteDialog(props: {
     icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       openSettings();
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:image-generation-settings",
+    searchTerms: ["image generation", "images", "pictures", "chatgpt", "grok", "settings"],
+    title: "Image generation settings",
+    icon: <ImageIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      openSettings("image-generation");
     },
   });
 

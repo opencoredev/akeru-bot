@@ -30,6 +30,7 @@ import { Input } from "../ui/input";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import {
   SUBSCRIPTION_PROVIDERS,
+  subscriptionProviderTargetId,
   type SubscriptionProviderDefinition,
 } from "./subscriptionProviders";
 
@@ -111,6 +112,7 @@ export function ProviderLoginCard({
 
   return (
     <SettingsRow
+      id={subscriptionProviderTargetId(definition.id)}
       title={
         <span className="flex items-center gap-2">
           {ProviderIcon ? (

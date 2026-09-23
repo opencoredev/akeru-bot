@@ -5,6 +5,7 @@
 - [Install and first run](./user/install.md)
 - [Configure bots](./user/bots.md)
 - [Bot channels](./user/channels.md)
+- [Image generation](./user/image-generation.md)
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
 - [Permission modes](./user/permission-modes.md)
 - [Configure sandboxes](./user/sandboxes.md)

@@ -1,5 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
-import { ProviderInstanceId, type BotEngine, type McpServerId } from "@t3tools/contracts";
+import {
+  ProviderInstanceId,
+  isImageProviderId,
+  type BotEngine,
+  type ImageProviderId,
+  type McpServerId,
+} from "@t3tools/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -46,7 +52,16 @@ export interface BotProfileUpdate {
   readonly sandbox: Bot["sandbox"];
   readonly personalityTone: number;
   readonly voiceEnabled: boolean;
+  readonly imageProvider: ImageProviderId | null;
   readonly disabledMcpServerIds: readonly McpServerId[];
+}
+
+/** Select value for "use the global default" in the bot image provider picker. */
+export const BOT_IMAGE_PROVIDER_DEFAULT = "default";
+
+/** Maps the bot image provider picker value to the saved field; anything unknown means the global default. */
+export function botImageProviderFromSelectValue(value: string | null): ImageProviderId | null {
+  return value !== null && isImageProviderId(value) ? value : null;
 }
 
 export function parseBotUsageCapInput(input: string): {
@@ -94,6 +109,9 @@ export function useBotProfileDraft(
     canonicalizeBotPersonalityTone(bot.personalityTone),
   );
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
+  const [imageProvider, setImageProvider] = useState<ImageProviderId | null>(
+    bot.imageProvider ?? null,
+  );
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
     bot.disabledMcpServerIds,
   );
@@ -193,6 +211,9 @@ export function useBotProfileDraft(
     setVoiceEnabled((current) =>
       rebaseUneditedValue(current, previous.voiceEnabled, bot.voiceEnabled),
     );
+    setImageProvider((current) =>
+      rebaseUneditedValue(current, previous.imageProvider ?? null, bot.imageProvider ?? null),
+    );
     setDisabledMcpServerIds((current) =>
       rebaseUneditedValue(
         current,
@@ -239,6 +260,7 @@ export function useBotProfileDraft(
     sandboxDirty ||
     personalityTone !== savedTone ||
     voiceEnabled !== bot.voiceEnabled ||
+    imageProvider !== (bot.imageProvider ?? null) ||
     toolOverridesDirty;
   const canSave = Boolean(onSave) && dirty && name.trim().length > 0 && resolvedUsageCap.valid;
 
@@ -266,6 +288,8 @@ export function useBotProfileDraft(
     setPersonalityTone,
     voiceEnabled,
     setVoiceEnabled,
+    imageProvider,
+    setImageProvider,
     disabledMcpServerIds,
     setDisabledMcpServerIds,
     model,
@@ -306,6 +330,7 @@ export function useBotProfileDraft(
         sandbox,
         personalityTone,
         voiceEnabled,
+        imageProvider,
         disabledMcpServerIds,
       }).then((success) => {
         setSaving(false);

@@ -132,4 +132,19 @@ describe("searchSettings", () => {
       to: "/settings/privacy",
     });
   });
+
+  it("finds image generation separately from chat providers", () => {
+    expect(searchSettings("image generation")[0]).toMatchObject({
+      id: "image-generation",
+      to: "/settings/image-generation",
+    });
+    expect(searchSettings("Grok images")[0]).toMatchObject({
+      id: "image-provider-grok",
+      to: "/settings/image-generation",
+    });
+    expect(searchSettings("image fallback")[0]).toMatchObject({
+      id: "image-fallback-order",
+      to: "/settings/image-generation",
+    });
+  });
 });

@@ -13,11 +13,13 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
 import { SettingsSection } from "./components/SettingsSection";
+import { ImageGenerationSummary } from "./ImageGenerationSummary";
 import { ProviderConnections } from "./ProviderConnections";
+import type { MobileSettingsHealthTarget } from "./settingsDeepLink";
 
 export type SettingsProviderHealthParams = {
   readonly environmentId: EnvironmentId;
-  readonly target: "local-execution" | "bot-inbox" | "providers";
+  readonly target: MobileSettingsHealthTarget;
 } & Record<string, unknown>;
 
 function Field(props: { readonly label: string; readonly value: string }) {
@@ -161,6 +163,11 @@ export function SettingsProviderHealthRouteScreen({
       >
         {route.params.target === "providers" ? (
           <ProviderConnections
+            key={route.params.environmentId}
+            environmentId={route.params.environmentId}
+          />
+        ) : route.params.target === "image-generation" ? (
+          <ImageGenerationSummary
             key={route.params.environmentId}
             environmentId={route.params.environmentId}
           />
