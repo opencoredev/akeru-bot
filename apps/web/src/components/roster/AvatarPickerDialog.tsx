@@ -10,29 +10,21 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
-import { Switch } from "../ui/switch";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { AvatarColorPicker } from "./AvatarColorPicker";
 import { BotAvatarView } from "./BotAvatarView";
-import {
-  ditherSeedForName,
-  orderedDitherRgba,
-  rerollDitherSeed,
-  resolveUploadAvatar,
-  type UploadRendering,
-} from "./dither.logic";
 import { BLOB_SHAPES, resolveBlobRendering } from "./roster.logic";
 import type { Bot, BotAvatar, BotBlobShape } from "./types";
 import { useSaveBotAvatar } from "./useServerRoster";
 
-type PickerTab = "bot" | "generate" | "upload";
+type PickerTab = "bot" | "upload";
 
 // Uploads become small square data URLs so an oversized photo can neither
 // bloat the persisted roster nor blow the localStorage quota.
 const AVATAR_UPLOAD_SIZE = 128;
 const AVATAR_UPLOAD_MAX_FILE_BYTES = 8 * 1024 * 1024;
 
-async function downscaleAvatarImage(file: File): Promise<UploadRendering> {
+async function downscaleAvatarImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   try {
     const canvas = document.createElement("canvas");
@@ -52,29 +44,21 @@ async function downscaleAvatarImage(file: File): Promise<UploadRendering> {
       AVATAR_UPLOAD_SIZE,
       AVATAR_UPLOAD_SIZE,
     );
-    const plainUrl = canvas.toDataURL("image/jpeg", 0.85);
-    // Both renderings up front, so the dither toggle previews instantly. The
-    // dithered image is near-1-bit, so PNG stays well under the JPEG's size.
-    const imageData = context.getImageData(0, 0, AVATAR_UPLOAD_SIZE, AVATAR_UPLOAD_SIZE);
-    orderedDitherRgba(imageData.data, imageData.width, imageData.height);
-    context.putImageData(imageData, 0, 0);
-    return { plainUrl, ditheredUrl: canvas.toDataURL("image/png") };
+    return canvas.toDataURL("image/jpeg", 0.85);
   } finally {
     bitmap.close();
   }
 }
 
 const TAB_LABELS: Record<PickerTab, string> = {
-  bot: "Blob",
-  generate: "Generate",
+  bot: "Bot",
   upload: "Upload",
 };
 
 /**
- * Avatar picker for one bot. The Blob tab picks a blob shape and color;
- * Generate seeds a Dither Kit identicon from the bot's name with a reroll;
- * Upload previews a local image, optionally dithered, and applies it as a
- * data URL until server assets exist.
+ * Avatar picker for one bot. The Bot tab picks a body shape and color;
+ * Upload previews a local image and applies it as a data URL until server
+ * assets exist.
  */
 export function AvatarPickerDialog({
   bot,
@@ -90,21 +74,17 @@ export function AvatarPickerDialog({
   const [tab, setTab] = useState<PickerTab>("bot");
   const [shape, setShape] = useState<BotBlobShape>(initialBlob.shape);
   const [color, setColor] = useState(initialBlob.color);
-  const [seed, setSeed] = useState(
-    bot.avatar.kind === "dither" ? bot.avatar.seed : ditherSeedForName(bot.name),
-  );
-  const [upload, setUpload] = useState<UploadRendering | null>(null);
+  const [upload, setUpload] = useState<string | null>(null);
   const uploadSequence = useRef(0);
-  const [ditherUpload, setDitherUpload] = useState(false);
   const [failure, setFailure] = useState<"save" | "upload" | "too-large" | null>(null);
   const [saving, setSaving] = useState(false);
 
   const draftAvatar: BotAvatar | null =
     tab === "bot"
       ? { kind: "blob", shape, color }
-      : tab === "generate"
-        ? { kind: "dither", seed }
-        : resolveUploadAvatar(upload, ditherUpload);
+      : upload === null
+        ? null
+        : { kind: "image", assetPath: upload, dithered: false };
 
   const handleUpload = (file: File | undefined) => {
     if (!file) return;
@@ -155,13 +135,13 @@ export function AvatarPickerDialog({
             value={[tab]}
             onValueChange={(next) => {
               const value = next[0];
-              if (value === "bot" || value === "generate" || value === "upload") {
+              if (value === "bot" || value === "upload") {
                 setFailure(null);
                 setTab(value);
               }
             }}
           >
-            {(["bot", "generate", "upload"] as const).map((option) => (
+            {(["bot", "upload"] as const).map((option) => (
               <Toggle key={option} value={option}>
                 {TAB_LABELS[option]}
               </Toggle>
@@ -200,22 +180,11 @@ export function AvatarPickerDialog({
               </div>
               <AvatarColorPicker className="mx-auto" value={color} onChange={setColor} />
             </>
-          ) : tab === "generate" ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-3">
-              <BotAvatarView
-                avatar={{ kind: "dither", seed }}
-                name={bot.name}
-                className="size-20"
-              />
-              <Button variant="outline" onClick={() => setSeed(rerollDitherSeed(bot.name))}>
-                Reroll
-              </Button>
-            </div>
           ) : (
             <div className="flex h-40 flex-col items-center justify-center gap-3">
               {upload !== null ? (
                 <img
-                  src={ditherUpload ? upload.ditheredUrl : upload.plainUrl}
+                  src={upload}
                   alt="Avatar preview"
                   className="size-20 rounded-full object-cover"
                 />
@@ -229,18 +198,6 @@ export function AvatarPickerDialog({
                   onChange={(event) => handleUpload(event.currentTarget.files?.[0])}
                 />
               </label>
-              {upload !== null ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Switch
-                    id="dither-avatar-upload"
-                    checked={ditherUpload}
-                    onCheckedChange={setDitherUpload}
-                  />
-                  <label htmlFor="dither-avatar-upload" className="cursor-pointer">
-                    Dither image
-                  </label>
-                </div>
-              ) : null}
             </div>
           )}
         </DialogPanel>

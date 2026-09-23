@@ -15,6 +15,14 @@ You can connect a subscription in Settings and use **Create** to add a bot later
 You can change the bot's avatar, name, label, description, model, voice access, and enabled tools.
 Select **Save** to apply the changes.
 
+Shaped avatars are a flat colored body with a face. The eyes are cut out of the body, so they take
+the color of whatever sits behind the avatar. Very light and very dark custom colors draw their eyes
+on instead. Bots saved with an older preset color show the matching color from the current palette.
+
+Avatars rest on a still frame. A working bot sways, glances down at its work, and now and then turns
+its face around its body. Point at a bot and its eyes widen and follow the pointer. Now and then one
+resting bot on screen blinks or glances around. With reduced motion turned on, avatars stay still.
+
 Set **Token hard stop** to interrupt the current step when it reaches the selected limit. A settled
 reply shows its engine, step tokens, and estimated USD cost when the provider reports enough usage
 data.

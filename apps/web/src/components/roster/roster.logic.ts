@@ -21,22 +21,42 @@ export const BLOB_SHAPES: readonly BotBlobShape[] = [
 ];
 
 export const BLOB_COLORS: readonly string[] = [
-  "#FFFFFF",
-  "#E0645C",
-  "#E8883A",
-  "#D9A833",
-  "#5BA97B",
-  "#4E9BB8",
-  "#5B7FD4",
-  "#8B6FC9",
-  "#C96FA8",
-  "#7A8699",
+  "#FF4A5A",
+  "#FF7A1F",
+  "#FFA826",
+  "#16C47A",
+  "#1FBFAE",
+  "#2E8EFF",
+  "#9A68FF",
+  "#FF4FA8",
+  "#A0764F",
+  "#8E8E93",
 ];
 
 export const DEFAULT_BLOB_SHAPE: BotBlobShape = "circle";
-export const DEFAULT_BLOB_COLOR = "#7A8699";
-const DARK_EYES = "#0A0A0A";
+export const DEFAULT_BLOB_COLOR = "#8E8E93";
+const DARK_EYES = "#161616";
 const LIGHT_EYES = "#FFFFFF";
+
+/** The muted presets bots were saved with before the palette went vivid. */
+const LEGACY_BLOB_COLORS: Record<string, string> = {
+  "#E0645C": "#FF4A5A",
+  "#E8883A": "#FF7A1F",
+  "#D9A833": "#FFA826",
+  "#5BA97B": "#16C47A",
+  "#4E9BB8": "#1FBFAE",
+  "#5B7FD4": "#2E8EFF",
+  "#8B6FC9": "#9A68FF",
+  "#C96FA8": "#FF4FA8",
+  "#7A8699": "#8E8E93",
+};
+
+/** Normalizes a stored body color, moving retired presets onto the current palette. */
+export function resolveBlobColor(value: unknown) {
+  if (!isBotAvatarColor(value)) return DEFAULT_BLOB_COLOR;
+  const color = value.toUpperCase();
+  return LEGACY_BLOB_COLORS[color] ?? color;
+}
 
 function relativeLuminance(hexColor: string) {
   const channels = hexColor
@@ -52,23 +72,23 @@ function relativeLuminance(hexColor: string) {
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
-function contrastRatio(first: number, second: number) {
-  const lighter = Math.max(first, second);
-  const darker = Math.min(first, second);
-  return (lighter + 0.05) / (darker + 0.05);
+/**
+ * How the eyes are drawn. Most bodies cut their eyes out so the surface shows
+ * through. Near-white and near-black bodies would lose cutout eyes against a
+ * matching surface, so they paint them in a contrasting ink instead.
+ */
+export function resolveBlobEyes(color: string): { kind: "cutout" } | { kind: "ink"; ink: string } {
+  const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
+  if (luminance === null) return { kind: "cutout" };
+  if (luminance > 0.6) return { kind: "ink", ink: DARK_EYES };
+  if (luminance < 0.02) return { kind: "ink", ink: LIGHT_EYES };
+  return { kind: "cutout" };
 }
 
-/** Picks whichever eye color has the stronger contrast against the blob. */
-export function resolveBlobEyeColor(color: string) {
-  if (!isBotAvatarColor(color)) return DARK_EYES;
-
-  const bodyLuminance = relativeLuminance(color);
-  const darkLuminance = relativeLuminance(DARK_EYES);
-  if (bodyLuminance === null || darkLuminance === null) return DARK_EYES;
-
-  const darkContrast = contrastRatio(bodyLuminance, darkLuminance);
-  const lightContrast = contrastRatio(bodyLuminance, 1);
-  return lightContrast > darkContrast ? LIGHT_EYES : DARK_EYES;
+/** A faint edge for light bodies that would otherwise fade into a light surface. */
+export function resolveBlobOutline(color: string) {
+  const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
+  return luminance !== null && luminance > 0.7 ? "rgba(0, 0, 0, 0.14)" : null;
 }
 
 export function isBotAvatarColor(value: unknown): value is string {
@@ -81,14 +101,24 @@ export function isBotBlobShape(value: string): value is BotBlobShape {
 
 /**
  * Every avatar kind resolves to a paintable blob so the roster never renders
- * an empty slot: dither and image avatars (and any unknown blob shape coming
- * from persisted or server data) fall back to the default circle blob until
- * their real renderer applies.
+ * an empty slot. Legacy dither avatars, which delegated bots and imports still
+ * carry, become a blob picked from their seed so each bot keeps a stable,
+ * distinct look. Image avatars and unknown blob shapes from persisted or
+ * server data fall back to the default circle.
  */
 export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
   shape: BotBlobShape;
   color: string;
 } {
+  if (avatar?.kind === "dither") {
+    const hash = Math.abs(hashSeed(avatar.seed));
+    return {
+      shape: BLOB_SHAPES[hash % BLOB_SHAPES.length] ?? DEFAULT_BLOB_SHAPE,
+      color:
+        BLOB_COLORS[Math.floor(hash / BLOB_SHAPES.length) % BLOB_COLORS.length] ??
+        DEFAULT_BLOB_COLOR,
+    };
+  }
   if (avatar?.kind !== "blob") {
     return { shape: DEFAULT_BLOB_SHAPE, color: DEFAULT_BLOB_COLOR };
   }
@@ -96,21 +126,16 @@ export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
   // default circle rather than an empty slot.
   return {
     shape: isBotBlobShape(avatar.shape) ? avatar.shape : DEFAULT_BLOB_SHAPE,
-    color: avatar.color || DEFAULT_BLOB_COLOR,
+    color: resolveBlobColor(avatar.color),
   };
 }
 
-/**
- * Random blob avatar for a freshly created bot. White is excluded so an
- * auto-assigned body never washes out on the light sidebar; it stays
- * pickable in the avatar picker. `random` is injectable for tests.
- */
+/** Random blob avatar for a freshly created bot. `random` is injectable for tests. */
 export function randomBotAvatar(
   random: () => number = Math.random,
 ): Extract<BotAvatar, { kind: "blob" }> {
-  const colors = BLOB_COLORS.filter((color) => color !== "#FFFFFF");
   const shape = BLOB_SHAPES[Math.floor(random() * BLOB_SHAPES.length)] ?? DEFAULT_BLOB_SHAPE;
-  const color = colors[Math.floor(random() * colors.length)] ?? DEFAULT_BLOB_COLOR;
+  const color = BLOB_COLORS[Math.floor(random() * BLOB_COLORS.length)] ?? DEFAULT_BLOB_COLOR;
   return { kind: "blob", shape, color };
 }
 
@@ -145,14 +170,17 @@ export function resolveBotPresence(shell: PresenceShell | null): RosterPresence 
 }
 
 /**
- * Phase offset for the idle blink, so a roster full of bots never blinks in
- * sync. Negative so the animation starts mid-cycle. The modulo must match the
- * `bot-blink` duration in index.css.
+ * Stable 0–1 motion seed per bot, so a roster full of avatars never blinks or
+ * glances in sync.
  */
-export function blinkDelayMs(seed: string): number {
+export function botAvatarSeed(seed: string): number {
+  return (Math.abs(hashSeed(seed)) % 1000) / 1000;
+}
+
+function hashSeed(seed: string) {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  return -(Math.abs(hash) % 6400);
+  return hash;
 }
 
 export function resolveRosterBotId(

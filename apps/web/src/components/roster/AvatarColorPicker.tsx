@@ -9,7 +9,7 @@ import {
   hsvToHex,
   type HsvColor,
 } from "./avatarColorPicker.logic";
-import { BLOB_COLORS, DEFAULT_BLOB_COLOR, isBotAvatarColor } from "./roster.logic";
+import { BLOB_COLORS, resolveBlobColor } from "./roster.logic";
 
 function ColorThumb({ color, left, top }: { color: string; left: string; top: string }) {
   return (
@@ -175,7 +175,7 @@ export function AvatarColorPicker({
   className?: string;
   label?: string;
 }) {
-  const color = isBotAvatarColor(value) ? value.toUpperCase() : DEFAULT_BLOB_COLOR;
+  const color = resolveBlobColor(value);
   const presetSelected = BLOB_COLORS.includes(color);
 
   return (
