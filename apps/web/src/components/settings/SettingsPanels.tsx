@@ -145,6 +145,7 @@ import { ProjectFavicon } from "../ProjectFavicon";
 import { PortabilitySettings } from "./PortabilitySettings";
 import { LanguageSetting } from "./LanguageSetting";
 import { useI18n } from "../../i18n";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -156,20 +157,20 @@ const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
   "12-hour": "12-hour",
   "24-hour": "24-hour",
-} as const;
+} as const satisfies Record<string, MessageKey>;
 
-const BOT_SANDBOX_BROWSER_SHARING_LABELS: Record<BotSandboxBrowserSharing, string> = {
+const BOT_SANDBOX_BROWSER_SHARING_LABELS: Record<BotSandboxBrowserSharing, MessageKey> = {
   shared: "Shared",
   separate: "Separate",
 };
 
-const BACKGROUND_ACTIVITY_PROFILE_LABELS: Record<BackgroundActivityProfile, string> = {
+const BACKGROUND_ACTIVITY_PROFILE_LABELS: Record<BackgroundActivityProfile, MessageKey> = {
   balanced: "Balanced",
   performance: "Performance",
   "battery-saver": "Battery saver",
 };
 
-const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
+const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, MessageKey> = {
   hold: "Hold",
   "double-click": "Double press",
   direct: "Direct",
@@ -177,20 +178,20 @@ const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
 
 type BackgroundActivityProfileOption = BackgroundActivityProfile | "advanced";
 
-const BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS: Record<BackgroundActivityProfileOption, string> = {
+const BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS: Record<
+  BackgroundActivityProfileOption,
+  MessageKey
+> = {
   ...BACKGROUND_ACTIVITY_PROFILE_LABELS,
   advanced: "Advanced",
 };
 
-const BACKGROUND_ACTIVITY_PROFILE_DESCRIPTIONS: Record<BackgroundActivityProfile, string> = {
+const BACKGROUND_ACTIVITY_PROFILE_DESCRIPTIONS: Record<BackgroundActivityProfile, MessageKey> = {
   balanced:
     "Pauses background probes when clients are idle, the host is locked, or low power mode is active.",
   performance: "Allows scoped background probes while any subscribed client remains connected.",
   "battery-saver": "Also pauses background probes when the host or client is on battery.",
 };
-
-const ADVANCED_BACKGROUND_ACTIVITY_DESCRIPTION =
-  "Uses custom background intervals with the selected shared power policy.";
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 const BACKGROUND_ACTIVITY_BOOLEAN_OVERRIDES: ReadonlyArray<{
@@ -224,15 +225,17 @@ function backgroundActivityProfileSettings(profile: BackgroundActivityProfile) {
 }
 
 function AboutVersionTitle() {
+  const { t } = useI18n();
   return (
     <span className="inline-flex items-baseline gap-2">
-      <span>Version</span>
+      <span>{t("Version")}</span>
       <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
     </span>
   );
 }
 
 function AboutVersionSection() {
+  const { t } = useI18n();
   const updateState = useDesktopUpdateState();
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
 
@@ -328,18 +331,19 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
-  const statusLabel: Record<string, string> = {
+  const actionLabel: Record<string, MessageKey> = { download: "Download", install: "Install" };
+  const statusLabel: Record<string, MessageKey> = {
     checking: "Checking…",
     downloading: "Downloading…",
     "up-to-date": "Up to Date",
   };
-  const buttonLabel =
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
+  const buttonLabel = t(
+    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates",
+  );
   const description =
     action === "download" || action === "install"
-      ? "Update available."
-      : "Current version of the application.";
+      ? t("Update available.")
+      : t("Current version of the application.");
 
   return (
     <SettingsRow
@@ -606,6 +610,7 @@ function BackgroundActivityAdvancedDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const resolvedBackgroundActivity = resolveServerBackgroundActivitySettings(settings);
@@ -660,13 +665,13 @@ function BackgroundActivityAdvancedDialog({
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   <SelectItem hideIndicator value="balanced">
-                    {BACKGROUND_ACTIVITY_PROFILE_LABELS.balanced}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_LABELS.balanced)}
                   </SelectItem>
                   <SelectItem hideIndicator value="performance">
-                    {BACKGROUND_ACTIVITY_PROFILE_LABELS.performance}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_LABELS.performance)}
                   </SelectItem>
                   <SelectItem hideIndicator value="battery-saver">
-                    {BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"]}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"])}
                   </SelectItem>
                 </SelectPopup>
               </Select>
@@ -901,7 +906,7 @@ export function AppearanceSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="appearance" title={t("Appearance")}>
-        <div id={searchableSetting("theme").id}>
+        <div id={searchableSetting("theme", t).id}>
           <ThemeLibrary
             appearanceMode={appearanceMode}
             customThemes={customThemes}
@@ -918,7 +923,7 @@ export function AppearanceSettingsPanel() {
         </div>
 
         <SettingsRow
-          {...searchableSetting("setting-appearance-contrast")}
+          {...searchableSetting("setting-appearance-contrast", t)}
           description="Adjust the contrast of colors and borders across the interface."
           resetAction={
             settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast ? (
@@ -966,7 +971,7 @@ export function AppearanceSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("setting-glass-opacity")}
+          {...searchableSetting("setting-glass-opacity", t)}
           description="Control how transparent glass surfaces are. Higher values make menus, dialogs, and the composer more solid."
           resetAction={
             settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? (
@@ -1013,7 +1018,7 @@ export function AppearanceSettingsPanel() {
 
         {showEnvironmentIdentification ? (
           <SettingsRow
-            {...searchableSetting("environment-identification")}
+            {...searchableSetting("environment-identification", t)}
             description="Choose how Dev environments are identified."
             resetAction={
               settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
@@ -1080,12 +1085,13 @@ function useFontDefaultFamilies() {
 }
 
 function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
   return (
     <FontFamilySettingsRow
-      {...searchableSetting("interface-font")}
+      {...searchableSetting("interface-font", t)}
       description="Everything outside code blocks and the terminal."
       defaultFamily={defaults.sans}
       defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilySans}
@@ -1111,12 +1117,13 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
 }
 
 function PromptFontRow() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
   return (
     <FontFamilySettingsRow
-      {...searchableSetting("prompt-font")}
+      {...searchableSetting("prompt-font", t)}
       description="Only the box you write prompts in. Mono works well here."
       defaultFamily={defaults.interfaceFamily}
       defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer}
@@ -1150,12 +1157,13 @@ function CodeFontRow({
   description?: string;
   preview?: ReactNode;
 }) {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
   return (
     <FontFamilySettingsRow
-      {...searchableSetting("code-font")}
+      {...searchableSetting("code-font", t)}
       {...(title !== undefined ? { title } : {})}
       description={description}
       defaultFamily={defaults.code}
@@ -1183,12 +1191,13 @@ function CodeFontRow({
 }
 
 function TerminalFontRow() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
   return (
     <FontFamilySettingsRow
-      {...searchableSetting("terminal-font")}
+      {...searchableSetting("terminal-font", t)}
       description="Terminal output, independent from code blocks and diffs."
       defaultFamily={defaults.code}
       defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilyTerminal}
@@ -1224,12 +1233,13 @@ function TerminalFontRow() {
 }
 
 function FontSmoothingRow() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   if (!isMacPlatform(navigator.platform)) return null;
   return (
     <SettingsRow
-      {...searchableSetting("font-smoothing")}
+      {...searchableSetting("font-smoothing", t)}
       description="Render text with thinner grayscale anti-aliasing instead of macOS's heavier default."
       resetAction={
         settings.fontSmoothing !== DEFAULT_UNIFIED_SETTINGS.fontSmoothing ? (
@@ -1253,11 +1263,12 @@ function FontSmoothingRow() {
 }
 
 function WordWrapRow() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   return (
     <SettingsRow
-      {...searchableSetting("word-wrap")}
+      {...searchableSetting("word-wrap", t)}
       description="Wrap long lines in code blocks, tables, diffs, and file previews by default."
       resetAction={
         settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? (
@@ -1590,6 +1601,7 @@ const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set([
  * jump to one of the rows unfolds the section.
  */
 function LegacyFeaturesSection() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const [open, setOpen] = useState(false);
@@ -1615,15 +1627,17 @@ function LegacyFeaturesSection() {
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="group flex min-h-8 w-full items-center gap-2 px-3 sm:px-4">
           <h2 className="text-lg font-semibold tracking-[-0.025em] text-muted-foreground transition-colors group-hover:text-foreground">
-            Legacy features
+            {t("Legacy features")}
           </h2>
           <ChevronRightIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-panel-open:rotate-90" />
         </CollapsibleTrigger>
         <CollapsiblePanel>
           <div className="relative space-y-1 overflow-visible pt-3 text-foreground">
             <SettingsRow
-              {...searchableSetting("legacy-plan-mode")}
-              description="Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode."
+              {...searchableSetting("legacy-plan-mode", t)}
+              description={t(
+                "Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode.",
+              )}
               control={
                 <Switch
                   checked={settings.planModeEnabled}
@@ -1652,13 +1666,15 @@ function LegacyFeaturesSection() {
                           }),
                     });
                   }}
-                  aria-label="Plan mode (legacy)"
+                  aria-label={t("Plan mode (legacy)")}
                 />
               }
             />
             <SettingsRow
-              {...searchableSetting("legacy-token-streaming")}
-              description="Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior."
+              {...searchableSetting("legacy-token-streaming", t)}
+              description={t(
+                "Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior.",
+              )}
               control={
                 <Switch
                   checked={settings.enableLegacyTokenStreaming}
@@ -1671,14 +1687,16 @@ function LegacyFeaturesSection() {
                       const api = readLocalApi();
                       const confirmed = await (api ?? ensureLocalApi()).dialogs.confirm(
                         [
-                          "Turn on token-by-token output?",
-                          "It is significantly slower than the default buffered output and hurts the reading experience. This switch exists only for backwards compatibility.",
+                          t("Turn on token-by-token output?"),
+                          t(
+                            "It is significantly slower than the default buffered output and hurts the reading experience. This switch exists only for backwards compatibility.",
+                          ),
                         ].join("\n"),
                       );
                       if (confirmed) updateSettings({ enableLegacyTokenStreaming: true });
                     })();
                   }}
-                  aria-label="Stream token by token (legacy)"
+                  aria-label={t("Stream token by token (legacy)")}
                 />
               }
             />
@@ -1696,17 +1714,20 @@ export function BotSandboxBrowserSharingSettings({
   readonly value: BotSandboxBrowserSharing;
   readonly onChange: (value: BotSandboxBrowserSharing) => void;
 }) {
+  const { t } = useI18n();
   const [pendingValue, setPendingValue] = useState<BotSandboxBrowserSharing | null>(null);
 
   return (
     <>
       <SettingsRow
-        {...searchableSetting("sandbox-browser-sharing")}
-        description="Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile."
+        {...searchableSetting("sandbox-browser-sharing", t)}
+        description={t(
+          "Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile.",
+        )}
         resetAction={
           value !== DEFAULT_UNIFIED_SETTINGS.botSandboxBrowserSharing ? (
             <SettingResetButton
-              label="sandbox and browser sharing"
+              label={t("sandbox and browser sharing")}
               onClick={() => setPendingValue(DEFAULT_UNIFIED_SETTINGS.botSandboxBrowserSharing)}
             />
           ) : null
@@ -1720,15 +1741,15 @@ export function BotSandboxBrowserSharingSettings({
               }
             }}
           >
-            <SelectTrigger className="w-full sm:w-40" aria-label="Sandbox and browser sharing">
-              <SelectValue>{BOT_SANDBOX_BROWSER_SHARING_LABELS[value]}</SelectValue>
+            <SelectTrigger className="w-full sm:w-40" aria-label={t("Sandbox and browser sharing")}>
+              <SelectValue>{t(BOT_SANDBOX_BROWSER_SHARING_LABELS[value])}</SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               <SelectItem hideIndicator value="shared">
-                Shared
+                {t(BOT_SANDBOX_BROWSER_SHARING_LABELS.shared)}
               </SelectItem>
               <SelectItem hideIndicator value="separate">
-                Separate
+                {t(BOT_SANDBOX_BROWSER_SHARING_LABELS.separate)}
               </SelectItem>
             </SelectPopup>
           </Select>
@@ -1738,16 +1759,20 @@ export function BotSandboxBrowserSharingSettings({
       <Dialog open={pendingValue !== null} onOpenChange={(open) => !open && setPendingValue(null)}>
         <DialogPopup>
           <DialogHeader>
-            <DialogTitle>Change bot workspace mode?</DialogTitle>
+            <DialogTitle>{t("Change bot workspace mode?")}</DialogTitle>
             <DialogDescription>
               {pendingValue === "shared"
-                ? "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move."
-                : "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace."}
+                ? t(
+                    "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move.",
+                  )
+                : t(
+                    "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace.",
+                  )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingValue(null)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               onClick={() => {
@@ -1756,7 +1781,7 @@ export function BotSandboxBrowserSharingSettings({
                 if (nextValue) onChange(nextValue);
               }}
             >
-              Change mode
+              {t("Change mode")}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -1772,13 +1797,16 @@ export function GeneralSettingsPanel() {
   const [backgroundActivityDialogOpen, setBackgroundActivityDialogOpen] = useState(false);
   const observability = useAtomValue(primaryServerObservabilityAtom);
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
-  const diagnosticsDescription = formatDiagnosticsDescription({
-    localTracingEnabled: observability?.localTracingEnabled ?? false,
-    otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
-    otlpTracesUrl: observability?.otlpTracesUrl,
-    otlpMetricsEnabled: observability?.otlpMetricsEnabled ?? false,
-    otlpMetricsUrl: observability?.otlpMetricsUrl,
-  });
+  const diagnosticsDescription = formatDiagnosticsDescription(
+    {
+      localTracingEnabled: observability?.localTracingEnabled ?? false,
+      otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
+      otlpTracesUrl: observability?.otlpTracesUrl,
+      otlpMetricsEnabled: observability?.otlpMetricsEnabled ?? false,
+      otlpMetricsUrl: observability?.otlpMetricsUrl,
+    },
+    t,
+  );
 
   const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
   const textGenInstanceId = textGenerationModelSelection.instanceId;
@@ -1807,10 +1835,11 @@ export function GeneralSettingsPanel() {
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
   const backgroundActivityDescription =
     backgroundActivityProfileOption === "advanced"
-      ? `${ADVANCED_BACKGROUND_ACTIVITY_DESCRIPTION} Current shared policy: ${
-          BACKGROUND_ACTIVITY_PROFILE_LABELS[activeBackgroundActivityProfile]
-        }.`
-      : BACKGROUND_ACTIVITY_PROFILE_DESCRIPTIONS[resolvedBackgroundActivity.profile];
+      ? t(
+          "Uses custom background intervals with the selected shared power policy. Current shared policy: {policy}.",
+          { policy: t(BACKGROUND_ACTIVITY_PROFILE_LABELS[activeBackgroundActivityProfile]) },
+        )
+      : t(BACKGROUND_ACTIVITY_PROFILE_DESCRIPTIONS[resolvedBackgroundActivity.profile]);
   const canResetBackgroundActivity = !Equal.equals(
     settings.backgroundActivity,
     DEFAULT_UNIFIED_SETTINGS.backgroundActivity,
@@ -1826,12 +1855,12 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("time-format")}
-          description="System default follows your browser or OS clock preference."
+          {...searchableSetting("time-format", t)}
+          description={t("System default follows your browser or OS clock preference.")}
           resetAction={
             settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
               <SettingResetButton
-                label="time format"
+                label={t("time format")}
                 onClick={() =>
                   updateSettings({
                     timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
@@ -1849,18 +1878,18 @@ export function GeneralSettingsPanel() {
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Timestamp format">
-                <SelectValue>{TIMESTAMP_FORMAT_LABELS[settings.timestampFormat]}</SelectValue>
+              <SelectTrigger className="w-full sm:w-40" aria-label={t("Timestamp format")}>
+                <SelectValue>{t(TIMESTAMP_FORMAT_LABELS[settings.timestampFormat])}</SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="locale">
-                  {TIMESTAMP_FORMAT_LABELS.locale}
+                  {t(TIMESTAMP_FORMAT_LABELS.locale)}
                 </SelectItem>
                 <SelectItem hideIndicator value="12-hour">
-                  {TIMESTAMP_FORMAT_LABELS["12-hour"]}
+                  {t(TIMESTAMP_FORMAT_LABELS["12-hour"])}
                 </SelectItem>
                 <SelectItem hideIndicator value="24-hour">
-                  {TIMESTAMP_FORMAT_LABELS["24-hour"]}
+                  {t(TIMESTAMP_FORMAT_LABELS["24-hour"])}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -1868,12 +1897,12 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("usage-refresh")}
-          description="How often the Usage page reloads plan limits."
+          {...searchableSetting("usage-refresh", t)}
+          description={t("How often the Usage page reloads plan limits.")}
           resetAction={
             settings.usageRefreshMinutes !== DEFAULT_UNIFIED_SETTINGS.usageRefreshMinutes ? (
               <SettingResetButton
-                label="usage refresh"
+                label={t("usage refresh")}
                 onClick={() =>
                   updateSettings({
                     usageRefreshMinutes: DEFAULT_UNIFIED_SETTINGS.usageRefreshMinutes,
@@ -1892,21 +1921,23 @@ export function GeneralSettingsPanel() {
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Usage refresh">
-                <SelectValue>{`${settings.usageRefreshMinutes} min`}</SelectValue>
+              <SelectTrigger className="w-full sm:w-40" aria-label={t("Usage refresh")}>
+                <SelectValue>
+                  {t("{minutes} min", { minutes: settings.usageRefreshMinutes })}
+                </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="1">
-                  1 min
+                  {t("{minutes} min", { minutes: 1 })}
                 </SelectItem>
                 <SelectItem hideIndicator value="5">
-                  5 min
+                  {t("{minutes} min", { minutes: 5 })}
                 </SelectItem>
                 <SelectItem hideIndicator value="15">
-                  15 min
+                  {t("{minutes} min", { minutes: 15 })}
                 </SelectItem>
                 <SelectItem hideIndicator value="30">
-                  30 min
+                  {t("{minutes} min", { minutes: 30 })}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -1914,12 +1945,12 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("hide-whitespace-changes")}
-          description="Set whether the diff panel ignores whitespace-only edits by default."
+          {...searchableSetting("hide-whitespace-changes", t)}
+          description={t("Set whether the diff panel ignores whitespace-only edits by default.")}
           resetAction={
             settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace ? (
               <SettingResetButton
-                label="diff whitespace changes"
+                label={t("diff whitespace changes")}
                 onClick={() =>
                   updateSettings({
                     diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
@@ -1934,18 +1965,20 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ diffIgnoreWhitespace: Boolean(checked) })
               }
-              aria-label="Hide whitespace changes by default"
+              aria-label={t("Hide whitespace changes by default")}
             />
           }
         />
 
         <SettingsRow
-          {...searchableSetting("skills-in-slash-menu")}
-          description="Also include skills in the / command menu. Skills always appear when you type $."
+          {...searchableSetting("skills-in-slash-menu", t)}
+          description={t(
+            "Also include skills in the / command menu. Skills always appear when you type $.",
+          )}
           resetAction={
             settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu ? (
               <SettingResetButton
-                label="skills in slash menu"
+                label={t("skills in slash menu")}
                 onClick={() =>
                   updateSettings({
                     showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
@@ -1960,19 +1993,19 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ showSkillsInSlashMenu: Boolean(checked) })
               }
-              aria-label="Show skills in slash menu"
+              aria-label={t("Show skills in slash menu")}
             />
           }
         />
 
         <SettingsRow
-          title="Provider update checks"
-          description="Check installed provider CLIs for newer available versions."
+          title={t("Provider update checks")}
+          description={t("Check installed provider CLIs for newer available versions.")}
           resetAction={
             settings.enableProviderUpdateChecks !==
             DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks ? (
               <SettingResetButton
-                label="provider update checks"
+                label={t("provider update checks")}
                 onClick={() =>
                   updateSettings({
                     enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -1987,7 +2020,7 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ enableProviderUpdateChecks: Boolean(checked) })
               }
-              aria-label="Check provider versions"
+              aria-label={t("Check provider versions")}
             />
           }
         />
@@ -1995,10 +2028,11 @@ export function GeneralSettingsPanel() {
         <SettingsRow
           title={
             <span className="inline-flex items-center gap-1.5">
-              Background activity
+              {t("Background activity")}
               <PolicyTooltip>
-                This shared policy gates background work such as Git refreshes and provider health
-                probes after their individual intervals elapse.
+                {t(
+                  "This shared policy gates background work such as Git refreshes and provider health probes after their individual intervals elapse.",
+                )}
               </PolicyTooltip>
             </span>
           }
@@ -2006,7 +2040,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             canResetBackgroundActivity ? (
               <SettingResetButton
-                label="background activity"
+                label={t("background activity")}
                 onClick={() => updateSettings(resetBackgroundActivitySettings())}
               />
             ) : null
@@ -2029,23 +2063,26 @@ export function GeneralSettingsPanel() {
                   }
                 }}
               >
-                <SelectTrigger className="w-full sm:w-40" aria-label="Background activity profile">
+                <SelectTrigger
+                  className="w-full sm:w-40"
+                  aria-label={t("Background activity profile")}
+                >
                   <SelectValue>
-                    {BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS[backgroundActivityProfileOption]}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS[backgroundActivityProfileOption])}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   <SelectItem hideIndicator value="balanced">
-                    {BACKGROUND_ACTIVITY_PROFILE_LABELS.balanced}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_LABELS.balanced)}
                   </SelectItem>
                   <SelectItem hideIndicator value="performance">
-                    {BACKGROUND_ACTIVITY_PROFILE_LABELS.performance}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_LABELS.performance)}
                   </SelectItem>
                   <SelectItem hideIndicator value="battery-saver">
-                    {BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"]}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"])}
                   </SelectItem>
                   <SelectItem hideIndicator value="advanced">
-                    {BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS.advanced}
+                    {t(BACKGROUND_ACTIVITY_PROFILE_OPTION_LABELS.advanced)}
                   </SelectItem>
                 </SelectPopup>
               </Select>
@@ -2056,14 +2093,14 @@ export function GeneralSettingsPanel() {
                       <Button
                         size="icon-sm"
                         variant="outline"
-                        aria-label="Configure advanced background activity"
+                        aria-label={t("Configure advanced background activity")}
                         onClick={() => setBackgroundActivityDialogOpen(true)}
                       >
                         <SettingsIcon className="size-4" />
                       </Button>
                     }
                   />
-                  <TooltipPopup side="top">Configure background activity</TooltipPopup>
+                  <TooltipPopup side="top">{t("Configure background activity")}</TooltipPopup>
                 </Tooltip>
               ) : null}
               <BackgroundActivityAdvancedDialog
@@ -2075,12 +2112,12 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("local-execution")}
-          description="Auto review runs safe actions and asks before sensitive ones."
+          {...searchableSetting("local-execution", t)}
+          description={t("Auto review runs safe actions and asks before sensitive ones.")}
           resetAction={
             settings.localExecutionMode !== DEFAULT_UNIFIED_SETTINGS.localExecutionMode ? (
               <SettingResetButton
-                label="local execution"
+                label={t("local execution")}
                 onClick={() =>
                   updateSettings({
                     localExecutionMode: DEFAULT_UNIFIED_SETTINGS.localExecutionMode,
@@ -2098,24 +2135,24 @@ export function GeneralSettingsPanel() {
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Local execution">
+              <SelectTrigger className="w-full sm:w-40" aria-label={t("Local execution")}>
                 <SelectValue>
                   {settings.localExecutionMode === "full-access"
-                    ? "Full access"
+                    ? t("Full access")
                     : settings.localExecutionMode === "approval-required"
-                      ? "Ask first"
-                      : "Auto review"}
+                      ? t("Ask first")
+                      : t("Auto review")}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="auto">
-                  Auto review
+                  {t("Auto review")}
                 </SelectItem>
                 <SelectItem hideIndicator value="approval-required">
-                  Ask first
+                  {t("Ask first")}
                 </SelectItem>
                 <SelectItem hideIndicator value="full-access">
-                  Full access
+                  {t("Full access")}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -2123,13 +2160,13 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("add-project-starts-in")}
-          description='Leave empty to use "~/" when the Add Project browser opens.'
+          {...searchableSetting("add-project-starts-in", t)}
+          description={t('Leave empty to use "~/" when the Add Project browser opens.')}
           resetAction={
             settings.addProjectBaseDirectory !==
             DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory ? (
               <SettingResetButton
-                label="add project base directory"
+                label={t("add project base directory")}
                 onClick={() =>
                   updateSettings({
                     addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
@@ -2145,19 +2182,19 @@ export function GeneralSettingsPanel() {
               onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
               placeholder="~/"
               spellCheck={false}
-              aria-label="Add project base directory"
+              aria-label={t("Add project base directory")}
             />
           }
         />
 
         {isElectron ? (
           <SettingsRow
-            {...searchableSetting("quit-confirmation")}
-            description="Hold mode also quits on two quick presses."
+            {...searchableSetting("quit-confirmation", t)}
+            description={t("Hold mode also quits on two quick presses.")}
             resetAction={
               settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
                 <SettingResetButton
-                  label="quit shortcut behavior"
+                  label={t("quit shortcut behavior")}
                   onClick={() =>
                     updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
                   }
@@ -2176,14 +2213,16 @@ export function GeneralSettingsPanel() {
                 <SelectTrigger
                   size="sm"
                   className="w-full sm:w-40"
-                  aria-label="Quit shortcut behavior"
+                  aria-label={t("Quit shortcut behavior")}
                 >
-                  <SelectValue>{QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit]}</SelectValue>
+                  <SelectValue>
+                    {t(QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   {Object.entries(QUIT_CONFIRMATION_MODE_LABELS).map(([value, label]) => (
                     <SelectItem hideIndicator key={value} value={value}>
-                      {label}
+                      {t(label)}
                     </SelectItem>
                   ))}
                 </SelectPopup>
@@ -2193,12 +2232,12 @@ export function GeneralSettingsPanel() {
         ) : null}
 
         <SettingsRow
-          {...searchableSetting("text-generation-model")}
-          description="Used when bot work or source control work does not have its own model."
+          {...searchableSetting("text-generation-model", t)}
+          description={t("Used when bot work or source control work does not have its own model.")}
           resetAction={
             isTextGenerationModelDirty ? (
               <SettingResetButton
-                label="text generation model"
+                label={t("text generation model")}
                 onClick={() =>
                   updateSettings({
                     textGenerationModelSelection:
@@ -2275,14 +2314,14 @@ export function GeneralSettingsPanel() {
         ) : (
           <SettingsRow
             title={<AboutVersionTitle />}
-            description="Current version of the application."
+            description={t("Current version of the application.")}
           />
         )}
         <SettingsRow
-          title="Feedback endpoint"
+          title={t("Feedback endpoint")}
           control={
             <Input
-              aria-label="Feedback endpoint"
+              aria-label={t("Feedback endpoint")}
               className="w-full sm:w-80"
               defaultValue={settings.productFeedbackEndpoint}
               key={settings.productFeedbackEndpoint}
@@ -2294,7 +2333,7 @@ export function GeneralSettingsPanel() {
                   event.currentTarget.value = settings.productFeedbackEndpoint;
                   toastManager.add({
                     type: "error",
-                    title: "Use HTTPS or loopback HTTP.",
+                    title: t("Use HTTPS or loopback HTTP."),
                   });
                   return;
                 }
@@ -2310,19 +2349,19 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          title="Send feedback"
+          title={t("Send feedback")}
           control={
             <Button size="xs" variant="outline" onClick={() => openProductFeedback()}>
-              Send feedback
+              {t("Send feedback")}
             </Button>
           }
         />
         <SettingsRow
-          {...searchableSetting("diagnostics")}
+          {...searchableSetting("diagnostics", t)}
           description={diagnosticsDescription}
           control={
             <Button size="xs" variant="outline" onClick={() => openSettings("diagnostics")}>
-              View diagnostics
+              {t("View diagnostics")}
             </Button>
           }
         />
@@ -2334,6 +2373,7 @@ export function GeneralSettingsPanel() {
 }
 
 export function ArchivedThreadsPanel() {
+  const { t } = useI18n();
   const projects = useProjects();
   const { unarchiveThread, confirmAndDeleteThread } = useThreadActions();
   const environmentIds = useMemo(
@@ -2450,8 +2490,8 @@ export function ArchivedThreadsPanel() {
     <SettingsPageContainer>
       {archivedGroups.length === 0 ? (
         <SettingsSection
-          id={isLoadingArchive ? undefined : searchableSetting("archive").id}
-          title={searchableSetting("archive").title}
+          id={isLoadingArchive ? undefined : searchableSetting("archive", t).id}
+          title={searchableSetting("archive", t).title}
         >
           <SettingsRow
             title={
@@ -2479,7 +2519,7 @@ export function ArchivedThreadsPanel() {
         archivedGroups.map(({ project, threads: projectThreads }, index) => (
           <SettingsSection
             key={project.id}
-            id={index === 0 ? searchableSetting("archive").id : undefined}
+            id={index === 0 ? searchableSetting("archive", t).id : undefined}
             title={project.name}
             icon={
               <ProjectFavicon

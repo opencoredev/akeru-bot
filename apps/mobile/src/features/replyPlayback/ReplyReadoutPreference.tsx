@@ -4,6 +4,7 @@ import type { ReplyReadoutPreference as Preference } from "@t3tools/client-runti
 
 import { AppText } from "../../components/AppText";
 import { ThemedSwitch } from "../../components/ThemedSwitch";
+import { useMobileI18n } from "../../lib/i18n";
 
 export function ReplyReadoutPreference({ preference }: { readonly preference: Preference }) {
   const state = useSyncExternalStore(
@@ -11,7 +12,8 @@ export function ReplyReadoutPreference({ preference }: { readonly preference: Pr
     preference.getSnapshot,
     preference.getSnapshot,
   );
-  const label = "Automatically read new replies in this chat on this device";
+  const { t } = useMobileI18n();
+  const label = t("Automatically read new replies in this chat on this device");
   return (
     <View className="gap-2">
       <View className="min-h-11 flex-row items-center gap-3">
@@ -27,8 +29,9 @@ export function ReplyReadoutPreference({ preference }: { readonly preference: Pr
         />
       </View>
       <AppText className="text-sm text-muted-foreground">
-        Only new completed replies are read. History is never replayed. Your selected speech service
-        may charge for audio.
+        {t(
+          "Only new completed replies are read. History is never replayed. Your selected speech service may charge for audio.",
+        )}
       </AppText>
       {state.persistenceError ? (
         <AppText
@@ -36,7 +39,7 @@ export function ReplyReadoutPreference({ preference }: { readonly preference: Pr
           accessibilityLiveRegion="polite"
           className="text-sm text-muted-foreground"
         >
-          This preference could not be saved on this device.
+          {t("This preference could not be saved on this device.")}
         </AppText>
       ) : null}
     </View>

@@ -31,9 +31,14 @@ import {
   providerAvailabilityReason,
   type ProviderAvailabilityPresentation,
   type ProviderAvailabilityReason,
+  type ProviderAvailabilityTranslate,
 } from "@t3tools/client-runtime/provider-availability";
+import { translate as translateMessage } from "@t3tools/client-runtime/i18n";
 
 import { formatProviderDriverKindLabel } from "./providerModels";
+
+const english: ProviderAvailabilityTranslate = (message, params) =>
+  translateMessage("en", message, params);
 
 /**
  * Local-only placeholder used while a draft has no provider it can safely
@@ -132,6 +137,8 @@ export function providerInstanceUnavailability(
     readonly model?: string | null;
     readonly modelName?: string | null;
     readonly providerName?: string;
+    /** The active translator; omit for English. */
+    readonly translate?: ProviderAvailabilityTranslate;
   } = {},
 ): (ProviderAvailabilityPresentation & { readonly reason: ProviderAvailabilityReason }) | null {
   const reason = providerInstanceAvailabilityReason(entry, options.model);
@@ -140,9 +147,13 @@ export function providerInstanceUnavailability(
     reason,
     ...presentProviderUnavailability({
       reason,
-      providerName: entry?.displayName ?? options.providerName ?? "This provider",
+      providerName:
+        entry?.displayName ??
+        options.providerName ??
+        (options.translate ?? english)("This provider"),
       modelName: options.modelName ?? options.model,
       detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
+      translate: options.translate,
     }),
   };
 }
@@ -154,10 +165,16 @@ export function providerInstanceUnavailableReason(
     readonly model?: string | null;
     readonly modelName?: string | null;
     readonly providerName?: string;
+    /** The active translator; omit for English. */
+    readonly translate?: ProviderAvailabilityTranslate;
   } = {},
 ): string | null {
   const presentation = providerInstanceUnavailability(entry, options);
-  return presentation ? `${presentation.title}. ${presentation.description}` : null;
+  if (!presentation) return null;
+  return (options.translate ?? english)("{title}. {description}", {
+    title: presentation.title,
+    description: presentation.description,
+  });
 }
 
 /**
@@ -165,10 +182,13 @@ export function providerInstanceUnavailableReason(
  * stays pickable because the next attempt may succeed; every other reason
  * needs the user to fix something first.
  */
-export function providerInstancePickerBlockReason(entry: ProviderInstanceEntry): string | null {
+export function providerInstancePickerBlockReason(
+  entry: ProviderInstanceEntry,
+  translate?: ProviderAvailabilityTranslate,
+): string | null {
   const reason = providerInstanceAvailabilityReason(entry);
   if (!reason || reason === "temporary-failure") return null;
-  return providerInstanceUnavailableReason(entry);
+  return providerInstanceUnavailableReason(entry, translate ? { translate } : {});
 }
 
 /**

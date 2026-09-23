@@ -15,6 +15,7 @@ import {
   providerUnavailabilitySummary,
   type ProviderAvailabilityPresentation,
   type ProviderAvailabilityReason,
+  type ProviderAvailabilityTranslate,
 } from "@t3tools/client-runtime/provider-availability";
 import {
   buildProviderOptionSelectionsFromDescriptors,
@@ -60,6 +61,7 @@ function providerDisplayLabel(provider: {
 export function resolveModelSendBlock(
   config: T3ServerConfig | null | undefined,
   selection: ModelSelection,
+  translate?: ProviderAvailabilityTranslate,
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ProviderAvailabilityPresentation | null {
   if (!config) return null;
@@ -90,6 +92,7 @@ export function resolveModelSendBlock(
     ),
     modelName,
     detail: provider?.unavailabilityDetail ?? provider?.message,
+    translate,
   });
 }
 
@@ -173,6 +176,7 @@ export function buildModelOptions(
   config: T3ServerConfig | null | undefined,
   fallbackModelSelection: ModelSelection | null,
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
+  translate?: ProviderAvailabilityTranslate,
 ): ReadonlyArray<ModelOption> {
   const options = new Map<string, ModelOption>();
 
@@ -205,7 +209,12 @@ export function buildModelOptions(
   ): string | null =>
     reason === null
       ? null
-      : providerUnavailabilitySummary({ reason, providerName: providerLabel, modelName });
+      : providerUnavailabilitySummary({
+          reason,
+          providerName: providerLabel,
+          modelName,
+          translate,
+        });
 
   for (const provider of allProviders) {
     const providerLabel = providerDisplayLabel(provider);

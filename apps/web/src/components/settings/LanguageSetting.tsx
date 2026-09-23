@@ -7,7 +7,7 @@ export function LanguageSetting() {
   const { t, preference, setPreference, catalogFailed, retryCatalog } = useI18n();
   return (
     <SettingsRow
-      {...searchableSetting("language")}
+      {...searchableSetting("language", t)}
       title={<label htmlFor="language-preference">{t("Language")}</label>}
       description={
         <span id="language-description">

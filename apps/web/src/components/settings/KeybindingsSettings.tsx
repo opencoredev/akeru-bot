@@ -73,6 +73,7 @@ import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useI18n } from "../../i18n";
 
 function KeybindingPill({ value }: { value: string }) {
   const parts = value.split("+");
@@ -1049,6 +1050,7 @@ function NewKeybindingTableRow({
 }
 
 export function KeybindingsSettingsPanel() {
+  const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const keybindingsConfigPath = useAtomValue(primaryServerKeybindingsConfigPathAtom);
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
@@ -1197,7 +1199,7 @@ export function KeybindingsSettingsPanel() {
   return (
     <SettingsPageContainer width="wide">
       <SettingsSection
-        {...searchableSetting("keybindings")}
+        {...searchableSetting("keybindings", t)}
         headerAction={
           <div className="flex items-center gap-1.5">
             <ExpandableHeaderSearch

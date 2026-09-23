@@ -7,6 +7,8 @@ import {
   type ServerProviderUnavailability,
   type UnifiedSettings,
 } from "@t3tools/contracts";
+import { translate as translateMessage } from "@t3tools/client-runtime/i18n";
+import type { ProviderAvailabilityTranslate } from "@t3tools/client-runtime/provider-availability";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
 import type { ComposerProviderCatalog } from "../chat/composerProviderMenuItems";
@@ -70,12 +72,14 @@ export function resolveStickyBotEngine(input: {
 export function botEngineUnavailability(
   selection: ModelSelection | null,
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+  translate: ProviderAvailabilityTranslate = (message, params) =>
+    translateMessage("en", message, params),
 ) {
   if (!selection) {
     return {
       reason: "missing-provider" as const,
-      title: "No provider is connected",
-      description: "Connect a provider in Settings > Providers so this bot can reply.",
+      title: translate("No provider is connected"),
+      description: translate("Connect a provider in Settings > Providers so this bot can reply."),
       technicalDetails: "",
       action: "providers" as const,
     };
@@ -87,6 +91,7 @@ export function botEngineUnavailability(
     model: selection.model,
     modelName,
     providerName: formatProviderDriverKindLabel(ProviderDriverKind.make(selection.instanceId)),
+    translate,
   });
 }
 

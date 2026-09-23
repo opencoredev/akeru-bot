@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionForInstance,
@@ -173,13 +174,15 @@ export function useBotProfileDraft(
       ),
     [model, provider, providers, settings],
   );
+  const { t } = useI18n();
   const engineUnavailability = useMemo(
     () =>
       botEngineUnavailability(
         model ? { instanceId: providerInstanceId, model } : null,
         instanceEntries,
+        t,
       ),
-    [instanceEntries, model, providerInstanceId],
+    [instanceEntries, model, providerInstanceId, t],
   );
 
   useEffect(() => {

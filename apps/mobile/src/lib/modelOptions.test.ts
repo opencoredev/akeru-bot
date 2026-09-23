@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
 import { ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
 
 import {
@@ -318,6 +319,16 @@ describe("resolveModelSendBlock", () => {
     expect(block).toMatchObject({ title: "Claude is not connected", action: "providers" });
   });
 
+  it("explains the block in the active interface language", async () => {
+    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+    const block = resolveModelSendBlock(
+      claude({ auth: { status: "unauthenticated" }, unavailability: "missing-login" }),
+      selection,
+      zh.translate,
+    );
+    expect(block).toMatchObject({ title: "Claude 未连接", action: "providers" });
+  });
+
   it("names the saved model when the provider no longer offers it", () => {
     const block = resolveModelSendBlock(claude({ models: [{ slug: "other", name: "Other" }] }), {
       ...selection,
@@ -342,11 +353,11 @@ describe("resolveModelSendBlock", () => {
         dependentRoutines: [],
       },
     ];
-    expect(resolveModelSendBlock(claude({}), selection, disconnected)?.title).toBe(
+    expect(resolveModelSendBlock(claude({}), selection, undefined, disconnected)?.title).toBe(
       "Claude is not connected",
     );
     const customSelection = { ...selection, instanceId: ProviderInstanceId.make("claude_work") };
     const custom = claude({ instanceId: customSelection.instanceId });
-    expect(resolveModelSendBlock(custom, customSelection, disconnected)).toBeNull();
+    expect(resolveModelSendBlock(custom, customSelection, undefined, disconnected)).toBeNull();
   });
 });

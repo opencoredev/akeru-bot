@@ -1493,6 +1493,149 @@ export const englishCatalog = {
   "“{name}” was canceled": "“{name}” was canceled",
   "“{name}” failed": "“{name}” failed",
   "“{name}” finished": "“{name}” finished",
+  "Back to chats": "Back to chats",
+  "Settings breadcrumb": "Settings breadcrumb",
+  "12-hour": "12-hour",
+  "24-hour": "24-hour",
+  Shared: "Shared",
+  Separate: "Separate",
+  Performance: "Performance",
+  "Battery saver": "Battery saver",
+  Hold: "Hold",
+  "Double press": "Double press",
+  Direct: "Direct",
+  "Pauses background probes when clients are idle, the host is locked, or low power mode is active.":
+    "Pauses background probes when clients are idle, the host is locked, or low power mode is active.",
+  "Allows scoped background probes while any subscribed client remains connected.":
+    "Allows scoped background probes while any subscribed client remains connected.",
+  "Also pauses background probes when the host or client is on battery.":
+    "Also pauses background probes when the host or client is on battery.",
+  "Uses custom background intervals with the selected shared power policy. Current shared policy: {policy}.":
+    "Uses custom background intervals with the selected shared power policy. Current shared policy: {policy}.",
+  Download: "Download",
+  "Up to Date": "Up to Date",
+  "Check for Updates": "Check for Updates",
+  "Update available.": "Update available.",
+  "Current version of the application.": "Current version of the application.",
+  "Legacy features": "Legacy features",
+  "Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode.":
+    "Brings back the Build/Plan toggle in the composer along with the /plan and /default commands and the Shift+Tab shortcut. While off, every chat runs in build mode.",
+  "Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior.":
+    "Paints assistant output token by token instead of in complete chunks. Not recommended: it is significantly slower, and long responses become harder to follow. Kept only for compatibility with the old behavior.",
+  "Turn on token-by-token output?": "Turn on token-by-token output?",
+  "It is significantly slower than the default buffered output and hurts the reading experience. This switch exists only for backwards compatibility.":
+    "It is significantly slower than the default buffered output and hurts the reading experience. This switch exists only for backwards compatibility.",
+  "Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile.":
+    "Shared uses one sandbox and browser for every bot. Separate gives each bot its own sandbox and browser profile.",
+  "sandbox and browser sharing": "sandbox and browser sharing",
+  "Change bot workspace mode?": "Change bot workspace mode?",
+  "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move.":
+    "Active bot work keeps its current workspace. The next turn moves each bot into the shared workspace and browser. Files and cookies do not move.",
+  "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace.":
+    "Active bot work keeps its current workspace. The next turn creates a separate workspace and browser for each bot. Shared files and cookies stay in the shared workspace.",
+  "Change mode": "Change mode",
+  "System default follows your browser or OS clock preference.":
+    "System default follows your browser or OS clock preference.",
+  "time format": "time format",
+  "Timestamp format": "Timestamp format",
+  "How often the Usage page reloads plan limits.": "How often the Usage page reloads plan limits.",
+  "usage refresh": "usage refresh",
+  "{minutes} min": "{minutes} min",
+  "Set whether the diff panel ignores whitespace-only edits by default.":
+    "Set whether the diff panel ignores whitespace-only edits by default.",
+  "diff whitespace changes": "diff whitespace changes",
+  "Hide whitespace changes by default": "Hide whitespace changes by default",
+  "Also include skills in the / command menu. Skills always appear when you type $.":
+    "Also include skills in the / command menu. Skills always appear when you type $.",
+  "skills in slash menu": "skills in slash menu",
+  "Check installed provider CLIs for newer available versions.":
+    "Check installed provider CLIs for newer available versions.",
+  "provider update checks": "provider update checks",
+  "Check provider versions": "Check provider versions",
+  "Background activity": "Background activity",
+  "This shared policy gates background work such as Git refreshes and provider health probes after their individual intervals elapse.":
+    "This shared policy gates background work such as Git refreshes and provider health probes after their individual intervals elapse.",
+  "background activity": "background activity",
+  "Background activity profile": "Background activity profile",
+  "Configure advanced background activity": "Configure advanced background activity",
+  "Configure background activity": "Configure background activity",
+  "Auto review runs safe actions and asks before sensitive ones.":
+    "Auto review runs safe actions and asks before sensitive ones.",
+  "local execution": "local execution",
+  "Full access": "Full access",
+  "Ask first": "Ask first",
+  "Auto review": "Auto review",
+  'Leave empty to use "~/" when the Add Project browser opens.':
+    'Leave empty to use "~/" when the Add Project browser opens.',
+  "add project base directory": "add project base directory",
+  "Add project base directory": "Add project base directory",
+  "Hold mode also quits on two quick presses.": "Hold mode also quits on two quick presses.",
+  "quit shortcut behavior": "quit shortcut behavior",
+  "Quit shortcut behavior": "Quit shortcut behavior",
+  "Used when bot work or source control work does not have its own model.":
+    "Used when bot work or source control work does not have its own model.",
+  "text generation model": "text generation model",
+  "Feedback endpoint": "Feedback endpoint",
+  "Use HTTPS or loopback HTTP.": "Use HTTPS or loopback HTTP.",
+  "View diagnostics": "View diagnostics",
+  "Local trace file.": "Local trace file.",
+  "Terminal logs only.": "Terminal logs only.",
+  "Exporting OTEL to {url}.": "Exporting OTEL to {url}.",
+  "Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.":
+    "Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.",
+  "Exporting OTEL traces to {url}.": "Exporting OTEL traces to {url}.",
+  "Exporting OTEL metrics to {url}.": "Exporting OTEL metrics to {url}.",
+  "Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included.":
+    "Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included.",
+  "Reading...": "Reading...",
+  Import: "Import",
+  "Exporting...": "Exporting...",
+  Export: "Export",
+  "Import Akeru archive": "Import Akeru archive",
+  "The provider": "The provider",
+  "the provider": "the provider",
+  "your {provider}": "your {provider}",
+  "your provider": "your provider",
+  provider: "provider",
+  "This provider": "This provider",
+  "{provider} is not set up": "{provider} is not set up",
+  "Add {provider} in Settings > Providers, or pick another model for this bot.":
+    "Add {provider} in Settings > Providers, or pick another model for this bot.",
+  "{provider} is turned off": "{provider} is turned off",
+  "Turn {provider} on in Settings > Providers, then send your message again.":
+    "Turn {provider} on in Settings > Providers, then send your message again.",
+  "{provider} is not installed": "{provider} is not installed",
+  "Install {provider} from Settings > Providers, or pick another model for this bot.":
+    "Install {provider} from Settings > Providers, or pick another model for this bot.",
+  "{provider} is not connected": "{provider} is not connected",
+  "Connect {account} account in Settings > Providers.":
+    "Connect {account} account in Settings > Providers.",
+  "{provider} sign-in expired": "{provider} sign-in expired",
+  "Reconnect {provider} in Settings > Providers, then send your message again.":
+    "Reconnect {provider} in Settings > Providers, then send your message again.",
+  "{model} is not available on {provider}": "{model} is not available on {provider}",
+  "This model is not available on {provider}": "This model is not available on {provider}",
+  "Pick another model for this bot.": "Pick another model for this bot.",
+  "{provider} limit reached": "{provider} limit reached",
+  "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.":
+    "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
+  "Akeru usage cap reached": "Akeru usage cap reached",
+  "Raise this bot's usage cap in its settings to keep chatting.":
+    "Raise this bot's usage cap in its settings to keep chatting.",
+  "{provider} could not respond": "{provider} could not respond",
+  "Send your message again in a moment.": "Send your message again in a moment.",
+  "{title}. {description}": "{title}. {description}",
+  "Connect a provider in Settings > Providers so this bot can reply.":
+    "Connect a provider in Settings > Providers so this bot can reply.",
+  "{title}.": "{title}.",
+  "Automatically read new replies in this chat on this device":
+    "Automatically read new replies in this chat on this device",
+  "Only new completed replies are read. History is never replayed. Your selected speech service may charge for audio.":
+    "Only new completed replies are read. History is never replayed. Your selected speech service may charge for audio.",
+  "This preference could not be saved on this device.":
+    "This preference could not be saved on this device.",
+  "Could not open the sign-in page. Try Open sign-in again.":
+    "Could not open the sign-in page. Try Open sign-in again.",
   "Run provider command": "Run provider command",
   "Run provider skill": "Run provider skill",
   "{scope} skill": "{scope} skill",

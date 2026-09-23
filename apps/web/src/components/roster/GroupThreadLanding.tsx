@@ -76,7 +76,7 @@ export function resolveGroupAddressedBot<T extends { readonly id: string }>(
 }
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const peopleIdentity = useAtomValue(
     environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
@@ -155,8 +155,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const today = useLocalDay();
   const todayLabel = t("Today");
   const entries = useMemo(
-    () => buildBotConversationEntries(messages, today, todayLabel),
-    [messages, today, todayLabel],
+    () => buildBotConversationEntries(messages, today, todayLabel, locale),
+    [messages, today, todayLabel, locale],
   );
   const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,

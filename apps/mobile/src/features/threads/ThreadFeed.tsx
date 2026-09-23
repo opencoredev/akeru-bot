@@ -134,16 +134,18 @@ const WIDE_MARKDOWN_BLOCK_OPTIONS = {
   includeOrderedLists: Platform.OS === "android",
 } as const;
 
-const MESSAGE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  hour: "numeric",
-  minute: "2-digit",
-});
-function formatMessageTime(input: string): string {
+const MESSAGE_TIME_OPTIONS: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+
+/** Message clock time in the interface language; `formatDate` comes from `useMobileI18n`. */
+function formatMessageTime(
+  input: string,
+  formatDate: (value: number, options: Intl.DateTimeFormatOptions) => string,
+): string {
   const timestamp = Date.parse(input);
   if (Number.isNaN(timestamp)) {
     return "";
   }
-  return MESSAGE_TIME_FORMATTER.format(timestamp);
+  return formatDate(timestamp, MESSAGE_TIME_OPTIONS);
 }
 
 // Pre-measurement heights for getFixedItemSize, mirroring renderFeedEntry's
@@ -1057,6 +1059,7 @@ function renderFeedEntry(
     readonly reviewCommentBubbleWidth: number;
     readonly userBubbleMaxWidth: number;
     readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;
+    readonly formatDate: (value: number, options: Intl.DateTimeFormatOptions) => string;
   },
 ) {
   const entry = info.item;
@@ -1104,7 +1107,10 @@ function renderFeedEntry(
     const { message } = entry;
     const isUser = message.role === "user";
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
-    const timestampLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
+    const timestampLabel = formatMessageTime(
+      isUser ? message.createdAt : message.updatedAt,
+      props.formatDate,
+    );
     const attachments = message.attachments ?? [];
     const hasReviewCommentContext = message.text.includes("<review_comment");
     // A bubble that sizes itself from its content cannot lay out a block whose
@@ -1620,7 +1626,7 @@ function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean
 }
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
-  const { t } = useMobileI18n();
+  const { t, formatDate } = useMobileI18n();
   const navigation = useNavigation();
   const replyPlayback = useOptionalReplyPlayback();
   const environment = useEnvironmentPresentation(props.environmentId);
@@ -2195,8 +2201,10 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       skills: props.skills,
       replyPlayback,
       replySynthesis,
+      formatDate,
     }),
     [
+      formatDate,
       copiedRowId,
       expandedWorkRows,
       terminalAssistantMessageIds,

@@ -340,6 +340,7 @@ export function ImageGenerationRoutingSection({
     fallbackOrder?: ImageProviderId[];
   }) => void;
 }) {
+  const { t } = useI18n();
   const enabledProviders = IMAGE_PROVIDER_IDS.filter((id) => isImageProviderEnabled(settings, id));
   const defaultProvider = effectiveDefaultProvider(settings);
   const order = effectiveFallbackOrder(settings);
@@ -355,7 +356,7 @@ export function ImageGenerationRoutingSection({
   return (
     <SettingsSection title="Routing">
       <SettingsRow
-        {...searchableSetting("image-default-provider")}
+        {...searchableSetting("image-default-provider", t)}
         title="Default provider"
         description={
           enabledProviders.length === 0
@@ -388,7 +389,7 @@ export function ImageGenerationRoutingSection({
       />
       {order.length === 2 ? (
         <SettingsRow
-          {...searchableSetting("image-fallback-order")}
+          {...searchableSetting("image-fallback-order", t)}
           title="Fallback order"
           description="When the first provider fails, the next one tries the same request."
           status={orderError ? <span className="text-destructive">{orderError}</span> : null}

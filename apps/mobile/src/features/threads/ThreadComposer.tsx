@@ -336,12 +336,15 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       resolveModelSendBlock(
         props.serverConfig,
         props.selectedThread.modelSelection,
+        t,
         subscriptionStatuses,
       ),
-    [props.serverConfig, props.selectedThread.modelSelection, subscriptionStatuses],
+    [props.serverConfig, props.selectedThread.modelSelection, subscriptionStatuses, t],
   );
   const canSend = hasContent && sendBlock === null;
-  const sendBlockHint = sendBlock ? `${sendBlock.title}. ${sendBlock.description}` : undefined;
+  const sendBlockHint = sendBlock
+    ? t("{title}. {description}", { title: sendBlock.title, description: sendBlock.description })
+    : undefined;
 
   // Notify the parent from the derived value, not focus events: the parent
   // sizes the feed inset from this, and blur-during-sheet would otherwise
@@ -692,8 +695,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
   // ── Model menu ───────────────────────────────────────────
   const modelOptions = useMemo(
-    () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses),
-    [props.serverConfig, currentModelSelection, subscriptionStatuses],
+    () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses, t),
+    [props.serverConfig, currentModelSelection, subscriptionStatuses, t],
   );
   const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
   // An existing thread is bound to its harness: sessions can't move between
@@ -877,7 +880,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             pointerEvents="none"
           >
             <Text className="text-center text-xs text-foreground-muted">
-              <Text className="text-xs font-t3-bold text-foreground">{sendBlock.title}.</Text>{" "}
+              <Text className="text-xs font-t3-bold text-foreground">
+                {t("{title}.", { title: sendBlock.title })}
+              </Text>{" "}
               {sendBlock.description}
             </Text>
           </View>

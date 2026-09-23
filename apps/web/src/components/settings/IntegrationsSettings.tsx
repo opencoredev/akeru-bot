@@ -53,6 +53,7 @@ import {
   SettingsSection,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { useI18n } from "../../i18n";
 
 const FILL_VALUE = "fill";
 const RESPONSIVE_VALUE = "responsive";
@@ -117,6 +118,7 @@ const rotateViewport = (
 });
 
 function BrowserViewportSetting({ disabled }: { readonly disabled: boolean }) {
+  const { t } = useI18n();
   const viewport = useClientSettings((settings) => settings.browserDefaultViewport);
   const updateSettings = useUpdatePrimarySettings();
 
@@ -167,7 +169,7 @@ function BrowserViewportSetting({ disabled }: { readonly disabled: boolean }) {
 
   return (
     <SettingsRow
-      {...searchableSetting("browser-default-viewport")}
+      {...searchableSetting("browser-default-viewport", t)}
       description="The viewport a browser tab opens at, for both you and bots. Fill sizes the page to the panel; any other choice opens the device toolbar at that size."
       resetAction={
         !disabled && viewport._tag !== DEFAULT_BROWSER_VIEWPORT._tag ? (
@@ -271,12 +273,13 @@ function BrowserViewportSetting({ disabled }: { readonly disabled: boolean }) {
 }
 
 function BrowserZoomSetting({ disabled }: { readonly disabled: boolean }) {
+  const { t } = useI18n();
   const zoomFactor = useClientSettings((settings) => settings.browserDefaultZoomFactor);
   const updateSettings = useUpdatePrimarySettings();
 
   return (
     <SettingsRow
-      {...searchableSetting("browser-default-zoom")}
+      {...searchableSetting("browser-default-zoom", t)}
       description="Page zoom applied to new browser tabs."
       resetAction={
         !disabled && zoomFactor !== DEFAULT_PREVIEW_ZOOM_FACTOR ? (
@@ -314,12 +317,13 @@ function BrowserZoomSetting({ disabled }: { readonly disabled: boolean }) {
 }
 
 function BrowserAppearanceSetting({ disabled }: { readonly disabled: boolean }) {
+  const { t } = useI18n();
   const appearance = useClientSettings((settings) => settings.browserDefaultAppearance);
   const updateSettings = useUpdatePrimarySettings();
 
   return (
     <SettingsRow
-      {...searchableSetting("browser-default-appearance")}
+      {...searchableSetting("browser-default-appearance", t)}
       description="The color scheme pages are told to prefer. System follows your OS setting."
       resetAction={
         !disabled && appearance !== DEFAULT_PREVIEW_APPEARANCE ? (
@@ -356,12 +360,13 @@ function BrowserAppearanceSetting({ disabled }: { readonly disabled: boolean }) 
 }
 
 function AgentBrowserAccessSetting() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
   return (
     <SettingsRow
-      {...searchableSetting("agent-browser-access")}
+      {...searchableSetting("agent-browser-access", t)}
       description="Let bots open and drive the preview browser. When off, browser tools and their instructions are withheld from new bot sessions. Your own browser panel is unaffected."
       status={
         settings.enableAgentBrowserAccess
@@ -394,12 +399,13 @@ function AgentBrowserAccessSetting() {
 }
 
 function BrowserAutoShowFloatingPreviewSetting({ disabled }: { readonly disabled: boolean }) {
+  const { t } = useI18n();
   const autoShow = useClientSettings((settings) => settings.browserAutoShowFloatingPreview);
   const updateSettings = useUpdatePrimarySettings();
 
   return (
     <SettingsRow
-      {...searchableSetting("browser-auto-show-floating-preview")}
+      {...searchableSetting("browser-auto-show-floating-preview", t)}
       description="Pop the floating preview into view when a bot opens a browser. A bot that explicitly asks to show or hide its preview still gets what it asked for."
       resetAction={
         !disabled && autoShow !== DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW ? (

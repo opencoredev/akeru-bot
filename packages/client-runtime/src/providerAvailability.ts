@@ -4,6 +4,8 @@ import type {
   ServerProviderUnavailability,
 } from "@t3tools/contracts";
 
+import { translate as translateMessage, type TranslationParams } from "./i18n/index.ts";
+
 /**
  * Why a provider instance cannot run a turn right now. The server's turn
  * preflight uses the same order, so a client that shows a reason shows the one
@@ -52,83 +54,113 @@ export function providerAvailabilityReason(
   return null;
 }
 
+/** A client's active translator. The default renders English. */
+export type ProviderAvailabilityTranslate = (message: string, params?: TranslationParams) => string;
+
+const english: ProviderAvailabilityTranslate = (message, params) =>
+  translateMessage("en", message, params);
+
 export function presentProviderUnavailability(input: {
   readonly reason: ProviderAvailabilityReason;
   /** Omit when the failure did not say which provider it came from. */
   readonly providerName?: string | null | undefined;
   readonly modelName?: string | null | undefined;
   readonly detail?: string | null | undefined;
+  readonly translate?: ProviderAvailabilityTranslate | undefined;
 }): ProviderAvailabilityPresentation {
+  const translate = input.translate ?? english;
   const known = input.providerName;
   // Subject, mid-sentence, possessive, and title forms for a known or unknown provider.
-  const name = known ?? "The provider";
-  const who = known ?? "the provider";
-  const yours = known ? `your ${known}` : "your provider";
-  const label = known ?? "Provider";
+  const name = known ?? translate("The provider");
+  const who = known ?? translate("the provider");
+  const yours = known
+    ? translate("your {provider}", { provider: known })
+    : translate("your provider");
+  const label = known ?? translate("Provider");
   const technicalDetails = boundedDetail(input.detail);
   switch (input.reason) {
     case "missing-provider":
       return {
-        title: `${name} is not set up`,
-        description: `Add ${who} in Settings > Providers, or pick another model for this bot.`,
+        title: translate("{provider} is not set up", { provider: name }),
+        description: translate(
+          "Add {provider} in Settings > Providers, or pick another model for this bot.",
+          { provider: who },
+        ),
         technicalDetails,
         action: "providers",
       };
     case "disabled":
       return {
-        title: `${name} is turned off`,
-        description: `Turn ${who} on in Settings > Providers, then send your message again.`,
+        title: translate("{provider} is turned off", { provider: name }),
+        description: translate(
+          "Turn {provider} on in Settings > Providers, then send your message again.",
+          { provider: who },
+        ),
         technicalDetails,
         action: "providers",
       };
     case "not-installed":
       return {
-        title: `${name} is not installed`,
-        description: `Install ${who} from Settings > Providers, or pick another model for this bot.`,
+        title: translate("{provider} is not installed", { provider: name }),
+        description: translate(
+          "Install {provider} from Settings > Providers, or pick another model for this bot.",
+          { provider: who },
+        ),
         technicalDetails,
         action: "providers",
       };
     case "missing-login":
       return {
-        title: `${name} is not connected`,
-        description: `Connect ${yours} account in Settings > Providers.`,
+        title: translate("{provider} is not connected", { provider: name }),
+        description: translate("Connect {account} account in Settings > Providers.", {
+          account: yours,
+        }),
         technicalDetails,
         action: "providers",
       };
     case "expired-login":
       return {
-        title: `${label} sign-in expired`,
-        description: `Reconnect ${who} in Settings > Providers, then send your message again.`,
+        title: translate("{provider} sign-in expired", { provider: label }),
+        description: translate(
+          "Reconnect {provider} in Settings > Providers, then send your message again.",
+          { provider: who },
+        ),
         technicalDetails,
         action: "providers",
       };
     case "unsupported-model":
       return {
         title: input.modelName
-          ? `${input.modelName} is not available on ${who}`
-          : `This model is not available on ${who}`,
-        description: "Pick another model for this bot.",
+          ? translate("{model} is not available on {provider}", {
+              model: input.modelName,
+              provider: who,
+            })
+          : translate("This model is not available on {provider}", { provider: who }),
+        description: translate("Pick another model for this bot."),
         technicalDetails,
         action: "none",
       };
     case "limit-reached":
       return {
-        title: `${label} limit reached`,
-        description: `Your ${known ?? "provider"} plan hit its usage or rate limit. Wait for it to reset, then send your message again.`,
+        title: translate("{provider} limit reached", { provider: label }),
+        description: translate(
+          "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
+          { provider: known ?? translate("provider") },
+        ),
         technicalDetails,
         action: "none",
       };
     case "usage-cap":
       return {
-        title: "Akeru usage cap reached",
-        description: "Raise this bot's usage cap in its settings to keep chatting.",
+        title: translate("Akeru usage cap reached"),
+        description: translate("Raise this bot's usage cap in its settings to keep chatting."),
         technicalDetails,
         action: "usage",
       };
     case "temporary-failure":
       return {
-        title: `${name} could not respond`,
-        description: "Send your message again in a moment.",
+        title: translate("{provider} could not respond", { provider: name }),
+        description: translate("Send your message again in a moment."),
         technicalDetails,
         action: "none",
       };
@@ -140,7 +172,10 @@ export function providerUnavailabilitySummary(
   input: Parameters<typeof presentProviderUnavailability>[0],
 ): string {
   const presentation = presentProviderUnavailability(input);
-  return `${presentation.title}. ${presentation.description}`;
+  return (input.translate ?? english)("{title}. {description}", {
+    title: presentation.title,
+    description: presentation.description,
+  });
 }
 
 const TURN_FAILURE_KINDS = new Set(["provider.turn.start.failed", "runtime.error"]);

@@ -30,16 +30,13 @@ export function PrivacySettingsPanel() {
     settings.memory.enabled
       ? t(description)
       : `${t(description)} ${t(MEMORY_SETTING_DISABLED_HINT)}`;
-  const translatedSetting = (id: SettingsSearchItemId) => {
-    const setting = searchableSetting(id);
-    return { ...setting, title: t(setting.title) };
-  };
+  const translatedSetting = (id: SettingsSearchItemId) => searchableSetting(id, t);
 
   return (
     <SettingsPageContainer>
       <SettingsSection title="Privacy controls">
         <SettingsRow
-          {...searchableSetting("anonymous-analytics")}
+          {...searchableSetting("anonymous-analytics", t)}
           description="Send app version, platform, architecture, client type, and feature events to PostHog. Akeru Bot does not use provider account IDs."
           resetAction={
             settings.analyticsEnabled !== DEFAULT_SERVER_SETTINGS.analyticsEnabled ? (
@@ -60,7 +57,7 @@ export function PrivacySettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("privacy-product-feedback")}
+          {...searchableSetting("privacy-product-feedback", t)}
           description="Send feedback you submit to the Akeru feedback service. The service keeps submissions for up to 90 days."
           control={
             <Switch
@@ -73,7 +70,7 @@ export function PrivacySettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("privacy-voice-calls")}
+          {...searchableSetting("privacy-voice-calls", t)}
           description="Send live microphone audio and session data to the ChatGPT Realtime service during a call."
           control={
             <Switch
@@ -86,7 +83,7 @@ export function PrivacySettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("privacy-provider-update-checks")}
+          {...searchableSetting("privacy-provider-update-checks", t)}
           description="Contact provider release sources to check for newer CLI versions."
           control={
             <Switch

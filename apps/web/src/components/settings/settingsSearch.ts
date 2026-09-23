@@ -414,12 +414,16 @@ const SEARCH_ITEMS_BY_ID = Object.fromEntries(
  * spread (or pick from) this instead of restating the strings, so the catalog
  * and the rendered settings cannot drift apart.
  */
-export function searchableSetting(id: SettingsSearchItemId): {
+/** Pass the active translator so the row title follows the interface language. */
+export function searchableSetting(
+  id: SettingsSearchItemId,
+  translate: (message: string) => string = (message) => message,
+): {
   readonly id: string;
   readonly title: string;
 } {
   const { id: anchorId, title } = SEARCH_ITEMS_BY_ID[id];
-  return { id: anchorId, title };
+  return { id: anchorId, title: translate(title) };
 }
 
 function normalizeSearchText(value: string): string {

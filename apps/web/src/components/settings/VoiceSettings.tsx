@@ -20,6 +20,7 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { ComposedVoiceRows, VoiceApiConnectionsSection } from "./VoiceApiSettings";
+import { useI18n } from "../../i18n";
 
 const VOICE_LABELS: Readonly<Record<ChatGptRealtimeVoice, string>> = {
   alloy: "Alloy",
@@ -50,6 +51,7 @@ const VOICE_PROVIDER_DESCRIPTIONS: Readonly<Record<VoiceProvider, string>> = {
 };
 
 export function VoiceSettingsPanel() {
+  const { t } = useI18n();
   const voice = usePrimarySettings((settings) => settings.voice);
   const updateSettings = useUpdatePrimarySettings();
   const replyPlayback = useOptionalReplyPlayback();
@@ -70,7 +72,7 @@ export function VoiceSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="voice" title="Voice">
         <SettingsRow
-          {...searchableSetting("voice-enabled")}
+          {...searchableSetting("voice-enabled", t)}
           description="Allow bots with Voice calls enabled to start voice calls."
           resetAction={
             voice.enabled !== DEFAULT_SERVER_SETTINGS.voice.enabled ? (
@@ -93,7 +95,7 @@ export function VoiceSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("voice-provider")}
+          {...searchableSetting("voice-provider", t)}
           description={VOICE_PROVIDER_DESCRIPTIONS[voice.provider]}
           control={
             <Select
@@ -128,7 +130,7 @@ export function VoiceSettingsPanel() {
           ) : null
         ) : (
           <SettingsRow
-            {...searchableSetting("voice-selection")}
+            {...searchableSetting("voice-selection", t)}
             description="Choose the voice used for new calls."
             resetAction={
               voice.enabled && realtimeVoice !== defaultRealtimeVoice ? (
@@ -168,6 +170,7 @@ export function VoiceSettingsPanel() {
 }
 
 function AutomaticReadoutRow({ preference }: { readonly preference: ReplyReadoutPreference }) {
+  const { t } = useI18n();
   const state = useSyncExternalStore(
     preference.subscribe,
     preference.getSnapshot,
@@ -175,7 +178,7 @@ function AutomaticReadoutRow({ preference }: { readonly preference: ReplyReadout
   );
   return (
     <SettingsRow
-      {...searchableSetting("voice-read-aloud")}
+      {...searchableSetting("voice-read-aloud", t)}
       description={
         state.persistenceError
           ? "This preference could not be saved on this device."

@@ -26,6 +26,7 @@ import { ChannelSetupDialog } from "./ChannelSetupDialog";
 import { CHANNEL_PROVIDER_META, channelProviderMeta } from "./channelProviderMeta";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { useI18n } from "../../i18n";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 const UNASSIGNED = "unassigned";
@@ -83,6 +84,7 @@ export function parsePhotonHostedCredentials(input: string): {
 }
 
 export function BotChannelsSettingsPanel() {
+  const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   const targetEnvironmentId = environmentId ?? NO_ENVIRONMENT;
   const session = useEnvironmentSessionState(targetEnvironmentId);
@@ -228,7 +230,7 @@ export function BotChannelsSettingsPanel() {
 
   return (
     <SettingsPageContainer className="gap-8">
-      <SettingsSection {...searchableSetting("bot-channels")}>
+      <SettingsSection {...searchableSetting("bot-channels", t)}>
         <div
           className="mx-3 flex flex-wrap gap-1 rounded-xl bg-muted/60 p-1 sm:mx-4"
           role="tablist"

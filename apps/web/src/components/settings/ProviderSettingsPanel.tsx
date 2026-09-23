@@ -372,6 +372,7 @@ export function EnvironmentProviderSettings({
    */
   readonly readOnly?: boolean;
 }) {
+  const { t } = useI18n();
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const serverProviders =
@@ -665,7 +666,7 @@ export function EnvironmentProviderSettings({
   return (
     <>
       <SettingsSection
-        {...searchableSetting("providers")}
+        {...searchableSetting("providers", t)}
         headerAction={
           <div className="flex items-center gap-1.5">
             <ProviderLastChecked lastCheckedAt={lastCheckedAt} />

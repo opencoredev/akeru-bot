@@ -22,7 +22,7 @@ function describeUnavailableInstance(
   t: ReturnType<typeof useI18n>["t"],
 ): string {
   return (
-    providerInstanceUnavailableReason(entry) ??
+    providerInstanceUnavailableReason(entry, { translate: t }) ??
     (entry.snapshot.message?.trim() || t("{name} is not ready yet.", { name: entry.displayName }))
   );
 }

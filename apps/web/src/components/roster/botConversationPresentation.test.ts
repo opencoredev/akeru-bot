@@ -120,19 +120,23 @@ describe("bot conversation presentation", () => {
     expect(conversationSeparatorLabel("not-a-date", null, now)).toBeNull();
   });
 
-  it("formats older separators in the interface language", () => {
+  it("formats the separator in the interface language", () => {
     const now = new Date(2026, 7, 17, 18, 30);
-    const formatDate = (value: Date, options: Intl.DateTimeFormatOptions) =>
-      new Intl.DateTimeFormat("zh-CN", options).format(value);
-    const label = conversationSeparatorLabel(
-      new Date(2026, 7, 16, 13, 54).toISOString(),
-      null,
-      now,
-      "今天",
-      formatDate,
-    );
-    expect(label).toContain(formatDate(new Date(2026, 7, 16), { month: "short", day: "numeric" }));
-    expect(label).not.toContain("Aug");
+    const afternoon = new Date(2026, 7, 16, 13, 54).toISOString();
+
+    const label = conversationSeparatorLabel(afternoon, null, now, "今天", "zh-CN");
+    expect(label).toContain("8月16日");
+    expect(label).toContain("周日");
+    expect(label).not.toMatch(/Sun|Aug|PM/);
+    expect(
+      conversationSeparatorLabel(
+        new Date(2026, 7, 17, 9, 5).toISOString(),
+        afternoon,
+        now,
+        "今天",
+        "zh-CN",
+      ),
+    ).toMatch(/^今天 .*9:05/);
   });
 
   it("starts a group per author run so one long answer is not a stack of replies", () => {

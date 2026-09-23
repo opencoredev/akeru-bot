@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { catalogRegistry, createTranslator } from "./i18n/index.ts";
 import {
   latestTurnFailure,
   presentProviderUnavailability,
@@ -142,6 +143,31 @@ describe("presentProviderUnavailability", () => {
     expect(
       presentProviderUnavailability({ reason: "usage-cap", providerName: "Codex" }).action,
     ).toBe("usage");
+  });
+
+  it("renders every reason in the active interface language", async () => {
+    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+    for (const reason of reasons) {
+      const english = presentProviderUnavailability({ reason, providerName: "Claude" });
+      const presentation = presentProviderUnavailability({
+        reason,
+        providerName: "Claude",
+        translate: zh.translate,
+      });
+      expect(presentation.title, reason).not.toBe(english.title);
+      expect(presentation.description, reason).not.toBe(english.description);
+      expect(presentation.action).toBe(english.action);
+    }
+    expect(
+      presentProviderUnavailability({
+        reason: "missing-login",
+        providerName: "Claude",
+        translate: zh.translate,
+      }),
+    ).toMatchObject({
+      title: "Claude 未连接",
+      description: "请在“设置 > 提供商”中连接你的 Claude 账号。",
+    });
   });
 
   it("keeps a bounded provider detail for the technical details", () => {

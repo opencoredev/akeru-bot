@@ -28,10 +28,13 @@ import { SettingsSection } from "./components/SettingsSection";
 
 const RETRY_POLL_MS = 5000;
 
-function commandError(result: AtomCommandResult<unknown, unknown>): string {
-  if (result._tag !== "Failure") return "The request failed.";
+function commandError(
+  result: AtomCommandResult<unknown, unknown>,
+  t: (message: string) => string,
+): string {
+  if (result._tag !== "Failure") return t("The request failed.");
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "The request failed.";
+  return error instanceof Error ? error.message : t("The request failed.");
 }
 
 function Action({
@@ -102,7 +105,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
         // A dropped request must not end the login; the next check picks up the approval.
         if (result._tag === "Failure") {
           pollFailed = true;
-          setError(commandError(result));
+          setError(commandError(result, t));
         }
         timer = setTimeout(check, RETRY_POLL_MS);
         return;
@@ -126,7 +129,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     try {
       await Linking.openURL(url);
     } catch {
-      setError("Could not open the sign-in page. Try Open sign-in again.");
+      setError(t("Could not open the sign-in page. Try Open sign-in again."));
     }
   };
 
@@ -152,7 +155,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     const result = await start({ environmentId, input: { provider } });
     setBusy(false);
     if (result._tag === "Failure") {
-      setError(commandError(result));
+      setError(commandError(result, t));
       return;
     }
     if (result._tag !== "Success") return;
@@ -169,7 +172,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     const started = await start({ environmentId, input: apiKeyStartInput(keyProvider, baseUrl) });
     if (started._tag !== "Success") {
       setBusy(false);
-      if (started._tag === "Failure") setError(commandError(started));
+      if (started._tag === "Failure") setError(commandError(started, t));
       return;
     }
     const result = await complete({
@@ -183,12 +186,12 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       setBaseUrl("");
       query.refresh();
     } else {
-      if (result._tag === "Failure") setError(commandError(result));
+      if (result._tag === "Failure") setError(commandError(result, t));
       else if (result._tag === "Success")
         setError(
           result.value.status === "failed"
             ? result.value.error
-            : "The key was not saved. Try again.",
+            : t("The key was not saved. Try again."),
         );
       await cancel({ environmentId, input: { loginId: started.value.loginId } });
     }
@@ -201,7 +204,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     const result = await complete({ environmentId, input: { loginId: flow.loginId, code } });
     setBusy(false);
     if (result._tag === "Success") settle(result.value);
-    else if (result._tag === "Failure") setError(commandError(result));
+    else if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   const cancelLogin = async () => {
@@ -213,7 +216,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     setError(null);
     if (login) {
       const result = await cancel({ environmentId, input: { loginId: login.loginId } });
-      if (result._tag === "Failure") setError(commandError(result));
+      if (result._tag === "Failure") setError(commandError(result, t));
     }
   };
 
@@ -226,7 +229,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     });
     setBusy(false);
     if (result._tag === "Success") query.refresh();
-    else if (result._tag === "Failure") setError(commandError(result));
+    else if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   const activeProvider = keyProvider ?? flow?.provider;

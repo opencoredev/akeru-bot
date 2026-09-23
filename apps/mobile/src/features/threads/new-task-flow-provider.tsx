@@ -78,6 +78,7 @@ import {
   type HomeProjectScope,
 } from "../home/homeThreadList";
 import { useMobileProjectGroupingSettings } from "../../state/project-grouping";
+import { useMobileI18n } from "../../lib/i18n";
 import { resolvePendingTaskInteractionMode } from "./legacy-plan-mode";
 import { useLegacyPlanModeState } from "./use-legacy-plan-mode-enabled";
 import {
@@ -193,6 +194,7 @@ type NewTaskFlowContextValue = {
 const NewTaskFlowContext = React.createContext<NewTaskFlowContextValue | null>(null);
 
 export function NewTaskFlowProvider(props: React.PropsWithChildren) {
+  const { t } = useMobileI18n();
   const projects = useProjects();
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -438,12 +440,14 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         selectedEnvironmentServerConfig,
         draftModelSelection ?? projectDefaultModelSelection,
         subscriptionStatuses,
+        t,
       ),
     [
       selectedEnvironmentServerConfig,
       draftModelSelection,
       projectDefaultModelSelection,
       subscriptionStatuses,
+      t,
     ],
   );
 

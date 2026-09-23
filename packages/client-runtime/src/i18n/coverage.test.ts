@@ -147,6 +147,9 @@ describe("discovered interface message coverage", () => {
       "packages/client-runtime/src/durableMemory.ts",
       "packages/client-runtime/src/imageGeneration.ts",
       "apps/web/src/components/roster/routineReceipts.ts",
+      "apps/web/src/components/settings/SettingsPanels.logic.ts",
+      "packages/client-runtime/src/providerAvailability.ts",
+      "apps/web/src/components/roster/botEngineSelection.ts",
     ].sort();
     const missing: string[] = [];
     const expressions: Record<string, string[]> = {};

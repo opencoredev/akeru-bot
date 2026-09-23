@@ -32,6 +32,7 @@ import {
   saveSandboxProviderConnection,
   selectableSandboxProviders,
 } from "./SandboxSettingsPanel.logic";
+import { useI18n } from "../../i18n";
 
 const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   local: "Local",
@@ -63,6 +64,7 @@ function EnvironmentSandboxSettingsPanel({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const { t } = useI18n();
   const sandbox = useEnvironmentSettings(environmentId, (settings) => settings.sandbox);
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   const [editingProvider, setEditingProvider] = useState<CloudSandboxProvider | null>(null);
@@ -113,9 +115,9 @@ function EnvironmentSandboxSettingsPanel({
   return (
     <>
       <SettingsPageContainer>
-        <SettingsSection {...searchableSetting("sandbox")}>
+        <SettingsSection {...searchableSetting("sandbox", t)}>
           <SettingsRow
-            {...searchableSetting("default-sandbox")}
+            {...searchableSetting("default-sandbox", t)}
             description="Bots without an override use this sandbox."
             control={
               <Select
@@ -141,7 +143,7 @@ function EnvironmentSandboxSettingsPanel({
             }
           />
           <SettingsRow
-            {...searchableSetting("sandbox-auto-idle")}
+            {...searchableSetting("sandbox-auto-idle", t)}
             description="Akeru pauses remote sandboxes when bots are idle."
             control={<Switch checked disabled aria-label="Auto-idle" />}
           />

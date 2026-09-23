@@ -3,6 +3,7 @@ import type { BotEngine } from "@t3tools/contracts";
 import { useMemo } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
@@ -24,6 +25,7 @@ import {
 export function useBotEngineAvailability(engine: BotEngine | null) {
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const { t } = useI18n();
   return useMemo(() => {
     const instanceEntries = sortProviderInstanceEntries(
       applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
@@ -36,7 +38,7 @@ export function useBotEngineAvailability(engine: BotEngine | null) {
       providers,
       defaultSelection,
     });
-    const unavailability = botEngineUnavailability(selection, instanceEntries);
+    const unavailability = botEngineUnavailability(selection, instanceEntries, t);
     return {
       instanceEntries,
       selection,
@@ -44,5 +46,5 @@ export function useBotEngineAvailability(engine: BotEngine | null) {
       unavailability,
       blocked: unavailability !== null && unavailability.reason !== "temporary-failure",
     };
-  }, [engine, providers, settings]);
+  }, [engine, providers, settings, t]);
 }

@@ -8,7 +8,7 @@ The choice stays on your client. It does not change the language preference on a
 
 This setting controls interface copy only. Your messages, bot responses, bot names, instructions, code, and paths remain unchanged. It does not tell a bot which language to use when responding.
 
-Translation is still in progress. Settings, pairing, the command palette, connection status, the bot roster, chats, the composer, bot settings, memory, routines, and onboarding are translated. Some tools still show English, including the file browser, diffs, the terminal, and git. Native desktop menus and startup dialogs also stay in English.
+Translation is still in progress. Settings navigation and General settings, pairing, the command palette, connection status, the bot roster, chats, the composer, bot settings, memory, routines, and onboarding are translated. Dates and times in a chat follow your language. Some tools still show English, including the file browser, diffs, the terminal, and git, as do the details inside most other Settings sections. Native desktop menus and startup dialogs also stay in English.
 
 Memory and routine screens translate their labels only. Saved facts, memory notes, routine names, instructions, and run results stay as written.
 

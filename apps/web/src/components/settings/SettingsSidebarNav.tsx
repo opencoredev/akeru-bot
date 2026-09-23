@@ -15,11 +15,13 @@ import {
 import { SidebarChromeHeader } from "../sidebar/SidebarChrome";
 import { SETTINGS_NAV_GROUPS } from "./SettingsDialog";
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 
 export function SettingsSidebarNav() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
+  const { t } = useI18n();
   const go = (to: string) => {
     if (isMobile) setOpenMobile(false);
     void navigate({ to });
@@ -35,7 +37,7 @@ export function SettingsSidebarNav() {
             className="p-[var(--sidebar-content-inset)] pb-0 last:pb-[var(--sidebar-content-inset)]"
           >
             <div className="px-[var(--sidebar-row-content-inset)] pb-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-muted-foreground/70 group-data-[collapsible=icon]:hidden">
-              {group.label}
+              {t(group.label)}
             </div>
             <SidebarMenu>
               {group.items.map((item) => {
@@ -47,14 +49,14 @@ export function SettingsSidebarNav() {
                       aria-current={active ? "page" : undefined}
                       isActive={active}
                       onClick={() => go(to)}
-                      tooltip={item.label}
+                      tooltip={t(item.label)}
                     >
                       <AppIcon
                         className={cn("size-4", !active && "text-sidebar-muted-foreground")}
                         icon={item.icon}
                       />
                       <span className="truncate group-data-[collapsible=icon]:hidden">
-                        {item.label}
+                        {t(item.label)}
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -67,9 +69,9 @@ export function SettingsSidebarNav() {
       <SidebarFooter className="p-[var(--sidebar-content-inset)]">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => go("/")} tooltip="Back to chats">
+            <SidebarMenuButton onClick={() => go("/")} tooltip={t("Back to chats")}>
               <ArrowLeftIcon />
-              <span className="group-data-[collapsible=icon]:hidden">Back to chats</span>
+              <span className="group-data-[collapsible=icon]:hidden">{t("Back to chats")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

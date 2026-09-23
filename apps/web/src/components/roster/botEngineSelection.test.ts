@@ -1,5 +1,6 @@
 import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
@@ -63,6 +64,16 @@ describe("resolveStickyBotEngine", () => {
     ).toBeNull();
     expect(botEngineUnavailability(null, instanceEntries)).toMatchObject({
       reason: "missing-provider",
+      title: "No provider is connected",
+    });
+  });
+
+  it("explains a missing provider in the active interface language", async () => {
+    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+    expect(botEngineUnavailability(null, [], zh.translate)).toMatchObject({
+      reason: "missing-provider",
+      title: "未连接任何提供商",
+      description: "请在“设置 > 提供商”中连接一个提供商，以便此机器人回复。",
     });
   });
 

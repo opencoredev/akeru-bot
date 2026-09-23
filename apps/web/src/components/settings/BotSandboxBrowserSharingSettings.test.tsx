@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { visitElements } from "../../test/reactElementTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
+
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");

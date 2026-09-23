@@ -1537,6 +1537,7 @@ function EmptyRemoteEnvironments() {
 }
 
 export function ConnectionsSettings() {
+  const { t } = useI18n();
   const desktopBridge = window.desktopBridge;
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
@@ -3168,7 +3169,7 @@ export function ConnectionsSettings() {
       )}
 
       <SettingsSection
-        {...searchableSetting("remote-environments")}
+        {...searchableSetting("remote-environments", t)}
         headerAction={
           <Dialog
             open={addBackendDialogOpen}

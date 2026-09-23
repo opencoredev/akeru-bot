@@ -37,6 +37,7 @@ import {
 } from "./PortabilitySettings.logic";
 import { SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { useI18n } from "../../i18n";
 
 interface ImportPreviewState {
   readonly contents: string;
@@ -204,6 +205,7 @@ function importResultDescription(result: PortabilityApplyImportResult): string {
 }
 
 export function PortabilitySettings() {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const primaryEnvironment = usePrimaryEnvironment();
   const projectPickerTarget = portabilityProjectPickerTarget(
@@ -381,8 +383,10 @@ export function PortabilitySettings() {
   return (
     <>
       <SettingsRow
-        {...searchableSetting("data-portability")}
-        description="Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included."
+        {...searchableSetting("data-portability", t)}
+        description={t(
+          "Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included.",
+        )}
         control={
           <div className="flex items-center gap-1.5">
             <Button
@@ -391,7 +395,7 @@ export function PortabilitySettings() {
               disabled={environmentId === null || pending !== null}
               onClick={() => fileInputRef.current?.click()}
             >
-              {pending === "preview" ? "Reading..." : "Import"}
+              {pending === "preview" ? t("Reading...") : t("Import")}
             </Button>
             <Button
               size="xs"
@@ -399,14 +403,14 @@ export function PortabilitySettings() {
               disabled={environmentId === null || pending !== null}
               onClick={() => void handleExport()}
             >
-              {pending === "export" ? "Exporting..." : "Export"}
+              {pending === "export" ? t("Exporting...") : t("Export")}
             </Button>
             <input
               ref={fileInputRef}
               className="sr-only"
               type="file"
               accept=".archive,application/json"
-              aria-label="Import Akeru archive"
+              aria-label={t("Import Akeru archive")}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 event.currentTarget.value = "";

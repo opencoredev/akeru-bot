@@ -34,11 +34,13 @@ English extraction is incremental. A catalog's existence is not evidence that ev
 | Interface area                      | Web and desktop renderer                                                      | Native mobile                                         |
 | ----------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Language preference and selector    | Client settings, Settings > General                                           | Installation storage, Settings                        |
-| Settings                            | Dialog, navigation, general, connections, providers                           | Root screen and subscreens, except legal documents    |
+| Settings                            | Rail, breadcrumb, searchable row titles, General, Connections pairing         | Root screen and subscreens, except those listed below |
 | Settings search and command palette | Translated labels plus English search aliases                                 | No command palette; Settings navigation is translated |
 | Pairing                             | Pairing route                                                                 | Connections list and new connection screens           |
 | Roster and home                     | Roster sidebar, empty roster, new bot and new group dialogs, group details    | Home, chat list, swipe actions, archived chats        |
 | Chat                                | Bot and group chat views, landing pages, prompts, delegation cards, composer  | Chat screen, composer, approvals, empty workspace     |
+| Chat dates and times                | Date dividers and routine receipt times use the interface locale              | Message times use the interface locale                |
+| Provider availability               | Model pickers, bot engine row, no-provider banner                             | Composer send block, model picker, new chat flow      |
 | Bot settings                        | Settings page, details panel, channels and tools sheets, usage, model pickers | No bot settings screen                                |
 | Onboarding and errors               | Desktop onboarding and the root error view                                    | Not applicable                                        |
 | Connection errors                   | Stable-code status line; raw detail in tooltip                                | Stable-code status line; raw detail kept separate     |
@@ -47,7 +49,7 @@ English extraction is incremental. A catalog's existence is not evidence that ev
 | Routines                            | Routine panel, routine form, and routine receipts in chat                     | No routine screen                                     |
 | Approved non-English catalogs       | Simplified Chinese (`zh-CN`)                                                  | Simplified Chinese (`zh-CN`)                          |
 
-The coverage test scans every file that imports `useI18n` or `useMobileI18n`, plus a short explicit list of plain modules that translate through a passed-in or module-level translator: `CommandPalette.logic.ts`, `composerProviderMenuItems.ts`, the mobile `app-updates.ts`, the onboarding logic modules, `durableMemory.ts` and `imageGeneration.ts` in client-runtime, and `routineReceipts.ts`. Plural forms passed to `plural` are extracted as messages too. Mobile code outside React uses `translateOutsideReact` from `apps/mobile/src/lib/i18n.tsx`, which follows the mounted language provider.
+The coverage test scans every file that imports `useI18n` or `useMobileI18n`, plus a short explicit list of plain modules that translate through a passed-in or module-level translator: `CommandPalette.logic.ts`, `composerProviderMenuItems.ts`, the mobile `app-updates.ts`, the onboarding logic modules, `durableMemory.ts`, `imageGeneration.ts`, and `providerAvailability.ts` in client-runtime, `botEngineSelection.ts`, and `routineReceipts.ts`. Plural forms passed to `plural` are extracted as messages too. Mobile code outside React uses `translateOutsideReact` from `apps/mobile/src/lib/i18n.tsx`, which follows the mounted language provider.
 
 ### Untranslated exceptions
 
@@ -55,9 +57,12 @@ These surfaces render English in every language. Each is a known gap, not a clai
 
 - Desktop native shell: the application menu, context menus built in the main process, updater dialogs, and the startup splash (`DesktopApplicationMenu.ts`, `DesktopWindow.ts`, startup assets). Electron's built-in menu roles follow the operating system. Translating them needs a client-local preference bridge into the main process, a menu rebuild on change, and Electron restart verification.
 - Web workspace tools: the file browser, diff panel, terminal drawer, git actions, branch toolbar, project scripts, and preview panels.
-- Web plugins, usage, voice, product feedback, the privacy controls, outbound data, and legal sections of Settings > Privacy, and desktop update tooltips and toasts built in `desktopUpdate.logic.ts` and `providerUpdates.logic.ts`.
+- Web Settings section bodies outside General. Row titles translate everywhere through Settings search, but descriptions, controls, and dialogs in Appearance and the theme editor, Keybindings, Providers (instance cards, the add dialog, model lists, status labels), Bot channels setup, Voice, Image generation, Browser, Plugins, Sandbox, Privacy (except Memory), Connections access details, Source control and writing style, Errors, Diagnostics, and project settings render English.
+- Web General leftovers: the Background activity advanced dialog, the portability import preview dialog and its toasts, and desktop update tooltips and toasts built in `desktopUpdate.logic.ts` and `providerUpdates.logic.ts`.
+- Web roster timestamps and the chat timestamp tooltip format with the browser or host locale, not the interface language (`roster.logic.ts`, `BotRosterSidebar.tsx`, `timestampFormat.ts`).
 - Web chat error presentation from `presentThreadError`, channel origin labels, and shared composer mention labels in `packages/client-runtime` and `packages/shared`.
-- Mobile screens: git sheets and progress overlay, chat channels, the composer command popover, files, review, terminal, usage, legal documents, and the activity widget.
+- Mobile screens: git sheets and progress overlay, chat channels, the composer command popover, files, review, terminal, usage and bot usage, image generation settings, legal documents, and the activity widget.
+- Mobile relative times in chat lists and archived chats (`lib/time.ts` `relativeTime`) stay English.
 - Toast titles and descriptions raised from non-component code outside the translated areas, and confirm dialog messages passed by callers in those areas.
 - Raw error text from providers, the environment server, git, and the operating system. It is shown as received, next to a translated explanation where a stable code exists.
 

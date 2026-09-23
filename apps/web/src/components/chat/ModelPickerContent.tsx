@@ -203,8 +203,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         entry.instanceId,
         isProviderInstancePickerSelectable(entry)
           ? null
-          : (providerInstancePickerBlockReason(entry) ??
-              providerInstanceUnavailableReason(entry) ??
+          : (providerInstancePickerBlockReason(entry, t) ??
+              providerInstanceUnavailableReason(entry, { translate: t }) ??
               t("{name} is not available right now.", { name: entry.displayName })),
       );
     }

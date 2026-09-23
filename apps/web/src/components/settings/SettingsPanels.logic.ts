@@ -217,33 +217,48 @@ function collapseOtelSignalsUrl(input: {
   return `${tracesBase}/{traces,metrics}`;
 }
 
-export function formatDiagnosticsDescription(input: {
-  readonly localTracingEnabled: boolean;
-  readonly otlpTracesEnabled: boolean;
-  readonly otlpTracesUrl?: string | undefined;
-  readonly otlpMetricsEnabled: boolean;
-  readonly otlpMetricsUrl?: string | undefined;
-}): string {
-  const mode = input.localTracingEnabled ? "Local trace file" : "Terminal logs only";
+type DiagnosticsTranslate = (message: string, params?: Record<string, string>) => string;
+
+const englishDiagnostics: DiagnosticsTranslate = (message, params = {}) =>
+  message.replace(/\{(\w+)\}/g, (placeholder, name: string) => params[name] ?? placeholder);
+
+/** Pass the active translator for display; the default returns English. */
+export function formatDiagnosticsDescription(
+  input: {
+    readonly localTracingEnabled: boolean;
+    readonly otlpTracesEnabled: boolean;
+    readonly otlpTracesUrl?: string | undefined;
+    readonly otlpMetricsEnabled: boolean;
+    readonly otlpMetricsUrl?: string | undefined;
+  },
+  translate: DiagnosticsTranslate = englishDiagnostics,
+): string {
+  const mode = input.localTracingEnabled
+    ? translate("Local trace file.")
+    : translate("Terminal logs only.");
   const tracesUrl = input.otlpTracesEnabled ? input.otlpTracesUrl : undefined;
   const metricsUrl = input.otlpMetricsEnabled ? input.otlpMetricsUrl : undefined;
 
   if (tracesUrl && metricsUrl) {
     const collapsedUrl = collapseOtelSignalsUrl({ tracesUrl, metricsUrl });
-    return collapsedUrl
-      ? `${mode}. Exporting OTEL to ${collapsedUrl}.`
-      : `${mode}. Exporting OTEL traces to ${tracesUrl} and metrics to ${metricsUrl}.`;
+    const exporting = collapsedUrl
+      ? translate("Exporting OTEL to {url}.", { url: collapsedUrl })
+      : translate("Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.", {
+          tracesUrl,
+          metricsUrl,
+        });
+    return `${mode} ${exporting}`;
   }
 
   if (tracesUrl) {
-    return `${mode}. Exporting OTEL traces to ${tracesUrl}.`;
+    return `${mode} ${translate("Exporting OTEL traces to {url}.", { url: tracesUrl })}`;
   }
 
   if (metricsUrl) {
-    return `${mode}. Exporting OTEL metrics to ${metricsUrl}.`;
+    return `${mode} ${translate("Exporting OTEL metrics to {url}.", { url: metricsUrl })}`;
   }
 
-  return `${mode}.`;
+  return mode;
 }
 
 export function buildProviderInstanceUpdatePatch(input: {
