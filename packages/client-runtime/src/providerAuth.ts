@@ -19,7 +19,7 @@ export const PROVIDER_CONNECTIONS = [
 ] as const satisfies ReadonlyArray<{ id: SubscriptionProviderId; label: string }>;
 
 export function providerSupportsBaseUrl(provider: SubscriptionProviderId): boolean {
-  return provider !== "xai" && provider !== "cursor";
+  return provider !== "xai";
 }
 
 export function providerUsesApiKey(status: SubscriptionProviderStatus | undefined): boolean {
@@ -55,7 +55,6 @@ export function providerConnectionLabel(status: SubscriptionProviderStatus): str
 const SUBSCRIPTION_PROVIDER_BY_DRIVER: Readonly<Record<string, SubscriptionProviderId>> = {
   codex: "openai-codex",
   claudeAgent: "anthropic",
-  cursor: "cursor",
   grok: "xai",
   kimi: "kimi-for-coding",
   opencodeGo: "opencode-go",

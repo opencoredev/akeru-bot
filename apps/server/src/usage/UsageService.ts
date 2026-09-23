@@ -63,7 +63,6 @@ const encodeRatesCache = Schema.encodeEffect(
 const DRIVER_CONNECTIONS = {
   claudeAgent: { provider: "claude", connection: "anthropic" },
   codex: { provider: "codex", connection: "openai-codex" },
-  cursor: { provider: "cursor", connection: "cursor" },
   grok: { provider: "grok", connection: "xai" },
   kimi: { provider: "kimi", connection: "kimi-for-coding" },
   opencode: { provider: "opencode", connection: "opencode-go" },

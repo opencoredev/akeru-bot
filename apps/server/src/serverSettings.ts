@@ -321,13 +321,13 @@ function restoreUsedProviders(
     ...settings,
     providers: {
       ...settings.providers,
-      cursor: {
-        ...settings.providers.cursor,
-        enabled: persisted.providers?.cursor?.enabled ?? usedProviders.has("cursor"),
-      },
       grok: {
         ...settings.providers.grok,
         enabled: persisted.providers?.grok?.enabled ?? usedProviders.has("grok"),
+      },
+      cursor: {
+        ...settings.providers.cursor,
+        enabled: persisted.providers?.cursor?.enabled ?? usedProviders.has("cursor"),
       },
       kimi: {
         ...settings.providers.kimi,
@@ -391,8 +391,8 @@ const PERSISTED_SERVER_SETTINGS_DEFAULTS = {
   ...DEFAULT_SERVER_SETTINGS,
   providers: {
     ...DEFAULT_SERVER_SETTINGS.providers,
-    cursor: { ...DEFAULT_SERVER_SETTINGS.providers.cursor, enabled: undefined },
     grok: { ...DEFAULT_SERVER_SETTINGS.providers.grok, enabled: undefined },
+    cursor: { ...DEFAULT_SERVER_SETTINGS.providers.cursor, enabled: undefined },
     opencode: { ...DEFAULT_SERVER_SETTINGS.providers.opencode, enabled: undefined },
   },
 };

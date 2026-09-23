@@ -492,8 +492,6 @@ function subscriptionProviderForDriver(
       return "openai-codex";
     case "claudeAgent":
       return "anthropic";
-    case "cursor":
-      return "cursor";
     case "grok":
       return "xai";
     case "kimi":

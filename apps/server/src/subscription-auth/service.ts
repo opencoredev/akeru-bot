@@ -36,12 +36,6 @@ import {
   type CodexDeviceLoginPending,
 } from "./providers/openaiCodex.ts";
 import {
-  pollCursorLogin,
-  refreshCursorToken,
-  startCursorLogin,
-  type CursorLoginPending,
-} from "./providers/cursor.ts";
-import {
   isKimiCodingDeviceId,
   pollKimiDeviceLogin,
   refreshKimiToken,
@@ -180,7 +174,6 @@ type PendingLogin =
   | { provider: SubscriptionProviderId; authMode: "api-key"; baseUrl?: string }
   | { provider: "anthropic"; verifier: string }
   | { provider: "openai-codex"; pending: CodexDeviceLoginPending }
-  | { provider: "cursor"; pending: CursorLoginPending }
   | { provider: "xai"; pending: XAIDeviceLoginPending }
   | { provider: "kimi-for-coding"; pending: KimiDeviceLoginPending }
   | { provider: "opencode-go" };
@@ -546,16 +539,16 @@ export class SubscriptionAuthService {
 
   async testHealth(provider: SubscriptionProviderId): Promise<void> {
     this.reload();
+    if (provider === "cursor") return;
     const credential = this.data[provider];
     if (!credential) {
       this.recordOAuthFailure(provider, "No account is connected.");
       return;
     }
     if (credential.type === "api-key") {
-      const defaultBaseUrls: Record<SubscriptionProviderId, string> = {
+      const defaultBaseUrls: Partial<Record<SubscriptionProviderId, string>> = {
         anthropic: "https://api.anthropic.com/v1",
         "openai-codex": "https://api.openai.com/v1",
-        cursor: "https://api.cursor.com",
         xai: "https://api.x.ai/v1",
         "kimi-for-coding": "https://api.kimi.com/coding/v1",
         "opencode-go": "https://opencode.ai/zen/go/v1",
@@ -655,12 +648,12 @@ export class SubscriptionAuthService {
     options: Omit<SubscriptionAuthStartInput, "provider"> = {},
   ): Promise<StartedLogin> {
     this.reload();
+    if (provider === "cursor") {
+      throw new Error("Cursor authentication is not supported in this build.");
+    }
     const authMode = options.authMode ?? (provider === "opencode-go" ? "api-key" : "oauth");
     if (options.baseUrl !== undefined && authMode !== "api-key") {
       throw new Error("Custom base URLs require API-key authentication. Select API key first.");
-    }
-    if (authMode === "api-key" && provider === "cursor") {
-      throw new Error("Cursor API-key authentication is not supported. Use OAuth.");
     }
     if (options.baseUrl !== undefined && provider === "xai") {
       throw new Error(
@@ -703,18 +696,6 @@ export class SubscriptionAuthService {
             url: pending.url,
             userCode: pending.userCode,
             instructions: pending.instructions,
-            completion: "poll",
-          };
-          break;
-        }
-        case "cursor": {
-          const pending = await startCursorLogin();
-          this.pendingLogins.set(loginId, { provider, pending });
-          started = {
-            loginId,
-            provider,
-            url: pending.url,
-            instructions: "Approve the Cursor login in your browser.",
             completion: "poll",
           };
           break;
@@ -783,14 +764,6 @@ export class SubscriptionAuthService {
         return { status: "pending", nextPollMs: 2000 };
       case "openai-codex": {
         const result = await pollCodexDeviceLogin(login.pending);
-        return this.foldPoll(loginId, login.provider, result);
-      }
-      case "cursor": {
-        const result = await pollCursorLogin(login.pending);
-        if (result.status === "pending") {
-          this.pendingLogins.set(loginId, { provider: "cursor", pending: result.pending });
-          this.savePending();
-        }
         return this.foldPoll(loginId, login.provider, result);
       }
       case "xai": {
@@ -1029,8 +1002,6 @@ export class SubscriptionAuthService {
         return refreshAnthropicToken(credential.refresh);
       case "openai-codex":
         return refreshCodexToken(credential);
-      case "cursor":
-        return refreshCursorToken(credential);
       case "xai":
         return refreshXAIToken(credential.refresh);
       case "kimi-for-coding":
@@ -1041,6 +1012,8 @@ export class SubscriptionAuthService {
         );
       case "opencode-go":
         throw new Error("OpenCode Go API keys do not refresh.");
+      case "cursor":
+        throw new Error("Cursor authentication is not supported in this build.");
     }
   }
 }

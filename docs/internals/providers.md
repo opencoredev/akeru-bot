@@ -102,21 +102,19 @@ The built-in `grok-build` slug is the CLI's product name, not an ACP model id.
 `session/set_model`. Grok snapshots no longer advertise `requiresNewThreadForModelChange`, so an
 in-session model change reaches ACP `session/set_model`.
 
-Cursor and OpenCode still start sessions through `AcpSessionRuntime.start()`. The new
-`initialize()` method is additive and unused by those adapters.
+OpenCode starts sessions through `AcpSessionRuntime.start()`. The new
+`initialize()` method is additive and unused by that adapter.
 
 ACP outbound notifications (`session/cancel` included) encode as JSON-RPC with no `id` or
 `headers`. The previous Request encoder emitted `id: ""`, which Grok CLI treats as a malformed
-request and drops, so Stop did not stop. Cursor and OpenCode share this protocol path; the mock
-agent was previously lenient and hid the bug. `AcpSessionRuntime.cancel` now waits for the cancel
+request and drops, so Stop did not stop. `AcpSessionRuntime.cancel` now waits for the cancel
 write before returning so a replacement prompt cannot race ahead of it. Grok mid-turn sends cancel
 the in-flight prompt and continue the same turn instead of queueing.
 
 Grok skill discovery uses `grok inspect --json`. Machine-level health checks recover probe
 failures to an empty skill list. `ProviderInstance.snapshotForCwd` re-runs inspect in the
 thread workspace so a failed probe is not cached as empty. Composer cwd refresh still uses the
-machine snapshot until a client calls `snapshotForCwd`. Cursor composer wiring from the same
-upstream PR is not in this change.
+machine snapshot until a client calls `snapshotForCwd`.
 
 `ServerProviderSkill` carries an optional `icon` (an emoji or a short glyph name from skill
 frontmatter or provider metadata, e.g. the Codex app-server's interface icon paths). Clients

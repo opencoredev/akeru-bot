@@ -25,7 +25,6 @@ export const USAGE_CONTRACT_VERSION = 5 as const;
 export const UsageProviderKind = Schema.Literals([
   "claude",
   "codex",
-  "cursor",
   "grok",
   "kimi",
   "opencode",
@@ -180,7 +179,13 @@ export type UsagePlanLimitsStatus = typeof UsagePlanLimitsStatus.Type;
 
 /** Live plan meters for one Settings → Providers login. */
 export const UsageProviderPlanLimits = Schema.Struct({
-  provider: SubscriptionProviderId,
+  provider: Schema.Literals([
+    "anthropic",
+    "openai-codex",
+    "xai",
+    "kimi-for-coding",
+    "opencode-go",
+  ]),
   status: UsagePlanLimitsStatus,
   plan: Schema.NullOr(TrimmedNonEmptyString),
   message: Schema.NullOr(TrimmedNonEmptyString),

@@ -2,7 +2,6 @@ import type { UsageProviderKind } from "@t3tools/contracts";
 
 import {
   ClaudeAI,
-  CursorIcon,
   GrokIcon,
   KimiIcon,
   OpenCodeIcon,
@@ -31,11 +30,6 @@ export const PROVIDER_PRESENTATION = {
     label: "Claude",
     color: "#d97757",
     mark: ClaudeAI,
-  },
-  cursor: {
-    label: "Cursor",
-    color: "#a78bfa",
-    mark: CursorIcon,
   },
   grok: {
     label: "Grok",

@@ -15,6 +15,7 @@ import { McpServerId } from "./mcpServer.ts";
 export const SubscriptionProviderId = Schema.Literals([
   "anthropic",
   "openai-codex",
+  /** Legacy Cursor subscription records still decode; Cursor auth is unavailable. */
   "cursor",
   "xai",
   "kimi-for-coding",

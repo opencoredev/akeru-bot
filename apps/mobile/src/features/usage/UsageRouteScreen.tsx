@@ -18,7 +18,6 @@ import { SettingsSection } from "../settings/components/SettingsSection";
 const PLAN_LABELS = {
   "openai-codex": "ChatGPT",
   anthropic: "Claude",
-  cursor: "Cursor",
   xai: "Grok",
   "kimi-for-coding": "Kimi For Coding",
   "opencode-go": "OpenCode Go",

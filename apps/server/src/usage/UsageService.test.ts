@@ -101,7 +101,6 @@ describe("usageRecordFromEntry", () => {
   it.each([
     ["claudeAgent", "anthropic", "claude"],
     ["codex", "openai-codex", "codex"],
-    ["cursor", "cursor", "cursor"],
     ["grok", "xai", "grok"],
     ["kimi", "kimi-for-coding", "kimi"],
     ["opencode", "opencode-go", "opencode"],

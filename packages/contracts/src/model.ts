@@ -129,7 +129,6 @@ export type ModelCapabilities = typeof ModelCapabilities.Type;
 
 const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex");
 const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
-const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
@@ -152,7 +151,6 @@ export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,
   [CLAUDE_DRIVER_KIND]: "claude-sonnet-5",
-  [CURSOR_DRIVER_KIND]: "auto",
   // Product slug, not an ACP model id. The Grok adapter treats it as "the session's current model".
   [GROK_DRIVER_KIND]: "grok-build",
   [KIMI_DRIVER_KIND]: "k3",
@@ -166,7 +164,6 @@ export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
 > = {
   [CODEX_DRIVER_KIND]: DEFAULT_TEXT_GENERATION_MODEL,
   [CLAUDE_DRIVER_KIND]: "claude-haiku-4-5",
-  [CURSOR_DRIVER_KIND]: "composer-2",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
 };
 
@@ -205,17 +202,6 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "claude-haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4-5-20251001": "claude-haiku-4-5",
   },
-  [CURSOR_DRIVER_KIND]: {
-    composer: "composer-2",
-    "composer-1.5": "composer-1.5",
-    "composer-1": "composer-1.5",
-    "opus-4.6-thinking": "claude-opus-4-6",
-    "opus-4.6": "claude-opus-4-6",
-    "sonnet-4.6-thinking": "claude-sonnet-4-6",
-    "sonnet-4.6": "claude-sonnet-4-6",
-    "opus-4.5-thinking": "claude-opus-4-5",
-    "opus-4.5": "claude-opus-4-5",
-  },
   [OPENCODE_DRIVER_KIND]: {},
   [OPENCODE_GO_DRIVER_KIND]: {},
 };
@@ -225,7 +211,6 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
 export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>> = {
   [CODEX_DRIVER_KIND]: "Codex",
   [CLAUDE_DRIVER_KIND]: "Claude",
-  [CURSOR_DRIVER_KIND]: "Cursor",
   [GROK_DRIVER_KIND]: "Grok",
   [KIMI_DRIVER_KIND]: "Kimi For Coding",
   [OPENCODE_DRIVER_KIND]: "OpenCode",

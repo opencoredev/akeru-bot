@@ -6,7 +6,7 @@ back and forward navigation.
 
 ## Plan limits
 
-The **Limits** tab opens by default and shows available limits for ChatGPT, Claude, Cursor, Grok,
+The **Limits** tab opens by default and shows available limits for ChatGPT, Claude, Grok,
 Kimi For Coding, and OpenCode Go.
 Disconnected accounts and limits that a provider does not report stay hidden.
 

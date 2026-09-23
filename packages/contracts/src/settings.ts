@@ -491,6 +491,10 @@ export const ClaudeSettings = makeProviderSettingsSchema(
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
 
+/**
+ * Legacy Cursor settings are retained for decoding old settings files. The
+ * provider is no longer registered, so runtime hydration exposes it as unavailable.
+ */
 export const CursorSettings = makeProviderSettingsSchema(
   {
     // Off by default like Grok and OpenCode. Users opt in from Settings.
@@ -537,7 +541,7 @@ export type CursorSettings = typeof CursorSettings.Type;
 
 export const GrokSettings = makeProviderSettingsSchema(
   {
-    // Off by default (like Cursor and OpenCode): the binding is not yet
+    // Off by default: the binding is not yet
     // stable enough to probe on every install. Users opt in from Settings.
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),
@@ -595,7 +599,7 @@ export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
 
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
-    // Off by default (like Cursor and Grok): the binding is not yet stable
+    // Off by default: the binding is not yet stable
     // enough to probe on every install. Users opt in from Settings.
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),

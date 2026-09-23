@@ -26,7 +26,6 @@ type SubscriptionEnvironment = NodeJS.ProcessEnv & {
 const subscriptionProviderDrivers = [
   ["codex", "openai-codex"],
   ["claudeAgent", "anthropic"],
-  ["cursor", "cursor"],
   ["grok", "xai"],
   ["kimi", "kimi-for-coding"],
   ["opencodeGo", "opencode-go"],

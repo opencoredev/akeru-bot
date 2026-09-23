@@ -119,7 +119,7 @@ Provider event logs in [`EventNdjsonLogger.ts`][event-log] drop canonical deltas
 streaming chunks (Codex item/realtime methods, Claude content-block deltas, ACP
 `agent_message_chunk`/`agent_thought_chunk`, OpenCode text/reasoning part updates) before
 serialization. ACP request diagnostics stay on by default; full protocol logging is opt-in through
-the Cursor and Grok provider settings and filters the same transient session updates. Async drain/close behavior for this file is owned
+the Grok provider settings and filters the same transient session updates. Async drain/close behavior for this file is owned
 separately by the desktop log-drain work and is not changed here.
 
 ## Provider drivers
