@@ -24,6 +24,14 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
+import { collectComposerMentionReferences } from "@t3tools/shared/composerInlineTokens";
+import {
+  appendComposerMentionContext,
+  isHiddenComposerThread,
+  THREAD_MENTION_MAX_THREADS,
+  THREAD_MENTION_TURN_LIMIT,
+  type ThreadMentionSource,
+} from "@t3tools/shared/composerThreadMentions";
 import {
   isTemporaryWorktreeBranch,
   stripWorktreeBranchPrefix,
@@ -1205,6 +1213,56 @@ const make = Effect.gen(function* () {
     return { threadId: startedSession.threadId, engine: desiredEngine };
   });
 
+  /**
+   * Expands composer `@browser` and `@chat:<id>` mentions into a bounded
+   * context block for the provider. The stored message keeps only the tokens,
+   * so clients render chips and the socket never carries the excerpts.
+   */
+  const expandComposerMentions = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    messageText: string,
+  ) {
+    const references = collectComposerMentionReferences(messageText);
+    if (!references.browser && references.threadIds.length === 0) {
+      return messageText;
+    }
+    const browser = !references.browser
+      ? null
+      : (yield* serverSettingsService.getSettings.pipe(
+            Effect.map((settings) => settings.enableAgentBrowserAccess),
+            Effect.orElseSucceed(() => false),
+          ))
+        ? ("enabled" as const)
+        : ("disabled" as const);
+    const threads: ThreadMentionSource[] = [];
+    for (const mentionedId of references.threadIds
+      .filter((id) => id !== threadId)
+      .slice(0, THREAD_MENTION_MAX_THREADS)) {
+      const snapshot = yield* projectionSnapshotQuery
+        .getThreadDetailSnapshot(ThreadId.make(mentionedId), {
+          turnLimit: THREAD_MENTION_TURN_LIMIT,
+        })
+        .pipe(
+          Effect.map(Option.getOrUndefined),
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not read a mentioned chat for turn context.", {
+              threadId,
+              mentionedThreadId: mentionedId,
+              cause,
+            }).pipe(Effect.as(undefined)),
+          ),
+        );
+      // Mentioned chats resolve within this environment; hidden chats are excluded.
+      if (snapshot === undefined || isHiddenComposerThread(snapshot.thread)) continue;
+      threads.push({
+        id: snapshot.thread.id,
+        title: snapshot.thread.title,
+        messages: snapshot.thread.messages,
+      });
+    }
+    return appendComposerMentionContext(messageText, { browser, threads });
+  });
+
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly messageText: string;
@@ -1227,7 +1285,9 @@ const make = Effect.gen(function* () {
     if (input.modelSelection !== undefined || ensured.engine.configured) {
       threadModelSelections.set(input.threadId, ensured.engine.modelSelection);
     }
-    const normalizedInput = toNonEmptyProviderInput(input.messageText);
+    const normalizedInput = toNonEmptyProviderInput(
+      yield* expandComposerMentions(input.threadId, input.messageText),
+    );
     const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* agentController
       .listSessions()

@@ -29,4 +29,23 @@ describe("SentMessageText", () => {
     expect(markup).toContain("whitespace-pre-wrap");
     expect(markup).toContain("my thoughts");
   });
+
+  it("renders browser and chat mentions as chips", () => {
+    const markup = renderToStaticMarkup(
+      <SentMessageText text="check @chat:thread-9 with @browser" />,
+    );
+
+    expect(markup).toContain('data-markdown-copy="@chat:thread-9"');
+    expect(markup).toContain("Unknown chat");
+    expect(markup).toContain('data-markdown-copy="@browser"');
+    expect(markup).toContain("Browser");
+    expect(markup).toContain("check ");
+  });
+
+  it("renders an @bot:<id> mention as a chip with the bot's name", () => {
+    const markup = renderToStaticMarkup(<SentMessageText text="ask @bot:bot-gone now" />);
+
+    expect(markup).toContain('data-markdown-copy="@bot:bot-gone"');
+    expect(markup).toContain("Unknown bot");
+  });
 });

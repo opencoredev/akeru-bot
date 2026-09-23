@@ -10,6 +10,12 @@ import {
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
 import {
+  applyBotPromptMention,
+  botPromptMention,
+  botPromptMentionTrigger,
+  buildBotPromptMentionItems,
+} from "./botPromptMentions.logic";
+import {
   appendBotMention,
   BotPromptComposer,
   canSubmitBotPrompt,
@@ -42,8 +48,8 @@ describe("bot prompt composer", () => {
   });
 
   it("preserves new draft text when inserting a mention", () => {
-    expect(appendBotMention("new draft", "Mori")).toBe("new draft @Mori ");
-    expect(appendBotMention("", "Mori")).toBe("@Mori ");
+    expect(appendBotMention("new draft", "@Mori")).toBe("new draft @Mori ");
+    expect(appendBotMention("", "@bot:mori-2")).toBe("@bot:mori-2 ");
   });
 
   it("expands for long or multiline prompts", () => {
@@ -98,11 +104,35 @@ describe("bot prompt composer", () => {
       const mention = resolveBotMention("@Mori check the logs", bots);
       expect(mention).toEqual({ kind: "ambiguous", name: "Mori" });
       expect(botMentionHint(mention)).toBe(
-        "More than one bot here is named Mori. Rename one of them to mention it.",
+        "More than one bot here is named Mori. Pick one from the @ menu to mention it.",
       );
       expect(resolveBotMention("@Mori then @Akeru", bots)).toEqual({ kind: "bot", botId: "boss" });
     }
     expect(botMentionHint({ kind: "bot", botId: "boss" })).toBeNull();
+  });
+
+  it("submits to the exact Mika picked from either menu", () => {
+    const mikas = [
+      { id: "mika-claude", name: "Mika", title: "Designer" },
+      { id: "mika-grok", name: "Mika", title: "Reviewer" },
+    ];
+    const trigger = botPromptMentionTrigger("@mika", 5)!;
+    const rows = buildBotPromptMentionItems({
+      query: trigger.query,
+      browserAvailable: false,
+      bots: mikas,
+      threads: [],
+    });
+    expect(rows).toHaveLength(2);
+    for (const [index, bot] of mikas.entries()) {
+      const picked = applyBotPromptMention("@mika", trigger, rows[index]!).text;
+      const draft = `${picked}please review`;
+      expect(resolveBotMention(draft, mikas)).toEqual({ kind: "bot", botId: bot.id });
+      expect(botMentionHint(resolveBotMention(draft, mikas))).toBeNull();
+
+      const appended = appendBotMention("please review", botPromptMention(bot, mikas).source);
+      expect(resolveBotMention(appended, mikas)).toEqual({ kind: "bot", botId: bot.id });
+    }
   });
 
   it("focuses the prompt for unmodified printable typing outside an editor", () => {

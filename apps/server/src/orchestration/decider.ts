@@ -16,6 +16,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
+import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
@@ -271,6 +272,23 @@ function activeGroupBotIds(
       .map((member) => member.botId)
       .filter((botId) => activeBotIds.has(botId)),
   );
+}
+
+// The active member named by the latest `@bot:<id>` token, for clients that send the
+// token without resolving it to respondingBotId first. Plain `@Name` stays client-resolved.
+function mentionedGroupBotId(
+  readModel: OrchestrationReadModel,
+  group: OrchestrationReadModel["groups"][number],
+  text: string,
+): BotId | null {
+  const activeBotIds = activeGroupBotIds(readModel, group);
+  let mentioned: BotId | null = null;
+  for (const token of collectComposerInlineTokens(`${text}\n`)) {
+    if (token.type !== "bot-mention") continue;
+    const botId = [...activeBotIds].find((id) => id === token.value);
+    if (botId !== undefined) mentioned = botId;
+  }
+  return mentioned;
 }
 
 // Checks that the bot a chat would answer with is still active: any bot for a
@@ -2651,7 +2669,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           command,
           groupId: targetThread.groupId,
         });
-        const selectedBotId = command.respondingBotId ?? group.bossBotId;
+        const selectedBotId =
+          command.respondingBotId ??
+          mentionedGroupBotId(readModel, group, command.message.text) ??
+          group.bossBotId;
         if (selectedBotId === null) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({

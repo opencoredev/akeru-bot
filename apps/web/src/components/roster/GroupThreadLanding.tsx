@@ -40,6 +40,7 @@ import {
   UserMessageRow,
   useMessageReactionUpdater,
 } from "./BotChatMessageRows";
+import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { botEngineFailureContext } from "./botEngineSelection";
 import { buildBotStepMeters } from "./botStepMeter.logic";
@@ -77,6 +78,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  const mentionScope = useBotPromptMentionScope({
+    environmentId,
+    threadRef: runtime.linkedThreadRef,
+    projectId: runtime.defaultProject?.id,
+    cwd: runtime.defaultProject?.workspaceRoot,
+  });
   const respondingBot = bots.find((bot) => bot.id === runtime.respondingBotId) ?? null;
   // Names the provider behind a failed reply, like a bot chat does.
   const respondingEngine = useBotEngineAvailability(respondingBot?.engine ?? null);
@@ -285,6 +292,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           </div>
         ) : null}
         <BotPromptComposer
+          mentionScope={mentionScope}
           botName={group.name}
           draftKey={`group:${group.id}`}
           busy={working && pendingApproval === null}
@@ -331,7 +339,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             runtime.defaultProject === null ||
             (!waitingForUserInput && !runtime.providerAvailable)
           }
-          mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
+          mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name, title: bot.title }))}
           replyPreview={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
           sendBlockedDescriptionId={

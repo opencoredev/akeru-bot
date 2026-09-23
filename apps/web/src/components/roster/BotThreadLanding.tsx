@@ -48,6 +48,7 @@ import { botEngineFailureContext } from "./botEngineSelection";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
@@ -144,6 +145,12 @@ export function BotThreadLanding({
     blocked: sendBlocked,
   } = useBotEngineAvailability(bot?.engine ?? null);
   const runtime = useBotThreadRuntime(botId, stickyEngine);
+  const mentionScope = useBotPromptMentionScope({
+    environmentId,
+    threadRef: runtime.linkedThreadRef,
+    projectId: runtime.defaultProject?.id,
+    cwd: runtime.defaultProject?.workspaceRoot,
+  });
   const engineNoticeId = useId();
   const failureContext = botEngineFailureContext(
     stickyEngine,
@@ -599,6 +606,7 @@ export function BotThreadLanding({
             />
           ) : null}
           <BotPromptComposer
+            mentionScope={mentionScope}
             botName={bot.name}
             draftKey={bot.id}
             busy={working && pendingApproval === null}

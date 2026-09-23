@@ -42,6 +42,26 @@ export type ComposerCommandItem =
       readonly skill: ServerProviderSkill;
       readonly label: string;
       readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "browser-mention";
+      readonly label: string;
+      readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "bot-mention";
+      readonly botId: string;
+      readonly label: string;
+      readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "thread-mention";
+      readonly threadId: string;
+      readonly label: string;
+      readonly description: string;
     };
 
 interface ComposerCommandPopoverProps {
@@ -82,19 +102,28 @@ function itemIcon(item: ComposerCommandItem): AppSymbolName | null {
       return "terminal";
     case "skill":
       return SKILL_SOURCE_SYMBOL_BY_KIND[resolveProviderSkillSourceKind(item.skill)];
+    case "browser-mention":
+      return "globe";
+    case "bot-mention":
+      return "person.crop.circle";
+    case "thread-mention":
+      return "text.bubble";
     case "path":
       return null;
   }
 }
 
-function groupLabel(triggerKind: ComposerTriggerKind | null): string | null {
+function groupLabel(
+  triggerKind: ComposerTriggerKind | null,
+  items: ReadonlyArray<ComposerCommandItem>,
+): string | null {
   switch (triggerKind) {
     case "slash-command":
       return "Commands";
     case "skill":
       return "Skills";
     case "path":
-      return "Files";
+      return items.some((item) => item.type !== "path") ? "Mentions" : "Files";
     default:
       return null;
   }
@@ -102,11 +131,11 @@ function groupLabel(triggerKind: ComposerTriggerKind | null): string | null {
 
 function emptyText(triggerKind: ComposerTriggerKind | null, isLoading: boolean): string {
   if (isLoading) {
-    return triggerKind === "path" ? "Searching files…" : "Loading…";
+    return triggerKind === "path" ? "Searching…" : "Loading…";
   }
   switch (triggerKind) {
     case "path":
-      return "No matching files or folders.";
+      return "No matching chats, files, or folders.";
     case "skill":
       return "No skills found.";
     case "slash-command":
@@ -132,6 +161,10 @@ const CommandRow = memo(function CommandRow(props: {
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        props.item.description ? `${props.item.label}, ${props.item.description}` : props.item.label
+      }
       onPress={props.onPress}
       style={({ pressed }) => ({
         flexDirection: "row",
@@ -179,7 +212,7 @@ const CommandRow = memo(function CommandRow(props: {
 export const ComposerCommandPopover = memo(function ComposerCommandPopover(
   props: ComposerCommandPopoverProps,
 ) {
-  const label = groupLabel(props.triggerKind);
+  const label = groupLabel(props.triggerKind, props.items);
 
   return (
     <PopoverSurface>

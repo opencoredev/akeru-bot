@@ -144,6 +144,14 @@
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"
     },
+    "./composerThreadMentions": {
+      "types": "./src/composerThreadMentions.ts",
+      "import": "./src/composerThreadMentions.ts"
+    },
+    "./composerBotMentions": {
+      "types": "./src/composerBotMentions.ts",
+      "import": "./src/composerBotMentions.ts"
+    },
     "./composerInlineTokens": {
       "types": "./src/composerInlineTokens.ts",
       "import": "./src/composerInlineTokens.ts"

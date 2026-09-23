@@ -74,6 +74,8 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { composerMentionItemToken, isThreadMentionQuery } from "./composerMentionItems";
+import { ComposerMentionPopover } from "./ComposerMentionPopover";
 import {
   type ExistingThreadSettingsRouteSession,
   useExistingThreadSettingsRoutePresentation,
@@ -423,10 +425,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     }
     return detectComposerTrigger(props.draftMessage, composerSelection.end);
   }, [composerSelection, props.draftMessage]);
+  const mentionQuery = composerTrigger?.kind === "path" ? composerTrigger.query : null;
   const pathSearch = useComposerPathSearch({
     environmentId: props.environmentId,
-    cwd: composerTrigger?.kind === "path" ? props.projectCwd : null,
-    query: composerTrigger?.kind === "path" ? composerTrigger.query : null,
+    cwd: mentionQuery !== null && !isThreadMentionQuery(mentionQuery) ? props.projectCwd : null,
+    query: mentionQuery !== null && !isThreadMentionQuery(mentionQuery) ? mentionQuery : null,
   });
 
   const composerMenuItems: ComposerCommandItem[] = useMemo(() => {
@@ -568,7 +571,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     }
 
     if (composerTrigger.kind === "path") {
-      return pathSearch.entries.map((entry) => {
+      const fileItems = pathSearch.entries.map((entry) => {
         const parts = entry.path.split("/");
         return {
           id: `path:${entry.path}`,
@@ -579,6 +582,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           description: parts.length > 1 ? parts.slice(0, -1).join("/") : "",
         };
       });
+      return fileItems;
     }
 
     return [];
@@ -629,6 +633,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         replacement = `/${item.command} `;
       } else if (item.type === "provider-slash-command") {
         replacement = `/${item.command.name} `;
+      } else {
+        const token = composerMentionItemToken(item);
+        if (token !== null) replacement = `${token} `;
       }
 
       const result = replaceTextRange(
@@ -790,7 +797,19 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         layout={COMPOSER_LAYOUT_TRANSITION}
         style={{ maxWidth: props.contentMaxWidth }}
       >
-        {composerTrigger && composerMenuItems.length > 0 ? (
+        {composerTrigger?.kind === "path" && !composerTrigger.query.startsWith('"') ? (
+          <ComposerMentionPopover
+            environmentId={props.environmentId}
+            threadId={props.selectedThread.id}
+            projectId={props.selectedThread.projectId}
+            groupId={props.selectedThread.groupId ?? null}
+            browserAvailable={props.serverConfig?.settings.enableAgentBrowserAccess === true}
+            query={composerTrigger.query}
+            fileItems={composerMenuItems}
+            isLoading={pathSearch.isPending}
+            onSelect={handleCommandSelect}
+          />
+        ) : composerTrigger && composerMenuItems.length > 0 ? (
           <View className="absolute inset-x-0 bottom-full z-10 mb-2">
             <ComposerCommandPopover
               items={composerMenuItems}

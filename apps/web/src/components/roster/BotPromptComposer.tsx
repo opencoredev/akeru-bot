@@ -1,6 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 import {
+  type ComposerBotMention,
+  resolveComposerBotMention,
+} from "@t3tools/shared/composerBotMentions";
+import {
   ArrowUpIcon,
   AtSignIcon,
   CornerDownRightIcon,
@@ -44,6 +48,21 @@ import {
   releaseBotPromptAttachments,
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
+import {
+  applyBotPromptMention,
+  botPromptMention,
+  type BotPromptMentionBot,
+  botPromptMentionTrigger,
+  type BotPromptMentionItem,
+  removeBotPromptMention,
+} from "./botPromptMentions.logic";
+import {
+  BotPromptMentionChips,
+  BotPromptMentionMenu,
+  type BotPromptMentionMenuHandle,
+  type BotPromptMentionScope,
+  draftHasMentionChips,
+} from "./BotPromptMentions";
 
 export type BotComposerState = "stopped" | "sending" | "ready" | "empty";
 
@@ -77,8 +96,9 @@ export function isBotPromptSubmissionCurrent(
   return submissionRevision === currentRevision;
 }
 
-export function appendBotMention(draft: string, botName: string): string {
-  return `${draft}${draft && !/\s$/.test(draft) ? " " : ""}@${botName} `;
+/** Appends a bot mention token, `@Name` or `@bot:<id>`, with the spacing the parser needs. */
+export function appendBotMention(draft: string, mention: string): string {
+  return `${draft}${draft && !/\s$/.test(draft) ? " " : ""}${mention} `;
 }
 
 export function shouldFocusBotPromptForKey(input: {
@@ -101,43 +121,21 @@ export function shouldFocusBotPromptForKey(input: {
   );
 }
 
-export interface MentionBot {
-  readonly id: string;
-  readonly name: string;
-}
+export type MentionBot = BotPromptMentionBot;
 
 const EMPTY_MENTION_BOTS: ReadonlyArray<MentionBot> = [];
 
-export type BotMention =
-  | { readonly kind: "none" }
-  | { readonly kind: "bot"; readonly botId: string }
-  | { readonly kind: "ambiguous"; readonly name: string };
+export type BotMention = ComposerBotMention;
 
-// Resolves the latest whole-word @BotName. A name shared by two bots cannot be routed honestly.
+// Resolves the latest whole-word @BotName or @bot:<id>. A bare name shared by two bots
+// cannot be routed honestly; the @ menu inserts the id token for those.
 export function resolveBotMention(prompt: string, bots: ReadonlyArray<MentionBot>): BotMention {
-  const mentions = bots.flatMap((bot) => {
-    const token = `@${bot.name}`;
-    const index = prompt.lastIndexOf(token);
-    if (index < 0) return [];
-    const before = prompt[index - 1];
-    const after = prompt[index + token.length];
-    return (before === undefined || /\s/.test(before)) && (after === undefined || /\s/.test(after))
-      ? [{ bot, index }]
-      : [];
-  });
-  const latest = mentions.toSorted(
-    (left, right) => right.index - left.index || right.bot.name.length - left.bot.name.length,
-  )[0];
-  if (!latest) return { kind: "none" };
-  const namesakes = bots.filter((bot) => bot.name === latest.bot.name);
-  return namesakes.length > 1
-    ? { kind: "ambiguous", name: latest.bot.name }
-    : { kind: "bot", botId: latest.bot.id };
+  return resolveComposerBotMention(prompt, bots);
 }
 
 export function botMentionHint(mention: BotMention): string | null {
   return mention.kind === "ambiguous"
-    ? `More than one bot here is named ${mention.name}. Rename one of them to mention it.`
+    ? `More than one bot here is named ${mention.name}. Pick one from the @ menu to mention it.`
     : null;
 }
 
@@ -154,6 +152,7 @@ export function BotPromptComposer({
   disabled,
   readOnly = false,
   mentionBots = EMPTY_MENTION_BOTS,
+  mentionScope = null,
   activitySlot = null,
   busy = false,
   pendingActionSlot = null,
@@ -168,6 +167,8 @@ export function BotPromptComposer({
   disabled: boolean;
   readOnly?: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
+  /** Enables `@browser` and `@chat:` mentions for this chat's environment. */
+  mentionScope?: BotPromptMentionScope | null;
   /** Live turn status, docked above the prompt box where it stays visible without scrolling. */
   activitySlot?: ReactNode;
   /** A turn is still running, so sending again would queue behind it. */
@@ -205,6 +206,11 @@ export function BotPromptComposer({
   const releasedPreviewUrlsRef = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
+  const mentionMenuRef = useRef<BotPromptMentionMenuHandle>(null);
+  const mentionListboxId = useId();
+  const [caret, setCaret] = useState<number | null>(null);
+  const [dismissedMentionStart, setDismissedMentionStart] = useState<number | null>(null);
+  const [activeMentionOptionId, setActiveMentionOptionId] = useState<string | null>(null);
   const revisionRef = useRef(0);
   const stashPulseTimeoutRef = useRef<number | null>(null);
   const stashInFlightRef = useRef<Set<string>>(new Set());
@@ -252,7 +258,40 @@ export function BotPromptComposer({
     [releaseAttachments],
   );
 
-  const expanded = attachments.length > 0 || replyPreview != null || isBotPromptExpanded(draft);
+  const hasMentionChips = mentionScope !== null && draftHasMentionChips(draft);
+  const expanded =
+    attachments.length > 0 || replyPreview != null || hasMentionChips || isBotPromptExpanded(draft);
+  const mentionsEnabled = !readOnly && (mentionScope !== null || mentionBots.length > 0);
+  const candidateMentionTrigger =
+    mentionsEnabled && caret !== null ? botPromptMentionTrigger(draft, caret) : null;
+  const mentionTrigger =
+    candidateMentionTrigger && candidateMentionTrigger.rangeStart !== dismissedMentionStart
+      ? candidateMentionTrigger
+      : null;
+  const selectMention = useCallback(
+    (item: BotPromptMentionItem) => {
+      const input = promptInputRef.current;
+      if (!input || input.selectionStart === null) return;
+      const trigger = botPromptMentionTrigger(input.value, input.selectionStart);
+      if (!trigger) return;
+      const next = applyBotPromptMention(input.value, trigger, item);
+      persistDraft(next.text);
+      setCaret(next.caret);
+      window.requestAnimationFrame(() => {
+        promptInputRef.current?.focus();
+        promptInputRef.current?.setSelectionRange(next.caret, next.caret);
+      });
+    },
+    [persistDraft],
+  );
+  const closeMentionMenu = useCallback(() => {
+    const input = promptInputRef.current;
+    const trigger =
+      input && input.selectionStart !== null
+        ? botPromptMentionTrigger(input.value, input.selectionStart)
+        : null;
+    setDismissedMentionStart(trigger?.rangeStart ?? null);
+  }, []);
   const canSubmit = canSubmitBotPrompt(disabled, draft, attachments.length);
   const composerState = botComposerState({ disabled, busy, canSubmit });
   // Only stands in for the arrow when there is nothing to send, so a follow-up stays sendable.
@@ -631,123 +670,168 @@ export function BotPromptComposer({
             </motion.div>
           ) : null}
         </AnimatePresence>
-        <div
-          data-testid="bot-prompt-composer"
-          data-expanded={expanded || undefined}
-          className={cn(
-            "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
-            expanded && "min-h-28",
-            pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
-          )}
-        >
-          {/* One line, always the same height, so starting a reply never resizes the box. */}
-          {replyPreview ? (
-            <div
-              className="mx-3 mt-3 flex h-8 items-center gap-2 rounded-lg bg-foreground/8 px-2.5 text-xs"
-              data-testid="composer-reply-preview"
-            >
-              <CornerDownRightIcon aria-hidden="true" className="size-3.5 shrink-0 opacity-60" />
-              <span className="shrink-0 font-medium">{replyPreview.label}</span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                {replyPreview.text}
-              </span>
-              <button
-                type="button"
-                aria-label="Cancel reply"
-                className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={onCancelReply}
+        <div className="relative">
+          {mentionTrigger ? (
+            <BotPromptMentionMenu
+              ref={mentionMenuRef}
+              listboxId={mentionListboxId}
+              trigger={mentionTrigger}
+              scope={mentionScope}
+              bots={mentionBots}
+              onSelect={selectMention}
+              onClose={closeMentionMenu}
+              onActiveOptionChange={setActiveMentionOptionId}
+            />
+          ) : null}
+          <div
+            data-testid="bot-prompt-composer"
+            data-expanded={expanded || undefined}
+            className={cn(
+              "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
+              expanded && "min-h-28",
+              pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
+            )}
+          >
+            {/* One line, always the same height, so starting a reply never resizes the box. */}
+            {replyPreview ? (
+              <div
+                className="mx-3 mt-3 flex h-8 items-center gap-2 rounded-lg bg-foreground/8 px-2.5 text-xs"
+                data-testid="composer-reply-preview"
               >
-                <XIcon className="size-3.5" />
+                <CornerDownRightIcon aria-hidden="true" className="size-3.5 shrink-0 opacity-60" />
+                <span className="shrink-0 font-medium">{replyPreview.label}</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {replyPreview.text}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Cancel reply"
+                  className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={onCancelReply}
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              </div>
+            ) : null}
+            <BotPromptAttachments
+              attachments={attachments}
+              className="px-3 pt-3"
+              onExpand={setExpandedAttachmentId}
+              onPreviewError={(attachmentId) => {
+                setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
+                if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
+              }}
+              onRemove={removeAttachment}
+            />
+            {hasMentionChips ? (
+              <BotPromptMentionChips
+                bots={mentionBots}
+                draft={draft}
+                onRemove={(chip) => {
+                  persistDraft(removeBotPromptMention(draft, chip));
+                  promptInputRef.current?.focus();
+                }}
+              />
+            ) : null}
+            <textarea
+              ref={promptInputRef}
+              aria-label={`Message ${botName}`}
+              data-testid="bot-prompt-input"
+              placeholder={placeholder ?? `Message ${botName}`}
+              rows={1}
+              value={draft}
+              readOnly={readOnly}
+              tabIndex={readOnly ? -1 : undefined}
+              aria-autocomplete={mentionsEnabled ? "list" : undefined}
+              aria-controls={mentionTrigger && activeMentionOptionId ? mentionListboxId : undefined}
+              aria-activedescendant={(mentionTrigger && activeMentionOptionId) || undefined}
+              className={cn(
+                "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
+                expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-[0.9rem]",
+              )}
+              onChange={(event) => {
+                const { selectionStart, value } = event.currentTarget;
+                persistDraft(value);
+                setCaret(selectionStart);
+                if (botPromptMentionTrigger(value, selectionStart) === null) {
+                  setDismissedMentionStart(null);
+                }
+              }}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onBlur={() => setCaret(null)}
+              onKeyDown={(event) => {
+                if (mentionTrigger && mentionMenuRef.current?.handleKeyDown(event)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  return;
+                }
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              onPaste={(event) => {
+                if (!readOnly && event.clipboardData.files.length > 0) {
+                  addFiles(event.clipboardData.files);
+                }
+              }}
+            />
+            <div
+              data-testid="bot-prompt-controls"
+              /* Pinned to the box corners in every state: growing the draft must not move
+             the add or send button out from under the pointer. */
+              className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between"
+            >
+              <div className="pointer-events-auto flex min-w-0 items-center gap-1">
+                <Menu>
+                  <MenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label="Add to prompt"
+                        disabled={readOnly}
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    }
+                  >
+                    <PlusIcon className="size-5" />
+                  </MenuTrigger>
+                  <MenuPopup align="start" side="top" sideOffset={8}>
+                    <MenuItem onClick={() => fileInputRef.current?.click()}>
+                      <PaperclipIcon />
+                      Attach file
+                    </MenuItem>
+                    {mentionBots.map((bot) => {
+                      const mention = botPromptMention(bot, mentionBots);
+                      return (
+                        <MenuItem
+                          key={bot.id}
+                          onClick={() => persistDraft(appendBotMention(draft, mention.source))}
+                        >
+                          <AtSignIcon />
+                          Mention {bot.name}
+                          {mention.detail ? ` (${mention.detail})` : ""}
+                        </MenuItem>
+                      );
+                    })}
+                  </MenuPopup>
+                </Menu>
+              </div>
+              <button
+                type="submit"
+                aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
+                aria-describedby={
+                  [mentionHint ? mentionHintId : null, disabled ? sendBlockedDescriptionId : null]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+                data-busy={showBusyMeter || undefined}
+                disabled={!canSubmit || mentionHint !== null}
+                className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-25 data-busy:opacity-70"
+              >
+                {showBusyMeter ? <LoaderMeter /> : <ArrowUpIcon className="size-5" />}
               </button>
             </div>
-          ) : null}
-          <BotPromptAttachments
-            attachments={attachments}
-            className="px-3 pt-3"
-            onExpand={setExpandedAttachmentId}
-            onPreviewError={(attachmentId) => {
-              setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
-              if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
-            }}
-            onRemove={removeAttachment}
-          />
-          <textarea
-            ref={promptInputRef}
-            aria-label={`Message ${botName}`}
-            data-testid="bot-prompt-input"
-            placeholder={placeholder ?? `Message ${botName}`}
-            rows={1}
-            value={draft}
-            readOnly={readOnly}
-            tabIndex={readOnly ? -1 : undefined}
-            className={cn(
-              "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
-              expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-[0.9rem]",
-            )}
-            onChange={(event) => persistDraft(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            onPaste={(event) => {
-              if (!readOnly && event.clipboardData.files.length > 0) {
-                addFiles(event.clipboardData.files);
-              }
-            }}
-          />
-          <div
-            data-testid="bot-prompt-controls"
-            /* Pinned to the box corners in every state: growing the draft must not move
-             the add or send button out from under the pointer. */
-            className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between"
-          >
-            <div className="pointer-events-auto flex min-w-0 items-center gap-1">
-              <Menu>
-                <MenuTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="Add to prompt"
-                      disabled={readOnly}
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                  }
-                >
-                  <PlusIcon className="size-5" />
-                </MenuTrigger>
-                <MenuPopup align="start" side="top" sideOffset={8}>
-                  <MenuItem onClick={() => fileInputRef.current?.click()}>
-                    <PaperclipIcon />
-                    Attach file
-                  </MenuItem>
-                  {mentionBots.map((bot) => (
-                    <MenuItem
-                      key={bot.id}
-                      onClick={() => persistDraft(appendBotMention(draft, bot.name))}
-                    >
-                      <AtSignIcon />
-                      Mention {bot.name}
-                    </MenuItem>
-                  ))}
-                </MenuPopup>
-              </Menu>
-            </div>
-            <button
-              type="submit"
-              aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
-              aria-describedby={
-                [mentionHint ? mentionHintId : null, disabled ? sendBlockedDescriptionId : null]
-                  .filter(Boolean)
-                  .join(" ") || undefined
-              }
-              data-busy={showBusyMeter || undefined}
-              disabled={!canSubmit || mentionHint !== null}
-              className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-25 data-busy:opacity-70"
-            >
-              {showBusyMeter ? <LoaderMeter /> : <ArrowUpIcon className="size-5" />}
-            </button>
           </div>
         </div>
         {mentionHint ? (

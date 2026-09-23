@@ -63,6 +63,7 @@ import {
   type NativeMarkdownTextStyle,
   type SelectableMarkdownSkill,
 } from "../../native/SelectableMarkdownText";
+import { labelSentMessageMentions, useSentMessageMentions } from "./sentMessageMentions";
 
 import { AppText as Text } from "../../components/AppText";
 import { CopyTextButton } from "../../components/CopyTextButton";
@@ -1331,6 +1332,7 @@ function UserMessageContent(props: {
   readonly onLinkPress: (href: string) => void;
   readonly renderImage: MarkdownImageRenderer;
 }) {
+  const mentions = useSentMessageMentions(props.text, props.skills);
   const segments = parseReviewCommentMessageSegments(props.text);
   const hasReviewComment = segments.some((segment) => segment.kind === "review-comment");
   if (!hasReviewComment) {
@@ -1338,7 +1340,7 @@ function UserMessageContent(props: {
       return (
         <SelectableMarkdownText
           markdown={props.text}
-          skills={props.skills}
+          skills={mentions.skills}
           textStyle={props.markdownStyles.nativeTextStyle}
           preserveSoftBreaks
           onLinkPress={props.onLinkPress}
@@ -1353,7 +1355,7 @@ function UserMessageContent(props: {
         styles={props.markdownStyles.styles}
         theme={props.markdownStyles.theme}
       >
-        {props.text}
+        {labelSentMessageMentions(props.text, mentions.displays)}
       </Markdown>
     );
   }
@@ -1380,7 +1382,7 @@ function UserMessageContent(props: {
           <SelectableMarkdownText
             key={segment.id}
             markdown={text}
-            skills={props.skills}
+            skills={mentions.skills}
             textStyle={props.markdownStyles.nativeTextStyle}
             preserveSoftBreaks
             onLinkPress={props.onLinkPress}
@@ -1394,7 +1396,7 @@ function UserMessageContent(props: {
             styles={props.markdownStyles.styles}
             theme={props.markdownStyles.theme}
           >
-            {text}
+            {labelSentMessageMentions(text, mentions.displays)}
           </Markdown>
         );
       })}

@@ -15,6 +15,12 @@ describe("splitPromptIntoComposerSegments", () => {
     ]);
   });
 
+  it("keeps browser and chat mentions as plain text", () => {
+    expect(splitPromptIntoComposerSegments("Use @browser on @chat:thread-2 now")).toEqual([
+      { type: "text", text: "Use @browser on @chat:thread-2 now" },
+    ]);
+  });
+
   it("does not convert an incomplete trailing mention token", () => {
     expect(splitPromptIntoComposerSegments("Inspect @AGENTS.md")).toEqual([
       { type: "text", text: "Inspect @AGENTS.md" },

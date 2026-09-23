@@ -968,6 +968,41 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
+  it.effect("routes an @bot:<id> token to that member when the client sends no responder", () =>
+    Effect.gen(function* () {
+      const readModel = makeReadModel({
+        bots: [
+          makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
+          makeBot({ id: SPECIALIST_ID, groupId: GROUP_ID }),
+          makeBot({ id: BotId.make("bot-outsider") }),
+        ],
+        groups: [makeGroup()],
+        threads: [makeGroupThread()],
+      });
+      const responderFor = (text: string) =>
+        decideOrchestrationCommand({
+          command: {
+            ...startTurnCommand(),
+            message: { ...startTurnCommand().message, text },
+          },
+          readModel,
+        }).pipe(
+          Effect.map((result) => {
+            const event = (Array.isArray(result) ? result : [result]).find(
+              (entry) => entry.type === "thread.turn-start-requested",
+            );
+            if (event?.type !== "thread.turn-start-requested") {
+              throw new Error("Expected turn start");
+            }
+            return event.payload.respondingBotId;
+          }),
+        );
+
+      expect(yield* responderFor(`@bot:${SPECIALIST_ID} look`)).toBe(SPECIALIST_ID);
+      expect(yield* responderFor("@bot:bot-outsider look")).toBe(BOSS_ID);
+    }),
+  );
+
   it.effect("rejects a mention for a non-member or archived member", () =>
     Effect.gen(function* () {
       const outsiderId = BotId.make("bot-outsider");

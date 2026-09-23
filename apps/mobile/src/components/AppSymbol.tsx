@@ -151,6 +151,7 @@ const ANDROID_ICON_BY_SF_SYMBOL: Partial<Record<SFSymbol, Icon>> = {
   "sun.max": IconSun,
   "stop.fill": IconPlayerStopFilled,
   terminal: IconTerminal2,
+  globe: IconWorld,
   "text.bubble": IconMessage,
   "text.word.spacing": IconLetterSpacing,
   "textformat.size": IconTypography,
