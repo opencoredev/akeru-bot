@@ -1430,6 +1430,7 @@ describe("ProviderCommandReactor", () => {
         kind: "provider.turn.start.failed",
         payload: {
           detail: "Provider instance 'missing' is not available.",
+          unavailability: "temporary-failure",
           requestId: "user-message-missing-bot-engine",
         },
       }),
@@ -1475,6 +1476,7 @@ describe("ProviderCommandReactor", () => {
         kind: "provider.turn.start.failed",
         payload: {
           detail: "Composio could not prepare connected tools.",
+          unavailability: "temporary-failure",
           requestId: "user-message-composio-failure",
         },
       }),

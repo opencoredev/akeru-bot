@@ -7,6 +7,7 @@ import type {
   ServerProviderSlashCommand,
   ServerProviderModel,
   ServerProviderState,
+  ServerProviderUnavailability,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as PlatformError from "effect/PlatformError";
@@ -50,6 +51,61 @@ export interface ProviderProbeResult {
   readonly status: Exclude<ServerProviderState, "disabled">;
   readonly auth: ServerProviderAuth;
   readonly message?: string;
+}
+
+/** Maps provider text once at the adapter boundary; unknown text stays useful. */
+export function providerUnavailabilityFromDetail(
+  driver: string,
+  detail: string,
+): ServerProviderUnavailability {
+  const text = detail.toLowerCase();
+  const mappings: Record<string, ReadonlyArray<readonly [RegExp, ServerProviderUnavailability]>> = {
+    codex: [
+      [/refresh token|token expired|login expired/, "expired-login"],
+      [/not logged in|not authenticated|authentication required|unauthorized|api key/, "missing-login"],
+      [/model .*not found|unknown model|invalid model/, "unsupported-model"],
+      [/usage cap|spending limit|budget exceeded/, "usage-cap"],
+      [/rate limit|too many requests|quota/, "limit-reached"],
+    ],
+    claudeAgent: [
+      [/oauth token.*expired|token expired|session expired/, "expired-login"],
+      [/please run.*login|not authenticated|authentication required/, "missing-login"],
+      [/model.*not found|invalid model/, "unsupported-model"],
+      [/max usage|spending limit|budget exceeded/, "usage-cap"],
+      [/rate limit|overloaded|too many requests/, "limit-reached"],
+    ],
+    grok: [
+      [/expired|login expired|oauth.*invalid/, "expired-login"],
+      [/unauthorized|authentication|api key/, "missing-login"],
+      [/unknown model|model.*not found|invalid model/, "unsupported-model"],
+      [/usage cap|billing limit|budget exceeded/, "usage-cap"],
+      [/rate limit|too many requests|capacity/, "limit-reached"],
+    ],
+    kimi: [
+      [/token expired|session expired|login expired/, "expired-login"],
+      [/unauthorized|please login|authentication required|api key/, "missing-login"],
+      [/model.*not found|unsupported model|invalid model/, "unsupported-model"],
+      [/usage cap|quota exceeded|spending limit/, "usage-cap"],
+      [/rate limit|too many requests/, "limit-reached"],
+    ],
+    opencodeGo: [
+      [/session expired|token expired|re-authenticate/, "expired-login"],
+      [/not authenticated|unauthorized|sign in|api key/, "missing-login"],
+      [/model.*not found|unknown model|unsupported model/, "unsupported-model"],
+      [/usage cap|spending limit|budget exceeded/, "usage-cap"],
+      [/rate limit|too many requests|capacity/, "limit-reached"],
+    ],
+    // OpenCode's adapter reports the driver as `opencode`; keep this alias
+    // alongside the subscription-flavoured `opencodeGo` instance id.
+    opencode: [
+      [/session expired|token expired|re-authenticate|authentication expired/, "expired-login"],
+      [/not authenticated|unauthorized|sign in|api key/, "missing-login"],
+      [/model.*not found|unknown model|unsupported model/, "unsupported-model"],
+      [/usage cap|spending limit|budget exceeded/, "usage-cap"],
+      [/rate limit|too many requests|capacity/, "limit-reached"],
+    ],
+  };
+  return mappings[driver]?.find(([pattern]) => pattern.test(text))?.[1] ?? "temporary-failure";
 }
 
 export interface ServerProviderPresentation {
@@ -216,6 +272,11 @@ export function buildServerProvider(input: {
         checkedAt: input.checkedAt,
       })
     : undefined;
+  const unavailability = input.probe.message
+    ? providerUnavailabilityFromDetail(input.driver ?? "unknown", input.probe.message)
+    : input.probe.auth.status === "unauthenticated"
+      ? "missing-login"
+      : undefined;
   return {
     displayName: input.presentation.displayName,
     ...(input.presentation.badgeLabel ? { badgeLabel: input.presentation.badgeLabel } : {}),
@@ -232,6 +293,7 @@ export function buildServerProvider(input: {
     auth: input.probe.auth,
     checkedAt: input.checkedAt,
     ...(input.probe.message ? { message: input.probe.message } : {}),
+    ...(unavailability ? { unavailability } : {}),
     models: input.models,
     slashCommands: [...(input.slashCommands ?? [])],
     skills: [...(input.skills ?? [])],

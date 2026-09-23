@@ -1215,6 +1215,8 @@ export function projectEvent(
                         ? thread.latestTurn.assistantMessageId
                         : null,
                     respondingBotId: thread.respondingBotId ?? null,
+                    ...(session.lastError ? { errorMessage: session.lastError } : {}),
+                    ...(session.unavailability ? { unavailability: session.unavailability } : {}),
                   }
                 : thread.latestTurn !== null &&
                     thread.latestTurn.state === "running" &&
@@ -1222,6 +1224,8 @@ export function projectEvent(
                   ? {
                       ...thread.latestTurn,
                       state: settledTurnState,
+                      ...(session.lastError ? { errorMessage: session.lastError } : {}),
+                      ...(session.unavailability ? { unavailability: session.unavailability } : {}),
                       // A running turn's completedAt can only hold a mid-turn
                       // placeholder checkpoint timestamp — the session leaving
                       // "running" is the authoritative turn end.

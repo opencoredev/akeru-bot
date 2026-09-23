@@ -15,6 +15,7 @@ import {
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
+  type OrchestrationLatestTurn,
   type OrchestrationThreadShell,
   ThreadId,
   type ProviderSession,
@@ -72,6 +73,7 @@ import {
 } from "../Services/ProviderCommandReactor.ts";
 import { forkParked, ServerActivation } from "../../serverActivation.ts";
 import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
+import { providerUnavailabilityFromDetail } from "../../provider/providerSnapshot.ts";
 import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
@@ -452,6 +454,7 @@ const make = Effect.gen(function* () {
     readonly turnId: TurnId | null;
     readonly createdAt: string;
     readonly requestId?: string;
+    readonly unavailability?: OrchestrationLatestTurn["unavailability"];
   }) =>
     Effect.all({
       commandId: serverCommandId("provider-failure-activity"),
@@ -469,6 +472,7 @@ const make = Effect.gen(function* () {
             summary: input.summary,
             payload: {
               detail: input.detail,
+              ...(input.unavailability ? { unavailability: input.unavailability } : {}),
               ...(input.requestId ? { requestId: input.requestId } : {}),
             },
             turnId: input.turnId,
@@ -569,6 +573,18 @@ const make = Effect.gen(function* () {
     return controllerError?.detail ?? Cause.pretty(cause);
   };
 
+  const formatFailure = (cause: Cause.Cause<unknown>) => {
+    const detail = formatFailureDetail(cause);
+    const failReason = cause.reasons.find(Cause.isFailReason);
+    if (isBotUsageCapExceeded(failReason?.error)) {
+      return { detail, unavailability: "usage-cap" as const };
+    }
+    const provider = isProviderAdapterRequestError(failReason?.error)
+      ? failReason.error.provider
+      : "unknown";
+    return { detail, unavailability: providerUnavailabilityFromDetail(provider, detail) } as const;
+  };
+
   const setThreadSession = (input: {
     readonly threadId: ThreadId;
     readonly session: OrchestrationSession;
@@ -589,6 +605,7 @@ const make = Effect.gen(function* () {
   const setThreadSessionErrorOnTurnStartFailure = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly detail: string;
+    readonly unavailability?: OrchestrationLatestTurn["unavailability"];
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThreadShell(input.threadId);
@@ -608,6 +625,7 @@ const make = Effect.gen(function* () {
         status: session?.status === "stopped" ? "stopped" : "error",
         activeTurnId: null,
         lastError: input.detail,
+        ...(input.unavailability ? { unavailability: input.unavailability } : {}),
         updatedAt: input.createdAt,
       },
       createdAt: input.createdAt,
@@ -1536,10 +1554,11 @@ const make = Effect.gen(function* () {
       if (Cause.hasInterruptsOnly(cause)) {
         return Effect.void;
       }
-      const detail = formatFailureDetail(cause);
+      const { detail, unavailability } = formatFailure(cause);
       return setThreadSessionErrorOnTurnStartFailure({
         threadId: event.payload.threadId,
         detail,
+        unavailability,
         createdAt: event.payload.createdAt,
       }).pipe(
         Effect.flatMap(() =>
@@ -1551,6 +1570,7 @@ const make = Effect.gen(function* () {
             turnId: null,
             createdAt: event.payload.createdAt,
             requestId: event.payload.messageId,
+            unavailability,
           }),
         ),
         Effect.asVoid,

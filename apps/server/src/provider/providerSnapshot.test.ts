@@ -12,8 +12,29 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import {
   isCommandMissingCause,
   providerModelsFromSettings,
+  providerUnavailabilityFromDetail,
   spawnAndCollect,
 } from "./providerSnapshot.ts";
+
+describe("providerUnavailabilityFromDetail", () => {
+  it.each([
+    ["codex", "Not authenticated", "missing-login"],
+    ["codex", "refresh token expired; rate limit", "expired-login"],
+    ["claudeAgent", "Please run login: OAuth token expired", "expired-login"],
+    ["claudeAgent", "model claude-9 not found", "unsupported-model"],
+    ["grok", "model not found", "unsupported-model"],
+    ["kimi", "rate limit exceeded", "limit-reached"],
+    ["opencodeGo", "spending limit reached", "usage-cap"],
+    ["opencodeGo", "rate limit and usage cap", "usage-cap"],
+    ["opencode", "OpenCode authentication expired; please re-authenticate", "expired-login"],
+    ["opencode", "OpenCode model openai/gpt-5 not found", "unsupported-model"],
+    ["opencode", "OpenCode API rate limit exceeded", "limit-reached"],
+    ["opencode", "OpenCode usage cap exceeded", "usage-cap"],
+    ["codex", "socket closed", "temporary-failure"],
+  ])("maps %s provider detail", (driver, detail, category) => {
+    expect(providerUnavailabilityFromDetail(driver, detail)).toBe(category);
+  });
+});
 
 const OPENCODE_CUSTOM_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [

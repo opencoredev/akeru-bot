@@ -652,6 +652,16 @@ export const OrchestrationSession = Schema.Struct({
   mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
   activeTurnId: Schema.NullOr(TurnId),
   lastError: Schema.NullOr(TrimmedNonEmptyString),
+  unavailability: Schema.optional(
+    Schema.Literals([
+      "missing-login",
+      "expired-login",
+      "unsupported-model",
+      "limit-reached",
+      "usage-cap",
+      "temporary-failure",
+    ]),
+  ),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationSession = typeof OrchestrationSession.Type;
@@ -716,6 +726,17 @@ export const OrchestrationLatestTurn = Schema.Struct({
   requestMessageId: Schema.optional(Schema.NullOr(MessageId)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  errorMessage: Schema.optional(TrimmedNonEmptyString),
+  unavailability: Schema.optional(
+    Schema.Literals([
+      "missing-login",
+      "expired-login",
+      "unsupported-model",
+      "limit-reached",
+      "usage-cap",
+      "temporary-failure",
+    ]),
+  ),
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
@@ -3101,6 +3122,17 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedErrorClass<O
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
     bootstrapThreadDisposition: Schema.optional(Schema.Literal("deleted")),
+    unavailability: Schema.optional(
+      Schema.Literals([
+        "missing-login",
+        "expired-login",
+        "unsupported-model",
+        "limit-reached",
+        "usage-cap",
+        "temporary-failure",
+      ]),
+    ),
+    repairAction: Schema.optional(TrimmedNonEmptyString),
   },
 ) {}
 
