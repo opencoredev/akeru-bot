@@ -45,6 +45,7 @@ function makeBot(id: BotId): OrchestrationBot {
     sandbox: "local",
     runtimeMode: "approval-required",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],
     groupId: null,

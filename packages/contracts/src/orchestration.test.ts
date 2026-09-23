@@ -375,6 +375,46 @@ it.effect("defaults omitted bot channel bindings", () =>
   }),
 );
 
+it.effect("defaults an omitted bot image provider to the global default", () =>
+  Effect.gen(function* () {
+    const bot = yield* decodeOrchestrationBot({
+      id: "bot-1",
+      name: "Akeru",
+      title: "Agent",
+      avatar: { kind: "dither", seed: "akeru" },
+      engine: null,
+      sandbox: "local",
+      groupId: null,
+      archivedAt: null,
+      createdAt: "2026-08-27T20:00:00.000Z",
+      updatedAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.strictEqual(bot.imageProvider, null);
+  }),
+);
+
+it.effect("keeps an explicit bot image provider independent of the chat engine", () =>
+  Effect.gen(function* () {
+    const bot = yield* decodeOrchestrationBot({
+      id: "bot-1",
+      name: "Akeru",
+      title: "Agent",
+      avatar: { kind: "dither", seed: "akeru" },
+      engine: { provider: "claudeAgent", model: "claude-opus-5.5" },
+      imageProvider: "chatgpt",
+      sandbox: "local",
+      groupId: null,
+      archivedAt: null,
+      createdAt: "2026-08-27T20:00:00.000Z",
+      updatedAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.strictEqual(bot.imageProvider, "chatgpt");
+    assert.strictEqual(bot.engine?.provider, "claudeAgent");
+  }),
+);
+
 it.effect("decodes a dispatch error after its bootstrap thread was deleted", () =>
   Effect.gen(function* () {
     const error = yield* decodeDispatchCommandError({

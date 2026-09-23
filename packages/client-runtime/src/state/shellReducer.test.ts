@@ -99,6 +99,7 @@ const stubBot = {
   sandbox: "local" as const,
   runtimeMode: "full-access" as const,
   usageCap: null,
+  imageProvider: null,
   voiceEnabled: false,
   channelBindings: [],
   groupId: null,

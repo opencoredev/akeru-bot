@@ -28,6 +28,7 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
 } from "./orchestration.ts";
+import { ImageProviderId } from "./imageGeneration.ts";
 import {
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
@@ -93,6 +94,9 @@ export const PortabilityBotData = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
   usageCap: Schema.NullOr(BotUsageCap),
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean,
   archived: Schema.Boolean,

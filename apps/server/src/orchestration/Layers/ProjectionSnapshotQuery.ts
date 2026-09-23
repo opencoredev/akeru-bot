@@ -450,6 +450,7 @@ function mapBotRow(row: Schema.Schema.Type<typeof ProjectionBotDbRowSchema>): Or
     sandbox: row.sandbox,
     runtimeMode: row.runtimeMode,
     usageCap: row.usageCap,
+    imageProvider: row.imageProvider,
     personalityTone: row.personalityTone,
     voiceEnabled: row.voiceEnabled === 1,
     channelBindings: row.channelBindings ?? [],
@@ -601,7 +602,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         bot_id AS "botId", name, title, label, description,
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
-        usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled",
+        usage_cap_json AS "usageCap", image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"

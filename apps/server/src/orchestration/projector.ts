@@ -406,6 +406,7 @@ export function projectEvent(
             sandbox: payload.sandbox,
             runtimeMode: payload.runtimeMode,
             usageCap: payload.usageCap,
+            imageProvider: payload.imageProvider,
             personalityTone: payload.personalityTone,
             voiceEnabled: payload.voiceEnabled,
             channelBindings: payload.channelBindings,
@@ -441,6 +442,9 @@ export function projectEvent(
             ...(payload.sandbox !== undefined ? { sandbox: payload.sandbox } : {}),
             ...(payload.runtimeMode !== undefined ? { runtimeMode: payload.runtimeMode } : {}),
             ...(payload.usageCap !== undefined ? { usageCap: payload.usageCap } : {}),
+            ...(payload.imageProvider !== undefined
+              ? { imageProvider: payload.imageProvider }
+              : {}),
             ...(payload.personalityTone !== undefined
               ? { personalityTone: payload.personalityTone }
               : {}),

@@ -89,6 +89,7 @@ const bot = {
   sandbox: null,
   runtimeMode: "full-access" as const,
   usageCap: null,
+  imageProvider: null,
   voiceEnabled: true,
   groupId: null,
   archivedAt: null,

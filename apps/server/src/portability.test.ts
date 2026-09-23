@@ -146,6 +146,7 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
         sandbox: "local",
         runtimeMode: "full-access",
         usageCap: null,
+        imageProvider: null,
         voiceEnabled: true,
         channelBindings: [],
         groupId: GROUP_ID,

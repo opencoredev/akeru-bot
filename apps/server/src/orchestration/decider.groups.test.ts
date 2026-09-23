@@ -70,6 +70,7 @@ function makeBot(input: {
     sandbox: "local",
     runtimeMode: "full-access",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],
     groupId: input.groupId ?? null,

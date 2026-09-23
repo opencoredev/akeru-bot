@@ -582,6 +582,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               ? DEFAULT_LOCAL_EXECUTION_MODE
               : DEFAULT_RUNTIME_MODE),
           usageCap: command.usageCap,
+          imageProvider: command.imageProvider ?? null,
           personalityTone: command.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
           voiceEnabled: command.voiceEnabled ?? false,
           channelBindings: [],
@@ -709,6 +710,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.sandbox !== undefined ? { sandbox: command.sandbox } : {}),
           ...(command.runtimeMode !== undefined ? { runtimeMode: command.runtimeMode } : {}),
           ...(command.usageCap !== undefined ? { usageCap: command.usageCap } : {}),
+          ...(command.imageProvider !== undefined ? { imageProvider: command.imageProvider } : {}),
           ...(command.personalityTone !== undefined
             ? { personalityTone: command.personalityTone }
             : {}),

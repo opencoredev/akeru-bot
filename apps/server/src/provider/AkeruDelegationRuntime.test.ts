@@ -57,6 +57,7 @@ function bot(id: BotId, overrides: Partial<OrchestrationBot> = {}): Orchestratio
     sandbox: "local",
     runtimeMode: "approval-required",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],
     groupId: null,

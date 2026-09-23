@@ -28,6 +28,7 @@ import {
   PreviewZoomFactor,
 } from "./preview.ts";
 import { VoiceProvider, ChatGptRealtimeVoice, VoiceSettings } from "./voiceCall.ts";
+import { ImageGenerationSettings, ImageGenerationSettingsPatch } from "./imageGeneration.ts";
 import {
   ProviderInstanceConfig,
   ProviderInstanceEnvironmentVariable,
@@ -794,6 +795,7 @@ export const ServerSettings = Schema.Struct({
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   browserProvider: BrowserProviderSettings,
   voice: VoiceSettings,
+  imageGeneration: ImageGenerationSettings,
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
   // consumers should resolve `backgroundActivity` instead.
@@ -1065,6 +1067,7 @@ const ServerSettingsPatchFields = {
       voice: Schema.optionalKey(ChatGptRealtimeVoice),
     }),
   ),
+  imageGeneration: Schema.optionalKey(ImageGenerationSettingsPatch),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),

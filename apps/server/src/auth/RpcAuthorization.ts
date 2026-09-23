@@ -50,6 +50,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscriptionAuthCancel]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscriptionAuthLogout]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscriptionAuthHealthTest]: AuthOrchestrationOperateScope,
+  [WS_METHODS.imageProviderList]: AuthOrchestrationReadScope,
+  [WS_METHODS.imageProviderHealthTest]: AuthOrchestrationOperateScope,
   [WS_METHODS.mcpServerAuthenticate]: AuthOrchestrationOperateScope,
   [WS_METHODS.botInboxList]: AuthOrchestrationReadScope,
   [WS_METHODS.botInboxResolve]: AuthOrchestrationOperateScope,

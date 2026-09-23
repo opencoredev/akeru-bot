@@ -29,6 +29,7 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
 import { AkeruDelegationRecord, DelegationId } from "./akeruDelegation.ts";
+import { ImageProviderId } from "./imageGeneration.ts";
 import {
   ClientRoutineCommand,
   InternalRoutineCommand,
@@ -514,6 +515,14 @@ export const OrchestrationBot = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  /**
+   * The bot's image provider, independent of its chat engine (a Claude bot may
+   * still use ChatGPT images). `null` means "use the global default" and is
+   * also the decode default so bots written before this field decode cleanly.
+   */
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   channelBindings: Schema.Array(ChannelBinding).pipe(
@@ -1124,6 +1133,7 @@ const BotCreateCommand = Schema.Struct({
   sandbox: Schema.NullOr(BotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.NullOr(GroupId),
@@ -1144,6 +1154,7 @@ const BotUpdateCommand = Schema.Struct({
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
@@ -1164,6 +1175,7 @@ const ClientBotUpdateCommand = Schema.Struct({
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
@@ -2150,6 +2162,9 @@ export const BotCreatedPayload = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: BotPersonalityTone.pipe(
     Schema.withDecodingDefault(Effect.succeed(BALANCED_BOT_PERSONALITY_TONE)),
   ),
@@ -2174,6 +2189,7 @@ export const BotUpdatedPayload = Schema.Struct({
   sandbox: Schema.optional(PersistedBotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),

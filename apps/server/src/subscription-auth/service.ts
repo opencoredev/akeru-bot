@@ -366,6 +366,24 @@ export class SubscriptionAuthService {
     this.recordHealthFailure(`mcp:${serverId}`, message, at, "request");
   }
 
+  recordImageRequestSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+    this.recordHealthSuccess(`image:${provider}`, at);
+  }
+
+  recordImageRequestFailure(
+    provider: "chatgpt" | "grok",
+    message: string,
+    at = new Date().toISOString(),
+    failureKind: "request" | "revoked" = "request",
+  ): void {
+    this.recordHealthFailure(`image:${provider}`, message, at, failureKind);
+  }
+
+  /** Image-provider request health, keyed separately from the chat driver. */
+  imageRequestHealth(provider: "chatgpt" | "grok"): RequestHealthStatus | undefined {
+    return this.requestHealth(`image:${provider}`);
+  }
+
   private recordHealthFailure(
     key: string,
     message: string,

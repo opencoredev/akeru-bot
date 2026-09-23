@@ -197,6 +197,11 @@ import {
   SubscriptionAuthStatuses,
 } from "./subscriptionAuth.ts";
 import {
+  ImageGenerationError,
+  ImageProviderHealthTestInput,
+  ImageProviderListResult,
+} from "./imageGeneration.ts";
+import {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
   SourceControlDiscoveryResult,
@@ -328,6 +333,10 @@ export const WS_METHODS = {
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
   subscriptionAuthHealthTest: "subscriptionAuth.healthTest",
+
+  // Image generation providers
+  imageProviderList: "imageProvider.list",
+  imageProviderHealthTest: "imageProvider.healthTest",
   mcpServerAuthenticate: "mcpServer.authenticate",
   botInboxList: "botInbox.list",
   botInboxResolve: "botInbox.resolve",
@@ -524,6 +533,18 @@ export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionA
   payload: SubscriptionAuthHealthTestInput,
   success: SubscriptionAuthStatuses,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+export const WsImageProviderListRpc = Rpc.make(WS_METHODS.imageProviderList, {
+  payload: Schema.Struct({}),
+  success: ImageProviderListResult,
+  error: Schema.Union([ImageGenerationError, EnvironmentAuthorizationError]),
+});
+
+export const WsImageProviderHealthTestRpc = Rpc.make(WS_METHODS.imageProviderHealthTest, {
+  payload: ImageProviderHealthTestInput,
+  success: ImageProviderListResult,
+  error: Schema.Union([ImageGenerationError, EnvironmentAuthorizationError]),
 });
 
 export const WsMcpServerAuthenticateRpc = Rpc.make(WS_METHODS.mcpServerAuthenticate, {
@@ -1133,6 +1154,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
   WsSubscriptionAuthHealthTestRpc,
+  WsImageProviderListRpc,
+  WsImageProviderHealthTestRpc,
   WsMcpServerAuthenticateRpc,
   WsBotInboxListRpc,
   WsBotInboxResolveRpc,

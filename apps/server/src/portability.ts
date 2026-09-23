@@ -406,6 +406,7 @@ export function portableRecords(
         sandbox: bot.sandbox,
         runtimeMode: bot.runtimeMode,
         usageCap: bot.usageCap,
+        imageProvider: bot.imageProvider,
         personalityTone: bot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
         voiceEnabled: bot.voiceEnabled,
         archived: bot.archivedAt !== null,
@@ -1537,6 +1538,7 @@ export function commandsForPortabilityImport(
       sandbox: record.data.sandbox,
       runtimeMode: record.data.runtimeMode,
       usageCap: record.data.usageCap,
+      imageProvider: record.data.imageProvider,
       personalityTone: record.data.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
       voiceEnabled: record.data.voiceEnabled,
     } as const;

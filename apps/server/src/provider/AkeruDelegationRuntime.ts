@@ -255,6 +255,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       sandbox: parentBot.sandbox,
       runtimeMode: parent.access.runtimeMode,
       usageCap: null,
+      imageProvider: null,
       voiceEnabled: false,
       groupId: parentThread.groupId ?? null,
       createdAt: now(),

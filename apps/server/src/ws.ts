@@ -74,6 +74,7 @@ import {
   RpcClientId,
   EnvironmentAuthorizationError,
   McpServerAuthenticationError,
+  ImageGenerationError,
   SubscriptionAuthError,
   ThreadId,
   type TerminalAttachStreamEvent,
@@ -87,6 +88,11 @@ import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgro
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
 import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";
+import {
+  imageProviderStatuses,
+  normalizeImageGenerationPatch,
+  runImageProviderHealthTest,
+} from "./image-generation/service.ts";
 import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import {
   buildProviderAccessCapabilities,
@@ -885,6 +891,19 @@ const makeWsRpcLayer = (
           inbox: botInbox.list(),
         };
       });
+      const getImageProviderSnapshot = Effect.fn("getImageProviderSnapshot")(function* () {
+        subscriptionAuth.reload();
+        const settings = yield* serverSettings.getSettings.pipe(
+          Effect.mapError((cause) => new ImageGenerationError({ reason: cause.message })),
+        );
+        return {
+          providers: imageProviderStatuses({
+            settings: settings.imageGeneration,
+            subscriptionStatuses: subscriptionAuth.statuses(),
+            requestHealth: (provider) => subscriptionAuth.imageRequestHealth(provider),
+          }),
+        };
+      });
       const authorizeEffect = <A, E, R>(
         requiredScope: AuthEnvironmentScope,
         effect: Effect.Effect<A, E, R>,
@@ -1233,6 +1252,7 @@ const makeWsRpcLayer = (
                     sandbox: nextBot.sandbox,
                     runtimeMode: nextBot.runtimeMode,
                     usageCap: nextBot.usageCap,
+                    imageProvider: nextBot.imageProvider,
                     personalityTone: nextBot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
                     voiceEnabled: nextBot.voiceEnabled,
                     channelBindings: ChannelRuntime.channelBindingsForRuntime(
@@ -2470,9 +2490,20 @@ const makeWsRpcLayer = (
         [WS_METHODS.serverUpdateSettings]: ({ patch }) =>
           observeRpcEffect(
             WS_METHODS.serverUpdateSettings,
-            serverSettings
-              .updateSettings(patch)
-              .pipe(Effect.map(ServerSettings.redactServerSettingsForClient)),
+            Effect.gen(function* () {
+              const normalizedPatch = patch.imageGeneration
+                ? {
+                    ...patch,
+                    imageGeneration: normalizeImageGenerationPatch(
+                      (yield* serverSettings.getSettings).imageGeneration,
+                      patch.imageGeneration,
+                    ),
+                  }
+                : patch;
+              return yield* serverSettings
+                .updateSettings(normalizedPatch)
+                .pipe(Effect.map(ServerSettings.redactServerSettingsForClient));
+            }),
             {
               "rpc.aggregate": "server",
             },
@@ -2825,6 +2856,22 @@ const makeWsRpcLayer = (
                   reason: cause instanceof Error ? cause.message : String(cause),
                 }),
             }).pipe(Effect.andThen(getAccessHealthSnapshot())),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.imageProviderList]: (_input) =>
+          observeRpcEffect(WS_METHODS.imageProviderList, getImageProviderSnapshot(), {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.imageProviderHealthTest]: ({ provider }) =>
+          observeRpcEffect(
+            WS_METHODS.imageProviderHealthTest,
+            Effect.tryPromise({
+              try: () => runImageProviderHealthTest({ provider, subscriptionAuth }),
+              catch: (cause) =>
+                new ImageGenerationError({
+                  reason: cause instanceof Error ? cause.message : String(cause),
+                }),
+            }).pipe(Effect.andThen(getImageProviderSnapshot())),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.voiceCallGet]: (_input) =>

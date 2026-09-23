@@ -35,6 +35,7 @@ function makeBot(archivedAt: string | null = null): OrchestrationBot {
     sandbox: "local",
     runtimeMode: "full-access",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: true,
     channelBindings: [],
     groupId: null,

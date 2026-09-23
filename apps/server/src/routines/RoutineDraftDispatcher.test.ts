@@ -49,6 +49,7 @@ function bot(id: BotId): OrchestrationBot {
     sandbox: "local",
     runtimeMode: "full-access",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],
     groupId: null,
