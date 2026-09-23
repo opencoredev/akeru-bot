@@ -288,7 +288,7 @@ function scanContent(content: string): ReadonlyArray<string> {
   return findings;
 }
 
-function assertSafeContent(content: string): void {
+export function assertSafeContent(content: string): void {
   const findings = scanContent(content);
   if (findings.length > 0) {
     throw new BotMemoryError(

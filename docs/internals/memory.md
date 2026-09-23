@@ -200,9 +200,9 @@ rules (`durableFactActions`, `durableFactMutation`) live in
 `packages/client-runtime/src/durableMemory.ts` and always send the fact's
 `expectedRevision`, so a stale edit fails with a revision conflict instead of
 overwriting a newer one. Mutations go through
-`memory.facts.mutate`. The remaining `AkeruMemoryMutation` variants
-(`candidate.decide`, `conversation.clear`) exist in contracts but are not
-served over WebSocket.
+`memory.facts.mutate`, which also serves `candidate.decide` for shared memory
+approvals (below). `conversation.clear` exists in contracts but is not served
+over WebSocket.
 Import review lives in the same module: `resolveImportConflicts` has no default decision and
 returns resolutions only after every conflicting root has one.
 
@@ -221,3 +221,41 @@ user-visible `memory.observation.dropped` activity. Startup drains rows left by 
 so a restart does not silently lose queued work, and `busy_timeout` plus enqueue error handling keep
 queue contention off the reply path. Observer and Reflector calls use the same usage ledger hooks
 for every provider path, including legacy external turns.
+Observation records are cleared and reinserted through Mastra's storage adapter when restoration is
+required. Imports must target the archive's original thread. Flattened buffered observations are
+promoted into active observations on restore so Mastra's chunk-based storage retains their text.
+
+## Shared memory approvals
+
+Bots save shared facts through the same `memory` tool: an optional `share`
+field (`{ fact, scope: "project" | "group" | "workspace", sensitive? }`) is
+handled in `BotMemoryToolHandlers.ts` and forwarded to the agent controller's
+`shareFact`. Because the handler set is shared, the Mastra controller (Codex,
+Kimi) and the MCP bridge for legacy adapters (Claude, Grok, OpenCode) take the
+same path. `shareFact` checks the bot's scope grant and calls
+`MemoryApprovals.propose` (`apps/server/src/memory/MemoryApprovals.ts`) with
+the `sharedProjectMemory` mode.
+
+In `"auto"` mode a non-sensitive fact is written directly with
+`EntityMemoryRepository.insertScopedFact`. Otherwise `propose` stores a
+pending row in `akeru_memory_candidates`, appends a
+`memory.approval.requested` thread activity whose payload is an
+`AkeruMemoryApprovalRequest`, and opens an `approval-request` bot inbox item
+keyed `memory-approval:<candidateId>` that carries the same request as
+`memoryApproval`. The tool result reports `pending` so the bot does not retry.
+
+`candidate.decide` on `memory.facts.mutate` calls `MemoryApprovals.decide`.
+Decisions are serialized, must come from the candidate's source thread, and
+write an `akeru_memory_candidate_receipts` row. Approve (optionally with an
+edited `fact`) inserts an approved revision; reject writes nothing. The
+decision then appends `memory.approval.resolved` and resolves the inbox item.
+A repeat decision for the same candidate returns the first receipt, so the
+chat card and inbox cannot double-apply.
+
+Clients derive open requests with `pendingMemoryApprovals` in
+`packages/client-runtime/src/durableMemory.ts`: a requested activity with no
+resolved activity for the same `candidateId`. Because this reads persisted
+activities, pending cards survive reload. The web chat renders
+`MemoryApprovalPrompt` in the composer's pending-action slot; web Settings and
+the mobile bot inbox decide items with `memoryApprovalMutation` against the
+request's `sourceThreadId`.

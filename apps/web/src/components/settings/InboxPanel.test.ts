@@ -1,4 +1,4 @@
-import { BotId } from "@t3tools/contracts";
+import { AkeruMemoryCandidateId, BotId, ThreadId } from "@t3tools/contracts";
 import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -43,5 +43,23 @@ describe("inbox row actions", () => {
   it("resolves approval and user-action items in Settings", () => {
     expect(inboxRowAction(incident("approval:req-1"))).toBe("resolve");
     expect(inboxRowAction(incident("user-action:bot-1:request_box_help:login"))).toBe("resolve");
+  });
+});
+
+describe("memory approval inbox items", () => {
+  it("decides memory approvals instead of resolving them", () => {
+    const item = incident("memory-approval:candidate-1", {
+      kind: "approval-request",
+      memoryApproval: {
+        candidateId: AkeruMemoryCandidateId.make("candidate-1"),
+        fact: "Deploys happen on Fridays.",
+        scope: "project",
+        sensitive: false,
+        sourceThreadId: ThreadId.make("thread-ada"),
+        authorBotId: BotId.make("bot-1"),
+        affectedBotIds: [BotId.make("bot-1")],
+      },
+    });
+    expect(inboxRowAction(item)).toBe("memory-approval");
   });
 });

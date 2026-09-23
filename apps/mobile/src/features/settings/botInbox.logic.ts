@@ -10,8 +10,12 @@ export type SettingsInboxView =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly items: ReadonlyArray<BotInboxItem> };
 
-export function canResolveInboxItem(item: BotInboxItem): boolean {
-  return item.kind === "approval-request" || item.kind === "browser-dead";
+export type InboxItemAction = "memory-approval" | "resolve" | null;
+
+// Memory approvals are decided, not dismissed; resolving one would drop the fact silently.
+export function inboxItemAction(item: BotInboxItem): InboxItemAction {
+  if (item.memoryApproval) return "memory-approval";
+  return item.kind === "approval-request" || item.kind === "browser-dead" ? "resolve" : null;
 }
 
 export function settingsInboxView(query: SettingsInboxQuery): SettingsInboxView {

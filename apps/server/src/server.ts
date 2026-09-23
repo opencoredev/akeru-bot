@@ -112,6 +112,7 @@ import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale"
 import { ServerActivation } from "./serverActivation.ts";
 import { RoutineLayerLive } from "./routines/layer.ts";
 import { RoutineDraftDispatcherLive } from "./routines/RoutineDraftDispatcher.ts";
+import { MemoryApprovalsLive } from "./memory/MemoryApprovals.ts";
 
 // Effect's default preemptive shutdown waits 20s before finalizing request scopes.
 // T3's primary transport is long-lived WebSocket RPC, whose Effect scope finalizer
@@ -275,9 +276,15 @@ const RuntimeMemoryRepositoriesWithPersistenceLive = RuntimeMemoryRepositoriesLi
   Layer.provideMerge(PersistenceLayerLive),
 );
 
+const MemoryApprovalsLayerLive = MemoryApprovalsLive.pipe(
+  Layer.provide(OrchestrationLayerLive),
+  Layer.provide(RuntimeMemoryRepositoriesWithPersistenceLive),
+);
+
 const ProviderLayerLive = AgentControllerLive.pipe(
   Layer.provide(LegacyProviderLayerLive),
   Layer.provide(RuntimeMemoryRepositoriesWithPersistenceLive),
+  Layer.provide(MemoryApprovalsLayerLive),
   Layer.provide(RoutineDraftDispatcherLive.pipe(Layer.provide(OrchestrationLayerLive))),
 );
 
@@ -377,6 +384,7 @@ const AuthLayerLive = EnvironmentAuth.layer.pipe(
 const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
   Layer.provideMerge(ProviderSessionDirectoryLayerLive),
   Layer.provideMerge(ProviderLayerLive),
+  Layer.provideMerge(MemoryApprovalsLayerLive),
   Layer.provideMerge(OrchestrationLayerLive),
 );
 

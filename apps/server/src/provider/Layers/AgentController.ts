@@ -70,6 +70,7 @@ import {
 } from "../../memory/BotMemory.ts";
 import {
   createBotMemoryToolHandler,
+  type AkeruMemoryShareFact,
   type AkeruMemoryToolHandler,
 } from "../../memory/BotMemoryToolHandlers.ts";
 import {
@@ -158,8 +159,14 @@ import {
 } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import { RoutineDraftDispatcher } from "../../routines/RoutineDraftDispatcher.ts";
+import { MemoryApprovals } from "../../memory/MemoryApprovals.ts";
 
 const DEFAULT_MODE_ID = "build";
+const DEFAULT_MEMORY_TOOL_SETTINGS = {
+  enabled: true,
+  privateBotMemory: true,
+  sharedProjectMemory: "ask",
+} as const;
 const PLAN_MODE_ID = "plan";
 const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
   Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
@@ -618,6 +625,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const runtimeContext = yield* Effect.context<never>();
     const runPromise = Effect.runPromiseWith(runtimeContext);
     const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
+    const memoryApprovals = yield* Effect.serviceOption(MemoryApprovals);
     const routineDispatcher = Option.getOrUndefined(routineDraftDispatcher);
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
@@ -932,7 +940,38 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (scopes.has("bot")) targets.add("memory");
       if (resolved.groupId !== null && scopes.has("group")) targets.add("group");
       if (targets.size === 0) return undefined;
-      const handler = createBotMemoryToolHandler(botMemoryStore, resolved, targets).memory;
+      // Shared facts go through MemoryApprovals, which saves them directly in
+      // auto mode or opens an approval card and inbox item in ask mode.
+      const shareFact: AkeruMemoryShareFact | undefined =
+        access && Option.isSome(memoryApprovals)
+          ? async (request) => {
+              if (!scopes.has(request.scope)) {
+                throw new Error(
+                  `The ${request.scope} memory scope is outside this bot's access grant.`,
+                );
+              }
+              if (request.scope === "group" && access.groupId === null) {
+                throw new Error("Group memory is available only in a group chat.");
+              }
+              const settings = await runPromise(memorySettings());
+              const result = await runPromise(
+                memoryApprovals.value.propose({
+                  access,
+                  fact: request.fact,
+                  scope: request.scope,
+                  sensitive: request.sensitive,
+                  mode: settings.sharedProjectMemory,
+                }),
+              );
+              return { status: result.status };
+            }
+          : undefined;
+      const handler = createBotMemoryToolHandler(
+        botMemoryStore,
+        resolved,
+        targets,
+        shareFact,
+      ).memory;
       // The memory settings gate is enforced at call time: a handler captured
       // while Memory was on must deny calls after it is turned off, and a
       // "Private bot memory" toggle applies without rebuilding the session.
@@ -957,11 +996,16 @@ const make = (options?: AgentControllerLiveOptions) =>
             Effect.map((settings) => ({
               enabled: settings.memory.enabled,
               privateBotMemory: settings.memory.privateBotMemory,
+              sharedProjectMemory: settings.memory.sharedProjectMemory,
             })),
             // Fail closed: an unreadable setting must not re-enable memory the user turned off.
-            Effect.orElseSucceed(() => ({ enabled: false, privateBotMemory: false })),
+            Effect.orElseSucceed(() => ({
+              ...DEFAULT_MEMORY_TOOL_SETTINGS,
+              enabled: false,
+              privateBotMemory: false,
+            })),
           )
-        : Effect.succeed({ enabled: true, privateBotMemory: true });
+        : Effect.succeed(DEFAULT_MEMORY_TOOL_SETTINGS);
     const memoryAccessKey = (access: BotMemoryAccess | undefined): string | undefined =>
       access ? `${access.botId}:${access.groupId ?? "private"}` : undefined;
     const legacyResourceIdentity = new Map<string, LegacyResourceIdentity>();

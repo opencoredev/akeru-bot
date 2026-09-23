@@ -1,7 +1,12 @@
-import type {
-  AkeruMemoryArchiveV2,
-  AkeruMemoryImportPreview,
-  AkeruMemoryRevision,
+import {
+  AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
+  AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
+  AkeruMemoryCandidateId,
+  BotId,
+  ThreadId,
+  type AkeruMemoryArchiveV2,
+  type AkeruMemoryImportPreview,
+  type AkeruMemoryRevision,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -19,11 +24,15 @@ import {
   durableFactBotsLabel,
   durableFactMutation,
   groupImportPreview,
+  memoryApprovalHeading,
+  memoryApprovalMutation,
   memoryArchiveSchemaVersion,
+  pendingMemoryApprovals,
   resolveImportConflicts,
   summarizeDurableFacts,
 } from "./durableMemory.ts";
 import { createTranslator } from "./i18n/index.ts";
+import { zhCNCatalog } from "./i18n/zh-CN.ts";
 
 const revision = (
   overrides: Partial<AkeruMemoryRevision> & Pick<AkeruMemoryRevision, "id" | "rootId" | "revision">,
@@ -365,6 +374,77 @@ describe("durable fact actions", () => {
       conflict: false,
       message: "The fact could not be updated.",
       detail: "Memory is turned off.",
+    });
+  });
+});
+
+describe("shared memory approvals", () => {
+  const request = (candidateId: string, fact: string) => ({
+    candidateId: AkeruMemoryCandidateId.make(candidateId),
+    fact,
+    scope: "project" as const,
+    sensitive: false,
+    sourceThreadId: ThreadId.make("thread-1"),
+    authorBotId: BotId.make("bot-ada"),
+    affectedBotIds: [BotId.make("bot-ada")],
+  });
+
+  it("keeps only requests without a decision, once each, and ignores malformed payloads", () => {
+    const first = request("candidate-1", "Deploys happen on Fridays.");
+    const second = request("candidate-2", "The team uses pnpm.");
+    const activities = [
+      { kind: AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, payload: first },
+      { kind: AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, payload: second },
+      { kind: AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, payload: second },
+      { kind: AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, payload: { candidateId: 3 } },
+      { kind: "tool.completed", payload: first },
+      {
+        kind: AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
+        payload: {
+          candidateId: first.candidateId,
+          status: "approved",
+          fact: first.fact,
+          scope: "project",
+          affectedBotIds: first.affectedBotIds,
+          memoryRootId: null,
+          createdAt: "2026-09-23T08:00:00.000Z",
+        },
+      },
+    ];
+    expect(pendingMemoryApprovals(activities)).toEqual([second]);
+    expect(pendingMemoryApprovals([])).toEqual([]);
+  });
+
+  it("builds approve, edit-and-approve, and reject decisions", () => {
+    const pending = request("candidate-1", "Deploys happen on Fridays.");
+    expect(memoryApprovalHeading("project")).toBe("Save to project memory?");
+    expect(memoryApprovalHeading("bot")).toBe("Save to this bot's memory?");
+    expect(memoryApprovalHeading("project", createTranslator("zh-CN", zhCNCatalog))).toBe(
+      "要保存到项目记忆吗？",
+    );
+    expect(memoryApprovalMutation(pending, { action: "approve" })).toEqual({
+      operation: "candidate.decide",
+      decision: { candidateId: pending.candidateId, decision: "approve" },
+    });
+    expect(
+      memoryApprovalMutation(pending, { action: "approve", fact: " Deploys happen on Mondays. " }),
+    ).toEqual({
+      operation: "candidate.decide",
+      decision: {
+        candidateId: pending.candidateId,
+        decision: "approve",
+        fact: "Deploys happen on Mondays.",
+      },
+    });
+    expect(
+      memoryApprovalMutation(pending, { action: "approve", fact: "Deploys happen on Fridays." }),
+    ).toEqual({
+      operation: "candidate.decide",
+      decision: { candidateId: pending.candidateId, decision: "approve" },
+    });
+    expect(memoryApprovalMutation(pending, { action: "reject" })).toEqual({
+      operation: "candidate.decide",
+      decision: { candidateId: pending.candidateId, decision: "reject" },
     });
   });
 });

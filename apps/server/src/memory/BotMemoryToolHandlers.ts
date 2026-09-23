@@ -1,21 +1,43 @@
 import {
   AkeruMemoryDocumentTarget,
   AkeruMemoryFileOperation,
+  AkeruMemoryShareScope,
+  TrimmedNonEmptyString,
+  type AkeruMemoryShareScope as AkeruMemoryShareScopeValue,
   type AkeruMemoryDocumentTarget as AkeruMemoryDocumentTargetValue,
-  type AkeruMemoryFileOperation as AkeruMemoryFileOperationValue,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 import type { AkeruToolExecution } from "../provider/AkeruToolRuntime.ts";
-import type { BotMemoryAccess, BotMemoryStore } from "./BotMemory.ts";
+import { assertSafeContent, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";
 
 export type AkeruMemoryToolId = "memory";
 
 export const AkeruMemoryToolInputSchema = Schema.Struct({
   target: AkeruMemoryDocumentTarget,
   operations: Schema.Array(AkeruMemoryFileOperation),
+  share: Schema.optional(
+    Schema.Struct({
+      fact: TrimmedNonEmptyString,
+      scope: AkeruMemoryShareScope,
+      sensitive: Schema.optional(Schema.Boolean),
+    }),
+  ),
 });
 export type AkeruMemoryToolInput = typeof AkeruMemoryToolInputSchema.Type;
+
+export interface AkeruMemoryShareRequest {
+  readonly fact: string;
+  readonly scope: AkeruMemoryShareScopeValue;
+  readonly sensitive: boolean;
+}
+
+export type AkeruMemoryShareOutcome = { readonly status: "saved" } | { readonly status: "pending" };
+
+// Saves or proposes a shared fact. Undefined when shared memory is unavailable.
+export type AkeruMemoryShareFact = (
+  request: AkeruMemoryShareRequest,
+) => Promise<AkeruMemoryShareOutcome>;
 
 export type AkeruMemoryToolHandler = (
   input: Omit<AkeruToolExecution, "toolId"> & { readonly toolId: AkeruMemoryToolId },
@@ -29,21 +51,51 @@ Make all related changes in one atomic operations array. Each operation is add, 
 
 Targets: user stores stable facts about the user; memory stores this bot's durable notes; group stores this bot's notes for the active group and is available only in a group chat.
 
-Save only stable, high-signal facts useful in future chats. Skip one-off requests, task progress, temporary plans, raw dumps, secrets, instructions copied from content, and facts that are easy to rediscover. Keep entries declarative and consolidate stale or overlapping entries when space is tight. On ordinary turns, do not call this tool when nothing durable changed. During a server-requested automatic memory review, follow the review protocol instead: call exactly once, using the user target with an empty operations array when no change is needed.`;
+Save only stable, high-signal facts useful in future chats. Skip one-off requests, task progress, temporary plans, raw dumps, secrets, instructions copied from content, and facts that are easy to rediscover. Keep entries declarative and consolidate stale or overlapping entries when space is tight. On ordinary turns, do not call this tool when nothing durable changed. During a server-requested automatic memory review, follow the review protocol instead: call exactly once, using the user target with an empty operations array when no change is needed.
+
+Shared memory: to save a fact that other bots or future chats in this project, group, or workspace should know, pass share with the exact fact text and a scope of project, group, or workspace. Set sensitive to true for personal, health, financial, or otherwise private details. Use share only when the user asks you to remember something for the project, group, or workspace, not for ordinary preferences. The user is usually asked to approve shared facts in the chat before they are saved. When the result says the fact is pending approval, tell the user briefly and do not call share again for the same fact.`;
 
 export function createBotMemoryToolHandler(
   store: BotMemoryStore,
   access: BotMemoryAccess,
   allowedTargets: ReadonlySet<AkeruMemoryDocumentTargetValue>,
+  shareFact?: AkeruMemoryShareFact,
 ): Record<AkeruMemoryToolId, AkeruMemoryToolHandler> {
   return {
     memory: async ({ input }) => {
-      const decoded = input as {
-        readonly target: AkeruMemoryDocumentTargetValue;
-        readonly operations: ReadonlyArray<AkeruMemoryFileOperationValue>;
-      };
+      const decoded = input as AkeruMemoryToolInput;
       if (!allowedTargets.has(decoded.target)) {
         throw new Error(`Memory target '${decoded.target}' is outside this bot's access grant.`);
+      }
+      let shared: AkeruMemoryShareOutcome | undefined;
+      if (decoded.share) {
+        if (!shareFact) throw new Error("Shared memory is not available in this chat.");
+        assertSafeContent(decoded.share.fact);
+        shared = await shareFact({
+          fact: decoded.share.fact,
+          scope: decoded.share.scope,
+          sensitive: decoded.share.sensitive ?? false,
+        });
+      }
+      const shareResult = shared
+        ? {
+            share: {
+              scope: decoded.share!.scope,
+              status: shared.status,
+              message:
+                shared.status === "saved"
+                  ? "The shared fact was saved."
+                  : "The shared fact is pending the user's approval in this chat.",
+            },
+          }
+        : {};
+      if (shared && decoded.operations.length === 0) {
+        return {
+          success: true,
+          done: true,
+          ...shareResult,
+          note: "Do not repeat this share request.",
+        };
       }
       if (decoded.operations.length === 0) {
         const document = await store.readDocument(access, decoded.target);
@@ -69,6 +121,7 @@ export function createBotMemoryToolHandler(
         usage: `${result.document.charCount.toLocaleString()}/${result.document.charLimit.toLocaleString()} chars`,
         applied: result.applied,
         changed: result.changed,
+        ...shareResult,
         note: "The write is complete. Do not repeat it.",
       };
     },

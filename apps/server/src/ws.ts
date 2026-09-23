@@ -18,6 +18,7 @@ import {
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   AkeruMemoryOperationError,
+  type AkeruMemoryMutationResult,
   type AkeruMemoryThreadAccess,
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   AuthAccessWriteScope,
@@ -143,6 +144,7 @@ import {
 import { exportAkeruMemory } from "./memory/MemoryExport.ts";
 import { applyAkeruMemoryImport, previewAkeruMemoryImport } from "./memory/MemoryImport.ts";
 import { EntityMemoryRepository } from "./memory/Services/EntityMemoryRepository.ts";
+import { MemoryApprovals } from "./memory/MemoryApprovals.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -706,6 +708,7 @@ const makeWsRpcLayer = (
       const agentController = yield* AgentController.AgentController;
       const entityMemoryRepositoryOption = yield* Effect.serviceOption(EntityMemoryRepository);
       const entityMemoryRepository = Option.getOrNull(entityMemoryRepositoryOption);
+      const memoryApprovals = Option.getOrNull(yield* Effect.serviceOption(MemoryApprovals));
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
@@ -3415,54 +3418,90 @@ const makeWsRpcLayer = (
                     Effect.mapError((cause) => memoryOperationError("facts.mutate", cause)),
                   ),
                 }).pipe(
-                  Effect.flatMap(({ access, memoryId, updatedAt, settings }) => {
-                    const mutation = input.mutation;
-                    if (
-                      mutation.operation === "candidate.decide" ||
-                      mutation.operation === "conversation.clear"
-                    ) {
-                      return Effect.fail(
-                        memoryOperationError(
-                          "facts.mutate",
-                          `${mutation.operation} is not a durable fact mutation.`,
-                        ),
-                      );
-                    }
-                    if (settings.memory.enabled === false) {
-                      return Effect.fail(
-                        memoryOperationError("facts.mutate", "Memory is turned off."),
-                      );
-                    }
-                    if (
-                      settings.memory.privateBotMemory === false &&
-                      mutation.operation === "fact.scope" &&
-                      (mutation.scope === "private" || mutation.scope === "bot")
-                    ) {
-                      return Effect.fail(
-                        memoryOperationError(
-                          "facts.mutate",
-                          "Private bot memory is turned off. The fact cannot be moved to a bot-private scope.",
-                        ),
-                      );
-                    }
-                    return entityMemoryRepository
-                      .applyMutation({
-                        access,
-                        mutation,
-                        memoryId,
-                        updatedAt,
-                        sharedProjectApproval:
-                          settings.memory.sharedProjectMemory === "auto" ? "approved" : "pending",
-                      })
-                      .pipe(
-                        Effect.map((revision) =>
-                          revision === null
-                            ? { kind: "deleted" as const, memoryId: mutation.memoryId }
-                            : { kind: "revision" as const, revision },
-                        ),
-                        Effect.mapError((cause) => memoryOperationError("facts.mutate", cause)),
-                      );
-                  }),
+                  Effect.flatMap(
+                    ({
+                      access,
+                      memoryId,
+                      updatedAt,
+                      settings,
+                    }): Effect.Effect<AkeruMemoryMutationResult, AkeruMemoryOperationError> => {
+                      const mutation = input.mutation;
+                      if (mutation.operation === "candidate.decide") {
+                        const { decision } = mutation;
+                        if (memoryApprovals === null) {
+                          return Effect.fail(
+                            memoryOperationError(
+                              "facts.mutate",
+                              "Memory approvals are unavailable.",
+                            ),
+                          );
+                        }
+                        if (decision.decision === "approve" && !settings.memory.enabled) {
+                          return Effect.fail(
+                            memoryOperationError("facts.mutate", "Memory is turned off."),
+                          );
+                        }
+                        if (
+                          decision.decision === "approve" &&
+                          settings.memory.privateBotMemory === false &&
+                          (decision.scope === "private" || decision.scope === "bot")
+                        ) {
+                          return Effect.fail(
+                            memoryOperationError(
+                              "facts.mutate",
+                              "Private bot memory is turned off. The fact cannot be saved to a bot-private scope.",
+                            ),
+                          );
+                        }
+                        return memoryApprovals.decide({ access, decision }).pipe(
+                          Effect.map((receipt) => ({ kind: "candidate" as const, receipt })),
+                          Effect.mapError((cause) => memoryOperationError("facts.mutate", cause)),
+                        );
+                      }
+                      if (mutation.operation === "conversation.clear") {
+                        return Effect.fail(
+                          memoryOperationError(
+                            "facts.mutate",
+                            `${mutation.operation} is not a durable fact mutation.`,
+                          ),
+                        );
+                      }
+                      if (settings.memory.enabled === false) {
+                        return Effect.fail(
+                          memoryOperationError("facts.mutate", "Memory is turned off."),
+                        );
+                      }
+                      if (
+                        settings.memory.privateBotMemory === false &&
+                        mutation.operation === "fact.scope" &&
+                        (mutation.scope === "private" || mutation.scope === "bot")
+                      ) {
+                        return Effect.fail(
+                          memoryOperationError(
+                            "facts.mutate",
+                            "Private bot memory is turned off. The fact cannot be moved to a bot-private scope.",
+                          ),
+                        );
+                      }
+                      return entityMemoryRepository
+                        .applyMutation({
+                          access,
+                          mutation,
+                          memoryId,
+                          updatedAt,
+                          sharedProjectApproval:
+                            settings.memory.sharedProjectMemory === "auto" ? "approved" : "pending",
+                        })
+                        .pipe(
+                          Effect.map((revision) =>
+                            revision === null
+                              ? { kind: "deleted" as const, memoryId: mutation.memoryId }
+                              : { kind: "revision" as const, revision },
+                          ),
+                          Effect.mapError((cause) => memoryOperationError("facts.mutate", cause)),
+                        );
+                    },
+                  ),
                 ),
             { "rpc.aggregate": "memory" },
           ).pipe(

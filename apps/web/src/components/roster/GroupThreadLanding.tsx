@@ -1,3 +1,4 @@
+import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@t3tools/client-runtime/errors";
 import { type EnvironmentId } from "@t3tools/contracts";
@@ -23,6 +24,7 @@ import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
+import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
@@ -101,6 +103,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
+  const memoryApprovals = useMemo(() => pendingMemoryApprovals(activities), [activities]);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
   const runtimeWarning = useMemo(
     () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
@@ -338,6 +341,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 onToggleOption={runtime.selectPendingUserInputOption}
                 onSelectSingleOption={runtime.selectPendingUserInputOption}
                 onAdvance={runtime.advancePendingUserInput}
+              />
+            ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
+              <MemoryApprovalPrompt
+                threadRef={runtime.linkedThreadRef}
+                approvals={memoryApprovals}
+                currentBotId={activeBot?.id ?? null}
               />
             ) : null
           }

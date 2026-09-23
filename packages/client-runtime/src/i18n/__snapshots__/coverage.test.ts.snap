@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1176,
+  "directMessageCount": 1185,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -15,7 +15,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "'No chats matching "{query}".', { query: props.searchQuery })}",
     ],
     "apps/mobile/src/features/settings/SettingsProviderHealthRouteScreen.tsx": [
-      "botInboxKindLabel(item.kind))}\`}",
+      "describeDurableFactFailure(squashAtomCommandFailure(result)).message),",
     ],
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx": [
       "description) : \`\${t(description)} \${t(MEMORY_SETTING_DISABLED_HINT)}\`;",
@@ -80,6 +80,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/GroupDetailsPanel.tsx": [
       "'Delete "{name}"? Its bots stay in your roster.', { name: group.name }),",
     ],
+    "apps/web/src/components/roster/MemoryApprovalPrompt.tsx": [
+      "describeDurableFactFailure(squashAtomCommandFailure(result)).message),",
+    ],
     "apps/web/src/components/roster/RoutinePanel.tsx": [
       "WEEKDAYS[schedule.weekday ?? 1] ?? "Monday");",
       "runStatusPresentation(run.status).label);",
@@ -93,7 +96,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "runStatusPresentation(latest.status).label)}",
     ],
     "apps/web/src/components/settings/InboxPanel.tsx": [
-      "botInboxKindLabel(item.kind))}",
+      "describeDurableFactFailure(squashAtomCommandFailure(result)).message,",
     ],
     "apps/web/src/components/settings/PrivacySettings.tsx": [
       "description)",
@@ -113,6 +116,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     ],
     "packages/client-runtime/src/durableMemory.ts": [
       "label)\`.",
+      "MEMORY_APPROVAL_HEADINGS[scope]);",
     ],
   },
   "finiteSources": {
@@ -367,6 +371,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/DurableMemoryPanels.tsx",
     "apps/web/src/components/roster/GroupDetailsPanel.tsx",
     "apps/web/src/components/roster/GroupThreadLanding.tsx",
+    "apps/web/src/components/roster/MemoryApprovalPrompt.tsx",
     "apps/web/src/components/roster/NewBotDialog.tsx",
     "apps/web/src/components/roster/NewGroupDialog.tsx",
     "apps/web/src/components/roster/RoutinePanel.tsx",

@@ -1,4 +1,8 @@
-// @effect-diagnostics globalTimers:off
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Schedule from "effect/Schedule";
+import * as Semaphore from "effect/Semaphore";
+import * as Scope from "effect/Scope";
 import {
   type BotMemoryAccess,
   type BotMemoryReviewInput,
@@ -43,26 +47,23 @@ export class AkeruMemoryTurn {
   private successfulMemoryCalls = 0;
   private foregroundState: "pending" | "succeeded" | "failed" = "pending";
   private reviewSettled = false;
-  private operation: Promise<void> = Promise.resolve();
-  private readonly heartbeat: NodeJS.Timeout | undefined;
+  private readonly semaphore = Effect.runPromise(Semaphore.make(1));
+  private readonly scope: Scope.Scope;
+  private scopeClosed = false;
 
   constructor(
     store: BotMemoryStore,
     access: BotMemoryAccess,
     reservation: BotMemoryReviewReservation,
     context: string,
+    scope: Scope.Scope,
   ) {
     this.store = store;
     this.access = access;
     this.reservation = reservation;
     this.context = context;
     this.reviewIncluded = reservation.memoryReviewIncluded;
-    this.heartbeat = this.reviewIncluded
-      ? setInterval(() => {
-          void this.store.renewReviewClaim(this.reservation).catch(() => undefined);
-        }, 20_000)
-      : undefined;
-    this.heartbeat?.unref();
+    this.scope = scope;
   }
 
   wrapMemoryHandler(handler: AkeruMemoryToolHandler): AkeruMemoryToolHandler {
@@ -94,7 +95,7 @@ export class AkeruMemoryTurn {
         return;
       }
       if (!this.reviewIncluded) {
-        this.stopHeartbeat();
+        await this.closeScope();
         return;
       }
       if (mode === "foreground") {
@@ -109,6 +110,10 @@ export class AkeruMemoryTurn {
         this.foregroundState === "succeeded" && succeeded && this.reviewCallContractSatisfied,
       );
     });
+  }
+
+  async close(): Promise<void> {
+    return this.abandon();
   }
 
   async abandon(): Promise<void> {
@@ -128,17 +133,25 @@ export class AkeruMemoryTurn {
     if (this.reviewSettled) return;
     if (this.reviewIncluded) await this.store.settleReviewClaim(this.reservation, completed);
     this.reviewSettled = true;
-    this.stopHeartbeat();
+    await this.closeScope();
   }
 
-  private stopHeartbeat(): void {
-    if (this.heartbeat) clearInterval(this.heartbeat);
+  private async closeScope(): Promise<void> {
+    if (this.scopeClosed) return;
+    this.scopeClosed = true;
+    await Effect.runPromise(Scope.close(this.scope, Exit.void));
+  }
+
+  async settleFromScope(): Promise<void> {
+    if (this.reviewSettled) return;
+    if (this.reviewIncluded) await this.store.settleReviewClaim(this.reservation, false);
+    this.reviewSettled = true;
   }
 
   private exclusive(operation: () => Promise<void>): Promise<void> {
-    const next = this.operation.then(operation, operation);
-    this.operation = next.catch(() => undefined);
-    return next;
+    return this.semaphore.then((semaphore) =>
+      Effect.runPromise(Semaphore.withPermit(semaphore)(Effect.promise(operation))),
+    );
   }
 }
 
@@ -155,6 +168,7 @@ export class AkeruMemoryTurnHarness {
     privateBotMemory,
   }: AkeruMemoryTurnAdmission): Promise<AkeruMemoryTurn> {
     const reservation = await this.store.reserveReviewCadence(access.botId, input);
+    const scope = await Effect.runPromise(Scope.make());
     try {
       const promptSnapshot = await this.store.readPromptSnapshot(access);
       const snapshot = formatBotMemoryPrompt(
@@ -165,13 +179,33 @@ export class AkeruMemoryTurnHarness {
       const review = reservation.memoryReviewIncluded
         ? formatAutomaticBotMemoryReview(access.groupId !== null, reservation.reviewInputs)
         : "";
-      return new AkeruMemoryTurn(
+      const turn = new AkeruMemoryTurn(
         this.store,
         access,
         reservation,
         [snapshot, review].filter(Boolean).join("\n\n"),
+        scope,
       );
+      const store = this.store;
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(Effect.succeed(turn), () =>
+            Effect.promise(() => turn.settleFromScope()),
+          );
+          if (turn.reviewIncluded) {
+            yield* Effect.promise(() =>
+              store.renewReviewClaim(reservation).catch(() => false),
+            ).pipe(
+              Effect.repeat(Schedule.fixed("20 seconds")),
+              Effect.asVoid,
+              Effect.forkScoped,
+            );
+          }
+        }).pipe(Effect.provideService(Scope.Scope, scope)),
+      );
+      return turn;
     } catch (cause) {
+      await Effect.runPromise(Scope.close(scope, Exit.void));
       await this.store.settleReviewCadence(reservation, false);
       throw cause;
     }

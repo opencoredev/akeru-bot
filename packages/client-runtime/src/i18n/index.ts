@@ -1505,6 +1505,31 @@ export const englishCatalog = {
   "{provider} subscription detected": "{provider} subscription detected",
   "No {provider} subscription connected": "No {provider} subscription connected",
   "Connect {provider} subscription": "Connect {provider} subscription",
+
+  "Nothing open": "Nothing open",
+  "Bot failures and memory approvals appear here.":
+    "Bot failures and memory approvals appear here.",
+  "Could not load the inbox": "Could not load the inbox",
+  "Loading inbox": "Loading inbox",
+  "Memory approval": "Memory approval",
+  "Memory to save": "Memory to save",
+  "Could not update memory": "Could not update memory",
+  "Fact to save": "Fact to save",
+  "Approve edit": "Approve edit",
+  "{botName} wants to save this": "{botName} wants to save this",
+  "A bot wants to save this": "A bot wants to save this",
+  "Sensitive, always needs approval": "Sensitive, always needs approval",
+  "Available to {bots}": "Available to {bots}",
+  "Save to private memory?": "Save to private memory?",
+  "Save to this bot's memory?": "Save to this bot's memory?",
+  "Save to project memory?": "Save to project memory?",
+  "Save to group memory?": "Save to group memory?",
+  "Save to workspace memory?": "Save to workspace memory?",
+  "Save to private memory": "Save to private memory",
+  "Save to this bot's memory": "Save to this bot's memory",
+  "Save to project memory": "Save to project memory",
+  "Save to group memory": "Save to group memory",
+  "Save to workspace memory": "Save to workspace memory",
 } as const;
 
 export type MessageKey = keyof typeof englishCatalog;

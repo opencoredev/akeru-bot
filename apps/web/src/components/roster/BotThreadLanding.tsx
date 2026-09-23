@@ -1,3 +1,4 @@
+import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@t3tools/client-runtime/errors";
 import {
@@ -28,6 +29,7 @@ import { Spinner } from "../ui/spinner";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
+import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
@@ -167,6 +169,7 @@ export function BotThreadLanding({
   const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
+  const memoryApprovals = useMemo(() => pendingMemoryApprovals(activities), [activities]);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
   const runtimeWarning = useMemo(
     () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
@@ -648,6 +651,12 @@ export function BotThreadLanding({
                   onRespond={(decision) =>
                     approvalState.respond(pendingApproval.requestId, decision)
                   }
+                />
+              ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
+                <MemoryApprovalPrompt
+                  threadRef={runtime.linkedThreadRef}
+                  approvals={memoryApprovals}
+                  currentBotId={bot.id}
                 />
               ) : null
             }

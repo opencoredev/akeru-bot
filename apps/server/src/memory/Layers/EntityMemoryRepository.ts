@@ -1129,6 +1129,64 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     return preferred ?? authorized[0]!;
   };
 
+  const insertScopedFact: EntityMemoryRepositoryShape["insertScopedFact"] = (input) =>
+    Effect.gen(function* () {
+      const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
+      const partition = targetScopePartition(input.access, input.scope, partitions);
+      if (!partition) {
+        return yield* new AkeruMemoryAccessDenied({
+          reason: `The ${input.scope} memory scope is not available to this thread.`,
+        });
+      }
+      const authorBotId = input.access.respondingBotId ?? input.access.botId;
+      const draft: AkeruMemoryRevision = {
+        id: input.memoryId,
+        rootId: AkeruMemoryRootId.make(input.memoryId),
+        revision: 1,
+        partition: {
+          tenantId: partition.tenantId,
+          scope: partition.scope,
+          partitionId: partition.partitionId,
+        },
+        entityKind: "other",
+        entityId: AkeruMemoryEntityId.make("pending"),
+        kind: "fact",
+        value: {},
+        fact: input.fact,
+        sourceThreadId: partition.scope === "thread" ? input.access.threadId : null,
+        sourceMessageId: input.sourceMessageId,
+        authorBotId,
+        initiatingUserId: input.access.userId,
+        createdAt: input.createdAt,
+        confirmedAt: input.createdAt,
+        updatedAt: input.createdAt,
+        confidence: input.confidence,
+        approvalState: "approved",
+        supersedesId: null,
+        supersededById: null,
+        visibility: partition.visibility,
+        deletionState: "active",
+        pinned: false,
+        sensitive: input.sensitive,
+        affectedBotIds:
+          input.access.groupId === null
+            ? authorBotId === null
+              ? []
+              : [authorBotId]
+            : input.access.groupMemberBotIds,
+      };
+      const entity = expectedEntity(input.access, draft);
+      if (entity === null) {
+        return yield* new AkeruMemoryAccessDenied({
+          reason: `The ${input.scope} memory scope has no owner in this thread.`,
+        });
+      }
+      return yield* insert({
+        access: input.access,
+        revision: { ...draft, entityKind: entity.kind, entityId: entity.id },
+      });
+    });
+
   // Durable-fact mutations are modeled as ordinary revisions (or tombstones)
   // on the target partition, so the chain keeps a full audit trail and every
   // write still flows through authorizeRevision's ownership checks.
@@ -1304,6 +1362,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     previewImport,
     applyImport,
     deleteRoot,
+    insertScopedFact,
     applyMutation,
   } satisfies EntityMemoryRepositoryShape;
 });

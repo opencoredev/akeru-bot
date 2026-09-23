@@ -1,6 +1,7 @@
 import type { SubscriptionAuthStatuses } from "@t3tools/contracts";
 
-import type { MessageKey } from "./i18n/index.ts";
+import { MEMORY_APPROVAL_ACTIONS } from "./durableMemory.ts";
+import type { MessageKey, TranslationParams } from "./i18n/index.ts";
 
 export type BotInboxItem = SubscriptionAuthStatuses["inbox"][number];
 
@@ -28,4 +29,28 @@ export function botInboxKindLabel(kind: BotInboxItem["kind"]): MessageKey {
     case "browser-dead":
       return "Browser connection failed";
   }
+}
+
+/**
+ * The kind label, detail, and next step an inbox row shows. Memory approvals render from
+ * their structured payload so the copy follows the interface language and names the fact
+ * once. The server's English prose in lastFailure and nextAction stays for older clients.
+ */
+export function botInboxItemCopy(
+  item: BotInboxItem,
+  t: (message: MessageKey, params?: TranslationParams) => string,
+): { readonly kind: string; readonly detail: string; readonly nextAction: string } {
+  const approval = item.memoryApproval;
+  if (approval) {
+    return {
+      kind: t("Memory approval"),
+      detail: approval.fact,
+      nextAction: t(MEMORY_APPROVAL_ACTIONS[approval.scope]),
+    };
+  }
+  return {
+    kind: t(botInboxKindLabel(item.kind)),
+    detail: item.lastFailure,
+    nextAction: item.nextAction,
+  };
 }

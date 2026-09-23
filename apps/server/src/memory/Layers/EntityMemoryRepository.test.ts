@@ -2125,4 +2125,39 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.equal((yield* repository.getCurrent({ access: botAccess, rootId })).revision, 1);
     }),
   );
+
+  it.effect("inserts an approved fact into a shared group scope for every member", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const revision = yield* repository.insertScopedFact({
+        access: sharedAccess,
+        scope: "group",
+        fact: "The group ships on Fridays.",
+        sensitive: false,
+        confidence: 1,
+        sourceMessageId: null,
+        memoryId: AkeruMemoryId.make("scoped-group-fact"),
+        createdAt: "2026-09-23T08:00:00.000Z",
+      });
+      assert.equal(revision.partition.scope, "group");
+      assert.equal(revision.approvalState, "approved");
+      assert.equal(revision.authorBotId, BotId.make("bot"));
+      assert.deepEqual(revision.affectedBotIds, [BotId.make("bot")]);
+      assert.isNull(revision.sourceThreadId);
+
+      const outsideGroup = yield* repository
+        .insertScopedFact({
+          access: botAccess,
+          scope: "group",
+          fact: "No group here.",
+          sensitive: false,
+          confidence: 1,
+          sourceMessageId: null,
+          memoryId: AkeruMemoryId.make("scoped-no-group"),
+          createdAt: "2026-09-23T08:00:00.000Z",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(outsideGroup._tag === "Failure");
+    }),
+  );
 });

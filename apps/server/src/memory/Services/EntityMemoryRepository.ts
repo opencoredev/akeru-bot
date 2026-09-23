@@ -3,9 +3,11 @@ import type {
   AkeruMemoryMutation,
   AkeruMemoryRevision,
   AkeruMemoryRootId,
+  AkeruMemoryTargetScope,
   AkeruMemoryThreadAccess,
   AkeruMemoryImportPreview,
   AkeruMemoryImportApplyResult,
+  MessageId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -76,6 +78,19 @@ export interface ApplyEntityMemoryMutationInput {
   readonly updatedAt: string;
   /** Shared-scope policy for a mutation that lands a fact on a shared scope. */
   readonly sharedProjectApproval: "approved" | "pending";
+}
+
+// Writes a new approved fact to the partition that backs a target scope for
+// the given thread access. Used when a person approves a memory candidate.
+export interface InsertScopedEntityMemoryInput {
+  readonly access: AkeruMemoryThreadAccess;
+  readonly scope: AkeruMemoryTargetScope;
+  readonly fact: string;
+  readonly sensitive: boolean;
+  readonly confidence: number;
+  readonly sourceMessageId: MessageId | null;
+  readonly memoryId: AkeruMemoryId;
+  readonly createdAt: string;
 }
 
 export interface TombstoneEntityMemoryInput {
@@ -150,6 +165,9 @@ export interface EntityMemoryRepositoryShape {
   readonly deleteRoot: (
     input: DeleteEntityMemoryInput,
   ) => Effect.Effect<void, EntityMemoryRepositoryError>;
+  readonly insertScopedFact: (
+    input: InsertScopedEntityMemoryInput,
+  ) => Effect.Effect<AkeruMemoryRevision, EntityMemoryRepositoryError>;
   readonly applyMutation: (
     input: ApplyEntityMemoryMutationInput,
   ) => Effect.Effect<AkeruMemoryRevision | null, EntityMemoryRepositoryError>;

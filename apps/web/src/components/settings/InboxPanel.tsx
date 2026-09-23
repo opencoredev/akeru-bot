@@ -1,16 +1,23 @@
-import { CircleAlertIcon } from "lucide-react";
+import { BookmarkIcon, CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
-  botInboxKindLabel,
+  botInboxItemCopy,
   selectOpenBotInboxItems,
   type BotInboxItem,
 } from "@t3tools/client-runtime/bot-inbox";
+import {
+  describeDurableFactFailure,
+  memoryApprovalMutation,
+  type MemoryApprovalIntent,
+} from "@t3tools/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useI18n } from "../../i18n";
 import { botInboxEnvironment } from "../../state/botInbox";
+import { memoryEnvironment } from "../../state/memory";
 import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
@@ -18,7 +25,7 @@ import { Button } from "../ui/button";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 export type InboxRepairDestination = "providers" | "plugins";
-export type InboxRowAction = InboxRepairDestination | "resolve";
+export type InboxRowAction = InboxRepairDestination | "resolve" | "memory-approval";
 
 export function inboxRepairDestination(item: BotInboxItem): InboxRepairDestination | null {
   if (item.incidentKey.startsWith("access:mcp-")) return "plugins";
@@ -29,6 +36,7 @@ export function inboxRepairDestination(item: BotInboxItem): InboxRepairDestinati
 }
 
 export function inboxRowAction(item: BotInboxItem): InboxRowAction {
+  if (item.memoryApproval) return "memory-approval";
   return inboxRepairDestination(item) ?? "resolve";
 }
 
@@ -39,6 +47,7 @@ export function InboxPanel() {
     environmentId === null ? null : botInboxEnvironment.list({ environmentId, input: {} }),
   );
   const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
+  const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
   const openItems = selectOpenBotInboxItems(inboxQuery.data ?? []);
 
   return (
@@ -52,49 +61,79 @@ export function InboxPanel() {
         }
       >
         {inboxQuery.isPending ? (
-          <SettingsRow title={t("Loading errors")} />
+          <SettingsRow title={t("Loading inbox")} />
         ) : inboxQuery.error ? (
-          <SettingsRow title={t("Could not load errors")} description={inboxQuery.error} />
+          <SettingsRow title={t("Could not load the inbox")} description={inboxQuery.error} />
         ) : openItems.length === 0 ? (
-          <SettingsRow title={t("No errors")} description={t("Bot failures appear here.")} />
+          <SettingsRow
+            title={t("Nothing open")}
+            description={t("Bot failures and memory approvals appear here.")}
+          />
         ) : (
-          openItems.map((item) => (
-            <InboxIncidentRow
-              key={item.id}
-              item={item}
-              environmentId={environmentId}
-              onResolve={
-                environmentId === null
-                  ? null
-                  : async () => {
-                      const result = await resolveIncident({
-                        environmentId,
-                        input: { id: item.id },
-                      });
-                      return result._tag === "Failure"
-                        ? formatEnvironmentQueryError(result.cause)
-                        : null;
-                    }
-              }
-            />
-          ))
+          openItems.map((item) => {
+            const approval = item.memoryApproval;
+            return (
+              <InboxIncidentRow
+                key={item.id}
+                item={item}
+                environmentId={environmentId}
+                onResolve={
+                  environmentId === null
+                    ? null
+                    : async () => {
+                        const result = await resolveIncident({
+                          environmentId,
+                          input: { id: item.id },
+                        });
+                        return result._tag === "Failure"
+                          ? formatEnvironmentQueryError(result.cause)
+                          : null;
+                      }
+                }
+                onDecideMemory={
+                  environmentId === null || approval === undefined
+                    ? null
+                    : async (intent) => {
+                        const result = await mutateFact({
+                          environmentId,
+                          input: {
+                            threadId: approval.sourceThreadId,
+                            mutation: memoryApprovalMutation(approval, intent),
+                          },
+                        });
+                        if (result._tag === "Failure") {
+                          return t(
+                            describeDurableFactFailure(squashAtomCommandFailure(result)).message,
+                          );
+                        }
+                        // The server closes the inbox item when it records the decision.
+                        inboxQuery.refresh();
+                        return null;
+                      }
+                }
+              />
+            );
+          })
         )}
       </SettingsSection>
     </SettingsPageContainer>
   );
 }
 
-function InboxIncidentRow({
+export function InboxIncidentRow({
   item,
   environmentId,
   onResolve,
+  onDecideMemory,
 }: {
   readonly item: BotInboxItem;
   readonly environmentId: ReturnType<typeof useSettingsEnvironmentId>;
   readonly onResolve: (() => Promise<string | null>) | null;
+  readonly onDecideMemory: ((intent: MemoryApprovalIntent) => Promise<string | null>) | null;
 }) {
   const { t } = useI18n();
   const action = inboxRowAction(item);
+  const copy = botInboxItemCopy(item, t);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const openRepair = () => {
@@ -114,19 +153,51 @@ function InboxIncidentRow({
       setIsResolving(false);
     }
   };
+  const handleDecideMemory = async (intent: MemoryApprovalIntent) => {
+    if (onDecideMemory === null || isResolving) return;
+    setIsResolving(true);
+    setResolveError(null);
+    try {
+      setResolveError(await onDecideMemory(intent));
+    } finally {
+      setIsResolving(false);
+    }
+  };
 
   return (
     <SettingsRow
       title={
         <span className="flex items-center gap-2">
-          <CircleAlertIcon className="size-4 text-destructive" />
-          {item.botName} · {item.taskOrRoutine} · {t(botInboxKindLabel(item.kind))}
+          {action === "memory-approval" ? (
+            <BookmarkIcon className="size-4 text-muted-foreground" />
+          ) : (
+            <CircleAlertIcon className="size-4 text-destructive" />
+          )}
+          {item.botName} · {item.taskOrRoutine} · {copy.kind}
         </span>
       }
-      description={item.lastFailure}
-      status={resolveError ?? item.nextAction}
+      description={copy.detail}
+      status={resolveError ?? copy.nextAction}
       control={
-        action === "resolve" ? (
+        action === "memory-approval" ? (
+          <span className="flex items-center gap-1.5">
+            <Button
+              size="xs"
+              variant="ghost-muted"
+              disabled={isResolving || onDecideMemory === null}
+              onClick={() => void handleDecideMemory({ action: "reject" })}
+            >
+              {t("Reject")}
+            </Button>
+            <Button
+              size="xs"
+              disabled={isResolving || onDecideMemory === null}
+              onClick={() => void handleDecideMemory({ action: "approve" })}
+            >
+              {t("Approve")}
+            </Button>
+          </span>
+        ) : action === "resolve" ? (
           <Button
             size="xs"
             variant="outline"

@@ -38,6 +38,38 @@ describe("subscription auth contracts", () => {
     ).toThrow();
   });
 
+  it("decodes inbox items with and without a memory approval", () => {
+    const item = {
+      id: "item-1",
+      incidentKey: "approval:request-1",
+      kind: "approval-request",
+      status: "open",
+      botId: "bot-1",
+      botName: "Ada",
+      taskOrRoutine: "Planning",
+      lastFailure: "This request needs approval.",
+      nextAction: "Open the chat.",
+      firstSeenAt: "2026-09-01T00:00:00.000Z",
+      lastSeenAt: "2026-09-01T00:00:00.000Z",
+      occurrenceCount: 1,
+    };
+    const memoryApproval = {
+      candidateId: "candidate-1",
+      fact: "The project uses Bun.",
+      scope: "project",
+      sensitive: false,
+      sourceThreadId: "thread-1",
+      authorBotId: "bot-1",
+      affectedBotIds: ["bot-1"],
+    };
+    const decoded = decodeStatuses({
+      providers: [],
+      inbox: [item, { ...item, id: "item-2", memoryApproval }],
+    });
+    expect(decoded.inbox[0]?.memoryApproval).toBeUndefined();
+    expect(decoded.inbox[1]?.memoryApproval).toEqual(memoryApproval);
+  });
+
   it("exposes API-key metadata but strips secrets from status", () => {
     const decoded = decodeStatuses({
       providers: [

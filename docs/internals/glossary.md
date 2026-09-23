@@ -57,6 +57,12 @@ Small, server-owned Markdown context attached to one named bot: `USER.md`, `MEMO
 bot-specific `GROUP.md` per group. It is distinct from bot instructions and thread observational
 memory. See [memory architecture](memory.md).
 
+#### Memory approval
+
+A pending request from a bot to save a shared durable fact at project, group, or workspace scope.
+It appears as a chat card and a bot inbox item, and either one decides it through
+`candidate.decide`. See [shared memory approvals](memory.md#shared-memory-approvals).
+
 #### Observational memory
 
 An automatically generated, inspectable summary of older content in one thread. It complements the

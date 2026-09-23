@@ -97,6 +97,27 @@ connection paired with read-only access can view facts but not change them.
 Clearing a chat's observations does not remove durable facts, the bot, or its notes. Facts waiting
 for approval, rejected facts, and forgotten facts stay out of what the bot uses.
 
+### Approving shared memory
+
+A bot can ask to save a fact for the whole project, its group, or the workspace, so other bots and
+later chats know it too. By default, Akeru asks you first. The chat shows a card above the message
+box, such as "Save to project memory?", with the bot that asked, the fact, and the bots that would
+see it. Facts the bot marks as sensitive, such as personal, health, or financial details, are
+labeled "Sensitive, always needs approval" and always wait for you, even when shared project memory
+saves automatically.
+
+- **Approve** saves the fact as shown.
+- **Edit** lets you change the text first. **Approve edit** saves your version.
+- **Reject** discards the request. Nothing is saved.
+
+The same request also appears in the bot inbox in Settings, on desktop, web, and mobile, labeled
+Memory approval, with the fact, where it would be saved, and **Approve** and **Reject**. Deciding
+in either place closes it in both, and a request stays open across restarts until you decide. The
+chat stays usable while a request waits. If several requests are waiting, the card shows them one
+at a time, oldest first.
+
+An approved fact appears in Memory under its scope like any other durable fact.
+
 ### Memory settings
 
 Settings has a Memory section under Privacy on desktop and web, and under Settings on mobile:
@@ -111,7 +132,7 @@ Settings has a Memory section under Privacy on desktop and web, and under Settin
   you can review, forget, or delete them.
 - **Save shared project memory automatically** decides what happens when a fact is shared with a
   whole project. When it is off, the default, the fact waits for your approval. When it is on, the
-  fact is approved right away.
+  fact is approved right away, unless a bot marks it as sensitive.
 
 Private bot memory and shared project memory only apply while Memory is on, so their switches are
 unavailable while it is off.

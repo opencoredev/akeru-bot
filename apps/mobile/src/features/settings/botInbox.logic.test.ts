@@ -1,8 +1,8 @@
-import { BotId } from "@t3tools/contracts";
+import { AkeruMemoryCandidateId, BotId, ThreadId } from "@t3tools/contracts";
 import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
+import { inboxItemAction, settingsInboxView } from "./botInbox.logic";
 
 function incident(overrides: Partial<BotInboxItem> = {}): BotInboxItem {
   return {
@@ -65,10 +65,31 @@ describe("settingsInboxView", () => {
   });
 });
 
-describe("canResolveInboxItem", () => {
+describe("inboxItemAction", () => {
   it("keeps connector incidents open until their dependency recovers", () => {
-    expect(canResolveInboxItem(incident())).toBe(false);
-    expect(canResolveInboxItem(incident({ kind: "approval-request" }))).toBe(true);
-    expect(canResolveInboxItem(incident({ kind: "browser-dead" }))).toBe(true);
+    expect(inboxItemAction(incident())).toBeNull();
+    expect(inboxItemAction(incident({ kind: "approval-request" }))).toBe("resolve");
+    expect(inboxItemAction(incident({ kind: "browser-dead" }))).toBe("resolve");
+  });
+
+  it("asks for a decision on memory approvals instead of resolving them", () => {
+    const item = incident({
+      kind: "approval-request",
+      incidentKey: "memory-approval:candidate-1",
+      memoryApproval: {
+        candidateId: AkeruMemoryCandidateId.make("candidate-1"),
+        fact: "Deploys happen on Fridays.",
+        scope: "project",
+        sensitive: false,
+        sourceThreadId: ThreadId.make("thread-1"),
+        authorBotId: BotId.make("bot-1"),
+        affectedBotIds: [BotId.make("bot-1")],
+      },
+    });
+    expect(inboxItemAction(item)).toBe("memory-approval");
+    expect(settingsInboxView({ error: null, data: [item] })).toEqual({
+      kind: "ready",
+      items: [item],
+    });
   });
 });
