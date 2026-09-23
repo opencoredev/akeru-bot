@@ -15,6 +15,7 @@ import {
 } from "./renderer";
 import symbolsFontUrl from "./fonts/SymbolsNerdFontMono-Regular.woff2?url";
 import { isMonospaceFamily } from "../../appearanceFonts";
+import { terminalLatencyCallbacks, type TerminalLatencyProbe, type TerminalLatencyCallbacks } from "../latency";
 
 export const DEFAULT_TERMINAL_FONT_SIZE = 12;
 const MIN_TERMINAL_FONT_SIZE = 6;
@@ -534,6 +535,8 @@ export interface GhosttyTerminalSurfaceOptions {
   /** Read after font and WASM loading. Hosts can supply a getter for the latest value. */
   readonly visible?: boolean;
   readonly onData: (data: string) => void;
+  /** Optional live measurement hooks; omitted in normal clients. */
+  readonly latencyProbe?: TerminalLatencyProbe;
   readonly onResize: (cols: number, rows: number) => void;
   readonly onSelectionChange: () => void;
   readonly beforeKey: (event: KeyboardEvent) => boolean;
@@ -557,6 +560,7 @@ export class GhosttyTerminalSurface {
   private readonly context: CanvasRenderingContext2D;
   private readonly core: GhosttyTerminalCore;
   private readonly options: GhosttyTerminalSurfaceOptions;
+  private readonly latencyCallbacks: TerminalLatencyCallbacks;
   private visible: boolean;
   private hasSize = false;
   private metrics: GhosttyCellMetrics;
@@ -646,6 +650,7 @@ export class GhosttyTerminalSurface {
     this.mouseAnyEventTracking = core.isMouseAnyEventTracking();
     this.metrics = metrics;
     this.options = options;
+    this.latencyCallbacks = terminalLatencyCallbacks(options.latencyProbe);
     this.visible = options.visible ?? true;
     this.theme = options.theme;
     this.fontFamily = fontFamily;
@@ -750,6 +755,7 @@ export class GhosttyTerminalSurface {
   write(data: string): void {
     if (this.disposed) return;
     this.core.write(data);
+    this.latencyCallbacks.onByteArrival(data);
     this.synchronizeMouseTrackingState();
     // Restart the blink cycle from the visible phase so the cursor never sits
     // invisible through a stream of output or a burst of typing echo.
@@ -1124,6 +1130,7 @@ export class GhosttyTerminalSurface {
     this.suppressedKeyCodes.delete(event.code);
     event.preventDefault();
     event.stopPropagation();
+    this.latencyCallbacks.onKeypress(data);
     this.options.onData(data);
   };
 
@@ -1772,6 +1779,7 @@ export class GhosttyTerminalSurface {
         ? { selectionBackground: this.theme.selectionBackground }
         : {}),
     });
+    this.latencyCallbacks.onGlyphPaint();
     this.positionInput();
     this.renderedCursorY =
       this.cursorOn && this.snapshot.cursorVisible && this.snapshot.cursorY >= 0

@@ -49,6 +49,7 @@ import {
   type GhosttyTerminalSurfaceOptions,
 } from "~/terminal/ghostty/surface";
 import { type GhosttyColor, type GhosttyTheme } from "~/terminal/ghostty/core";
+import { TerminalLatencyRecorder } from "~/terminal/latency";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { isTerminalLinkActivation, isTerminalUrl, resolvePathLinkTarget } from "../terminal-links";
 import {
@@ -507,6 +508,26 @@ export function TerminalViewport({
 
     const setup = async (): Promise<(() => void) | null> => {
       const setupFont = terminalFontRef.current;
+      const latencyEnabled =
+        import.meta.env.DEV &&
+        (new URLSearchParams(window.location.search).get("terminalLatency") === "1" ||
+          window.localStorage.getItem("akeru:terminal-latency") === "1");
+      const latencyRecorder = latencyEnabled ? new TerminalLatencyRecorder() : undefined;
+      if (latencyRecorder) {
+        const report = () => {
+          const text = latencyRecorder.report(`terminal ${threadId}`);
+          console.info(text);
+          return text;
+        };
+        const reportWindow = window as Window & { __akeruTerminalLatencyReport?: () => string };
+        reportWindow.__akeruTerminalLatencyReport = report;
+        setupCleanups.push(() => {
+          if (reportWindow.__akeruTerminalLatencyReport === report) {
+            delete reportWindow.__akeruTerminalLatencyReport;
+          }
+        });
+        console.info(`[terminal] latency enabled for ${threadId}; call window.__akeruTerminalLatencyReport()`);
+      }
       const terminalOptions: GhosttyTerminalSurfaceOptions = {
         theme: terminalThemeFromApp(mount),
         font: terminalFontOptions(setupFont.family, setupFont.size),
@@ -514,6 +535,7 @@ export function TerminalViewport({
           return visibleRef.current;
         },
         onData: (data) => handleData(data),
+        ...(latencyRecorder ? { latencyProbe: latencyRecorder } : {}),
         onResize: (cols, rows) => void resizeTerminal(cols, rows),
         onSelectionChange: () => handleSelectionChange(),
         beforeKey: (event) => handleBeforeKey(event),
@@ -527,6 +549,8 @@ export function TerminalViewport({
       };
       const terminal = await GhosttyTerminalSurface.create(mount, terminalOptions);
       if (cancelled) {
+        for (const cleanup of setupCleanups.toReversed()) cleanup();
+        setupCleanups = [];
         terminal.dispose();
         return null;
       }

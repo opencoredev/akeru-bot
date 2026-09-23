@@ -52,3 +52,22 @@ disk before their lifecycle boundary completes.
 Restoration reads at most the last 8 MiB from current and legacy history files.
 It skips an incomplete UTF-8 code point at the start and applies the line limit
 before rewriting oversized files. File handles close before that rewrite.
+
+## Input latency measurement
+
+`apps/web/src/terminal/latency.ts` contains the repeatable percentile harness. A
+live desktop pass supplies `TerminalLatencyProbe` hooks on the Ghostty surface:
+keypress, PTY byte arrival, and glyph-frame scheduling are timestamped with
+`performance.now()`. The harness reports keypress-to-glyph and byte-arrival-to-
+glyph p50, p95, and p99 values. Headless tests cover the percentile math, but
+cannot synthesize an operating-system keypress or a real PTY round trip; those
+numbers must be collected on local desktop and at least one remote or tunnel
+connection.
+
+The first measurement commit's headless byte-arrival-to-render-scheduling
+baseline was p50 0.00 ms and p95 0.01 ms. Keypress-to-glyph was not measurable
+without a running desktop app. The probe is opt-in and the existing single-shot
+`requestAnimationFrame` scheduler remains unchanged. Local echo is deliberately
+not enabled from a headless result: without proving that PTY echo dominates,
+predicting printable input would risk duplicate characters and would desync
+application keypad, bracketed-paste, and alternate-screen programs.
