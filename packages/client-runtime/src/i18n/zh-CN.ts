@@ -1436,6 +1436,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "{scope} skill": "{scope} 技能",
   "No skills found. Try / to browse provider commands.": "未找到技能。试试输入 / 浏览提供方命令。",
   "No matching command.": "没有匹配的命令。",
+  "Connect a provider to use skills.": "连接提供方后即可使用技能。",
+  "Connect a provider to use its commands.": "连接提供方后即可使用其命令。",
   "Checking subscription": "正在检查订阅",
   "{provider} subscription detected": "已检测到 {provider} 订阅",
   "No {provider} subscription connected": "未连接 {provider} 订阅",

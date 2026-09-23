@@ -163,6 +163,20 @@ export function restoreBotStashPrompt(currentPrompt: string, stashedPrompt: stri
     : stashedPrompt;
 }
 
+/**
+ * The `$` or `/` token the command picker opens for. A null catalog still opens it so
+ * the picker can say a provider is missing; only an omitted catalog turns it off.
+ */
+export function botPromptCommandMenuTrigger(input: {
+  readonly draft: string;
+  readonly caret: number | null;
+  readonly readOnly: boolean;
+  readonly commandCatalog: ComposerProviderCatalog | null | undefined;
+}) {
+  if (input.readOnly || input.commandCatalog === undefined || input.caret === null) return null;
+  return botPromptCommandTrigger(input.draft, input.caret);
+}
+
 export function BotPromptComposer({
   botName,
   draftKey,
@@ -170,7 +184,7 @@ export function BotPromptComposer({
   readOnly = false,
   mentionBots = EMPTY_MENTION_BOTS,
   mentionScope = null,
-  commandCatalog = null,
+  commandCatalog,
   activitySlot = null,
   busy = false,
   pendingActionSlot = null,
@@ -187,7 +201,10 @@ export function BotPromptComposer({
   mentionBots?: ReadonlyArray<MentionBot>;
   /** Enables `@browser` and `@chat:` mentions for this chat's environment. */
   mentionScope?: BotPromptMentionScope | null;
-  /** The answering provider's skills and commands, offered by the `$` and `/` pickers. */
+  /**
+   * The answering provider's skills and commands, offered by the `$` and `/` pickers.
+   * Null keeps the pickers open with a connect-a-provider line; omit it to turn them off.
+   */
   commandCatalog?: ComposerProviderCatalog | null;
   /** Live turn status, docked above the prompt box where it stays visible without scrolling. */
   activitySlot?: ReactNode;
@@ -310,10 +327,12 @@ export function BotPromptComposer({
     },
     [persistDraft],
   );
-  const candidateCommandTrigger =
-    !readOnly && commandCatalog !== null && caret !== null
-      ? botPromptCommandTrigger(draft, caret)
-      : null;
+  const candidateCommandTrigger = botPromptCommandMenuTrigger({
+    draft,
+    caret,
+    readOnly,
+    commandCatalog,
+  });
   const commandTrigger =
     candidateCommandTrigger && candidateCommandTrigger.rangeStart !== dismissedCommandStart
       ? candidateCommandTrigger
@@ -790,7 +809,7 @@ export function BotPromptComposer({
               onActiveOptionChange={setActiveMentionOptionId}
             />
           ) : null}
-          {commandTrigger && commandCatalog ? (
+          {commandTrigger && commandCatalog !== undefined ? (
             <BotPromptCommandMenu
               ref={commandMenuRef}
               trigger={commandTrigger}

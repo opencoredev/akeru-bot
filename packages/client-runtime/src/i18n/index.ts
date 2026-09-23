@@ -1499,6 +1499,8 @@ export const englishCatalog = {
   "No skills found. Try / to browse provider commands.":
     "No skills found. Try / to browse provider commands.",
   "No matching command.": "No matching command.",
+  "Connect a provider to use skills.": "Connect a provider to use skills.",
+  "Connect a provider to use its commands.": "Connect a provider to use its commands.",
   "Checking subscription": "Checking subscription",
   "{provider} subscription detected": "{provider} subscription detected",
   "No {provider} subscription connected": "No {provider} subscription connected",

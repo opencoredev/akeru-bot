@@ -1,3 +1,4 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { type KeyboardEvent, type Ref, useImperativeHandle, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -20,7 +21,8 @@ export interface BotPromptCommandMenuHandle {
 /**
  * The `$` skill and `/` command picker, the same menu the classic composer shows.
  * Mounted only while a trigger is being typed, so settings stay off the typing path.
- * `onSelect` receives the text that replaces the typed token.
+ * `onSelect` receives the text that replaces the typed token. A null catalog means no
+ * provider is connected, so the menu stays open and says so instead of vanishing.
  */
 export function BotPromptCommandMenu({
   ref,
@@ -31,7 +33,7 @@ export function BotPromptCommandMenu({
 }: {
   ref: Ref<BotPromptCommandMenuHandle>;
   trigger: BotPromptCommandTrigger;
-  catalog: ComposerProviderCatalog;
+  catalog: ComposerProviderCatalog | null;
   onSelect: (inserted: string) => void;
   onClose: () => void;
 }) {
@@ -50,9 +52,10 @@ export function BotPromptCommandMenu({
     [catalog, kind, query, showSkillsInSlashMenu, t],
   );
   const searchKey = `${trigger.kind}:${trigger.query.trim().toLowerCase()}`;
-  const [highlight, setHighlight] = useState<{ itemId: string | null; searchKey: string | null }>(
-    { itemId: null, searchKey: null },
-  );
+  const [highlight, setHighlight] = useState<{ itemId: string | null; searchKey: string | null }>({
+    itemId: null,
+    searchKey: null,
+  });
   const activeItemId = resolveComposerMenuActiveItemId({
     items,
     highlightedItemId: highlight.itemId,
@@ -100,15 +103,27 @@ export function BotPromptCommandMenu({
         resolvedTheme={resolvedTheme}
         isLoading={false}
         triggerKind={trigger.kind}
-        emptyStateText={
-          trigger.kind === "skill"
-            ? t("No skills found. Try / to browse provider commands.")
-            : t("No matching command.")
-        }
+        emptyStateText={botPromptCommandMenuEmptyText(trigger.kind, catalog !== null, t)}
         activeItemId={activeItemId}
         onHighlightedItemChange={(itemId) => setHighlight({ itemId, searchKey })}
         onSelect={select}
       />
     </div>
   );
+}
+
+/** The line an empty picker shows. Without a provider, it says what to connect. */
+export function botPromptCommandMenuEmptyText(
+  kind: BotPromptCommandTrigger["kind"],
+  hasProvider: boolean,
+  t: (message: MessageKey) => string,
+): string {
+  if (!hasProvider) {
+    return kind === "skill"
+      ? t("Connect a provider to use skills.")
+      : t("Connect a provider to use its commands.");
+  }
+  return kind === "skill"
+    ? t("No skills found. Try / to browse provider commands.")
+    : t("No matching command.");
 }

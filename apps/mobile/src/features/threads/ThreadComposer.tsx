@@ -849,12 +849,17 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             isLoading={pathSearch.isPending}
             onSelect={handleCommandSelect}
           />
-        ) : composerTrigger && composerMenuItems.length > 0 ? (
+        ) : composerTrigger &&
+          // `$` stays open when empty so a missing provider or skill is stated, not silent.
+          (composerMenuItems.length > 0 || composerTrigger.kind === "skill") ? (
           <View className="absolute inset-x-0 bottom-full z-10 mb-2">
             <ComposerCommandPopover
               items={composerMenuItems}
               triggerKind={composerTrigger.kind}
               isLoading={pathSearch.isPending}
+              {...(composerTrigger.kind === "skill" && selectedProviderStatus === null
+                ? { emptyText: t("Connect a provider to use skills.") }
+                : {})}
               onSelect={handleCommandSelect}
             />
           </View>

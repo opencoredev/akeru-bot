@@ -68,6 +68,8 @@ interface ComposerCommandPopoverProps {
   readonly items: ReadonlyArray<ComposerCommandItem>;
   readonly triggerKind: ComposerTriggerKind | null;
   readonly isLoading: boolean;
+  /** Replaces the default empty line, for example when no provider is connected. */
+  readonly emptyText?: string;
   readonly onSelect: (item: ComposerCommandItem) => void;
 }
 
@@ -242,7 +244,7 @@ export const ComposerCommandPopover = memo(function ComposerCommandPopover(
       ) : (
         <View className="px-3.5 py-2.5">
           <Text className="text-xs text-foreground-tertiary">
-            {emptyText(props.triggerKind, props.isLoading)}
+            {props.emptyText ?? emptyText(props.triggerKind, props.isLoading)}
           </Text>
         </View>
       )}

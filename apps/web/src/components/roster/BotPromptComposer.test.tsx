@@ -24,6 +24,7 @@ import {
 import {
   appendBotMention,
   BotPromptComposer,
+  botPromptCommandMenuTrigger,
   canSubmitBotPrompt,
   botMentionHint,
   resolveBotMention,
@@ -56,6 +57,17 @@ describe("bot prompt composer", () => {
   it("preserves new draft text when inserting a mention", () => {
     expect(appendBotMention("new draft", "@Mori")).toBe("new draft @Mori ");
     expect(appendBotMention("", "@bot:mori-2")).toBe("@bot:mori-2 ");
+  });
+
+  it("opens the $ and / pickers when no provider catalog is connected", () => {
+    const open = (draft: string, commandCatalog: null | undefined, readOnly = false) =>
+      botPromptCommandMenuTrigger({ draft, caret: draft.length, readOnly, commandCatalog })?.kind;
+    expect(open("$", null)).toBe("skill");
+    expect(open("hi $", null)).toBe("skill");
+    expect(open("/", null)).toBe("slash-command");
+    // Onboarding previews omit the catalog and read-only chats never type.
+    expect(open("$", undefined)).toBeUndefined();
+    expect(open("/", null, true)).toBeUndefined();
   });
 
   it("expands for long or multiline prompts", () => {

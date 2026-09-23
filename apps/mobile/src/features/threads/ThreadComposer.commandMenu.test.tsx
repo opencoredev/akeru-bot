@@ -173,7 +173,7 @@ const serverConfig = {
   settings: {},
 } as unknown as ServerConfig;
 
-function renderMenu(draftMessage: string) {
+function renderMenu(draftMessage: string, config: ServerConfig | null = serverConfig) {
   hooks.slots = [];
   hooks.cursor = 0;
   const props = {
@@ -192,7 +192,7 @@ function renderMenu(draftMessage: string) {
       runtimeMode: "full-access",
       modelSelection: { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude" },
     } as unknown as OrchestrationThreadShell,
-    serverConfig,
+    serverConfig: config,
     queueCount: 0,
     environmentId: EnvironmentId.make("environment"),
     projectCwd: null,
@@ -209,6 +209,7 @@ function renderMenu(draftMessage: string) {
   const popover = findElement(tree, (element) => element.type === "ComposerCommandPopover");
   return {
     triggerKind: popover?.props.triggerKind,
+    emptyText: popover?.props.emptyText,
     labels: ((popover?.props.items ?? []) as ReadonlyArray<ComposerCommandItem>).map(
       (item) => item.label,
     ),
@@ -238,6 +239,16 @@ describe("ThreadComposer command menus", () => {
 
   it("filters / rows by the typed query", () => {
     expect(renderMenu("/comp").labels).toEqual(["/compact"]);
+  });
+
+  it("keeps $ open with a connect line when no provider is connected", () => {
+    const noProvider = { ...serverConfig, providers: [] } as unknown as ServerConfig;
+    expect(renderMenu("$", noProvider)).toEqual({
+      triggerKind: "skill",
+      emptyText: "Connect a provider to use skills.",
+      labels: [],
+    });
+    expect(renderMenu("/", noProvider).labels).toEqual(["/model", "/plan", "/default"]);
   });
 
   it("shows no menu without a trigger", () => {
