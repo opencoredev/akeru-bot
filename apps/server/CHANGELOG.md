@@ -1,5 +1,15 @@
 # akeru-bot
 
+## 0.2.0
+
+### Minor Changes
+
+- [#293](https://github.com/opencoredev/akeru-bot/pull/293) [`1c1dada`](https://github.com/opencoredev/akeru-bot/commit/1c1dadaa2ec4d7c9b8f76d6807a67094176a66c8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Replace saved facts with editable, bot-owned memory notes that follow bots across chats. Keep separate notes for each group, review durable preferences periodically, and keep up to 30 complete recent turns within a roughly 64,000-token budget alongside conversation observations.
+
+### Patch Changes
+
+- [#289](https://github.com/opencoredev/akeru-bot/pull/289) [`cedae46`](https://github.com/opencoredev/akeru-bot/commit/cedae46081f9aeff6274210b234b66ec0047225e) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Fix desktop startup when the bundled server loads the plugin catalog from a worktree.
+
 ## 0.1.1
 
 ## 0.1.0
