@@ -27,7 +27,10 @@ import {
   PreviewViewportSetting,
   PreviewZoomFactor,
 } from "./preview.ts";
-import { VoiceProvider, ChatGptRealtimeVoice, VoiceSettings } from "./voiceCall.ts";
+import {
+  VoiceProvider, ChatGptRealtimeVoice, VoiceSettings, VoiceApiProvider,
+  VoiceTranscriptionProvider, VoiceSynthesisVoices,
+} from "./voiceCall.ts";
 import { ImageGenerationSettings, ImageGenerationSettingsPatch } from "./imageGeneration.ts";
 import {
   ProviderInstanceConfig,
@@ -1065,6 +1068,10 @@ const ServerSettingsPatchFields = {
       enabled: Schema.optionalKey(Schema.Boolean),
       provider: Schema.optionalKey(VoiceProvider),
       voice: Schema.optionalKey(ChatGptRealtimeVoice),
+      openaiVoice: Schema.optionalKey(ChatGptRealtimeVoice),
+      transcriptionProvider: Schema.optionalKey(VoiceTranscriptionProvider),
+      synthesisProvider: Schema.optionalKey(VoiceApiProvider),
+      synthesisVoices: Schema.optionalKey(VoiceSynthesisVoices),
     }),
   ),
   imageGeneration: Schema.optionalKey(ImageGenerationSettingsPatch),

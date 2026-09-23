@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { STORED_REPLY_SYNTHESIS_UNAVAILABLE } from "./capability.ts";
+import {
+  STORED_REPLY_SYNTHESIS_UNAVAILABLE,
+  storedReplySynthesisCapability,
+} from "./capability.ts";
 import { replyReadoutMessageAction } from "./messageAction.ts";
 import { createReplyPlaybackSession, SPOKEN_CACHE_LIMIT } from "./session.ts";
 
@@ -90,6 +93,16 @@ describe("reply playback session", () => {
     expect(replyReadoutMessageAction).toHaveBeenCalledTimes(1);
   });
 
+  it("derives capability from configured synthesis settings", () => {
+    expect(
+      storedReplySynthesisCapability({
+        provider: "composed",
+        synthesisProvider: "elevenlabs",
+        synthesisVoices: { elevenlabs: "voice-1" },
+      }),
+    ).toEqual({ available: true, provider: "elevenlabs", voice: "voice-1" });
+    expect(storedReplySynthesisCapability({ provider: "chatgpt" }).available).toBe(false);
+  });
   it("exposes settled assistant readout without starting a turn", () => {
     const { session, prepare } = setup();
     expect(session.actionFor(message)).toMatchObject({

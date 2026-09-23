@@ -56,6 +56,7 @@
     "@t3tools/mobile-terminal-native": "file:./modules/t3-terminal",
     "@t3tools/shared": "workspace:*",
     "@tabler/icons-react-native": "^3.44.0",
+    "base64-js": "1.5.1",
     "cn": "^0.2.4",
     "diff": "8.0.3",
     "effect": "catalog:",

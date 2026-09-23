@@ -218,6 +218,18 @@ import {
   VoiceCallSnapshot,
   VoiceCallStartInput,
   VoiceCallStartResult,
+  VoiceProviderInput,
+  VoiceConnectInput,
+  VoiceProviderStatus,
+  VoiceProvidersResult,
+  VoiceListVoicesInput,
+  VoiceListVoicesResult,
+  VoiceTranscribeInput,
+  VoiceTranscribeResult,
+  VoiceSynthesizeInput,
+  VoiceSynthesizeResult,
+  VoiceCancelInput,
+  VoiceCancelResult,
 } from "./voiceCall.ts";
 import {
   PortabilityApplyImportInput,
@@ -340,6 +352,14 @@ export const WS_METHODS = {
   mcpServerAuthenticate: "mcpServer.authenticate",
   botInboxList: "botInbox.list",
   botInboxResolve: "botInbox.resolve",
+  voiceProviders: "voice.providers",
+  voiceConnect: "voice.connect",
+  voiceDisconnect: "voice.disconnect",
+  voiceTest: "voice.test",
+  voiceListVoices: "voice.listVoices",
+  voiceTranscribe: "voice.transcribe",
+  voiceSynthesize: "voice.synthesize",
+  voiceCancel: "voice.cancel",
   voiceCallGet: "voiceCall.get",
   voiceCallStart: "voiceCall.start",
   voiceCallHangup: "voiceCall.hangup",
@@ -564,6 +584,48 @@ export const WsBotInboxResolveRpc = Rpc.make(WS_METHODS.botInboxResolve, {
   payload: BotInboxResolveInput,
   success: Schema.Void,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+});
+
+const VoiceRpcError = Schema.Union([VoiceCallError, EnvironmentAuthorizationError]);
+export const WsVoiceProvidersRpc = Rpc.make(WS_METHODS.voiceProviders, {
+  payload: Schema.Struct({}),
+  success: VoiceProvidersResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceConnectRpc = Rpc.make(WS_METHODS.voiceConnect, {
+  payload: VoiceConnectInput,
+  success: VoiceProviderStatus,
+  error: VoiceRpcError,
+});
+export const WsVoiceDisconnectRpc = Rpc.make(WS_METHODS.voiceDisconnect, {
+  payload: VoiceProviderInput,
+  success: VoiceProviderStatus,
+  error: VoiceRpcError,
+});
+export const WsVoiceTestRpc = Rpc.make(WS_METHODS.voiceTest, {
+  payload: VoiceProviderInput,
+  success: VoiceProviderStatus,
+  error: VoiceRpcError,
+});
+export const WsVoiceListVoicesRpc = Rpc.make(WS_METHODS.voiceListVoices, {
+  payload: VoiceListVoicesInput,
+  success: VoiceListVoicesResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceTranscribeRpc = Rpc.make(WS_METHODS.voiceTranscribe, {
+  payload: VoiceTranscribeInput,
+  success: VoiceTranscribeResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceSynthesizeRpc = Rpc.make(WS_METHODS.voiceSynthesize, {
+  payload: VoiceSynthesizeInput,
+  success: VoiceSynthesizeResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceCancelRpc = Rpc.make(WS_METHODS.voiceCancel, {
+  payload: VoiceCancelInput,
+  success: VoiceCancelResult,
+  error: VoiceRpcError,
 });
 
 export const WsVoiceCallGetRpc = Rpc.make(WS_METHODS.voiceCallGet, {
@@ -1159,6 +1221,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsMcpServerAuthenticateRpc,
   WsBotInboxListRpc,
   WsBotInboxResolveRpc,
+  WsVoiceProvidersRpc,
+  WsVoiceConnectRpc,
+  WsVoiceDisconnectRpc,
+  WsVoiceTestRpc,
+  WsVoiceListVoicesRpc,
+  WsVoiceTranscribeRpc,
+  WsVoiceSynthesizeRpc,
+  WsVoiceCancelRpc,
   WsVoiceCallGetRpc,
   WsVoiceCallStartRpc,
   WsVoiceCallHangupRpc,

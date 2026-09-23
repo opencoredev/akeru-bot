@@ -918,6 +918,14 @@ export function createServerEnvironmentAtoms<R, E>(
         key: voiceCallHangupConcurrencyKey,
       },
     }),
+    synthesizeVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:synthesize",
+      tag: WS_METHODS.voiceSynthesize,
+    }),
+    cancelVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:cancel",
+      tag: WS_METHODS.voiceCancel,
+    }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,

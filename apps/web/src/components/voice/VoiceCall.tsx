@@ -562,6 +562,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             return;
           }
           if (pending.failure) throw pending.failure;
+          if (!result.value.answerSdp) throw new Error("The voice call did not return an answer.");
           await peer.setRemoteDescription({ type: "answer", sdp: result.value.answerSdp });
           if (pending.cancelled) {
             void hangupCommandRef.current({

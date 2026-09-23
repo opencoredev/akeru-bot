@@ -2945,6 +2945,16 @@ const makeWsRpcLayer = (
             }).pipe(Effect.andThen(getImageProviderSnapshot())),
             { "rpc.aggregate": "server" },
           ),
+        [WS_METHODS.voiceProviders]: () => voiceCalls.providers,
+        [WS_METHODS.voiceConnect]: ({ provider, apiKey }) => voiceCalls.connect(provider, apiKey),
+        [WS_METHODS.voiceDisconnect]: ({ provider }) => voiceCalls.disconnect(provider),
+        [WS_METHODS.voiceTest]: ({ provider }) => voiceCalls.test(provider),
+        [WS_METHODS.voiceListVoices]: ({ provider, cursor }) =>
+          voiceCalls.listVoices(provider, cursor),
+        [WS_METHODS.voiceTranscribe]: (input) => voiceCalls.transcribe(input, voiceCallOwnerId),
+        [WS_METHODS.voiceSynthesize]: (input) => voiceCalls.synthesize(input, voiceCallOwnerId),
+        [WS_METHODS.voiceCancel]: ({ operationId }) =>
+          voiceCalls.cancel(operationId, voiceCallOwnerId),
         [WS_METHODS.voiceCallGet]: (_input) =>
           observeRpcEffect(WS_METHODS.voiceCallGet, voiceCalls.get, {
             "rpc.aggregate": "voice-call",
