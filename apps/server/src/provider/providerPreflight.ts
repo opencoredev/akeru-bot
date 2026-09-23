@@ -75,10 +75,10 @@ export const preflightProvider = (input: {
 }): ProviderPreflightVerdict | undefined => {
   const provider = input.providers.find((candidate) => candidate.instanceId === input.providerId);
   if (!provider) {
-    return {
-      category: "temporary-failure",
-      detail: `Provider '${input.providerId}' is unavailable.`,
-    };
+    // An empty or stale snapshot can occur before the provider registry has
+    // completed its first probe. That is not evidence that the provider is
+    // unavailable; let dispatch perform its normal adapter-level check.
+    return undefined;
   }
   const name = provider.displayName ?? provider.driver;
   if (!provider.enabled) {

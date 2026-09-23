@@ -130,6 +130,12 @@ describe("preflightProvider", () => {
     expect(preflight(provider())).toBeUndefined();
   });
 
+  it("lets an unprobed provider proceed until its adapter is checked", () => {
+    expect(
+      preflightProvider({ providers: [], providerId: "claude", model: "claude-sonnet" }),
+    ).toBeUndefined();
+  });
+
   it("reports a disabled provider before any stale probe failure", () => {
     expect(
       preflight(
