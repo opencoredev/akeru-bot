@@ -69,13 +69,70 @@ When upgrading from saved facts, Akeru migrates approved user, bot, and matching
 Facts that do not fit, have unsupported scopes, or fail validation are preserved in a migration
 archive instead of being silently discarded or shared more broadly.
 
+### Durable facts
+
+Durable facts are the saved facts that outlast a chat, kept separately from chat memory and from a
+bot's Markdown notes. Memory lists them in their own section. Pick a scope to see facts saved for
+this chat, this bot, or this project. Each fact shows its scope, the chat it came from, the bots it
+affects, whether it is approved, waiting for approval, or rejected, when it was created and last
+updated, and the value it replaced. Pinned and forgotten facts are marked. Memory loads only the
+facts in the scope you pick, without chat transcripts or observations.
+
+Each fact has its own actions:
+
+- **Edit** changes the fact's text. The previous text stays visible as the value it replaced.
+- **Pin** keeps a fact marked as important. **Unpin** removes the mark.
+- **Make private**, **Move to this bot**, and **Share with project** change who the fact applies
+  to. A fact shared with the project may need your approval first; see the settings below.
+- **Approve** and **Reject** decide a fact that is waiting for approval. A rejected fact stays in
+  the list, and you can still approve it later.
+- **Forget** stops the bot from using a fact but keeps it in the list, marked Forgotten, so you can
+  still see it. A forgotten fact can only be deleted.
+- **Delete** removes a fact for good after you confirm. It can't be restored.
+
+If the same fact changed on another device while you were working, Akeru shows the latest version
+with a short message instead of overwriting it. Try the change again on the fresh version. A
+connection paired with read-only access can view facts but not change them.
+
+Clearing a chat's observations does not remove durable facts, the bot, or its notes. Facts waiting
+for approval, rejected facts, and forgotten facts stay out of what the bot uses.
+
+### Memory settings
+
+Settings has a Memory section under Privacy on desktop and web, and under Settings on mobile:
+
+- **Memory** turns durable memory on or off. While it is off, bots do not receive durable facts,
+  and no facts can be saved or changed. Existing facts still appear in Memory so you can review
+  them. Their actions return when you turn Memory back on.
+- **Private bot memory** controls whether each bot keeps private facts that only that bot uses.
+  While it is off, the bot's own `MEMORY.md` notes and bot-private facts are not supplied to the
+  bot, the memory tool no longer offers the bot's private target, and Memory no longer offers
+  **Make private** or **Move to this bot**. Existing bot-private facts still appear in Memory so
+  you can review, forget, or delete them.
+- **Save shared project memory automatically** decides what happens when a fact is shared with a
+  whole project. When it is off, the default, the fact waits for your approval. When it is on, the
+  fact is approved right away.
+
+Private bot memory and shared project memory only apply while Memory is on, so their switches are
+unavailable while it is off.
+
+The mobile app shows the same facts, actions, and settings. Export and import durable facts from
+the desktop or web app; mobile does not offer them.
+
 ### Exporting and importing durable memory
 
-Memory exports are readable Markdown archives with a versioned manifest and checksums. You can
-export one chat, one bot, one project, or all memory. Complete exports include revision history
-and forgotten (tombstoned) facts. Import always shows a preview. New, changed, conflicting, and
-skipped facts are listed, and each conflict requires a choice to keep the local fact or use the
-archive. A newer local fact is never replaced silently. Archives are checked against the current
-user, bot, group, project, and workspace before any change is applied.
-An all-memory export is export-only. Import a thread, bot, project, or workspace archive so each
+Choose a scope under Transfer memory, then select Export durable facts. You can export this chat,
+this bot, this project, or all memory. The export is a JSON archive with a versioned manifest,
+checksums, and the Markdown files it covers. Complete exports include revision history and
+forgotten facts. Export notes still exports the bot's notes and the chat's observations on their
+own.
+
+Import accepts either kind of archive and always shows a preview first. For durable facts, the
+preview lists new, changed, conflicting, and skipped facts. Each conflict shows your fact beside
+the archive's version and needs its own choice: keep yours or use the archive. Apply stays
+unavailable until every conflict has a choice, so a newer local fact is never replaced silently.
+Archives are checked against the current user, bot, group, project, and workspace before any
+change is applied.
+
+An all-memory export is export-only. Import a chat, bot, project, or workspace archive so each
 authority can be checked safely.

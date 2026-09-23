@@ -5,6 +5,7 @@ import {
   AkeruMemoryId,
   AkeruMemoryRevision,
   AkeruMemoryRootId,
+  type AkeruMemoryTargetScope,
   AkeruMemoryTenantId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -26,6 +27,8 @@ import {
   type EntityMemoryRepositoryShape,
   type SearchEntityMemoryInput,
   type TombstoneEntityMemoryInput,
+  type DeleteEntityMemoryInput,
+  type ApplyEntityMemoryMutationInput,
   EntityMemoryImportError,
 } from "../Services/EntityMemoryRepository.ts";
 import { encodeMemoryArchiveJson } from "../MemoryArchiveJson.ts";
@@ -952,9 +955,8 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         ),
     );
 
-  const deleteRoot: EntityMemoryRepositoryShape["deleteRoot"] = (input) =>
-    writeLock.withPermit(
-      Effect.gen(function* () {
+  const deleteRootInner = (input: DeleteEntityMemoryInput) =>
+    Effect.gen(function* () {
         yield* getCurrent(input);
         const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
         const rows = yield* sql
@@ -991,6 +993,185 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         DELETE FROM akeru_memory_derived_copies
         WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
       `.pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:derived-copies")));
+    });
+
+  const deleteRoot: EntityMemoryRepositoryShape["deleteRoot"] = (input) =>
+    writeLock.withPermit(deleteRootInner(input));
+
+  const targetScopePartition = (
+    access: Parameters<typeof resolveAuthorizedMemoryPartitions>[0],
+    scope: AkeruMemoryTargetScope,
+    partitions: ReadonlyArray<AuthorizedMemoryPartition>,
+  ) => {
+    const authorized = partitions.filter((partition) => {
+      switch (scope) {
+        case "private":
+          return (
+            partition.visibility === "private" &&
+            (partition.scope === "bot" || partition.scope === "bot-user")
+          );
+        case "bot":
+          return partition.scope === "bot" || partition.scope === "bot-user";
+        case "group":
+          return partition.scope === "group";
+        case "project":
+        case "workspace":
+          return partition.scope === scope;
+      }
+    });
+    if (authorized.length === 0) return null;
+    const preferred =
+      scope === "bot"
+        ? authorized.find((partition) => partition.scope === "bot")
+        : scope === "private"
+          ? authorized.find((partition) => partition.scope === "bot-user")
+          : authorized.find((partition) => partition.scope === scope);
+    return preferred ?? authorized[0]!;
+  };
+
+  // Durable-fact mutations are modeled as ordinary revisions (or tombstones)
+  // on the target partition, so the chain keeps a full audit trail and every
+  // write still flows through authorizeRevision's ownership checks.
+  const applyMutation: EntityMemoryRepositoryShape["applyMutation"] = (input) =>
+    writeLock.withPermit(
+      Effect.gen(function* () {
+        const current = yield* getCurrent({
+          access: input.access,
+          rootId: input.mutation.memoryId,
+        });
+        if (current.revision !== input.mutation.expectedRevision) {
+          return yield* new EntityMemoryConflictError({
+            rootId: current.rootId,
+            expectedRevision: input.mutation.expectedRevision,
+            actualRevision: current.revision,
+          });
+        }
+        const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
+        const nextFor = (revision: AkeruMemoryRevision): AkeruMemoryRevision => ({
+          ...revision,
+          id: input.memoryId,
+          revision: current.revision + 1,
+          supersedesId: current.id,
+          supersededById: null,
+          confirmedAt: input.updatedAt,
+          updatedAt: input.updatedAt,
+        });
+        let next: AkeruMemoryRevision;
+        switch (input.mutation.operation) {
+          case "fact.edit": {
+            next = nextFor({ ...current, fact: input.mutation.fact });
+            break;
+          }
+          case "fact.pin": {
+            next = nextFor({ ...current, pinned: input.mutation.pinned });
+            break;
+          }
+          case "fact.decide": {
+            next = nextFor({
+              ...current,
+              approvalState: input.mutation.decision === "approve" ? "approved" : "rejected",
+            });
+            break;
+          }
+          case "fact.scope": {
+            const partition = targetScopePartition(
+              input.access,
+              input.mutation.scope,
+              partitions,
+            );
+            if (!partition) {
+              return yield* new AkeruMemoryAccessDenied({
+                reason: `The ${input.mutation.scope} memory scope is not available to this thread.`,
+              });
+            }
+            const entity = expectedEntity(input.access, {
+              ...current,
+              partition: {
+                tenantId: partition.tenantId,
+                scope: partition.scope,
+                partitionId: partition.partitionId,
+              },
+            });
+            if (entity === null) {
+              return yield* new AkeruMemoryAccessDenied({
+                reason: `The ${input.mutation.scope} memory scope has no owner in this thread.`,
+              });
+            }
+            next = nextFor({
+              ...current,
+              partition: {
+                tenantId: partition.tenantId,
+                scope: partition.scope,
+                partitionId: partition.partitionId,
+              },
+              entityKind: entity.kind,
+              entityId: entity.id,
+              visibility: partition.visibility,
+              sourceThreadId: partition.scope === "thread" ? input.access.threadId : null,
+              approvalState:
+                partition.visibility === "shared"
+                  ? input.sharedProjectApproval
+                  : current.approvalState,
+            });
+            break;
+          }
+          case "fact.forget": {
+            next = nextFor({ ...current, deletionState: "tombstoned" });
+            break;
+          }
+          case "fact.delete": {
+            return yield* deleteRootInner({
+              access: input.access,
+              rootId: current.rootId,
+            }).pipe(Effect.as(null));
+          }
+        }
+        const partitionChanged = !samePartition(next, {
+          ...current.partition,
+          visibility: current.visibility,
+        });
+        if (
+          !partitionChanged &&
+          (next.entityKind !== current.entityKind || next.entityId !== current.entityId)
+        ) {
+          return yield* new EntityMemoryConflictError({
+            rootId: current.rootId,
+            expectedRevision: input.mutation.expectedRevision,
+            actualRevision: current.revision,
+          });
+        }
+        yield* sql
+          .withTransaction(
+            Effect.gen(function* () {
+              const updated = yield* sql<{ readonly id: string }>`
+              UPDATE akeru_memory_revisions
+              SET superseded_by_id = ${next.id}, updated_at = ${next.updatedAt}
+              WHERE memory_id = ${current.id}
+                AND tenant_id = ${current.partition.tenantId}
+                AND root_id = ${current.rootId}
+                AND revision = ${input.mutation.expectedRevision}
+                AND superseded_by_id IS NULL
+              RETURNING memory_id AS id
+            `;
+              if (updated.length !== 1) {
+                return yield* new EntityMemoryConflictError({
+                  rootId: current.rootId,
+                  expectedRevision: input.mutation.expectedRevision,
+                  actualRevision: null,
+                });
+              }
+              yield* invalidateDerivedCopies(input.access.tenantId, next.rootId);
+              yield* insertRow(next);
+            }),
+          )
+          .pipe(
+            Effect.mapError((cause) =>
+              cause._tag === "EntityMemoryConflictError"
+                ? cause
+                : toPersistenceSqlError("EntityMemoryRepository.applyMutation:query")(cause),
+            ),
+          );
+        return next;
       }),
     );
 
@@ -1006,6 +1187,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     previewImport,
     applyImport,
     deleteRoot,
+    applyMutation,
   } satisfies EntityMemoryRepositoryShape;
 });
 

@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off preferSchemaOverJson:off
+import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -9,6 +10,7 @@ import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  DEFAULT_SERVER_SETTINGS,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   ApprovalRequestId,
@@ -26,8 +28,10 @@ import {
   type AkeruDelegationAccessGrant,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  type ServerSettings,
 } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
+import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -39,6 +43,7 @@ import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
+import { ServerSettingsService, layerTest as serverSettingsLayerTest } from "../../serverSettings.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
 import { BotMemoryStore } from "../../memory/BotMemory.ts";
 import { createBotMemoryToolHandler } from "../../memory/BotMemoryToolHandlers.ts";
@@ -77,6 +82,10 @@ const grokInstanceId = ProviderInstanceId.make("grok");
 const openCodeInstanceId = ProviderInstanceId.make("opencode");
 const kimiInstanceId = ProviderInstanceId.make("kimi-custom");
 const openCodeGoInstanceId = ProviderInstanceId.make("opencodeGo");
+
+class MemoryToolCallError extends Data.TaggedError("MemoryToolCallError")<{
+  readonly cause: Error;
+}> {}
 
 const codexSelection = {
   instanceId: codexInstanceId,
@@ -348,7 +357,7 @@ function makeMemoryOnlyCredentialOptions() {
     revoked,
     issueMcpCredential: (request: (typeof requests)[number]) => {
       requests.push(request);
-      if (request.capabilities?.has("preview")) return Effect.succeed(undefined);
+      if (!request.capabilities?.has("memory")) return Effect.succeed(undefined);
       return Effect.succeed({
         config: {
           environmentId: EnvironmentId.make("environment-test"),
@@ -519,6 +528,8 @@ function makeLayer(
     | "botMemoryStore"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
+  settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
+  settingsLayer?: Layer.Layer<ServerSettingsService>,
 ) {
   return makeAgentControllerLive({
     makeMastraHarness: factory,
@@ -534,11 +545,12 @@ function makeLayer(
         close: async () => undefined,
       })),
   }).pipe(
-    Layer.provide(
+    Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(LegacyProviderBridge, bridge),
         Layer.succeed(BotUsageLedger, usageLedger),
         Layer.mock(EntityMemoryRepository)({}),
+        settingsLayer ?? serverSettingsLayerTest(settingsOverrides ?? {}),
         ServerConfig.layerTest(
           process.cwd(),
           baseDir ?? { prefix: "akeru-mastra-controller-test-" },
@@ -549,7 +561,7 @@ function makeLayer(
 }
 
 function provideController<A, E>(
-  effect: Effect.Effect<A, E, AgentController>,
+  effect: Effect.Effect<A, E, AgentController | ServerSettingsService>,
   bridge: ProviderServiceShape,
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
@@ -564,9 +576,23 @@ function provideController<A, E>(
     | "makeBotBrowser"
     | "botMemoryStore"
   >,
+  settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
+  settingsLayer?: Layer.Layer<ServerSettingsService>,
 ) {
   return effect.pipe(
-    Effect.provide(makeLayer(bridge, factory, makeMcpManager, baseDir, usageLedger, overrides)),
+    Effect.provide(
+      makeLayer(
+        bridge,
+        factory,
+        makeMcpManager,
+        baseDir,
+        usageLedger,
+        overrides,
+        undefined,
+        settingsOverrides,
+        settingsLayer,
+      ),
+    ),
     Effect.orDie,
   );
 }
@@ -1539,6 +1565,396 @@ describe("AgentControllerLive", () => {
     },
   );
 
+  it.effect("honors the Memory setting per turn on the Mastra path", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-memory-toggle-mastra-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-memory-toggle-mastra");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: codexThreadId,
+      projectId: ProjectId.make("project-memory-toggle-mastra"),
+      workspaceRoot: "/workspace/memory-toggle-mastra",
+      botId,
+      groupId: null,
+      respondingBotId: botId,
+      groupMemberBotIds: [],
+    } as const;
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* resolveCodex(controller);
+        yield* Effect.promise(() =>
+          botMemoryStore.mutate({
+            ...access,
+            target: "user",
+            operations: [{ action: "add", content: "The user prefers vim." }],
+          }),
+        );
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: access,
+        });
+        const reserve = vi.spyOn(botMemoryStore, "reserveReviewCadence");
+        const readSnapshot = vi.spyOn(botMemoryStore, "readPromptSnapshot");
+
+        // While Memory is on, the admitted turn supplies the durable snapshot.
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Remember this turn." });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+        expect(mastra.session.state.get().persistentMemoryContext).toContain("<user-memory>");
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+
+        const awaitNextCompletedTurn = () =>
+          controller.streamEvents.pipe(
+            Stream.filter((event) => event.type === "turn.completed"),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
+
+        // Toggling Memory off mid-session must stop snapshot reads and review
+        // reservations for the very next turn, and remove the memory tool.
+        yield* settings.updateSettings({ memory: { enabled: false } });
+        const offTurn = yield* awaitNextCompletedTurn();
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "No memory now." });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(2));
+        mastra.finishSend();
+        yield* Fiber.join(offTurn);
+        expect(readSnapshot).toHaveBeenCalledTimes(1);
+        expect(reserve).toHaveBeenCalledTimes(1);
+        expect(mastra.session.state.get()).not.toHaveProperty("persistentMemoryContext");
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).not.toContain(
+          "memory",
+        );
+
+        // Turning Memory back on restores the snapshot on the next turn.
+        yield* settings.updateSettings({ memory: { enabled: true } });
+        const restoredTurn = yield* awaitNextCompletedTurn();
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Memory again." });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(3));
+        expect(mastra.session.state.get().persistentMemoryContext).toContain("<user-memory>");
+        mastra.finishSend();
+        yield* Fiber.join(restoredTurn);
+        expect(readSnapshot).toHaveBeenCalledTimes(2);
+        expect(reserve).toHaveBeenCalledTimes(2);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+      ),
+    );
+  });
+
+  it.effect("honors the Memory setting per turn on the legacy provider path", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-memory-toggle-legacy-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-memory-toggle-legacy");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: claudeThreadId,
+      projectId: ProjectId.make("project-memory-toggle-legacy"),
+      workspaceRoot: "/workspace/memory-toggle-legacy",
+      botId,
+      groupId: null,
+      respondingBotId: botId,
+      groupMemberBotIds: [],
+    } as const;
+    const credentials = makeMemoryOnlyCredentialOptions();
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* Effect.promise(() =>
+          botMemoryStore.mutate({
+            ...access,
+            target: "user",
+            operations: [{ action: "add", content: "The user prefers vim." }],
+          }),
+        );
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+          memoryAccess: access,
+        });
+        const reserve = vi.spyOn(botMemoryStore, "reserveReviewCadence");
+        const readSnapshot = vi.spyOn(botMemoryStore, "readPromptSnapshot");
+
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "First legacy turn." });
+        expect(bridge.sendTurn).toHaveBeenCalledTimes(1);
+        expect(bridge.sendTurn.mock.calls[0]?.[0].persistentMemoryContext).toContain(
+          "<user-memory>",
+        );
+
+        yield* settings.updateSettings({ memory: { enabled: false } });
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "Memory off turn." });
+        expect(bridge.sendTurn).toHaveBeenCalledTimes(2);
+        expect(bridge.sendTurn.mock.calls[1]?.[0].persistentMemoryContext ?? "").not.toContain(
+          "<user-memory>",
+        );
+        expect(reserve).toHaveBeenCalledTimes(1);
+        expect(readSnapshot).toHaveBeenCalledTimes(1);
+
+        yield* settings.updateSettings({ memory: { enabled: true } });
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "Memory back on." });
+        expect(bridge.sendTurn).toHaveBeenCalledTimes(3);
+        expect(bridge.sendTurn.mock.calls[2]?.[0].persistentMemoryContext).toContain(
+          "<user-memory>",
+        );
+        expect(reserve).toHaveBeenCalledTimes(2);
+        expect(readSnapshot).toHaveBeenCalledTimes(2);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore, ...credentials },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          McpMemoryToolSession.clearMcpMemoryToolSession(claudeThreadId);
+          NodeFS.rmSync(memoryDir, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
+
+  it.effect("denies the legacy MCP memory tool while Memory is off and restores it on re-enable", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mcp-gate-legacy-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-mcp-gate-legacy");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: claudeThreadId,
+      projectId: ProjectId.make("project-mcp-gate-legacy"),
+      workspaceRoot: "/workspace/mcp-gate-legacy",
+      botId,
+      groupId: null,
+      respondingBotId: botId,
+      groupMemberBotIds: [],
+    } as const;
+    const credentials = makeMemoryOnlyCredentialOptions();
+    const callMemoryTool = (input: { target: string; operations: Array<unknown> }) =>
+      Effect.tryPromise({
+        try: () => {
+          const handler = McpMemoryToolSession.readMcpMemoryToolSession(claudeThreadId);
+          assert.isDefined(handler);
+          return handler({
+            threadId: String(claudeThreadId),
+            toolId: "memory",
+            toolCallId: `mcp-memory-${NodeCrypto.randomUUID()}`,
+            input,
+            approvalMode: "require-grant",
+          });
+        },
+        catch: (cause) =>
+            new MemoryToolCallError({ cause: cause instanceof Error ? cause : new Error(String(cause)) }),
+      });
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+          memoryAccess: access,
+        });
+
+        const enabled = yield* callMemoryTool({
+          target: "user",
+          operations: [{ action: "add", content: "The user prefers vim." }],
+        });
+        expect(enabled).toMatchObject({ success: true, changed: true });
+
+        // The handler stays registered between turns, so it must re-check the
+        // Memory setting on every call.
+        yield* settings.updateSettings({ memory: { enabled: false } });
+        const denied = yield* callMemoryTool({
+          target: "user",
+          operations: [],
+        }).pipe(Effect.result);
+        assert.equal(denied._tag, "Failure");
+        expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain("disabled");
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "Memory off turn." });
+        const deniedDuringTurn = yield* callMemoryTool({
+          target: "user",
+          operations: [],
+        }).pipe(Effect.result);
+        assert.equal(deniedDuringTurn._tag, "Failure");
+        expect(deniedDuringTurn._tag === "Failure" ? deniedDuringTurn.failure.cause.message : "").toContain("disabled");
+
+        yield* settings.updateSettings({ memory: { enabled: true } });
+        const restored = yield* callMemoryTool({ target: "user", operations: [] });
+        expect(restored).toMatchObject({
+          success: true,
+          content: "The user prefers vim.",
+        });
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore, ...credentials },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          McpMemoryToolSession.clearMcpMemoryToolSession(claudeThreadId);
+          NodeFS.rmSync(memoryDir, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
+
+  it.effect("applies the Private bot memory toggle mid-session on the legacy path", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-private-toggle-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-private-toggle-legacy");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: claudeThreadId,
+      projectId: ProjectId.make("project-private-toggle-legacy"),
+      workspaceRoot: "/workspace/private-toggle-legacy",
+      botId,
+      groupId: null,
+      respondingBotId: botId,
+      groupMemberBotIds: [],
+    } as const;
+    const credentials = makeMemoryOnlyCredentialOptions();
+    const callMemoryTool = (input: { target: string; operations: Array<unknown> }) =>
+      Effect.tryPromise({
+        try: () => {
+          const handler = McpMemoryToolSession.readMcpMemoryToolSession(claudeThreadId);
+          assert.isDefined(handler);
+          return handler({
+            threadId: String(claudeThreadId),
+            toolId: "memory",
+            toolCallId: `mcp-memory-${NodeCrypto.randomUUID()}`,
+            input,
+            approvalMode: "require-grant",
+          });
+        },
+        catch: (cause) =>
+            new MemoryToolCallError({ cause: cause instanceof Error ? cause : new Error(String(cause)) }),
+      });
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* Effect.promise(() =>
+          botMemoryStore.mutate({
+            ...access,
+            target: "memory",
+            operations: [{ action: "add", content: "Bot-private note." }],
+          }),
+        );
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+          memoryAccess: access,
+        });
+
+        const privateRead = yield* callMemoryTool({ target: "memory", operations: [] });
+        expect(privateRead).toMatchObject({ success: true, content: "Bot-private note." });
+
+        // Turning Private bot memory off mid-session removes MEMORY.md from the
+        // prompt and denies the bot-private target on the existing handler.
+        yield* settings.updateSettings({ memory: { privateBotMemory: false } });
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "Private off turn." });
+        expect(bridge.sendTurn).toHaveBeenCalledTimes(1);
+        const context = bridge.sendTurn.mock.calls[0]?.[0].persistentMemoryContext ?? "";
+        expect(context).not.toContain("<bot-memory>");
+        expect(context).not.toContain("Bot-private note.");
+        const denied = yield* callMemoryTool({ target: "memory", operations: [] }).pipe(
+          Effect.result,
+        );
+        assert.equal(denied._tag, "Failure");
+        expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain("Private bot memory is disabled.");
+        const userStillAllowed = yield* callMemoryTool({ target: "user", operations: [] });
+        expect(userStillAllowed).toMatchObject({ success: true });
+
+        yield* settings.updateSettings({ memory: { privateBotMemory: true } });
+        const restoredRead = yield* callMemoryTool({ target: "memory", operations: [] });
+        expect(restoredRead).toMatchObject({ success: true, content: "Bot-private note." });
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "Private on again." });
+        expect(bridge.sendTurn.mock.calls[1]?.[0].persistentMemoryContext).toContain(
+          "Bot-private note.",
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore, ...credentials },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          McpMemoryToolSession.clearMcpMemoryToolSession(claudeThreadId);
+          NodeFS.rmSync(memoryDir, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
+
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
     const layer = makeAgentControllerLive().pipe(
@@ -1909,6 +2325,125 @@ describe("AgentControllerLive", () => {
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("drops a Mastra admission interrupted while the memory settings read is held", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-admit-gate-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-mastra-admit-gate");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: codexThreadId,
+      projectId: ProjectId.make("project-mastra-admit-gate"),
+      workspaceRoot: "/workspace/mastra-admit-gate",
+      botId,
+      groupId: null,
+      respondingBotId: botId,
+      groupMemberBotIds: [],
+    } as const;
+    const disabledMemorySettings: ServerSettings = {
+      ...DEFAULT_SERVER_SETTINGS,
+      memory: { ...DEFAULT_SERVER_SETTINGS.memory, enabled: false },
+    };
+    const sessionInput = {
+      threadId: codexThreadId,
+      provider: ProviderDriverKind.make("codex"),
+      providerInstanceId: codexInstanceId,
+      modelSelection: codexSelection,
+      runtimeMode: "full-access" as const,
+      memoryAccess: access,
+    };
+
+    const gate = Deferred.makeUnsafe<void>();
+    const reached = Deferred.makeUnsafe<void>();
+    let holdNextGetSettings = false;
+    const gatedSettingsLayer = Layer.succeed(ServerSettingsService, {
+      start: Effect.void,
+      ready: Effect.void,
+      getSettings: Effect.suspend(() =>
+        holdNextGetSettings
+          ? Effect.sync(() => {
+              Deferred.doneUnsafe(reached, Effect.void);
+            }).pipe(
+              Effect.andThen(Deferred.await(gate)),
+              Effect.as(disabledMemorySettings),
+            )
+          : Effect.succeed(disabledMemorySettings),
+      ),
+      updateSettings: () => Effect.die("not used"),
+      streamChanges: Stream.empty,
+      subscribeChanges: Effect.succeed(Stream.empty),
+    });
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, sessionInput);
+      holdNextGetSettings = true;
+      yield* controller.sendTurn({ threadId: codexThreadId, input: "Interrupt me." });
+      yield* Deferred.await(reached);
+
+      // Collect turn.started events for the rest of the test so we can prove
+      // the cancelled admission never begins a turn.
+      const startedEvents: TurnId[] = [];
+      const startedFiber = yield* controller.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.started"),
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            if (event.turnId) startedEvents.push(event.turnId);
+          }),
+        ),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* controller.interruptTurn({ threadId: codexThreadId });
+      const next = yield* controller.sendTurn({
+        threadId: codexThreadId,
+        input: "Replacement turn.",
+      });
+      // Admission of the replacement is queued behind the held settings read.
+      assert.equal(mastra.sendMessage.mock.calls.length, 0);
+
+      Deferred.doneUnsafe(gate, Effect.void);
+      yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+      mastra.finishSend();
+      yield* Effect.yieldNow;
+
+      // The interrupted admission must never reach sendMessage or displace the
+      // replacement turn's state.
+      assert.equal(mastra.sendMessage.mock.calls.length, 1);
+      expect(mastra.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expect.stringContaining("Replacement turn."),
+        }),
+      );
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(startedFiber);
+      assert.deepEqual(startedEvents, [next.turnId] as TurnId[]);
+    }).pipe(
+      Effect.provide(
+        makeLayer(
+          bridge.service,
+          mastra.factory,
+          undefined,
+          undefined,
+          undefined,
+          { botMemoryStore },
+          undefined,
+          undefined,
+          gatedSettingsLayer,
+        ),
+      ),
+      Effect.orDie,
+      Effect.ensuring(
+        Effect.sync(() => {
+          NodeFS.rmSync(memoryDir, { recursive: true, force: true });
+        }),
+      ),
     );
   });
 

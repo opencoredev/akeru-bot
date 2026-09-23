@@ -526,6 +526,12 @@ export const AkeruMemoryMutation = Schema.Union([
     scope: AkeruMemoryTargetScope,
   }),
   Schema.Struct({
+    operation: Schema.Literal("fact.decide"),
+    memoryId: AkeruMemoryRootId,
+    expectedRevision: PositiveInt,
+    decision: Schema.Literals(["approve", "reject"]),
+  }),
+  Schema.Struct({
     operation: Schema.Literal("fact.forget"),
     memoryId: AkeruMemoryRootId,
     expectedRevision: PositiveInt,
@@ -552,6 +558,31 @@ export const AkeruMemoryMutationResult = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("conversation-cleared") }),
 ]);
 export type AkeruMemoryMutationResult = typeof AkeruMemoryMutationResult.Type;
+
+export const AkeruMemoryFactsListInput = Schema.Struct({
+  threadId: ThreadId,
+  target: AkeruMemoryArchiveTarget,
+});
+export type AkeruMemoryFactsListInput = typeof AkeruMemoryFactsListInput.Type;
+
+export const AkeruMemoryFactRead = Schema.Struct({
+  rootId: AkeruMemoryRootId,
+  fact: TrimmedNonEmptyString,
+  scope: AkeruMemoryScope,
+  sourceThreadId: Schema.NullOr(ThreadId),
+  affectedBotIds: Schema.Array(BotId),
+  approvalState: AkeruMemoryApprovalState,
+  deletionState: AkeruMemoryDeletionState,
+  pinned: Schema.Boolean,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  revision: PositiveInt,
+  supersededFact: Schema.NullOr(Schema.String),
+});
+export type AkeruMemoryFactRead = typeof AkeruMemoryFactRead.Type;
+
+export const AkeruMemoryFactsListResult = Schema.Struct({ facts: Schema.Array(AkeruMemoryFactRead) });
+export type AkeruMemoryFactsListResult = typeof AkeruMemoryFactsListResult.Type;
 
 export class AkeruMemoryOperationError extends Schema.TaggedErrorClass<AkeruMemoryOperationError>()(
   "AkeruMemoryOperationError",

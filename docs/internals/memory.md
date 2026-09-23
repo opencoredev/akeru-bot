@@ -111,6 +111,49 @@ without re-running its private migration.
 
 ## Archive format
 
+The T17 memory facts view reads current durable facts through `memory.facts.list`.
+Its input is `{ threadId, target }` and its result is `{ facts }`, containing only
+fact metadata and text. The RPC requires read scope; writes continue to use the
+durable repository authorization path.
+
+`memory.facts.mutate` serves the durable-fact edits the view needs: it accepts
+`{ threadId, mutation }` where the mutation is one of `fact.edit` (`{ fact }`),
+`fact.pin` (`{ pinned }`), `fact.scope` (`{ scope }`), `fact.decide`
+(`{ decision: "approve" | "reject" }`), `fact.forget`, or `fact.delete`. Every
+mutation carries `memoryId` (the root) and `expectedRevision` for optimistic
+concurrency. Edits, pins, scope moves, decisions, and forgets are recorded as
+new revisions on the same root (a tombstone for forget); delete removes the
+root and its history outright. The result is `{ kind: "revision", revision }`
+or `{ kind: "deleted", memoryId }`. Each write goes through the M1-T11
+`authorizeRevision` ownership checks, re-resolves the target scope's partition
+against the same thread context for scope changes, and deletes the root's
+`akeru_memory_derived_copies` rows so packet and summary readers rebuild from
+the new chain. The RPC requires the operate scope.
+
+Server settings carry the durable memory switches as `settings.memory`:
+`enabled` ("Memory on", default true), `privateBotMemory` ("Private bot memory
+on", default true), and `sharedProjectMemory` ("Shared project memory",
+`"ask"` or `"auto"`, default `"ask"`). With `"ask"`, a fact moved onto a
+shared project partition lands `pending` and must be approved through
+`fact.decide` before it joins current recall. The settings hold no embedding
+or model configuration; durable memory is not a model feature.
+
+`enabled === false` rejects every `memory.facts.mutate` write and
+`memory.document.replace` write at the WS boundary, and the agent controller
+withholds the bot's whole memory prompt snapshot and memory tool. Listing,
+export, forget, and delete remain available so the user can still inspect and
+clean up stored facts.
+
+`privateBotMemory === false` narrows that gate to the bot-private scope. The
+memory tool loses its `memory` (bot-private `MEMORY.md`) target, the
+`MEMORY.md` section is omitted from the prompt snapshot supplied on every
+turn (including legacy-adapter sessions), `memory.document.replace` rejects
+writes to the `memory` target, and `memory.facts.mutate` rejects
+`fact.scope` moves onto `private`/`bot` partitions. Reads are unaffected:
+`memory.facts.list`, archive export, and `memory.documents.inspect` still
+return existing bot-private facts and notes so the user can forget or delete
+them.
+
 The memory archive schema is version 3. It binds file paths, scope IDs, file checksums, the
 observational snapshot checksum, and a manifest checksum. Preview validates all files and produces a
 hash of the archive plus current destination state. Apply recomputes it and refuses stale previews.
@@ -147,3 +190,17 @@ resolutions for every conflict. The older `memory.documents.*` RPCs remain avail
 Markdown document archives and compatibility imports.
 All-scope archives are export-only: import must target one authority domain so ownership can be
 validated without granting a combined archive access across unrelated users or workspaces.
+
+Clients read durable facts through `memory.facts.list` for one thread, bot, or
+project scope. The server collapses each root to its current revision, including
+pending, rejected, and forgotten facts, and fills `supersededFact` from the previous
+revision's text; chat snapshots never cross the wire on this path. Client action
+rules (`durableFactActions`, `durableFactMutation`) live in
+`packages/client-runtime/src/durableMemory.ts` and always send the fact's
+`expectedRevision`, so a stale edit fails with a revision conflict instead of
+overwriting a newer one. Mutations go through
+`memory.facts.mutate`. The remaining `AkeruMemoryMutation` variants
+(`candidate.decide`, `conversation.clear`) exist in contracts but are not
+served over WebSocket.
+Import review lives in the same module: `resolveImportConflicts` has no default decision and
+returns resolutions only after every conflicting root has one.

@@ -1,4 +1,9 @@
-import { type EnvironmentId, type ThreadId, WS_METHODS } from "@t3tools/contracts";
+import {
+  type AkeruMemoryFactsListInput,
+  type EnvironmentId,
+  type ThreadId,
+  WS_METHODS,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { Atom, type AtomRegistry } from "effect/unstable/reactivity";
 
@@ -8,6 +13,11 @@ import {
   createEnvironmentRpcCommand,
   createEnvironmentRpcQueryAtomFamily,
 } from "./runtime.ts";
+
+/** Targets a durable fact view can list. A mutation refreshes all of them for its chat. */
+const LISTED_FACT_TARGETS = ["thread", "bot", "project"] as const satisfies ReadonlyArray<
+  AkeruMemoryFactsListInput["target"]
+>;
 
 export function createMemoryEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
@@ -44,8 +54,58 @@ export function createMemoryEnvironmentAtoms<R, E>(
       ),
     );
 
+  const listFacts = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:memory:facts:list",
+    tag: WS_METHODS.memoryFactsList,
+    staleTimeMs: 5_000,
+  });
+  // A scope move changes which list a fact belongs to, so every list for the chat goes stale.
+  const refreshFacts = (
+    target: {
+      readonly environmentId: EnvironmentId;
+      readonly input: { readonly threadId: ThreadId };
+    },
+    registry: AtomRegistry.AtomRegistry,
+  ) =>
+    Effect.sync(() => {
+      for (const listTarget of LISTED_FACT_TARGETS) {
+        registry.refresh(
+          listFacts({
+            environmentId: target.environmentId,
+            input: { threadId: target.input.threadId, target: listTarget },
+          }),
+        );
+      }
+    });
+
   return {
     inspectDocuments,
+    listFacts,
+    mutateFact: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:facts:mutate",
+      tag: WS_METHODS.memoryFactMutate,
+      scheduler,
+      concurrency,
+      onSettled: refreshFacts,
+    }),
+    exportDurableArchive: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:durable:export",
+      tag: WS_METHODS.memoryArchiveExport,
+      scheduler,
+    }),
+    previewDurableImport: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:durable:import-preview",
+      tag: WS_METHODS.memoryArchivePreviewImport,
+      scheduler,
+      concurrency,
+    }),
+    applyDurableImport: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:durable:import-apply",
+      tag: WS_METHODS.memoryArchiveApplyImport,
+      scheduler,
+      concurrency,
+      onSettled: refreshFacts,
+    }),
     replaceDocument: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:memory:document:replace",
       tag: WS_METHODS.memoryDocumentReplace,

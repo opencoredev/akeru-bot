@@ -133,6 +133,17 @@ describe("searchSettings", () => {
     });
   });
 
+  it("routes memory controls to Privacy settings", () => {
+    expect(searchSettings("shared project memory")[0]).toMatchObject({
+      id: "memory-shared-project",
+      to: "/settings/privacy",
+    });
+    expect(searchSettings("private bot memory")[0]).toMatchObject({
+      id: "memory-private-bot",
+      to: "/settings/privacy",
+    });
+  });
+
   it("finds image generation separately from chat providers", () => {
     expect(searchSettings("image generation")[0]).toMatchObject({
       id: "image-generation",

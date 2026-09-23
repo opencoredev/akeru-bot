@@ -84,6 +84,10 @@
       "types": "./src/settingsDeepLink.ts",
       "default": "./src/settingsDeepLink.ts"
     },
+    "./durable-memory": {
+      "types": "./src/durableMemory.ts",
+      "default": "./src/durableMemory.ts"
+    },
     "./bot-inbox": {
       "types": "./src/botInbox.ts",
       "default": "./src/botInbox.ts"

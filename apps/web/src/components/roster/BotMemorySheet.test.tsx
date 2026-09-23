@@ -21,6 +21,17 @@ describe("BotMemorySheet", () => {
     expect(source).toContain('role="alert"');
   });
 
+  it("keeps durable facts in their own section apart from chat memory", () => {
+    const source = NodeFS.readFileSync(new URL("./BotMemorySheet.tsx", import.meta.url), "utf8");
+    const durable = NodeFS.readFileSync(new URL("./BotDurableMemory.tsx", import.meta.url), "utf8");
+    expect(source.indexOf("Observational memory")).toBeLessThan(
+      source.indexOf("<BotDurableMemory"),
+    );
+    expect(durable).toContain("Durable facts");
+    expect(durable).toContain("DURABLE_MEMORY_INSPECT_SCOPES");
+    expect(durable).toContain("Clearing chat observations does not remove them.");
+  });
+
   it("keeps server failures and falls back for unknown errors", () => {
     expect(memoryErrorMessage(new Error("Memory is too large."))).toBe("Memory is too large.");
     expect(memoryErrorMessage(null)).toBe("Memory request failed.");

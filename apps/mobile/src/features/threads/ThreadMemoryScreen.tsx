@@ -1,3 +1,11 @@
+import {
+  DURABLE_FACT_DELETE_CONFIRM,
+  type DurableFactIntent,
+  type DurableMemoryExportScope,
+  type DurableMemoryFact,
+  describeDurableFactFailure,
+  durableFactMutation,
+} from "@t3tools/client-runtime/durable-memory";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type {
   AkeruMemoryDocument,
@@ -6,15 +14,21 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { useRoute, type RouteProp } from "@react-navigation/native";
-import { useEffect, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
 import { useThemeColor } from "../../lib/useThemeColor";
+import { useBotNames } from "../../state/bots";
+import { useThreadTitles } from "../../state/entities";
 import { memoryEnvironment } from "../../state/memory";
 import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
+import { useEnvironmentOperateAccess } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { DurableFactsCard } from "./DurableFactsCard";
 
 type MemoryRouteParams = {
   readonly ThreadSettingsMemory: {
@@ -108,6 +122,70 @@ export function ThreadMemoryScreen() {
     reportFailure: false,
   });
   const [busy, setBusy] = useState(false);
+  const [durableScope, setDurableScope] = useState<DurableMemoryExportScope>("bot");
+  const durableQuery = useEnvironmentQuery(
+    memoryEnvironment.listFacts({
+      environmentId,
+      input: { threadId, target: durableScope },
+    }),
+  );
+  const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
+  const operateAccess = useEnvironmentOperateAccess(environmentId);
+  const memorySettings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId))?.memory;
+  const factPolicy = useMemo(
+    () =>
+      // Wait for both operate access and settings, so actions never flash in and out.
+      operateAccess === "pending" || !memorySettings
+        ? null
+        : {
+            canOperate: operateAccess === "granted",
+            memoryEnabled: memorySettings.enabled,
+            privateBotMemory: memorySettings.privateBotMemory,
+          },
+    [operateAccess, memorySettings],
+  );
+  const durableFacts = durableQuery.data?.facts;
+  const threadTitles = useThreadTitles(
+    useMemo(
+      () => [
+        ...new Set(
+          (durableFacts ?? []).flatMap((fact) =>
+            fact.sourceThreadId === null ? [] : [fact.sourceThreadId],
+          ),
+        ),
+      ],
+      [durableFacts],
+    ),
+  );
+  const botNames = useBotNames(
+    useMemo(
+      () => [...new Set((durableFacts ?? []).flatMap((fact) => fact.affectedBotIds))],
+      [durableFacts],
+    ),
+  );
+  const [busyFactRootId, setBusyFactRootId] = useState<string | null>(null);
+  const [factEdit, setFactEdit] = useState<{ rootId: string; draft: string } | null>(null);
+  const [factFailure, setFactFailure] = useState<string | null>(null);
+  const runFactIntent = async (fact: DurableMemoryFact, intent: DurableFactIntent) => {
+    setBusyFactRootId(fact.rootId);
+    setFactFailure(null);
+    try {
+      const result = await mutateFact({
+        environmentId,
+        input: { threadId, mutation: durableFactMutation(fact, intent) },
+      });
+      if (result._tag === "Failure") {
+        const described = describeDurableFactFailure(squashAtomCommandFailure(result));
+        setFactFailure(described.message);
+        // A stale edit would overwrite the newer text, so drop it with the old revision.
+        if (described.conflict) setFactEdit(null);
+        return;
+      }
+      setFactEdit(null);
+    } finally {
+      setBusyFactRootId(null);
+    }
+  };
   const previousObservations = query.data?.conversation.current
     ? query.data.conversation.history.filter(
         (item) => item.generationCount !== query.data!.conversation.current!.generationCount,
@@ -173,7 +251,8 @@ export function ThreadMemoryScreen() {
           <View className="gap-3 rounded-2xl bg-card p-4">
             <Text className="font-t3-bold text-foreground">Observational memory</Text>
             <Text className="text-xs text-foreground-muted">
-              Automatic summaries of this chat, kept separate from the Markdown files.
+              Automatic summaries of this chat only. Clearing them keeps the bot, its notes, and
+              durable facts.
             </Text>
             <Text className="text-sm text-foreground">
               {query.data.conversation.current?.activeObservations ?? "No observations yet."}
@@ -221,6 +300,41 @@ export function ThreadMemoryScreen() {
               <Text className="font-t3-medium text-foreground">Clear observations</Text>
             </Pressable>
           </View>
+          <DurableFactsCard
+            botNames={botNames}
+            busyRootId={busyFactRootId}
+            currentBotId={query.data.botId}
+            currentThreadId={threadId}
+            editing={factEdit}
+            error={durableQuery.error}
+            facts={durableQuery.data?.facts ?? null}
+            failure={factFailure}
+            isPending={durableQuery.isPending}
+            policy={factPolicy}
+            onCancelEdit={() => setFactEdit(null)}
+            onDraftChange={(draft) =>
+              setFactEdit((current) => (current ? { ...current, draft } : current))
+            }
+            onIntent={(fact, intent) => void runFactIntent(fact, intent)}
+            onRequestDelete={(fact) =>
+              Alert.alert(DURABLE_FACT_DELETE_CONFIRM.title, DURABLE_FACT_DELETE_CONFIRM.message, [
+                { text: DURABLE_FACT_DELETE_CONFIRM.cancel, style: "cancel" },
+                {
+                  text: DURABLE_FACT_DELETE_CONFIRM.confirm,
+                  style: "destructive",
+                  onPress: () => void runFactIntent(fact, { action: "delete" }),
+                },
+              ])
+            }
+            onScopeChange={(scope) => {
+              setFactEdit(null);
+              setFactFailure(null);
+              setDurableScope(scope);
+            }}
+            onStartEdit={(fact) => setFactEdit({ rootId: fact.rootId, draft: fact.fact })}
+            scope={durableScope}
+            threadTitles={threadTitles}
+          />
         </>
       ) : null}
     </ScrollView>

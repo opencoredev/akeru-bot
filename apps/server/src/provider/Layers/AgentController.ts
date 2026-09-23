@@ -241,6 +241,7 @@ interface ActiveSession {
   memoryAccess: BotMemoryAccess | undefined;
   configuredToolSession: AkeruToolSession;
   configuredMemoryAccess: BotMemoryAccess | undefined;
+  privateBotMemory: boolean;
   readonly workspaceResourceKey: string;
   readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
@@ -275,6 +276,7 @@ interface LegacyResourceIdentity {
   readonly botName: string | undefined;
   readonly personalityTone: BotPersonalityTone;
   readonly memoryAccessKey: string | undefined;
+  privateBotMemory: boolean;
 }
 
 export interface AgentControllerLiveOptions {
@@ -906,19 +908,45 @@ const make = (options?: AgentControllerLiveOptions) =>
     };
     const memoryHandlers = (
       access: AkeruMemoryThreadAccess | undefined,
-      allowedScopes?: AkeruDelegationAccessGrant["memoryScopes"],
+      allowedScopes: AkeruDelegationAccessGrant["memoryScopes"],
     ) => {
       const resolved = memoryAccessFor(access);
       if (!resolved) return undefined;
-      const scopes = new Set(allowedScopes ?? ["private", "bot", "group"]);
+      const scopes = new Set(allowedScopes);
       const targets = new Set<AkeruMemoryDocumentTarget>();
       if (scopes.has("private")) targets.add("user");
       if (scopes.has("bot")) targets.add("memory");
       if (resolved.groupId !== null && scopes.has("group")) targets.add("group");
-      return targets.size > 0
-        ? createBotMemoryToolHandler(botMemoryStore, resolved, targets)
-        : undefined;
+      if (targets.size === 0) return undefined;
+      const handler = createBotMemoryToolHandler(botMemoryStore, resolved, targets).memory;
+      // The memory settings gate is enforced at call time: a handler captured
+      // while Memory was on must deny calls after it is turned off, and a
+      // "Private bot memory" toggle applies without rebuilding the session.
+      const guarded: AkeruMemoryToolHandler = async (input) => {
+        const settings = await runPromise(memorySettings());
+        if (!settings.enabled) {
+          throw new Error("Bot memory is disabled.");
+        }
+        if (!settings.privateBotMemory) {
+          const { target } = input.input as { readonly target?: AkeruMemoryDocumentTarget };
+          if (target === "memory") {
+            throw new Error("Private bot memory is disabled.");
+          }
+        }
+        return handler(input);
+      };
+      return { memory: guarded };
     };
+    const memorySettings = () =>
+      Option.isSome(serverSettings)
+        ? serverSettings.value.getSettings.pipe(
+            Effect.map((settings) => ({
+              enabled: settings.memory.enabled,
+              privateBotMemory: settings.memory.privateBotMemory,
+            })),
+            Effect.orElseSucceed(() => ({ enabled: true, privateBotMemory: true })),
+          )
+        : Effect.succeed({ enabled: true, privateBotMemory: true });
     const memoryAccessKey = (access: BotMemoryAccess | undefined): string | undefined =>
       access ? `${access.botId}:${access.groupId ?? "private"}` : undefined;
     const legacyResourceIdentity = new Map<string, LegacyResourceIdentity>();
@@ -1488,22 +1516,35 @@ const make = (options?: AgentControllerLiveOptions) =>
     const startAdmittedPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
       const { threadId, turnId, message } = pending;
       if (active.admittingTurn?.turnId !== turnId) return;
-      active.toolSession = pending.toolSession;
-      active.memoryAccess = pending.memoryAccess;
-      let dispatch: Promise<void>;
-      if (!active.memoryAccess) {
-        toolRuntime.registerSession(String(threadId), active.toolSession);
-        active.admittingTurn = null;
-        beginPendingTurn(active, pending);
-        const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
-        dispatch = persistentMemoryContext
-          ? active.session.state
-              .set(stateWithoutMemory)
-              .then(() => active.session.sendMessage(message))
-          : active.session.sendMessage(message);
-      } else {
-        dispatch = (async () => {
-          const memoryAccess = active.memoryAccess!;
+      const dispatch: Promise<void> = (async () => {
+        const settings = pending.memoryAccess ? await runPromise(memorySettings()) : undefined;
+        // The settings read is asynchronous; the turn may have been interrupted
+        // while it was pending. Only mutate session state if this admission
+        // still owns the turn.
+        if (active.admittingTurn?.turnId !== turnId) return;
+        const memoryAccess =
+          pending.memoryAccess && settings?.enabled ? pending.memoryAccess : undefined;
+        if (settings) active.privateBotMemory = settings.privateBotMemory;
+        active.memoryAccess = memoryAccess;
+        if (!memoryAccess) {
+          // No durable memory this turn: drop any memory tool handler captured
+          // when the turn was queued so the bot cannot read or change facts.
+          const toolSession = { ...pending.toolSession };
+          delete toolSession.memoryHandlers;
+          active.toolSession = toolSession;
+          toolRuntime.registerSession(String(threadId), active.toolSession);
+          const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
+          if (persistentMemoryContext) {
+            await active.session.state.set(stateWithoutMemory);
+          }
+          if (active.admittingTurn?.turnId !== turnId) return;
+          active.admittingTurn = null;
+          beginPendingTurn(active, pending);
+          await active.session.sendMessage(message);
+          return;
+        }
+        {
+          active.toolSession = pending.toolSession;
           const memoryTurn = await memoryTurnHarness.admit({
             access: memoryAccess,
             input: {
@@ -1511,6 +1552,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               groupId: memoryAccess.groupId === null ? null : String(memoryAccess.groupId),
               text: pending.reviewInput.slice(0, 4_000),
             },
+            privateBotMemory: active.privateBotMemory,
           });
           const reservationKey = mastraReservationKey(threadId, turnId);
           mastraMemoryTurns.set(reservationKey, memoryTurn);
@@ -1551,8 +1593,8 @@ const make = (options?: AgentControllerLiveOptions) =>
               mastraMemoryTurns.delete(reservationKey);
             }
           }
-        })();
-      }
+        }
+      })();
       void dispatch
         .then(() => {
           const turn = active.activeTurn;
@@ -2303,6 +2345,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.delegation;
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
+        const settings = yield* memorySettings();
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
             ? memoryHandlers(input.memoryAccess, access.memoryScopes)
@@ -2331,6 +2374,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.configuredMemoryAccess = delegatedAccess
           ? undefined
           : memoryAccessFor(input.memoryAccess);
+        existing.privateBotMemory = settings.privateBotMemory;
         if (!existing.activeTurn && !existing.admittingTurn && existing.pendingTurns.length === 0) {
           existing.toolSession = configuredToolSession;
           existing.memoryAccess = existing.configuredMemoryAccess;
@@ -2339,6 +2383,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         return toProviderSession(threadId, existing);
       }
       const existingLegacy = legacyResourceIdentity.get(key);
+      const settings = yield* memorySettings();
       const nextMemoryAccess = delegatedAccess ? undefined : memoryAccessFor(input.memoryAccess);
       const nextMemoryHandlers =
         access.memoryScopes.length > 0
@@ -2360,6 +2405,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
         if (live) {
           existingLegacy.memoryAccess = nextMemoryAccess;
+          existingLegacy.privateBotMemory = settings.privateBotMemory;
           if (nextMemoryHandlers?.memory) {
             McpMemoryToolSession.setMcpMemoryToolSession(threadId, nextMemoryHandlers.memory);
           } else {
@@ -2418,11 +2464,21 @@ const make = (options?: AgentControllerLiveOptions) =>
               }),
             ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {
-        const frozenMemoryContext = nextMemoryAccess
-          ? formatBotMemoryPrompt(
-              yield* Effect.promise(() => botMemoryStore.readPromptSnapshot(nextMemoryAccess)),
-            )
-          : "";
+        const frozenMemoryContext =
+          nextMemoryAccess && settings.enabled
+            ? formatBotMemoryPrompt(
+                yield* Effect.promise(() =>
+                  settings.privateBotMemory
+                    ? botMemoryStore.readPromptSnapshot(nextMemoryAccess)
+                    : botMemoryStore
+                        .readPromptSnapshot(nextMemoryAccess)
+                        .then((snapshot) => ({
+                          ...snapshot,
+                          memory: { ...snapshot.memory, content: "", charCount: 0 },
+                        })),
+                ),
+              )
+            : "";
         return yield* legacyProviderBridge
           .startSession(threadId, {
             ...input,
@@ -2441,6 +2497,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   personalityTone,
                   memoryAccess: nextMemoryAccess,
                   memoryAccessKey: memoryAccessKey(nextMemoryAccess),
+                  privateBotMemory: settings.privateBotMemory,
                 });
                 return session;
               }),
@@ -2659,6 +2716,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           memoryAccess: nextMemoryAccess,
           configuredToolSession: toolSession,
           configuredMemoryAccess: nextMemoryAccess,
+          privateBotMemory: settings.privateBotMemory,
           workspaceResourceKey,
           pendingApprovals: new Map<string, PendingApproval>(),
           unsubscribe,
@@ -2698,7 +2756,13 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           }
           const { botUsage: _, ...providerInput } = input;
-          const memoryAccess = legacyResourceIdentity.get(key)?.memoryAccess;
+          // memory.enabled is authoritative per turn: while it is off the turn
+          // must not read the durable snapshot or reserve review cadence. The
+          // identity keeps its stored access so re-enabling restores memory.
+          const settings = yield* memorySettings();
+          const memoryAccess = settings.enabled
+            ? legacyResourceIdentity.get(key)?.memoryAccess
+            : undefined;
           const conversation = bundle.readObservationalMemory
             ? yield* runMastra("memory.read", () => bundle.readObservationalMemory!(key, key))
             : undefined;
@@ -2718,6 +2782,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                     groupId: memoryAccess.groupId === null ? null : String(memoryAccess.groupId),
                     text: (providerInput.input ?? "").slice(0, 4_000),
                   },
+                  privateBotMemory: settings.privateBotMemory,
                 }),
               )
             : undefined;

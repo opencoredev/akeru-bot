@@ -14,6 +14,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import {
   AkeruBotUsageReadError,
+  AkeruMemoryId,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   AkeruMemoryOperationError,
@@ -3286,6 +3287,148 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "memory" },
           ),
+        [WS_METHODS.memoryFactsList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryFactsList,
+            entityMemoryRepository === null
+              ? Effect.fail(memoryOperationError("facts.list", "Durable memory is unavailable."))
+              : resolveMemoryAccess("facts.list", input.threadId).pipe(
+                  Effect.flatMap((access) =>
+                    exportAkeruMemory({
+                      repository: entityMemoryRepository,
+                      access,
+                      target: input.target,
+                      // Complete history, so pending, rejected, and forgotten facts stay
+                      // visible and actionable, and each fact can show the text it replaced.
+                      complete: true,
+                      createdAt: "1970-01-01T00:00:00.000Z",
+                      conversations: [],
+                    }).pipe(
+                      Effect.mapError((cause) => memoryOperationError("facts.list", cause)),
+                      Effect.map((archive) => {
+                        const revisions = archive.revisions.map(({ revision }) => revision);
+                        const byId = new Map(revisions.map((revision) => [revision.id, revision]));
+                        const firstCreatedAt = new Map<string, string>();
+                        for (const revision of revisions) {
+                          if (revision.revision === 1) {
+                            firstCreatedAt.set(revision.rootId, revision.createdAt);
+                          }
+                        }
+                        return {
+                          facts: revisions
+                            .filter(
+                              (revision) =>
+                                revision.supersededById === null &&
+                                revision.deletionState !== "deleted",
+                            )
+                            .map((revision) => {
+                              const previous = revision.supersedesId
+                                ? byId.get(revision.supersedesId)
+                                : undefined;
+                              return {
+                                rootId: revision.rootId,
+                                fact: revision.fact,
+                                scope: revision.partition.scope,
+                                sourceThreadId: revision.sourceThreadId,
+                                affectedBotIds: revision.affectedBotIds,
+                                approvalState: revision.approvalState,
+                                deletionState: revision.deletionState,
+                                pinned: revision.pinned,
+                                createdAt:
+                                  firstCreatedAt.get(revision.rootId) ?? revision.createdAt,
+                                updatedAt: revision.updatedAt,
+                                revision: revision.revision,
+                                supersededFact:
+                                  previous && previous.fact !== revision.fact
+                                    ? previous.fact
+                                    : null,
+                              };
+                            }),
+                        };
+                      }),
+                    ),
+                  ),
+                ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryFactMutate]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryFactMutate,
+            entityMemoryRepository === null
+              ? Effect.fail(
+                  memoryOperationError("facts.mutate", "Durable memory is unavailable."),
+                )
+              : Effect.all({
+                  access: resolveMemoryAccess("facts.mutate", input.threadId),
+                  memoryId: randomUUID.pipe(
+                    Effect.map((uuid) => AkeruMemoryId.make(`rpc:${uuid}`)),
+                  ),
+                  updatedAt: nowIso,
+                  settings: serverSettings.getSettings.pipe(
+                    Effect.mapError((cause) => memoryOperationError("facts.mutate", cause)),
+                  ),
+                }).pipe(
+                  Effect.flatMap(({ access, memoryId, updatedAt, settings }) => {
+                    const mutation = input.mutation;
+                    if (
+                      mutation.operation === "candidate.decide" ||
+                      mutation.operation === "conversation.clear"
+                    ) {
+                      return Effect.fail(
+                        memoryOperationError(
+                          "facts.mutate",
+                          `${mutation.operation} is not a durable fact mutation.`,
+                        ),
+                      );
+                    }
+                    if (settings.memory.enabled === false) {
+                      return Effect.fail(
+                        memoryOperationError("facts.mutate", "Memory is turned off."),
+                      );
+                    }
+                    if (
+                      settings.memory.privateBotMemory === false &&
+                      mutation.operation === "fact.scope" &&
+                      (mutation.scope === "private" || mutation.scope === "bot")
+                    ) {
+                      return Effect.fail(
+                        memoryOperationError(
+                          "facts.mutate",
+                          "Private bot memory is turned off. The fact cannot be moved to a bot-private scope.",
+                        ),
+                      );
+                    }
+                    return entityMemoryRepository
+                      .applyMutation({
+                        access,
+                        mutation,
+                        memoryId,
+                        updatedAt,
+                        sharedProjectApproval:
+                          settings.memory.sharedProjectMemory === "auto"
+                            ? "approved"
+                            : "pending",
+                      })
+                      .pipe(
+                        Effect.map((revision) =>
+                          revision === null
+                            ? { kind: "deleted" as const, memoryId: mutation.memoryId }
+                            : { kind: "revision" as const, revision },
+                        ),
+                        Effect.mapError((cause) =>
+                          memoryOperationError("facts.mutate", cause),
+                        ),
+                      );
+                  }),
+                ),
+            { "rpc.aggregate": "memory" },
+          ).pipe(
+            Effect.catch((cause) =>
+              isOrchestrationDispatchCommandError(cause)
+                ? memoryOperationError("facts.mutate", cause)
+                : Effect.fail(cause),
+            ),
+          ),
         [WS_METHODS.memoryDocumentsInspect]: (input) =>
           observeRpcEffect(
             WS_METHODS.memoryDocumentsInspect,
@@ -3316,19 +3459,34 @@ const makeWsRpcLayer = (
         [WS_METHODS.memoryDocumentReplace]: (input) =>
           observeRpcEffect(
             WS_METHODS.memoryDocumentReplace,
-            resolveBotMemoryAccess("document.replace", input.threadId).pipe(
-              Effect.flatMap((access) =>
-                Effect.tryPromise({
-                  try: () =>
-                    botMemoryStore.replaceDocument(
-                      access,
-                      input.target,
-                      input.content,
-                      input.expectedBotId,
-                      input.expectedContent,
-                    ),
-                  catch: (cause) => memoryOperationError("document.replace", cause),
-                }),
+            Effect.all({
+              access: resolveBotMemoryAccess("document.replace", input.threadId),
+              settings: serverSettings.getSettings.pipe(
+                Effect.mapError((cause) => memoryOperationError("document.replace", cause)),
+              ),
+            }).pipe(
+              Effect.flatMap(({ access, settings }) =>
+                settings.memory.enabled === false ||
+                (input.target === "memory" && settings.memory.privateBotMemory === false)
+                  ? Effect.fail(
+                      memoryOperationError(
+                        "document.replace",
+                        input.target === "memory"
+                          ? "Private bot memory is turned off."
+                          : "Memory is turned off.",
+                      ),
+                    )
+                  : Effect.tryPromise({
+                      try: () =>
+                        botMemoryStore.replaceDocument(
+                          access,
+                          input.target,
+                          input.content,
+                          input.expectedBotId,
+                          input.expectedContent,
+                        ),
+                      catch: (cause) => memoryOperationError("document.replace", cause),
+                    }),
               ),
             ),
             { "rpc.aggregate": "memory" },

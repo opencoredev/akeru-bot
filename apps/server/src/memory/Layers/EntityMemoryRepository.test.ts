@@ -1017,4 +1017,307 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.isTrue(current.pinned);
     }),
   );
+
+  it.effect("edits a durable fact through applyMutation", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-edit-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-edit-1", "bot:user", { rootId }),
+      });
+      const next = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 1,
+          fact: "The user prefers helix.",
+        },
+        memoryId: AkeruMemoryId.make("mutate-edit-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isNotNull(next);
+      assert.equal(next!.fact, "The user prefers helix.");
+      assert.equal(next!.revision, 2);
+      assert.equal(next!.supersedesId, "mutate-edit-1");
+      const history = yield* repository.listHistory({ access: botAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => revision.revision),
+        [2, 1],
+      );
+      const stale = yield* repository
+        .applyMutation({
+          access: botAccess,
+          mutation: {
+            operation: "fact.edit",
+            memoryId: rootId,
+            expectedRevision: 1,
+            fact: "stale",
+          },
+          memoryId: AkeruMemoryId.make("mutate-edit-3"),
+          updatedAt: "2026-08-30T22:31:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(stale._tag === "Failure");
+      if (stale._tag === "Failure") {
+        assert.instanceOf(Cause.squash(stale.cause), EntityMemoryConflictError);
+      }
+    }),
+  );
+
+  it.effect("pins and unpins a durable fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-pin-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-pin-1", "bot:user", { rootId }),
+      });
+      const pinned = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.pin",
+          memoryId: rootId,
+          expectedRevision: 1,
+          pinned: true,
+        },
+        memoryId: AkeruMemoryId.make("mutate-pin-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isTrue(pinned!.pinned);
+      const unpinned = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.pin",
+          memoryId: rootId,
+          expectedRevision: 2,
+          pinned: false,
+        },
+        memoryId: AkeruMemoryId.make("mutate-pin-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isFalse(unpinned!.pinned);
+      assert.equal(unpinned!.revision, 3);
+    }),
+  );
+
+  it.effect("changes scope only to an owner-valid target", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-scope-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-scope-1", "bot:user", { rootId }),
+      });
+      const moved = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("mutate-scope-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(moved!.partition.scope, "project");
+      assert.equal(moved!.entityKind, "project");
+      assert.equal(moved!.visibility, "shared");
+      const back = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 2,
+          scope: "bot",
+        },
+        memoryId: AkeruMemoryId.make("mutate-scope-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(back!.partition.scope, "bot");
+      assert.equal(back!.visibility, "private");
+      // A group scope is not owned by a one-to-one thread and must fail.
+      const denied = yield* repository
+        .applyMutation({
+          access: botAccess,
+          mutation: {
+            operation: "fact.scope",
+            memoryId: rootId,
+            expectedRevision: 3,
+            scope: "group",
+          },
+          memoryId: AkeruMemoryId.make("mutate-scope-4"),
+          updatedAt: "2026-08-30T22:32:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(denied._tag === "Failure");
+    }),
+  );
+
+  it.effect("rejects then approves a pending durable fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-decide-root");
+      const foreignAccess = {
+        ...botAccess,
+        threadId: ThreadId.make("thread-decide-seed"),
+      };
+      const encodeJson = (value: unknown) =>
+        // The seeded row only carries empty objects and short bot-id arrays;
+        // keep the JSON encoding inline and side-effect free.
+        JSON.stringify(value) as string;
+      const pending = makeRevision("mutate-decide-1", "project", {
+        rootId,
+        partition: {
+          tenantId: botAccess.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(botAccess.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(botAccess.projectId),
+        visibility: "shared",
+        approvalState: "pending",
+      });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO akeru_memory_revisions (
+        memory_id, root_id, revision, tenant_id, scope, partition_id,
+        entity_kind, entity_id, kind, value_json, fact_text,
+        source_thread_id, source_message_id, author_bot_id, initiating_user_id,
+        created_at, confirmed_at, updated_at, confidence, approval_state,
+        supersedes_id, superseded_by_id, visibility, deletion_state,
+        pinned, sensitive, affected_bot_ids_json
+      ) VALUES (
+        ${pending.id}, ${pending.rootId}, ${pending.revision}, ${pending.partition.tenantId},
+        ${pending.partition.scope}, ${pending.partition.partitionId}, ${pending.entityKind},
+        ${pending.entityId}, ${pending.kind}, ${encodeJson(pending.value)}, ${pending.fact},
+        ${pending.sourceThreadId}, ${pending.sourceMessageId}, ${pending.authorBotId},
+        ${pending.initiatingUserId}, ${pending.createdAt}, ${pending.confirmedAt},
+        ${pending.updatedAt}, ${pending.confidence}, ${pending.approvalState},
+        ${pending.supersedesId}, ${pending.supersededById}, ${pending.visibility},
+        ${pending.deletionState}, ${pending.pinned ? 1 : 0}, ${pending.sensitive ? 1 : 0},
+        ${encodeJson(pending.affectedBotIds)}
+      )`;
+      assert.isDefined(foreignAccess);
+      const rejected = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.decide",
+          memoryId: rootId,
+          expectedRevision: 1,
+          decision: "reject",
+        },
+        memoryId: AkeruMemoryId.make("mutate-decide-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(rejected!.approvalState, "rejected");
+      const approved = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.decide",
+          memoryId: rootId,
+          expectedRevision: 2,
+          decision: "approve",
+        },
+        memoryId: AkeruMemoryId.make("mutate-decide-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(approved!.approvalState, "approved");
+      assert.isTrue(
+        (yield* repository.listCurrent({ access: botAccess })).some(
+          (revision) => revision.rootId === rootId,
+        ),
+      );
+    }),
+  );
+
+  it.effect("forgets then permanently deletes a durable fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
+      const rootId = AkeruMemoryRootId.make("mutate-delete-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-delete-1", "bot:user", {
+          rootId,
+          fact: "mutate-delete-marker",
+        }),
+      });
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("mutate-delete-1")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      const forgotten = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.forget",
+          memoryId: rootId,
+          expectedRevision: 1,
+        },
+        memoryId: AkeruMemoryId.make("mutate-delete-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(forgotten!.deletionState, "tombstoned");
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
+      assert.deepEqual(
+        yield* repository.search({ access: botAccess, query: "mutate delete marker", limit: 10 }),
+        [],
+      );
+      const deleted = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.delete",
+          memoryId: rootId,
+          expectedRevision: 2,
+        },
+        memoryId: AkeruMemoryId.make("mutate-delete-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isNull(deleted);
+      const missing = yield* repository.getCurrent({ access: botAccess, rootId }).pipe(Effect.exit);
+      assert.isTrue(missing._tag === "Failure");
+    }),
+  );
+
+  it.effect("does not let another thread's owner mutate a fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-owner-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-owner-1", "bot:user", { rootId }),
+      });
+      const wrongBot = yield* repository
+        .applyMutation({
+          access: privateAccess("other-bot"),
+          mutation: {
+            operation: "fact.pin",
+            memoryId: rootId,
+            expectedRevision: 1,
+            pinned: true,
+          },
+          memoryId: AkeruMemoryId.make("mutate-owner-2"),
+          updatedAt: "2026-08-30T22:30:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(wrongBot._tag === "Failure");
+      assert.equal(
+        (yield* repository.getCurrent({ access: botAccess, rootId })).revision,
+        1,
+      );
+    }),
+  );
 });

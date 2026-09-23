@@ -6,6 +6,7 @@ import type {
 } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 
+import { BotDurableMemory } from "./BotDurableMemory";
 import { BotMemoryTransfer } from "./BotMemoryTransfer";
 
 import { memoryEnvironment } from "../../state/memory";
@@ -202,7 +203,8 @@ export function BotMemorySheet({
                 <div>
                   <h3 className="text-sm font-medium">Observational memory</h3>
                   <p className="text-xs text-muted-foreground">
-                    Automatic summaries of this chat. These stay separate from the Markdown files.
+                    Automatic summaries of this chat only. Clearing them keeps the bot, its notes,
+                    and durable facts.
                   </p>
                 </div>
                 {query.data.conversation.current ? (
@@ -263,6 +265,13 @@ export function BotMemorySheet({
                   {clearPending ? "Clear observations" : "Clear"}
                 </Button>
               </section>
+              {threadRef ? (
+                <BotDurableMemory
+                  key={`durable:${threadRef.environmentId}:${threadRef.threadId}`}
+                  threadRef={threadRef}
+                  botId={query.data.botId}
+                />
+              ) : null}
               {threadRef ? (
                 <BotMemoryTransfer
                   key={`${threadRef.environmentId}:${threadRef.threadId}`}

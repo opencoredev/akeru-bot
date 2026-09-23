@@ -1,5 +1,12 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import {
+  MEMORY_SETTING_DISABLED_HINT,
+  SHARED_PROJECT_MEMORY_SETTING,
+  sharedProjectMemoryAutoSaves,
+  sharedProjectMemoryMode,
+} from "@t3tools/client-runtime/durable-memory";
 import { EnvironmentId } from "@t3tools/contracts";
+import type { MemorySettingsPatch } from "@t3tools/contracts/settings";
 import Constants from "expo-constants";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
@@ -124,6 +131,8 @@ function LocalSettingsRouteScreen({
         <GeneralSettingsSection />
 
         <PrivacySettingsSection environmentId={settingsEnvironmentId} />
+
+        <MemorySettingsSection environmentId={settingsEnvironmentId} />
 
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
@@ -272,6 +281,62 @@ function EnvironmentPrivacySettingsSection({
         label="Provider update checks"
         value={settings.enableProviderUpdateChecks}
         onValueChange={(enabled) => updateControl("provider-update-checks", enabled)}
+      />
+    </SettingsSection>
+  );
+}
+
+function MemorySettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+}) {
+  if (environmentId === null) return null;
+  return <EnvironmentMemorySettingsSection environmentId={environmentId} />;
+}
+
+function EnvironmentMemorySettingsSection({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId;
+}) {
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
+  if (!settings) return null;
+
+  const updateMemory = (memory: MemorySettingsPatch) => {
+    void updateSettings({ environmentId, input: { patch: { memory } } });
+  };
+  const memory = settings.memory;
+  const memoryHint = (description: string) =>
+    memory.enabled ? description : `${description} ${MEMORY_SETTING_DISABLED_HINT}`;
+
+  return (
+    <SettingsSection title="Memory">
+      <SettingsSwitchRow
+        icon="doc.text"
+        label="Memory"
+        subtitle="Keep durable facts that bots can use across chats."
+        value={memory.enabled}
+        onValueChange={(enabled) => updateMemory({ enabled })}
+      />
+      <SettingsSwitchRow
+        disabled={!memory.enabled}
+        icon="person.crop.circle"
+        label="Private bot memory"
+        subtitle={memoryHint("Let each bot keep facts about you that only that bot uses.")}
+        value={memory.privateBotMemory}
+        onValueChange={(privateBotMemory) => updateMemory({ privateBotMemory })}
+      />
+      <SettingsSwitchRow
+        disabled={!memory.enabled}
+        icon="folder.fill"
+        label={SHARED_PROJECT_MEMORY_SETTING.label}
+        subtitle={memoryHint(SHARED_PROJECT_MEMORY_SETTING.description)}
+        value={sharedProjectMemoryAutoSaves(memory.sharedProjectMemory)}
+        onValueChange={(auto) =>
+          updateMemory({ sharedProjectMemory: sharedProjectMemoryMode(auto) })
+        }
       />
     </SettingsSection>
   );

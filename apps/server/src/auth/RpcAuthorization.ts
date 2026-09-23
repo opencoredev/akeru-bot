@@ -83,6 +83,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.memoryArchiveExport]: AuthOrchestrationReadScope,
   [WS_METHODS.memoryArchivePreviewImport]: AuthOrchestrationReadScope,
   [WS_METHODS.memoryArchiveApplyImport]: AuthOrchestrationOperateScope,
+  [WS_METHODS.memoryFactsList]: AuthOrchestrationReadScope,
+  [WS_METHODS.memoryFactMutate]: AuthOrchestrationOperateScope,
   [WS_METHODS.memoryDocumentsInspect]: AuthOrchestrationReadScope,
   [WS_METHODS.memoryDocumentReplace]: AuthOrchestrationOperateScope,
   [WS_METHODS.memoryObservationsClear]: AuthOrchestrationOperateScope,

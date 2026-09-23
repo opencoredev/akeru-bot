@@ -1,3 +1,9 @@
+import {
+  MEMORY_SETTING_DISABLED_HINT,
+  SHARED_PROJECT_MEMORY_SETTING,
+  sharedProjectMemoryAutoSaves,
+  sharedProjectMemoryMode,
+} from "@t3tools/client-runtime/durable-memory";
 import { AKERU_MARKETING_SITE_URL, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
@@ -16,6 +22,8 @@ const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
 export function PrivacySettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
+  const memoryHint = (description: string) =>
+    settings.memory.enabled ? description : `${description} ${MEMORY_SETTING_DISABLED_HINT}`;
 
   return (
     <SettingsPageContainer>
@@ -77,6 +85,52 @@ export function PrivacySettingsPanel() {
                 updateSettings({ enableProviderUpdateChecks: Boolean(checked) })
               }
               aria-label="Enable provider update checks"
+            />
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Memory">
+        <SettingsRow
+          {...searchableSetting("memory-enabled")}
+          description="Keep durable facts that bots can use across chats."
+          control={
+            <Switch
+              checked={settings.memory.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ memory: { enabled: Boolean(checked) } })
+              }
+              aria-label="Memory"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("memory-private-bot")}
+          description={memoryHint("Let each bot keep facts about you that only that bot uses.")}
+          control={
+            <Switch
+              checked={settings.memory.privateBotMemory}
+              disabled={!settings.memory.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ memory: { privateBotMemory: Boolean(checked) } })
+              }
+              aria-label="Private bot memory"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("memory-shared-project")}
+          description={memoryHint(SHARED_PROJECT_MEMORY_SETTING.description)}
+          control={
+            <Switch
+              checked={sharedProjectMemoryAutoSaves(settings.memory.sharedProjectMemory)}
+              disabled={!settings.memory.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  memory: { sharedProjectMemory: sharedProjectMemoryMode(Boolean(checked)) },
+                })
+              }
+              aria-label={SHARED_PROJECT_MEMORY_SETTING.label}
             />
           }
         />

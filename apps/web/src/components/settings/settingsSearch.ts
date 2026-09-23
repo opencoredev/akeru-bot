@@ -168,6 +168,24 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/privacy",
   },
   {
+    id: "memory-enabled",
+    title: "Memory",
+    to: "/settings/privacy",
+    keywords: ["durable facts", "remember"],
+  },
+  {
+    id: "memory-private-bot",
+    title: "Private bot memory",
+    to: "/settings/privacy",
+    keywords: ["memory"],
+  },
+  {
+    id: "memory-shared-project",
+    title: "Save shared project memory automatically",
+    to: "/settings/privacy",
+    keywords: ["memory", "approval"],
+  },
+  {
     id: "local-execution",
     title: "Local execution",
     to: "/settings/general",

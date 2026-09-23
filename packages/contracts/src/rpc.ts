@@ -11,6 +11,10 @@ import {
   AkeruMemoryImportPreview,
   AkeruMemoryImportApplyInput,
   AkeruMemoryImportApplyResult,
+  AkeruMemoryFactsListInput,
+  AkeruMemoryFactsListResult,
+  AkeruMemoryMutateInput,
+  AkeruMemoryMutationResult,
   AkeruMemoryDocumentsInspectInput,
   AkeruMemoryDocumentsSnapshot,
   AkeruMemoryDocumentReplaceInput,
@@ -386,6 +390,8 @@ export const WS_METHODS = {
   memoryArchiveExport: "memory.archive.export",
   memoryArchivePreviewImport: "memory.archive.previewImport",
   memoryArchiveApplyImport: "memory.archive.applyImport",
+  memoryFactsList: "memory.facts.list",
+  memoryFactMutate: "memory.facts.mutate",
   memoryDocumentsInspect: "memory.documents.inspect",
   memoryDocumentReplace: "memory.document.replace",
   memoryObservationsClear: "memory.observations.clear",
@@ -758,6 +764,18 @@ export const WsMemoryArchivePreviewImportRpc = Rpc.make(WS_METHODS.memoryArchive
 export const WsMemoryArchiveApplyImportRpc = Rpc.make(WS_METHODS.memoryArchiveApplyImport, {
   payload: AkeruMemoryImportApplyInput,
   success: AkeruMemoryImportApplyResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryFactsListRpc = Rpc.make(WS_METHODS.memoryFactsList, {
+  payload: AkeruMemoryFactsListInput,
+  success: AkeruMemoryFactsListResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryFactMutateRpc = Rpc.make(WS_METHODS.memoryFactMutate, {
+  payload: AkeruMemoryMutateInput,
+  success: AkeruMemoryMutationResult,
   error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
 });
 
@@ -1276,6 +1294,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsMemoryArchiveExportRpc,
   WsMemoryArchivePreviewImportRpc,
   WsMemoryArchiveApplyImportRpc,
+  WsMemoryFactsListRpc,
+  WsMemoryFactMutateRpc,
   WsMemoryDocumentsInspectRpc,
   WsMemoryDocumentReplaceRpc,
   WsMemoryObservationsClearRpc,

@@ -14,6 +14,12 @@ export type AkeruMemoryReviewMode = "foreground" | "deferred";
 export interface AkeruMemoryTurnAdmission {
   readonly access: BotMemoryAccess;
   readonly input: BotMemoryReviewInput;
+  /**
+   * When false the bot-private `MEMORY.md` is withheld from the supplied prompt
+   * context, matching the "Private bot memory" setting. User and group memory
+   * are unaffected.
+   */
+  readonly privateBotMemory?: boolean;
 }
 
 /**
@@ -143,10 +149,15 @@ export class AkeruMemoryTurnHarness {
     this.store = store;
   }
 
-  async admit({ access, input }: AkeruMemoryTurnAdmission): Promise<AkeruMemoryTurn> {
+  async admit({ access, input, privateBotMemory }: AkeruMemoryTurnAdmission): Promise<AkeruMemoryTurn> {
     const reservation = await this.store.reserveReviewCadence(access.botId, input);
     try {
-      const snapshot = formatBotMemoryPrompt(await this.store.readPromptSnapshot(access));
+      const promptSnapshot = await this.store.readPromptSnapshot(access);
+      const snapshot = formatBotMemoryPrompt(
+        privateBotMemory === false
+          ? { ...promptSnapshot, memory: { ...promptSnapshot.memory, content: "", charCount: 0 } }
+          : promptSnapshot,
+      );
       const review = reservation.memoryReviewIncluded
         ? formatAutomaticBotMemoryReview(access.groupId !== null, reservation.reviewInputs)
         : "";

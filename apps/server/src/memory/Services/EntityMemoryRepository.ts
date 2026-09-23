@@ -1,5 +1,6 @@
 import type {
   AkeruMemoryId,
+  AkeruMemoryMutation,
   AkeruMemoryRevision,
   AkeruMemoryRootId,
   AkeruMemoryThreadAccess,
@@ -66,6 +67,18 @@ export interface InsertEntityMemoryInput {
 
 export interface ReviseEntityMemoryInput extends InsertEntityMemoryInput {
   readonly expectedRevision: number;
+}
+
+export interface ApplyEntityMemoryMutationInput {
+  readonly access: AkeruMemoryThreadAccess;
+  readonly mutation: Extract<
+    AkeruMemoryMutation,
+    { readonly operation: `fact.${string}` }
+  >;
+  readonly memoryId: AkeruMemoryId;
+  readonly updatedAt: string;
+  /** Shared-scope policy for a mutation that lands a fact on a shared scope. */
+  readonly sharedProjectApproval: "approved" | "pending";
 }
 
 export interface TombstoneEntityMemoryInput {
@@ -140,6 +153,9 @@ export interface EntityMemoryRepositoryShape {
   readonly deleteRoot: (
     input: DeleteEntityMemoryInput,
   ) => Effect.Effect<void, EntityMemoryRepositoryError>;
+  readonly applyMutation: (
+    input: ApplyEntityMemoryMutationInput,
+  ) => Effect.Effect<AkeruMemoryRevision | null, EntityMemoryRepositoryError>;
 }
 
 export class EntityMemoryRepository extends Context.Service<
