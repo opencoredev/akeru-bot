@@ -2858,7 +2858,7 @@ describe("AgentControllerLive", () => {
           Effect.forkChild({ startImmediately: true }),
         );
         yield* Effect.yieldNow;
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project.", hiddenWake: true });
         mastra.emit({
           type: "message_update",
           message: assistantMessage("I'll check first.", "opening"),
@@ -2883,6 +2883,7 @@ describe("AgentControllerLive", () => {
         mastra.finishSend();
         yield* Effect.yieldNow;
         yield* Fiber.interrupt(eventsFiber);
+        expect(events.find((event) => event.type === "turn.started")?.payload.hiddenWake).toBe(true);
 
         assert.deepEqual(
           events.filter((event) => event.type === "item.completed").map((event) => event.itemId),

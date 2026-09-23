@@ -1,6 +1,6 @@
 import { CircleAlertIcon } from "lucide-react";
 
-import type { BotInboxItem } from "../../botInbox";
+import { botInboxKindLabel, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { Button } from "../ui/button";
 import { ComposerBannerStack } from "../chat/ComposerBannerStack";
 
@@ -23,7 +23,7 @@ export function BotInboxAlertStack({
         id: item.id,
         variant: "error",
         icon: <CircleAlertIcon />,
-        title: `${item.botName} · ${item.taskOrRoutine}`,
+        title: `${item.botName} · ${item.taskOrRoutine} · ${botInboxKindLabel(item.kind)}`,
         description: (
           <>
             <span>{item.lastFailure}</span>

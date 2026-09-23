@@ -1,7 +1,7 @@
 import { CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
-import { selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import { botInboxKindLabel, selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
@@ -111,7 +111,7 @@ function InboxIncidentRow({
       title={
         <span className="flex items-center gap-2">
           <CircleAlertIcon className="size-4 text-destructive" />
-          {item.botName} · {item.taskOrRoutine}
+          {item.botName} · {item.taskOrRoutine} · {botInboxKindLabel(item.kind)}
         </span>
       }
       description={item.lastFailure}

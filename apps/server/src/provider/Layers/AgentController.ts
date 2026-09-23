@@ -218,6 +218,7 @@ interface PendingTurn {
   readonly toolSession: AkeruToolSession;
   readonly memoryAccess: BotMemoryAccess | undefined;
   readonly reviewInput: string;
+  readonly hiddenWake: boolean;
 }
 
 interface ActiveSession {
@@ -263,6 +264,7 @@ interface LegacyTurnMemoryState {
   readonly earlyEvents: Array<ProviderRuntimeEvent>;
   assistant: string;
   readonly memoryTurn: AkeruMemoryTurn | undefined;
+  readonly hiddenWake: boolean;
   priorMemoryHandler?: AkeruMemoryToolHandler;
   reviewMemoryHandler?: AkeruMemoryToolHandler;
 }
@@ -641,6 +643,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     // Providers only promise tool-call ids unique within a chat.
     const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
       `tool:${input.threadId}:${input.toolCallId}`;
+    const legacyHiddenWakeByTurn = new Map<string, boolean>();
     const memoryUsageByThread = new Map<
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
@@ -1445,7 +1448,7 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     const beginPendingTurn = (
       active: ActiveSession,
-      { threadId, turnId, botUsage }: PendingTurn,
+      { threadId, turnId, botUsage, hiddenWake }: PendingTurn,
     ) => {
       const key = String(threadId);
       if (botUsage) {
@@ -1468,7 +1471,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       publish({
         ...baseEvent(threadId, active, turnId),
         type: "turn.started",
-        payload: { model: active.model },
+        payload: { model: active.model, ...(hiddenWake ? { hiddenWake: true } : {}) },
       });
       publishSessionState(threadId, active, "running");
     };
@@ -2796,6 +2799,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             earlyEvents: [],
             assistant: "",
             memoryTurn,
+            hiddenWake: input.hiddenWake === true,
           };
           if (memoryTurn?.reviewIncluded) {
             const priorMemoryHandler = McpMemoryToolSession.readMcpMemoryToolSession(
@@ -2837,6 +2841,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 Effect.gen(function* () {
                   if (!hasLegacyPending(key, pendingMemory)) return;
                   pendingMemory.turnId = String(result.turnId);
+                  if (input.hiddenWake === true) legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
                   pendingMemory.dispatchReturned = true;
                   for (const event of pendingMemory.earlyEvents) {
                     if (String(event.turnId) !== pendingMemory.turnId) continue;
@@ -2918,6 +2923,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           toolSession: active.configuredToolSession,
           memoryAccess: active.configuredMemoryAccess,
           reviewInput: input.input ?? "",
+          hiddenWake: input.hiddenWake === true,
         });
         if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();
@@ -3460,6 +3466,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           legacyProviderBridge.streamEvents,
           Stream.fromPubSub(runtimeEvents),
         ).pipe(
+          Stream.map((event) => {
+            if (event.type !== "turn.started") return event;
+            const key = String(event.threadId);
+            const hiddenWake = event.turnId === undefined
+              ? false
+              : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
+                legacyPending(key).some((pending) => !pending.dispatchReturned && pending.hiddenWake);
+            return hiddenWake ? { ...event, payload: { ...event.payload, hiddenWake: true } } : event;
+          }),
           Stream.tap((event) =>
             Effect.gen(function* () {
               const key = String(event.threadId);
@@ -3479,6 +3494,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 pending.seenEventIds.add(String(event.eventId));
               }
               if (event.type === "turn.completed" || event.type === "turn.aborted") {
+                if (event.turnId) legacyHiddenWakeByTurn.delete(`${key}:${String(event.turnId)}`);
                 if (!event.turnId) return;
                 const terminals = legacyBufferedTerminals.get(key) ?? new Map();
                 terminals.set(String(event.turnId), event);
