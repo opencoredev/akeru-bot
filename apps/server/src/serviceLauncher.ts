@@ -1,8 +1,10 @@
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics globalDate:off
 // @effect-diagnostics globalTimers:off
-// This file is shipped as a standalone bundle and copied to a stable path by
-// `akeru service update`. Keep runtime imports limited to Node built-ins.
+// This file is intentionally excluded from the Effect migration. It is shipped as a
+// standalone bundle and copied to a stable path by `akeru service update`;
+// `apps/server/package.json` packs it separately with `build:bundle`. Keep runtime
+// imports limited to Node built-ins so the standalone updater remains self-contained.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";

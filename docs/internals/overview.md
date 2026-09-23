@@ -170,3 +170,48 @@ already dispatch.
 [checkpoint]: ../../apps/server/src/orchestration/Layers/CheckpointReactor.ts
 [receipts]: ../../apps/server/src/orchestration/Layers/RuntimeReceiptBus.ts
 [drivers]: ../../apps/server/src/provider/builtInDrivers.ts
+
+## Effect conventions and migration metric
+
+Server code should keep effectful work inside `Effect.gen` and named `Effect.fn` functions, model
+resources with scoped layers and `Effect.acquireRelease`, and use Effect services such as `Clock`,
+`DateTime`, `FileSystem`, `HttpClient`, and `ChildProcessSpawner` at system boundaries. Decode
+untrusted data with `Schema` and represent expected failures with `Schema.TaggedErrorClass`.
+`ManagedRuntime` is the bridge for legacy callbacks; do not scatter `Effect.runPromise` calls through
+library code.
+
+The migration tracks three signals in production `.ts` files under `apps/server/src`:
+
+1. Runtime escapes: `Effect.runPromise`, `Effect.runSync`, and `Effect.runFork` in library code.
+2. Promise bridges: `Effect.tryPromise` and `Effect.promise` used to cross an imperative boundary.
+3. Each rule token in `@effect-diagnostics <rule>:off` and
+   `@effect-diagnostics-next-line <rule>:off` suppressions.
+
+Tests (`*.test.ts`) and the standalone `serviceLauncher.ts` bundle are excluded from all
+three counts. Runtime escapes and Promise bridges count each matching call site. Suppressions
+count each disabled rule token, so one directive that disables three rules contributes three
+suppression counts.
+
+Run `node scripts/effect-migration-metric.ts` for a production-source report. It is a
+reporting tool rather than a CI gate. The 2026-09-22 audit baseline for diagnostic suppressions was:
+
+| Rule | Suppressions |
+| --- | ---: |
+| `cryptoRandomUUID` | 1 |
+| `globalConsole` | 1 |
+| `globalDate` | 18 |
+| `globalFetch` | 12 |
+| `globalRandom` | 5 |
+| `globalTimers` | 4 |
+| `nodeBuiltinImport` | 35 |
+| `preferSchemaOverJson` | 1 |
+| `returnEffectInGen` | 2 |
+
+The same audit counted 58 runtime escapes and 76 Promise bridges. Each follow-up migration issue
+should report how many suppression tokens and boundary calls it removes against this baseline.
+
+Pure data and mapping modules are not migration targets when they have no I/O or lifetime state.
+`apps/server/src/serviceLauncher.ts` is also excluded: it is a deliberately Node-only standalone
+bundle packed separately by `build:bundle`, and adding Effect imports would break that deployment
+boundary. The audit also leaves type-only provider service shapes and the legitimate
+`returnEffectInGen` cases in place.
