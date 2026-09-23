@@ -44,6 +44,8 @@ vi.mock("../../state/memory", () => ({
     mutateFact: "mutate-fact",
     replaceDocument: "replace-document",
     clearObservations: "clear-observations",
+    listFacts: vi.fn(() => "list-facts"),
+    mutateFact: "mutate-fact",
   },
 }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: controls.query }));
@@ -65,32 +67,34 @@ describe("BotMemorySheet", () => {
     controls.buttons.length = 0;
     controls.inspect.mockClear();
     controls.mutate.mockClear();
-    controls.query.mockImplementation((input) => ({
-      data:
-        input === "list-facts"
-          ? { facts: [] }
-          : {
-              botId: "bot-1",
-              groupId: "group-1",
-              user: document("user", "The user prefers short answers.", 1_375),
-              memory: document("memory", "Use the release checklist.", 2_200),
-              group: document("group", "The group ships on Fridays.", 2_200),
-              conversation: {
-                current: input
-                  ? {
-                      generationCount: 2,
-                      activeObservations: "Thread observation",
-                      createdAt: "2026-08-31T00:00:00.000Z",
-                      updatedAt: "2026-08-31T00:00:00.000Z",
-                    }
-                  : null,
-                history: [],
-              },
-            },
-      error: null,
-      isPending: false,
-      refresh: vi.fn(),
-    }));
+    controls.query.mockImplementation((input) => {
+      if (input === "list-facts") {
+        return { data: { facts: [] }, error: null, isPending: false, refresh: vi.fn() };
+      }
+      return {
+        data: {
+          botId: "bot-1",
+          groupId: "group-1",
+          user: document("user", "The user prefers short answers.", 1_375),
+          memory: document("memory", "Use the release checklist.", 2_200),
+          group: document("group", "The group ships on Fridays.", 2_200),
+          conversation: {
+            current: input
+              ? {
+                  generationCount: 2,
+                  activeObservations: "Thread observation",
+                  createdAt: "2026-08-31T00:00:00.000Z",
+                  updatedAt: "2026-08-31T00:00:00.000Z",
+                }
+              : null,
+            history: [],
+          },
+        },
+        error: null,
+        isPending: false,
+        refresh: vi.fn(),
+      };
+    });
     vi.stubGlobal("window", {
       confirm: vi.fn(() => true),
       prompt: vi.fn(() => "Edited fact"),
