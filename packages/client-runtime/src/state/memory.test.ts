@@ -84,7 +84,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
       const exported = yield* Effect.promise(() =>
         atoms.exportArchive.run(registry, {
           environmentId,
-          input: { threadId },
+          input: { threadId, target: "thread", complete: true },
         }),
       );
       const cleared = yield* Effect.promise(() =>

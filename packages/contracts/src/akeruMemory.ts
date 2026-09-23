@@ -366,7 +366,13 @@ export const AkeruMarkdownMemoryArchiveV3 = Schema.Struct({
 });
 export type AkeruMarkdownMemoryArchiveV3 = typeof AkeruMarkdownMemoryArchiveV3.Type;
 
-export const AkeruMarkdownMemoryExportInput = Schema.Struct({ threadId: ThreadId });
+export const AkeruMarkdownMemoryExportInput = Schema.Struct({
+  threadId: ThreadId,
+  target: AkeruMemoryArchiveTarget.pipe(
+    Schema.withDecodingDefault(Effect.succeed("thread" as const)),
+  ),
+  complete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
 export type AkeruMarkdownMemoryExportInput = typeof AkeruMarkdownMemoryExportInput.Type;
 
 export const AkeruMarkdownMemoryImportPreviewInput = Schema.Struct({
@@ -480,6 +486,12 @@ export type AkeruMemoryImportPreview = typeof AkeruMemoryImportPreview.Type;
 export const AkeruMemoryImportApplyInput = Schema.Struct({
   ...AkeruMemoryImportPreviewInput.fields,
   previewHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  resolutions: Schema.Array(
+    Schema.Struct({
+      rootId: AkeruMemoryRootId,
+      decision: Schema.Literals(["keep-local", "use-archive"]),
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type AkeruMemoryImportApplyInput = typeof AkeruMemoryImportApplyInput.Type;
 

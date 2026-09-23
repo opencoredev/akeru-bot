@@ -278,6 +278,16 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     return yield* decodeRow(row.value);
   });
 
+  const invalidateDerivedCopies = (tenantId: string, rootId: string) =>
+    // Observational summaries and provider memory packets are assembled from
+    // these derived rows on each read; this server has no independent packet
+    // cache. Removing the rows here therefore makes both consumers rebuild
+    // from the new durable revision instead of serving stale content.
+    sql`
+      DELETE FROM akeru_memory_derived_copies
+      WHERE tenant_id = ${tenantId} AND root_id = ${rootId}
+    `.pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateDerivedCopies")));
+
   const insert: EntityMemoryRepositoryShape["insert"] = (input) =>
     writeLock.withPermit(
       Effect.gen(function* () {
@@ -304,6 +314,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             actualRevision: existing.revision,
           });
         }
+        yield* invalidateDerivedCopies(input.access.tenantId, revision.rootId);
         yield* insertRow(revision).pipe(
           Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.insert:query")),
           Effect.catchTag("PersistenceSqlError", (cause) =>
@@ -369,6 +380,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                   actualRevision: null,
                 });
               }
+              yield* invalidateDerivedCopies(input.access.tenantId, revision.rootId);
               yield* insertRow(revision);
             }),
           )
@@ -423,6 +435,10 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                   actualRevision: null,
                 });
               }
+              yield* sql`
+                DELETE FROM akeru_memory_derived_copies
+                WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
+              `;
               yield* insertRow(next);
             }),
           )
@@ -645,6 +661,45 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
           reason: "An imported memory scope is not valid for the selected target.",
         });
       }
+      const sourcePartition = input.partitions.find(
+        (partition) =>
+          partition.scope === revision.partition.scope &&
+          partition.partitionId === revision.partition.partitionId &&
+          partition.tenantId === revision.partition.tenantId &&
+          partition.visibility === revision.visibility,
+      );
+      const expectedEntityId =
+        selected.scope === "project"
+          ? input.access.projectId
+          : selected.scope === "workspace"
+            ? selected.partitionId
+            : selected.scope === "bot"
+              ? input.access.botId
+              : selected.scope === "user"
+                ? input.access.userId
+                : selected.scope === "bot-user"
+                  ? input.access.userId
+                : selected.scope === "thread" && input.access.groupId !== null
+                  ? input.access.groupId
+                  : selected.scope === "thread" && input.access.botId !== null
+                    ? input.access.botId
+                    : input.access.projectId;
+      const expectedAffected =
+        selected.visibility === "shared"
+          ? new Set([...input.access.groupMemberBotIds, ...(authorBotId === null ? [] : [authorBotId])])
+          : new Set(authorBotId === null ? [] : [authorBotId]);
+      if (
+        !sourcePartition ||
+        String(revision.entityId) !== String(expectedEntityId) ||
+        revision.initiatingUserId !== input.access.userId ||
+        revision.authorBotId !== null && authorBotId !== null && revision.authorBotId !== authorBotId ||
+        revision.affectedBotIds.some((botId) => !expectedAffected.has(botId)) ||
+        revision.affectedBotIds.length !== expectedAffected.size
+      ) {
+        return yield* new AkeruMemoryAccessDenied({
+          reason: "The archive record belongs to a different memory owner.",
+        });
+      }
       const sharedBotIds = [
         ...new Set([
           ...input.access.groupMemberBotIds,
@@ -824,9 +879,23 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 detail: "The memory import preview is stale. Preview the archive again.",
               });
             }
-            const conflict = preview.items.find((item) => item.classification === "conflicting");
-            if (conflict) {
-              return yield* new EntityMemoryImportError({ detail: conflict.reason });
+            const requestedResolutions = input.resolutions ?? [];
+            const resolutions = new Map(requestedResolutions.map((resolution) => [String(resolution.rootId), resolution.decision]));
+            if (resolutions.size !== requestedResolutions.length) {
+              return yield* new EntityMemoryImportError({ detail: "Each memory conflict may be resolved only once." });
+            }
+            const conflicts = preview.items.filter((item) => item.classification === "conflicting");
+            for (const conflict of conflicts) {
+              if (!resolutions.has(String(conflict.rootId))) {
+                return yield* new EntityMemoryImportError({
+                  detail: `Choose keep-local or use-archive for ${conflict.rootId}.`,
+                });
+              }
+            }
+            for (const resolution of resolutions.keys()) {
+              if (!preview.items.some((item) => String(item.rootId) === resolution && item.classification === "conflicting")) {
+                return yield* new EntityMemoryImportError({ detail: `Resolution targets a non-conflicting memory: ${resolution}.` });
+              }
             }
             for (const item of preview.items) {
               if (item.classification === "skipped") continue;
@@ -836,8 +905,19 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               const local = preview.local
                 .filter((revision) => revision.rootId === item.rootId)
                 .sort((left, right) => left.revision - right.revision);
-              const additions = incoming.slice(local.length);
-              if (local.length > 0 && additions[0]) {
+              const decision = resolutions.get(String(item.rootId));
+              if (item.classification === "conflicting" && decision === "keep-local") continue;
+              const additions = item.classification === "conflicting" ? incoming : incoming.slice(local.length);
+              if (additions.length > 0) {
+                yield* invalidateDerivedCopies(input.access.tenantId, item.rootId);
+              }
+              if (item.classification === "conflicting" && decision === "use-archive") {
+                yield* sql`
+                  DELETE FROM akeru_memory_revisions
+                  WHERE tenant_id = ${input.access.tenantId} AND root_id = ${item.rootId}
+                `;
+              }
+              if (item.classification !== "conflicting" && local.length > 0 && additions[0]) {
                 const updated = yield* sql<{ readonly id: string }>`
             UPDATE akeru_memory_revisions
             SET superseded_by_id = ${additions[0].id}, updated_at = ${additions[0].updatedAt}
@@ -903,10 +983,14 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             reason: "Every historical revision must be authorized before permanent deletion.",
           });
         }
-        yield* sql`
+      yield* sql`
         DELETE FROM akeru_memory_revisions
         WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
       `.pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:query")));
+      yield* sql`
+        DELETE FROM akeru_memory_derived_copies
+        WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
+      `.pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:derived-copies")));
       }),
     );
 

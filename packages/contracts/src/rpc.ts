@@ -5,6 +5,12 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { AkeruBotUsageInput, AkeruBotUsageReadError, AkeruBotUsageSnapshot } from "./akeruUsage.ts";
 import {
   AkeruMemoryOperationError,
+  AkeruMemoryArchiveV2,
+  AkeruMemoryExportInput,
+  AkeruMemoryImportPreviewInput,
+  AkeruMemoryImportPreview,
+  AkeruMemoryImportApplyInput,
+  AkeruMemoryImportApplyResult,
   AkeruMemoryDocumentsInspectInput,
   AkeruMemoryDocumentsSnapshot,
   AkeruMemoryDocumentReplaceInput,
@@ -377,6 +383,9 @@ export const WS_METHODS = {
   memoryExport: "memory.documents.export",
   memoryImportPreview: "memory.documents.importPreview",
   memoryImportApply: "memory.documents.importApply",
+  memoryArchiveExport: "memory.archive.export",
+  memoryArchivePreviewImport: "memory.archive.previewImport",
+  memoryArchiveApplyImport: "memory.archive.applyImport",
   memoryDocumentsInspect: "memory.documents.inspect",
   memoryDocumentReplace: "memory.document.replace",
   memoryObservationsClear: "memory.observations.clear",
@@ -731,6 +740,24 @@ export const WsMemoryImportPreviewRpc = Rpc.make(WS_METHODS.memoryImportPreview,
 export const WsMemoryImportApplyRpc = Rpc.make(WS_METHODS.memoryImportApply, {
   payload: AkeruMarkdownMemoryImportApplyInput,
   success: AkeruMarkdownMemoryImportApplyResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryArchiveExportRpc = Rpc.make(WS_METHODS.memoryArchiveExport, {
+  payload: AkeruMemoryExportInput,
+  success: AkeruMemoryArchiveV2,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryArchivePreviewImportRpc = Rpc.make(WS_METHODS.memoryArchivePreviewImport, {
+  payload: AkeruMemoryImportPreviewInput,
+  success: AkeruMemoryImportPreview,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryArchiveApplyImportRpc = Rpc.make(WS_METHODS.memoryArchiveApplyImport, {
+  payload: AkeruMemoryImportApplyInput,
+  success: AkeruMemoryImportApplyResult,
   error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
 });
 
@@ -1246,6 +1273,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsMemoryExportRpc,
   WsMemoryImportPreviewRpc,
   WsMemoryImportApplyRpc,
+  WsMemoryArchiveExportRpc,
+  WsMemoryArchivePreviewImportRpc,
+  WsMemoryArchiveApplyImportRpc,
   WsMemoryDocumentsInspectRpc,
   WsMemoryDocumentReplaceRpc,
   WsMemoryObservationsClearRpc,

@@ -84,6 +84,10 @@ export interface ImportEntityMemoryInput {
 
 export interface ApplyEntityMemoryImportInput extends ImportEntityMemoryInput {
   readonly previewHash: string;
+  readonly resolutions?: ReadonlyArray<{
+    readonly rootId: AkeruMemoryRootId;
+    readonly decision: "keep-local" | "use-archive";
+  }>;
 }
 
 export class EntityMemoryImportError extends Schema.TaggedErrorClass<EntityMemoryImportError>()(

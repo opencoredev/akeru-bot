@@ -68,3 +68,14 @@ contain personal details.
 When upgrading from saved facts, Akeru migrates approved user, bot, and matching group facts once.
 Facts that do not fit, have unsupported scopes, or fail validation are preserved in a migration
 archive instead of being silently discarded or shared more broadly.
+
+### Exporting and importing durable memory
+
+Memory exports are readable Markdown archives with a versioned manifest and checksums. You can
+export one chat, one bot, one project, or all memory. Complete exports include revision history
+and forgotten (tombstoned) facts. Import always shows a preview. New, changed, conflicting, and
+skipped facts are listed, and each conflict requires a choice to keep the local fact or use the
+archive. A newer local fact is never replaced silently. Archives are checked against the current
+user, bot, group, project, and workspace before any change is applied.
+An all-memory export is export-only. Import a thread, bot, project, or workspace archive so each
+authority can be checked safely.

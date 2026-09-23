@@ -22,6 +22,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import {
   makeSqlitePersistenceLive,
@@ -411,6 +412,26 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("invalidates derived copies on ordinary durable writes", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
+      const rootId = AkeruMemoryRootId.make("derived-write-root");
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("stale")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      yield* repository.insert({ access: botAccess, revision: makeRevision("derived-write-root", "bot:user", { rootId }) });
+      assert.deepEqual(yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`, []);
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("stale-2")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      yield* repository.revise({
+        access: botAccess,
+        expectedRevision: 1,
+        revision: makeRevision("derived-write-root-2", "bot:user", { rootId, revision: 2, supersedesId: AkeruMemoryId.make("derived-write-root") }),
+      });
+      assert.deepEqual(yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`, []);
+    }),
+  );
+
   it.effect("does not return all memory for punctuation-only search", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
@@ -437,6 +458,9 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           fact: "secret-disappear-value",
         }),
       });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("active")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
       yield* repository.tombstone({
         access: botAccess,
         rootId,
@@ -450,6 +474,10 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         limit: 10,
       });
       assert.equal(rows.length, 0);
+      const ftsRows = yield* sql<{ readonly memory_id: string }>`SELECT memory_id FROM akeru_memory_fts WHERE memory_id = ${"active"}`;
+      assert.deepEqual(ftsRows, []);
+      const derivedRows = yield* sql<{ readonly root_id: string }>`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`;
+      assert.deepEqual(derivedRows, []);
       const current = yield* repository.getCurrent({ access: botAccess, rootId });
       assert.equal(current.deletionState, "tombstoned");
       assert.equal(current.revision, 2);
@@ -554,6 +582,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
   it.effect("previews and atomically imports a new authorized history", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
       const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
       const rootId = AkeruMemoryRootId.make("import-root");
       const first = makeRevision("import-1", "bot:user", {
@@ -647,34 +676,12 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         initiatingUserId: AkeruMemoryUserId.make("foreign-user"),
         affectedBotIds: [BotId.make("foreign-bot")],
       });
-      const preview = yield* repository.previewImport!({
+      const exit = yield* repository.previewImport!({
         access: botAccess,
         partitions,
         revisions: [forged],
-      });
-      const applied = yield* repository.applyImport!({
-        access: botAccess,
-        partitions,
-        revisions: [forged],
-        previewHash: preview.previewHash,
-      });
-      assert.equal(applied.imported, 1);
-      const current = yield* repository.getCurrent({
-        access: botAccess,
-        rootId: forged.rootId,
-      });
-      assert.deepEqual(current.partition, {
-        tenantId: botAccess.tenantId,
-        scope: "bot",
-        partitionId: AkeruMemoryPartitionId.make(botAccess.botId!),
-      });
-      assert.equal(current.visibility, "private");
-      assert.equal(current.entityKind, "bot");
-      assert.equal(current.entityId, AkeruMemoryEntityId.make(botAccess.botId!));
-      assert.isNull(current.sourceThreadId);
-      assert.equal(current.authorBotId, botAccess.botId);
-      assert.equal(current.initiatingUserId, botAccess.userId);
-      assert.deepEqual(current.affectedBotIds, [botAccess.botId]);
+      }).pipe(Effect.exit);
+      assert.isTrue(exit._tag === "Failure");
     }),
   );
 
@@ -713,30 +720,19 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         entityKind: "bot",
         entityId: AkeruMemoryEntityId.make("foreign-bot"),
       });
-      const preview = yield* repository.previewImport!({
+      const exit = yield* repository.previewImport!({
         access: botAccess,
         partitions,
         revisions: [botRevision],
-      });
-      yield* repository.applyImport!({
-        access: botAccess,
-        partitions,
-        revisions: [botRevision],
-        previewHash: preview.previewHash,
-      });
-      const current = yield* repository.getCurrent({
-        access: botAccess,
-        rootId: botRevision.rootId,
-      });
-      assert.equal(current.partition.scope, "bot");
-      assert.equal(current.partition.partitionId, AkeruMemoryPartitionId.make(botAccess.botId!));
-      assert.equal(current.entityKind, "bot");
+      }).pipe(Effect.exit);
+      assert.isTrue(exit._tag === "Failure");
     }),
   );
 
   it.effect("classifies identical, extending, divergent, and re-homed histories", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
       const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
       const rootId = AkeruMemoryRootId.make("classified-import-root");
       const first = makeRevision("classified-import-1", "bot", {
@@ -779,12 +775,18 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         revisions: [extendingFirst, second],
       });
       assert.equal(changed.items[0]?.classification, "changed");
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${first.id}, ${botAccess.threadId}, ${first.updatedAt})`;
       yield* repository.applyImport!({
         access: botAccess,
         partitions,
         revisions: [extendingFirst, second],
         previewHash: changed.previewHash,
       });
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
 
       const divergent = yield* repository.previewImport!({
         access: botAccess,
@@ -792,6 +794,22 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         revisions: [{ ...first, fact: "A divergent history." }],
       });
       assert.equal(divergent.items[0]?.classification, "conflicting");
+      const unresolved = yield* repository.applyImport({
+        access: botAccess,
+        partitions,
+        revisions: [{ ...first, fact: "A divergent history." }],
+        previewHash: divergent.previewHash,
+      }).pipe(Effect.exit);
+      assert.isTrue(unresolved._tag === "Failure");
+      yield* repository.applyImport!({
+        access: botAccess,
+        partitions,
+        revisions: [{ ...first, fact: "A divergent history." }],
+        previewHash: divergent.previewHash,
+        resolutions: [{ rootId: first.rootId, decision: "use-archive" }],
+      });
+      const replaced = yield* repository.getCurrent({ access: botAccess, rootId: first.rootId });
+      assert.equal(replaced.fact, "A divergent history.");
 
       const sharedRootId = AkeruMemoryRootId.make("rehome-import-root");
       yield* repository.insert({
@@ -812,8 +830,8 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         access: botAccess,
         partitions,
         revisions: [makeRevision("rehome-archive", "bot", { rootId: sharedRootId })],
-      });
-      assert.equal(rehome.items[0]?.classification, "conflicting");
+      }).pipe(Effect.exit);
+      assert.isTrue(rehome._tag === "Failure");
     }),
   );
 

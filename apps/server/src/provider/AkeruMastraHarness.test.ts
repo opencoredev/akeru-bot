@@ -182,6 +182,43 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("keeps /new thread observational memory isolated", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-new-"));
+    const harness = await createAkeruMastraHarness({
+      authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+      memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+      getThreadTools: () => ({}),
+      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+    });
+    try {
+      await harness.restoreObservationalMemory!("prior-thread", {
+        current: {
+          id: "prior-observation",
+          generationCount: 1,
+          originType: "initial",
+          activeObservations: "Prior chat only.",
+          bufferedObservations: "",
+          bufferedReflection: null,
+          totalTokensObserved: 10,
+          observationTokenCount: 2,
+          createdAt: "2026-09-13T12:00:00.000Z",
+          updatedAt: "2026-09-13T12:01:00.000Z",
+        },
+        history: [],
+      });
+      const fresh = await harness.readObservationalMemory!("new-thread");
+      assert.isNull(fresh.current);
+      assert.deepEqual(fresh.history, []);
+      assert.equal(
+        (await harness.readObservationalMemory!("prior-thread")).current?.activeObservations,
+        "Prior chat only.",
+      );
+    } finally {
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("restores exported observational memory instead of treating import as a no-op", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restore-"));
     const harness = await createAkeruMastraHarness({

@@ -121,3 +121,29 @@ observation queue.
 Observation records are cleared and reinserted through Mastra's storage adapter when restoration is
 required. Imports must target the archive's original thread. Flattened buffered observations are
 promoted into active observations on restore so Mastra's chunk-based storage retains their text.
+
+## Durable entity archive format
+
+The durable ledger export is a version 2 JSON envelope whose `files` are UTF-8 Markdown
+records. Each record is at `durable/<root-id>/<revision>.md`; its `akeru-memory`
+frontmatter contains the root and revision IDs, partition scope and ID, entity ownership,
+provenance, approval and deletion state, timestamps, and revision links. The `sha256` value
+on every file and revision covers its canonical JSON or Markdown content. `manifestSha256`
+covers the schema version, target, completeness flag, timestamps, and the file, revision, and
+conversation checksums. Complete exports include every revision in a chain, including a
+terminal tombstone, so another tool can inspect history without Akeru.
+
+Import first validates checksums, chain links, approval state, tombstone position, and that
+every partition and entity belongs to the importing user's authorized thread. Preview reports
+`new`, `changed`, `conflicting`, and `skipped` roots. A conflicting root must receive an
+explicit `keep-local` or `use-archive` decision in the apply request; absent decisions are
+rejected. `use-archive` replaces that root's local history with the validated archive chain,
+while `keep-local` leaves it untouched.
+
+Durable archives use the `memory.archive.*` RPCs. `memory.archive.export` accepts a thread,
+bot, project, or all scope and returns the V2 archive. Preview returns per-root `new`, `changed`,
+`conflicting`, or `skipped` outcomes. Apply requires explicit `keep-local` or `use-archive`
+resolutions for every conflict. The older `memory.documents.*` RPCs remain available for V3
+Markdown document archives and compatibility imports.
+All-scope archives are export-only: import must target one authority domain so ownership can be
+validated without granting a combined archive access across unrelated users or workspaces.

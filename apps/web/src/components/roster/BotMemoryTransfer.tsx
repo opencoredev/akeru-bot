@@ -55,7 +55,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
           void run(async () => {
             const result = await exportArchive({
               environmentId: threadRef.environmentId,
-              input: { threadId: threadRef.threadId },
+              input: { threadId: threadRef.threadId, target: "thread", complete: true },
             });
             if (result._tag === "Failure") throw squashAtomCommandFailure(result);
             const url = URL.createObjectURL(

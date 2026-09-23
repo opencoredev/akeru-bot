@@ -159,6 +159,10 @@ export function applyAkeruMemoryImport(input: {
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
   readonly previewHash: string;
+  readonly resolutions?: ReadonlyArray<{
+    readonly rootId: AkeruMemoryRevision["rootId"];
+    readonly decision: "keep-local" | "use-archive";
+  }>;
 }): Effect.Effect<AkeruMemoryImportApplyResult, Error> {
   return Effect.gen(function* () {
     const prepared = yield* prepare(input);
@@ -166,6 +170,7 @@ export function applyAkeruMemoryImport(input: {
       access: input.access,
       ...prepared,
       previewHash: input.previewHash,
+      resolutions: input.resolutions ?? [],
     });
   });
 }

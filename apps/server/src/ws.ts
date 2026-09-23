@@ -139,6 +139,9 @@ import {
   exportBotMemoryArchive,
   previewBotMemoryImport,
 } from "./memory/BotMemoryArchive.ts";
+import { exportAkeruMemory } from "./memory/MemoryExport.ts";
+import { applyAkeruMemoryImport, previewAkeruMemoryImport } from "./memory/MemoryImport.ts";
+import { EntityMemoryRepository } from "./memory/Services/EntityMemoryRepository.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -700,6 +703,8 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const agentController = yield* AgentController.AgentController;
+      const entityMemoryRepositoryOption = yield* Effect.serviceOption(EntityMemoryRepository);
+      const entityMemoryRepository = Option.getOrNull(entityMemoryRepositoryOption);
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
@@ -846,6 +851,43 @@ const makeWsRpcLayer = (
                   groupMemberBotIds: access.groupMemberBotIds,
                 } satisfies BotMemoryAccess)
               : Effect.fail(memoryOperationError(operation, "This chat has no responding bot."));
+          }),
+        );
+      const readArchiveConversations = (
+        anchor: AkeruMemoryThreadAccess,
+        target: "thread" | "bot" | "project" | "workspace" | "all",
+      ) =>
+        projectionSnapshotQuery.getShellSnapshot().pipe(
+          Effect.mapError((cause) => memoryOperationError("archive.export", cause)),
+          Effect.flatMap((shell) => {
+            const projectIds = new Set(
+              shell.projects
+                .filter((project) =>
+                  target === "all"
+                    ? true
+                    : target === "project"
+                      ? project.id === anchor.projectId
+                      : target === "workspace"
+                        ? project.workspaceRoot === anchor.workspaceRoot
+                        : true,
+                )
+                .map((project) => project.id),
+            );
+            const threads = shell.threads.filter((thread) => {
+              if (target === "thread") return thread.id === anchor.threadId;
+              if (!projectIds.has(thread.projectId)) return false;
+              if (target !== "bot") return true;
+              return (thread.respondingBotId ?? thread.botId) === (anchor.respondingBotId ?? anchor.botId);
+            });
+            return Effect.forEach(threads, (thread) =>
+              agentController.readConversationMemory
+                ? agentController.readConversationMemory(thread.id).pipe(
+                    Effect.map((snapshot) => ({ threadId: thread.id, snapshot })),
+                    Effect.mapError((cause) => memoryOperationError("archive.export", cause)),
+                  )
+                : Effect.fail(memoryOperationError("archive.export", "Observational memory is unavailable.")),
+              { concurrency: 4 },
+            ).pipe(Effect.mapError((cause) => memoryOperationError("archive.export", cause)));
           }),
         );
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
@@ -3179,6 +3221,67 @@ const makeWsRpcLayer = (
                     }),
                   catch: (cause) => memoryOperationError("documents.importApply", cause),
                 }),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryArchiveExport]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryArchiveExport,
+            entityMemoryRepository === null
+              ? Effect.fail(memoryOperationError("archive.export", "Durable memory is unavailable."))
+              : Effect.all({
+              access: resolveMemoryAccess("archive.export", input.threadId),
+              conversations: resolveMemoryAccess("archive.export", input.threadId).pipe(
+                Effect.flatMap((access) => readArchiveConversations(access, input.target)),
+              ),
+              createdAt: nowIso,
+            }).pipe(
+              Effect.flatMap(({ access, conversations, createdAt }) =>
+                exportAkeruMemory({
+                  repository: entityMemoryRepository,
+                  access,
+                  target: input.target,
+                  complete: input.complete && conversations.length > 0,
+                  createdAt,
+                  conversations,
+                }).pipe(Effect.mapError((cause) => memoryOperationError("archive.export", cause))),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryArchivePreviewImport]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryArchivePreviewImport,
+            entityMemoryRepository === null
+              ? Effect.fail(memoryOperationError("archive.previewImport", "Durable memory is unavailable."))
+              : resolveMemoryAccess("archive.previewImport", input.threadId).pipe(
+              Effect.flatMap((access) =>
+                previewAkeruMemoryImport({
+                  repository: entityMemoryRepository,
+                  access,
+                  target: input.target,
+                  archive: input.archive,
+                }).pipe(Effect.mapError((cause) => memoryOperationError("archive.previewImport", cause))),
+              ),
+            ),
+            { "rpc.aggregate": "memory" },
+          ),
+        [WS_METHODS.memoryArchiveApplyImport]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.memoryArchiveApplyImport,
+            entityMemoryRepository === null
+              ? Effect.fail(memoryOperationError("archive.applyImport", "Durable memory is unavailable."))
+              : resolveMemoryAccess("archive.applyImport", input.threadId).pipe(
+              Effect.flatMap((access) =>
+                applyAkeruMemoryImport({
+                  repository: entityMemoryRepository,
+                  access,
+                  target: input.target,
+                  archive: input.archive,
+                  previewHash: input.previewHash,
+                  resolutions: input.resolutions,
+                }).pipe(Effect.mapError((cause) => memoryOperationError("archive.applyImport", cause))),
               ),
             ),
             { "rpc.aggregate": "memory" },
