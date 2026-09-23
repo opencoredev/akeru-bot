@@ -1145,6 +1145,39 @@ const make = (options?: AgentControllerLiveOptions) =>
           await update;
         },
         getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
+        // Durable queue rows can drain before any client opens the thread (for
+        // example right after a server restart), so the activity must not
+        // depend on an active provider session; the row's recorded turnId is
+        // the authority and the active turn is only a fallback.
+        onObservationDropped: async ({ threadId, turnId, resourceId, modelId, attempts, error }) => {
+          if (!Option.isSome(orchestrationEngine)) return;
+          const active = sessions.get(threadId);
+          const droppedAt = nowIso();
+          await runPromise(
+            orchestrationEngine.value.dispatch({
+              type: "thread.activity.append",
+              commandId: CommandId.make(
+                `server:observation-dropped:${NodeCrypto.randomUUID()}`,
+              ),
+              threadId: ThreadIdBrand(threadId),
+              activity: {
+                id: EventId.make(`observation-dropped:${NodeCrypto.randomUUID()}`),
+                tone: "error",
+                kind: "memory.observation.dropped",
+                summary: "Background memory observation dropped after repeated failures",
+                payload: {
+                  resourceId,
+                  modelId: modelId ?? null,
+                  attempts,
+                  detail: error.message,
+                },
+                turnId: turnId ? TurnId.make(turnId) : (active?.activeTurn?.turnId ?? null),
+                createdAt: droppedAt,
+              },
+              createdAt: droppedAt,
+            }),
+          );
+        },
         ...(routineDispatcher
           ? {
               listRoutines: (threadId: string) =>
@@ -1323,6 +1356,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           threadId: String(threadId),
           resourceId: String(threadId),
           modelId: resolved.mastraModelId,
+          turnId: String(turn.turnId),
         })
         .catch((cause) => {
           turn.memoryQueued = false;

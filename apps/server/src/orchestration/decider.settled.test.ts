@@ -5,13 +5,14 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  TurnId,
   type OrchestrationEvent,
   type OrchestrationReadModel,
   type OrchestrationSession,
   type OrchestrationThread,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { assert, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
 import { decideOrchestrationCommand } from "./decider.ts";
@@ -686,4 +687,51 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       ]);
     }),
   );
+
+it.layer(NodeServices.layer)("memory observation drop activity", (it) => {
+  it.effect("projects a dropped-observation activity row with thread and turn context", () =>
+    Effect.gen(function* () {
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.activity.append",
+          commandId: CommandId.make("cmd-observation-dropped"),
+          threadId: ThreadId.make("thread-1"),
+          activity: {
+            id: EventId.make("observation-dropped-1"),
+            tone: "error",
+            kind: "memory.observation.dropped",
+            summary: "Background memory observation dropped after repeated failures",
+            payload: {
+              resourceId: "thread-1",
+              modelId: "openai/gpt-5.6-sol",
+              attempts: 3,
+              detail: "observer down",
+            },
+            turnId: TurnId.make("turn-1"),
+            createdAt: NOW,
+          },
+          createdAt: NOW,
+        },
+        readModel: makeReadModel(null),
+      });
+      const events = Array.isArray(result) ? result : [result];
+      expect(events.map((event) => event.type)).toEqual(["thread.activity-appended"]);
+
+      const appended = events[0]!;
+      assert.equal(appended.type, "thread.activity-appended");
+      const projected = yield* projectEvent(
+        makeReadModel(null),
+        { ...appended, sequence: 1 } as OrchestrationEvent,
+      ).pipe(Effect.orDie);
+      const activity = projected.threads[0]?.activities[0];
+      expect(activity?.kind).toBe("memory.observation.dropped");
+      expect(activity?.tone).toBe("error");
+      expect(activity?.turnId).toBe("turn-1");
+      expect(activity?.summary).toBe(
+        "Background memory observation dropped after repeated failures",
+      );
+      expect(activity?.payload).toMatchObject({ attempts: 3, detail: "observer down" });
+    }),
+  );
+});
 });

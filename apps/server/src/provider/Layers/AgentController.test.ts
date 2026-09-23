@@ -67,6 +67,7 @@ import {
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
 import {
   BotUsageCapExceeded,
   BotUsageLedger,
@@ -2752,6 +2753,124 @@ describe("AgentControllerLive", () => {
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("dispatches a thread activity when an observation is dropped", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const dispatched: Array<{ readonly type: string; readonly activity?: unknown }> = [];
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const options = mastra.harnessOptions[0]!;
+        yield* Effect.promise(() =>
+          Promise.resolve(
+            options.onObservationDropped!({
+              threadId: String(codexThreadId),
+              turnId: "turn-dropped",
+              resourceId: String(codexThreadId),
+              modelId: "openai/gpt-5.6-sol",
+              attempts: 3,
+              error: new Error("observer down"),
+            }),
+          ),
+        );
+        assert.equal(dispatched.length, 1);
+        const command = dispatched[0]!;
+        assert.equal(command.type, "thread.activity.append");
+        const activity = command.activity as {
+          readonly kind: string;
+          readonly tone: string;
+          readonly turnId: string;
+          readonly payload: { readonly attempts: number };
+        };
+        assert.equal(activity.kind, "memory.observation.dropped");
+        assert.equal(activity.tone, "error");
+        assert.equal(activity.turnId, "turn-dropped");
+        assert.equal(activity.payload.attempts, 3);
+      }),
+      bridge.service,
+      mastra.factory,
+    ).pipe(
+      Effect.provideService(
+        OrchestrationEngine.OrchestrationEngineService,
+        OrchestrationEngine.OrchestrationEngineService.of({
+          readEvents: () => Stream.empty,
+          readThreadEvents: () => Stream.empty,
+          getThreadReplayStats: () =>
+            Effect.die("unused"),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              dispatched.push(command);
+              return { sequence: 1 };
+            }),
+          streamDomainEvents: Stream.empty,
+          subscribeDomainEvents: Effect.succeed(Stream.empty),
+          latestSequence: Effect.succeed(0),
+        }),
+      ),
+    );
+  });
+
+  it.effect("dispatches the drop activity without an active session", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const dispatched: Array<{ readonly type: string; readonly activity?: unknown }> = [];
+    return provideController(
+      Effect.gen(function* () {
+        // No startSession: the durable queue can drain after a restart before
+        // any client opens the thread, so the drop must still be appended.
+        const options = mastra.harnessOptions[0]!;
+        yield* Effect.promise(() =>
+          Promise.resolve(
+            options.onObservationDropped!({
+              threadId: "thread-never-opened",
+              turnId: "turn-durable",
+              resourceId: "thread-never-opened",
+              modelId: "openai/gpt-5.6-sol",
+              attempts: 3,
+              error: new Error("observer down"),
+            }),
+          ),
+        );
+        assert.equal(dispatched.length, 1);
+        const command = dispatched[0]!;
+        assert.equal(command.type, "thread.activity.append");
+        const activity = command.activity as {
+          readonly kind: string;
+          readonly turnId: string;
+        };
+        assert.equal(activity.kind, "memory.observation.dropped");
+        assert.equal(activity.turnId, "turn-durable");
+      }),
+      bridge.service,
+      mastra.factory,
+    ).pipe(
+      Effect.provideService(
+        OrchestrationEngine.OrchestrationEngineService,
+        OrchestrationEngine.OrchestrationEngineService.of({
+          readEvents: () => Stream.empty,
+          readThreadEvents: () => Stream.empty,
+          getThreadReplayStats: () => Effect.die("unused"),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              dispatched.push(command);
+              return { sequence: 1 };
+            }),
+          streamDomainEvents: Stream.empty,
+          subscribeDomainEvents: Effect.succeed(Stream.empty),
+          latestSequence: Effect.succeed(0),
+        }),
+      ),
     );
   });
 

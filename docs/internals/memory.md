@@ -205,3 +205,19 @@ overwriting a newer one. Mutations go through
 served over WebSocket.
 Import review lives in the same module: `resolveImportConflicts` has no default decision and
 returns resolutions only after every conflicting root has one.
+
+## Observational memory durability
+
+Observation work is a rebuildable cache, but queue admission is durable. Each completed turn first
+records a pending observation in `mastra-observational-memory.sqlite.queue.sqlite`, a dedicated
+store beside the Mastra memory DB. The queue store is owned by `AkeruMastraHarness`, which opens it
+directly and never sees the Effect migration runner, so it versions itself with `PRAGMA
+user_version` instead of an environment-store migration. A background drain claims one row at a time
+with a single conditional `UPDATE` (a lease expires after five minutes so a crashed drain cannot
+hold a row forever), then runs Mastra observation without holding up the reply. A failed attempt
+increments `attempts`, releases the claim, and pushes `next_attempt_at` out by a short backoff, so a
+stuck observation never blocks later rows; the third failure removes the row and emits a
+user-visible `memory.observation.dropped` activity. Startup drains rows left by a previous process,
+so a restart does not silently lose queued work, and `busy_timeout` plus enqueue error handling keep
+queue contention off the reply path. Observer and Reflector calls use the same usage ledger hooks
+for every provider path, including legacy external turns.
