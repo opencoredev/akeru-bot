@@ -1,8 +1,8 @@
 "use client";
 
 import type { PreviewFrame, ScopedThreadRef } from "@t3tools/contracts";
-import { Maximize2Icon, Minimize2Icon } from "lucide-react";
-import type { ReactNode } from "react";
+import { Maximize2Icon, MonitorIcon, Minimize2Icon } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { BrowserSurfaceSlot } from "../../browser/BrowserSurfaceSlot";
 import { PreviewPanel } from "../preview/PreviewPanel";
@@ -10,10 +10,23 @@ import { usePreviewSession } from "../preview/usePreviewSession";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { isPreviewSupportedInRuntime, useThreadPreviewState } from "../../previewStateStore";
+import { cn } from "~/lib/utils";
 import {
   botBrowserPreviewRuntimeTabId,
   resolveBotBrowserPreviewStatus,
+  type BotBrowserPreviewStatus,
 } from "./botBrowserPreview.logic";
+
+/*
+ * The bot's screen. Two ideas come from the reference build: the resting card
+ * reveals an "Open" affordance instead of a permanently parked button, and Esc
+ * collapses the expanded viewer. Everything else stays on Akeru's transport —
+ * the native surface in Electron, remote frames on the web.
+ *
+ * The card is only dark while it is actually showing a page. An idle card that
+ * paints itself black reads as a broken screen rather than an empty one, so
+ * waiting and failed states rest on the app's own surface.
+ */
 
 interface BotBrowserPreviewProps {
   readonly botName: string;
@@ -26,11 +39,20 @@ interface BotBrowserPreviewProps {
 
 const STATUS_LABELS = {
   unsupported: "Open the desktop app to view the browser.",
-  connecting: "Connecting browser...",
   waiting: "The browser appears when the bot opens a page.",
-  loading: "Opening page...",
+  loading: "Opening page…",
   failed: "The page did not load.",
 } as const;
+
+const SCREEN_RADIUS = 12;
+
+/**
+ * Whether the card is showing real page content. Only a live card earns the
+ * dark surface; every other state keeps the neutral one.
+ */
+export function isLiveBrowserStatus(status: BotBrowserPreviewStatus): boolean {
+  return status === "ready" || status === "loading";
+}
 
 export function BotBrowserPreview({
   botName,
@@ -96,30 +118,75 @@ function ConnectedBotBrowserPreview({
       ? null
       : botBrowserPreviewRuntimeTabId(threadRef, previewState.serverEpoch, tabId);
 
+  // Esc collapses the viewer. Handlers that already consumed the key — dialogs,
+  // menus — keep priority.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      onExpandedChange(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [expanded, onExpandedChange]);
+
+  // Expanding replaces the control you just pressed, so focus has to travel
+  // with the view and come back to that control on the way out. Queried by
+  // attribute rather than held as a ref because the buttons render through
+  // Tooltip's `render` prop.
+  const expandedRef = useRef<HTMLElement | null>(null);
+  const collapsedRef = useRef<HTMLElement | null>(null);
+  const wasExpanded = useRef(expanded);
+  useEffect(() => {
+    if (expanded && !wasExpanded.current) {
+      expandedRef.current?.focus();
+    } else if (!expanded && wasExpanded.current) {
+      collapsedRef.current?.querySelector<HTMLElement>("[data-browser-expand]")?.focus();
+    }
+    wasExpanded.current = expanded;
+  }, [expanded]);
+
   if (expanded) {
     return (
-      <section className="flex min-h-0 flex-1 flex-col" data-testid="bot-browser-expanded">
-        <header className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center gap-2 px-3">
-          <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{botName}'s browser</h2>
-          {trailingAction}
+      <section
+        aria-label={`${botName}'s browser`}
+        className="flex min-h-0 flex-1 flex-col outline-none"
+        data-testid="bot-browser-expanded"
+        ref={expandedRef}
+        tabIndex={-1}
+      >
+        <header className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-between gap-3 px-4">
+          <h2 className="min-w-0 truncate text-sm font-medium">{botName}'s browser</h2>
+          <div className="flex shrink-0 items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-label={`Collapse ${botName} browser`}
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => onExpandedChange(false)}
+                  />
+                }
+              >
+                <Minimize2Icon />
+              </TooltipTrigger>
+              <TooltipPopup side="left">Collapse (Esc)</TooltipPopup>
+            </Tooltip>
+            {trailingAction}
+          </div>
         </header>
-        <div className="relative min-h-0 flex-1 overflow-hidden border-t border-border">
+        <div
+          className={cn(
+            "relative mx-3 mb-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-border",
+            isLiveBrowserStatus(status) ? "bg-zinc-950" : "bg-muted/40",
+          )}
+        >
           {nativeSupported ? (
             <PreviewPanel mode="embedded" threadRef={threadRef} visible={visible} />
           ) : (
-            <BrowserFrame
-              botName={botName}
-              frame={frame}
-              status={status}
-              className="size-full rounded-none"
-            />
+            <BrowserFrame botName={botName} frame={frame} status={status} className="size-full" />
           )}
-          <PreviewSizeButton
-            label={`Restore ${botName} browser preview`}
-            tooltip="Restore preview"
-            onClick={() => onExpandedChange(false)}
-            expanded
-          />
         </div>
       </section>
     );
@@ -134,6 +201,7 @@ function ConnectedBotBrowserPreview({
       browserVisible={visible && Boolean(desktopOverlay?.hasWebContents) && !failed}
       onExpand={() => onExpandedChange(true)}
       trailingAction={trailingAction}
+      sectionRef={collapsedRef}
     />
   );
 }
@@ -146,76 +214,129 @@ function BotBrowserPreviewFrame({
   browserVisible = false,
   onExpand,
   trailingAction,
+  sectionRef,
 }: {
   readonly botName: string;
-  readonly status: ReturnType<typeof resolveBotBrowserPreviewStatus>;
+  readonly status: BotBrowserPreviewStatus;
   readonly runtimeTabId?: string | null;
   readonly frame?: PreviewFrame | null;
   readonly browserVisible?: boolean;
   readonly onExpand?: () => void;
   readonly trailingAction?: ReactNode;
+  readonly sectionRef?: React.MutableRefObject<HTMLElement | null>;
 }) {
-  const showBrowser = runtimeTabId !== null && (status === "ready" || status === "loading");
-  const showFrame = frame !== null && (status === "ready" || status === "loading");
+  const live = isLiveBrowserStatus(status);
+  const showBrowser = runtimeTabId !== null && live;
+  const showFrame = frame !== null && live;
+  const canOpen = onExpand !== undefined && live;
 
   return (
-    <section className="shrink-0 px-3 pt-3" data-testid="bot-browser-preview">
+    <section className="shrink-0 px-4 pt-4" data-testid="bot-browser-preview" ref={sectionRef}>
       <div className="mb-2 flex min-h-7 items-center gap-2">
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{botName}'s browser</h2>
+        {canOpen ? (
+          // The native surface paints above the DOM in Electron, so a hover-only
+          // affordance would be unreachable there. This keeps Open beside the label.
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-label={`Expand ${botName} browser`}
+                  data-browser-expand=""
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={onExpand}
+                />
+              }
+            >
+              <Maximize2Icon />
+            </TooltipTrigger>
+            <TooltipPopup side="left">Open</TooltipPopup>
+          </Tooltip>
+        ) : null}
         {trailingAction}
       </div>
-      <BrowserFrame
-        botName={botName}
-        frame={showFrame ? frame : null}
-        status={status}
-        className="aspect-video rounded-xl shadow-sm ring-1 ring-inset ring-white/10"
+      <div
+        className={cn(
+          "group/screen relative aspect-video overflow-hidden rounded-xl border border-border transition-shadow",
+          live ? "bg-zinc-950" : "bg-muted/40",
+          canOpen && "cursor-pointer hover:shadow-sm",
+        )}
+        onClick={canOpen ? onExpand : undefined}
       >
         {showBrowser ? (
           <BrowserSurfaceSlot
             tabId={runtimeTabId}
             visible={browserVisible}
-            cornerRadius={12}
+            cornerRadius={SCREEN_RADIUS}
             fitSourceContent
             className="absolute inset-0"
           />
         ) : null}
-        {onExpand ? (
-          <PreviewSizeButton
-            label={`Expand ${botName} browser`}
-            tooltip="Expand browser"
-            onClick={onExpand}
-          />
+        {showFrame && frame ? <RemoteFrame botName={botName} frame={frame} /> : null}
+        <ScreenStatus status={status} />
+        {canOpen ? (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/0 transition-colors group-focus-within/screen:bg-zinc-950/25 group-hover/screen:bg-zinc-950/25">
+            <Button
+              aria-label={`Open ${botName} browser`}
+              className="translate-y-1 opacity-0 transition group-focus-within/screen:translate-y-0 group-focus-within/screen:opacity-100 group-hover/screen:translate-y-0 group-hover/screen:opacity-100"
+              size="xs"
+              variant="secondary"
+              onClick={(event) => {
+                event.stopPropagation();
+                onExpand();
+              }}
+            >
+              <Maximize2Icon />
+              Open
+            </Button>
+          </div>
         ) : null}
-      </BrowserFrame>
+      </div>
     </section>
   );
 }
 
-function PreviewSizeButton(props: {
-  readonly label: string;
-  readonly tooltip: string;
-  readonly expanded?: boolean;
-  readonly onClick: () => void;
+function RemoteFrame({
+  botName,
+  frame,
+}: {
+  readonly botName: string;
+  readonly frame: PreviewFrame;
 }) {
-  const Icon = props.expanded ? Minimize2Icon : Maximize2Icon;
   return (
-    <div className="absolute bottom-2 right-2 z-40">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              aria-label={props.label}
-              className="bg-background/88 shadow-sm backdrop-blur hover:bg-background"
-              size="icon-sm"
-              variant="outline"
-              onClick={props.onClick}
-            />
-          }
-        >
-          <Icon />
-        </TooltipTrigger>
-        <TooltipPopup side="left">{props.tooltip}</TooltipPopup>
-      </Tooltip>
+    <img
+      alt={`${botName} browser`}
+      className="absolute inset-0 size-full object-contain"
+      data-testid="bot-browser-remote-frame"
+      src={`data:${frame.mimeType};base64,${frame.data}`}
+    />
+  );
+}
+
+/**
+ * What the card says when it is not simply showing a page. A live card that is
+ * still opening keeps its dark surface and dims; an idle one explains itself on
+ * the neutral surface with the screen glyph the empty state deserves.
+ */
+function ScreenStatus({ status }: { readonly status: BotBrowserPreviewStatus }) {
+  if (status === "ready") return null;
+
+  if (status === "loading") {
+    return (
+      <div
+        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-950/70 px-6 text-center text-xs text-zinc-300"
+        role="status"
+      >
+        {STATUS_LABELS.loading}
+      </div>
+    );
+  }
+
+  return (
+    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
+      <MonitorIcon aria-hidden className="size-5 text-muted-foreground/70" />
+      <span className="text-xs text-muted-foreground">{STATUS_LABELS[status]}</span>
     </div>
   );
 }
@@ -225,30 +346,16 @@ function BrowserFrame({
   frame,
   status,
   className,
-  children,
 }: {
   readonly botName: string;
   readonly frame: PreviewFrame | null;
-  readonly status: ReturnType<typeof resolveBotBrowserPreviewStatus>;
+  readonly status: BotBrowserPreviewStatus;
   readonly className: string;
-  readonly children?: ReactNode;
 }) {
   return (
-    <div className={`relative overflow-hidden bg-zinc-950 ${className}`}>
-      {children}
-      {frame ? (
-        <img
-          alt={`${botName} browser`}
-          className="absolute inset-0 size-full object-contain"
-          data-testid="bot-browser-remote-frame"
-          src={`data:${frame.mimeType};base64,${frame.data}`}
-        />
-      ) : null}
-      {status !== "ready" ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-950/88 px-6 text-center text-xs text-zinc-400">
-          {STATUS_LABELS[status]}
-        </div>
-      ) : null}
+    <div className={cn("relative overflow-hidden", className)}>
+      {frame ? <RemoteFrame botName={botName} frame={frame} /> : null}
+      <ScreenStatus status={status} />
     </div>
   );
 }

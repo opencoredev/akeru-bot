@@ -25,12 +25,16 @@ Select **Skip setup** on any setup step, then confirm **Skip setup** in the dial
 Select **Cancel** to stay in setup. Skipping keeps any connected subscriptions and bots you already
 created. Setup will not open again after a restart.
 
-You can connect a subscription in Settings and use **Create** to add a bot later.
+You can connect a subscription in Settings and use **Create** to add a bot later. When the roster is
+empty, the main view shows **Create bot**.
 
 ## Profile
 
 You can change the bot's avatar, name, label, description, model, voice access, and enabled tools.
-Select **Save** to apply the changes.
+Select **Save** to apply the changes. The model button in the composer shows which model answers the
+next message. Select it to change the bot's model without leaving the chat. If the provider stops
+offering the bot's model, the button keeps showing it and marks it unavailable until you choose
+another one.
 
 Shaped avatars are a flat colored body with a face. The eyes are cut out of the body, so they take
 the color of whatever sits behind the avatar. Very light and very dark custom colors draw their eyes
@@ -52,6 +56,9 @@ sees the same profile.
 **Separate** is the default. Each bot gets its own workspace identity and browser profile. **Shared**
 lets bots share files and browser cookies.
 
+When a bot shares its browser, the panel shows a small capture of its screen. Select **Open** to
+expand it, and select the collapse button or press Esc to shrink it again.
+
 Bots can use Local, E2B, Daytona, Vercel Sandbox, or Upstash Box. Connect remote services under
 **Settings > Sandbox**. A bot-specific sandbox overrides the environment default.
 
@@ -63,10 +70,15 @@ cloud sandbox do not show the local computer prompt.
 ## Run a routine
 
 Open **Routines** in the bot panel. Add a routine, procedure, schedule, timezone, required skills,
-and connectors. Run a dry run and approve the procedure before you enable its schedule.
+and connectors. Select **Test** to test the routine, then approve the procedure before you enable its
+schedule.
 
-The panel shows the next and last run, latest result or failure, and five recent attempts. You can
-run, pause, resume, edit, or delete the routine. A procedure change needs approval again.
+Each routine card shows its schedule, status, and latest result. Select a card to see when it runs,
+its latest run, its instructions, and its workspace. You can run, pause, resume, edit, or delete the
+routine there, then select the back button to return to the list. A procedure change needs approval
+again. A draft routine shows **Draft** until you approve its procedure.
+
+The bot's chat notes when a routine is created, starts a run, and finishes, fails, or is canceled.
 
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
 adds one item to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived
@@ -83,6 +95,11 @@ Changing the provider starts a fresh provider session with the same enabled tool
 
 The sidebar shows pinned bots and groups as launcher cards at the top, followed by the rest as detailed rows under **Bots**. Drag a bot or group to reorder it, pin it, or unpin it. Dragging into **Pinned** pins it at that spot, and dragging a pinned item back into **Bots** unpins it.
 
+To archive a bot, open its menu and select **Archive bot**. Archived bots leave the roster and stop
+taking messages, but their chats are kept. A message sent from another device that still shows the
+bot is refused with a note that the bot is archived. Open **Archived** at the bottom of the roster and select
+**Restore** to bring one back.
+
 Pins only change the roster layout. They do not change group membership or settle chats.
 
 While you drag, the lifted row stays in the roster and moves vertically between available positions. The destination label stays readable and takes the accent color. These transitions follow your reduced-motion preference, and a drop does not replay a second animation.
@@ -97,12 +114,21 @@ Use the panel button to collapse or reopen the bot editor. The default shortcut 
 can change **Right Panel: Toggle** in keybinding settings. Narrow screens open the editor as a sheet.
 
 Bot replies support headings, links, tables, task lists, code blocks, math, and Mermaid diagrams.
+While a bot works, a small pixel meter sits under the latest message with the bot's current step and
+the elapsed time. The meter sweeps once when the bot starts or moves to a new step, then holds still.
+With reduced motion turned on, it skips the sweep. The timer counts whole seconds either way.
 During longer bot work, the bot posts short status notes after meaningful progress.
 
 When a bot hands work to another bot or group, the chat shows a card for each handoff. Cards for
 work that is still running always stay. For finished, failed, or canceled work, the chat keeps the
 20 most recent cards, and a long result shows its first 2,000 characters. Open the delegated chat to
 read the full result.
+
+When a request fails, the chat shows a short card that says what went wrong and what to do next. A
+provider that is turned off or signed out gets an **Open providers** button. When the cause is
+unknown, select **Send feedback** to report it with its details. Expand **Technical details** to see
+the underlying error, or select **Resume** when an interrupted request can continue. On mobile, the resume card
+shows the same summary.
 
 ## Voice calls
 

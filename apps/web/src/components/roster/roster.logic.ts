@@ -269,6 +269,25 @@ export function buildRosterSections(input: RosterSectionsInput): RosterSection[]
   ];
 }
 
+/**
+ * The unpinned zone holds bots and groups, so the heading says what is actually
+ * under it rather than calling a group a bot.
+ */
+export function rosterZoneHeading(items: readonly RosterItemRef[]): string {
+  const hasBots = items.some((item) => item.kind === "bot");
+  const hasGroups = items.some((item) => item.kind === "group");
+  if (hasGroups && hasBots) return "Bots and groups";
+  if (hasGroups) return "Groups";
+  return "Bots";
+}
+
+/** Archived bots, newest archive first, for the roster's restore list. */
+export function archivedRosterBots(bots: readonly Bot[]): Bot[] {
+  return bots
+    .filter((bot) => bot.archivedAt !== null)
+    .toSorted((left, right) => (right.archivedAt ?? "").localeCompare(left.archivedAt ?? ""));
+}
+
 export const ROSTER_TILE_LIMIT = 5;
 
 export function buildRosterStrip(

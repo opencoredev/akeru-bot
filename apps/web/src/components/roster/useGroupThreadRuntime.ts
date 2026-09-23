@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { newMessageId, newThreadId } from "../../lib/utils";
 import { resolveAppModelSelectionState } from "../../modelSelection";
+import { NO_PROVIDER_MODEL_SELECTION } from "../../providerInstances";
 import { environmentGroupsAtom } from "../../state/bots";
 import {
   useAllEnvironmentShellsBootstrapped,
@@ -43,6 +44,7 @@ import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThre
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
+import { latestThreadRuntimeError } from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -233,6 +235,13 @@ export function useGroupThreadRuntime(groupId: string) {
       }
       if (!groupReady || !group) {
         setError("The group is still connecting.");
+        return false;
+      }
+      if (
+        !appDefaultModelSelection ||
+        appDefaultModelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId
+      ) {
+        setError("Connect at least one provider before messaging a group.");
         return false;
       }
       if (!activeProject) {
@@ -433,8 +442,15 @@ export function useGroupThreadRuntime(groupId: string) {
     bootstrapped,
     canResume,
     defaultProject: activeProject,
-    error: error ?? rememberedThread?.session?.lastError ?? null,
+    error:
+      error ??
+      latestThreadRuntimeError(activities, rememberedThread?.latestTurn ?? null) ??
+      rememberedThread?.session?.lastError ??
+      null,
     groupReady,
+    providerAvailable:
+      appDefaultModelSelection !== null &&
+      appDefaultModelSelection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,

@@ -29,6 +29,8 @@ export type ModelEsque = {
   shortName?: string | undefined;
   subProvider?: string | undefined;
   isLegacy?: boolean | undefined;
+  /** A selected model the provider no longer lists. */
+  unavailable?: boolean | undefined;
 };
 
 function escapeRegExp(value: string): string {

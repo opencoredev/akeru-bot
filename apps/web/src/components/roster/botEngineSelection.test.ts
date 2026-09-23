@@ -9,6 +9,30 @@ import { resolveStickyBotEngine } from "./botEngineSelection";
 const settings = DEFAULT_UNIFIED_SETTINGS;
 
 describe("resolveStickyBotEngine", () => {
+  it("returns no engine when every provider is disabled", () => {
+    const providers = [
+      {
+        ...makeComposerTestProvider(),
+        enabled: false,
+        installed: false,
+        status: "disabled" as const,
+        auth: { status: "unknown" as const },
+      },
+    ];
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const instanceId = instanceEntries[0]!.instanceId;
+
+    expect(
+      resolveStickyBotEngine({
+        engine: { provider: instanceId, model: "gpt-5.6-sol" },
+        instanceEntries,
+        settings,
+        providers,
+        defaultSelection: { instanceId, model: "gpt-5.6-sol" },
+      }),
+    ).toBeNull();
+  });
+
   it("keeps the bot engine model instead of the app default", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);

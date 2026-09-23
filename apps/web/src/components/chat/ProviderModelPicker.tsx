@@ -3,7 +3,7 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { buttonVariants } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
@@ -66,7 +66,22 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     selectedInstanceOptions.find((option) => option.slug === props.model) ??
     selectedInstanceOptions[0];
   const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
-  const triggerLabel = selectedModel ? getTriggerDisplayModelLabel(selectedModel) : props.model;
+  const triggerLabel = selectedModel?.unavailable
+    ? `${triggerTitle} is no longer offered by this provider. Choose another model.`
+    : selectedModel
+      ? getTriggerDisplayModelLabel(selectedModel)
+      : props.model;
+  const { getModelDisabledReason } = props;
+  const getDisabledReason = useCallback(
+    (instanceId: ProviderInstanceId, model: string) =>
+      getModelDisabledReason?.(instanceId, model) ??
+      (props.modelOptionsByInstance
+        .get(instanceId)
+        ?.some((option) => option.slug === model && option.unavailable)
+        ? "No longer offered by this provider"
+        : null),
+    [getModelDisabledReason, props.modelOptionsByInstance],
+  );
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
@@ -199,9 +214,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           modelOptionsByInstance={props.modelOptionsByInstance}
           terminalOpen={props.terminalOpen ?? false}
           onRequestClose={() => setIsMenuOpen(false)}
-          {...(props.getModelDisabledReason
-            ? { getModelDisabledReason: props.getModelDisabledReason }
-            : {})}
+          getModelDisabledReason={getDisabledReason}
           onInstanceModelChange={handleInstanceModelChange}
         />
       </PopoverPopup>

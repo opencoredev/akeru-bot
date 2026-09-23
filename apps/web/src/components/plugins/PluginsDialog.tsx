@@ -21,6 +21,7 @@ import {
 import { ensureLocalApi } from "../../localApi";
 import { cn, randomUUID } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
+import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../workspaceTitlebar";
 import { environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcpServers";
@@ -585,7 +586,14 @@ function PluginsDialogForEnvironment({
         />
       ) : (
         <>
-          <DialogHeader className={PLUGIN_DIRECTORY_HEADER_CLASS_NAME}>
+          <DialogHeader
+            className={cn(
+              PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
+              // The standalone page sits under the fixed sidebar trigger; without
+              // this the title disappears behind it once the sidebar collapses.
+              standalone && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+            )}
+          >
             <div className="pe-8">
               {standalone ? (
                 <h1 className="font-heading text-xl font-semibold leading-none">Plugins</h1>
@@ -606,8 +614,11 @@ function PluginsDialogForEnvironment({
                 className="h-9 ps-9"
               />
             </div>
+            {/* Full-bleed: the chips scroll to the panel edge so it is visible
+                that the row continues past it, instead of stopping short at a
+                padding boundary that reads as the end of the list. */}
             <div
-              className="flex gap-1.5 overflow-x-auto pb-1"
+              className="-mx-6 flex gap-1.5 overflow-x-auto px-6 pb-1.5 [scrollbar-width:thin]"
               aria-label="Plugin sections and categories"
             >
               {PLUGIN_DIRECTORY_FILTERS.map((item) => (

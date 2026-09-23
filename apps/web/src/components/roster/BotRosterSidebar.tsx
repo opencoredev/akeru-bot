@@ -10,9 +10,12 @@ import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { BotId, GroupId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   BotIcon,
@@ -51,6 +54,15 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { AkeruWordmark } from "../AkeruWordmark";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
@@ -64,6 +76,7 @@ import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
 import {
+  archivedRosterBots,
   buildRosterListItems,
   filterRosterBots,
   filterRosterGroups,
@@ -78,6 +91,7 @@ import {
   rosterItemsForZone,
   rosterListItemId,
   rosterMarkerId,
+  rosterZoneHeading,
   orderRosterBotsForShortcuts,
   resolveRosterShortcutBot,
   type RosterItemRef,
@@ -249,6 +263,57 @@ const setRosterItemPinned = (item: RosterItemRef, pinned: boolean) =>
 const nudgeRosterItem = (item: RosterItemRef, delta: -1 | 1) =>
   useRosterStore.getState().nudgeRosterItem(item, delta);
 
+function commandFailureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
+  const error = squashAtomCommandFailure(result);
+  return error instanceof Error ? error.message : "The environment rejected the change.";
+}
+
+/**
+ * The roster row focus lands on once an archived one is gone: the row that takes
+ * its place, else the row above it, else nothing — meaning the roster list
+ * itself, because the row focus would have returned to is on its way out.
+ * Keys are `rosterItemKey` values, so a surviving group can take the focus too.
+ */
+export function focusTargetAfterRosterArchive(
+  rowKeys: readonly string[],
+  archivedKey: string,
+): string | null {
+  const index = rowKeys.indexOf(archivedKey);
+  if (index === -1) return rowKeys[0] ?? null;
+  return rowKeys[index + 1] ?? rowKeys[index - 1] ?? null;
+}
+
+/**
+ * Runs one create-bot submission at a time. `NewBotDialog` stays mounted while
+ * the command is awaited, so a second submit would dispatch a second create and
+ * leave the pending-selection id on whichever request happened to settle last.
+ * The latch is a ref rather than state because both submits land before React
+ * has re-rendered the dialog with `submitting`.
+ */
+export async function runCreateBotOnce(
+  inFlight: { current: boolean },
+  create: () => Promise<void>,
+): Promise<void> {
+  if (inFlight.current) return;
+  inFlight.current = true;
+  try {
+    await create();
+  } finally {
+    inFlight.current = false;
+  }
+}
+
+const rosterFullTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/** Unabbreviated date for the roster row's compact timestamp tooltip. */
+function formatRosterFullTimestamp(isoDate: string): string {
+  const parsed = new Date(isoDate);
+  return Number.isNaN(parsed.getTime()) ? "" : rosterFullTimestampFormatter.format(parsed);
+}
+
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
@@ -260,6 +325,7 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveUp,
   canMoveDown,
   onNudge,
+  onArchive,
   sortable,
 }: {
   bot: Bot;
@@ -272,6 +338,7 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveUp: boolean;
   canMoveDown: boolean;
   onNudge: (item: RosterItemRef, delta: -1 | 1) => void;
+  onArchive: (bot: Bot) => void;
   sortable: SortableRosterRowBag;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -312,6 +379,7 @@ const BotRosterRow = memo(function BotRosterRow({
       >
         <button
           type="button"
+          data-roster-row={rosterItemKey({ kind: "bot", id: bot.id })}
           aria-current={isActive || undefined}
           onClick={() => onSelect(bot)}
           className={cn(
@@ -329,9 +397,18 @@ const BotRosterRow = memo(function BotRosterRow({
               <span className="flex items-baseline gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
                 {latestMessage ? (
-                  <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+                  // The compact label collapses to a bare numeric date once a
+                  // chat is over a week old ("1/15"), which reads like a count
+                  // rather than a date. Keep the compact form — the roster has
+                  // no room for more — and let the machine-readable datetime
+                  // plus hover text say what it actually is.
+                  <time
+                    dateTime={latestMessage.at}
+                    aria-label={`Last message ${formatRosterFullTimestamp(latestMessage.at)}`}
+                    className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground"
+                  >
                     {formatRosterTimestamp(latestMessage.at, timestampFormat)}
-                  </span>
+                  </time>
                 ) : null}
               </span>
               {latestMessage ? (
@@ -369,6 +446,10 @@ const BotRosterRow = memo(function BotRosterRow({
             <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
               <ArrowDownIcon />
               Move down
+            </MenuItem>
+            <MenuItem variant="destructive" onClick={() => onArchive(bot)}>
+              <ArchiveIcon />
+              Archive bot
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -467,6 +548,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
     >
       <button
         type="button"
+        data-roster-row={rosterItemKey({ kind: "group", id: group.id })}
         aria-current={isActive || undefined}
         onClick={() => onSelect(group)}
         className={cn(
@@ -636,6 +718,8 @@ export default function BotRosterSidebar() {
   const createGroupCommand = useAtomCommand(botEnvironment.groups.create, {
     reportFailure: false,
   });
+  const archiveBotCommand = useAtomCommand(botEnvironment.archive, { reportFailure: false });
+  const restoreBotCommand = useAtomCommand(botEnvironment.restore, { reportFailure: false });
   const pathname = useLocation({ select: (location) => location.pathname });
   const { bots, groups, lastMessageByBotId, selectedBotId, pinnedItems, unassignedItems } =
     useRosterStore(
@@ -668,6 +752,7 @@ export default function BotRosterSidebar() {
     () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
     [bots, query],
   );
+  const archivedBots = useMemo(() => archivedRosterBots(bots), [bots]);
   const visibleGroups = useMemo(
     () => filterRosterGroups(groups, bots, query),
     [bots, groups, query],
@@ -940,41 +1025,145 @@ export default function BotRosterSidebar() {
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
-  const [pendingCreatedBotId, setPendingCreatedBotId] = useState<string | null>(null);
-  const handleNewBot = () => setNewBotOpen(true);
-  const handleNewGroup = () => setNewGroupOpen(true);
-  const handleCreateBot = async ({ name, avatar }: { name: string; avatar: BotAvatar }) => {
+  const [archivingBot, setArchivingBot] = useState<Bot | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [pendingArchivedBotId, setPendingArchivedBotId] = useState<string | null>(null);
+  // Archiving is the one close that cannot go back where it came from: the row
+  // menu button focus was on leaves with the row. The confirm names its survivor
+  // here and holds it past the close, so the dialog does not restore focus onto
+  // a button the projection is about to remove.
+  const archivedFocusTarget = useRef<string | null | undefined>(undefined);
+  const rosterSearchRef = useRef<HTMLInputElement | null>(null);
+
+  /** Row keys in the order the roster renders them, so the survivor is the next one down. */
+  const rosterRowKeys = useMemo(
+    () =>
+      rosterListItems.flatMap((item) => (item.kind === "entry" ? [rosterItemKey(item.item)] : [])),
+    [rosterListItems],
+  );
+
+  const focusRosterRow = useCallback((rowKey: string | null) => {
+    const list = rosterListRef.current;
+    for (const row of rowKey === null
+      ? []
+      : (list?.querySelectorAll<HTMLElement>("[data-roster-row]") ?? [])) {
+      if (row.dataset.rosterRow === rowKey) {
+        row.focus();
+        return;
+      }
+    }
+    // Nothing survived in the list, or the last bot took the list with it.
+    (list ?? rosterSearchRef.current)?.focus();
+  }, []);
+
+  const handleArchiveBot = async (bot: Bot) => {
     if (environmentId === null) {
+      // Nothing was archived, so the dialog restores focus to the row menu itself.
+      setArchivingBot(null);
+      toastManager.add({ type: "error", title: "Connect an environment first" });
+      return;
+    }
+    const botKey = rosterItemKey({ kind: "bot", id: bot.id });
+    archivedFocusTarget.current = focusTargetAfterRosterArchive(rosterRowKeys, botKey);
+    setArchivingBot(null);
+    const result = await archiveBotCommand({
+      environmentId,
+      input: { botId: BotId.make(bot.id) },
+    });
+    if (result._tag === "Failure") {
+      // The row stayed, so focus goes back to it rather than to its replacement.
+      archivedFocusTarget.current = undefined;
+      focusRosterRow(botKey);
+      // Archiving is refused with a reason (a group boss, a group left too small), so say it.
       toastManager.add({
         type: "error",
-        title: "Connect an environment first",
+        title: `Could not archive ${bot.name}`,
+        description: commandFailureMessage(result),
       });
       return;
     }
-    const botId = BotId.make(`bot-${randomUUID()}`);
-    const result = await createBotCommand({
-      environmentId,
-      input: {
-        botId,
-        name: name.trim(),
-        title: "Assistant",
-        label: null,
-        description: null,
-        avatar,
-        engine: null,
-        sandbox: null,
-        runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
-        usageCap: null,
-        groupId: null,
-      },
-    });
-    if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not create bot" });
+    setPendingArchivedBotId(bot.id);
+  };
+
+  // The exit waits for the roster projection. Navigating on the command's reply
+  // sends `/` a selection it still resolves to the archived bot, which bounces
+  // straight back into the chat being left; focus would land on a row that is
+  // about to be removed. Once the bot is gone from the live roster the survivor
+  // is real, and the selection is re-read because the user may have opened
+  // another bot while the archive was in flight.
+  useEffect(() => {
+    if (pendingArchivedBotId === null) return;
+    if (bots.some((bot) => bot.id === pendingArchivedBotId && bot.archivedAt === null)) return;
+    const focusTarget = archivedFocusTarget.current ?? null;
+    archivedFocusTarget.current = undefined;
+    setPendingArchivedBotId(null);
+    focusRosterRow(focusTarget);
+    if (useRosterStore.getState().selectedBotId === pendingArchivedBotId) {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [bots, focusRosterRow, navigate, pendingArchivedBotId]);
+
+  const handleRestoreBot = async (bot: Bot) => {
+    if (environmentId === null) {
+      toastManager.add({ type: "error", title: "Connect an environment first" });
       return;
     }
-    setNewBotOpen(false);
-    setPendingCreatedBotId(botId);
+    const result = await restoreBotCommand({
+      environmentId,
+      input: { botId: BotId.make(bot.id) },
+    });
+    if (result._tag === "Failure") {
+      toastManager.add({
+        type: "error",
+        title: `Could not restore ${bot.name}`,
+        description: commandFailureMessage(result),
+      });
+    }
   };
+
+  const [pendingCreatedBotId, setPendingCreatedBotId] = useState<string | null>(null);
+  const [creatingBot, setCreatingBot] = useState(false);
+  const creatingBotRef = useRef(false);
+  const handleNewBot = () => setNewBotOpen(true);
+  const handleNewGroup = () => setNewGroupOpen(true);
+  const handleCreateBot = ({ name, avatar }: { name: string; avatar: BotAvatar }) =>
+    runCreateBotOnce(creatingBotRef, async () => {
+      if (environmentId === null) {
+        toastManager.add({
+          type: "error",
+          title: "Connect an environment first",
+        });
+        return;
+      }
+      setCreatingBot(true);
+      try {
+        const botId = BotId.make(`bot-${randomUUID()}`);
+        const result = await createBotCommand({
+          environmentId,
+          input: {
+            botId,
+            name: name.trim(),
+            title: "Assistant",
+            label: null,
+            description: null,
+            avatar,
+            engine: null,
+            sandbox: null,
+            runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
+            usageCap: null,
+            groupId: null,
+          },
+        });
+        if (result._tag === "Failure") {
+          toastManager.add({ type: "error", title: "Could not create bot" });
+          return;
+        }
+        setNewBotOpen(false);
+        setPendingCreatedBotId(botId);
+      } finally {
+        setCreatingBot(false);
+      }
+    });
 
   const handleCreateGroup = async (input: NewGroupInput) => {
     if (environmentId === null) {
@@ -1029,6 +1218,7 @@ export default function BotRosterSidebar() {
             <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
               <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
               <input
+                ref={rosterSearchRef}
                 type="text"
                 data-testid="roster-search-input"
                 placeholder="Search"
@@ -1113,6 +1303,9 @@ export default function BotRosterSidebar() {
                   <ul
                     ref={attachListMotionRef}
                     role="list"
+                    // Focusable only on purpose: where focus lands when an
+                    // archived row leaves and no sibling row survives it.
+                    tabIndex={-1}
                     aria-label="Bots and groups"
                     className="relative flex flex-wrap justify-center gap-x-1 gap-y-px"
                   >
@@ -1155,6 +1348,7 @@ export default function BotRosterSidebar() {
                                         canMoveUp={canMoveUp}
                                         canMoveDown={canMoveDown}
                                         onNudge={nudgeRosterItem}
+                                        onArchive={setArchivingBot}
                                         sortable={bag}
                                       />
                                     );
@@ -1222,8 +1416,11 @@ export default function BotRosterSidebar() {
                                 )}
                               >
                                 <ChevronDownIcon className="size-3.5" />
-                                <span>Bots</span>
-                                <span className="tabular-nums">
+                                <span>{rosterZoneHeading(visibleUnassignedItems)}</span>
+                                <span
+                                  className="tabular-nums"
+                                  aria-label={`${visibleUnassignedItems.length} unpinned`}
+                                >
                                   {visibleUnassignedItems.length}
                                 </span>
                                 <span
@@ -1270,6 +1467,62 @@ export default function BotRosterSidebar() {
             </SidebarGroup>
           </>
         )}
+        {/* Archiving is reversible, so the way back stays in the roster itself. */}
+        {archivedBots.length > 0 ? (
+          <SidebarGroup
+            data-testid="roster-archived"
+            className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden"
+          >
+            <button
+              type="button"
+              aria-expanded={archivedOpen}
+              onClick={() => setArchivedOpen((open) => !open)}
+              className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronDownIcon
+                className={cn("size-3.5 transition-transform", !archivedOpen && "-rotate-90")}
+              />
+              <span>Archived</span>
+              <span className="tabular-nums" aria-label={`${archivedBots.length} archived`}>
+                {archivedBots.length}
+              </span>
+            </button>
+            {archivedOpen ? (
+              <ul role="list" aria-label="Archived bots" className="flex flex-col gap-px">
+                {archivedBots.map((bot) => (
+                  <li
+                    key={bot.id}
+                    className="flex list-none items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-sidebar-row-hover"
+                  >
+                    <BotAvatarView
+                      avatar={bot.avatar}
+                      name={bot.name}
+                      className="size-8 opacity-60"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-sidebar-muted-foreground">
+                      {bot.name}
+                    </span>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label={`Restore ${bot.name}`}
+                            onClick={() => void handleRestoreBot(bot)}
+                            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <ArchiveRestoreIcon className="size-4" />
+                          </button>
+                        }
+                      />
+                      <TooltipPopup side="top">Restore</TooltipPopup>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
       {/* Rail create menu sits above the footer, like the expanded header's plus. */}
       <div className="hidden shrink-0 flex-col items-center pb-1 group-data-[collapsible=icon]:flex">
@@ -1300,6 +1553,7 @@ export default function BotRosterSidebar() {
       {newBotOpen ? (
         <NewBotDialog
           open
+          submitting={creatingBot}
           onOpenChange={setNewBotOpen}
           onCreate={(input) => void handleCreateBot(input)}
         />
@@ -1312,6 +1566,35 @@ export default function BotRosterSidebar() {
           onCreate={(input) => void handleCreateGroup(input)}
         />
       ) : null}
+      <AlertDialog
+        open={archivingBot !== null}
+        onOpenChange={(open) => {
+          if (!open) setArchivingBot(null);
+        }}
+      >
+        {archivingBot ? (
+          <AlertDialogPopup
+            // Cancelling belongs back on the row menu it came from. Archiving does
+            // not: that row is on its way out of the projection, so the archive
+            // effect places focus on the survivor and this must not move it after.
+            finalFocus={() => archivedFocusTarget.current === undefined}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>Archive {archivingBot.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {archivingBot.name} leaves the roster and stops taking messages. Its chat history is
+                kept, and you can restore it from Archived at any time.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+              <Button variant="destructive" onClick={() => void handleArchiveBot(archivingBot)}>
+                Archive
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        ) : null}
+      </AlertDialog>
       <SidebarChromeFooter />
     </>
   );

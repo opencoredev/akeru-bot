@@ -712,6 +712,59 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         ]);
       });
 
+      it("drops Grok models a clean probe no longer lists and keeps them when a probe fails", () => {
+        const model = (slug: string) => ({
+          slug,
+          name: slug,
+          isCustom: false,
+          capabilities: null,
+        });
+        const previousProvider = {
+          instanceId: ProviderInstanceId.make("grok"),
+          driver: ProviderDriverKind.make("grok"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-07-17T00:00:00.000Z",
+          version: "1.0.0",
+          models: [model("grok-build"), model("stale-alias")],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const cleanProbe = {
+          ...previousProvider,
+          checkedAt: "2026-07-17T00:01:00.000Z",
+          models: [model("grok-build")],
+        } satisfies ServerProvider;
+        const failedProbe = {
+          ...previousProvider,
+          status: "error",
+          auth: { status: "unknown" },
+          checkedAt: "2026-07-17T00:01:00.000Z",
+          models: [model("grok-build")],
+          message: "Failed to execute Grok CLI health check.",
+        } satisfies ServerProvider;
+        const signedOut = {
+          ...failedProbe,
+          auth: { status: "unauthenticated" },
+          message: "Grok CLI is installed but not logged in. Run `grok login`.",
+        } satisfies ServerProvider;
+
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, cleanProbe).models.map((entry) => entry.slug),
+          ["grok-build"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, failedProbe).models.map((entry) => entry.slug),
+          ["grok-build", "stale-alias"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, signedOut).models.map((entry) => entry.slug),
+          ["grok-build", "stale-alias"],
+        );
+      });
+
       it("classifies pending, logout, uninstall, and reconnect OpenCode inventories", () => {
         const previousProvider = {
           instanceId: ProviderInstanceId.make("opencode"),

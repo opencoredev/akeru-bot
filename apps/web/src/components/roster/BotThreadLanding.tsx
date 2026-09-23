@@ -1,12 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, type EnvironmentId, type TurnId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, Clock3Icon } from "lucide-react";
+
+import { cn } from "~/lib/utils";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
 import { resolveAppModelSelectionState } from "../../modelSelection";
+import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -20,8 +24,10 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentSessionState } from "../../state/session";
 import { openSettings } from "../../settingsDialogStore";
 import { SidebarInset } from "../ui/sidebar";
+import { Spinner } from "../ui/spinner";
+import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { BotActivityStatus } from "./BotActivityStatus";
+import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
@@ -35,6 +41,7 @@ import {
   useMessageReactionUpdater,
 } from "./BotChatMessageRows";
 import {
+  buildBotConversationEntries,
   channelOriginForAssistantMessage,
   isBotConversationWorking,
   visibleBotChatMessages,
@@ -46,6 +53,7 @@ import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
+import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
@@ -55,7 +63,70 @@ import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
+import { deriveRoutineReceipts, type RoutineReceipt } from "./routineReceipts";
+import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
+
+function openRoutinesPanel(botName: string): boolean {
+  const panel = document.querySelector<HTMLElement>('[data-testid="bot-details-panel"]');
+  const routinesControl = Array.from(
+    panel?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+  ).find((button) => button.textContent?.trim() === "Routines");
+  if (!panel || !routinesControl) return false;
+
+  routinesControl.click();
+  const openButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).filter(
+    (button) => button.getAttribute("aria-label") === `Open ${botName} bot sidebar`,
+  );
+  if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
+    openButtons.at(-1)?.click();
+  } else if (panel.getAttribute("aria-hidden") === "true") {
+    openButtons[0]?.click();
+  }
+  return true;
+}
+
+function RoutineReceiptRow({
+  receipt,
+  botName,
+}: {
+  readonly receipt: RoutineReceipt;
+  readonly botName: string;
+}) {
+  const Icon =
+    receipt.tone === "error"
+      ? CircleAlertIcon
+      : receipt.tone === "success"
+        ? CircleCheckIcon
+        : Clock3Icon;
+  const error = receipt.tone === "error";
+  return (
+    <button
+      type="button"
+      aria-label={`${receipt.text}. Open Routines`}
+      className={cn(
+        "mx-auto flex w-full max-w-3xl items-start gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+        error && "bg-destructive/8 text-destructive hover:bg-destructive/12 hover:text-destructive",
+      )}
+      data-testid="routine-receipt"
+      onClick={() => {
+        if (!openRoutinesPanel(botName)) {
+          toastManager.add({ type: "error", title: "Could not open Routines" });
+        }
+      }}
+    >
+      <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 whitespace-normal break-words text-left leading-5">
+        {receipt.text}
+      </span>
+      <time className="shrink-0 text-[11px] text-muted-foreground/60" dateTime={receipt.createdAt}>
+        {new Date(receipt.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+      </time>
+      {/* Signals that the row opens Routines rather than being a plain note. */}
+      <ChevronRightIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+    </button>
+  );
+}
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -67,7 +138,9 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const bots = useRosterStore((state) => state.bots);
-  const bot = bots.find((candidate) => candidate.id === botId);
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
+  const bot = routedBot.status === "available" ? routedBot.bot : undefined;
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const configuredEngine = bot?.engine ?? null;
   const instanceEntries = useMemo(
@@ -132,21 +205,59 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   }, [botId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
   useEffect(() => {
-    if (!bot || bot.archivedAt !== null) {
+    if (routedBot.status === "loading") return;
+    if (routedBot.status === "missing") {
       void navigate({ to: "/", replace: true });
       return;
     }
-    useRosterStore.getState().selectBot(bot.id);
-  }, [bot, navigate]);
+    useRosterStore.getState().selectBot(botId);
+  }, [botId, navigate, routedBot.status]);
 
+  const activeUserInput = runtime.pendingUserInputs[0] ?? null;
+  const waitingForUserInput =
+    activeUserInput !== null && !runtime.respondingRequestIds.includes(activeUserInput.requestId);
   const working = isBotConversationWorking({
     sending: runtime.sending,
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
     presence,
+    turnRunning: runtime.latestTurn?.state === "running",
+    waitingForUserInput,
   });
+  const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null);
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
+  );
+  const entries = useMemo(() => buildBotConversationEntries(messages), [messages]);
+  const routineReceipts = useMemo(
+    () =>
+      runtime.linkedThreadRef
+        ? deriveRoutineReceipts(
+            runtime.linkedThreadRef.threadId,
+            snapshot?.routines ?? [],
+            snapshot?.routineRuns ?? [],
+          )
+        : [],
+    [runtime.linkedThreadRef, snapshot?.routines, snapshot?.routineRuns],
+  );
+  // Each message carries the index it had in `messages`, because the merge below
+  // reorders it away from that position and a row must not go looking for itself.
+  const timelineItems = useMemo(
+    () =>
+      [
+        ...entries.map((entry, index) => ({
+          kind: "message" as const,
+          createdAt: entry.message.createdAt,
+          entry,
+          index,
+        })),
+        ...routineReceipts.map((receipt) => ({
+          kind: "receipt" as const,
+          createdAt: receipt.createdAt,
+          receipt,
+        })),
+      ].toSorted((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    [entries, routineReceipts],
   );
   const available = bot?.archivedAt === null;
   const playbackKey = useReplyPlaybackThread({
@@ -161,7 +272,20 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     [],
   );
 
-  if (!bot || bot.archivedAt !== null) return null;
+  if (routedBot.status === "loading") {
+    return (
+      <SidebarInset
+        aria-label="Loading bot"
+        className="h-dvh min-h-0 items-center justify-center overflow-hidden bg-background text-muted-foreground"
+      >
+        <div className="flex flex-1 items-center justify-center gap-2 text-sm" role="status">
+          <Spinner aria-hidden="true" className="size-4" />
+          Loading bot…
+        </div>
+      </SidebarInset>
+    );
+  }
+  if (!bot) return null;
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
@@ -178,6 +302,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       ) ?? [])
     : [];
   const currentPersonId = snapshot?.currentPersonId;
+  const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;
   const linkedThreadId = runtime.linkedThreadRef?.threadId;
   const channelApprovalFor = (messageIndex: number): ChannelApprovalTarget | null => {
     if (!canManageChannelBindings || !environmentId || !linkedThreadId) return null;
@@ -193,6 +318,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       sent: binding.sentMessageIds.includes(message.id),
     };
   };
+
   return (
     <SidebarInset
       aria-label={`${bot.name} chat`}
@@ -214,46 +340,65 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             </div>
           </WorkspacePageHeader>
           <BotConversationScrollArea>
-            {messages.length === 0 ? (
+            {timelineItems.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
                 <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-14" />
                 <h1 className="text-lg font-medium">Message {bot.name}</h1>
               </div>
             ) : (
-              messages.map((message, messageIndex) =>
-                message.role === "assistant" ? (
-                  <AssistantMessageRow
-                    key={message.id}
-                    message={message}
-                    author={bot}
-                    testId="bot-provider-message"
-                    cwd={runtime.defaultProject?.workspaceRoot}
-                    threadRef={runtime.linkedThreadRef ?? undefined}
-                    stepMeter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
-                    pluginResults={
-                      message.turnId === null ? undefined : pluginResultsByTurn.get(message.turnId)
-                    }
-                    currentPersonId={currentPersonId}
-                    playback={replyPlayback}
-                    playbackKey={playbackKey}
-                    channelApproval={channelApprovalFor(messageIndex)}
-                    onReply={replyTo}
-                    onReactionChange={updateReaction}
-                  />
-                ) : (
-                  <UserMessageRow
-                    key={message.id}
-                    message={message}
-                    testId="bot-user-message"
-                    replyLabel="you"
-                    showChannelOrigin
-                    environmentId={environmentId}
-                    currentPersonId={currentPersonId}
-                    onReply={replyTo}
-                    onReactionChange={updateReaction}
-                  />
-                ),
-              )
+              timelineItems.map((item) => (
+                <Fragment key={item.kind === "receipt" ? item.receipt.id : item.entry.message.id}>
+                  {item.kind === "receipt" ? (
+                    <RoutineReceiptRow botName={bot.name} receipt={item.receipt} />
+                  ) : (
+                    (() => {
+                      const { message, separator, startsGroup } = item.entry;
+                      const messageIndex = item.index;
+                      return (
+                        <>
+                          {separator ? <ConversationSeparator label={separator} /> : null}
+                          {message.role === "assistant" ? (
+                            <AssistantMessageRow
+                              message={message}
+                              author={bot}
+                              testId="bot-provider-message"
+                              startsGroup={startsGroup}
+                              cwd={runtime.defaultProject?.workspaceRoot}
+                              threadRef={runtime.linkedThreadRef ?? undefined}
+                              stepMeter={
+                                message.turnId === null ? undefined : stepMeters.get(message.turnId)
+                              }
+                              pluginResults={
+                                message.turnId === null
+                                  ? undefined
+                                  : pluginResultsByTurn.get(message.turnId)
+                              }
+                              currentPersonId={currentPersonId}
+                              playback={replyPlayback}
+                              playbackKey={playbackKey}
+                              channelApproval={channelApprovalFor(messageIndex)}
+                              onReply={replyTo}
+                              onReactionChange={reactionHandler}
+                            />
+                          ) : (
+                            <UserMessageRow
+                              message={message}
+                              testId="bot-user-message"
+                              startsGroup={startsGroup}
+                              replyLabel="you"
+                              showChannelOrigin
+                              environmentId={environmentId}
+                              currentPersonId={currentPersonId}
+                              onReply={replyTo}
+                              onReactionChange={reactionHandler}
+                            />
+                          )}
+                        </>
+                      );
+                    })()
+                  )}
+                </Fragment>
+              ))
             )}
             {pendingPluginResults.map(([turnId, results]) => (
               <div className="flex items-start gap-3" key={`${turnId}:plugins`}>
@@ -305,7 +450,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                 }
               />
             ))}
-            {working ? <BotActivityStatus avatar={bot.avatar} name={bot.name} /> : null}
           </BotConversationScrollArea>
           <BotInboxAlertStack
             items={inboxItems}
@@ -313,6 +457,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
           />
           <ThreadRuntimeWarningBanner warning={runtimeWarning} />
           <ThreadErrorBanner
+            threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? bot.id}`}
             error={
               inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
             }
@@ -322,6 +467,20 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
           <BotPromptComposer
             botName={bot.name}
             draftKey={bot.id}
+            busy={working && pendingApproval === null}
+            activitySlot={
+              working && !waitingForUserInput && pendingApproval === null ? (
+                <BotActivityStatus
+                  avatar={bot.avatar}
+                  name={bot.name}
+                  startedAt={
+                    runtime.latestTurn?.completedAt ? null : (runtime.latestTurn?.startedAt ?? null)
+                  }
+                  update={workingUpdate}
+                  compact
+                />
+              ) : null
+            }
             pendingActionSlot={
               pendingApproval ? (
                 <BotApprovalPrompt

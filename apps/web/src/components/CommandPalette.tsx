@@ -112,6 +112,7 @@ import {
 import {
   ADDON_ICON_CLASS,
   browseInputEndPaddingClass,
+  buildBotActionItems,
   buildBrowseGroups,
   buildModelPickerCommandPaletteAction,
   buildProjectActionItems,
@@ -135,6 +136,9 @@ import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sideb
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
 import { CommandPaletteResults } from "./CommandPaletteResults";
+import { BotAvatarView } from "./roster/BotAvatarView";
+import { useRosterStore } from "./roster/rosterStore";
+import type { Bot } from "./roster/types";
 import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon } from "./Icons";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
@@ -154,6 +158,7 @@ import { Kbd, KbdGroup } from "./ui/kbd";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
+import { activeComposerModelPicker } from "../composerModelPickerRegistry";
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
@@ -174,6 +179,10 @@ function projectFavicon(project: Project) {
       className={ITEM_ICON_CLASS}
     />
   );
+}
+
+function botAvatarIcon(bot: Bot) {
+  return <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-4 shrink-0" />;
 }
 
 function getEnvironmentBrowsePlatform(os: string | null | undefined): string {
@@ -585,6 +594,8 @@ function OpenCommandPaletteDialog(props: {
     useHandleNewThread();
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
+  const rosterBots = useRosterStore((state) => state.bots);
+  const lastMessageByBotId = useRosterStore((state) => state.lastMessageByBotId);
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme } = useTheme();
@@ -991,6 +1002,23 @@ function OpenCommandPaletteDialog(props: {
   const allThreadItems: ReturnType<typeof buildThreadActionItems> = [];
   const recentThreadItems = allThreadItems.slice(0, RECENT_THREAD_LIMIT);
 
+  // Bots lead the palette: opening one lands in its conversation, which is the
+  // app's primary surface and the likeliest reason the palette was opened.
+  const botItems = useMemo(
+    () =>
+      buildBotActionItems({
+        bots: rosterBots.filter((bot) => bot.archivedAt === null),
+        searchTerms: (bot) => [bot.title, bot.label ?? ""],
+        icon: botAvatarIcon,
+        renderDescription: (bot) => lastMessageByBotId[bot.id]?.text ?? null,
+        openBot: async (bot) => {
+          useRosterStore.getState().selectBot(bot.id);
+          await navigate({ to: "/bots/$botId", params: { botId: bot.id } });
+        },
+      }),
+    [lastMessageByBotId, navigate, rosterBots],
+  );
+
   const pushPaletteView = useCallback(
     (view: CommandPaletteView): void => {
       browseNavigation.invalidate();
@@ -1328,7 +1356,8 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push(
     buildModelPickerCommandPaletteAction({
-      composerHandle: composerHandleRef?.current ?? null,
+      // Bot chats have no full chat composer; their composer registers just the picker.
+      composerHandle: composerHandleRef?.current ?? activeComposerModelPicker(),
       closePalette: () => setOpen(false),
       scheduleAfterClose: (openModelPicker) => {
         window.requestAnimationFrame(openModelPicker);
@@ -1495,7 +1524,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
+  const rootGroups = buildRootGroups({ actionItems, recentThreadItems, botItems });
   const sourceSelectionViewValue =
     addProjectEnvironmentId === null ? null : `sources:${addProjectEnvironmentId}`;
   const activeGroups =

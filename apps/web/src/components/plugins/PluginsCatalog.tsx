@@ -50,11 +50,30 @@ interface PluginsCatalogProps {
 
 const EMPTY_PROVIDER_ACCESS_STATUSES: readonly ProviderAccessStatus[] = [];
 
+/** The two or three verbs a plugin actually gives a bot, so a row reads as a capability. */
+function PluginCapabilities({ plugin }: { readonly plugin: PluginDirectoryDefinition }) {
+  const capabilities = plugin.capabilities.slice(0, 3);
+  if (capabilities.length === 0) return null;
+  return (
+    <ul className="mt-1.5 flex min-w-0 flex-wrap gap-1">
+      {capabilities.map((capability) => (
+        <li
+          className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] leading-4 text-muted-foreground"
+          key={capability}
+        >
+          {capability}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function PluginRow({
   plugin,
   server,
   accessStatus,
   pending,
+  featured = false,
   onToggle,
   onOpen,
 }: {
@@ -62,19 +81,29 @@ function PluginRow({
   readonly server: McpServer | undefined;
   readonly accessStatus: ProviderAccessStatus | undefined;
   readonly pending: boolean;
+  readonly featured?: boolean;
   readonly onToggle: (enabled: boolean) => void;
   readonly onOpen: () => void;
 }) {
   const action = pluginPrimaryAction(plugin, server, accessStatus);
   const brokerName = pluginBrokerName(plugin);
+  const installed = server?.enabled === true;
   return (
     <article
-      className="group flex min-w-0 items-center rounded-xl pe-2.5 transition-colors hover:bg-muted/45"
+      className={
+        featured
+          ? "group flex min-w-0 flex-col rounded-xl border border-border/70 p-3 transition-colors hover:bg-muted/45"
+          : "group flex min-w-0 items-center rounded-xl pe-2.5 transition-colors hover:bg-muted/45"
+      }
       data-plugin-id={plugin.id}
     >
       <button
         aria-label={`Open ${plugin.title}`}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 text-start outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        className={
+          featured
+            ? "flex min-w-0 cursor-pointer items-start gap-3 rounded-lg text-start outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            : "flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 text-start outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        }
         type="button"
         onClick={onOpen}
       >
@@ -82,7 +111,15 @@ function PluginRow({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-medium leading-5">{plugin.title}</h3>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{plugin.category}</span>
+            {featured ? null : (
+              <span className="shrink-0 text-[11px] text-muted-foreground">{plugin.category}</span>
+            )}
+            {installed ? (
+              <CheckIcon
+                aria-label={`${plugin.title} is connected`}
+                className="size-3.5 shrink-0 text-success"
+              />
+            ) : null}
             {brokerName ? (
               <Badge
                 className="border-border/60 bg-background/60 px-1.5 text-muted-foreground"
@@ -99,16 +136,31 @@ function PluginRow({
               </span>
             ) : null}
           </div>
-          <p className="truncate text-xs leading-5 text-muted-foreground">{plugin.description}</p>
+          <p
+            className={
+              featured
+                ? "line-clamp-2 text-xs leading-5 text-muted-foreground"
+                : "truncate text-xs leading-5 text-muted-foreground"
+            }
+          >
+            {plugin.description}
+          </p>
+          {featured ? <PluginCapabilities plugin={plugin} /> : null}
         </div>
-        <ChevronRightIcon
-          aria-hidden="true"
-          className="size-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
-        />
+        {featured ? null : (
+          <ChevronRightIcon
+            aria-hidden="true"
+            className="size-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
+          />
+        )}
       </button>
       <Button
         aria-label={`${action.label} ${plugin.title}`}
-        className="h-7 min-w-14 rounded-full px-3 text-xs"
+        className={
+          featured
+            ? "mt-3 h-7 w-full rounded-full px-3 text-xs"
+            : "h-7 min-w-14 rounded-full px-3 text-xs"
+        }
         size="sm"
         variant="secondary"
         disabled={pending || action.enable === null}
@@ -137,29 +189,42 @@ export function PluginsCatalog({
   }
   return (
     <div className="space-y-7">
-      {sections.map((section) => (
-        <section aria-label={section.title} key={section.title}>
-          <div className="mb-2 flex items-center justify-between px-2">
-            <h2 className="text-xs font-medium text-muted-foreground">{section.title}</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-x-7 md:grid-cols-2">
-            {section.plugins.map((plugin) => {
-              const server = findPluginServer(plugin, servers);
-              return (
-                <PluginRow
-                  key={`${section.title}:${plugin.id}`}
-                  plugin={plugin}
-                  server={server}
-                  accessStatus={accessStatuses.find((status) => status.pluginId === plugin.id)}
-                  pending={pendingServerId === pluginMcpServerId(plugin)}
-                  onToggle={(enabled) => onToggle(plugin, enabled)}
-                  onOpen={() => onOpen(plugin)}
-                />
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      {sections.map((section) => {
+        // Featured leads the directory, so it gets cards that show what each
+        // plugin does; the categories below stay scannable rows.
+        const featured = section.title === "Featured";
+        return (
+          <section aria-label={section.title} key={section.title}>
+            <div className="mb-2 flex items-center justify-between px-2">
+              <h2 className="text-xs font-medium text-muted-foreground">{section.title}</h2>
+              <span className="text-xs text-muted-foreground">{section.plugins.length}</span>
+            </div>
+            <div
+              className={
+                featured
+                  ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  : "grid grid-cols-1 gap-x-7 md:grid-cols-2"
+              }
+            >
+              {section.plugins.map((plugin) => {
+                const server = findPluginServer(plugin, servers);
+                return (
+                  <PluginRow
+                    key={`${section.title}:${plugin.id}`}
+                    plugin={plugin}
+                    server={server}
+                    accessStatus={accessStatuses.find((status) => status.pluginId === plugin.id)}
+                    pending={pendingServerId === pluginMcpServerId(plugin)}
+                    featured={featured}
+                    onToggle={(enabled) => onToggle(plugin, enabled)}
+                    onOpen={() => onOpen(plugin)}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

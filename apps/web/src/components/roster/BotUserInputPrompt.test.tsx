@@ -56,10 +56,35 @@ describe("BotUserInputPrompt", () => {
       onSelectSingleOption,
       onAdvance: vi.fn(),
     });
-    const panel = element.props.children as ReactElement<{
+    const panel = element?.props.children as ReactElement<{
       onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
     }>;
 
     expect(panel.props.onSelectSingleOption).toBe(onSelectSingleOption);
+  });
+
+  it("clears itself once the answer is on its way", () => {
+    expect(
+      BotUserInputPrompt({
+        pendingUserInputs: [prompt],
+        respondingRequestIds: [prompt.requestId],
+        answers: {},
+        questionIndex: 0,
+        onToggleOption: vi.fn(),
+        onSelectSingleOption: vi.fn(),
+        onAdvance: vi.fn(),
+      }),
+    ).toBeNull();
+    expect(
+      BotUserInputPrompt({
+        pendingUserInputs: [],
+        respondingRequestIds: [],
+        answers: {},
+        questionIndex: 0,
+        onToggleOption: vi.fn(),
+        onSelectSingleOption: vi.fn(),
+        onAdvance: vi.fn(),
+      }),
+    ).toBeNull();
   });
 });

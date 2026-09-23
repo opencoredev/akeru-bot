@@ -3,14 +3,16 @@ import { LinkIcon, PlusIcon } from "lucide-react";
 import { useEffect } from "react";
 
 import { APP_DISPLAY_NAME } from "~/branding";
+import { BotZeroState } from "../components/roster/BotZeroState";
 import { resolveRosterBotId } from "../components/roster/roster.logic";
+import { isRosterReady } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
 import { openSettings } from "../settingsDialogStore";
-import { useEnvironments } from "../state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 
 function ChatIndexRouteView() {
   const { authGateState } = Route.useRouteContext();
@@ -25,22 +27,21 @@ function ChatIndexRouteView() {
 
 function BotIndexRedirect() {
   const navigate = useNavigate();
+  const environmentId = usePrimaryEnvironmentId();
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const rosterReady = isRosterReady(environmentId, rosterEnvironmentId);
   const botId = useRosterStore((state) => resolveRosterBotId(state.selectedBotId, state.bots));
 
   useEffect(() => {
-    if (botId === null) return;
+    if (!rosterReady || botId === null) return;
     void navigate({ to: "/bots/$botId", params: { botId }, replace: true });
-  }, [botId, navigate]);
+  }, [botId, navigate, rosterReady]);
 
-  if (botId !== null) return null;
+  if (!rosterReady || botId !== null) return null;
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
-      <Empty className="flex-1">
-        <EmptyHeader>
-          <EmptyTitle>Create a bot to start chatting</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
+      <BotZeroState />
     </SidebarInset>
   );
 }

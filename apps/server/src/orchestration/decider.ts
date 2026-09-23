@@ -273,6 +273,21 @@ function activeGroupBotIds(
   );
 }
 
+// Checks that the bot a chat would answer with is still active: any bot for a
+// direct chat, an active member for a group chat. A chat with no bot passes.
+function requireActiveResponder(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly groupId: GroupId | null | undefined;
+  readonly botId: BotId | null | undefined;
+}) {
+  if (input.botId === null || input.botId === undefined) return Effect.void;
+  const botId = input.botId;
+  return input.groupId === null || input.groupId === undefined
+    ? Effect.asVoid(requireBotNotArchived({ ...input, botId }))
+    : Effect.asVoid(requireActiveGroupMember({ ...input, groupId: input.groupId, botId }));
+}
+
 function botGroupUpdatedEvent(input: {
   readonly botId: BotId;
   readonly groupId: GroupId | null;
@@ -2406,12 +2421,26 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.voice-transcript.append": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
-      if (command.respondingBotId !== undefined) {
+      // An archived bot takes no new speech, but the tail of a reply already in
+      // flight when it was archived still lands in the transcript. The web client
+      // omits respondingBotId for user speech, so resolve it the way a turn would.
+      if (command.role === "user") {
+        const group =
+          thread.groupId === null || thread.groupId === undefined
+            ? null
+            : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+        yield* requireActiveResponder({
+          readModel,
+          command,
+          groupId: group?.id,
+          botId: command.respondingBotId ?? (group ? group.bossBotId : thread.botId),
+        });
+      } else if (command.respondingBotId !== undefined) {
         yield* requireBot({ readModel, command, botId: command.respondingBotId });
       }
       return {
@@ -2591,10 +2620,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       }
 
       let respondingBotId = targetThread.botId ?? null;
+      const isGroupThread = targetThread.groupId !== null && targetThread.groupId !== undefined;
+      // Direct chats refuse archived bots here so a stale client or queued send cannot
+      // wake one. Group chats check the responding member below instead.
       let respondingBot =
         respondingBotId === null
           ? null
-          : yield* requireBot({ readModel, command, botId: respondingBotId });
+          : isGroupThread
+            ? yield* requireBot({ readModel, command, botId: respondingBotId })
+            : yield* requireBotNotArchived({ readModel, command, botId: respondingBotId });
       let personAssignedEvent: Omit<OrchestrationEvent, "sequence"> | null = null;
       if (targetThread.groupId !== null && targetThread.groupId !== undefined) {
         const group = yield* requireGroup({
@@ -2800,6 +2834,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Chat '${command.threadId}' is already active.`,
         });
       }
+      // Resume answers with the same bot the provider reactor picks.
+      yield* requireActiveResponder({
+        readModel,
+        command,
+        groupId: thread.groupId,
+        botId: thread.respondingBotId ?? thread.botId,
+      });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",

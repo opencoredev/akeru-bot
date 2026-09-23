@@ -1,7 +1,9 @@
 import { ArrowDownIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
 import {
   isConversationAtEnd,
   reduceConversationFollowState,
@@ -76,7 +78,9 @@ export function BotConversationScrollArea({ children }: { readonly children: Rea
         }}
       >
         <div ref={contentRef} className="flex min-h-full w-full flex-col">
-          <div className="mt-auto flex w-full flex-col gap-4">{children}</div>
+          <div className={cn("mt-auto flex flex-col gap-1", CONVERSATION_MEASURE_CLASS_NAME)}>
+            {children}
+          </div>
         </div>
       </div>
 

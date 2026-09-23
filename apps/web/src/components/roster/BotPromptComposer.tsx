@@ -1,6 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
-import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  AtSignIcon,
+  CornerDownRightIcon,
+  PaperclipIcon,
+  PlusIcon,
+  XIcon,
+} from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -23,9 +30,13 @@ import { ComposerBanner } from "../chat/ComposerBanner";
 import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
+import { LoaderMeter } from "../chat/ResponseLoadingState";
+import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
+import { BotComposerModelControl } from "./BotComposerModelControl";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
+import { useRosterStore } from "./rosterStore";
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -33,6 +44,23 @@ import {
   releaseBotPromptAttachments,
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
+
+export type BotComposerState = "stopped" | "sending" | "ready" | "empty";
+
+/**
+ * The composer's visible state. `stopped` means sending is unavailable, `sending` means a
+ * turn is still running, `ready` means this draft can go now. A running turn never blocks a
+ * ready draft: a follow-up still sends and queues behind the turn.
+ */
+export function botComposerState(input: {
+  readonly disabled: boolean;
+  readonly busy: boolean;
+  readonly canSubmit: boolean;
+}): BotComposerState {
+  if (input.disabled) return "stopped";
+  if (input.busy) return "sending";
+  return input.canSubmit ? "ready" : "empty";
+}
 
 export function isBotPromptExpanded(prompt: string): boolean {
   return prompt.includes("\n") || prompt.length > 80;
@@ -126,6 +154,8 @@ export function BotPromptComposer({
   disabled,
   readOnly = false,
   mentionBots = EMPTY_MENTION_BOTS,
+  activitySlot = null,
+  busy = false,
   pendingActionSlot = null,
   placeholder,
   replyPreview,
@@ -137,6 +167,10 @@ export function BotPromptComposer({
   disabled: boolean;
   readOnly?: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
+  /** Live turn status, docked above the prompt box where it stays visible without scrolling. */
+  activitySlot?: ReactNode;
+  /** A turn is still running, so sending again would queue behind it. */
+  busy?: boolean;
   /** Rendered above the prompt box so a pending decision reads as part of the composer. */
   pendingActionSlot?: ReactNode;
   placeholder?: string;
@@ -146,6 +180,14 @@ export function BotPromptComposer({
 }) {
   const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  // A bot chat keys its draft by bot id; group and onboarding composers namespace
+  // theirs, so a key that names a live bot is the one composer that speaks for it.
+  const composerBotId = useRosterStore((state) =>
+    draftKey !== undefined &&
+    state.bots.some((bot) => bot.id === draftKey && bot.archivedAt === null)
+      ? draftKey
+      : null,
+  );
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
   const mentionHintId = useId();
   const mentionHint = botMentionHint(resolveBotMention(draft, mentionBots));
@@ -208,6 +250,10 @@ export function BotPromptComposer({
   );
 
   const expanded = attachments.length > 0 || replyPreview != null || isBotPromptExpanded(draft);
+  const canSubmit = canSubmitBotPrompt(disabled, draft, attachments.length);
+  const composerState = botComposerState({ disabled, busy, canSubmit });
+  // Only stands in for the arrow when there is nothing to send, so a follow-up stays sendable.
+  const showBusyMeter = busy && !canSubmit;
   const addFiles = (next: FileList | readonly File[]) => {
     revisionRef.current += 1;
     const added = createBotPromptAttachments(Array.from(next));
@@ -483,6 +529,7 @@ export function BotPromptComposer({
   return (
     <form
       data-chat-composer-form="true"
+      data-state={composerState}
       aria-disabled={readOnly || undefined}
       className="w-full px-4 pb-4 pt-2 sm:px-6 sm:pb-6"
       onSubmit={(event) => {
@@ -526,157 +573,182 @@ export function BotPromptComposer({
         );
       }}
     >
-      <ComposerBanner.Dock className="relative z-0">
-        <ComposerBanner.Column>
-          {isStashMenuOpen ? (
-            <ComposerStashMenu
-              entries={stashQueue}
-              stashShortcutLabel={shortcutLabelForCommand(keybindings, "composer.stash")}
-              onRestore={restoreStashEntry}
-              onDelete={deleteStashEntry}
-              onClose={() => setIsStashMenuOpen(false)}
-            />
-          ) : null}
-        </ComposerBanner.Column>
-        <ComposerStashBadge
-          count={stashQueue.length}
-          menuOpen={isStashMenuOpen}
-          pulseKey={stashPulse.key}
-          pulsing={stashPulse.active}
-          onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
-        />
-      </ComposerBanner.Dock>
-      <AnimatePresence initial={false}>
-        {pendingActionSlot ? (
-          <motion.div
-            key="pending-action"
-            data-testid="bot-pending-action-motion"
-            initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
-            transition={{ duration: prefersReducedMotion ? 0 : 0.16, ease: "easeOut" }}
-          >
-            {pendingActionSlot}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-      <div
-        data-testid="bot-prompt-composer"
-        data-expanded={expanded || undefined}
-        className={cn(
-          "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
-          expanded && "min-h-28",
-          pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
-        )}
-      >
-        {replyPreview ? (
-          <div className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-foreground/8 px-3 py-2 text-xs">
-            <div className="min-w-0 flex-1">
-              <div className="font-medium">Replying to {replyPreview.label}</div>
-              <div className="truncate text-muted-foreground">{replyPreview.text}</div>
-            </div>
-            <button
-              type="button"
-              aria-label="Cancel reply"
-              className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground"
-              onClick={onCancelReply}
-            >
-              <XIcon className="size-3.5" />
-            </button>
+      <div className={CONVERSATION_MEASURE_CLASS_NAME}>
+        <ComposerBanner.Dock className="relative z-0">
+          <ComposerBanner.Column>
+            {isStashMenuOpen ? (
+              <ComposerStashMenu
+                entries={stashQueue}
+                stashShortcutLabel={shortcutLabelForCommand(keybindings, "composer.stash")}
+                onRestore={restoreStashEntry}
+                onDelete={deleteStashEntry}
+                onClose={() => setIsStashMenuOpen(false)}
+              />
+            ) : null}
+          </ComposerBanner.Column>
+          <ComposerStashBadge
+            count={stashQueue.length}
+            menuOpen={isStashMenuOpen}
+            pulseKey={stashPulse.key}
+            pulsing={stashPulse.active}
+            onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
+          />
+        </ComposerBanner.Dock>
+        {composerBotId !== null ? (
+          <div className="mb-1 flex min-w-0 items-center px-1" data-testid="bot-composer-model">
+            <BotComposerModelControl botId={composerBotId} disabled={readOnly} />
           </div>
         ) : null}
-        <BotPromptAttachments
-          attachments={attachments}
-          className="px-3 pt-3"
-          onExpand={setExpandedAttachmentId}
-          onPreviewError={(attachmentId) => {
-            setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
-            if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
-          }}
-          onRemove={removeAttachment}
-        />
-        <textarea
-          ref={promptInputRef}
-          aria-label={`Message ${botName}`}
-          data-testid="bot-prompt-input"
-          placeholder={placeholder ?? `Message ${botName}`}
-          rows={1}
-          value={draft}
-          readOnly={readOnly}
-          tabIndex={readOnly ? -1 : undefined}
-          className={cn(
-            "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
-            expanded ? "min-h-16 px-4 pb-2 pt-3" : "min-h-13 px-14 py-[0.9rem]",
-          )}
-          onChange={(event) => persistDraft(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          onPaste={(event) => {
-            if (!readOnly && event.clipboardData.files.length > 0) {
-              addFiles(event.clipboardData.files);
-            }
-          }}
-        />
+        <AnimatePresence initial={false}>
+          {activitySlot ? (
+            <motion.div
+              key="activity"
+              className="mb-2 px-1"
+              data-testid="bot-composer-activity"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 2 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.16, ease: "easeOut" }}
+            >
+              {activitySlot}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+        <AnimatePresence initial={false}>
+          {pendingActionSlot ? (
+            <motion.div
+              key="pending-action"
+              data-testid="bot-pending-action-motion"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.16, ease: "easeOut" }}
+            >
+              {pendingActionSlot}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
         <div
-          data-testid="bot-prompt-controls"
+          data-testid="bot-prompt-composer"
+          data-expanded={expanded || undefined}
           className={cn(
-            "pointer-events-none flex items-center justify-between",
-            expanded ? "px-2 pb-2" : "absolute inset-x-2 bottom-2",
+            "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
+            expanded && "min-h-28",
+            pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
           )}
         >
-          <div className="pointer-events-auto flex min-w-0 items-center gap-1">
-            <Menu>
-              <MenuTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label="Add to prompt"
-                    disabled={readOnly}
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8"
-                  />
-                }
+          {/* One line, always the same height, so starting a reply never resizes the box. */}
+          {replyPreview ? (
+            <div
+              className="mx-3 mt-3 flex h-8 items-center gap-2 rounded-lg bg-foreground/8 px-2.5 text-xs"
+              data-testid="composer-reply-preview"
+            >
+              <CornerDownRightIcon aria-hidden="true" className="size-3.5 shrink-0 opacity-60" />
+              <span className="shrink-0 font-medium">{replyPreview.label}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                {replyPreview.text}
+              </span>
+              <button
+                type="button"
+                aria-label="Cancel reply"
+                className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={onCancelReply}
               >
-                <PlusIcon className="size-5" />
-              </MenuTrigger>
-              <MenuPopup align="start" side="top" sideOffset={8}>
-                <MenuItem onClick={() => fileInputRef.current?.click()}>
-                  <PaperclipIcon />
-                  Attach file
-                </MenuItem>
-                {mentionBots.map((bot) => (
-                  <MenuItem
-                    key={bot.id}
-                    onClick={() => persistDraft(appendBotMention(draft, bot.name))}
-                  >
-                    <AtSignIcon />
-                    Mention {bot.name}
-                  </MenuItem>
-                ))}
-              </MenuPopup>
-            </Menu>
-          </div>
-          <button
-            type="submit"
-            aria-label="Send message"
-            aria-describedby={mentionHint ? mentionHintId : undefined}
-            disabled={
-              !canSubmitBotPrompt(disabled, draft, attachments.length) || mentionHint !== null
-            }
-            className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-25"
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
+          <BotPromptAttachments
+            attachments={attachments}
+            className="px-3 pt-3"
+            onExpand={setExpandedAttachmentId}
+            onPreviewError={(attachmentId) => {
+              setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
+              if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
+            }}
+            onRemove={removeAttachment}
+          />
+          <textarea
+            ref={promptInputRef}
+            aria-label={`Message ${botName}`}
+            data-testid="bot-prompt-input"
+            placeholder={placeholder ?? `Message ${botName}`}
+            rows={1}
+            value={draft}
+            readOnly={readOnly}
+            tabIndex={readOnly ? -1 : undefined}
+            className={cn(
+              "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
+              expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-[0.9rem]",
+            )}
+            onChange={(event) => persistDraft(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            onPaste={(event) => {
+              if (!readOnly && event.clipboardData.files.length > 0) {
+                addFiles(event.clipboardData.files);
+              }
+            }}
+          />
+          <div
+            data-testid="bot-prompt-controls"
+            /* Pinned to the box corners in every state: growing the draft must not move
+             the add or send button out from under the pointer. */
+            className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between"
           >
-            <ArrowUpIcon className="size-5" />
-          </button>
+            <div className="pointer-events-auto flex min-w-0 items-center gap-1">
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Add to prompt"
+                      disabled={readOnly}
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  }
+                >
+                  <PlusIcon className="size-5" />
+                </MenuTrigger>
+                <MenuPopup align="start" side="top" sideOffset={8}>
+                  <MenuItem onClick={() => fileInputRef.current?.click()}>
+                    <PaperclipIcon />
+                    Attach file
+                  </MenuItem>
+                  {mentionBots.map((bot) => (
+                    <MenuItem
+                      key={bot.id}
+                      onClick={() => persistDraft(appendBotMention(draft, bot.name))}
+                    >
+                      <AtSignIcon />
+                      Mention {bot.name}
+                    </MenuItem>
+                  ))}
+                </MenuPopup>
+              </Menu>
+            </div>
+            <button
+              type="submit"
+              aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
+              aria-describedby={mentionHint ? mentionHintId : undefined}
+              data-busy={showBusyMeter || undefined}
+              disabled={!canSubmit || mentionHint !== null}
+              className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-25 data-busy:opacity-70"
+            >
+              {showBusyMeter ? <LoaderMeter /> : <ArrowUpIcon className="size-5" />}
+            </button>
+          </div>
         </div>
+        {mentionHint ? (
+          <p id={mentionHintId} role="status" className="px-4 pt-2 text-xs text-muted-foreground">
+            {mentionHint}
+          </p>
+        ) : null}
       </div>
-      {mentionHint ? (
-        <p id={mentionHintId} role="status" className="px-4 pt-2 text-xs text-muted-foreground">
-          {mentionHint}
-        </p>
-      ) : null}
       <input
         ref={fileInputRef}
         type="file"

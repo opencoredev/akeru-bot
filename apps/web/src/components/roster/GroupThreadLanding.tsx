@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { type EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
@@ -13,11 +13,12 @@ import { environmentSnapshotAtom } from "../../state/shell";
 import { SidebarInset } from "../ui/sidebar";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
+import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
-import { BotActivityStatus } from "./BotActivityStatus";
+import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
@@ -25,7 +26,11 @@ import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import { GroupMemberStack } from "./GroupMemberStack";
-import { visibleBotChatMessages } from "./botConversationPresentation";
+import {
+  buildBotConversationEntries,
+  isBotConversationWorking,
+  visibleBotChatMessages,
+} from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
 import {
   AssistantMessageRow,
@@ -83,7 +88,25 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     setReplyTarget(null);
   }, [groupId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
-  const messages = useMemo(() => visibleBotChatMessages(runtime.messages), [runtime.messages]);
+  const pendingApproval = approvalState.pendingApproval;
+  const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
+  const waitingForUserInput =
+    pendingUserInput !== null && !runtime.respondingRequestIds.includes(pendingUserInput.requestId);
+  // Derived before the transcript is built: the visible set depends on whether a turn is
+  // still open, so an intermediate answer from the active turn stays behind the status.
+  const working = isBotConversationWorking({
+    sending: runtime.sending,
+    respondingToUserInput: runtime.respondingRequestIds.length > 0,
+    presence,
+    turnRunning: runtime.latestTurn?.state === "running",
+    waitingForUserInput,
+  });
+  const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null);
+  const messages = useMemo(
+    () => visibleBotChatMessages(runtime.messages, working),
+    [runtime.messages, working],
+  );
+  const entries = useMemo(() => buildBotConversationEntries(messages), [messages]);
   const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: group ? runtime.linkedThreadRef?.threadId : null,
@@ -100,10 +123,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const currentPersonId = peopleIdentity.current?.id;
   const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
   const boss = resolveAvailableGroupBoss(members, group.bossBotId);
-  const working =
-    runtime.sending || runtime.respondingRequestIds.length > 0 || presence === "working";
-  const pendingApproval = approvalState.pendingApproval;
-  const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
   const inboxItems = selectOpenBotInboxItems(
     inboxQuery.data?.inbox ?? [],
@@ -145,28 +164,33 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               </h1>
             </div>
           ) : (
-            messages.map((message) => {
+            entries.map(({ message, separator, startsGroup }) => {
               if (message.role === "assistant") {
                 const respondingBot = message.respondingBotId
                   ? members.find((bot) => bot.id === message.respondingBotId)
                   : boss;
                 return (
-                  <AssistantMessageRow
-                    key={message.id}
-                    message={message}
-                    author={respondingBot ?? null}
-                    testId="group-provider-message"
-                    cwd={runtime.defaultProject?.workspaceRoot}
-                    threadRef={runtime.linkedThreadRef ?? undefined}
-                    stepMeter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
-                    pluginResults={undefined}
-                    currentPersonId={currentPersonId}
-                    playback={replyPlayback}
-                    playbackKey={playbackKey}
-                    channelApproval={null}
-                    onReply={replyTo}
-                    onReactionChange={updateReaction}
-                  />
+                  <Fragment key={message.id}>
+                    {separator ? <ConversationSeparator label={separator} /> : null}
+                    <AssistantMessageRow
+                      message={message}
+                      author={respondingBot ?? null}
+                      testId="group-provider-message"
+                      startsGroup={startsGroup}
+                      cwd={runtime.defaultProject?.workspaceRoot}
+                      threadRef={runtime.linkedThreadRef ?? undefined}
+                      stepMeter={
+                        message.turnId === null ? undefined : stepMeters.get(message.turnId)
+                      }
+                      pluginResults={undefined}
+                      currentPersonId={currentPersonId}
+                      playback={replyPlayback}
+                      playbackKey={playbackKey}
+                      channelApproval={null}
+                      onReply={replyTo}
+                      onReactionChange={updateReaction}
+                    />
+                  </Fragment>
                 );
               }
               const current = isCurrentGroupPerson(
@@ -175,17 +199,20 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 peopleIdentity.host?.id,
               );
               return (
-                <UserMessageRow
-                  key={message.id}
-                  message={message}
-                  testId="group-user-message"
-                  replyLabel={current ? "you" : "participant"}
-                  showChannelOrigin={false}
-                  environmentId={environmentId}
-                  currentPersonId={currentPersonId}
-                  onReply={replyTo}
-                  onReactionChange={updateReaction}
-                />
+                <Fragment key={message.id}>
+                  {separator ? <ConversationSeparator label={separator} /> : null}
+                  <UserMessageRow
+                    message={message}
+                    testId="group-user-message"
+                    startsGroup={startsGroup}
+                    replyLabel={current ? "you" : "participant"}
+                    showChannelOrigin={false}
+                    environmentId={environmentId}
+                    currentPersonId={currentPersonId}
+                    onReply={replyTo}
+                    onReactionChange={updateReaction}
+                  />
+                </Fragment>
               );
             })
           )}
@@ -201,9 +228,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               }
             />
           ))}
-          {working && activeBot ? (
-            <BotActivityStatus avatar={activeBot.avatar} name={activeBot.name} />
-          ) : null}
         </BotConversationScrollArea>
         <BotInboxAlertStack
           items={inboxItems}
@@ -211,6 +235,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         />
         <ThreadRuntimeWarningBanner warning={runtimeWarning} />
         <ThreadErrorBanner
+          threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? group.id}`}
           error={
             inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
           }
@@ -225,6 +250,20 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         <BotPromptComposer
           botName={group.name}
           draftKey={`group:${group.id}`}
+          busy={working && pendingApproval === null}
+          activitySlot={
+            working && activeBot && !waitingForUserInput && pendingApproval === null ? (
+              <BotActivityStatus
+                avatar={activeBot.avatar}
+                name={activeBot.name}
+                startedAt={
+                  runtime.latestTurn?.completedAt ? null : (runtime.latestTurn?.startedAt ?? null)
+                }
+                update={workingUpdate}
+                compact
+              />
+            ) : null
+          }
           pendingActionSlot={
             pendingApproval ? (
               <BotApprovalPrompt
@@ -234,7 +273,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 error={approvalState.responseError}
                 onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
               />
-            ) : pendingUserInput ? (
+            ) : waitingForUserInput ? (
               <BotUserInputPrompt
                 pendingUserInputs={runtime.pendingUserInputs}
                 respondingRequestIds={runtime.respondingRequestIds}
@@ -246,7 +285,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               />
             ) : null
           }
-          {...(pendingUserInput ? { placeholder: "Write a custom answer..." } : {})}
+          {...(waitingForUserInput ? { placeholder: "Write a custom answer..." } : {})}
           disabled={
             runtime.sending ||
             pendingApproval !== null ||
@@ -254,6 +293,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             !runtime.groupReady ||
             !runtime.bootstrapped ||
             runtime.defaultProject === null ||
+            !runtime.providerAvailable ||
             boss === null
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
@@ -269,6 +309,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             return sent;
           }}
         />
+        {!runtime.providerAvailable ? (
+          <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
+            Connect at least one provider before you message this group.
+          </p>
+        ) : null}
       </div>
     </SidebarInset>
   );

@@ -55,7 +55,7 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain("Routines are not available for this environment.");
     expect(markup).not.toContain("mock data");
     expect(markup).not.toContain("border-b border-border");
-    expect(markup).toContain("border-t border-border");
+    expect(markup).toContain("rounded-xl border border-border");
   });
 
   it("sets, clears, and rejects invalid hard stops", () => {

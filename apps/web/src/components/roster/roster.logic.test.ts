@@ -2,6 +2,7 @@ import { BotId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  archivedRosterBots,
   botAvatarSeed,
   buildGroupedRosterSections,
   buildRosterSections,
@@ -38,6 +39,7 @@ import {
   rosterGroupDropId,
   rosterMarkerId,
   rosterZoneHasVisibleEntries,
+  rosterZoneHeading,
   BLOB_COLORS,
   BLOB_SHAPES,
 } from "./roster.logic";
@@ -143,6 +145,32 @@ describe("buildRosterSections", () => {
     });
 
     expect(sections[0]?.bots.map((entry) => entry.id)).toEqual(["pinned"]);
+  });
+});
+
+describe("rosterZoneHeading", () => {
+  it("names what the zone holds instead of calling a group a bot", () => {
+    expect(rosterZoneHeading([{ kind: "bot", id: "one" }])).toBe("Bots");
+    expect(rosterZoneHeading([{ kind: "group", id: "product" }])).toBe("Groups");
+    expect(
+      rosterZoneHeading([
+        { kind: "bot", id: "one" },
+        { kind: "group", id: "product" },
+      ]),
+    ).toBe("Bots and groups");
+    expect(rosterZoneHeading([])).toBe("Bots");
+  });
+});
+
+describe("archivedRosterBots", () => {
+  it("lists archived bots newest first and leaves active bots out", () => {
+    const archived = archivedRosterBots([
+      bot({ id: "active", name: "Active" }),
+      bot({ id: "older", name: "Older", archivedAt: "2026-08-02T00:00:00.000Z" }),
+      bot({ id: "newer", name: "Newer", archivedAt: "2026-08-09T00:00:00.000Z" }),
+    ]);
+
+    expect(archived.map((entry) => entry.id)).toEqual(["newer", "older"]);
   });
 });
 

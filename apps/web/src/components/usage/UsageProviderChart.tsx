@@ -332,6 +332,15 @@ export function UsageProviderChart({
       ? formatRelativeHourShort(period, referenceTime, timeZone)
       : formatPeriod(period);
 
+  // A blank 260px plot reads as broken; the table below already says this, so match it.
+  if (periods.length === 0 || !paths.some((path) => path.total > 0)) {
+    return (
+      <p className="flex h-56 items-center justify-center text-sm text-muted-foreground">
+        No activity in this window.
+      </p>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex gap-2">

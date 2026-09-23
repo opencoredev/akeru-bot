@@ -21,6 +21,11 @@ export function BotUserInputPrompt({
   readonly onSelectSingleOption: (questionId: string, optionLabel: string) => void;
   readonly onAdvance: () => void;
 }) {
+  // Once an answer is on its way the question has been dealt with: the composer's working
+  // status takes over rather than leaving a dead card docked above the prompt box.
+  const activePrompt = pendingUserInputs[0];
+  if (!activePrompt || respondingRequestIds.includes(activePrompt.requestId)) return null;
+
   return (
     <section
       aria-label="Question"

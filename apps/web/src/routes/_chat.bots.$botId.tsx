@@ -17,6 +17,7 @@ import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
 import { useBotThreadRef } from "../components/roster/useBotThreadRef";
 import type { RoutineAdapterDraft } from "../components/roster/RoutinePanel";
 import { toRoutinePanelItem, toRoutineSchedule } from "../components/roster/routineAdapter";
+import { resolveRoutedBot } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
 import { randomUUID } from "../lib/utils";
@@ -44,9 +45,16 @@ function BotThreadRouteView() {
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [busyRoutineId, setBusyRoutineId] = useState<string | null>(null);
-  const bot = useRosterStore((state) =>
-    state.bots.find((candidate) => candidate.id === botId && candidate.archivedAt === null),
-  );
+  /*
+   * The roster store is not scoped to the active environment, so a bot found by
+   * id alone can still belong to the environment we just left. Judging the id
+   * only once the store mirrors this environment keeps the panel from showing
+   * one environment's bot while its saves address another.
+   */
+  const bots = useRosterStore((state) => state.bots);
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
+  const bot = routedBot.status === "available" ? routedBot.bot : null;
   const threadRef = useBotThreadRef(botId);
   const botAssignments = useMemo(
     () => (snapshot?.skillAssignments ?? []).filter((assignment) => assignment.botId === botId),
@@ -170,6 +178,29 @@ function BotThreadRouteView() {
               name: project.title,
             })),
             busyRoutineId,
+            // A new routine reports back into the bot's own chat, so it can only be
+            // created once that thread exists.
+            ...(threadRef
+              ? {
+                  onCreate: async (draft: RoutineAdapterDraft) => {
+                    if (!environmentId) throw new Error("The routine environment is unavailable.");
+                    const routineId = RoutineId.make(randomUUID());
+                    await withBusy(routineId, async () => {
+                      const result = await draftRoutine({
+                        environmentId,
+                        input: {
+                          routineId,
+                          targetThreadId: threadRef.threadId,
+                          ...(await routineDefinition(draft)),
+                          createdAt: new Date().toISOString(),
+                        },
+                      });
+                      requireSuccess(result, "Could not create routine");
+                      toastManager.add({ type: "success", title: "Routine draft created" });
+                    });
+                  },
+                }
+              : {}),
             onUpdate: async (routineId, draft) => {
               if (!environmentId) throw new Error("The routine environment is unavailable.");
               const current = snapshot?.routines?.find((routine) => routine.id === routineId);

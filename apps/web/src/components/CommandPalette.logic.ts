@@ -336,15 +336,13 @@ export function filterCommandPaletteGroups(input: {
     baseGroups = baseGroups.filter((group) => group.value !== "recent-threads");
   }
 
-  const searchableGroups = [...baseGroups];
+  // Searched results keep the resting order: who you talk to, then what you
+  // talked about, then projects, and only then the command list. Appending
+  // matches after the actions group buried every conversation under the IDE
+  // commands that happened to share a word with the query.
+  const actionGroups = baseGroups.filter((group) => group.value === "actions");
+  const searchableGroups = baseGroups.filter((group) => group.value !== "actions");
   if (!input.isInSubmenu && !isActionsFilter) {
-    if (input.projectSearchItems.length > 0) {
-      searchableGroups.push({
-        value: "projects-search",
-        label: "Projects",
-        items: input.projectSearchItems,
-      });
-    }
     if (input.threadSearchItems.length > 0) {
       searchableGroups.push({
         value: "threads-search",
@@ -352,7 +350,15 @@ export function filterCommandPaletteGroups(input: {
         items: input.threadSearchItems,
       });
     }
+    if (input.projectSearchItems.length > 0) {
+      searchableGroups.push({
+        value: "projects-search",
+        label: "Projects",
+        items: input.projectSearchItems,
+      });
+    }
   }
+  searchableGroups.push(...actionGroups);
 
   return searchableGroups.flatMap((group) => {
     const items = Arr.filterMap(group.items, (item, index) => {
@@ -449,13 +455,50 @@ export function getCommandPaletteMode(input: {
   return input.isBrowsing ? "root-browse" : "root";
 }
 
+/**
+ * Bots are the people the user talks to, so they lead the palette. Selecting
+ * one opens that bot's conversation, which makes this the fastest path to the
+ * app's primary surface — ahead of the IDE-flavored commands below it.
+ */
+export function buildBotActionItems<
+  TBot extends { readonly id: string; readonly name: string },
+>(input: {
+  bots: ReadonlyArray<TBot>;
+  icon: (bot: TBot) => ReactNode;
+  renderDescription?: (bot: TBot) => ReactNode;
+  searchTerms?: (bot: TBot) => ReadonlyArray<string>;
+  openBot: (bot: TBot) => Promise<void>;
+}): CommandPaletteActionItem[] {
+  return input.bots.map((bot) => {
+    const description = input.renderDescription?.(bot);
+    return Object.assign(
+      {
+        kind: "action" as const,
+        value: `bot:${bot.id}`,
+        searchTerms: [bot.name, ...(input.searchTerms?.(bot) ?? [])],
+        title: bot.name,
+        icon: input.icon(bot),
+      },
+      description ? { description } : {},
+      {
+        run: async () => {
+          await input.openBot(bot);
+        },
+      },
+    );
+  });
+}
+
 export function buildRootGroups(input: {
   actionItems: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
   recentThreadItems: ReadonlyArray<CommandPaletteActionItem>;
+  botItems?: ReadonlyArray<CommandPaletteActionItem>;
 }): CommandPaletteGroup[] {
   const groups: CommandPaletteGroup[] = [];
-  if (input.actionItems.length > 0) {
-    groups.push({ value: "actions", label: "Actions", items: input.actionItems });
+  // Bots and conversations first: the palette opens over a chat, so the
+  // likeliest intent is reaching another chat, not running a build command.
+  if (input.botItems && input.botItems.length > 0) {
+    groups.push({ value: "bots", label: "Bots", items: input.botItems });
   }
   if (input.recentThreadItems.length > 0) {
     groups.push({
@@ -463,6 +506,9 @@ export function buildRootGroups(input: {
       label: "Recent conversations",
       items: input.recentThreadItems,
     });
+  }
+  if (input.actionItems.length > 0) {
+    groups.push({ value: "actions", label: "Actions", items: input.actionItems });
   }
   return groups;
 }

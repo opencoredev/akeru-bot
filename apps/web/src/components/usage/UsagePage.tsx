@@ -186,24 +186,6 @@ export function UsagePage() {
             </Toggle>
           ))}
         </ToggleGroup>
-        {/* The period does not apply to Limits, so it stays in place but
-            disabled; unmounting it shifted the metric toggle ~300px. */}
-        <ToggleGroup
-          aria-label="Usage period"
-          variant="segmented"
-          value={[String(windowDays)]}
-          disabled={showingLimits}
-          onValueChange={(next) => {
-            const value = next[0];
-            if (value) selectWindow(Number(value));
-          }}
-        >
-          {WINDOW_OPTIONS.map((option) => (
-            <Toggle key={option.days} value={String(option.days)}>
-              {option.label}
-            </Toggle>
-          ))}
-        </ToggleGroup>
         <Button
           onClick={refreshWindow}
           aria-label={showingLimits ? "Refresh limits" : "Refresh usage"}
@@ -238,29 +220,6 @@ export function UsagePage() {
             ))}
           </SelectPopup>
         </Select>
-        <Select
-          value={String(windowDays)}
-          disabled={showingLimits}
-          onValueChange={(value) => selectWindow(Number(value))}
-        >
-          <SelectTrigger
-            aria-label="Usage period"
-            size="compact"
-            variant="ghost"
-            className="w-auto min-w-0"
-          >
-            <SelectValue>
-              {WINDOW_OPTIONS.find((option) => option.days === windowDays)?.label}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup align="end" alignItemWithTrigger={false}>
-            {WINDOW_OPTIONS.map((option) => (
-              <SelectItem key={option.days} value={String(option.days)}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
         <Button
           onClick={refreshWindow}
           aria-label={showingLimits ? "Refresh limits" : "Refresh usage"}
@@ -279,7 +238,7 @@ export function UsagePage() {
         <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="wide">
+          <WorkspacePageContainer width="readable">
             {showingLimits ? (
               <UsageLimitsOverview
                 planLimits={planLimits}
@@ -378,10 +337,30 @@ export function UsagePage() {
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-3">
-                    <h2 className="text-sm font-medium text-foreground">
-                      {isPast24Hours ? "Hourly" : "Daily"}{" "}
-                      {metric === "tokens" ? "processed tokens" : "cost"}
-                    </h2>
+                    {/* The period only shapes the time series and the breakdown
+                        below it, so it sits with them instead of competing with
+                        the metric control in the top bar. */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="text-sm font-medium text-foreground">
+                        {isPast24Hours ? "Hourly" : "Daily"}{" "}
+                        {metric === "tokens" ? "processed tokens" : "cost"}
+                      </h2>
+                      <ToggleGroup
+                        aria-label="Usage period"
+                        variant="segmented"
+                        value={[String(windowDays)]}
+                        onValueChange={(next) => {
+                          const value = next[0];
+                          if (value) selectWindow(Number(value));
+                        }}
+                      >
+                        {WINDOW_OPTIONS.map((option) => (
+                          <Toggle key={option.days} value={String(option.days)}>
+                            {option.label}
+                          </Toggle>
+                        ))}
+                      </ToggleGroup>
+                    </div>
                     <UsageProviderChart
                       providers={activeProviders}
                       days={days}
@@ -439,7 +418,11 @@ export function UsagePage() {
                   </div>
 
                   {breakdown === "model" ? (
-                    <table className="w-full table-fixed text-sm">
+                    // Model names and five numeric columns stop fitting well
+                    // before the narrowest supported width, so the table keeps a
+                    // readable minimum and scrolls rather than crushing columns.
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[34rem] table-fixed text-sm">
                       <colgroup>
                         <col className="w-2/5" />
                         <col className="w-1/5" />
@@ -487,8 +470,10 @@ export function UsagePage() {
                         )}
                       </tbody>
                     </table>
+                    </div>
                   ) : (
-                    <table className="w-full table-fixed text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[40rem] table-fixed text-sm">
                       <colgroup>
                         <col className="w-2/5" />
                         {activeProviders.map((provider) => (
@@ -549,6 +534,7 @@ export function UsagePage() {
                         )}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </section>
               </>

@@ -5,6 +5,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { deriveProviderInstanceEntries } from "./providerInstances";
 import {
   getAppModelOptionsForInstance,
+  getCustomModelOptionsByInstance,
   resolveAppModelSelectionForInstance,
   resolveAppModelSelectionState,
   resolvePlanAgentHealPatch,
@@ -57,7 +58,27 @@ function settingsWithProviderInstances(): UnifiedSettings {
   };
 }
 
+function settingsWithGrokCustomModel(): UnifiedSettings {
+  return {
+    ...settingsWithProviderInstances(),
+    providerInstances: {
+      ...settingsWithProviderInstances().providerInstances,
+      [ProviderInstanceId.make("grok")]: {
+        driver: ProviderDriverKind.make("grok"),
+        config: { customModels: ["grok-test-custom-model"] },
+      },
+    },
+  };
+}
+
 describe("instance-scoped model selection", () => {
+  it("returns an explicit empty selection when no provider is available", () => {
+    expect(resolveAppModelSelectionState(DEFAULT_UNIFIED_SETTINGS, [])).toEqual({
+      instanceId: ProviderInstanceId.make("t3code_no_provider"),
+      model: "",
+    });
+  });
+
   it("preserves server-provided legacy model metadata", () => {
     const baseProvider = provider({
       instanceId: "claudeAgent",
@@ -155,25 +176,64 @@ describe("instance-scoped model selection", () => {
     ).toBe("opus");
   });
 
-  it("includes Grok custom models from the selected provider instance", () => {
-    const providers = [provider({ provider: ProviderDriverKind.make("grok"), instanceId: "grok" })];
-    const settings: UnifiedSettings = {
-      ...settingsWithProviderInstances(),
-      providerInstances: {
-        ...settingsWithProviderInstances().providerInstances,
-        [ProviderInstanceId.make("grok")]: {
-          driver: ProviderDriverKind.make("grok"),
-          config: { customModels: ["grok-test-custom-model"] },
-        },
-      },
-    };
+  it("lists Grok custom models next to the provider catalog", () => {
+    const providers = [
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        models: ["grok-4.6", "grok-4.5"],
+      }),
+    ];
+    const settings = settingsWithGrokCustomModel();
     const grok = deriveProviderInstanceEntries(providers).find(
       (entry) => entry.instanceId === "grok",
     )!;
 
-    expect(getAppModelOptionsForInstance(settings, grok).map((option) => option.slug)).toContain(
+    expect(getAppModelOptionsForInstance(settings, grok).map((option) => option.slug)).toEqual([
+      "grok-4.6",
+      "grok-4.5",
       "grok-test-custom-model",
-    );
+    ]);
+  });
+
+  it("keeps a selected model the provider stopped listing, marked unavailable", () => {
+    const providers = [
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        models: ["grok-4.6"],
+      }),
+    ];
+    const options = getCustomModelOptionsByInstance(
+      settingsWithGrokCustomModel(),
+      providers,
+      ProviderInstanceId.make("grok"),
+      "grok-4.5",
+    ).get(ProviderInstanceId.make("grok"));
+
+    expect(options?.map((option) => [option.slug, option.unavailable ?? false])).toEqual([
+      ["grok-4.6", false],
+      ["grok-test-custom-model", false],
+      ["grok-4.5", true],
+    ]);
+  });
+
+  it("does not mark a selected model that is still listed", () => {
+    const providers = [
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        models: ["grok-4.6"],
+      }),
+    ];
+    const options = getCustomModelOptionsByInstance(
+      settingsWithGrokCustomModel(),
+      providers,
+      ProviderInstanceId.make("grok"),
+      "grok-test-custom-model",
+    ).get(ProviderInstanceId.make("grok"));
+
+    expect(options?.some((option) => option.unavailable)).toBe(false);
   });
 
   it("does not inject an unknown selected slug into the stock instance list", () => {

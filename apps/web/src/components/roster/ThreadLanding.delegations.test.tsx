@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import { visitElements } from "../../test/reactElementTree";
 import type { Bot, Group } from "./types";
-import type { PendingUserInput } from "../../session-logic";
+import type { PendingApproval, PendingUserInput } from "../../session-logic";
 
 const mocks = vi.hoisted(() => ({
   providersAtom: Symbol("providers"),
@@ -30,8 +30,10 @@ const mocks = vi.hoisted(() => ({
   groups: [] as Group[],
   activities: [] as OrchestrationThreadActivity[],
   messages: [] as OrchestrationMessage[],
+  groupMessages: [] as OrchestrationMessage[],
   pendingUserInputs: [] as PendingUserInput[],
   groupPendingUserInputs: [] as PendingUserInput[],
+  pendingApproval: null as PendingApproval | null,
   latestTurn: null as OrchestrationLatestTurn | null,
 }));
 
@@ -107,6 +109,15 @@ vi.mock("~/lib/replyPlaybackThread", () => ({
   useReplyPlaybackThread: () => undefined,
   replyPlaybackControlProps: () => undefined,
 }));
+vi.mock("./useRosterPendingApproval", () => ({
+  useRosterPendingApproval: () => ({
+    pendingApproval: mocks.pendingApproval,
+    pendingCount: mocks.pendingApproval ? 1 : 0,
+    responding: false,
+    responseError: null,
+    respond: vi.fn(),
+  }),
+}));
 vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
 vi.mock("./botPresence", () => ({
   useBotPresence: () => "idle",
@@ -114,7 +125,7 @@ vi.mock("./botPresence", () => ({
 }));
 vi.mock("./rosterStore", () => {
   const useRosterStore = (selector: (state: unknown) => unknown) =>
-    selector({ bots: mocks.bots, groups: mocks.groups });
+    selector({ bots: mocks.bots, groups: mocks.groups, environmentId: "environment-1" });
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
   return { useRosterStore };
 });
@@ -144,7 +155,7 @@ vi.mock("./useGroupThreadRuntime", () => ({
   useGroupThreadRuntime: () => ({
     sending: false,
     respondingRequestIds: [],
-    messages: [],
+    messages: mocks.groupMessages,
     error: null,
     defaultProject: null,
     groupReady: true,
@@ -166,6 +177,7 @@ vi.mock("./useGroupThreadRuntime", () => ({
 
 import { AssistantMessageRow } from "./BotChatMessageRows";
 import { BotThreadLanding } from "./BotThreadLanding";
+import { BotPromptComposer } from "./BotPromptComposer";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
@@ -249,8 +261,10 @@ describe("thread landing delegations", () => {
     mocks.groups = [group];
     mocks.activities = [];
     mocks.messages = [];
+    mocks.groupMessages = [];
     mocks.pendingUserInputs = [];
     mocks.groupPendingUserInputs = [];
+    mocks.pendingApproval = null;
     mocks.latestTurn = null;
     mocks.snapshot = {
       snapshotSequence: 1,
@@ -402,6 +416,146 @@ describe("thread landing delegations", () => {
 
     expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
     expect(prompt?.props.onSelectSingleOption).toBe(prompt?.props.onToggleOption);
+  });
+
+  it("keeps the active turn's intermediate answer out of the group transcript", () => {
+    const turnId = TurnId.make("turn-active");
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.groupMessages = [
+      {
+        id: MessageId.make("group-user"),
+        role: "user",
+        text: "Compare the options.",
+        turnId,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("group-intermediate"),
+        role: "assistant",
+        text: "Let me look.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+    mocks.latestTurn = {
+      turnId,
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+
+    hooks.beginRender();
+    const rendered = GroupThreadLanding({ groupId: group.id });
+    const provider = visitElements(
+      rendered,
+      (element) => element.props.testId === "group-provider-message",
+    );
+    const sent = visitElements(
+      rendered,
+      (element) => element.props.testId === "group-user-message",
+    );
+
+    expect(sent).not.toBeNull();
+    expect(provider).toBeNull();
+  });
+
+  it("shows the group answer again once the turn settles", () => {
+    const turnId = TurnId.make("turn-settled");
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.groupMessages = [
+      {
+        id: MessageId.make("group-user"),
+        role: "user",
+        text: "Compare the options.",
+        turnId,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("group-answer"),
+        role: "assistant",
+        text: "Here is the comparison.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+
+    hooks.beginRender();
+    const provider = visitElements(
+      GroupThreadLanding({ groupId: group.id }),
+      (element) => element.props.testId === "group-provider-message",
+    );
+
+    expect(provider).not.toBeNull();
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("does not report the %s composer as sending while an approval waits", (_kind, render) => {
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.latestTurn = {
+      turnId: TurnId.make("turn-approval"),
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+    mocks.pendingApproval = {
+      requestId: ApprovalRequestId.make("approval-1"),
+      requestKind: "command",
+      createdAt: timestamp,
+      detail: "Run the tests?",
+      options: [
+        { decision: "decline", label: "Decline" },
+        { decision: "accept", label: "Allow" },
+      ],
+    };
+
+    hooks.beginRender();
+    const composer = visitElements(
+      render(),
+      (element) => element.type === BotPromptComposer,
+    ) as ReactElement<Parameters<typeof BotPromptComposer>[0]> | null;
+
+    expect(composer?.props.busy).toBe(false);
+    expect(composer?.props.activitySlot).toBeNull();
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("reports the %s composer as sending while a turn runs", (_kind, render) => {
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.latestTurn = {
+      turnId: TurnId.make("turn-running"),
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+
+    hooks.beginRender();
+    const composer = visitElements(
+      render(),
+      (element) => element.type === BotPromptComposer,
+    ) as ReactElement<Parameters<typeof BotPromptComposer>[0]> | null;
+
+    expect(composer?.props.busy).toBe(true);
+    expect(composer?.props.activitySlot).not.toBeNull();
   });
 
   it.each([

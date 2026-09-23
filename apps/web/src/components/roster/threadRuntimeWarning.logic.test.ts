@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
+import { activeThreadRuntimeWarning, latestThreadRuntimeError } from "./threadRuntimeWarning.logic";
 
 const turnId = TurnId.make("turn-warning");
 const timestamp = "2026-09-11T12:00:00.000Z";
@@ -103,5 +103,24 @@ describe("activeThreadRuntimeWarning", () => {
         runningTurn,
       ),
     ).toBe("Claude is paused until the usage window resets.");
+  });
+});
+
+describe("latestThreadRuntimeError", () => {
+  it("keeps a failed turn's provider error visible after the session recovers", () => {
+    const failedTurn = { ...runningTurn, state: "error" as const, completedAt: timestamp };
+    const activity = {
+      ...warning,
+      kind: "runtime.error",
+      tone: "error" as const,
+      payload: { message: "The usage limit has been reached" },
+    };
+    expect(latestThreadRuntimeError([activity], failedTurn)).toBe(
+      "The usage limit has been reached",
+    );
+  });
+
+  it("does not surface an old error for a running turn", () => {
+    expect(latestThreadRuntimeError([warning], runningTurn)).toBeNull();
   });
 });

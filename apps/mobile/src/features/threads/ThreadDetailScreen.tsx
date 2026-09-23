@@ -1,4 +1,5 @@
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { presentThreadError } from "@t3tools/client-runtime/errors";
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
@@ -743,11 +744,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             ) : null}
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
               {props.canResumeThread ? (
-                <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3">
-                  <Text className="min-w-0 flex-1 text-sm text-foreground">
-                    {props.selectedThread.session?.lastError ??
-                      "The request stopped before it could finish."}
-                  </Text>
+                <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+                  <ResumeErrorSummary error={props.selectedThread.session?.lastError ?? null} />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Resume interrupted request"
@@ -841,3 +839,20 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     </View>
   );
 });
+
+function ResumeErrorSummary(props: { readonly error: string | null }) {
+  if (!props.error) {
+    return (
+      <Text className="min-w-0 flex-1 text-sm text-foreground">
+        The request stopped before it could finish.
+      </Text>
+    );
+  }
+  const presentation = presentThreadError(props.error);
+  return (
+    <View className="min-w-0 flex-1 gap-0.5">
+      <Text className="text-sm font-semibold text-foreground">{presentation.title}</Text>
+      <Text className="text-sm text-foreground-muted">{presentation.description}</Text>
+    </View>
+  );
+}

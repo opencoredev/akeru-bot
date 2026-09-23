@@ -75,8 +75,9 @@ vi.mock("./botPresence", () => ({
   useGroupPresence: () => "idle",
 }));
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (selector: (state: { groups: Group[]; bots: Bot[] }) => unknown) =>
-    selector({ groups: mocks.groups, bots: mocks.bots });
+  const useRosterStore = (
+    selector: (state: { groups: Group[]; bots: Bot[]; environmentId: string }) => unknown,
+  ) => selector({ groups: mocks.groups, bots: mocks.bots, environmentId: "environment-1" });
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
   return { useRosterStore };
 });

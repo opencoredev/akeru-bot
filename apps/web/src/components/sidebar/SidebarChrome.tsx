@@ -213,6 +213,8 @@ function SidebarPluginButton({
   readonly statusLabel: string;
 }) {
   const badgeLabel = formatEnabledPluginBadge(enabledCount);
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
 
   return (
     <SidebarMenuItem className="shrink-0">
@@ -222,14 +224,16 @@ function SidebarPluginButton({
             <SidebarMenuButton
               aria-label={`Plugins, ${statusLabel}`}
               className="relative overflow-visible!"
-              size="icon"
               onClick={onClick}
             >
               <AppIcon className="size-4" icon={PlugSocketIcon} />
+              <span className="truncate group-data-[collapsible=icon]:hidden">Plugins</span>
+              {/* Expanded, the count sits inline where it can be read as a
+                  number; collapsed, it becomes the badge on the glyph. */}
               {badgeLabel ? (
                 <span
                   aria-hidden="true"
-                  className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sidebar-primary px-1 text-[9px] font-semibold tabular-nums text-sidebar-primary-foreground"
+                  className="ms-auto text-xs tabular-nums text-sidebar-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:bg-sidebar-primary group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-[9px] group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:text-sidebar-primary-foreground"
                 >
                   {badgeLabel}
                 </span>
@@ -237,7 +241,7 @@ function SidebarPluginButton({
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{`Plugins · ${statusLabel}`}</TooltipPopup>
+        {collapsed ? <TooltipPopup side="right">{`Plugins · ${statusLabel}`}</TooltipPopup> : null}
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -332,7 +336,13 @@ function ComputerUseControl() {
   return environmentId ? <ComputerUseControlForEnvironment environmentId={environmentId} /> : null;
 }
 
-function SidebarUtilityItem({
+/**
+ * A footer destination. Expanded, it reads as a labeled row — four unlabeled
+ * icons asked the user to remember which glyph meant Usage and which meant
+ * Feedback. Collapsed to the icon rail there is no room for the label, so the
+ * tooltip carries it there and only there.
+ */
+export function SidebarUtilityItem({
   icon,
   label,
   onClick,
@@ -341,17 +351,24 @@ function SidebarUtilityItem({
   label: string;
   onClick: () => void;
 }) {
+  const { state } = useSidebar();
+
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} size="icon" onClick={onClick}>
+            <SidebarMenuButton
+              aria-label={label}
+              className="group-data-[collapsible=icon]:justify-center"
+              onClick={onClick}
+            >
               {icon}
+              <span className="truncate group-data-[collapsible=icon]:hidden">{label}</span>
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{label}</TooltipPopup>
+        {state === "collapsed" ? <TooltipPopup side="right">{label}</TooltipPopup> : null}
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -386,8 +403,16 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarProviderUpdatePill />
         <SidebarUpdateArchitectureWarning />
       </div>
-      <SidebarMenu className="flex-row flex-wrap items-center justify-center gap-1 overflow-visible group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:flex-nowrap">
+      {/* A labeled column, not a row of glyphs: each destination gets a
+          full-width row with a comfortable hit target. The icon rail collapses
+          it back to centered icons. */}
+      <SidebarMenu className="flex-col flex-nowrap gap-0.5 overflow-visible">
         <SidebarPluginSummary onClick={handlePluginsClick} />
+        <SidebarUtilityItem
+          icon={<AppIcon className="size-4" icon={Analytics01Icon} />}
+          label="Usage"
+          onClick={handleUsageClick}
+        />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}
           label="Settings"
@@ -397,11 +422,6 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
           icon={<AppIcon className="size-4" icon={HelpCircleIcon} />}
           label="Feedback"
           onClick={handleFeedbackClick}
-        />
-        <SidebarUtilityItem
-          icon={<AppIcon className="size-4" icon={Analytics01Icon} />}
-          label="Usage"
-          onClick={handleUsageClick}
         />
         <SidebarUpdatePill />
       </SidebarMenu>

@@ -34,3 +34,26 @@ export function activeThreadRuntimeWarning(
 
   return null;
 }
+
+/** Returns the persisted error for the latest failed turn, even after the session recovers. */
+export function latestThreadRuntimeError(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  latestTurn: OrchestrationLatestTurn | null,
+): string | null {
+  if (!latestTurn || latestTurn.state !== "error") return null;
+  const activity = activities
+    .toSorted(
+      (left, right) =>
+        (right.sequence ?? -1) - (left.sequence ?? -1) ||
+        right.createdAt.localeCompare(left.createdAt),
+    )
+    .find((candidate) => candidate.kind === "runtime.error" && candidate.turnId === latestTurn.turnId);
+  if (!activity) return null;
+  const payload =
+    activity.payload && typeof activity.payload === "object"
+      ? (activity.payload as Record<string, unknown>)
+      : null;
+  return typeof payload?.message === "string" && payload.message.trim()
+    ? payload.message
+    : activity.summary;
+}

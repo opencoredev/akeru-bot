@@ -19,7 +19,7 @@ import { Suspense, lazy, type ComponentType } from "react";
 import { cn } from "~/lib/utils";
 import { Dialog, DialogPopup, DialogTitle } from "~/components/ui/dialog";
 import { AppIcon } from "~/components/ui/app-icon";
-import { Spinner } from "~/components/ui/spinner";
+import { Skeleton } from "~/components/ui/skeleton";
 import { closeSettings, useSettingsDialogStore, type SettingsSection } from "~/settingsDialogStore";
 
 const GeneralSettingsPanel = lazy(async () => ({
@@ -82,42 +82,115 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   diagnostics: DiagnosticsSettingsPanel,
 };
 
+/**
+ * Panels arrive by lazy chunk, so the wait is short and its length is known.
+ * A skeleton in the shape of the incoming rows reads as "this is loading and
+ * here is what lands", where a spinner centered in an empty page read as
+ * "something is wrong".
+ */
+function SettingsPanelSkeleton() {
+  return (
+    <div className="flex-1 overflow-hidden px-5 pt-6 sm:px-6">
+      {/* The placeholder bars carry no information, so they stay hidden from
+          assistive tech; this announces the wait instead. */}
+      <span className="sr-only" role="status">
+        Loading settings
+      </span>
+      <div aria-hidden className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+        <Skeleton className="h-6 w-40 rounded-md" />
+        <div className="flex flex-col gap-1">
+          {[0, 1, 2, 3].map((row) => (
+            <div key={row} className="flex items-center justify-between gap-8 px-3 py-3 sm:px-4">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skeleton className="h-4 w-44 rounded-md" />
+                <Skeleton className="h-3 w-72 max-w-full rounded-md" />
+              </div>
+              <Skeleton className="h-8 w-28 shrink-0 rounded-md" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPanelForSection({ section }: { readonly section: SettingsSection }) {
   const Panel = SECTION_PANELS[section];
   return (
-    <Suspense
-      fallback={
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner />
-        </div>
-      }
-    >
+    <Suspense fallback={<SettingsPanelSkeleton />}>
       <Panel />
     </Suspense>
   );
 }
 
-/** Sections with a nav row. Anything else is reached from a link inside a panel. */
-export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
+export interface SettingsNavItem {
   readonly section: SettingsSection;
   readonly label: string;
   readonly icon: IconSvgElement;
+}
+
+/**
+ * Nav rows, grouped by what the user is trying to change rather than by which
+ * subsystem owns the setting. A flat list of fourteen peers gave "Diagnostics"
+ * the same weight as "Appearance"; grouping lets the rail be skimmed, and
+ * keeps the rarely-correct answers (Advanced) out of the way at the end.
+ * Anything not listed here is reached from a link inside a panel.
+ */
+export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
+  readonly id: string;
+  readonly label: string;
+  readonly items: ReadonlyArray<SettingsNavItem>;
 }> = [
-  { section: "general", label: "General", icon: Settings02Icon },
-  { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
-  { section: "providers", label: "Providers", icon: BotIcon },
-  { section: "channels", label: "Bot channels", icon: Message01Icon },
-  { section: "browser", label: "Browser", icon: BrowserIcon },
-  { section: "plugins", label: "Plugins", icon: Link02Icon },
-  { section: "sandbox", label: "Sandbox", icon: HardDriveIcon },
-  { section: "voice", label: "Voice", icon: CallIcon },
-  { section: "privacy", label: "Privacy", icon: SecurityCheckIcon },
-  { section: "inbox", label: "Errors", icon: AlertCircleIcon },
-  { section: "connections", label: "Connections", icon: Link02Icon },
-  { section: "keybindings", label: "Keybindings", icon: KeyboardIcon },
-  { section: "source-control", label: "Source control", icon: GitBranchIcon },
-  { section: "diagnostics", label: "Diagnostics", icon: Bug02Icon },
+  {
+    id: "general",
+    label: "General",
+    items: [
+      { section: "general", label: "General", icon: Settings02Icon },
+      { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
+      { section: "keybindings", label: "Keybindings", icon: KeyboardIcon },
+    ],
+  },
+  {
+    id: "bots",
+    label: "Bots",
+    items: [
+      { section: "providers", label: "Providers", icon: BotIcon },
+      { section: "channels", label: "Bot channels", icon: Message01Icon },
+      { section: "voice", label: "Voice", icon: CallIcon },
+    ],
+  },
+  {
+    id: "workspace",
+    label: "Workspace",
+    items: [
+      { section: "browser", label: "Browser", icon: BrowserIcon },
+      { section: "plugins", label: "Plugins", icon: Link02Icon },
+      { section: "sandbox", label: "Sandbox", icon: HardDriveIcon },
+    ],
+  },
+  {
+    id: "data",
+    label: "Privacy and data",
+    items: [
+      { section: "privacy", label: "Privacy", icon: SecurityCheckIcon },
+      { section: "connections", label: "Connections", icon: Link02Icon },
+    ],
+  },
+  {
+    id: "advanced",
+    label: "Advanced",
+    items: [
+      { section: "source-control", label: "Source control", icon: GitBranchIcon },
+      { section: "inbox", label: "Errors", icon: AlertCircleIcon },
+      { section: "diagnostics", label: "Diagnostics", icon: Bug02Icon },
+    ],
+  },
 ];
+
+/** Flattened nav rows in visual order, for lookups and non-grouped surfaces. */
+export const SETTINGS_NAV_ITEMS: ReadonlyArray<SettingsNavItem> = SETTINGS_NAV_GROUPS.flatMap(
+  (group) => group.items,
+);
 
 export function SettingsDialog() {
   const section = useSettingsDialogStore((state) => state.section);
@@ -137,28 +210,39 @@ export function SettingsDialog() {
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <nav
           aria-label="Settings sections"
-          className="flex w-52 shrink-0 flex-col gap-0.5 border-e bg-muted/30 p-2 max-sm:w-full max-sm:flex-row max-sm:overflow-x-auto max-sm:border-e-0 max-sm:border-b"
+          // Narrow layouts scroll the nav horizontally underneath the absolute
+          // close control, so reserve its width at the end: the padding keeps
+          // the last row reachable, and the scroll padding stops a scrolled row
+          // from resting beneath the button.
+          className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-e bg-muted/30 p-2 max-sm:w-full max-sm:flex-row max-sm:gap-2 max-sm:overflow-x-auto max-sm:scroll-pe-12 max-sm:border-e-0 max-sm:border-b max-sm:pe-12"
         >
-          {SETTINGS_NAV_ITEMS.map((item) => {
-            const isActive = section === item.section;
-            return (
-              <button
-                key={item.section}
-                type="button"
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => openSettings(item.section)}
-                className={cn(
-                  "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                )}
-              >
-                <AppIcon className="size-4 shrink-0" icon={item.icon} />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
+          {SETTINGS_NAV_GROUPS.map((group) => (
+            <div key={group.id} className="flex flex-col gap-0.5 max-sm:flex-row">
+              <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 max-sm:hidden">
+                {group.label}
+              </div>
+              {group.items.map((item) => {
+                const isActive = section === item.section;
+                return (
+                  <button
+                    key={item.section}
+                    type="button"
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => openSettings(item.section)}
+                    className={cn(
+                      "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)]",
+                      isActive
+                        ? "bg-selected text-selected-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                    )}
+                  >
+                    <AppIcon className="size-4 shrink-0" icon={item.icon} />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

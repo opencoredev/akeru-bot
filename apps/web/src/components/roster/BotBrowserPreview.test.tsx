@@ -2,7 +2,7 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { BotBrowserPreview } from "./BotBrowserPreview";
+import { BotBrowserPreview, isLiveBrowserStatus } from "./BotBrowserPreview";
 
 const mocks = vi.hoisted(() => ({ nativeSupported: false }));
 
@@ -45,6 +45,52 @@ beforeEach(() => {
 });
 
 describe("BotBrowserPreview", () => {
+  it("treats only a page-bearing status as live", () => {
+    expect(isLiveBrowserStatus("ready")).toBe(true);
+    expect(isLiveBrowserStatus("loading")).toBe(true);
+    expect(isLiveBrowserStatus("waiting")).toBe(false);
+    expect(isLiveBrowserStatus("failed")).toBe(false);
+    expect(isLiveBrowserStatus("unsupported")).toBe(false);
+  });
+
+  it("rests on the app surface until there is a page to show", () => {
+    const markup = renderToStaticMarkup(
+      <BotBrowserPreview
+        botName="Akeru"
+        threadRef={null}
+        expanded={false}
+        visible
+        onExpandedChange={vi.fn()}
+      />,
+    );
+
+    // An idle card that paints itself black reads as a broken screen.
+    expect(markup).not.toContain("bg-zinc-950");
+    expect(markup).toContain("bg-muted/40");
+    // A bot that has never run has no thread, so it waits instead of claiming a
+    // connection it can never finish.
+    expect(markup).toContain("The browser appears when the bot opens a page.");
+    expect(markup).not.toContain("Connecting");
+    expect(markup).not.toContain('aria-label="Expand Akeru browser"');
+  });
+
+  it("goes dark and offers Open once a page is live", () => {
+    const markup = renderToStaticMarkup(
+      <BotBrowserPreview
+        botName="Akeru"
+        threadRef={threadRef}
+        expanded={false}
+        visible
+        onExpandedChange={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("bg-zinc-950");
+    expect(markup).toContain('data-testid="bot-browser-preview"');
+    expect(markup).toContain('aria-label="Expand Akeru browser"');
+    expect(markup).toContain('aria-label="Open Akeru browser"');
+  });
+
   it("renders the remote frame when expanded on the web", () => {
     const markup = renderToStaticMarkup(
       <BotBrowserPreview
@@ -58,6 +104,7 @@ describe("BotBrowserPreview", () => {
 
     expect(markup).toContain('data-testid="bot-browser-remote-frame"');
     expect(markup).toContain("data:image/png;base64,remote-frame");
+    expect(markup).toContain('aria-label="Collapse Akeru browser"');
     expect(markup).not.toContain("native-preview-panel");
     expect(markup).not.toContain("Preview is only available");
   });

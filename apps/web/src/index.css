@@ -102,6 +102,17 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --command-shell-inset: 0.5rem;
   --command-content-inset: 1rem;
   --floating-content-inset: 0.75rem;
+  /*
+   * Motion. Restrained by design: these describe state changes that have
+   * already happened (a panel opening, a row selecting), never ambient
+   * movement. Nothing here loops: a continuously repainting animation pegs
+   * the GPU on high-refresh displays, and our users sit in this app all day.
+   * The working meter follows the same rule and plays once per step change.
+   * The .bot-status-shimmer label still loops and is tracked separately.
+   * Reduced motion collapses every duration to zero below.
+   */
+  --motion-duration-fast: 120ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --glass-blur: 12px;
   --glass-opacity: 80%;
   --glass-saturation: 1.14;
@@ -120,6 +131,15 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --app-scrollbar-thumb-hover: rgb(255 255 255 / 12%);
     --glass-blur: 16px;
     --glass-saturation: 1.08;
+  }
+}
+
+/* Honor the OS preference at the token, so a transition written against these
+   durations becomes an instant state change rather than each call site having
+   to remember its own reduced-motion branch. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
   }
 }
 
@@ -204,6 +224,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-sidebar-row-active: var(--sidebar-row-active);
   --color-sidebar-row-selected: var(--sidebar-row-selected);
   --color-sidebar-border: var(--contrast-sidebar-border);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-disabled-foreground: var(--disabled-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -327,13 +350,16 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+/* A real scrim, not a tint. The command palette opens straight over
+   conversation text, and a weak backdrop let that text read as part of the
+   result list. Dark mode needs more because its canvas is near-black. No
+   backdrop-filter: blurring the whole viewport behind every dialog costs a
+   full-screen GPU pass for an effect the scrim already achieves. */
 @utility dialog-backdrop {
-  background: color-mix(in srgb, var(--background) 60%, transparent);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  background: color-mix(in srgb, var(--background) 78%, transparent);
 
   @variant dark {
-    background: color-mix(in srgb, var(--background) 64%, transparent);
+    background: color-mix(in srgb, var(--background) 82%, transparent);
   }
 }
 
@@ -1435,6 +1461,12 @@ html[data-theme-id="akeru-noir"] {
   --info-foreground: var(--color-blue-700);
   --success: var(--color-emerald-500);
   --success-foreground: var(--color-emerald-700);
+  /* Selected and disabled were previously spelled inline at each call site,
+     so "selected" drifted between accent, muted, and a raw zinc. Name them
+     once; themes override them through the roles they alias. */
+  --selected: var(--accent);
+  --selected-foreground: var(--accent-foreground);
+  --disabled-foreground: color-mix(in srgb, var(--foreground) 38%, transparent);
   --warning: var(--color-amber-500);
   --warning-foreground: var(--color-amber-700);
   --warning-surface: color-mix(in srgb, var(--warning) 8%, transparent);
@@ -2595,6 +2627,38 @@ code {
 @keyframes bot-status-shimmer {
   to {
     background-position: -120% 0;
+  }
+}
+
+/* Loading meter pixels ("Drive" wavefront), played once: each cell flashes lit,
+   then settles to its resting opacity. Lit cells rest as a chevron, the rest dim.
+   The sweep replays only when the meter remounts on a step change. */
+.response-loading-pixel {
+  --response-loading-pixel-rest: 0.15;
+  opacity: var(--response-loading-pixel-rest);
+  animation: response-loading-pixel-sweep 650ms ease-in-out both;
+}
+
+.response-loading-pixel[data-lit] {
+  --response-loading-pixel-rest: 1;
+}
+
+@keyframes response-loading-pixel-sweep {
+  0% {
+    opacity: 0.15;
+  }
+  18%,
+  42% {
+    opacity: 1;
+  }
+  100% {
+    opacity: var(--response-loading-pixel-rest);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .response-loading-pixel {
+    animation: none;
   }
 }
 

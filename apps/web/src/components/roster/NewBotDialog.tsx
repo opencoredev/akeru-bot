@@ -15,10 +15,13 @@ export function NewBotDialog({
   open,
   onOpenChange,
   onCreate,
+  /** Set while a create is in flight, so the form cannot be submitted twice. */
+  submitting = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreate: (input: { name: string; avatar: BotAvatar }) => void;
+  submitting?: boolean;
 }) {
   const [name, setName] = useState("");
   const [blobAvatar, setBlobAvatar] = useState(() => randomBotAvatar());
@@ -48,7 +51,7 @@ export function NewBotDialog({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (trimmedName.length === 0) return;
+            if (submitting || trimmedName.length === 0) return;
             onCreate({ name: trimmedName, avatar });
           }}
         >
@@ -60,15 +63,34 @@ export function NewBotDialog({
             <div className="flex items-center gap-4">
               <BotAvatarView avatar={avatar} name={trimmedName} className="size-16 shrink-0" />
               <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium text-foreground">
-                Name
+                <span>
+                  Name{" "}
+                  <span className="text-destructive" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
+                </span>
                 <Input
                   autoFocus
+                  aria-describedby="new-bot-name-help"
                   data-testid="new-bot-name-input"
                   maxLength={80}
                   placeholder="Bot name"
+                  required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
+                <span
+                  id="new-bot-name-help"
+                  className={cn(
+                    "text-xs font-normal",
+                    trimmedName.length === 0 ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {trimmedName.length === 0
+                    ? "Enter a name to create this bot."
+                    : "This is how the bot appears in your roster."}
+                </span>
               </label>
             </div>
 
@@ -122,11 +144,21 @@ export function NewBotDialog({
           </div>
 
           <footer className="flex justify-end gap-2 border-t bg-muted px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting}
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={trimmedName.length === 0}>
-              Create bot
+            <Button
+              type="submit"
+              aria-describedby={trimmedName.length === 0 ? "new-bot-name-help" : undefined}
+              className="disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+              disabled={submitting || trimmedName.length === 0}
+            >
+              {submitting ? "Creating" : "Create bot"}
             </Button>
           </footer>
         </form>

@@ -26,12 +26,122 @@ export function channelOriginForAssistantMessage(
   return null;
 }
 
+/**
+ * One measure for the transcript, the composer, and everything docked between them.
+ * Centering a capped column keeps the reading width steady when the right panel opens,
+ * so a message does not reflow just because a side surface appeared.
+ */
+export const CONVERSATION_MEASURE_CLASS_NAME = "mx-auto w-full max-w-[46rem]";
+
 export function isBotConversationWorking(input: {
   sending: boolean;
   respondingToUserInput: boolean;
   presence: RosterPresence;
+  /** The provider turn is still open, even when presence has not caught up yet. */
+  turnRunning?: boolean;
+  /** A question is on screen; the bot is waiting on the person, not working. */
+  waitingForUserInput?: boolean;
 }): boolean {
-  return input.sending || input.respondingToUserInput || input.presence === "working";
+  if (input.waitingForUserInput && !input.respondingToUserInput) return false;
+  return (
+    input.sending ||
+    input.respondingToUserInput ||
+    input.presence === "working" ||
+    (input.turnRunning ?? false)
+  );
+}
+
+const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+function clockLabel(date: Date): string {
+  const hours = date.getHours();
+  const suffix = hours < 12 ? "AM" : "PM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(date.getMinutes()).padStart(2, "0")} ${suffix}`;
+}
+
+function isSameDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+/**
+ * Label for the separator above a message, or null when it continues the same sitting.
+ * A separator appears for the first message, when the day changes, and after a long
+ * enough gap that the next message reads as a new session.
+ */
+export function conversationSeparatorLabel(
+  createdAt: string,
+  previousCreatedAt: string | null,
+  now: Date = new Date(),
+): string | null {
+  const current = new Date(createdAt);
+  if (Number.isNaN(current.getTime())) return null;
+
+  if (previousCreatedAt !== null) {
+    const previous = new Date(previousCreatedAt);
+    const settled =
+      !Number.isNaN(previous.getTime()) &&
+      isSameDay(previous, current) &&
+      current.getTime() - previous.getTime() < SESSION_GAP_MS;
+    if (settled) return null;
+  }
+
+  const day = isSameDay(current, now)
+    ? "Today"
+    : `${WEEKDAY_NAMES[current.getDay()]}, ${MONTH_NAMES[current.getMonth()]} ${current.getDate()}`;
+  return `${day} ${clockLabel(current)}`;
+}
+
+export interface BotConversationEntry {
+  readonly message: OrchestrationMessage;
+  /** Rendered above the message when the conversation resumes after a break. */
+  readonly separator: string | null;
+  /** First message of a run by one author: the only one that carries the name and avatar. */
+  readonly startsGroup: boolean;
+}
+
+/**
+ * Turns the visible messages into rendered turns. Consecutive messages from one author
+ * form a group so a long answer reads as one reply rather than a stack of small ones.
+ */
+export function buildBotConversationEntries(
+  messages: ReadonlyArray<OrchestrationMessage>,
+  now: Date = new Date(),
+): ReadonlyArray<BotConversationEntry> {
+  return messages.map((message, index) => {
+    const previous = index === 0 ? null : messages[index - 1];
+    const separator = conversationSeparatorLabel(
+      message.createdAt,
+      previous?.createdAt ?? null,
+      now,
+    );
+    const sameAuthor =
+      previous !== null &&
+      previous !== undefined &&
+      previous.role === message.role &&
+      (previous.respondingBotId ?? null) === (message.respondingBotId ?? null) &&
+      (previous.authorPersonId ?? null) === (message.authorPersonId ?? null);
+    return { message, separator, startsGroup: separator !== null || !sameAuthor };
+  });
 }
 
 /**

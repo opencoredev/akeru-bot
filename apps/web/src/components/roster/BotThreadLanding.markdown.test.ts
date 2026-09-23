@@ -40,7 +40,8 @@ describe("BotThreadLanding message formatting", () => {
     expect(assistantRow).toContain('className="min-w-0 flex-1"');
     expect(assistantRow).not.toContain("onTaskListChange");
     const userRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "UserMessageRow");
-    expect(userRow).toContain('className="whitespace-pre-wrap"');
+    // Sent text goes through SentMessageText, which keeps a reply's backlink compact.
+    expect(userRow).toContain("<SentMessageText");
   });
 
   it("renders step meters for bot and group replies", () => {
@@ -96,8 +97,8 @@ describe("BotThreadLanding message formatting", () => {
     }
     // Only the "Unavailable bot" layout omits reactions.
     const assistantControls = rowComponent(source, "AssistantMessageRow").split("<MessageControls");
-    expect(assistantControls[2]).toContain("onReactionChange=");
-    expect(rowComponent(source, "UserMessageRow")).toContain("onReactionChange=");
+    expect(assistantControls[2]).toContain("{...reactions.controls}");
+    expect(rowComponent(source, "UserMessageRow")).toContain("{...reactions.controls}");
   });
 
   it("mounts the voice action in the live bot chat header", () => {
@@ -110,5 +111,34 @@ describe("BotThreadLanding message formatting", () => {
     expect(source).toContain('runtime.latestTurn?.state === "running"');
     expect(source).toContain("voiceCall.activeCall?.botId === bot.id");
     expect(source).toContain("voiceCall.startingBotId === bot.id");
+  });
+
+  it("disables reactions with an accessible reason while the linked thread is unavailable", () => {
+    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+    const rows = readSibling("BotChatMessageRows.tsx");
+
+    expect(source).toContain(
+      "const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;",
+    );
+    expect(rows).toContain("<UnavailableReactionControl");
+    expect(rows).toContain("aria-label={REACTION_UNAVAILABLE_REASON}");
+    expect(rows).toContain("disabled:pointer-events-auto");
+    expect(rows).toContain("if (!onReactionChange) return { controls: {}, chips: {} };");
+    expect(source).not.toContain(
+      'if (!threadRef) {\n      toastManager.add({ type: "error", title: "Could not update reaction" });',
+    );
+  });
+
+  it("renders routine receipts as readable actions with an explicit failed tone", () => {
+    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+    const start = source.indexOf("function RoutineReceiptRow");
+    const end = source.indexOf("const NO_ENVIRONMENT", start);
+    const receiptRow = source.slice(start, end);
+
+    expect(receiptRow).toContain("<button");
+    expect(receiptRow).toContain("openRoutinesPanel(botName)");
+    expect(receiptRow).toContain("text-destructive");
+    expect(receiptRow).toContain("whitespace-normal break-words");
+    expect(receiptRow).not.toContain("truncate");
   });
 });

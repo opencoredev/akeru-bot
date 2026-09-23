@@ -24,7 +24,6 @@ export function resolveStickyBotEngine(input: {
   );
   const entry =
     resolveSelectableProviderInstanceEntry(input.instanceEntries, preferredId) ??
-    input.instanceEntries[0] ??
     null;
   if (!entry) return null;
   if (input.engine && input.engine.provider === entry.instanceId) {

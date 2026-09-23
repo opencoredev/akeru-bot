@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import type { Thread } from "../types";
 import {
+  activeComposerModelPicker,
+  registerComposerModelPicker,
+} from "../composerModelPickerRegistry";
+import {
   browseInputEndPaddingClass,
   buildBrowseGroups,
   buildModelPickerCommandPaletteAction,
@@ -168,6 +172,25 @@ describe("buildModelPickerCommandPaletteAction", () => {
     scheduled!();
     expect(openModelPicker).toHaveBeenCalledOnce();
     expect(events).toEqual(["close-command-palette", "schedule-model-picker", "open-model-picker"]);
+  });
+
+  it("stays enabled for a composer that registers only a model picker", async () => {
+    const openModelPicker = vi.fn();
+    const release = registerComposerModelPicker({ openModelPicker });
+    const scheduleAfterClose = vi.fn((open: () => void) => open());
+
+    const action = buildModelPickerCommandPaletteAction({
+      composerHandle: activeComposerModelPicker(),
+      closePalette: vi.fn(),
+      scheduleAfterClose,
+      icon: null,
+    });
+    expect(action.disabled).toBe(false);
+    await action.run();
+    expect(openModelPicker).toHaveBeenCalledOnce();
+
+    release();
+    expect(activeComposerModelPicker()).toBeNull();
   });
 
   it("disables the action when no composer handle exists", async () => {

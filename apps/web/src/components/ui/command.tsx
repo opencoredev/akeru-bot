@@ -66,7 +66,11 @@ function CommandDialogPopup({
         <CommandDialogPrimitive.Popup
           className={cn(
             DIALOG_POPUP_CLASS,
-            "pointer-events-auto max-h-105 max-w-xl text-foreground",
+            // The palette floats directly over conversation text, so its
+            // surface stays fully opaque rather than inheriting any glass
+            // treatment: a translucent palette makes the message underneath
+            // read as part of the result list.
+            "pointer-events-auto max-h-105 max-w-xl bg-popover text-foreground",
             className,
           )}
           data-slot="command-dialog-popup"

@@ -47,6 +47,7 @@ import {
 import { useRosterStore } from "./rosterStore";
 import { ensureLocalApi } from "../../localApi";
 import { resolveBotFileAttachment } from "./botFileAttachment";
+import { latestThreadRuntimeError } from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
@@ -532,7 +533,11 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     botReady,
     canResume,
     defaultProject: activeProject,
-    error: error ?? rememberedThread?.session?.lastError ?? null,
+    error:
+      error ??
+      latestThreadRuntimeError(activities, rememberedThread?.latestTurn ?? null) ??
+      rememberedThread?.session?.lastError ??
+      null,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
