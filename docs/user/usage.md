@@ -26,6 +26,25 @@ environments that are still loading, stale, or unavailable.
 
 Web and desktop charts stay still when idle. Hover over a chart to inspect a value.
 
+## Per-bot usage
+
+On mobile, **Settings > General > Usage** lists the bots in each connected environment below the plan
+limits. Open a bot to see its input, output, Observer, and Reflector tokens, its cap, an estimated
+cost, subscription pool use, and reserved tokens.
+
+A measurement a provider did not report reads **Unavailable** rather than zero, and a measurement
+that is only partly reported shows a trailing `+` so the number reads as a floor. A notice names the
+snapshot as incomplete when any provider measurement is missing.
+
+Estimated cost comes from the model rate table. It is not subscription spend and not an amount
+billed. Subscription pool use is provider-reported; when a provider reports no meter, the row reads
+Unavailable.
+
+The cap is read-only here. Change a bot's cap in a chat with that bot, under chat settings.
+
+Per-bot usage reads when you open it, when the app returns to the foreground, and when you pull to
+refresh. It does not poll in the background.
+
 ## Refresh usage
 
 Akeru refreshes usage every five minutes by default. Select the refresh button to reload it now. The

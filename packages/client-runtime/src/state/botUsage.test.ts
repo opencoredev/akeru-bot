@@ -27,6 +27,90 @@ const target = new PrimaryConnectionTarget({
   wsBaseUrl: "wss://usage.example.test",
 });
 
+const snapshotFor = (botId: BotId) => ({
+  botId,
+  consumedTokens: 0,
+  reservedTokens: 0,
+  measurements: {
+    input: { tokens: 0, unavailableEntries: 0 },
+    output: { tokens: 0, unavailableEntries: 0 },
+    observer: { tokens: 0, unavailableEntries: 0 },
+    reflector: { tokens: 0, unavailableEntries: 0 },
+  },
+  entries: [],
+  usageCap: null,
+  estimatedCost: { status: "unavailable", usd: null },
+  subscriptionPool: { status: "unavailable", used: null, limit: null, unit: null },
+});
+
+/**
+ * A connected environment whose `bot.usage` handler counts calls, so a test can
+ * assert how many reads a policy costs rather than that a read happened.
+ */
+const connectedEnvironment = Effect.fn(function* () {
+  const calls = { count: 0 };
+  const client = {
+    [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
+      Effect.sync(() => {
+        calls.count += 1;
+        return snapshotFor(input.botId);
+      }),
+  } as unknown as WsRpcProtocolClient;
+  const rpcSession: RpcSession = {
+    client,
+    initialConfig: Effect.never,
+    ready: Effect.void,
+    probe: Effect.void,
+    closed: Effect.never,
+  };
+  const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
+    target,
+    state: yield* SubscriptionRef.make<SupervisorConnectionState>({
+      ...AVAILABLE_CONNECTION_STATE,
+      desired: true,
+      network: "online",
+      phase: "connected",
+      attempt: 1,
+      generation: 1,
+    }),
+    session: yield* SubscriptionRef.make(Option.some(rpcSession)),
+    prepared: yield* SubscriptionRef.make(Option.none<PreparedConnection>()),
+    connect: Effect.void,
+    disconnect: Effect.void,
+    retryNow: Effect.void,
+  } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+  const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
+    run: ((_id, effect) =>
+      Effect.provideService(
+        effect,
+        EnvironmentSupervisor.EnvironmentSupervisor,
+        supervisor,
+      )) as EnvironmentRegistry.EnvironmentRegistry["Service"]["run"],
+    followStream: ((_id, stream) =>
+      Stream.provideService(
+        stream,
+        EnvironmentSupervisor.EnvironmentSupervisor,
+        supervisor,
+      )) as EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"],
+    stateChanges: () => SubscriptionRef.changes(supervisor.state),
+  } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+  return {
+    calls,
+    runtime: Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registryService)),
+  };
+});
+
+/** Lets a mounted query's request finish before the call count is read. */
+const settle = Effect.sleep("10 millis");
+
+/**
+ * The refresh this guards against was a `setTimeout`, so these two tests run on
+ * the real clock: a test clock would step straight past a timer nobody adjusts
+ * and pass whether the interval is there or not. Long enough to have fired twice
+ * at the five-second cadence it used to carry.
+ */
+const PAST_THE_OLD_POLL_INTERVAL = "6 seconds";
+
 describe("bot usage environment atoms", () => {
   it.effect("keys usage queries by environment and bot and calls bot.usage", () =>
     Effect.scoped(
@@ -119,6 +203,60 @@ describe("bot usage environment atoms", () => {
         yield* Effect.addFinalizer(() => Effect.sync(unmount));
         yield* Effect.promise(() => requested);
         expect(requestedBotId).toBe(botId);
+      }),
+    ),
+  );
+
+  it.live("does not poll a mounted query while nothing signals focus", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { calls, runtime } = yield* connectedEnvironment();
+        const atoms = createBotUsageEnvironmentAtoms(runtime);
+        const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
+          Effect.sync(() => value.dispose()),
+        );
+        const unmount = registry.mount(
+          atoms.summary({ environmentId, input: { botId: BotId.make("bot-no-poll") } }),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(unmount));
+        yield* settle;
+        expect(calls.count).toBe(1);
+
+        // A screen left open — blurred, or the app in the background — keeps the
+        // atom mounted. Well past the interval this used to carry, it must not
+        // have asked again.
+        yield* Effect.sleep(PAST_THE_OLD_POLL_INTERVAL);
+        yield* settle;
+        expect(calls.count).toBe(1);
+      }),
+    ),
+  );
+
+  it.live("reads again when the client returns to the foreground", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { calls, runtime } = yield* connectedEnvironment();
+        const focusSignal = Atom.make(0);
+        const atoms = createBotUsageEnvironmentAtoms(runtime, { focusSignal });
+        const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
+          Effect.sync(() => value.dispose()),
+        );
+        const unmount = registry.mount(
+          atoms.summary({ environmentId, input: { botId: BotId.make("bot-focus") } }),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(unmount));
+        yield* settle;
+        expect(calls.count).toBe(1);
+
+        // Backgrounded: no foreground signal, no request, however long it sits.
+        yield* Effect.sleep(PAST_THE_OLD_POLL_INTERVAL);
+        yield* settle;
+        expect(calls.count).toBe(1);
+
+        // Returning to the foreground past the stale window reads once.
+        registry.set(focusSignal, 1);
+        yield* settle;
+        expect(calls.count).toBe(2);
       }),
     ),
   );

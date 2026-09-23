@@ -53,6 +53,7 @@ import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsCl
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
 import { SettingsProjectGroupingRouteScreen } from "./features/settings/SettingsProjectGroupingRouteScreen";
+import { BotUsageRouteScreen } from "./features/usage/BotUsageRouteScreen";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { SettingsProviderHealthRouteScreen } from "./features/settings/SettingsProviderHealthRouteScreen";
@@ -194,6 +195,13 @@ const SettingsContentStack = createNativeStackNavigator({
       linking: "usage",
       options: {
         title: "Usage",
+      },
+    }),
+    SettingsBotUsage: createNativeStackScreen({
+      screen: BotUsageRouteScreen,
+      linking: "usage/bot",
+      options: {
+        title: "Bot usage",
       },
     }),
     SettingsProviderHealth: createNativeStackScreen({
