@@ -182,7 +182,7 @@ export function durableFactReadOnlyReason(
   return null;
 }
 
-/** Names the chat a fact came from without exposing its id. */
+/** Names the chat a fact came from without exposing its id, or null when it has no source chat. */
 export function durableFactSourceLabel(
   fact: Pick<DurableMemoryFact, "sourceThreadId">,
   input: {
@@ -190,7 +190,7 @@ export function durableFactSourceLabel(
     readonly threadTitles: ReadonlyMap<string, string>;
   },
 ) {
-  if (fact.sourceThreadId === null) return "an unknown chat";
+  if (fact.sourceThreadId === null) return null;
   if (fact.sourceThreadId === input.currentThreadId) return "this chat";
   return input.threadTitles.get(fact.sourceThreadId)?.trim() || "another chat";
 }

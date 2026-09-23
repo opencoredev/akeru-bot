@@ -207,6 +207,10 @@ export function DurableFactsCard(props: {
         ? null
         : props.facts?.map((fact) => {
             const editing = props.editing?.rootId === fact.rootId ? props.editing : null;
+            const sourceLabel = durableFactSourceLabel(fact, {
+              currentThreadId: props.currentThreadId,
+              threadTitles: props.threadTitles,
+            });
             return (
               <View key={fact.rootId} className="gap-1 border-t border-border-subtle pt-3">
                 {editing ? (
@@ -250,12 +254,8 @@ export function DurableFactsCard(props: {
                   {DURABLE_MEMORY_SCOPE_LABELS[fact.scope]} · {factStatus(fact)}
                 </Text>
                 <Text className="text-xs text-foreground-muted">
-                  From{" "}
-                  {durableFactSourceLabel(fact, {
-                    currentThreadId: props.currentThreadId,
-                    threadTitles: props.threadTitles,
-                  })}
-                  {" · Bots: "}
+                  {sourceLabel === null ? "" : `From ${sourceLabel} · `}
+                  {"Bots: "}
                   {durableFactBotsLabel(fact, {
                     currentBotId: props.currentBotId,
                     botNames: props.botNames,

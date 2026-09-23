@@ -124,6 +124,7 @@ export function DurableFactList({
         const isEditing = editing?.rootId === fact.rootId;
         const confirmingDelete = confirmingDeleteRootId === fact.rootId;
         const actions = durableFactActions(fact, policy);
+        const sourceLabel = durableFactSourceLabel(fact, { currentThreadId, threadTitles });
         return (
           <li
             key={fact.rootId}
@@ -196,10 +197,12 @@ export function DurableFactList({
                   : `, ${DURABLE_MEMORY_DELETION_LABELS[fact.deletionState]}`}
                 {fact.pinned ? ", Pinned" : ""}
               </dd>
-              <dt>Source chat</dt>
-              <dd className="first-letter:uppercase">
-                {durableFactSourceLabel(fact, { currentThreadId, threadTitles })}
-              </dd>
+              {sourceLabel === null ? null : (
+                <>
+                  <dt>Source chat</dt>
+                  <dd className="first-letter:uppercase">{sourceLabel}</dd>
+                </>
+              )}
               <dt>Bots</dt>
               <dd className="first-letter:uppercase">
                 {durableFactBotsLabel(fact, { currentBotId, botNames }) ?? "None"}

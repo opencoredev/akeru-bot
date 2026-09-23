@@ -1107,7 +1107,10 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               entityKind: entity.kind,
               entityId: entity.id,
               visibility: partition.visibility,
-              sourceThreadId: partition.scope === "thread" ? input.access.threadId : null,
+              // A move changes who can read the fact, not where it came from.
+              sourceThreadId:
+                current.sourceThreadId ??
+                (partition.scope === "thread" ? input.access.threadId : null),
               approvalState:
                 partition.visibility === "shared"
                   ? input.sharedProjectApproval

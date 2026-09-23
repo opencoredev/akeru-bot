@@ -92,10 +92,12 @@ describe("mobile durable facts", () => {
       facts: [
         { ...fact, rootId: "m1", sourceThreadId: "thread-2", affectedBotIds: ["bot-9"] },
         { ...fact, rootId: "m2", sourceThreadId: "thread-9", affectedBotIds: [] },
+        { ...fact, rootId: "m3", sourceThreadId: null, affectedBotIds: [] },
       ] as unknown as DurableMemoryFact[],
     });
     expect(tree).toContain("From Launch plan · Bots: another bot");
     expect(tree).toContain("From another chat · Bots: none");
+    expect(tree).not.toContain("unknown chat");
     expect(tree).not.toContain("thread-9");
     expect(tree).not.toContain("bot-9");
   });

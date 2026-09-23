@@ -271,6 +271,18 @@ describe("DurableFactList", () => {
     expect(markup).not.toContain("bot-9");
   });
 
+  it("omits the source chat row when a fact has no source chat", () => {
+    const markup = renderToStaticMarkup(
+      renderFactList({ facts: [listedFact({ sourceThreadId: null })] }),
+    );
+    expect(markup).not.toContain("Source chat");
+    expect(markup).not.toContain("unknown chat");
+    expect(markup).toContain("Bots");
+    expect(renderToStaticMarkup(renderFactList({ facts: [listedFact()] }))).toContain(
+      "Source chat",
+    );
+  });
+
   it("hides every action for a read-only connection or while Memory is off", () => {
     const open = { canOperate: true, memoryEnabled: true, privateBotMemory: true };
     expect(

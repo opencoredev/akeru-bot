@@ -16,7 +16,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { DurableImportReview, DurableScopePicker } from "./DurableMemoryPanels";
 
@@ -24,7 +24,6 @@ import { memoryEnvironment } from "../../state/memory";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 
 const decodeArchive = Schema.decodeUnknownSync(AkeruMarkdownMemoryArchiveV3);
 const decodeDurableArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
@@ -65,6 +64,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
   const applyDurable = useAtomCommand(memoryEnvironment.applyDurableImport, {
     reportFailure: false,
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -182,8 +182,21 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
           </Button>
         </div>
       </div>
-      <Input
-        aria-label="Import memory archive"
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Import memory archive
+        </Button>
+      </div>
+      <input
+        ref={fileInputRef}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
         type="file"
         accept="application/json,.json"
         disabled={busy}

@@ -1162,6 +1162,56 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("keeps a fact's source chat when it moves between scopes", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-source-root");
+      const sourceThreadId = ThreadId.make("ui-thread-1");
+      const sourceMessageId = MessageId.make("ui-message-1");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-source-1", "bot:user", {
+          rootId,
+          sourceThreadId,
+          sourceMessageId,
+        }),
+      });
+      const shared = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("mutate-source-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(shared!.partition.scope, "project");
+      assert.equal(shared!.sourceThreadId, sourceThreadId);
+      assert.equal(shared!.sourceMessageId, sourceMessageId);
+      const moved = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 2,
+          scope: "bot",
+        },
+        memoryId: AkeruMemoryId.make("mutate-source-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(moved!.sourceThreadId, sourceThreadId);
+      const history = yield* repository.listHistory({ access: botAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => revision.sourceThreadId),
+        [sourceThreadId, sourceThreadId, sourceThreadId],
+      );
+    }),
+  );
+
   it.effect("rejects then approves a pending durable fact", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;

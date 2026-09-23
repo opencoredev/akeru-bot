@@ -241,7 +241,7 @@ describe("durable fact actions", () => {
       currentThreadId: "thread-1",
       threadTitles: new Map([["thread-2", "Launch plan"]]),
     };
-    expect(durableFactSourceLabel(fact({ sourceThreadId: null }), names)).toBe("an unknown chat");
+    expect(durableFactSourceLabel(fact({ sourceThreadId: null }), names)).toBeNull();
     expect(durableFactSourceLabel(fact({ sourceThreadId: "thread-1" as never }), names)).toBe(
       "this chat",
     );
