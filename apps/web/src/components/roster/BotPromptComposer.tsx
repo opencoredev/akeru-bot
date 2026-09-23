@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 import { ArrowUpIcon, AtSignIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import {
   hydrateImagesFromPersisted,
@@ -80,10 +80,13 @@ export interface MentionBot {
 
 const EMPTY_MENTION_BOTS: ReadonlyArray<MentionBot> = [];
 
-export function findMentionedBotId(
-  prompt: string,
-  bots: ReadonlyArray<MentionBot>,
-): string | undefined {
+export type BotMention =
+  | { readonly kind: "none" }
+  | { readonly kind: "bot"; readonly botId: string }
+  | { readonly kind: "ambiguous"; readonly name: string };
+
+// Resolves the latest whole-word @BotName. A name shared by two bots cannot be routed honestly.
+export function resolveBotMention(prompt: string, bots: ReadonlyArray<MentionBot>): BotMention {
   const mentions = bots.flatMap((bot) => {
     const token = `@${bot.name}`;
     const index = prompt.lastIndexOf(token);
@@ -91,10 +94,23 @@ export function findMentionedBotId(
     const before = prompt[index - 1];
     const after = prompt[index + token.length];
     return (before === undefined || /\s/.test(before)) && (after === undefined || /\s/.test(after))
-      ? [{ id: bot.id, index }]
+      ? [{ bot, index }]
       : [];
   });
-  return mentions.toSorted((left, right) => right.index - left.index)[0]?.id;
+  const latest = mentions.toSorted(
+    (left, right) => right.index - left.index || right.bot.name.length - left.bot.name.length,
+  )[0];
+  if (!latest) return { kind: "none" };
+  const namesakes = bots.filter((bot) => bot.name === latest.bot.name);
+  return namesakes.length > 1
+    ? { kind: "ambiguous", name: latest.bot.name }
+    : { kind: "bot", botId: latest.bot.id };
+}
+
+export function botMentionHint(mention: BotMention): string | null {
+  return mention.kind === "ambiguous"
+    ? `More than one bot here is named ${mention.name}. Rename one of them to mention it.`
+    : null;
 }
 
 export function restoreBotStashPrompt(currentPrompt: string, stashedPrompt: string): string {
@@ -131,6 +147,8 @@ export function BotPromptComposer({
   const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
+  const mentionHintId = useId();
+  const mentionHint = botMentionHint(resolveBotMention(draft, mentionBots));
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -471,7 +489,9 @@ export function BotPromptComposer({
         event.preventDefault();
         const prompt = draft.trim();
         const submittedAttachments = [...attachmentsRef.current];
+        const submittedMention = resolveBotMention(prompt, mentionBots);
         if (!canSubmitBotPrompt(disabled, prompt, submittedAttachments.length)) return;
+        if (submittedMention.kind === "ambiguous") return;
         const submittedFailedIds = new Set(failedAttachmentIds);
         persistDraft("");
         if (draftKey) clearBotDraft(draftKey);
@@ -483,7 +503,7 @@ export function BotPromptComposer({
         void onSubmit(
           prompt,
           submittedAttachments.map((attachment) => attachment.file),
-          findMentionedBotId(prompt, mentionBots),
+          submittedMention.kind === "bot" ? submittedMention.botId : undefined,
         ).then(
           (sent) => {
             if (sent) {
@@ -642,13 +662,21 @@ export function BotPromptComposer({
           <button
             type="submit"
             aria-label="Send message"
-            disabled={!canSubmitBotPrompt(disabled, draft, attachments.length)}
+            aria-describedby={mentionHint ? mentionHintId : undefined}
+            disabled={
+              !canSubmitBotPrompt(disabled, draft, attachments.length) || mentionHint !== null
+            }
             className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-25"
           >
             <ArrowUpIcon className="size-5" />
           </button>
         </div>
       </div>
+      {mentionHint ? (
+        <p id={mentionHintId} role="status" className="px-4 pt-2 text-xs text-muted-foreground">
+          {mentionHint}
+        </p>
+      ) : null}
       <input
         ref={fileInputRef}
         type="file"

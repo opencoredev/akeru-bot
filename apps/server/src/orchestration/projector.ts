@@ -820,6 +820,8 @@ export function projectEvent(
           threads: updateThread(nextBase.threads, payload.threadId, {
             botId: payload.botId,
             groupId: payload.groupId,
+            // A new owner makes the last responder stale, so a detached chat cannot route to it.
+            respondingBotId: payload.botId,
             updatedAt: payload.updatedAt,
           }),
         })),

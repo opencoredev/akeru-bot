@@ -1,6 +1,7 @@
 import {
   AuthSessionId,
   BotId,
+  ClientOrchestrationCommand,
   CommandId,
   EventId,
   GroupId,
@@ -20,6 +21,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { applyAuthenticatedCommandActor } from "./AuthenticatedCommand.ts";
 import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
@@ -30,6 +32,24 @@ const OTHER_SPECIALIST_ID = BotId.make("bot-other-specialist");
 const GROUP_ID = GroupId.make("group-product");
 const PERSON_ID = AuthSessionId.make("person-member");
 const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
+const decodeClientCommand = Schema.decodeUnknownEffect(ClientOrchestrationCommand);
+
+// Decides one command and projects its events, the same order the engine uses.
+const applyCommand = Effect.fn("applyCommand")(function* (
+  readModel: OrchestrationReadModel,
+  command: OrchestrationCommand,
+) {
+  const result = yield* decideOrchestrationCommand({ command, readModel });
+  const events = Array.isArray(result) ? result : [result];
+  let next = readModel;
+  for (const event of events) {
+    next = yield* projectEvent(next, {
+      ...event,
+      sequence: next.snapshotSequence + 1,
+    } as OrchestrationEvent);
+  }
+  return { readModel: next, events };
+});
 
 function makeBot(input: {
   readonly id: OrchestrationBot["id"];
@@ -1117,6 +1137,229 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           updatedAt: NOW,
         },
       ]);
+    }),
+  );
+  it.effect("walks every bot-only group action forward and back", () =>
+    Effect.gen(function* () {
+      const groupState = (model: OrchestrationReadModel) =>
+        model.groups.find((group) => group.id === GROUP_ID);
+      let model = makeReadModel({
+        bots: [
+          makeBot({ id: BOSS_ID }),
+          makeBot({ id: SPECIALIST_ID }),
+          makeBot({ id: OTHER_SPECIALIST_ID }),
+        ],
+      });
+
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.create",
+        commandId: CommandId.make("cmd-lifecycle-create"),
+        groupId: GROUP_ID,
+        name: "Product",
+        bossBotId: BOSS_ID,
+        specialistBotIds: [SPECIALIST_ID],
+        createdAt: NOW,
+      }));
+      expect(groupState(model)?.bossBotId).toBe(BOSS_ID);
+
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.rename",
+        commandId: CommandId.make("cmd-lifecycle-rename"),
+        groupId: GROUP_ID,
+        name: "Launch crew",
+      }));
+      expect(groupState(model)?.name).toBe("Launch crew");
+
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.member.assign",
+        commandId: CommandId.make("cmd-lifecycle-add"),
+        groupId: GROUP_ID,
+        botId: OTHER_SPECIALIST_ID,
+        role: "specialist",
+      }));
+      expect(groupState(model)?.members).toContainEqual({
+        kind: "bot",
+        botId: OTHER_SPECIALIST_ID,
+        role: "specialist",
+      });
+
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.member.unassign",
+        commandId: CommandId.make("cmd-lifecycle-remove"),
+        groupId: GROUP_ID,
+        botId: OTHER_SPECIALIST_ID,
+      }));
+      expect(
+        groupState(model)?.members.some(
+          (member) => member.kind === "bot" && member.botId === OTHER_SPECIALIST_ID,
+        ),
+      ).toBe(false);
+
+      // Add the bot back so the old boss can step down and leave afterwards.
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.member.assign",
+        commandId: CommandId.make("cmd-lifecycle-readd"),
+        groupId: GROUP_ID,
+        botId: OTHER_SPECIALIST_ID,
+        role: "specialist",
+      }));
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.boss.set",
+        commandId: CommandId.make("cmd-lifecycle-boss"),
+        groupId: GROUP_ID,
+        bossBotId: SPECIALIST_ID,
+        unassignPreviousBoss: false,
+      }));
+      expect(groupState(model)?.bossBotId).toBe(SPECIALIST_ID);
+      expect(groupState(model)?.members).toContainEqual({
+        kind: "bot",
+        botId: BOSS_ID,
+        role: "specialist",
+      });
+
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.member.unassign",
+        commandId: CommandId.make("cmd-lifecycle-remove-old-boss"),
+        groupId: GROUP_ID,
+        botId: BOSS_ID,
+      }));
+      expect(
+        groupState(model)
+          ?.members.filter((member) => member.kind === "bot")
+          .map((member) => member.botId)
+          .toSorted(),
+      ).toEqual([OTHER_SPECIALIST_ID, SPECIALIST_ID].toSorted());
+
+      ({ readModel: model } = yield* applyCommand(model, {
+        type: "group.delete",
+        commandId: CommandId.make("cmd-lifecycle-delete"),
+        groupId: GROUP_ID,
+      }));
+      expect(groupState(model)).toBeUndefined();
+      expect(model.bots.map((bot) => bot.id)).toEqual([
+        BOSS_ID,
+        SPECIALIST_ID,
+        OTHER_SPECIALIST_ID,
+      ]);
+    }),
+  );
+
+  it.effect("lets a person leave a group and rejects a second leave", () =>
+    Effect.gen(function* () {
+      const leave = {
+        type: "group.leave" as const,
+        commandId: CommandId.make("cmd-group-leave"),
+        groupId: GROUP_ID,
+        personId: PERSON_ID,
+      };
+      const { readModel } = yield* applyCommand(
+        makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+        }),
+        leave,
+      );
+
+      expect(readModel.groups[0]?.members.some((member) => member.kind === "person")).toBe(false);
+      const error = yield* decideOrchestrationCommand({ command: leave, readModel }).pipe(
+        Effect.flip,
+      );
+      if (error._tag !== "OrchestrationCommandInvariantError") {
+        throw new Error("Expected group leave invariant error");
+      }
+      expect(error.detail).toContain("not a member");
+    }),
+  );
+
+  it.effect("clears the mentioned responder when the group is deleted", () =>
+    Effect.gen(function* () {
+      const mentioned = yield* applyCommand(
+        makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+          threads: [makeGroupThread()],
+        }),
+        startTurnCommand(SPECIALIST_ID),
+      );
+      expect(mentioned.readModel.threads[0]?.respondingBotId).toBe(SPECIALIST_ID);
+
+      const { readModel } = yield* applyCommand(mentioned.readModel, {
+        type: "group.delete",
+        commandId: CommandId.make("cmd-delete-after-mention"),
+        groupId: GROUP_ID,
+      });
+
+      expect(readModel.threads[0]).toMatchObject({
+        botId: null,
+        groupId: null,
+        respondingBotId: null,
+      });
+    }),
+  );
+
+  it.effect("routes a client @mention to that bot's engine, then back to the boss", () =>
+    Effect.gen(function* () {
+      let model = makeReadModel({
+        bots: [
+          makeBot({ id: BOSS_ID, provider: "claudeAgent", model: "claude-opus-5-5" }),
+          makeBot({ id: SPECIALIST_ID, provider: "grok", model: "grok-5" }),
+        ],
+        groups: [makeGroup()],
+        threads: [makeGroupThread()],
+      });
+      const actor = { personId: PERSON_ID, displayName: "Member", canManageGroups: false };
+      // The web composer resolves "@bot-specialist" to respondingBotId before it sends.
+      const clientTurn = (messageId: string, text: string, respondingBotId?: BotId) =>
+        Effect.gen(function* () {
+          const decoded = yield* decodeClientCommand({
+            type: "thread.turn.start",
+            commandId: `cmd-${messageId}`,
+            threadId: "thread-group",
+            message: { messageId, role: "user", text, attachments: [] },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            ...(respondingBotId !== undefined ? { respondingBotId } : {}),
+            // A client cannot claim to be someone else; the server sets the sender.
+            senderPersonId: "person-forged",
+            createdAt: NOW,
+          });
+          if (decoded.type !== "thread.turn.start") throw new Error("Expected a turn start");
+          return applyAuthenticatedCommandActor(
+            { ...decoded, message: { ...decoded.message, attachments: [] } },
+            actor,
+          );
+        });
+      const turnStart = (events: ReadonlyArray<Omit<OrchestrationEvent, "sequence">>) => {
+        const event = events.find((entry) => entry.type === "thread.turn-start-requested");
+        if (event?.type !== "thread.turn-start-requested") {
+          throw new Error("Expected thread.turn-start-requested");
+        }
+        return event.payload;
+      };
+
+      const mentioned = yield* applyCommand(
+        model,
+        yield* clientTurn("message-mention", "@bot-specialist check the logs", SPECIALIST_ID),
+      );
+      model = mentioned.readModel;
+      expect(turnStart(mentioned.events)).toMatchObject({
+        respondingBotId: SPECIALIST_ID,
+        modelSelection: { instanceId: "grok", model: "grok-5" },
+      });
+      expect(model.threads[0]?.respondingBotId).toBe(SPECIALIST_ID);
+      expect(
+        mentioned.events.find((entry) => entry.type === "thread.message-sent")?.payload,
+      ).toMatchObject({ authorPersonId: PERSON_ID, text: "@bot-specialist check the logs" });
+
+      const unmentioned = yield* applyCommand(
+        model,
+        yield* clientTurn("message-plain", "Thanks @Leo, what next?"),
+      );
+      expect(turnStart(unmentioned.events)).toMatchObject({
+        respondingBotId: BOSS_ID,
+        modelSelection: { instanceId: "claudeAgent", model: "claude-opus-5-5" },
+      });
+      expect(unmentioned.readModel.threads[0]?.respondingBotId).toBe(BOSS_ID);
     }),
   );
 });

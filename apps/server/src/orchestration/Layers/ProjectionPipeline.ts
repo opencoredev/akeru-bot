@@ -1039,6 +1039,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             botId: event.payload.botId,
             groupId: event.payload.groupId,
+            respondingBotId: event.payload.botId,
             updatedAt: event.payload.updatedAt,
           });
           return;

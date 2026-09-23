@@ -13,7 +13,8 @@ import {
   appendBotMention,
   BotPromptComposer,
   canSubmitBotPrompt,
-  findMentionedBotId,
+  botMentionHint,
+  resolveBotMention,
   isBotPromptSubmissionCurrent,
   isBotPromptExpanded,
   restoreBotStashPrompt,
@@ -53,12 +54,55 @@ describe("bot prompt composer", () => {
 
   it("routes the latest complete group mention to its bot", () => {
     expect(
-      findMentionedBotId("Ask @Mori then @Path Finder ", [
+      resolveBotMention("Ask @Mori then @Path Finder ", [
         { id: "mori", name: "Mori" },
         { id: "pathfinder", name: "Path Finder" },
       ]),
-    ).toBe("pathfinder");
-    expect(findMentionedBotId("Email a@Mori.com", [{ id: "mori", name: "Mori" }])).toBeUndefined();
+    ).toEqual({ kind: "bot", botId: "pathfinder" });
+    expect(resolveBotMention("Email a@Mori.com", [{ id: "mori", name: "Mori" }])).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("prefers the longer bot name when two names start at the same mention", () => {
+    expect(
+      resolveBotMention("@Path Finder look", [
+        { id: "path", name: "Path" },
+        { id: "pathfinder", name: "Path Finder" },
+      ]),
+    ).toEqual({ kind: "bot", botId: "pathfinder" });
+  });
+
+  it("keeps a person mention as plain text so the boss answers", () => {
+    const groupBots = [
+      { id: "boss", name: "Akeru" },
+      { id: "mori", name: "Mori" },
+    ];
+    expect(resolveBotMention("Thanks @Leo, can you check this?", groupBots)).toEqual({
+      kind: "none",
+    });
+    expect(resolveBotMention("@Leo asked for this. @Mori please review", groupBots)).toEqual({
+      kind: "bot",
+      botId: "mori",
+    });
+  });
+
+  it("refuses to route a name two group bots share, whatever their order", () => {
+    const mori = { id: "mori-claude", name: "Mori" };
+    const otherMori = { id: "mori-grok", name: "Mori" };
+    const akeru = { id: "boss", name: "Akeru" };
+    for (const bots of [
+      [akeru, mori, otherMori],
+      [otherMori, akeru, mori],
+    ]) {
+      const mention = resolveBotMention("@Mori check the logs", bots);
+      expect(mention).toEqual({ kind: "ambiguous", name: "Mori" });
+      expect(botMentionHint(mention)).toBe(
+        "More than one bot here is named Mori. Rename one of them to mention it.",
+      );
+      expect(resolveBotMention("@Mori then @Akeru", bots)).toEqual({ kind: "bot", botId: "boss" });
+    }
+    expect(botMentionHint({ kind: "bot", botId: "boss" })).toBeNull();
   });
 
   it("focuses the prompt for unmodified printable typing outside an editor", () => {

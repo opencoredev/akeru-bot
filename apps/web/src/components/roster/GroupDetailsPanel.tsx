@@ -2,9 +2,10 @@ import { useAtomValue } from "@effect/atom-react";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
 import { BotIcon, Trash2Icon } from "lucide-react";
-import { useEffect, useReducer, useState, type ReactNode } from "react";
+import { useEffect, useId, useReducer, useState, type ReactNode } from "react";
 
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
+import { ensureLocalApi } from "../../localApi";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
 import { botEnvironment } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -34,6 +35,34 @@ function reducePanelState(state: PanelState, action: PanelAction): PanelState {
   if (action.type === "toggle-desktop") return { ...state, desktopOpen: !state.desktopOpen };
   if (action.type === "toggle-mobile") return { ...state, mobileOpen: !state.mobileOpen };
   return { ...state, mobileOpen: action.open };
+}
+
+/**
+ * Explains why the member list blocks removal, so the way back out of a group
+ * change is always visible. Returns null when every specialist can be removed.
+ */
+export function groupMemberRemovalHint(input: {
+  readonly memberCount: number;
+  readonly bossName: string | null;
+  readonly canAddBot: boolean;
+}): string | null {
+  if (input.memberCount <= 2) {
+    return input.canAddBot
+      ? "A group needs at least two bots. Add another bot before you remove one."
+      : "A group needs at least two bots. Create a new bot in the roster before you remove one.";
+  }
+  if (input.bossName !== null) {
+    return `To remove ${input.bossName}, make another bot the boss first.`;
+  }
+  return null;
+}
+
+/** True when the removal hint explains why this row's remove button is disabled. */
+export function isGroupMemberRemovalBlocked(input: {
+  readonly memberCount: number;
+  readonly isBoss: boolean;
+}): boolean {
+  return input.memberCount <= 2 || input.isBoss;
 }
 
 function GroupEditor({
@@ -68,6 +97,13 @@ function GroupEditor({
   const activeBots = bots.filter((bot) => bot.archivedAt === null);
   const members = groupBotMembers(group, activeBots);
   const availableBots = activeBots.filter((bot) => !groupContainsBot(group, bot.id));
+  const removalHintId = useId();
+  const addHintId = useId();
+  const removalHint = groupMemberRemovalHint({
+    memberCount: members.length,
+    bossName: members.find((bot) => bot.id === group.bossBotId)?.name ?? null,
+    canAddBot: availableBots.length > 0,
+  });
 
   useEffect(() => setName(group.name), [group.name]);
   useEffect(() => {
@@ -165,6 +201,10 @@ function GroupEditor({
               const role = group.members.find(
                 (member) => isGroupBotMember(member) && member.botId === bot.id,
               );
+              const blockedByRule = isGroupMemberRemovalBlocked({
+                memberCount: members.length,
+                isBoss: role?.kind === "bot" && role.role === "boss",
+              });
               return (
                 <div key={bot.id} className="flex min-h-9 items-center gap-2 rounded-md px-1">
                   <span className="min-w-0 flex-1 truncate text-sm">{bot.name}</span>
@@ -172,10 +212,9 @@ function GroupEditor({
                     {role?.kind === "bot" ? role.role : "specialist"}
                   </span>
                   <Button
+                    aria-describedby={removalHint && blockedByRule ? removalHintId : undefined}
                     aria-label={`Remove ${bot.name} from ${group.name}`}
-                    disabled={
-                      busy || role?.kind !== "bot" || role.role === "boss" || members.length <= 2
-                    }
+                    disabled={busy || role?.kind !== "bot" || blockedByRule}
                     size="icon-sm"
                     variant="ghost"
                     onClick={() =>
@@ -198,9 +237,22 @@ function GroupEditor({
               );
             })}
           </div>
+          {removalHint ? (
+            <p id={removalHintId} className="text-xs text-muted-foreground">
+              {removalHint}
+            </p>
+          ) : null}
           <div className="flex gap-2">
-            <Select value={newMemberId} onValueChange={(value) => value && setNewMemberId(value)}>
-              <SelectTrigger aria-label="Add bot" className="min-w-0 flex-1">
+            <Select
+              disabled={availableBots.length === 0}
+              value={newMemberId}
+              onValueChange={(value) => value && setNewMemberId(value)}
+            >
+              <SelectTrigger
+                aria-label="Add bot"
+                aria-describedby={availableBots.length === 0 ? addHintId : undefined}
+                className="min-w-0 flex-1"
+              >
                 <SelectValue placeholder="Choose bot" />
               </SelectTrigger>
               <SelectPopup>
@@ -234,6 +286,11 @@ function GroupEditor({
               <BotIcon />
             </Button>
           </div>
+          {availableBots.length === 0 ? (
+            <p id={addHintId} className="text-xs text-muted-foreground">
+              Every bot is already in this group.
+            </p>
+          ) : null}
         </section>
       </div>
       <div className="mt-6 -mx-2">
@@ -243,16 +300,22 @@ function GroupEditor({
             <Button
               disabled={busy}
               variant="destructive"
-              onClick={() =>
-                void run(
+              onClick={async () => {
+                const confirmed = await ensureLocalApi().dialogs.confirm(
+                  `Delete "${group.name}"? Its bots stay in your roster.`,
+                  { variant: "destructive" },
+                );
+                if (!confirmed) return;
+                const success = await run(
                   () =>
                     deleteGroup({
                       environmentId,
                       input: { groupId: GroupId.make(group.id) },
                     }),
                   "Could not delete group",
-                ).then((success) => success && onDeleted())
-              }
+                );
+                if (success) onDeleted();
+              }}
             >
               Delete
             </Button>
