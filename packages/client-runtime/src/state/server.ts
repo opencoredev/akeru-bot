@@ -829,6 +829,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.voiceCallGet,
       staleTimeMs: 1_000,
     }),
+    voiceProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:voice-providers",
+      tag: WS_METHODS.voiceProviders,
+      staleTimeMs: 5_000,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",
@@ -955,6 +960,10 @@ export function createServerEnvironmentAtoms<R, E>(
     synthesizeVoice: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:synthesize",
       tag: WS_METHODS.voiceSynthesize,
+    }),
+    transcribeVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:transcribe",
+      tag: WS_METHODS.voiceTranscribe,
     }),
     cancelVoice: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:cancel",

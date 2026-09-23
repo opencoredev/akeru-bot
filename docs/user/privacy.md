@@ -17,6 +17,10 @@ document. See [Bot memory](memory.md).
   it publicly to the Akeru Bot GitHub Issues tab, where it remains until a maintainer removes it.
 - Voice calls send microphone audio and call state to the ChatGPT Realtime service while a call is
   active.
+- Dictation records microphone audio on the device you dictate from and sends it through the
+  environment server to the transcription provider selected in **Settings > Voice**. Akeru does not
+  keep the recording after transcription finishes or is canceled. The text stays in your draft until
+  you send it.
 - Reading a stored reply aloud will send the spoken form of that reply to the selected speech
   service when stored-reply speech is connected. Temporary audio stays on this device for the
   current playback only. See [Voice and spoken replies](voice.md).

@@ -207,6 +207,24 @@ describe("bot prompt composer", () => {
     expect(withApproval).toContain("border-t-transparent");
   });
 
+  it("puts dictation in the send slot when the draft is empty", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Mori" disabled={false} onSubmit={async () => true} />,
+    );
+    expect(markup).toContain("data-bot-prompt-dictation");
+    expect(markup).toContain('aria-label="Start dictation"');
+    expect(markup).toContain("lucide-mic");
+    expect(markup).not.toContain('aria-label="Send message"');
+  });
+
+  it("keeps send in the slot for an inert preview", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Mori" disabled readOnly onSubmit={async () => true} />,
+    );
+    expect(markup).not.toContain("data-bot-prompt-dictation");
+    expect(markup).toContain('aria-label="Send message"');
+  });
+
   it("renders an inert preview with the production composer", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer

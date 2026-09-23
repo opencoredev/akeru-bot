@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./dictation": {
+      "types": "./src/dictation/index.ts",
+      "default": "./src/dictation/index.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"

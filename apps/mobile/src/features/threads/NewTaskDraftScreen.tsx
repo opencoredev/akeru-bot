@@ -23,6 +23,9 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
+import { composerActionIsDictation } from "@t3tools/client-runtime/dictation";
+import { DictationControls } from "../../components/DictationControls";
+import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
 import {
   ComposerInlineControl,
   ComposerToolbarButton,
@@ -122,6 +125,32 @@ export function NewTaskDraftScreen(props: {
       (environment) => environment.environmentId === selectedProject.environmentId,
     )?.connectionState === "connected";
   const promptInputRef = useRef<ComposerEditorHandle>(null);
+  const promptSelectionRef = useRef({ start: flow.prompt.length, end: flow.prompt.length });
+  const [dictationGeneration, setDictationGeneration] = useState(0);
+  const dictation = useEnvironmentComposerDictation({
+    environmentId: selectedProject?.environmentId ?? null,
+    connected: environmentConnected,
+    threadId: flow.draftKey ?? "new-chat",
+    draftId: flow.draftKey ?? "new-chat",
+    generation: dictationGeneration,
+    getDraft: () => {
+      const end = flow.prompt.length;
+      const { start, end: selectionEnd } = promptSelectionRef.current;
+      return {
+        text: flow.prompt,
+        selection: { start: Math.min(start, end), end: Math.min(selectionEnd, end) },
+      };
+    },
+    applyDraft: (next) => {
+      flow.setPrompt(next.text);
+      promptSelectionRef.current = next.selection;
+      promptInputRef.current?.setSelection(next.selection);
+    },
+  });
+  const showDictation = composerActionIsDictation({
+    hasDraft: flow.prompt.trim().length > 0 || flow.attachments.length > 0,
+    status: dictation.status,
+  });
   const loadedBranchesProjectKeyRef = useRef<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const settingsSheetPresentation = useThreadSettingsSheetPresentation({
@@ -184,6 +213,9 @@ export function NewTaskDraftScreen(props: {
   const latestDraftKeyRef = useRef(flow.draftKey);
   const latestIncomingShareIdRef = useRef(props.incomingShareId);
   latestDraftKeyRef.current = flow.draftKey;
+  useEffect(() => {
+    setDictationGeneration((generation) => generation + 1);
+  }, [flow.draftKey, selectedProject?.environmentId]);
   latestIncomingShareIdRef.current = props.incomingShareId;
   const isImportingShare = importingShareKey !== null;
   const alertedUnavailableIncomingShareIdRef = useRef<string | null>(null);
@@ -706,6 +738,7 @@ export function NewTaskDraftScreen(props: {
         // Drop the workspace selection with the content: the next task should
         // re-resolve mode/branch/origin from the server's configured defaults
         // instead of resurrecting this task's picks.
+        setDictationGeneration((generation) => generation + 1);
         clearComposerDraftContent(draftKey, { clearWorkspaceSelection: true });
       }
       navigation.getParent()?.goBack();
@@ -761,6 +794,7 @@ export function NewTaskDraftScreen(props: {
       }
       flow.finishEditingPendingTask();
     } else {
+      setDictationGeneration((generation) => generation + 1);
       clearComposerDraftContent(draftKey, { clearWorkspaceSelection: true });
     }
     navigation.dispatch(
@@ -808,6 +842,9 @@ export function NewTaskDraftScreen(props: {
       value={flow.prompt}
       skills={flow.selectedProviderSkills}
       onChangeText={flow.setPrompt}
+      onSelectionChange={(selection) => {
+        promptSelectionRef.current = selection;
+      }}
       onFocus={() => setIsComposerFocused(true)}
       onBlur={() => setIsComposerFocused(false)}
       onPasteImages={(uris) => void handleNativePasteImages(uris)}
@@ -1016,16 +1053,24 @@ export function NewTaskDraftScreen(props: {
               />
             ) : null}
           </ComposerToolbarScroller>
-          <ComposerToolbarButton
-            accessibilityLabel={
-              flow.submitting ? "Starting chat" : environmentConnected ? "Start chat" : "Queue chat"
-            }
-            disabled={!canStart}
-            icon={environmentConnected ? "arrow.up" : "tray.and.arrow.up"}
-            onPress={() => void handleStart()}
-            showChevron={false}
-            variant="primary"
-          />
+          {showDictation ? (
+            <DictationControls appearance="send-slot" {...dictation} />
+          ) : (
+            <ComposerToolbarButton
+              accessibilityLabel={
+                flow.submitting
+                  ? "Starting chat"
+                  : environmentConnected
+                    ? "Start chat"
+                    : "Queue chat"
+              }
+              disabled={!canStart}
+              icon={environmentConnected ? "arrow.up" : "tray.and.arrow.up"}
+              onPress={() => void handleStart()}
+              showChevron={false}
+              variant="primary"
+            />
+          )}
         </ComposerToolbarRow>
       </ComposerSurface>
     </View>

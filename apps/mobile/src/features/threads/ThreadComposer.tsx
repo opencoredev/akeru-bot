@@ -41,6 +41,9 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 
 import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
+import { composerActionIsDictation } from "@t3tools/client-runtime/dictation";
+import { DictationControls } from "../../components/DictationControls";
+import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
 import { GlassSurface } from "../../components/GlassSurface";
 import {
   ComposerEditor,
@@ -404,6 +407,28 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     end: props.draftMessage.length,
   }));
 
+  const [dictationGeneration, setDictationGeneration] = useState(0);
+  const dictation = useEnvironmentComposerDictation({
+    environmentId: props.environmentId,
+    connected: props.connectionState === "connected",
+    threadId: props.selectedThread.id,
+    draftId: props.selectedThread.id,
+    generation: dictationGeneration,
+    getDraft: () => ({ text: props.draftMessage, selection: composerSelection }),
+    applyDraft: (next) => {
+      props.onChangeDraftMessage(next.text);
+      setComposerSelection(next.selection);
+      inputRef.current?.setSelection(next.selection);
+    },
+  });
+  const showDictation = composerActionIsDictation({
+    hasDraft: props.draftMessage.trim().length > 0 || props.draftAttachments.length > 0,
+    status: dictation.status,
+  });
+  useEffect(() => {
+    setDictationGeneration((generation) => generation + 1);
+  }, [props.environmentId, props.selectedThread.id]);
+
   const handleSelectionChange = useCallback((selection: ComposerEditorSelection) => {
     setComposerSelection(selection);
   }, []);
@@ -600,6 +625,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       if (messageId === null) {
         return;
       }
+      setDictationGeneration((generation) => generation + 1);
     } finally {
       inFlightThreadIdsRef.current.delete(threadKey);
     }
@@ -966,6 +992,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(100)}>
               {showStopAction ? (
                 <ControlPill icon="stop.fill" variant="danger" onPress={props.onStopThread} />
+              ) : showDictation ? (
+                <DictationControls appearance="send-slot" {...dictation} />
               ) : (
                 <ControlPill
                   accessibilityLabel={sendLabel}
@@ -1011,15 +1039,19 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                   />
                 ) : null}
               </ComposerToolbarScroller>
-              <ComposerToolbarButton
-                accessibilityLabel={sendLabel}
-                accessibilityHint={sendBlockHint}
-                icon="arrow.up"
-                variant="primary"
-                disabled={!canSend}
-                onPress={handleSend}
-                showChevron={false}
-              />
+              {showDictation ? (
+                <DictationControls appearance="send-slot" {...dictation} />
+              ) : (
+                <ComposerToolbarButton
+                  accessibilityLabel={sendLabel}
+                  accessibilityHint={sendBlockHint}
+                  icon="arrow.up"
+                  variant="primary"
+                  disabled={!canSend}
+                  onPress={handleSend}
+                  showChevron={false}
+                />
+              )}
             </ComposerToolbarRow>
           ) : null}
         </ComposerSurface>

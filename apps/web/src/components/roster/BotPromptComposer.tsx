@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { composerActionIsDictation } from "@t3tools/client-runtime/dictation";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 import {
   type ComposerBotMention,
@@ -22,6 +23,7 @@ import {
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { compressImageForStash } from "../../lib/imageCompression";
+import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
 import { cn, randomUUID } from "../../lib/utils";
 import {
   MAX_STASH_ENTRIES,
@@ -31,6 +33,7 @@ import {
 } from "../../promptStashStore";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { ComposerBanner } from "../chat/ComposerBanner";
+import { DictationControls } from "../chat/DictationControls";
 import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
@@ -193,6 +196,8 @@ export function BotPromptComposer({
       : null,
   );
   const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
+  // Bumped whenever the draft is sent, stashed, or swapped, so a late transcript is dropped.
+  const [dictationGeneration, setDictationGeneration] = useState(0);
   const mentionHintId = useId();
   const mentionHint = botMentionHint(resolveBotMention(draft, mentionBots));
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
@@ -246,6 +251,7 @@ export function BotPromptComposer({
   useEffect(() => {
     revisionRef.current += 1;
     setDraft(draftKey ? readBotDraft(draftKey) : "");
+    setDictationGeneration((generation) => generation + 1);
   }, [draftKey]);
   useEffect(
     () => () => {
@@ -439,6 +445,7 @@ export function BotPromptComposer({
       }
 
       persistDraft("");
+      setDictationGeneration((generation) => generation + 1);
       const stashedIds = new Set(stashedAttachments.map((attachment) => attachment.id));
       const remaining = attachmentsRef.current.filter(
         (attachment) => !stashedIds.has(attachment.id),
@@ -568,6 +575,43 @@ export function BotPromptComposer({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, readOnly, stashCurrentPrompt]);
 
+  const dictation = useEnvironmentComposerDictation({
+    threadId: draftKey ?? botName,
+    draftId: draftKey ?? botName,
+    generation: dictationGeneration,
+    getDraft: () => {
+      const input = promptInputRef.current;
+      const text = input?.value ?? draft;
+      const start = input?.selectionStart ?? text.length;
+      return { text, selection: { start, end: input?.selectionEnd ?? start } };
+    },
+    applyDraft: (next) => {
+      persistDraft(next.text);
+      // Restore the caret after React commits the merged value.
+      window.requestAnimationFrame(() => {
+        const input = promptInputRef.current;
+        if (!input || input.value !== next.text) return;
+        input.focus();
+        input.setSelectionRange(next.selection.start, next.selection.end);
+      });
+    },
+  });
+  useEffect(() => {
+    if (dictation.status !== "failed" || !dictation.errorMessage) return;
+    toastManager.add({
+      type: "error",
+      title: "Could not dictate",
+      description: dictation.errorMessage,
+    });
+  }, [dictation.errorMessage, dictation.status]);
+  const showDictation =
+    !readOnly &&
+    !showBusyMeter &&
+    composerActionIsDictation({
+      hasDraft: draft.trim().length > 0 || attachments.length > 0,
+      status: dictation.status,
+    });
+
   return (
     <form
       data-chat-composer-form="true"
@@ -583,6 +627,9 @@ export function BotPromptComposer({
         if (submittedMention.kind === "ambiguous") return;
         const submittedFailedIds = new Set(failedAttachmentIds);
         persistDraft("");
+        setDictationGeneration((generation) => generation + 1);
+        // Sending with Enter settles a failed dictation, so the empty composer returns to the mic.
+        if (dictation.status === "failed") dictation.onCancel();
         if (draftKey) clearBotDraft(draftKey);
         attachmentsRef.current = [];
         setAttachments([]);
@@ -817,20 +864,39 @@ export function BotPromptComposer({
                   </MenuPopup>
                 </Menu>
               </div>
-              <button
-                type="submit"
-                aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
-                aria-describedby={
-                  [mentionHint ? mentionHintId : null, disabled ? sendBlockedDescriptionId : null]
-                    .filter(Boolean)
-                    .join(" ") || undefined
-                }
-                data-busy={showBusyMeter || undefined}
-                disabled={!canSubmit || mentionHint !== null}
-                className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-25 data-busy:opacity-70"
-              >
-                {showBusyMeter ? <LoaderMeter /> : <ArrowUpIcon className="size-5" />}
-              </button>
+              {showDictation ? (
+                <div
+                  className="pointer-events-auto size-9 shrink-0"
+                  data-bot-prompt-dictation="true"
+                >
+                  <DictationControls
+                    appearance="send-slot"
+                    {...dictation}
+                    onBlockedPress={(reason) =>
+                      toastManager.add({
+                        type: "info",
+                        title: "Dictation unavailable",
+                        description: reason,
+                      })
+                    }
+                  />
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
+                  aria-describedby={
+                    [mentionHint ? mentionHintId : null, disabled ? sendBlockedDescriptionId : null]
+                      .filter(Boolean)
+                      .join(" ") || undefined
+                  }
+                  data-busy={showBusyMeter || undefined}
+                  disabled={!canSubmit || mentionHint !== null}
+                  className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-foreground text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-25 data-busy:opacity-70"
+                >
+                  {showBusyMeter ? <LoaderMeter /> : <ArrowUpIcon className="size-5" />}
+                </button>
+              )}
             </div>
           </div>
         </div>

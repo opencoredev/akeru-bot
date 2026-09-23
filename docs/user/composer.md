@@ -33,6 +33,27 @@ commands when the same skill is already available.
 On Claude, picking a skill from the `$` menu is sent as a trailing `/name` command so Claude Code
 runs that skill. Codex still reads `$name` natively. The message you see in the chat stays `$name`.
 
+## Dictate a message
+
+When the composer is empty, the send control is a microphone. Hold it to record on this device, then
+release to transcribe into the draft. You can also tap it, or activate it with a keyboard or screen
+reader, to start recording, then activate it again to stop. Cancel stops recording and drops the
+audio. As soon as you type or attach a file, the microphone becomes the send arrow. Review the
+transcript, edit it, and send with that arrow. Dictation never sends a message on its own.
+
+If a transcription fails, the control stays in place as a retry button, even with text in the draft.
+Retry records again. Dismiss the error to get the send arrow back. Your draft is never changed by a
+failed attempt.
+
+Akeru keeps the text and cursor already in the draft and inserts the transcript at the cursor. If
+you switch chats or environments while a transcription is still running, that late result is
+discarded.
+
+Dictation needs a transcription provider for the connected environment. Turn on voice and connect
+a provider in **Settings > Voice**. Dictation is unavailable during an active voice call, while
+disconnected, or if the browser or device cannot use a microphone. On mobile, recording stops when
+Akeru leaves the foreground.
+
 ## Mention the browser or another chat
 
 Type `@` to open the mention menu. Use the arrow keys to move through it, `Enter` or `Tab` to pick,

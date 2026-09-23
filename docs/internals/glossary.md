@@ -13,6 +13,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
 - [Checkpointing](#checkpointing)
+- [Dictation](#dictation)
 - [Stored-reply playback](#stored-reply-playback)
 
 ## Concepts
@@ -106,6 +107,15 @@ A typed signal emitted when an async milestone completes, such as `checkpoint.ba
 #### Quiesced
 
 "Quiesced" means a turn has gone quiet and stable: follow-up work such as [CheckpointReactor.ts][6] has settled. It appears in [the receipt schema][13], so in practice it is something tests wait on rather than a production signal.
+
+### Dictation
+
+Hold-to-talk capture on the active client that transcribes into the current composer draft. The
+session, identity binding, and draft merging live in `packages/client-runtime/src/dictation`, which
+also binds transcription to the environment's `voice.transcribe` RPC. Browser capture lives in
+`apps/web/src/lib/dictationCapture.ts` and native capture in
+`apps/mobile/src/lib/expoDictationCapture.ts`. A transcript is applied only while the environment,
+thread, draft, and draft generation still match the ones captured at start.
 
 ### Stored-reply playback
 
