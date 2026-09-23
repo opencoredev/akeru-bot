@@ -13,14 +13,12 @@ import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { WorkspaceEmptyDetail } from "../layout/WorkspaceEmptyDetail";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
 import { checkForAppUpdateOnLaunch, startAppUpdateForegroundRecheck } from "../updates/app-updates";
-import { AndroidHomeFabLayout } from "./AndroidHomeFab";
 import { HomeScreen } from "./HomeScreen";
 import { HomeHeader } from "./HomeHeader";
 import { useHomeListOptions } from "./home-list-options";
 import { buildHomeProjectScopes } from "./homeThreadList";
 import { usePendingTaskListActions } from "./usePendingTaskListActions";
 import { useThreadListActions } from "./useThreadListActions";
-import { getConnectionAwareBrandHeaderOptions } from "./WorkspaceConnectionTitle";
 
 /* ─── Route screen ───────────────────────────────────────────────────── */
 
@@ -130,25 +128,10 @@ export function HomeRouteScreen() {
   }
 
   return (
-    <AndroidHomeFabLayout
-      onStartNewTask={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
-    >
+    <>
       <>
-        {/* Restore the header after leaving split view; screen options are
-            shallow-merged. The brand slot also doubles as the connection
-            status surface while an environment reconnects. */}
-        <NativeStackScreenOptions
-          options={{
-            ...getConnectionAwareBrandHeaderOptions({
-              onOpenEnvironments: () =>
-                navigation.navigate("SettingsSheet", {
-                  screen: "SettingsContent",
-                  params: { screen: "SettingsEnvironments" },
-                }),
-            }),
-            headerShown: true,
-          }}
-        />
+        {/* The Grok-style header owns the top chrome; the native header only
+            returns in split view. */}
         <HomeHeader
           environments={environments}
           projects={projectFilterOptions}
@@ -157,12 +140,19 @@ export function HomeRouteScreen() {
           selectedProjectKey={selectedProjectKey}
           projectSortOrder={listOptions.projectSortOrder}
           threadSortOrder={listOptions.threadSortOrder}
+          onSearchQueryChange={setSearchQuery}
           onEnvironmentChange={setSelectedEnvironmentId}
           onProjectChange={setSelectedProjectKey}
           onOpenEnvironments={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
               params: { screen: "SettingsEnvironments" },
+            })
+          }
+          onOpenArchive={() =>
+            navigation.navigate("SettingsSheet", {
+              screen: "SettingsContent",
+              params: { screen: "SettingsArchive" },
             })
           }
           onOpenSettings={() =>
@@ -174,9 +164,8 @@ export function HomeRouteScreen() {
               },
             })
           }
-          onProjectSortOrderChange={setProjectSortOrder}
-          onSearchQueryChange={setSearchQuery}
           onStartNewTask={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
+          onProjectSortOrderChange={setProjectSortOrder}
           onThreadSortOrderChange={setThreadSortOrder}
         />
 
@@ -246,6 +235,6 @@ export function HomeRouteScreen() {
           threadSortOrder={listOptions.threadSortOrder}
         />
       </>
-    </AndroidHomeFabLayout>
+    </>
   );
 }

@@ -11,7 +11,7 @@ import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { BotId, GroupId } from "@t3tools/contracts";
+import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArchiveIcon,
@@ -47,7 +47,7 @@ import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
-import { useThreadMessages } from "../../state/entities";
+import { useThreadMessages, useThreadShell } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -210,14 +210,20 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
-): RosterLastMessage | null {
+): { message: RosterLastMessage | null; taskTitle: string | null } {
   const threadRef = useBotThreadCandidate(botId);
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
-  return useMemo(
+  const message = useMemo(
     () => resolveLatestRosterMessage(fallback, visibleMessages),
     [fallback, visibleMessages],
   );
+  // The chat title reads as the bot's current task; the placeholder title of
+  // a brand-new chat says nothing, so the chip stays hidden until a real
+  // title lands.
+  const shellTitle = useThreadShell(threadRef)?.title ?? null;
+  const taskTitle = shellTitle === PLACEHOLDER_THREAD_TITLE ? null : shellTitle;
+  return useMemo(() => ({ message, taskTitle }), [message, taskTitle]);
 }
 
 type SortableRosterRowBag = Pick<
@@ -345,7 +351,7 @@ const BotRosterRow = memo(function BotRosterRow({
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
-  const latestMessage = useLatestBotMessage(bot.id, lastMessage);
+  const { message: latestMessage, taskTitle } = useLatestBotMessage(bot.id, lastMessage);
   return (
     <li
       role="listitem"
@@ -394,8 +400,14 @@ const BotRosterRow = memo(function BotRosterRow({
             <span className="max-w-full truncate text-xs font-medium">{bot.name}</span>
           ) : (
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="flex items-baseline gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 shrink truncate text-sm font-semibold">{bot.name}</span>
+                {taskTitle ? (
+                  <span className="min-w-0 shrink-[2] truncate rounded-md border border-sidebar-foreground/10 bg-sidebar-foreground/6 px-1.5 py-px text-[11px] text-sidebar-muted-foreground">
+                    {taskTitle}
+                  </span>
+                ) : null}
+                <span className="min-w-2 flex-1" />
                 {latestMessage ? (
                   // The compact label collapses to a bare numeric date once a
                   // chat is over a week old ("1/15"), which reads like a count

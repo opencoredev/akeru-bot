@@ -2,6 +2,7 @@ import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
 import {
   type EnvironmentId,
   isProviderDriverKind,
+  PLACEHOLDER_THREAD_TITLE,
   ProjectId,
   type MessageId,
   type ModelSelection,
@@ -157,7 +158,7 @@ export function buildLocalDraftThread(
     id: threadId,
     environmentId: draftThread.environmentId,
     projectId: draftThread.projectId,
-    title: "New chat",
+    title: PLACEHOLDER_THREAD_TITLE,
     modelSelection: fallbackModelSelection,
     runtimeMode: draftThread.runtimeMode,
     interactionMode: draftThread.interactionMode,

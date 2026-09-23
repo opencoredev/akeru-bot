@@ -807,7 +807,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               <ThreadDraftComposer
                 threadId={props.selectedThread.id}
                 editorRef={composerEditorRef}
-                placeholder="Ask the bot, or run a command…"
+                placeholder="Message, or run a command…"
                 contentMaxWidth={contentMaxWidth}
                 connectionState={props.connectionStateLabel}
                 connectionError={props.connectionError}

@@ -1,31 +1,21 @@
 import type { EnvironmentId, SidebarThreadSortOrder } from "@t3tools/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
-import Constants from "expo-constants";
-import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
-import { useCallback, useMemo, useRef } from "react";
-import { Platform, Pressable, Text as RNText, TextInput, View } from "react-native";
-import type { SearchBarCommands } from "react-native-screens";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Pressable, Text as RNText, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SymbolView } from "../../components/AppSymbol";
-import { BrandIcon } from "../../components/BrandIcon";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { HOME_HORIZONTAL_INSET } from "../../lib/layoutMetrics";
-import { resolveMobileStageLabel } from "../../lib/mobileBranding";
 import { useThemeColor } from "../../lib/useThemeColor";
-import { useThreadListV2Enabled } from "../threads/use-thread-list-v2-enabled";
+import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
-import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
-import {
-  createNativeMailSearchToolbarItem,
-  NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED,
-} from "../layout/native-mail-search-toolbar";
+import { useThreadListV2Enabled } from "../threads/use-thread-list-v2-enabled";
 import type { HomeProjectSortOrder } from "./homeThreadList";
 import { WorkspaceConnectionTitle } from "./WorkspaceConnectionTitle";
-import {
-  buildHomeListFilterMenu,
-  type HomeListFilterMenuEnvironment,
-  type HomeListFilterMenuProject,
+import type {
+  HomeListFilterMenuEnvironment,
+  HomeListFilterMenuProject,
 } from "./home-list-filter-menu";
 import {
   hasCustomHomeListOptions,
@@ -35,6 +25,26 @@ import {
 
 export type HomeHeaderEnvironment = HomeListFilterMenuEnvironment;
 
+function checkedMenuState(checked: boolean) {
+  return checked ? ("on" as const) : undefined;
+}
+
+/** Initials for the profile circle, derived from the environment scope. */
+function profileInitials(label: string | null): string {
+  const source = (label ?? "Akeru").trim();
+  const parts = source.split(/[\s-_.]+/).filter((part) => /[a-z0-9]/i.test(part));
+  if (parts.length >= 2) {
+    return `${parts[0]![0]!}${parts[1]![0]!}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase() || "AK";
+}
+
+/**
+ * Roster home header, matching the web bot roster's messenger idiom: a
+ * profile circle on the left (filters, archive, and settings live in its
+ * menu) and search + new-chat circles on the right. No brand lockup, no
+ * quick links — the bot list is the screen.
+ */
 export function HomeHeader(props: {
   readonly environments: ReadonlyArray<HomeHeaderEnvironment>;
   readonly projects: ReadonlyArray<HomeListFilterMenuProject>;
@@ -49,34 +59,46 @@ export function HomeHeader(props: {
   readonly onProjectSortOrderChange: (sortOrder: HomeProjectSortOrder) => void;
   readonly onThreadSortOrderChange: (sortOrder: SidebarThreadSortOrder) => void;
   readonly onOpenEnvironments: () => void;
+  readonly onOpenArchive: () => void;
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;
 }) {
-  if (Platform.OS === "android") {
-    return <AndroidHomeHeader {...props} />;
-  }
-
-  return <IosHomeHeader {...props} />;
-}
-
-type HomeHeaderProps = Parameters<typeof HomeHeader>[0];
-
-function checkedMenuState(checked: boolean) {
-  return checked ? ("on" as const) : undefined;
-}
-
-function AndroidHomeHeader(props: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const iconColor = useThemeColor("--color-icon");
   const mutedColor = useThemeColor("--color-foreground-muted");
-  const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   // Thread List v2 lays the list out in fixed creation order, so the
   // sort/group filter controls would be silently ignored — hide them and
-  // key the "customized" icon state off the environment filter alone.
+  // key the "customized" state off the environment filter alone.
   const threadListV2Enabled = useThreadListV2Enabled();
   const hasCustomListOptions = threadListV2Enabled
     ? props.selectedEnvironmentId !== null || props.selectedProjectKey !== null
     : hasCustomHomeListOptions(props);
+  const selectedEnvironmentLabel =
+    props.selectedEnvironmentId === null
+      ? null
+      : (props.environments.find(
+          (environment) => environment.environmentId === props.selectedEnvironmentId,
+        )?.label ?? null);
+  const initials = profileInitials(
+    selectedEnvironmentLabel ?? props.environments[0]?.label ?? null,
+  );
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    // Focus after the input mounts.
+    setTimeout(() => searchInputRef.current?.focus(), 50);
+  }, []);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    props.onSearchQueryChange("");
+  }, [props.onSearchQueryChange]);
+  useHardwareKeyboardCommand("focusSearch", () => {
+    openSearch();
+    return true;
+  });
+
   const menuActions = useMemo<MenuAction[]>(
     () => [
       {
@@ -137,6 +159,9 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
               })),
             },
           ] satisfies MenuAction[])),
+      { id: "archive", title: "Archived chats", image: "archivebox" },
+      { id: "environments", title: "Environments", image: "desktopcomputer" },
+      { id: "settings", title: "Settings", image: "gearshape" },
     ],
     [
       props.environments,
@@ -148,14 +173,26 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
       threadListV2Enabled,
     ],
   );
+
   const handleMenuAction = useCallback(
     (event: { nativeEvent: { event: string } }) => {
       const id = event.nativeEvent.event;
+      if (id === "archive") {
+        props.onOpenArchive();
+        return;
+      }
+      if (id === "environments") {
+        props.onOpenEnvironments();
+        return;
+      }
+      if (id === "settings") {
+        props.onOpenSettings();
+        return;
+      }
       if (id === "environment:all") {
         props.onEnvironmentChange(null);
         return;
       }
-
       if (id.startsWith("environment:")) {
         const environmentId = id.slice("environment:".length);
         const environment = props.environments.find(
@@ -166,12 +203,10 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
         }
         return;
       }
-
       if (id === "project:all") {
         props.onProjectChange(null);
         return;
       }
-
       if (id.startsWith("project:")) {
         const projectKey = id.slice("project:".length);
         if (props.projects.some((project) => project.key === projectKey)) {
@@ -179,7 +214,6 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
         }
         return;
       }
-
       const projectSort = PROJECT_SORT_OPTIONS.find(
         (option) => id === `project-sort:${option.value}`,
       );
@@ -187,7 +221,6 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
         props.onProjectSortOrderChange(projectSort.value);
         return;
       }
-
       const threadSort = THREAD_SORT_OPTIONS.find((option) => id === `thread-sort:${option.value}`);
       if (threadSort) {
         props.onThreadSortOrderChange(threadSort.value);
@@ -201,276 +234,121 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
     <>
       <NativeStackScreenOptions options={{ headerShown: false }} />
       <View
-        className="border-b border-header-border bg-header pb-3"
+        className="bg-screen pb-2"
         style={{
           paddingHorizontal: HOME_HORIZONTAL_INSET,
-          paddingTop: Math.max(insets.top, 12),
+          paddingTop: Math.max(insets.top, 12) + 4,
         }}
       >
-        <View className="w-full max-w-[720px] self-center gap-3">
-          <View className="flex-row items-center gap-2.5">
-            {/* Brand slot doubles as the connection status surface: while an
-                environment reconnects, the lockup fades to a status label in
-                place (no layout shift in the list below). */}
+        <View className="w-full max-w-[720px] self-center">
+          <View className="flex-row items-center gap-3">
+            {/* The profile slot doubles as the connection status surface:
+                while an environment reconnects, a status label fades in
+                beside the circle (no layout shift in the list below). */}
             <WorkspaceConnectionTitle
               grow
               onPress={props.onOpenEnvironments}
               brand={
-                <View className="flex-row items-center gap-2">
-                  <BrandIcon borderRadius={4} size={21} />
-                  <RNText className="-ml-0.5 text-[21px] font-t3-medium tracking-[-0.5px] text-foreground-muted">
-                    Akeru Bot
-                  </RNText>
-                  <View className="rounded-full bg-subtle px-2 py-0.75">
-                    <RNText className="text-[11px] font-t3-bold tracking-[1.1px] text-foreground-muted uppercase">
-                      {stageLabel}
+                <ControlPillMenu
+                  actions={menuActions}
+                  onPressAction={handleMenuAction}
+                  title={selectedEnvironmentLabel ?? "All environments"}
+                >
+                  <Pressable
+                    accessibilityHint="Opens filters, archived chats, and settings"
+                    accessibilityLabel={`Menu, ${hasCustomListOptions ? "filters active" : "no filters"}`}
+                    accessibilityRole="button"
+                    className="size-11 items-center justify-center rounded-full border border-border-subtle bg-subtle"
+                  >
+                    <RNText className="text-[15px] font-t3-bold tracking-[0.5px] text-foreground-secondary">
+                      {initials}
                     </RNText>
-                  </View>
-                </View>
+                    {hasCustomListOptions ? (
+                      <View className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-screen bg-blue-500" />
+                    ) : null}
+                  </Pressable>
+                </ControlPillMenu>
               }
             />
 
-            <ControlPillMenu
-              actions={menuActions}
-              isAnchoredToRight
-              onPressAction={handleMenuAction}
-            >
-              <Pressable
-                accessibilityLabel="Filter and sort chats"
-                accessibilityRole="button"
-                className="size-11 items-center justify-center rounded-full bg-subtle"
-              >
-                <SymbolView
-                  name={
-                    hasCustomListOptions
-                      ? "line.3.horizontal.decrease.circle.fill"
-                      : "line.3.horizontal.decrease.circle"
-                  }
-                  size={16}
-                  tintColor={iconColor}
-                  type="monochrome"
-                />
-              </Pressable>
-            </ControlPillMenu>
-            {/* Built identically to the filter button so the two circles
-                match exactly (ControlPill sizes via Tailwind classes and
-                resolves to a different box). */}
             <Pressable
-              accessibilityLabel="Open settings"
+              accessibilityLabel={searchOpen ? "Close search" : "Search chats"}
               accessibilityRole="button"
-              onPress={props.onOpenSettings}
-              className="size-11 items-center justify-center rounded-full bg-subtle"
+              className="size-11 items-center justify-center rounded-full bg-card"
+              onPress={searchOpen ? closeSearch : openSearch}
+              style={({ pressed }) => ({
+                elevation: 3,
+                opacity: pressed ? 0.7 : 1,
+                shadowColor: "#000000",
+                shadowOffset: { height: 3, width: 0 },
+                shadowOpacity: 0.08,
+                shadowRadius: 8,
+              })}
             >
-              <SymbolView name="gearshape" size={18} tintColor={iconColor} type="monochrome" />
+              <SymbolView
+                name={searchOpen ? "xmark.circle.fill" : "magnifyingglass"}
+                size={18}
+                tintColor={iconColor}
+                type="monochrome"
+              />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="New chat"
+              accessibilityRole="button"
+              className="size-11 items-center justify-center rounded-full bg-card"
+              onPress={props.onStartNewTask}
+              style={({ pressed }) => ({
+                elevation: 3,
+                opacity: pressed ? 0.7 : 1,
+                shadowColor: "#000000",
+                shadowOffset: { height: 3, width: 0 },
+                shadowOpacity: 0.08,
+                shadowRadius: 8,
+              })}
+            >
+              <SymbolView name="plus" size={19} tintColor={iconColor} type="monochrome" />
             </Pressable>
           </View>
 
-          <View className="min-h-12 flex-row items-center gap-2.5 rounded-2xl border border-input-border bg-input px-3.5">
-            <SymbolView name="magnifyingglass" size={17} tintColor={mutedColor} type="monochrome" />
-            <TextInput
-              accessibilityLabel="Search conversations"
-              autoCapitalize="none"
-              onChangeText={props.onSearchQueryChange}
-              placeholder="Search conversations"
-              placeholderTextColorClassName="accent-placeholder"
-              className="flex-1 py-2.5 text-base font-sans text-foreground"
-              value={props.searchQuery}
-            />
-            {props.searchQuery.length > 0 ? (
-              <Pressable
-                accessibilityLabel="Clear search"
-                hitSlop={10}
-                onPress={() => props.onSearchQueryChange("")}
-              >
-                <SymbolView
-                  name="xmark.circle.fill"
-                  size={17}
-                  tintColor={mutedColor}
-                  type="monochrome"
-                />
-              </Pressable>
-            ) : null}
-          </View>
+          {searchOpen ? (
+            <View className="mt-3 h-11 flex-row items-center gap-2.5 rounded-full bg-subtle px-4">
+              <SymbolView
+                name="magnifyingglass"
+                size={16}
+                tintColor={mutedColor}
+                type="monochrome"
+              />
+              <TextInput
+                accessibilityLabel="Search chats"
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="h-full flex-1 font-sans text-[16px] text-foreground"
+                onChangeText={props.onSearchQueryChange}
+                placeholder="Search"
+                placeholderTextColorClassName="accent-placeholder"
+                ref={searchInputRef}
+                returnKeyType="search"
+                value={props.searchQuery}
+              />
+              {props.searchQuery.length > 0 ? (
+                <Pressable
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
+                  hitSlop={10}
+                  onPress={() => props.onSearchQueryChange("")}
+                >
+                  <SymbolView
+                    name="xmark.circle.fill"
+                    size={16}
+                    tintColor={mutedColor}
+                    type="monochrome"
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </View>
-    </>
-  );
-}
-
-function IosHomeHeader(props: HomeHeaderProps) {
-  const searchBarRef = useRef<SearchBarCommands>(null);
-  const iconColor = useThemeColor("--color-icon");
-  // Thread List v2 lays the list out in fixed creation order, so the
-  // sort/group filter controls would be silently ignored — hide them and
-  // key the "customized" icon state off the environment filter alone.
-  const threadListV2Enabled = useThreadListV2Enabled();
-  const hasCustomListOptions = threadListV2Enabled
-    ? props.selectedEnvironmentId !== null || props.selectedProjectKey !== null
-    : hasCustomHomeListOptions(props);
-  const focusSearch = useCallback(() => {
-    searchBarRef.current?.focus();
-    return searchBarRef.current !== null;
-  }, []);
-  useHardwareKeyboardCommand("focusSearch", focusSearch);
-  const filterMenu = buildHomeListFilterMenu({
-    ...props,
-    listOrganization: !threadListV2Enabled,
-  });
-
-  return (
-    <>
-      <NativeStackScreenOptions
-        optionsVersion={filterMenu.items}
-        options={{
-          // Static header config (glass, title, fonts) lives in Stack.tsx
-          // (GLASS_HEADER_OPTIONS). Only dynamic values are set here.
-          headerTintColor: iconColor,
-          unstable_headerRightItems:
-            Platform.OS === "ios"
-              ? () => [
-                  withNativeGlassHeaderItem({
-                    accessibilityLabel: "Open settings",
-                    icon: { name: "ellipsis", type: "sfSymbol" } as const,
-                    identifier: "home-settings",
-                    label: "",
-                    onPress: props.onOpenSettings,
-                    type: "button",
-                  }),
-                ]
-              : undefined,
-          // The keys below are set per-branch (not `undefined`) so a later
-          // reapply cannot clobber options owned by NativeHeaderToolbar.
-          ...(NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED
-            ? {
-                unstable_headerToolbarItems: () => [
-                  createNativeMailSearchToolbarItem({
-                    composeButtonId: "home-new-task",
-                    composeSystemImageName: "square.and.pencil",
-                    filterMenu,
-                    filterButtonId: "home-filter",
-                    filterSystemImageName: hasCustomListOptions
-                      ? "line.3.horizontal.decrease.circle.fill"
-                      : "line.3.horizontal.decrease",
-                    onComposePress: props.onStartNewTask,
-                    onSearchTextChange: props.onSearchQueryChange,
-                    placeholder: "Search",
-                    searchTextChangeId: "home-search-text",
-                    showsSearchDismissButton: true,
-                  }),
-                ],
-              }
-            : {
-                // Pre-Liquid-Glass iOS: standard pull-down search in the nav
-                // bar; create + sort live in the plain bottom toolbar below.
-                headerSearchBarOptions: {
-                  ref: searchBarRef,
-                  autoCapitalize: "none" as const,
-                  hideNavigationBar: false,
-                  placeholder: "Search",
-                  onCancelButtonPress: () => {
-                    props.onSearchQueryChange("");
-                  },
-                  onChangeText: (event) => {
-                    props.onSearchQueryChange(event.nativeEvent.text);
-                  },
-                },
-              }),
-        }}
-      />
-
-      {NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED ? null : (
-        <NativeHeaderToolbar placement="bottom">
-          <NativeHeaderToolbar.Menu
-            accessibilityLabel="Filter and sort chats"
-            icon={
-              hasCustomListOptions
-                ? "line.3.horizontal.decrease.circle.fill"
-                : "line.3.horizontal.decrease.circle"
-            }
-            title="Chat list options"
-            separateBackground
-          >
-            <NativeHeaderToolbar.Menu title="Environment">
-              <NativeHeaderToolbar.Label>Environment</NativeHeaderToolbar.Label>
-              <NativeHeaderToolbar.MenuAction
-                isOn={props.selectedEnvironmentId === null}
-                onPress={() => props.onEnvironmentChange(null)}
-                subtitle="Show chats from every environment"
-              >
-                <NativeHeaderToolbar.Label>All environments</NativeHeaderToolbar.Label>
-              </NativeHeaderToolbar.MenuAction>
-              {props.environments.map((environment) => (
-                <NativeHeaderToolbar.MenuAction
-                  key={environment.environmentId}
-                  isOn={props.selectedEnvironmentId === environment.environmentId}
-                  onPress={() => props.onEnvironmentChange(environment.environmentId)}
-                >
-                  <NativeHeaderToolbar.Label>{environment.label}</NativeHeaderToolbar.Label>
-                </NativeHeaderToolbar.MenuAction>
-              ))}
-            </NativeHeaderToolbar.Menu>
-
-            {props.projects.length > 0 ? (
-              <NativeHeaderToolbar.Menu title="Project">
-                <NativeHeaderToolbar.Label>Project</NativeHeaderToolbar.Label>
-                <NativeHeaderToolbar.MenuAction
-                  isOn={props.selectedProjectKey === null}
-                  onPress={() => props.onProjectChange(null)}
-                  subtitle="Show chats from every project"
-                >
-                  <NativeHeaderToolbar.Label>All projects</NativeHeaderToolbar.Label>
-                </NativeHeaderToolbar.MenuAction>
-                {props.projects.map((project) => (
-                  <NativeHeaderToolbar.MenuAction
-                    key={project.key}
-                    isOn={props.selectedProjectKey === project.key}
-                    onPress={() => props.onProjectChange(project.key)}
-                  >
-                    <NativeHeaderToolbar.Label>{project.label}</NativeHeaderToolbar.Label>
-                  </NativeHeaderToolbar.MenuAction>
-                ))}
-              </NativeHeaderToolbar.Menu>
-            ) : null}
-
-            {threadListV2Enabled ? null : (
-              <NativeHeaderToolbar.Menu title="Sort projects">
-                <NativeHeaderToolbar.Label>Sort projects</NativeHeaderToolbar.Label>
-                {PROJECT_SORT_OPTIONS.map((option) => (
-                  <NativeHeaderToolbar.MenuAction
-                    key={option.value}
-                    isOn={props.projectSortOrder === option.value}
-                    onPress={() => props.onProjectSortOrderChange(option.value)}
-                  >
-                    <NativeHeaderToolbar.Label>{option.label}</NativeHeaderToolbar.Label>
-                  </NativeHeaderToolbar.MenuAction>
-                ))}
-              </NativeHeaderToolbar.Menu>
-            )}
-
-            {threadListV2Enabled ? null : (
-              <NativeHeaderToolbar.Menu title="Sort chats">
-                <NativeHeaderToolbar.Label>Sort chats</NativeHeaderToolbar.Label>
-                {THREAD_SORT_OPTIONS.map((option) => (
-                  <NativeHeaderToolbar.MenuAction
-                    key={option.value}
-                    isOn={props.threadSortOrder === option.value}
-                    onPress={() => props.onThreadSortOrderChange(option.value)}
-                  >
-                    <NativeHeaderToolbar.Label>{option.label}</NativeHeaderToolbar.Label>
-                  </NativeHeaderToolbar.MenuAction>
-                ))}
-              </NativeHeaderToolbar.Menu>
-            )}
-          </NativeHeaderToolbar.Menu>
-          <NativeHeaderToolbar.Spacer flexible />
-          <NativeHeaderToolbar.Button
-            accessibilityLabel="New chat"
-            icon="square.and.pencil"
-            onPress={props.onStartNewTask}
-            separateBackground
-          />
-        </NativeHeaderToolbar>
-      )}
     </>
   );
 }

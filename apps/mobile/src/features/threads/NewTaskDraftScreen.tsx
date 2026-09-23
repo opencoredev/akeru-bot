@@ -1059,7 +1059,7 @@ export function NewTaskDraftScreen(props: {
       />
       <NativeHeaderToolbar placement="left">
         <NativeHeaderToolbar.Button
-          accessibilityLabel="Cancel new chat"
+            accessibilityLabel="Cancel chat"
           label="Cancel"
           onPress={closeNewTask}
         />

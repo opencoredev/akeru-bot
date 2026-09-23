@@ -78,8 +78,14 @@ describe("mobile themes", () => {
     expect(getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "dark")["--color-screen"]).toBe(
       "#0a0a0a",
     );
+    // Neutral user bubbles carry a readable skill accent per appearance.
     expect(
       getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "light")[
+        "--color-user-bubble-skill-foreground"
+      ],
+    ).toBe("#a21caf");
+    expect(
+      getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "dark")[
         "--color-user-bubble-skill-foreground"
       ],
     ).toBe("#f0abfc");

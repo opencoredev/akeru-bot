@@ -631,7 +631,7 @@ function ThreadNavigationSidebarPane(
             },
             {
               id: "thread-sort",
-              title: "Sort chats",
+                  title: "Sort chats",
               subactions: THREAD_SORT_OPTIONS.map((option) => ({
                 id: `thread-sort:${option.value}`,
                 title: option.label,
@@ -940,7 +940,7 @@ function ThreadNavigationSidebarPane(
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Show ${Math.min(item.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled chats`}
+                    accessibilityLabel={`Show ${Math.min(item.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled chats`}
               onPress={showMoreSettled}
               className="mx-4 mt-2 items-center rounded-lg border border-dashed border-border py-2.5"
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -1122,8 +1122,8 @@ function ThreadNavigationSidebarPane(
         ? "Loading chats…"
         : props.searchQuery.trim().length > 0
           ? threadSearch.isPending
-            ? "Searching conversations…"
-            : "No matching conversations"
+            ? "Searching chats…"
+            : "No matching chats"
           : selectedProjectScope !== null
             ? `No chats in ${selectedProjectScope.title}`
             : "No chats yet"}
@@ -1284,7 +1284,7 @@ function ThreadNavigationSidebarPane(
           <SymbolView name="magnifyingglass" size={15} tintColor={mutedColor} type="monochrome" />
           <TextInput
             ref={searchInputRef}
-            accessibilityLabel="Search conversations"
+            accessibilityLabel="Search chats"
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"

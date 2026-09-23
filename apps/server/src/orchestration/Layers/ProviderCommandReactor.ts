@@ -11,6 +11,7 @@ import {
   type McpServer,
   type OrchestrationEvent,
   isGroupBotMember,
+  PLACEHOLDER_THREAD_TITLE,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -1341,7 +1342,7 @@ const make = Effect.gen(function* () {
     });
     if (
       generated.title === DEFAULT_THREAD_TITLE ||
-      generated.title === "New chat" ||
+      generated.title === PLACEHOLDER_THREAD_TITLE ||
       generated.title === previousTitle
     ) {
       return { _tag: "Completed", title: undefined } as const;

@@ -212,7 +212,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
           <NativeHeaderToolbar placement="right">
             {layout.usesSplitView ? (
               <NativeHeaderToolbar.Button
-                accessibilityLabel="Close new chat"
+                accessibilityLabel="Close chat"
                 icon="xmark"
                 onPress={() => navigation.goBack()}
                 separateBackground

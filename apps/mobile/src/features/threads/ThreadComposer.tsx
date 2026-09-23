@@ -27,6 +27,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import ImageViewing from "react-native-image-viewing";
+import { SymbolView } from "../../components/AppSymbol";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -67,6 +68,7 @@ import {
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { providerBotName } from "./thread-list-v2-items";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -280,6 +282,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
   const foregroundColor = useThemeColor("--color-foreground");
+  const mutedColor = useThemeColor("--color-icon-muted");
   const bodyText = useScaledTextRole("body");
   const fallbackInputRef = useRef<ComposerEditorHandle>(null);
   const inputRef = props.editorRef ?? fallbackInputRef;
@@ -295,6 +298,19 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   );
   const subscriptionStatuses = subscriptionAuth.data?.providers;
   const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
+  // Threads without a configured bot still read as a named teammate: fall
+  // back to the provider identity. Until either is known the caller's neutral
+  // placeholder stands in, so the composer never asks a bot called "Bot".
+  const composerBotName =
+    bot?.name ??
+    providerBotName(
+      props.serverConfig?.providers.find(
+        (candidate) =>
+          candidate.instanceId ===
+          (props.selectedThread.session?.providerInstanceId ??
+            props.selectedThread.modelSelection.instanceId),
+      )?.driver ?? null,
+    );
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
@@ -818,6 +834,32 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             </Animated.View>
           ) : null}
 
+          {!isExpanded ? (
+            <Pressable
+              accessibilityLabel="Add attachment"
+              accessibilityRole="button"
+              className="mr-1 size-9 items-center justify-center rounded-full bg-subtle"
+              hitSlop={6}
+              onPress={() => void props.onPickDraftImages()}
+              style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
+            >
+              <SymbolView name="plus" size={18} tintColor={mutedColor} type="monochrome" />
+            </Pressable>
+          ) : null}
+          {!isExpanded && !hasContent ? (
+            <Pressable
+              accessibilityLabel="Model and reasoning settings"
+              accessibilityRole="button"
+              className="mr-1 max-w-[112px] flex-row items-center gap-1.5 rounded-full bg-subtle px-2.5 py-2"
+              onPress={openSettings}
+              style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
+            >
+              <ProviderIcon provider={currentModelOption?.providerDriver} size={15} />
+              <Text className="shrink text-xs font-t3-medium text-foreground-muted" numberOfLines={1}>
+                {currentModelOption?.label ?? "Model"}
+              </Text>
+            </Pressable>
+          ) : null}
           <View className={isExpanded ? undefined : "min-w-0 flex-1"}>
             <ComposerEditor
               ref={inputRef}
@@ -828,7 +870,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               onChangeText={props.onChangeDraftMessage}
               onSelectionChange={handleSelectionChange}
               onPasteImages={(uris) => void props.onNativePasteImages(uris)}
-              placeholder={props.placeholder}
+              placeholder={composerBotName ? `Ask ${composerBotName}` : props.placeholder}
               onFocus={handleFocus}
               onBlur={handleBlur}
               onSubmit={handleSend}

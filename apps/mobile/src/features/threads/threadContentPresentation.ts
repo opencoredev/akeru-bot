@@ -21,7 +21,7 @@ const DELETED: ThreadContentPresentation = {
 const NOT_CACHED: ThreadContentPresentation = {
   kind: "unavailable",
   title: "Messages not cached",
-  detail: "Reconnect this environment to load the conversation.",
+  detail: "Reconnect this environment to load the chat.",
 };
 const detailErrorPresentations = new Map<string, ThreadContentPresentation>();
 
@@ -42,7 +42,7 @@ export function projectThreadContentPresentation(input: {
     if (presentation === undefined) {
       presentation = {
         kind: "unavailable",
-        title: "Could not load conversation",
+        title: "Could not load chat",
         detail: input.detailError,
       };
       // Error text is unbounded; keep only the latest to avoid a slow leak.

@@ -161,9 +161,9 @@ export function getConnectionAwareBrandHeaderOptions(opts: {
 }): NativeStackNavigationOptions {
   if (Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED) {
     return {
-      headerTitle: "Chats",
+      headerTitle: "Bots",
       headerTitleStyle: { color: "transparent", fontSize: 18, fontWeight: "800" },
-      title: "Chats",
+      title: "Bots",
       unstable_headerLeftItems: (): NativeStackHeaderItem[] => [
         {
           element: (
@@ -189,6 +189,6 @@ export function getConnectionAwareBrandHeaderOptions(opts: {
       />
     ),
     headerTitleStyle: opts.fallbackTitleStyle,
-    title: "Chats",
+    title: "Bots",
   };
 }

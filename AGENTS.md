@@ -166,6 +166,7 @@ Full glossary with file links: `docs/internals/glossary.md`
 - Inferred types over annotations. `any` is the enemy.
 - Comments describe how a thing is used, and move when the code moves. To be used mostly to describe functions, not to annotate every line of behavior.
 - Our users drive agents all day and notice a dropped frame, a lying spinner, and a stale label. No continuously repainting animations; they peg the GPU on high-refresh displays.
+- Clickable web controls inherit `cursor: pointer` from the base rule in `apps/web/src/index.css`. Use an explicit `cursor-*` utility only when the control is not a click (resize, grab, help, not-allowed).
 - If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
 
 ## Additional tips

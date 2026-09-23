@@ -419,7 +419,7 @@ function capitalize(value: string): string {
 function ArchivedThreadsSettingsSection() {
   return (
     <SettingsSection title="Chats">
-      <SettingsRow icon="archivebox" label="Archived conversations" target="SettingsArchive" />
+      <SettingsRow icon="archivebox" label="Archived chats" target="SettingsArchive" />
     </SettingsSection>
   );
 }

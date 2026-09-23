@@ -1,4 +1,4 @@
-import { TextGenerationError } from "@t3tools/contracts";
+import { PLACEHOLDER_THREAD_TITLE, TextGenerationError } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -60,7 +60,7 @@ export function sanitizeThreadTitle(raw: string): string {
     .replace(/\s+/g, " ");
 
   if (!normalized || normalized.trim().length === 0) {
-    return "New chat";
+    return PLACEHOLDER_THREAD_TITLE;
   }
 
   if (normalized.length <= 50) {

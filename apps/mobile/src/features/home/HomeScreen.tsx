@@ -20,17 +20,17 @@ import type {
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "../../lib/useThemeColor";
 
 import { AppText as Text } from "../../components/AppText";
+import { SymbolView } from "../../components/AppSymbol";
 import { EmptyState } from "../../components/EmptyState";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
 import type { SavedRemoteConnection } from "../../lib/connection";
 import { scopedProjectKey } from "../../lib/scopedEntities";
-import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { useThreadSearch } from "../../state/queries";
 import { useThreadListV2Enabled } from "../threads/use-thread-list-v2-enabled";
@@ -126,7 +126,6 @@ interface HomeScreenProps {
 /* ─── Layout constants ───────────────────────────────────────────────── */
 
 const ESTIMATED_THREAD_ROW_HEIGHT = 72;
-const PRE_LIQUID_GLASS_BOTTOM_TOOLBAR_HEIGHT = 44;
 /**
  * Top spacing between the list and the Android custom header. The Android
  * header (AndroidHomeHeader) is rendered in-flow above this screen and
@@ -177,7 +176,7 @@ function deriveEmptyState(props: {
   ) {
     return {
       title: "Connecting to environment",
-      detail: "Loading projects and chats from the saved environment.",
+      detail: "Loading projects and bots from the saved environment.",
       loading: true,
     };
   }
@@ -192,13 +191,9 @@ function deriveEmptyState(props: {
 
   return {
     title: "No chats yet",
-    detail: "Start a chat in one of your connected projects.",
+    detail: "Pick a bot to start a chat.",
     loading: false,
   };
-}
-
-function HomeTopContentSpacer() {
-  return <View className="h-4" />;
 }
 
 /* ─── Main screen ────────────────────────────────────────────────────── */
@@ -214,10 +209,6 @@ export function HomeScreen(props: HomeScreenProps) {
   const listRef = useRef<LegendListRef | null>(null);
   const insets = useSafeAreaInsets();
   const accentColor = useThemeColor("--color-icon-muted");
-  const iosBottomToolbarClearance =
-    Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
-      ? PRE_LIQUID_GLASS_BOTTOM_TOOLBAR_HEIGHT
-      : 0;
   const searchEnvironmentIds = useMemo(
     () =>
       props.selectedEnvironmentId === null
@@ -1034,33 +1025,50 @@ export function HomeScreen(props: HomeScreenProps) {
   });
 
   if (!hasAnyThreads) {
+    const emptyAction = !props.catalogState.hasReadyEnvironment
+      ? { label: "Add environment", onPress: props.onAddConnection }
+      : { label: "New chat", onPress: props.onStartNewTask };
     return (
-      <View
-        className="flex-1 items-center justify-center bg-screen px-8"
-        style={{
-          paddingBottom: Math.max(insets.bottom, 24) + iosBottomToolbarClearance,
-          paddingTop: NATIVE_LIQUID_GLASS_SUPPORTED ? insets.top + 72 : 0,
-        }}
-      >
-        <View className="w-full max-w-[430px]">
-          <EmptyState
-            title={emptyState.title}
-            detail={emptyState.detail}
-            actionLabel={!props.catalogState.hasReadyEnvironment ? "Add environment" : undefined}
-            onAction={!props.catalogState.hasReadyEnvironment ? props.onAddConnection : undefined}
-            variant="plain"
-          />
+      <View className="flex-1 bg-screen">
+        <View
+          className="flex-1 items-center justify-center px-8"
+          style={{ paddingBottom: Math.max(insets.bottom, 24) + 24 }}
+        >
+          <View className="size-20 items-center justify-center rounded-full bg-subtle">
+            <SymbolView name="text.bubble" size={30} tintColor={accentColor} type="monochrome" />
+          </View>
+          <Text className="mt-6 text-center text-[22px] font-t3-bold text-foreground">
+            {emptyState.title}
+          </Text>
+          <Text className="mt-2 max-w-[430px] text-center font-sans text-base leading-normal text-foreground-muted">
+            {emptyState.detail}
+          </Text>
           {emptyState.loading ? (
-            <View className="mt-4 items-center">
+            <View className="mt-5 items-center">
               <ActivityIndicator color={accentColor} />
             </View>
-          ) : null}
+          ) : (
+            <Pressable
+              className="mt-7 rounded-full border border-border-subtle bg-card px-6 py-3.5"
+              onPress={emptyAction.onPress}
+              style={({ pressed }) => ({
+                elevation: 6,
+                opacity: pressed ? 0.7 : 1,
+                shadowColor: "#000000",
+                shadowOffset: { height: 5, width: 0 },
+                shadowOpacity: 0.1,
+                shadowRadius: 14,
+              })}
+            >
+              <Text className="text-[16px] font-t3-bold text-foreground">{emptyAction.label}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
   }
 
-  const listHeader = Platform.OS === "ios" ? null : <HomeTopContentSpacer />;
+  const listHeader = null;
 
   // Project scoping lives in the header filter menu (no inline chip row on
   // mobile — the menu is the one filter surface).
@@ -1068,19 +1076,19 @@ export function HomeScreen(props: HomeScreenProps) {
 
   const listEmpty = !hasResults ? (
     hasSearchQuery && threadSearch.isPending ? null : hasSearchQuery ? (
-      <EmptyState title="No results" detail={`No conversations matching "${props.searchQuery}".`} />
+      <EmptyState title="No results" detail={`No chats matching "${props.searchQuery}".`} />
     ) : selectedProjectScope !== null ? (
       <EmptyState
         title={`No chats in ${selectedProjectScope.title}`}
-        detail="Choose another project or start a new chat."
+        detail="Choose another project or talk to a bot."
       />
     ) : selectedEnvironmentLabel ? (
       <EmptyState
         title={`No chats in ${selectedEnvironmentLabel}`}
-        detail="Choose another environment or start a new chat."
+        detail="Choose another environment or talk to a bot."
       />
     ) : (
-      <EmptyState title="No chats yet" detail="Start a chat to begin a coding session." />
+      <EmptyState title="No chats yet" detail="Pick a bot to start a chat." />
     )
   ) : null;
   // Self-contained: v1's listEmpty keys off projectGroups, which ignores the
@@ -1089,11 +1097,11 @@ export function HomeScreen(props: HomeScreenProps) {
   // is a list row even while collapsed.
   const v2ListEmpty =
     hasSearchQuery && threadSearch.isPending ? null : hasSearchQuery ? (
-      <EmptyState title="No results" detail={`No conversations matching "${props.searchQuery}".`} />
+      <EmptyState title="No results" detail={`No chats matching "${props.searchQuery}".`} />
     ) : v2ScopedProjectGroup !== null ? (
       <EmptyState
         title={`No chats in ${v2ScopedProjectGroup.title}`}
-        detail="Choose another project or start a new chat."
+        detail="Choose another project or talk to a bot."
       />
     ) : (
       listEmpty
@@ -1113,7 +1121,7 @@ export function HomeScreen(props: HomeScreenProps) {
               settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Show ${Math.min(threadListV2Layout.hiddenSettledCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled chats`}
+                  accessibilityLabel={`Show ${Math.min(threadListV2Layout.hiddenSettledCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more chats`}
                   onPress={showMoreSettled}
                   className="mx-4 mt-2 items-center rounded-lg border border-dashed border-border py-2.5"
                   style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -1126,18 +1134,15 @@ export function HomeScreen(props: HomeScreenProps) {
             }
             ListEmptyComponent={v2ListEmpty}
             style={{ flex: 1 }}
-            automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-            contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
+            automaticallyAdjustsScrollIndicatorInsets={false}
+            contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             {...scrollGateHandlers}
             scrollEventThrottle={16}
             contentContainerStyle={{
-              paddingBottom:
-                Platform.OS === "ios"
-                  ? Math.max(insets.bottom, 24) + 96 + iosBottomToolbarClearance
-                  : Math.max(insets.bottom, 16) + 88,
+              paddingBottom: Math.max(insets.bottom, 16) + 24,
             }}
           />
         </SwipeableScrollGateProvider>
@@ -1166,8 +1171,8 @@ export function HomeScreen(props: HomeScreenProps) {
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
           style={{ flex: 1 }}
-          automaticallyAdjustsScrollIndicatorInsets={NATIVE_LIQUID_GLASS_SUPPORTED}
-          contentInsetAdjustmentBehavior={NATIVE_LIQUID_GLASS_SUPPORTED ? "automatic" : "never"}
+          automaticallyAdjustsScrollIndicatorInsets={false}
+          contentInsetAdjustmentBehavior="never"
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
@@ -1175,24 +1180,8 @@ export function HomeScreen(props: HomeScreenProps) {
           recycleItems
           scrollEventThrottle={16}
           contentContainerStyle={{
-            // Android reserves room for the floating new-task FAB
-            // (56 button + 16 gap + bottom inset). Pre-glass iOS shows a
-            // standard 44pt bottom toolbar that overlays the list and is not
-            // reflected in insets while contentInsetAdjustmentBehavior is
-            // "never".
-            paddingBottom:
-              Platform.OS === "ios"
-                ? Math.max(insets.bottom, 24) + 24 + iosBottomToolbarClearance
-                : Math.max(insets.bottom, 16) + 88,
+            paddingBottom: Math.max(insets.bottom, 16) + 24,
           }}
-          scrollIndicatorInsets={
-            Platform.OS === "ios"
-              ? {
-                  bottom: Math.max(insets.bottom, 16) + 24 + iosBottomToolbarClearance,
-                  top: 0,
-                }
-              : undefined
-          }
         />
       </SwipeableScrollGateProvider>
     </View>

@@ -724,6 +724,13 @@ export const ThreadLinkedPullRequest = Schema.Struct({
 });
 export type ThreadLinkedPullRequest = typeof ThreadLinkedPullRequest.Type;
 
+/**
+ * Title a chat carries until a real one is generated. The server writes it on
+ * thread creation and clients seed local drafts with it, so anything that
+ * hides or replaces a placeholder title compares against this value.
+ */
+export const PLACEHOLDER_THREAD_TITLE = "New chat";
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
