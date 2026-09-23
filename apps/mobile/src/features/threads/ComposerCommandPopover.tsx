@@ -1,5 +1,6 @@
 import {
   resolveProviderSkillSourceKind,
+  resolveProviderSkillTextIcon,
   type ProviderSkillSourceKind,
 } from "@t3tools/client-runtime/providerSkills";
 import type { ServerProviderSkill, ServerProviderSlashCommand } from "@t3tools/contracts";
@@ -122,6 +123,10 @@ const CommandRow = memo(function CommandRow(props: {
   readonly isSlashSkill: boolean;
 }) {
   const iconName = itemIcon(props.item);
+  // A skill's own emoji wins; named glyphs and provider asset paths fall back
+  // to the source-kind symbol from itemIcon.
+  const skillTextIcon =
+    props.item.type === "skill" ? resolveProviderSkillTextIcon(props.item.skill) : null;
   const iconColor = useThemeColor("--color-icon-subtle");
   const borderColor = useThemeColor("--color-border");
 
@@ -141,6 +146,14 @@ const CommandRow = memo(function CommandRow(props: {
     >
       {props.item.type === "path" ? (
         <PierreEntryIcon path={props.item.path} kind={props.item.kind} size={16} />
+      ) : skillTextIcon ? (
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          className="w-4 text-center text-sm leading-4"
+        >
+          {skillTextIcon}
+        </Text>
       ) : iconName ? (
         <SymbolView name={iconName} size={14} tintColor={iconColor} type="monochrome" />
       ) : null}

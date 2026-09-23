@@ -20,8 +20,10 @@ Web and desktop convert HEIC and HEIF photos to JPEG when you drag or paste them
 
 Type `/` to open the command menu. Type `$` to search for a skill and add its token to the message.
 
-Skill results identify their source as App, Repo, Project, Personal, System, or Provider. A selected
-skill appears as a badge in the composer.
+The list shows the skills of the provider the chat is using. Each result shows the skill's own
+emoji when it has one, or a glyph for where the skill came from. The source label reads App, Repo,
+Project, Personal, System, or Provider. A selected skill appears as a tinted chip in the composer
+with the same emoji, and sends as `$name`.
 
 The slash menu includes skills by default. Turn off **Show skills in slash menu** under
 **Settings > General** to keep it command-only. Slash-menu skill results use the

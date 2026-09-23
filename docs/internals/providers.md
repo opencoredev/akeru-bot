@@ -126,6 +126,15 @@ reads an `icon` key from SKILL.md frontmatter, Grok forwards `icon` from `grok i
 OpenCode's `/skill` endpoint reports no icon field, and Kimi For Coding has no skill-loading
 mechanism so its catalog is intentionally empty.
 
+Clients draw only text icons: `resolveProviderSkillTextIcon` in `packages/client-runtime`
+accepts exactly one grapheme that is an emoji or pictographic symbol (keycaps, flags, ZWJ
+sequences and variation selectors included) and rejects names, paths, multi-glyph text, and
+control, bidi or stray zero-width characters. Claude's
+emoji icons render. Codex icon paths point at the environment's disk, which a remote client
+cannot load, and Grok's named glyphs are open vocabulary, so both fall back to the source-kind
+glyph. The composer skill chip stores the resolved emoji on its Lexical node and still
+serializes to `$name`.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
