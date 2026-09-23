@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1151,
+  "directMessageCount": 1159,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -13,6 +13,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/home/HomeScreen.tsx": [
       "'No chats matching "{query}".', { query: props.searchQuery })}",
       "'No chats matching "{query}".', { query: props.searchQuery })}",
+    ],
+    "apps/mobile/src/features/settings/SettingsProviderHealthRouteScreen.tsx": [
+      "botInboxKindLabel(item.kind))}\`}",
     ],
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx": [
       "description) : \`\${t(description)} \${t(MEMORY_SETTING_DISABLED_HINT)}\`;",
@@ -46,6 +49,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/BotDurableMemory.tsx": [
       "failure.message)}",
       "readOnlyReason)}</p> : null}",
+    ],
+    "apps/web/src/components/roster/BotInboxAlertStack.tsx": [
+      "botInboxKindLabel(item.kind))}\`,",
     ],
     "apps/web/src/components/roster/BotMemorySheet.tsx": [
       "copy.description)}</p>",
@@ -85,6 +91,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "runStatusPresentation(latest.status).label)}",
       "status.label)}",
       "runStatusPresentation(latest.status).label)}",
+    ],
+    "apps/web/src/components/settings/InboxPanel.tsx": [
+      "botInboxKindLabel(item.kind))}",
     ],
     "apps/web/src/components/settings/PrivacySettings.tsx": [
       "description)",
@@ -354,6 +363,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/botSandbox.ts",
     "apps/web/src/components/roster/routineReceipts.ts",
     "apps/web/src/components/settings/ConnectionsSettings.tsx",
+    "apps/web/src/components/settings/InboxPanel.tsx",
     "apps/web/src/components/settings/LanguageSetting.tsx",
     "apps/web/src/components/settings/PrivacySettings.tsx",
     "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
