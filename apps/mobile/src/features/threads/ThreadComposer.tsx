@@ -234,7 +234,7 @@ function composerConnectionStatus(input: {
   // cached messages are already visible.
   switch (input.threadSyncPhase) {
     case "loading":
-      return { kind: "syncing", label: "Loading messages..." };
+      return { kind: "syncing", label: "Loading messages…" };
     case "syncing":
       return { kind: "syncing", label: "Syncing messages..." };
     default:

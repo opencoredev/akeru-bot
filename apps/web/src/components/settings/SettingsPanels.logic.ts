@@ -31,13 +31,17 @@ export function projectGroupingModeFromToggle(
   return lastEnabledMode === "repository_path" ? "repository_path" : "repository";
 }
 
-const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
+const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "akeru:last-enabled-project-grouping-mode";
+// Pre-rebrand key, kept as a read fallback so the grouping preference survives.
+const LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY =
+  "t3code:last-enabled-project-grouping-mode";
 
 export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode {
   try {
-    return localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) === "repository_path"
-      ? "repository_path"
-      : "repository";
+    const stored =
+      localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) ??
+      localStorage.getItem(LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
+    return stored === "repository_path" ? "repository_path" : "repository";
   } catch {
     return "repository";
   }
@@ -47,6 +51,7 @@ export function rememberEnabledProjectGroupingMode(mode: SidebarProjectGroupingM
   if (mode === "separate") return;
   try {
     localStorage.setItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY, mode);
+    localStorage.removeItem(LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
   } catch {
     // Storage can be unavailable in restricted browser contexts.
   }

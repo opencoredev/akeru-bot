@@ -11,7 +11,11 @@ export interface VersionMismatch {
   readonly hint: string;
 }
 
-export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "t3code:version-mismatch-dismissals:v1";
+export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY =
+  "akeru:version-mismatch-dismissals:v1";
+// Pre-rebrand key, read as a fallback so dismissed banners stay dismissed.
+const LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY =
+  "t3code:version-mismatch-dismissals:v1";
 
 const VersionMismatchDismissalsSchema = Schema.Struct({
   keys: Schema.Array(Schema.String),
@@ -112,6 +116,10 @@ function readVersionMismatchDismissals(): VersionMismatchDismissals {
       getLocalStorageItem(
         VERSION_MISMATCH_DISMISSALS_STORAGE_KEY,
         VersionMismatchDismissalsSchema,
+      ) ??
+      getLocalStorageItem(
+        LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY,
+        VersionMismatchDismissalsSchema,
       ) ?? { keys: [] }
     );
   } catch (error) {
@@ -127,6 +135,11 @@ function writeVersionMismatchDismissals(document: VersionMismatchDismissals): vo
       document,
       VersionMismatchDismissalsSchema,
     );
+    try {
+      window.localStorage.removeItem(LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY);
+    } catch {
+      // Draining the legacy key is best-effort.
+    }
   } catch (error) {
     console.error("Could not persist version-mismatch dismissals.", error);
   }

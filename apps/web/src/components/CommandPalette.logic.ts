@@ -503,7 +503,7 @@ export function buildRootGroups(input: {
   if (input.recentThreadItems.length > 0) {
     groups.push({
       value: "recent-threads",
-      label: "Recent conversations",
+      label: "Recent chats",
       items: input.recentThreadItems,
     });
   }
@@ -516,7 +516,7 @@ export function buildRootGroups(input: {
 export function getCommandPaletteInputPlaceholder(mode: CommandPaletteMode): string {
   switch (mode) {
     case "root":
-      return "Search commands, projects, and conversations...";
+      return "Search commands, projects, and chats...";
     case "root-browse":
       return "Enter project path (e.g. ~/projects/my-app)";
     case "submenu":

@@ -15,8 +15,25 @@ import { RightPanelResizeHandle } from "./RightPanelResizeHandle";
 
 export type PreviewPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
 
-const PREVIEW_PANEL_WIDTH_STORAGE_KEY = "t3code:preview-panel-width";
+const PREVIEW_PANEL_WIDTH_STORAGE_KEY = "akeru:preview-panel-width";
+// Pre-rebrand key, drained on module load below.
+const LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY = "t3code:preview-panel-width";
 const PREVIEW_PANEL_MIN_WIDTH = 360;
+
+if (typeof window !== "undefined") {
+  try {
+    const legacy = window.localStorage.getItem(LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY);
+    if (
+      legacy !== null &&
+      window.localStorage.getItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY) === null
+    ) {
+      window.localStorage.setItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY, legacy);
+    }
+    window.localStorage.removeItem(LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable; the panel falls back to its default width.
+  }
+}
 /**
  * Upper bound as a fraction of the viewport; only binds on wide screens.
  * On narrow windows the container clamp below is what preserves the

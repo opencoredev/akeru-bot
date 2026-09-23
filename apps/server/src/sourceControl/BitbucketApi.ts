@@ -14,7 +14,10 @@ import {
   type SourceControlRepositoryVisibility,
 } from "@t3tools/contracts";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
-import { sanitizeBranchFragment } from "@t3tools/shared/git";
+import {
+  buildPullRequestWorktreeBranchName,
+  pullRequestWorktreeBranchCandidates,
+} from "@t3tools/shared/git";
 import {
   detectSourceControlProviderFromRemoteUrl,
   isSshRemoteUrl,
@@ -522,7 +525,7 @@ function checkoutBranchName(input: {
     return input.headBranch;
   }
 
-  return `t3code/pr-${input.pullRequestId}/${sanitizeBranchFragment(input.headBranch)}`;
+  return buildPullRequestWorktreeBranchName(input.pullRequestId, input.headBranch);
 }
 
 function repositoryNameWithOwner(
@@ -1058,14 +1061,21 @@ export const make = Effect.gen(function* () {
           isCrossRepository,
         });
         const localBranchNames = yield* git.listLocalBranchNames(input.cwd);
-        const localBranchExists = localBranchNames.includes(localBranch);
+        // Prefer the existing checkout, including a pre-rename
+        // `t3code/pr-<n>/<head>` branch, before minting a fresh akeru/ branch.
+        const existingLocalBranch = pullRequestWorktreeBranchCandidates(
+          pullRequest.id,
+          remoteBranch,
+        ).find((candidate) => localBranchNames.includes(candidate));
+        const effectiveLocalBranch = existingLocalBranch ?? localBranch;
+        const localBranchExists = existingLocalBranch !== undefined;
 
         if (input.force === true || !localBranchExists) {
           yield* git.fetchRemoteBranch({
             cwd: input.cwd,
             remoteName,
             remoteBranch,
-            localBranch,
+            localBranch: effectiveLocalBranch,
           });
         } else {
           yield* git.fetchRemoteTrackingBranch({
@@ -1077,11 +1087,13 @@ export const make = Effect.gen(function* () {
 
         yield* git.setBranchUpstream({
           cwd: input.cwd,
-          branch: localBranch,
+          branch: effectiveLocalBranch,
           remoteName,
           remoteBranch,
         });
-        yield* Effect.scoped(git.switchRef({ cwd: input.cwd, refName: localBranch }));
+        yield* Effect.scoped(
+          git.switchRef({ cwd: input.cwd, refName: effectiveLocalBranch }),
+        );
       }).pipe(
         Effect.mapError((cause) =>
           isBitbucketApiError(cause)

@@ -43,6 +43,7 @@ const setup = Layer.effectDiscard(
 
 export const makeSqlitePersistenceLive = Effect.fn("makeSqlitePersistenceLive")(function* (
   dbPath: string,
+  serviceName: string = "akeru-server",
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -54,7 +55,7 @@ export const makeSqlitePersistenceLive = Effect.fn("makeSqlitePersistenceLive")(
       filename: dbPath,
       spanAttributes: {
         "db.name": path.basename(dbPath),
-        "service.name": "t3-server",
+        "service.name": serviceName,
       },
     }),
   );
@@ -67,7 +68,7 @@ export const SqlitePersistenceMemory = Layer.provideMerge(
 
 export const layerConfig = Layer.unwrap(
   Effect.gen(function* () {
-    const { dbPath } = yield* ServerConfig;
-    return makeSqlitePersistenceLive(dbPath);
+    const { dbPath, otlpServiceName } = yield* ServerConfig;
+    return makeSqlitePersistenceLive(dbPath, otlpServiceName);
   }),
 );

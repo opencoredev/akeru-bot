@@ -38,7 +38,7 @@ export function InboxPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection
-        title="Error inbox"
+        title="Bot inbox"
         headerAction={
           openItems.length > 0 ? <Badge variant="error">{openItems.length} open</Badge> : null
         }
@@ -50,7 +50,7 @@ export function InboxPanel() {
         ) : openItems.length === 0 ? (
           <SettingsRow
             title="No errors"
-            description="Bot failures and approval requests appear here."
+            description="Bot failures appear here."
           />
         ) : (
           openItems.map((item) => (

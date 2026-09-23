@@ -51,6 +51,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDebouncedStorage, createMemoryStorage } from "./lib/storage";
+import { createMigratingStorage, migrateLocalStorageKey } from "./lib/storageKeyMigration";
 import { getDefaultServerModel } from "./providerModels";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
@@ -58,7 +59,9 @@ const isRuntimeMode = Schema.is(RuntimeMode);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 const isReviewCommentContext = Schema.is(ReviewCommentContextSchema);
 
-export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
+export const COMPOSER_DRAFT_STORAGE_KEY = "akeru:composer-drafts:v1";
+// Drafts persisted under the `t3code:` prefix before the rebrand.
+const LEGACY_COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
 const COMPOSER_DRAFT_STORAGE_VERSION = 8;
 const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 export type DraftThreadEnvMode = typeof DraftThreadEnvModeSchema.Type;
@@ -69,9 +72,17 @@ export type DraftId = typeof DraftId.Type;
 const COMPOSER_PERSIST_DEBOUNCE_MS = 300;
 
 const composerDebouncedStorage = createDebouncedStorage(
-  typeof localStorage !== "undefined" ? localStorage : createMemoryStorage(),
+  createMigratingStorage(
+    typeof localStorage !== "undefined" ? localStorage : createMemoryStorage(),
+    COMPOSER_DRAFT_STORAGE_KEY,
+    LEGACY_COMPOSER_DRAFT_STORAGE_KEY,
+  ),
   COMPOSER_PERSIST_DEBOUNCE_MS,
 );
+
+// Copy the pre-rebrand drafts payload forward so reads that bypass the
+// wrapped storage (like the attachment verifier) still find it.
+migrateLocalStorageKey(COMPOSER_DRAFT_STORAGE_KEY, LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
 
 // Flush pending composer draft writes before page unload to prevent data loss.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {

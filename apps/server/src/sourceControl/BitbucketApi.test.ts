@@ -761,8 +761,63 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
       cwd: "/repo",
       remoteName: "octocat",
       remoteBranch: "main",
-      localBranch: "t3code/pr-42/main",
+      localBranch: "akeru/pr-42/main",
     });
+    assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
+      cwd: "/repo",
+      branch: "akeru/pr-42/main",
+      remoteName: "octocat",
+      remoteBranch: "main",
+    });
+    assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
+      cwd: "/repo",
+      refName: "akeru/pr-42/main",
+    });
+  }).pipe(Effect.provide(layer));
+});
+
+it.effect("reuses a legacy t3code/pr-* local branch when checking out a fork pull request", () => {
+  const { git, layer } = makeLayer({
+    response: (request) => {
+      if (request.url.endsWith("/repositories/octocat/t3code")) {
+        return Response.json({
+          ...repositoryJson,
+          full_name: "octocat/t3code",
+          links: {
+            html: { href: "https://bitbucket.org/octocat/t3code" },
+            clone: [
+              { name: "https", href: "https://bitbucket.org/octocat/t3code.git" },
+              { name: "ssh", href: "git@bitbucket.org:octocat/t3code.git" },
+            ],
+          },
+        });
+      }
+      return Response.json({
+        ...bitbucketPullRequest,
+        source: {
+          branch: { name: "main" },
+          repository: {
+            full_name: "octocat/t3code",
+            workspace: { slug: "octocat" },
+          },
+        },
+      });
+    },
+    git: {
+      listLocalBranchNames: () => Effect.succeed(["t3code/pr-42/main"]),
+    },
+  });
+
+  return Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+    yield* bitbucket.checkoutPullRequest({
+      cwd: "/repo",
+      reference: "42",
+    });
+
+    // The legacy branch is reused: no fresh fetchRemoteBranch, upstream and
+    // checkout target the t3code/ branch.
+    assert.strictEqual(git.fetchRemoteBranch.mock.calls.length, 0);
     assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
       cwd: "/repo",
       branch: "t3code/pr-42/main",

@@ -70,7 +70,7 @@ describe("createNativeReviewDiffTheme", () => {
   });
 
   it("uses the selected app palette for native code surfaces", () => {
-    const standard = createNativeReviewDiffTheme("dark", "t3-code");
+    const standard = createNativeReviewDiffTheme("dark", "akeru-classic");
     const iris = createNativeReviewDiffTheme("dark", "iris");
 
     expect(iris.background).not.toBe(standard.background);

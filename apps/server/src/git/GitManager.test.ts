@@ -3612,7 +3612,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         pullRequestNumber: 93,
         headRepository: "octocat/codething-mvp",
         headBranch: "feature/missing-fork-branch",
-        localBranch: "t3code/pr-93/feature/missing-fork-branch",
+        localBranch: "akeru/pr-93/feature/missing-fork-branch",
       });
       if (!(error.cause instanceof AggregateError)) {
         return yield* Effect.die(error.cause);
@@ -4491,7 +4491,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           mode: "worktree",
         });
 
-        expect(result.branch).toBe("t3code/pr-91/main");
+        expect(result.branch).toBe("akeru/pr-91/main");
         expect(result.worktreePath).not.toBeNull();
         expect((yield* runGit(repoDir, ["branch", "--show-current"])).stdout.trim()).toBe("main");
         expect((yield* runGit(repoDir, ["rev-parse", "main"])).stdout.trim()).toBe(mainBefore);
@@ -4500,7 +4500,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
             "branch",
             "--show-current",
           ])).stdout.trim(),
-        ).toBe("t3code/pr-91/main");
+        ).toBe("akeru/pr-91/main");
       }),
   );
 
@@ -4552,7 +4552,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           mode: "worktree",
         });
 
-        expect(result.branch).toBe("t3code/pr-92/main");
+        expect(result.branch).toBe("akeru/pr-92/main");
         expect((yield* runGit(repoDir, ["rev-parse", "main"])).stdout.trim()).toBe(localMainBefore);
         expect(
           (yield* runGit(result.worktreePath as string, [
@@ -4621,6 +4621,72 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       expect(
         (yield* runGit(worktreePath, ["rev-parse", "--abbrev-ref", "@{upstream}"])).stdout.trim(),
       ).toBe("fork-seed/feature/pr-reused-fork");
+    }),
+  );
+
+  it.effect("reuses a pre-rename t3code/pr-* worktree for a fork pull request", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const originDir = yield* createBareRemote();
+      const forkDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", originDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(repoDir, ["remote", "add", "fork-seed", forkDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/pr-legacy-fork"]);
+      NodeFS.writeFileSync(NodePath.join(repoDir, "legacy-fork.txt"), "legacy fork\n");
+      yield* runGit(repoDir, ["add", "legacy-fork.txt"]);
+      yield* runGit(repoDir, ["commit", "-m", "Legacy fork PR branch"]);
+      yield* runGit(repoDir, ["push", "-u", "fork-seed", "feature/pr-legacy-fork"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+      // Simulate a pre-rebrand checkout: worktree on t3code/pr-84/<head>.
+      yield* runGit(repoDir, ["branch", "t3code/pr-84/feature/pr-legacy-fork", "feature/pr-legacy-fork"]);
+      const worktreePath = NodePath.join(
+        repoDir,
+        "..",
+        `pr-legacy-fork-${NodePath.basename(repoDir)}`,
+      );
+      yield* runGit(repoDir, ["worktree", "add", worktreePath, "t3code/pr-84/feature/pr-legacy-fork"]);
+
+      const { manager } = yield* makeManager({
+        ghScenario: {
+          pullRequest: {
+            number: 84,
+            title: "Legacy fork PR",
+            url: "https://github.com/pingdotgg/codething-mvp/pull/84",
+            baseRefName: "main",
+            headRefName: "feature/pr-legacy-fork",
+            state: "open",
+            isCrossRepository: true,
+            headRepositoryNameWithOwner: "octocat/codething-mvp",
+            headRepositoryOwnerLogin: "octocat",
+          },
+          repositoryCloneUrls: {
+            "octocat/codething-mvp": {
+              url: forkDir,
+              sshUrl: forkDir,
+            },
+          },
+        },
+      });
+
+      const result = yield* preparePullRequestThread(manager, {
+        cwd: repoDir,
+        reference: "84",
+        mode: "worktree",
+      });
+
+      // The legacy worktree is reused and reported under its actual branch;
+      // no second akeru/pr-84 branch is created.
+      expect(result.worktreePath && NodeFS.realpathSync.native(result.worktreePath)).toBe(
+        NodeFS.realpathSync.native(worktreePath),
+      );
+      expect(result.branch).toBe("t3code/pr-84/feature/pr-legacy-fork");
+      const branches = (yield* runGit(repoDir, ["branch", "--list", "akeru/*"])).stdout.trim();
+      expect(branches).toBe("");
+      expect(
+        (yield* runGit(worktreePath, ["rev-parse", "--abbrev-ref", "@{upstream}"])).stdout.trim(),
+      ).toBe("fork-seed/feature/pr-legacy-fork");
     }),
   );
 

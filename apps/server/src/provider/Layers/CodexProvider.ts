@@ -341,7 +341,7 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
 export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
-      name: "t3code_desktop",
+      name: "akeru_desktop",
       title: "Akeru Bot Desktop",
       version: packageJson.version,
     },
@@ -403,7 +403,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
 
   const initialize = yield* client.request("initialize", {
     clientInfo: {
-      name: "t3code_desktop",
+      name: "akeru_desktop",
       title: "Akeru Bot Desktop",
       version: "0.1.0",
     },

@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
+import { createMigratingStorage } from "./lib/storageKeyMigration";
 
 export type DiffPanelSelection =
   | { kind: "branch"; baseRef: string | null }
@@ -124,10 +125,14 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
         }),
     }),
     {
-      name: "t3code:diff-panel-state:v1",
+      name: "akeru:diff-panel-state:v1",
       version: 1,
       storage: createJSONStorage(() =>
-        resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+        createMigratingStorage(
+          resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+          "akeru:diff-panel-state:v1",
+          "t3code:diff-panel-state:v1",
+        ),
       ),
       partialize: (state) => ({
         byThreadKey: state.byThreadKey,

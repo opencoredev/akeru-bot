@@ -2385,6 +2385,52 @@ describe("ProviderCommandReactor", () => {
     expect(harness.refreshStatus.mock.calls[0]?.[0]).toBe("/tmp/provider-project-worktree");
   });
 
+  it("strips the legacy t3code/ prefix when regenerating a worktree branch name", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-legacy-branch"),
+        threadId: ThreadId.make("thread-1"),
+        branch: "t3code/deadbeef",
+        worktreePath: "/tmp/provider-project-worktree",
+      }),
+    );
+
+    // Simulate a text-generation response that echoes the existing legacy
+    // branch back instead of producing a fresh fragment.
+    harness.generateBranchName.mockImplementation(() =>
+      Effect.succeed({ branch: "t3code/deadbeef" }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-legacy-branch"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-legacy-branch"),
+          role: "user",
+          text: "Regenerate the branch name.",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.generateBranchName.mock.calls.length === 1);
+    await waitFor(() => harness.renameBranch.mock.calls.length === 1);
+    expect(harness.renameBranch.mock.calls[0]?.[0]).toMatchObject({
+      cwd: "/tmp/provider-project-worktree",
+      oldBranch: "t3code/deadbeef",
+      newBranch: "akeru/deadbeef",
+    });
+  });
+
   it("recreates a missing worktree from the thread branch before starting a turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

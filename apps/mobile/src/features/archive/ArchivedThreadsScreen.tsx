@@ -166,11 +166,11 @@ function ArchivedThreadsHeader(props: {
                 type="monochrome"
               />
               <TextInput
-                accessibilityLabel="Search archived conversations"
+                accessibilityLabel="Search archived chats"
                 autoCapitalize="none"
                 onChangeText={props.onSearchQueryChange}
                 value={props.searchQuery}
-                placeholder="Search archived conversations"
+                placeholder="Search archived chats"
                 placeholderTextColorClassName="accent-placeholder"
                 className="flex-1 py-2 text-base font-sans text-foreground"
               />
@@ -181,7 +181,7 @@ function ArchivedThreadsHeader(props: {
               onPressAction={handleAndroidFilterAction}
             >
               <Pressable
-                accessibilityLabel="Filter and sort archived conversations"
+                accessibilityLabel="Filter and sort archived chats"
                 accessibilityRole="button"
                 className="size-11 items-center justify-center rounded-full bg-subtle"
               >
@@ -203,7 +203,7 @@ function ArchivedThreadsHeader(props: {
     );
   }
   const archiveFilterMenu = {
-    title: "Archived conversation options",
+    title: "Archived chat options",
     items: [
       {
         type: "submenu" as const,
@@ -288,7 +288,7 @@ function ArchivedThreadsHeader(props: {
                 autoCapitalize: "none",
                 hideNavigationBar: false,
                 obscureBackground: false,
-                placeholder: "Search archived conversations",
+                placeholder: "Search archived chats",
                 onChangeText: (event) => {
                   props.onSearchQueryChange(event.nativeEvent.text);
                 },
@@ -303,21 +303,21 @@ function ArchivedThreadsHeader(props: {
         <NativeHeaderToolbar placement="right">
           {usesNativeChrome ? (
             <NativeHeaderToolbar.Button
-              accessibilityLabel="Refresh archived conversations"
+              accessibilityLabel="Refresh archived chats"
               icon="arrow.clockwise"
               onPress={props.onRefresh}
               separateBackground
             />
           ) : null}
           <NativeHeaderToolbar.Menu
-            accessibilityLabel="Filter and sort archived conversations"
+            accessibilityLabel="Filter and sort archived chats"
             icon={
               hasCustomFilter
                 ? "line.3.horizontal.decrease.circle.fill"
                 : "line.3.horizontal.decrease.circle"
             }
             separateBackground
-            title="Archived conversation options"
+            title="Archived chat options"
           >
             <NativeHeaderToolbar.Menu title="Environment">
               <NativeHeaderToolbar.Label>Environment</NativeHeaderToolbar.Label>
@@ -595,7 +595,7 @@ export function ArchivedThreadsScreen(props: {
       return (
         <View className="items-center py-16">
           <ActivityIndicator color={refreshTint} />
-          <Text className="mt-3 text-sm text-foreground-muted">Loading archive...</Text>
+          <Text className="mt-3 text-sm text-foreground-muted">Loading archive…</Text>
         </View>
       );
     }
@@ -605,7 +605,7 @@ export function ArchivedThreadsScreen(props: {
         detail={
           isFiltered ? "Try another search or environment." : "Chats you archive will appear here."
         }
-        title={isFiltered ? "No matching conversations" : "No archived conversations"}
+        title={isFiltered ? "No matching chats" : "No archived chats"}
       />
     );
   }, [isFiltered, isInitialLoad, refreshTint]);

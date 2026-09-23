@@ -195,8 +195,26 @@ import {
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 // Keep the v2 key so existing preferences survive the v2-to-default rename.
-const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
-const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
+const SETTLED_SHELF_EXPANDED_KEY = "akeru:sidebar-v2:settled-expanded";
+const SNOOZED_SHELF_EXPANDED_KEY = "akeru:sidebar-v2:snoozed-expanded";
+// Pre-rebrand keys, copied forward once at module load then drained.
+const LEGACY_SHELF_EXPANDED_KEYS: ReadonlyArray<readonly [string, string]> = [
+  [SETTLED_SHELF_EXPANDED_KEY, "t3code:sidebar-v2:settled-expanded"],
+  [SNOOZED_SHELF_EXPANDED_KEY, "t3code:sidebar-v2:snoozed-expanded"],
+];
+if (typeof window !== "undefined") {
+  try {
+    for (const [key, legacyKey] of LEGACY_SHELF_EXPANDED_KEYS) {
+      const legacy = window.localStorage.getItem(legacyKey);
+      if (legacy !== null && window.localStorage.getItem(key) === null) {
+        window.localStorage.setItem(key, legacy);
+      }
+      window.localStorage.removeItem(legacyKey);
+    }
+  } catch {
+    // Storage can be unavailable; the shelves fall back to their defaults.
+  }
+}
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -3413,7 +3431,7 @@ export default function Sidebar() {
                   }}
                   onKeyDown={handleThreadSearchKeyDown}
                   placeholder="Search"
-                  aria-label="Search conversations"
+                  aria-label="Search chats"
                   role="combobox"
                   aria-autocomplete="list"
                   aria-expanded={isSearchingThreads && threadSearchResults.length > 0}
@@ -3435,7 +3453,7 @@ export default function Sidebar() {
                     size="icon-micro"
                     variant="ghost"
                     className="shrink-0 text-sidebar-muted-foreground hover:bg-sidebar-control-surface hover:text-sidebar-foreground"
-                    aria-label="Clear conversation search"
+                    aria-label="Clear chat search"
                     onClick={() => {
                       clearThreadSearch();
                       threadSearchInputRef.current?.focus();
@@ -3495,7 +3513,7 @@ export default function Sidebar() {
                   <MenuTrigger
                     render={
                       <SidebarMenuButton
-                        aria-label="Filter conversations by project"
+                        aria-label="Filter chats by project"
                         className="min-w-0 flex-1 ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                       />
                     }
@@ -3646,7 +3664,7 @@ export default function Sidebar() {
                 role="status"
                 className="px-2 py-6 text-center text-xs text-sidebar-muted-foreground"
               >
-                No conversations found
+                No chats found
               </p>
             )
           ) : null}

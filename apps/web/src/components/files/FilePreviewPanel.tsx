@@ -81,8 +81,29 @@ interface FilePreviewPanelProps {
   onPendingChange: (relativePath: string, pending: boolean) => void;
 }
 
-const FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
-const RENDER_MARKDOWN_STORAGE_KEY = "t3code.renderMarkdown";
+const FILE_EXPLORER_STORAGE_KEY = "akeru.fileExplorerOpen";
+const RENDER_MARKDOWN_STORAGE_KEY = "akeru.renderMarkdown";
+// Pre-rebrand keys, copied forward once at module load then drained.
+const LEGACY_FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
+const LEGACY_RENDER_MARKDOWN_STORAGE_KEY = "t3code.renderMarkdown";
+
+if (typeof window !== "undefined") {
+  try {
+    const keyPairs: ReadonlyArray<readonly [string, string]> = [
+      [FILE_EXPLORER_STORAGE_KEY, LEGACY_FILE_EXPLORER_STORAGE_KEY],
+      [RENDER_MARKDOWN_STORAGE_KEY, LEGACY_RENDER_MARKDOWN_STORAGE_KEY],
+    ];
+    for (const [key, legacyKey] of keyPairs) {
+      const legacy = window.localStorage.getItem(legacyKey);
+      if (legacy !== null && window.localStorage.getItem(key) === null) {
+        window.localStorage.setItem(key, legacy);
+      }
+      window.localStorage.removeItem(legacyKey);
+    }
+  } catch {
+    // Storage can be unavailable; preferences reset to defaults.
+  }
+}
 const FILE_SAVE_DEBOUNCE_MS = 500;
 const FILE_LINK_REVEAL_ATTRIBUTE = "data-file-link-reveal";
 const FILE_LINK_REVEAL_UNSAFE_CSS = `

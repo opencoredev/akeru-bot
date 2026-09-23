@@ -13,6 +13,9 @@ import {
   resolveDesktopTheme,
   resolveThemeAppearance,
   resolveThemeHalf,
+  LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY,
+  LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY,
+  LEGACY_THEME_HALVES_STORAGE_KEY,
   THEME_APPEARANCE_MODE_STORAGE_KEY,
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   THEME_HALVES_STORAGE_KEY,
@@ -33,7 +36,8 @@ type ThemeSnapshot = {
 
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
-const STORAGE_KEY = "t3code:theme";
+const STORAGE_KEY = "akeru:theme";
+const LEGACY_STORAGE_KEY = "t3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME = "akeru-paper";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
@@ -53,7 +57,10 @@ export function readThemeHalves(): ThemeHalves | null {
 function readStoredThemeHalves(): ThemeHalves | null {
   if (typeof window === "undefined") return null;
   try {
-    return parseThemeHalves(window.localStorage.getItem(THEME_HALVES_STORAGE_KEY));
+    return parseThemeHalves(
+      window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY),
+    );
   } catch {
     return null;
   }
@@ -119,7 +126,9 @@ function readStoredFollowSystem(theme: Theme): boolean {
   if (typeof window === "undefined") return theme === "system";
 
   try {
-    const raw = window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY);
     if (raw === "true") return true;
     if (raw === "false") return false;
   } catch {
@@ -136,7 +145,9 @@ function isThemePreferenceMode(value: string | null): value is ThemePreferenceMo
 export function readAppearanceModePreference(theme: Theme): ThemePreferenceMode {
   if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY);
+      const raw =
+        window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
       if (isThemePreferenceMode(raw)) return raw;
     } catch {
       // Fall back to the legacy preference below when storage is unavailable.
@@ -153,6 +164,7 @@ function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): voi
     // The legacy follow-system flag is read-only migration input now; the
     // mode key is the single source of truth.
     window.localStorage.setItem(THEME_APPEARANCE_MODE_STORAGE_KEY, appearanceMode);
+    window.localStorage.removeItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
   } catch (cause) {
     throw new ThemeStorageError({
       operation: "write",
@@ -166,7 +178,8 @@ export function readThemePreference(): Theme {
   if (typeof window === "undefined") return DEFAULT_THEME_SNAPSHOT.theme;
   let raw: string | null;
   try {
-    raw = window.localStorage.getItem(STORAGE_KEY);
+    raw =
+      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
   } catch (cause) {
     throw new ThemeStorageError({
       operation: "read",
@@ -184,6 +197,7 @@ export function writeThemePreference(theme: Theme): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, theme);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     themeStorageReadFailure = null;
   } catch (cause) {
     throw new ThemeStorageError({
@@ -413,14 +427,22 @@ function handleSystemAppearanceChange() {
 }
 
 function handleStorageChange(e: StorageEvent) {
-  if (e.key === STORAGE_KEY) {
+  if (e.key === STORAGE_KEY || e.key === LEGACY_STORAGE_KEY) {
     themeStorageReadFailure = null;
     applyTheme(getStored(), true);
     emitChange();
-  } else if (e.key === THEME_FOLLOW_SYSTEM_STORAGE_KEY) {
+  } else if (
+    e.key === THEME_FOLLOW_SYSTEM_STORAGE_KEY ||
+    e.key === LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY
+  ) {
     applyTheme(getStored(), true);
     emitChange();
-  } else if (e.key === THEME_APPEARANCE_MODE_STORAGE_KEY || e.key === THEME_HALVES_STORAGE_KEY) {
+  } else if (
+    e.key === THEME_APPEARANCE_MODE_STORAGE_KEY ||
+    e.key === THEME_HALVES_STORAGE_KEY ||
+    e.key === LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY ||
+    e.key === LEGACY_THEME_HALVES_STORAGE_KEY
+  ) {
     applyTheme(getStored(), true);
     emitChange();
   } else if (e.key === CUSTOM_THEMES_STORAGE_KEY || e.key === null) {
@@ -483,6 +505,7 @@ export function useTheme() {
       // of erasing it or leaving it attached to the new theme.
       const previousHalvesRaw = window.localStorage.getItem(THEME_HALVES_STORAGE_KEY);
       window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
       try {
         writeThemePreference(next);
       } catch (cause) {
@@ -565,8 +588,10 @@ export function useTheme() {
         else next[appearance] = themeId;
         if (next.light === undefined && next.dark === undefined) {
           window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+          window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
         } else {
           window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, JSON.stringify(next));
+          window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
         }
       } catch (cause) {
         const error = new ThemeStorageError({
@@ -592,6 +617,7 @@ export function useTheme() {
     if (typeof window === "undefined") return false;
     try {
       window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
     } catch (cause) {
       const error = new ThemeStorageError({
         operation: "write",

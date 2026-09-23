@@ -651,7 +651,7 @@ html[data-theme-id="akeru-noir"] {
      vellum, forest drafting paper, marine cyanotype, copper, and violet ink.
      These colors stay deliberately deep at the top edge so the white stage
      wordmark and controls retain contrast in both appearance modes. */
-  html[data-theme-id="t3-chat"] {
+  html[data-theme-id="akeru-chat"] {
     --stage-art-top: oklch(0.760675 0.141361 348.019);
     --stage-art-mid: oklch(0.588093 0.188832 353.138);
     --stage-art-bottom: oklch(0.383959 0.135096 348.656);
@@ -779,7 +779,7 @@ html[data-theme-id="akeru-noir"] {
     }
   }
 
-  :is(html[data-theme-id="t3-chat"], html[data-theme-id="ocean"], html[data-theme-id="iris"]) {
+  :is(html[data-theme-id="akeru-chat"], html[data-theme-id="ocean"], html[data-theme-id="iris"]) {
     --stage-night-top: color-mix(in oklch, var(--stage-art-top) 38%, var(--stage-night-base-top));
     --stage-night-mid: color-mix(in oklch, var(--stage-art-mid) 38%, var(--stage-night-base-mid));
     --stage-night-bottom: color-mix(
@@ -802,7 +802,7 @@ html[data-theme-id="akeru-noir"] {
   }
 
   :is(
-    html[data-theme-id="t3-chat"],
+    html[data-theme-id="akeru-chat"],
     html[data-theme-id="grove"],
     html[data-theme-id="ocean"],
     html[data-theme-id="ember"],
@@ -1718,7 +1718,7 @@ html[data-theme-id]
   }
 }
 
-html[data-theme-id="t3-chat"] .chat-composer-glass-shell {
+html[data-theme-id="akeru-chat"] .chat-composer-glass-shell {
   /* T3 Chat's visible composer edge is a dark plum, not the stock translucent
      white outline. Its highlight is derived from --chat-input-gradient. */
   @variant dark {
@@ -1727,7 +1727,7 @@ html[data-theme-id="t3-chat"] .chat-composer-glass-shell {
   }
 }
 
-html[data-theme-id="t3-chat"]
+html[data-theme-id="akeru-chat"]
   :is(.chat-composer-banner-stack-cap, .chat-composer-drawer-surface, .chat-composer-top-drawer):is(
     :not([data-variant]),
     [data-variant="default"]
@@ -1879,7 +1879,7 @@ html[data-theme-id] .chat-markdown .chat-markdown-chrome-action {
 /* T3 Chat renders inline code and compact chat artifacts with its translucent
    secondary surface flattened over the light chat canvas. The raw muted and
    secondary tokens are substantially darker than those visible pixels. */
-html[data-theme-id="t3-chat"] {
+html[data-theme-id="akeru-chat"] {
   @variant light {
     & .chat-markdown :not(pre) > code,
     & [data-changed-files-state],
@@ -1932,7 +1932,7 @@ html[data-theme-id] [data-app-sidebar] {
 
 /* T3 Chat's panel divider is deliberately pink, and its resize affordance
    keeps that color while hovered. Do not neutralize this branded edge. */
-html[data-theme-id="t3-chat"] [data-app-sidebar] {
+html[data-theme-id="akeru-chat"] [data-app-sidebar] {
   @variant dark {
     border-color: var(--contrast-sidebar-border);
   }
@@ -2114,7 +2114,7 @@ html[data-theme-id="akeru-paper"] {
 /* The live T3 Chat texture is a 128px grayscale tile with a constant 7/255
    alpha. Keep our procedural texture cheap while matching that scale and
    strength for the branded preset. */
-html[data-theme-id="t3-chat"] {
+html[data-theme-id="akeru-chat"] {
   --surface-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02745'/%3E%3C/svg%3E");
   --surface-grain-size: 128px 128px;
 }

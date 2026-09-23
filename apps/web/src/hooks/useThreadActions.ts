@@ -676,7 +676,7 @@ export function useThreadActions() {
         const title = resolved?.thread.title ?? "this chat";
         const confirmationResult = await settlePromise(() =>
           localApi.dialogs.confirm(
-            [`Delete chat "${title}"?`, "This permanently clears this conversation history."].join(
+            [`Delete chat "${title}"?`, "This permanently clears this chat history."].join(
               "\n",
             ),
             { variant: "destructive" },

@@ -12,7 +12,9 @@ import { useCallback, useMemo } from "react";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
 
-const LAST_EDITOR_KEY = "t3code:last-editor";
+const LAST_EDITOR_KEY = "akeru:last-editor";
+// Pre-rebrand key, read as a fallback then drained on the next write.
+const LEGACY_LAST_EDITOR_KEY = "t3code:last-editor";
 
 export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorClass<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
@@ -53,10 +55,19 @@ export function resolveAndPersistPreferredEditor(
   availableEditors: readonly EditorId[],
 ): EditorId | null {
   const availableEditorIds = new Set(availableEditors);
-  const stored = getLocalStorageItem(LAST_EDITOR_KEY, EditorId);
+  const stored =
+    getLocalStorageItem(LAST_EDITOR_KEY, EditorId) ??
+    getLocalStorageItem(LEGACY_LAST_EDITOR_KEY, EditorId);
   if (stored && availableEditorIds.has(stored)) return stored;
   const editor = EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null;
-  if (editor) setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
+  if (editor) {
+    setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
+    try {
+      window.localStorage.removeItem(LEGACY_LAST_EDITOR_KEY);
+    } catch {
+      // Draining the legacy key is best-effort.
+    }
+  }
   return editor ?? null;
 }
 

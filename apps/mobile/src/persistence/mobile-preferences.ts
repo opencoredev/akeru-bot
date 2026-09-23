@@ -6,14 +6,22 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
-import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
+import {
+  normalizeMobileThemeId,
+  type MobileThemeId,
+  type MobileThemeMode,
+} from "../lib/mobileTheme";
 
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
 
-const PREFERENCES_KEY = "t3code.preferences";
-const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
+const PREFERENCES_KEY = "akeru.preferences";
+const PREFERENCES_FALLBACK_KEY = "akeru.preferences.fallback";
+// Keys written before the rebrand; reads fall back once and the next write
+// lands on the Akeru keys, draining the old entries.
+const LEGACY_PREFERENCES_KEY = "t3code.preferences";
+const LEGACY_PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
   readonly reviewedPrivacyPolicyVersion?: string;
@@ -117,23 +125,16 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
-  if (
-    typeof parsed.themeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.themeId)
-  ) {
-    preferences.themeId = parsed.themeId as MobileThemeId;
+  // Legacy ids (`t3-code`, `t3-chat`) canonicalize through the alias table so a
+  // persisted selection survives the rebrand instead of being dropped.
+  if (typeof parsed.themeId === "string") {
+    preferences.themeId = normalizeMobileThemeId(parsed.themeId);
   }
-  if (
-    typeof parsed.lightThemeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.lightThemeId)
-  ) {
-    preferences.lightThemeId = parsed.lightThemeId as MobileThemeId;
+  if (typeof parsed.lightThemeId === "string") {
+    preferences.lightThemeId = normalizeMobileThemeId(parsed.lightThemeId);
   }
-  if (
-    typeof parsed.darkThemeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.darkThemeId)
-  ) {
-    preferences.darkThemeId = parsed.darkThemeId as MobileThemeId;
+  if (typeof parsed.darkThemeId === "string") {
+    preferences.darkThemeId = normalizeMobileThemeId(parsed.darkThemeId);
   }
   if (
     parsed.themeMode === "system" ||
@@ -287,7 +288,15 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       );
     }
 
-    const fallbackResult = yield* Effect.result(secureStorage.getItem(PREFERENCES_FALLBACK_KEY));
+    const fallbackResult = yield* Effect.result(
+      secureStorage.getItem(PREFERENCES_FALLBACK_KEY).pipe(
+        Effect.flatMap((value) =>
+          value !== null
+            ? Effect.succeed(value)
+            : secureStorage.getItem(LEGACY_PREFERENCES_FALLBACK_KEY),
+        ),
+      ),
+    );
     let fallbackJson: string | null = null;
     if (fallbackResult._tag === "Success") {
       fallbackJson = fallbackResult.success;
@@ -330,13 +339,25 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     }
 
     if (parsed === null) {
-      const legacyJson = yield* secureStorage.getItem(PREFERENCES_KEY);
+      const legacyJson = yield* secureStorage
+        .getItem(PREFERENCES_KEY)
+        .pipe(
+          Effect.flatMap((value) =>
+            value !== null
+              ? Effect.succeed(value)
+              : secureStorage.getItem(LEGACY_PREFERENCES_KEY),
+          ),
+        );
       const legacyPreferences = parsePayload(legacyJson);
       parsed = legacyPreferences;
       if (legacyJson !== null && legacyPreferences !== null && databaseAvailable) {
         yield* saveJson(legacyJson);
         yield* secureStorage
           .removeItem(PREFERENCES_KEY)
+          .pipe(
+            Effect.andThen(secureStorage.removeItem(LEGACY_PREFERENCES_KEY)),
+            Effect.catch(() => Effect.void),
+          )
           .pipe(
             Effect.catch((error) =>
               Effect.logWarning("Could not remove migrated mobile preferences.").pipe(

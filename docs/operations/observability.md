@@ -115,7 +115,7 @@ Default Grafana login:
 ```bash
 export T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
 export T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export T3CODE_OTLP_SERVICE_NAME=t3-local
+export T3CODE_OTLP_SERVICE_NAME=akeru-local
 ```
 
 Optional:
@@ -154,7 +154,7 @@ macOS app bundle example:
 ```bash
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+T3CODE_OTLP_SERVICE_NAME=akeru-desktop \
 "/Applications/Akeru Bot (Alpha).app/Contents/MacOS/Akeru Bot (Alpha)"
 ```
 
@@ -163,7 +163,7 @@ Direct binary example:
 ```bash
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+T3CODE_OTLP_SERVICE_NAME=akeru-desktop \
 ./path/to/your/desktop-app-binary
 ```
 
@@ -299,7 +299,7 @@ Recommended flow in Grafana:
 
 Good first searches:
 
-- service name such as `t3-local`, `t3-dev`, or `t3-desktop`
+- service name such as `akeru-local`, `akeru-dev`, or `akeru-desktop`
 - span names like `sendTurn` or a Git operation such as `GitVcsDriver.statusDetails.status`
 - Git spans whose `git.operation` attribute identifies the operation
 - orchestration spans with attributes like `orchestration.command_type`
@@ -521,7 +521,7 @@ OTLP export:
 - `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
 - `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
 - `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_SERVICE_NAME`: service name, default `t3-server`
+- `T3CODE_OTLP_SERVICE_NAME`: service name, default `akeru-server`
 
 If the OTLP URLs are unset, local tracing still works and metrics stay in-process only.
 

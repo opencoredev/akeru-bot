@@ -24,6 +24,7 @@ import {
   ThreadId,
   VcsListRefsResult,
 } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -32,7 +33,10 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
-const DATABASE_NAME = "t3code:connection-runtime";
+const DATABASE_NAME = "akeru:connection-runtime";
+// Database used before the rebrand; its stores are copied forward once and the
+// legacy database is retired only after the copy succeeds.
+const LEGACY_DATABASE_NAME = "t3code:connection-runtime";
 const DATABASE_VERSION = 4;
 const CATALOG_STORE_NAME = "catalog";
 const SHELL_STORE_NAME = "shell";
@@ -118,30 +122,28 @@ function persistenceError(
   });
 }
 
-const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* () {
-  return yield* Effect.callback<IDBDatabase, ConnectionTransientError>((resume) => {
+const OBJECT_STORE_NAMES = [
+  CATALOG_STORE_NAME,
+  SHELL_STORE_NAME,
+  THREAD_STORE_NAME,
+  SERVER_CONFIG_STORE_NAME,
+  VCS_REFS_STORE_NAME,
+] as const;
+
+const openDatabaseAt = (name: string) =>
+  Effect.callback<IDBDatabase, ConnectionTransientError>((resume) => {
     if (typeof indexedDB === "undefined") {
       resume(
         Effect.fail(catalogError("open", "IndexedDB is unavailable in this browser context.")),
       );
       return;
     }
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    const request = indexedDB.open(name, DATABASE_VERSION);
     request.addEventListener("upgradeneeded", () => {
-      if (!request.result.objectStoreNames.contains(CATALOG_STORE_NAME)) {
-        request.result.createObjectStore(CATALOG_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(SHELL_STORE_NAME)) {
-        request.result.createObjectStore(SHELL_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(THREAD_STORE_NAME)) {
-        request.result.createObjectStore(THREAD_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(SERVER_CONFIG_STORE_NAME)) {
-        request.result.createObjectStore(SERVER_CONFIG_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(VCS_REFS_STORE_NAME)) {
-        request.result.createObjectStore(VCS_REFS_STORE_NAME);
+      for (const storeName of OBJECT_STORE_NAMES) {
+        if (!request.result.objectStoreNames.contains(storeName)) {
+          request.result.createObjectStore(storeName);
+        }
       }
     });
     request.addEventListener("error", () => {
@@ -151,6 +153,154 @@ const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
       resume(Effect.succeed(request.result));
     });
   });
+
+const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* () {
+  return yield* openDatabaseAt(DATABASE_NAME);
+});
+
+const databaseIsEmpty = Effect.fn("web.connectionStorage.databaseIsEmpty")(function* (
+  database: IDBDatabase,
+) {
+  return yield* Effect.callback<boolean, ConnectionTransientError>((resume) => {
+    const storeNames = Array.from(database.objectStoreNames);
+    if (storeNames.length === 0) {
+      resume(Effect.succeed(true));
+      return;
+    }
+    const transaction = database.transaction(storeNames, "readonly");
+    transaction.addEventListener("error", () => {
+      resume(
+        Effect.fail(
+          catalogError("inspect", transaction.error ?? "Unknown IndexedDB inspect error"),
+        ),
+      );
+    });
+    let pending = storeNames.length;
+    let sawEntry = false;
+    for (const storeName of storeNames) {
+      const request = transaction.objectStore(storeName).getKey(
+        IDBKeyRange.lowerBound(""),
+      );
+      request.addEventListener("success", () => {
+        if (request.result !== undefined && request.result !== null) {
+          sawEntry = true;
+        }
+        pending -= 1;
+        if (pending === 0) {
+          resume(Effect.succeed(!sawEntry));
+        }
+      });
+      request.addEventListener("error", () => {
+        pending -= 1;
+        if (pending === 0) {
+          resume(Effect.succeed(!sawEntry));
+        }
+      });
+    }
+  });
+});
+
+/** Copy every object store record from `source` into `target` inside one
+ * transaction, so the migration either lands completely or not at all. */
+const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseContents")(function* (
+  source: IDBDatabase,
+  target: IDBDatabase,
+) {
+  const storeNames = OBJECT_STORE_NAMES.filter(
+    (storeName) =>
+      source.objectStoreNames.contains(storeName) &&
+      target.objectStoreNames.contains(storeName),
+  );
+  if (storeNames.length === 0) return;
+
+  const entries = yield* Effect.callback<
+    ReadonlyArray<readonly [string, IDBValidKey, unknown]>,
+    ConnectionTransientError
+  >((resume) => {
+    const collected: Array<readonly [string, IDBValidKey, unknown]> = [];
+    const transaction = source.transaction(storeNames, "readonly");
+    transaction.addEventListener("error", () => {
+      resume(
+        Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB read error")),
+      );
+    });
+    transaction.addEventListener("complete", () => {
+      resume(Effect.succeed(collected));
+    });
+    for (const storeName of storeNames) {
+      const request = transaction.objectStore(storeName).openCursor();
+      request.addEventListener("success", () => {
+        const cursor = request.result;
+        if (cursor === null) return;
+        collected.push([storeName, cursor.key, cursor.value] as const);
+        cursor.continue();
+      });
+      request.addEventListener("error", () => {
+        resume(
+          Effect.fail(catalogError("migrate", request.error ?? "Unknown IndexedDB cursor error")),
+        );
+      });
+    }
+  });
+
+  yield* Effect.callback<void, ConnectionTransientError>((resume) => {
+    const transaction = target.transaction(storeNames, "readwrite");
+    transaction.addEventListener("error", () => {
+      resume(
+        Effect.fail(
+          catalogError("migrate", transaction.error ?? "Unknown IndexedDB write error"),
+        ),
+      );
+    });
+    transaction.addEventListener("complete", () => {
+      resume(Effect.void);
+    });
+    for (const [storeName, key, value] of entries) {
+      transaction.objectStore(storeName).put(value, key);
+    }
+  });
+});
+
+const deleteLegacyDatabase = Effect.fn("web.connectionStorage.deleteLegacyDatabase")(function* () {
+  yield* Effect.callback<void, never>((resume) => {
+    const request = indexedDB.deleteDatabase(LEGACY_DATABASE_NAME);
+    request.addEventListener("success", () => resume(Effect.void));
+    request.addEventListener("error", () => resume(Effect.void));
+    request.addEventListener("blocked", () => resume(Effect.void));
+  });
+});
+
+/** Move the persisted `t3code:connection-runtime` database forward when the
+ * Akeru database is still empty. The legacy database is deleted only after
+ * the copy commits, so a failed migration leaves the original data intact. */
+export const migrateLegacyConnectionDatabase = Effect.fn(
+  "web.connectionStorage.migrateLegacyConnectionDatabase",
+)(function* (database: IDBDatabase) {
+  if (typeof indexedDB === "undefined") return;
+  const isEmpty = yield* databaseIsEmpty(database);
+  if (!isEmpty) return;
+
+  const legacyResult = yield* Effect.result(
+    Effect.acquireRelease(openDatabaseAt(LEGACY_DATABASE_NAME), (legacy) =>
+      Effect.sync(() => legacy.close()),
+    ),
+  );
+  if (legacyResult._tag === "Failure") {
+    yield* Effect.logWarning(
+      "Could not open the legacy connection database for migration.",
+    ).pipe(Effect.annotateLogs({ error: legacyResult.failure }));
+    return;
+  }
+  yield* Effect.scoped(
+    Effect.gen(function* () {
+      const legacy = yield* Effect.acquireRelease(
+        Effect.succeed(legacyResult.success),
+        (db) => Effect.sync(() => db.close()),
+      );
+      yield* copyDatabaseContents(legacy, database);
+    }),
+  );
+  yield* deleteLegacyDatabase();
 });
 
 function readDatabaseValue(database: IDBDatabase, storeName: string, key: IDBValidKey) {
@@ -366,6 +516,13 @@ export const connectionStorageLayer = Layer.effectContext(
   Effect.gen(function* () {
     const database = yield* Effect.acquireRelease(openDatabase(), (database) =>
       Effect.sync(() => database.close()),
+    );
+    yield* migrateLegacyConnectionDatabase(database).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Connection database migration failed; using the new database.", {
+          cause: Cause.pretty(cause),
+        }),
+      ),
     );
     const catalog = yield* makeCatalogStore(makeCatalogBackend(database));
 

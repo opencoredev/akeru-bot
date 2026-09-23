@@ -10,6 +10,7 @@ import { type ScopedThreadRef } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveStorage } from "./lib/storage";
+import { createMigratingStorage } from "./lib/storageKeyMigration";
 import {
   DEFAULT_THREAD_TERMINAL_HEIGHT,
   DEFAULT_THREAD_TERMINAL_ID,
@@ -27,7 +28,9 @@ interface ThreadTerminalUiState {
 }
 
 // Keep the old storage key so existing drawer layout preferences migrate.
-const TERMINAL_UI_STATE_STORAGE_KEY = "t3code:terminal-state:v1";
+const TERMINAL_UI_STATE_STORAGE_KEY = "akeru:terminal-state:v1";
+// Pre-rebrand key, drained by the migrating storage wrapper.
+const LEGACY_TERMINAL_UI_STATE_STORAGE_KEY = "t3code:terminal-state:v1";
 
 interface PersistedTerminalUiStateStoreState {
   terminalUiStateByThreadKey?: Record<string, ThreadTerminalUiState>;
@@ -55,7 +58,11 @@ export function migratePersistedTerminalUiStateStoreState(
 }
 
 function createTerminalUiStateStorage() {
-  return resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined);
+  return createMigratingStorage(
+    resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+    TERMINAL_UI_STATE_STORAGE_KEY,
+    LEGACY_TERMINAL_UI_STATE_STORAGE_KEY,
+  );
 }
 
 function normalizeTerminalIds(terminalIds: string[]): string[] {

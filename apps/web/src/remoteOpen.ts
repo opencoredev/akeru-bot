@@ -197,9 +197,29 @@ export async function openRemoteEditorUrl(url: string): Promise<boolean> {
  * until the first remote open fires (we cannot observe SSH success from here,
  * so first click is the dismiss signal).
  */
-const REMOTE_OPEN_HINT_KEY = "t3code:remote-open-hint-seen";
+const REMOTE_OPEN_HINT_KEY = "akeru:remote-open-hint-seen";
+// The flag shipped under the `t3code:` prefix; read it once so the hint
+// does not resurface for people who already dismissed it.
+const LEGACY_REMOTE_OPEN_HINT_KEY = "t3code:remote-open-hint-seen";
+
+// Migrate the pre-rebrand flag once.
+function migrateRemoteOpenHint(): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (
+      window.localStorage.getItem(REMOTE_OPEN_HINT_KEY) === null &&
+      window.localStorage.getItem(LEGACY_REMOTE_OPEN_HINT_KEY) === "true"
+    ) {
+      window.localStorage.setItem(REMOTE_OPEN_HINT_KEY, "true");
+    }
+    window.localStorage.removeItem(LEGACY_REMOTE_OPEN_HINT_KEY);
+  } catch {
+    // Storage can be unavailable; the hint simply shows again.
+  }
+}
 
 export function useRemoteOpenHint(): readonly [seen: boolean, markSeen: () => void] {
+  migrateRemoteOpenHint();
   const [seen, setSeen] = useLocalStorage(REMOTE_OPEN_HINT_KEY, false, Schema.Boolean);
   return [seen, () => setSeen(true)] as const;
 }

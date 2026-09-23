@@ -1,7 +1,7 @@
 export const BUILT_IN_THEME_IDS = [
   "akeru-noir",
   "akeru-paper",
-  "t3-chat",
+  "akeru-chat",
   "grove",
   "ocean",
   "ember",
@@ -9,7 +9,7 @@ export const BUILT_IN_THEME_IDS = [
 ] as const;
 
 /** The mobile app's own hand-tuned palette, which is not part of the built-in library. */
-export const MOBILE_DEFAULT_THEME_ID = "t3-code";
+export const MOBILE_DEFAULT_THEME_ID = "akeru-classic";
 
 /**
  * Every palette the mobile app can render. Declared here so host-side tooling
@@ -101,7 +101,7 @@ export type ThemeDefinition = Readonly<{
 }>;
 
 export const T3_CHAT_THEME: ThemeDefinition = {
-  id: "t3-chat",
+  id: "akeru-chat",
   label: "Akeru Chat",
   appearance: "light",
   colors: {

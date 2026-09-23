@@ -38,7 +38,7 @@ function BotInbox({
 }) {
   const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
   return (
-    <SettingsSection title="Error inbox" card>
+    <SettingsSection title="Bot inbox" card>
       {items.length === 0 ? (
         <Text className="p-4 text-sm text-foreground-muted">No open items.</Text>
       ) : (

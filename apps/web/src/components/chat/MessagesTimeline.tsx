@@ -191,7 +191,7 @@ function TimelineLoadEarlierHeader({
           disabled={loading}
           className="w-full py-1.5 text-xs text-muted-foreground/60 hover:text-foreground disabled:cursor-default"
         >
-          {loading ? "Loading earlier turns…" : "Load earlier turns"}
+          {loading ? "Loading earlier turns..." : "Load earlier turns"}
         </button>
       </div>
     </div>
@@ -584,7 +584,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-placeholder text-sm">Send a message to start the conversation.</p>
+        <p className="text-placeholder text-sm">Send a message to start the chat.</p>
       </div>
     );
   }
@@ -1357,7 +1357,7 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
               Working for <WorkingTimer createdAt={row.createdAt} />
             </>
           ) : (
-            "Working..."
+            "Working"
           )}
           {workingStepLabel ? (
             <span className="ml-2 text-muted-foreground/55">· {workingStepLabel}</span>

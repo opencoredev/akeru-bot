@@ -32,7 +32,10 @@ export type { ThemeAppearance, ThemeColorRole, ThemeColors, ThemeDefinition, The
 
 export const AKERU_PAPER_THEME_ID = "akeru-paper" as const;
 export const AKERU_PAPER_THEME_LABEL = "Akeru Paper";
-export const T3_CHAT_THEME_ID = "t3-chat" as const;
+export const T3_CHAT_THEME_ID = "akeru-chat" as const;
+// The shipped id before the rebrand; stored preferences keep working through
+// the alias table below.
+const LEGACY_T3_CHAT_THEME_ID = "t3-chat";
 export const T3_CHAT_THEME_LABEL = "Akeru Chat";
 export const GROVE_THEME_ID = "grove" as const;
 export const GROVE_THEME_LABEL = "Grove";
@@ -43,10 +46,16 @@ export const EMBER_THEME_LABEL = "Ember";
 export const IRIS_THEME_ID = "iris" as const;
 export const IRIS_THEME_LABEL = "Iris";
 export const THEME_FILE_VERSION = 1 as const;
-export const CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
-export const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
-export const THEME_APPEARANCE_MODE_STORAGE_KEY = "t3code:theme-appearance-mode";
-export const THEME_HALVES_STORAGE_KEY = "t3code:theme-halves:v1";
+export const CUSTOM_THEMES_STORAGE_KEY = "akeru:themes:v1";
+export const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "akeru:theme-follow-system";
+export const THEME_APPEARANCE_MODE_STORAGE_KEY = "akeru:theme-appearance-mode";
+export const THEME_HALVES_STORAGE_KEY = "akeru:theme-halves:v1";
+// Theme persistence used the upstream `t3code:` prefix until the fork's
+// rebrand. Reads fall back to these keys and writes drain them.
+export const LEGACY_CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
+export const LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
+export const LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY = "t3code:theme-appearance-mode";
+export const LEGACY_THEME_HALVES_STORAGE_KEY = "t3code:theme-halves:v1";
 
 const LEGACY_T3_CHAT_DARK_THEME_ID = "t3-chat-dark";
 
@@ -215,7 +224,9 @@ function readCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {
 
   let raw: string | null;
   try {
-    raw = window.localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY);
+    raw =
+      window.localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_CUSTOM_THEMES_STORAGE_KEY);
   } catch (cause) {
     return { status: "unavailable", reason: "storage-unavailable", cause };
   }
@@ -267,7 +278,7 @@ export function subscribeToCustomThemes(listener: () => void): () => void {
     return () => customThemeListeners.delete(listener);
   }
   const handleStorage = (event: StorageEvent) => {
-    if (event.key === CUSTOM_THEMES_STORAGE_KEY || event.key === null) {
+    if (event.key === CUSTOM_THEMES_STORAGE_KEY || event.key === LEGACY_CUSTOM_THEMES_STORAGE_KEY || event.key === null) {
       invalidateCustomThemes();
     }
   };
@@ -284,6 +295,7 @@ export function subscribeToCustomThemes(listener: () => void): () => void {
 // old ids stay readable through this alias table.
 const LEGACY_THEME_ID_ALIASES: Readonly<Record<string, string>> = {
   [LEGACY_T3_CHAT_DARK_THEME_ID]: T3_CHAT_THEME_ID,
+  [LEGACY_T3_CHAT_THEME_ID]: T3_CHAT_THEME_ID,
   "t3-grove": GROVE_THEME_ID,
   "t3-ocean": OCEAN_THEME_ID,
   "t3-ember": EMBER_THEME_ID,
@@ -1500,6 +1512,7 @@ function saveCustomThemes(
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(storedThemes));
+    window.localStorage.removeItem(LEGACY_CUSTOM_THEMES_STORAGE_KEY);
     customThemeLibrarySnapshot = { status: "ready", storedThemes, themes };
   } catch (cause) {
     throw new ThemeLibraryStorageError({

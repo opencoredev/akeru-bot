@@ -37,7 +37,8 @@ import {
   mergeGitStatusParts,
   normalizeGitRemoteUrl,
   resolveAutoFeatureBranchName,
-  sanitizeBranchFragment,
+  buildPullRequestWorktreeBranchName,
+  pullRequestWorktreeBranchCandidates,
   sanitizeFeatureBranchName,
 } from "@t3tools/shared/git";
 import {
@@ -221,9 +222,7 @@ function resolvePullRequestWorktreeLocalBranchName(
     return pullRequest.headBranch;
   }
 
-  const sanitizedHeadBranch = sanitizeBranchFragment(pullRequest.headBranch).trim();
-  const suffix = sanitizedHeadBranch.length > 0 ? sanitizedHeadBranch : "head";
-  return `t3code/pr-${pullRequest.number}/${suffix}`;
+  return buildPullRequestWorktreeBranchName(pullRequest.number, pullRequest.headBranch);
 }
 
 function parseGitHubRepositoryNameWithOwnerFromRemoteUrl(url: string | null): string | null {
@@ -1960,13 +1959,15 @@ export const make = Effect.gen(function* () {
         checkedOutBranch: string,
       ) {
         if (checkedOutBranch !== localPullRequestBranch) {
-          // findLocalHeadBranch also accepts a branch that merely shares the head's bare name —
-          // a fork PR opened from "main" matches the user's own local main. That checkout is
-          // somebody else's work, so it keeps its tracking config and nothing else.
+          // findLocalHeadBranch also accepts the legacy `t3code/pr-*` alias and
+          // a branch that merely shares the head's bare name — a fork PR opened
+          // from "main" matches the user's own local main. Those checkouts are
+          // somebody else's (or a legacy alias's) work, so they keep their
+          // tracking config and report the branch actually checked out.
           yield* ensureExistingWorktreeUpstream(worktreePath);
           return {
             pullRequest,
-            branch: localPullRequestBranch,
+            branch: checkedOutBranch,
             worktreePath,
             isOnPullRequestHead: false,
           };
@@ -2048,11 +2049,18 @@ export const make = Effect.gen(function* () {
 
       const findLocalHeadBranch = Effect.fn("findLocalHeadBranch")(function* (cwd: string) {
         const result = yield* gitCore.listRefs({ cwd, refresh: true });
-        const localBranch = result.refs.find(
-          (branch) => !branch.isRemote && branch.name === localPullRequestBranch,
-        );
-        if (localBranch) {
-          return localBranch;
+        // Accept the legacy t3code/pr-* alias so pre-rename worktrees are
+        // reused instead of orphaned by the branch-prefix rename.
+        const candidates = pullRequestWithRemoteInfo.isCrossRepository
+          ? pullRequestWorktreeBranchCandidates(pullRequest.number, pullRequest.headBranch)
+          : [localPullRequestBranch];
+        for (const candidate of candidates) {
+          const localBranch = result.refs.find(
+            (branch) => !branch.isRemote && branch.name === candidate,
+          );
+          if (localBranch) {
+            return localBranch;
+          }
         }
         if (localPullRequestBranch === pullRequest.headBranch) {
           return null;
