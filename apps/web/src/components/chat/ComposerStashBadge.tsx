@@ -1,6 +1,7 @@
 import { BookmarkIcon } from "lucide-react";
 import { memo } from "react";
 
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { ComposerBanner } from "./ComposerBanner";
@@ -21,6 +22,7 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
   pulsing: boolean;
   onToggleMenu: () => void;
 }) {
+  const { t } = useI18n();
   if (props.count === 0) return null;
   const inline = props.placement === "inline";
   const count = (
@@ -42,7 +44,7 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
         size="micro"
         variant="ghost-muted"
         data-prompt-stash-badge="true"
-        aria-label={`Stashed prompts: ${props.count}. Open stash.`}
+        aria-label={t("Stashed prompts: {count}. Open stash.", { count: props.count })}
         aria-expanded={props.menuOpen}
         className={cn(
           "shrink-0 gap-1 px-1.5",
@@ -63,7 +65,7 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
       <ComposerBanner.Row
         render={<button type="button" />}
         data-prompt-stash-badge="true"
-        aria-label={`Stashed prompts: ${props.count}. Open stash.`}
+        aria-label={t("Stashed prompts: {count}. Open stash.", { count: props.count })}
         aria-expanded={props.menuOpen}
         className={cn(
           "transition-colors duration-200",
@@ -78,7 +80,7 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
         <ComposerBanner.Icon>
           <BookmarkIcon />
         </ComposerBanner.Icon>
-        <ComposerBanner.Content>Stash</ComposerBanner.Content>
+        <ComposerBanner.Content>{t("Stash")}</ComposerBanner.Content>
         <ComposerBanner.Actions>{count}</ComposerBanner.Actions>
       </ComposerBanner.Row>
     </ComposerBanner.Root>

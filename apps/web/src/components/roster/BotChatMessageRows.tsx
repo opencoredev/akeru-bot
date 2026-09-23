@@ -12,6 +12,7 @@ import type { ReplyPlaybackSession } from "@t3tools/client-runtime/reply-playbac
 import { SmilePlusIcon } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 
+import { useI18n } from "~/i18n";
 import { replyPlaybackControlProps } from "~/lib/replyPlaybackThread";
 import { cn } from "~/lib/utils";
 import { botEnvironment } from "../../state/bots";
@@ -41,7 +42,6 @@ const NO_ENVIRONMENT = "" as EnvironmentId;
 // Held open while a control's menu is, so the controls never slip out from under the pointer.
 const HOVER_CONTROLS_CLASS =
   "opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 has-[[aria-expanded=true]]:opacity-100 has-[[data-popup-open]]:opacity-100 max-md:opacity-100";
-const REACTION_UNAVAILABLE_REASON = "Reactions are unavailable until this chat is ready";
 // Offscreen rows skip layout and paint; the intrinsic size keeps the scrollbar steady.
 const ROW_VISIBILITY_CLASS = "[content-visibility:auto] [contain-intrinsic-size:auto_96px]";
 
@@ -67,6 +67,7 @@ export interface ChannelApprovalTarget {
 
 /** A stable reaction updater for memoized rows; it only changes with the linked thread. */
 export function useMessageReactionUpdater(threadRef: ScopedThreadRef | null) {
+  const { t } = useI18n();
   const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
     reportFailure: false,
   });
@@ -82,19 +83,19 @@ export function useMessageReactionUpdater(threadRef: ScopedThreadRef | null) {
         if (current && current !== next) {
           const removed = await dispatch(current, false);
           if (removed._tag === "Failure") {
-            toastManager.add({ type: "error", title: "Could not update reaction" });
+            toastManager.add({ type: "error", title: t("Could not update reaction") });
             return;
           }
         }
         if (next) {
           const added = await dispatch(next, true);
           if (added._tag === "Failure") {
-            toastManager.add({ type: "error", title: "Could not update reaction" });
+            toastManager.add({ type: "error", title: t("Could not update reaction") });
           }
         }
       })();
     },
-    [setMessageReaction, threadRef],
+    [setMessageReaction, t, threadRef],
   );
 }
 
@@ -103,12 +104,14 @@ function UnavailableReactionControl({
 }: {
   readonly selectedReaction: MessageReactionOption | null;
 }) {
+  const { t } = useI18n();
+  const unavailableReason = t("Reactions are unavailable until this chat is ready");
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
-            aria-label={REACTION_UNAVAILABLE_REASON}
+            aria-label={unavailableReason}
             className="disabled:pointer-events-auto"
             disabled
             size="icon-xs"
@@ -124,7 +127,7 @@ function UnavailableReactionControl({
           <SmilePlusIcon className="size-3.5" />
         )}
       </TooltipTrigger>
-      <TooltipPopup side="top">{REACTION_UNAVAILABLE_REASON}</TooltipPopup>
+      <TooltipPopup side="top">{unavailableReason}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -177,6 +180,7 @@ export function ChannelSendApproval({
   readonly messageId: MessageId;
   readonly sent: boolean;
 }) {
+  const { t } = useI18n();
   const send = useAtomCommand(botEnvironment.channels.send, { reportFailure: false });
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -185,7 +189,9 @@ export function ChannelSendApproval({
   return (
     <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
       <span className="min-w-0 flex-1 text-muted-foreground">
-        {delivered ? `Sent to ${label}` : `Send this reply to ${label}?`}
+        {delivered
+          ? t("Sent to {channel}", { channel: label })
+          : t("Send this reply to {channel}?", { channel: label })}
       </span>
       {!delivered ? (
         <Button
@@ -199,14 +205,17 @@ export function ChannelSendApproval({
             }).then((result) => {
               setBusy(false);
               if (result._tag === "Failure") {
-                toastManager.add({ type: "error", title: `Could not send to ${label}` });
+                toastManager.add({
+                  type: "error",
+                  title: t("Could not send to {channel}", { channel: label }),
+                });
               } else {
                 setSubmitted(true);
               }
             });
           }}
         >
-          {busy ? "Sending" : "Send"}
+          {busy ? t("Sending…") : t("Send")}
         </Button>
       ) : null}
     </div>
@@ -253,6 +262,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   onReply,
   onReactionChange,
 }: AssistantMessageRowProps) {
+  const { t } = useI18n();
   const readAloud = replyPlaybackControlProps(playback, message);
   const copyText = message.text || "Attachment";
   const label = author?.name ?? "Unavailable bot";
@@ -265,7 +275,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
         className={`group/message mt-3 max-w-[85%] first:mt-0 ${ROW_VISIBILITY_CLASS}`}
         data-testid={testId}
       >
-        <div className="text-sm font-medium">{label}</div>
+        <div className="text-sm font-medium">{t("Unavailable bot")}</div>
         {markdown}
         <div className={`mt-0.5 flex ${HOVER_CONTROLS_CLASS}`}>
           <MessageControls

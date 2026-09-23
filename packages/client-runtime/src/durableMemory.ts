@@ -16,13 +16,32 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
+import {
+  createTranslator,
+  type MessageKey,
+  type PluralForms,
+  type TranslationParams,
+} from "./i18n/index.ts";
+
+/**
+ * The part of a client translator the shared memory copy needs. Web and mobile pass the
+ * translator from their language provider; plain code outside React may omit it for English.
+ * Every label constant in this module is a catalog key, so callers render it with `t(label)`.
+ */
+export interface DurableMemoryTranslator {
+  readonly t: (message: MessageKey, params?: TranslationParams) => string;
+  readonly plural: (count: number, forms: PluralForms, params?: TranslationParams) => string;
+}
+
+const englishTranslator: DurableMemoryTranslator = createTranslator("en");
+
 /** Durable-archive scopes a client offers. Workspace stays internal to project-level memory. */
 export type DurableMemoryExportScope = Exclude<AkeruMemoryArchiveTarget, "workspace">;
 
 export const DURABLE_MEMORY_EXPORT_SCOPES: ReadonlyArray<{
   readonly scope: DurableMemoryExportScope;
-  readonly label: string;
-  readonly description: string;
+  readonly label: MessageKey;
+  readonly description: MessageKey;
 }> = [
   { scope: "thread", label: "This chat", description: "Facts saved only for this chat." },
   { scope: "bot", label: "This bot", description: "Facts this bot keeps about you and its work." },
@@ -39,7 +58,7 @@ export const DURABLE_MEMORY_INSPECT_SCOPES = DURABLE_MEMORY_EXPORT_SCOPES.filter
   (option) => option.scope !== "all",
 );
 
-export const DURABLE_MEMORY_SCOPE_LABELS: Readonly<Record<AkeruMemoryScope, string>> = {
+export const DURABLE_MEMORY_SCOPE_LABELS: Readonly<Record<AkeruMemoryScope, MessageKey>> = {
   user: "You",
   "bot-user": "Bot, about you",
   bot: "Bot",
@@ -49,13 +68,17 @@ export const DURABLE_MEMORY_SCOPE_LABELS: Readonly<Record<AkeruMemoryScope, stri
   thread: "Chat",
 };
 
-export const DURABLE_MEMORY_APPROVAL_LABELS: Readonly<Record<AkeruMemoryApprovalState, string>> = {
+export const DURABLE_MEMORY_APPROVAL_LABELS: Readonly<
+  Record<AkeruMemoryApprovalState, MessageKey>
+> = {
   pending: "Waiting for approval",
   approved: "Approved",
   rejected: "Rejected",
 };
 
-export const DURABLE_MEMORY_DELETION_LABELS: Readonly<Record<AkeruMemoryDeletionState, string>> = {
+export const DURABLE_MEMORY_DELETION_LABELS: Readonly<
+  Record<AkeruMemoryDeletionState, MessageKey>
+> = {
   active: "Active",
   tombstoned: "Forgotten",
   deleted: "Deleted",
@@ -69,7 +92,7 @@ export const IMPORT_CLASSIFICATION_ORDER: ReadonlyArray<AkeruMemoryImportClassif
 ];
 
 export const IMPORT_CLASSIFICATION_LABELS: Readonly<
-  Record<AkeruMemoryImportClassification, string>
+  Record<AkeruMemoryImportClassification, MessageKey>
 > = {
   conflicting: "Conflicts",
   new: "New",
@@ -134,7 +157,7 @@ export function durableFactsFromArchive(archive: AkeruMemoryArchiveV2) {
 /** Where a fact can be moved, labeled as the action. Group and workspace scopes stay server-managed. */
 export const DURABLE_FACT_MOVE_SCOPES: ReadonlyArray<{
   readonly scope: AkeruMemoryTargetScope;
-  readonly label: string;
+  readonly label: MessageKey;
 }> = [
   { scope: "private", label: "Make private" },
   { scope: "bot", label: "Move to this bot" },
@@ -176,7 +199,7 @@ export function durableFactMoveScopes(
 /** Why a fact list offers no actions, or null when the client can change facts. */
 export function durableFactReadOnlyReason(
   policy: Pick<DurableFactPolicy, "canOperate" | "memoryEnabled">,
-): string | null {
+): MessageKey | null {
   if (!policy.memoryEnabled) return "Memory is off. Turn it on in settings to change facts.";
   if (!policy.canOperate) return "This connection can read memory but not change it.";
   return null;
@@ -189,10 +212,11 @@ export function durableFactSourceLabel(
     readonly currentThreadId: string | null;
     readonly threadTitles: ReadonlyMap<string, string>;
   },
+  i18n: DurableMemoryTranslator = englishTranslator,
 ) {
   if (fact.sourceThreadId === null) return null;
-  if (fact.sourceThreadId === input.currentThreadId) return "this chat";
-  return input.threadTitles.get(fact.sourceThreadId)?.trim() || "another chat";
+  if (fact.sourceThreadId === input.currentThreadId) return i18n.t("this chat");
+  return input.threadTitles.get(fact.sourceThreadId)?.trim() || i18n.t("another chat");
 }
 
 /** Names the bots a fact affects without exposing their ids, or null when it names none. */
@@ -202,29 +226,35 @@ export function durableFactBotsLabel(
     readonly currentBotId: string | null;
     readonly botNames: ReadonlyMap<string, string>;
   },
+  i18n: DurableMemoryTranslator = englishTranslator,
 ): string | null {
   const labels: string[] = [];
   let unknown = 0;
   for (const botId of fact.affectedBotIds) {
-    if (botId === input.currentBotId) labels.push("this bot");
+    if (botId === input.currentBotId) labels.push(i18n.t("this bot"));
     else {
       const name = input.botNames.get(botId)?.trim();
       if (name) labels.push(name);
       else unknown += 1;
     }
   }
-  if (unknown === 1) labels.push("another bot");
-  if (unknown > 1) labels.push(`${unknown} other bots`);
-  return labels.length > 0 ? labels.join(", ") : null;
+  if (unknown > 0) {
+    labels.push(
+      unknown === 1 ? i18n.t("another bot") : i18n.t("{count} other bots", { count: unknown }),
+    );
+  }
+  return labels.length > 0 ? labels.join(i18n.t(", ")) : null;
 }
 
 /** Confirmation copy for permanently deleting a fact, shared by every client. */
-export const DURABLE_FACT_DELETE_CONFIRM = {
+export const DURABLE_FACT_DELETE_CONFIRM: Readonly<
+  Record<"title" | "message" | "confirm" | "cancel", MessageKey>
+> = {
   title: "Delete this fact for good?",
   message: "It can't be restored.",
   confirm: "Delete for good",
   cancel: "Keep",
-} as const;
+};
 
 export type DurableFactIntent =
   | { readonly action: "edit"; readonly fact: string }
@@ -286,22 +316,26 @@ export function canSaveDurableFactEdit(fact: Pick<DurableMemoryFact, "fact">, dr
   return next.length > 0 && next !== fact.fact;
 }
 
-export const DURABLE_FACT_CONFLICT_MESSAGE =
+export const DURABLE_FACT_CONFLICT_MESSAGE: MessageKey =
   "This fact changed somewhere else. The latest version is shown now.";
 
 /**
- * Plain copy for a failed fact mutation. `conflict` tells the caller its copy is stale;
- * the command already refreshes the lists, so the latest version arrives on its own.
+ * Plain copy for a failed fact mutation. `message` is a catalog key; `detail` is the raw
+ * server text for failures without a stable meaning, shown as received next to it.
+ * `conflict` tells the caller its copy is stale; the command already refreshes the lists,
+ * so the latest version arrives on its own.
  */
 export function describeDurableFactFailure(cause: unknown): {
   readonly conflict: boolean;
-  readonly message: string;
+  readonly message: MessageKey;
+  readonly detail: string | null;
 } {
   const tag = typeof cause === "object" && cause !== null && "_tag" in cause ? cause._tag : null;
   if (tag === "EnvironmentAuthorizationError") {
     return {
       conflict: false,
       message: "This connection can read memory but not change it.",
+      detail: null,
     };
   }
   const detail =
@@ -311,19 +345,20 @@ export function describeDurableFactFailure(cause: unknown): {
         ? cause.message
         : null;
   if (detail?.includes("revision conflict")) {
-    return { conflict: true, message: DURABLE_FACT_CONFLICT_MESSAGE };
+    return { conflict: true, message: DURABLE_FACT_CONFLICT_MESSAGE, detail: null };
   }
-  return { conflict: false, message: detail || "The fact could not be updated." };
+  return { conflict: false, message: "The fact could not be updated.", detail: detail || null };
 }
 
 /**
  * Shared project memory has two modes, so every client shows it as one switch:
  * on saves automatically, off asks first.
  */
-export const SHARED_PROJECT_MEMORY_SETTING = {
-  label: "Save shared project memory automatically",
-  description: "When off, facts shared with a project wait for your approval.",
-} as const;
+export const SHARED_PROJECT_MEMORY_SETTING: Readonly<Record<"label" | "description", MessageKey>> =
+  {
+    label: "Save shared project memory automatically",
+    description: "When off, facts shared with a project wait for your approval.",
+  };
 
 export const sharedProjectMemoryAutoSaves = (mode: SharedProjectMemorySaveMode) => mode === "auto";
 
@@ -331,7 +366,7 @@ export const sharedProjectMemoryMode = (autoSave: boolean): SharedProjectMemoryS
   autoSave ? "auto" : "ask";
 
 /** Hint for memory settings that do nothing while Memory itself is off. */
-export const MEMORY_SETTING_DISABLED_HINT = "Turn on Memory to change this.";
+export const MEMORY_SETTING_DISABLED_HINT: MessageKey = "Turn on Memory to change this.";
 
 export type ImportConflictDecision = "keep-local" | "use-archive";
 

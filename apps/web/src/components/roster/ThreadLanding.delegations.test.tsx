@@ -63,6 +63,11 @@ vi.mock("@effect/atom-react", () => ({
         : [],
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
 vi.mock("../../modelSelection", () => ({
   getCustomModelOptionsByInstance: () => new Map(),

@@ -10,7 +10,9 @@ import {
   createNativeStackScreen,
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { useMobileI18n } from "./lib/i18n";
+import { NativeStackScreenOptions } from "./native/StackHeader";
 import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useResolveClassNames } from "uniwind";
 
@@ -133,8 +135,40 @@ const LEGAL_DOCUMENT_HEADER_OPTIONS: AppScreenOptions = {
   presentation: "fullScreenModal",
 };
 
+function SettingsNavigationLayout({
+  children,
+  routeName,
+}: {
+  readonly children: ReactNode;
+  readonly routeName: string;
+}) {
+  const { t } = useMobileI18n();
+  const titles: Readonly<Record<string, string>> = {
+    Settings: t("Settings"),
+    SettingsEnvironments: t("Environments"),
+    SettingsEnvironmentNew: t("Add Environment"),
+    SettingsArchive: t("Archived chats"),
+    SettingsAppearance: t("Appearance"),
+    SettingsProjectGrouping: t("Project Grouping"),
+    SettingsClientStorage: t("Client Storage"),
+    SettingsUsage: t("Usage"),
+    SettingsBotUsage: t("Bot usage"),
+    SettingsProviderHealth: t("Settings"),
+  };
+  const title = titles[routeName];
+  return (
+    <>
+      {title === undefined ? null : <NativeStackScreenOptions options={{ title }} />}
+      {children}
+    </>
+  );
+}
+
 const SettingsContentStack = createNativeStackNavigator({
   initialRouteName: "Settings",
+  screenLayout: ({ children, route }) => (
+    <SettingsNavigationLayout routeName={route.name}>{children}</SettingsNavigationLayout>
+  ),
   screenOptions: {
     ...GLASS_HEADER_OPTIONS,
     // Sheets read better with the iOS-default centered title (no editor style).

@@ -85,6 +85,11 @@ vi.mock("./rosterStore", () => ({
 }));
 vi.mock("./useBotThreadRef", () => ({ useBotThreadRef: () => null }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
 
 import { BotSettingsPage } from "./BotSettingsPage";
 

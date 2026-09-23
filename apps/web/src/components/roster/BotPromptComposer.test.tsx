@@ -2,6 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { visitElements } from "../../test/reactElementTree";
+
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -177,14 +183,14 @@ describe("bot prompt composer", () => {
         botName="Akeru"
         disabled={false}
         pendingActionSlot={<div data-testid="pending-question">Question</div>}
-        placeholder="Write a custom answer..."
+        placeholder="Write a custom answer…"
         onSubmit={vi.fn(async () => true)}
       />,
     );
 
     expect(markup).toContain('data-testid="pending-question"');
     expect(markup).toContain('data-testid="bot-pending-action-motion"');
-    expect(markup).toContain('placeholder="Write a custom answer..."');
+    expect(markup).toContain('placeholder="Write a custom answer…"');
     expect(markup).toContain("rounded-t-md border-t-transparent");
   });
 

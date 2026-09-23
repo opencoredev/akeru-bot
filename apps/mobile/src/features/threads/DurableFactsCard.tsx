@@ -22,32 +22,42 @@ import {
   durableFactReadOnlyReason,
   durableFactSourceLabel,
 } from "@t3tools/client-runtime/durable-memory";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
+import { useMobileI18n } from "../../lib/i18n";
 
-function formatTime(value: string) {
+type MobileI18n = ReturnType<typeof useMobileI18n>;
+
+const TIME_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" };
+
+function formatTime(value: string, i18n: MobileI18n) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : i18n.formatDate(date, TIME_FORMAT);
 }
 
-function factStatus(fact: DurableMemoryFact) {
+function factStatus(fact: DurableMemoryFact, i18n: MobileI18n) {
   return [
-    DURABLE_MEMORY_APPROVAL_LABELS[fact.approvalState],
-    fact.deletionState === "active" ? null : DURABLE_MEMORY_DELETION_LABELS[fact.deletionState],
-    fact.pinned ? "Pinned" : null,
+    i18n.t(DURABLE_MEMORY_APPROVAL_LABELS[fact.approvalState]),
+    fact.deletionState === "active"
+      ? null
+      : i18n.t(DURABLE_MEMORY_DELETION_LABELS[fact.deletionState]),
+    fact.pinned ? i18n.t("Pinned") : null,
   ]
     .filter((part) => part !== null)
-    .join(", ");
+    .join(i18n.t(", "));
 }
 
-const SIMPLE_ACTION_LABELS = {
+const SIMPLE_ACTION_LABELS: Readonly<
+  Record<"pin" | "unpin" | "approve" | "reject" | "forget", MessageKey>
+> = {
   pin: "Pin",
   unpin: "Unpin",
   approve: "Approve",
   reject: "Reject",
   forget: "Forget",
-} as const;
+};
 
 function ActionButton(props: {
   readonly label: string;
@@ -84,6 +94,7 @@ function factActionButtons(
     readonly onStartEdit: (fact: DurableMemoryFact) => void;
     readonly onRequestDelete: (fact: DurableMemoryFact) => void;
   },
+  t: MobileI18n["t"],
 ) {
   return durableFactActions(fact, props.policy).flatMap((action) => {
     switch (action) {
@@ -91,7 +102,7 @@ function factActionButtons(
         return [
           <ActionButton
             key="edit"
-            label="Edit"
+            label={t("Edit")}
             disabled={props.busy}
             onPress={() => props.onStartEdit(fact)}
           />,
@@ -100,7 +111,7 @@ function factActionButtons(
         return durableFactMoveScopes(fact, props.policy).map((option) => (
           <ActionButton
             key={`move:${option.scope}`}
-            label={option.label}
+            label={t(option.label)}
             disabled={props.busy}
             onPress={() => props.onIntent(fact, { action: "move", scope: option.scope })}
           />
@@ -109,7 +120,7 @@ function factActionButtons(
         return [
           <ActionButton
             key="delete"
-            label="Delete"
+            label={t("Delete")}
             destructive
             disabled={props.busy}
             onPress={() => props.onRequestDelete(fact)}
@@ -119,7 +130,7 @@ function factActionButtons(
         return [
           <ActionButton
             key={action}
-            label={SIMPLE_ACTION_LABELS[action]}
+            label={t(SIMPLE_ACTION_LABELS[action])}
             disabled={props.busy}
             onPress={() => props.onIntent(fact, { action })}
           />,
@@ -155,13 +166,15 @@ export function DurableFactsCard(props: {
   /** Asks the user to confirm; the card never deletes on its own. */
   readonly onRequestDelete: (fact: DurableMemoryFact) => void;
 }) {
+  const i18n = useMobileI18n();
+  const { t } = i18n;
   const busy = props.busyRootId !== null;
   const readOnlyReason = props.policy ? durableFactReadOnlyReason(props.policy) : null;
   return (
     <View className="gap-3 rounded-2xl bg-card p-4">
-      <Text className="font-t3-bold text-foreground">Durable facts</Text>
+      <Text className="font-t3-bold text-foreground">{t("Durable facts")}</Text>
       <Text className="text-xs text-foreground-muted">
-        Facts kept beyond this chat. Clearing observations does not remove them.
+        {t("Facts kept beyond this chat. Clearing observations does not remove them.")}
       </Text>
       <View accessibilityRole="tablist" className="flex-row flex-wrap gap-2">
         {DURABLE_MEMORY_INSPECT_SCOPES.map((option) => {
@@ -185,18 +198,20 @@ export function DurableFactsCard(props: {
                     : "text-xs font-t3-medium text-foreground"
                 }
               >
-                {option.label}
+                {t(option.label)}
               </Text>
             </Pressable>
           );
         })}
       </View>
       {props.error ? (
-        <Text className="text-sm text-destructive">Durable facts unavailable.</Text>
+        <Text className="text-sm text-destructive">{t("Durable facts unavailable.")}</Text>
       ) : props.isPending && !props.facts ? (
-        <Text className="text-sm text-foreground-muted">Loading durable facts…</Text>
+        <Text className="text-sm text-foreground-muted">{t("Loading durable facts…")}</Text>
       ) : props.facts && props.facts.length === 0 ? (
-        <Text className="text-sm text-foreground-muted">No durable facts in this scope yet.</Text>
+        <Text className="text-sm text-foreground-muted">
+          {t("No durable facts in this scope yet.")}
+        </Text>
       ) : null}
       {props.failure ? (
         <Text accessibilityRole="alert" className="text-sm text-destructive">
@@ -213,16 +228,25 @@ export function DurableFactsCard(props: {
               durableFactActions(fact, props.policy).includes("edit")
                 ? props.editing
                 : null;
-            const sourceLabel = durableFactSourceLabel(fact, {
-              currentThreadId: props.currentThreadId,
-              threadTitles: props.threadTitles,
-            });
+            const source = durableFactSourceLabel(
+              fact,
+              { currentThreadId: props.currentThreadId, threadTitles: props.threadTitles },
+              i18n,
+            );
+            const bots =
+              durableFactBotsLabel(
+                fact,
+                { currentBotId: props.currentBotId, botNames: props.botNames },
+                i18n,
+              ) ?? t("none");
+            const created = formatTime(fact.createdAt, i18n);
+            const updated = formatTime(fact.updatedAt, i18n);
             return (
               <View key={fact.rootId} className="gap-1 border-t border-border-subtle pt-3">
                 {editing ? (
                   <View className="gap-2">
                     <TextInput
-                      accessibilityLabel="Edit fact"
+                      accessibilityLabel={t("Edit fact")}
                       className="min-h-16 rounded-xl border border-border px-3 py-2 text-sm text-foreground"
                       editable={!busy}
                       multiline
@@ -231,13 +255,17 @@ export function DurableFactsCard(props: {
                     />
                     <View className="flex-row gap-2">
                       <ActionButton
-                        label="Save"
+                        label={t("Save")}
                         disabled={busy || !canSaveDurableFactEdit(fact, editing.draft)}
                         onPress={() =>
                           props.onIntent(fact, { action: "edit", fact: editing.draft })
                         }
                       />
-                      <ActionButton label="Cancel" disabled={busy} onPress={props.onCancelEdit} />
+                      <ActionButton
+                        label={t("Cancel")}
+                        disabled={busy}
+                        onPress={props.onCancelEdit}
+                      />
                     </View>
                   </View>
                 ) : (
@@ -253,47 +281,48 @@ export function DurableFactsCard(props: {
                 )}
                 {fact.supersededFact ? (
                   <Text className="text-xs text-foreground-muted">
-                    Replaced: {fact.supersededFact}
+                    {t("Replaced: {fact}", { fact: fact.supersededFact })}
                   </Text>
                 ) : null}
                 <Text className="text-xs text-foreground-muted">
-                  {DURABLE_MEMORY_SCOPE_LABELS[fact.scope]} · {factStatus(fact)}
+                  {t(DURABLE_MEMORY_SCOPE_LABELS[fact.scope])} · {factStatus(fact, i18n)}
                 </Text>
                 <Text className="text-xs text-foreground-muted">
-                  {sourceLabel === null ? "" : `From ${sourceLabel} · `}
-                  {"Bots: "}
-                  {durableFactBotsLabel(fact, {
-                    currentBotId: props.currentBotId,
-                    botNames: props.botNames,
-                  }) ?? "none"}
+                  {source === null
+                    ? t("Bots: {bots}", { bots })
+                    : t("From {source} · Bots: {bots}", { source, bots })}
                 </Text>
                 <Text className="text-xs text-foreground-muted">
-                  Created {formatTime(fact.createdAt)} · Updated {formatTime(fact.updatedAt)}
+                  {t("Created {created} · Updated {updated}", { created, updated })}
                 </Text>
                 {props.busyRootId === fact.rootId ? (
                   <Text accessibilityLiveRegion="polite" className="text-xs text-foreground-muted">
-                    Saving…
+                    {t("Saving…")}
                   </Text>
                 ) : null}
                 {editing || !props.policy ? null : (
                   <View className="flex-row flex-wrap gap-2 pt-1">
-                    {factActionButtons(fact, {
-                      busy,
-                      policy: props.policy,
-                      onIntent: props.onIntent,
-                      onStartEdit: props.onStartEdit,
-                      onRequestDelete: props.onRequestDelete,
-                    })}
+                    {factActionButtons(
+                      fact,
+                      {
+                        busy,
+                        policy: props.policy,
+                        onIntent: props.onIntent,
+                        onStartEdit: props.onStartEdit,
+                        onRequestDelete: props.onRequestDelete,
+                      },
+                      t,
+                    )}
                   </View>
                 )}
               </View>
             );
           })}
       {readOnlyReason && !props.error ? (
-        <Text className="text-xs text-foreground-muted">{readOnlyReason}</Text>
+        <Text className="text-xs text-foreground-muted">{t(readOnlyReason)}</Text>
       ) : null}
       <Text className="text-xs text-foreground-muted">
-        Export or import durable facts from the desktop or web app.
+        {t("Export or import durable facts from the desktop or web app.")}
       </Text>
     </View>
   );

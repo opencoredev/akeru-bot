@@ -30,6 +30,7 @@ import {
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
+import { useMobileI18n } from "../lib/i18n";
 import { buildThreadFeed, unchangedPrefixLength } from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import { appAtomRegistry } from "../state/atom-registry";
@@ -87,6 +88,7 @@ export function useThreadDraftForThread(input: {
 }
 
 export function useThreadComposerState() {
+  const { t } = useMobileI18n();
   const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
@@ -209,7 +211,7 @@ export function useThreadComposerState() {
         : null;
     if (feedbackCommand) {
       if (thread.session === null) {
-        Alert.alert("Start a Codex chat first", "Send a message before you submit feedback.");
+        Alert.alert(t("Start a Codex chat first"), t("Send a message before you submit feedback."));
         return null;
       }
       const metadata = makeQueuedMessageMetadata();
@@ -247,16 +249,16 @@ export function useThreadComposerState() {
         }
         const error = Cause.squash(result.cause);
         Alert.alert(
-          "Could not send feedback to OpenAI",
-          error instanceof Error ? error.message : "An error occurred.",
+          t("Could not send feedback to OpenAI"),
+          error instanceof Error ? error.message : t("An error occurred."),
         );
         return null;
       }
       const feedbackId = result.value.feedbackId;
-      Alert.alert("Feedback sent to OpenAI", `Thread ID: ${feedbackId}`, [
-        { text: "OK", style: "cancel" },
+      Alert.alert(t("Feedback sent to OpenAI"), t("Thread ID: {id}", { id: feedbackId }), [
+        { text: t("OK"), style: "cancel" },
         {
-          text: "Copy ID",
+          text: t("Copy ID"),
           onPress: () => copyTextWithHaptic(feedbackId, { target: "Codex feedback thread ID" }),
         },
       ]);
@@ -299,6 +301,7 @@ export function useThreadComposerState() {
     selectedEnvironmentRuntime?.serverConfig?.providers,
     selectedThreadDetail,
     selectedThreadShell,
+    t,
     uploadThreadFeedback,
   ]);
 

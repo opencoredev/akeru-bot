@@ -1,5 +1,7 @@
 import type { SubscriptionAuthStatuses } from "@t3tools/contracts";
 
+import type { MessageKey } from "./i18n/index.ts";
+
 export type BotInboxItem = SubscriptionAuthStatuses["inbox"][number];
 
 export function selectOpenBotInboxItems(
@@ -11,7 +13,7 @@ export function selectOpenBotInboxItems(
     .toSorted((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
 }
 
-export function botInboxKindLabel(kind: BotInboxItem["kind"]): string {
+export function botInboxKindLabel(kind: BotInboxItem["kind"]): MessageKey {
   switch (kind) {
     case "silence-watchdog-failure":
       return "Bot stopped responding";

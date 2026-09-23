@@ -39,10 +39,10 @@ describe("bot settings page", () => {
   it("groups the bot's own settings into named sections", () => {
     const source = read("./BotSettingsPage.tsx");
 
-    expect(source).toContain('title="Bot"');
-    expect(source).toContain('title="Voice and personality"');
-    expect(source).toContain('title="Model"');
-    expect(source).toContain('title="Workspace"');
+    expect(source).toContain('title={t("Bot")}');
+    expect(source).toContain('title={t("Voice and personality")}');
+    expect(source).toContain('title={t("Model")}');
+    expect(source).toContain('title={t("Workspace")}');
   });
 
   it("saves through the shared bot update command", () => {
@@ -52,8 +52,8 @@ describe("bot settings page", () => {
     expect(source).toContain("botId: BotId.make(bot.id)");
     // The draft hook builds the payload, so the page cannot invent a shape.
     expect(source).toContain("useBotProfileDraft(bot, onSave)");
-    expect(source).toContain('title: "Could not save bot settings"');
-    expect(source).toContain('title: "Bot settings saved"');
+    expect(source).toContain('title: t("Could not save bot settings")');
+    expect(source).toContain('title: t("Bot settings saved")');
   });
 
   it("reports saving, saved, and unsaved state from the shared draft", () => {
@@ -63,14 +63,14 @@ describe("bot settings page", () => {
     expect(source).toContain("draft.saved");
     expect(source).toContain("draft.dirty");
     expect(source).toContain("disabled={!draft.canSave || draft.saving}");
-    expect(source).toContain('{draft.saving ? "Saving" : "Save"}');
+    expect(source).toContain('{draft.saving ? t("Saving") : t("Save")}');
   });
 
   it("protects unsaved settings from app navigation and page unload", () => {
     const source = read("./BotSettingsPage.tsx");
 
     expect(source).toContain("useBlocker({");
-    expect(source).toContain('requestConfirmDialog("Discard unsaved bot settings?"');
+    expect(source).toContain('requestConfirmDialog(t("Discard unsaved bot settings?")');
     expect(source).toContain("enableBeforeUnload: () => draft.dirty");
     expect(source).toContain("disabled: !draft.dirty");
   });
@@ -118,7 +118,7 @@ describe("bot settings entry points", () => {
     const route = read("../../routes/_chat.bots.$botId.tsx");
 
     expect(panel).toContain(
-      "botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone))",
+      "botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone), t)",
     );
     expect(panel).toContain("Open bot settings");
     expect(panel).not.toContain("<BotModelPicker");

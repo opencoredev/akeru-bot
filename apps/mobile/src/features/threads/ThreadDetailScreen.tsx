@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
@@ -263,6 +264,7 @@ const ThreadDraftComposer = memo(function ThreadDraftComposer(
 });
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
@@ -737,7 +739,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                     }}
                   >
                     <ControlPill
-                      accessibilityLabel="Scroll to end"
+                      accessibilityLabel={t("Scroll to end")}
                       activateOnPressIn
                       className="h-9 w-9 bg-transparent"
                       icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
@@ -746,7 +748,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   </LiquidGlassView>
                 ) : (
                   <ControlPill
-                    accessibilityLabel="Scroll to end"
+                    accessibilityLabel={t("Scroll to end")}
                     activateOnPressIn
                     className="h-9 w-9 border border-border bg-card shadow-md shadow-black/10"
                     icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
@@ -827,7 +829,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               <ThreadDraftComposer
                 threadId={props.selectedThread.id}
                 editorRef={composerEditorRef}
-                placeholder="Message, or run a command…"
+                placeholder={t("Message, or run a commandâ¦")}
                 contentMaxWidth={contentMaxWidth}
                 connectionState={props.connectionStateLabel}
                 connectionError={props.connectionError}

@@ -10,6 +10,12 @@ vi.mock("react-native", () => ({
   Pressable: "button",
 }));
 
+vi.mock("../../lib/i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
+});
+
 import { DurableFactsCard } from "./DurableFactsCard";
 
 const fact = {

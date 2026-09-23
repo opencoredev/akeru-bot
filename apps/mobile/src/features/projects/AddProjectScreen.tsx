@@ -17,9 +17,10 @@ import {
   type AddProjectRemoteSource,
 } from "@t3tools/client-runtime/operations/projects";
 import {
-  connectionStatusText,
+  type ConnectionFailureCode,
   type EnvironmentConnectionPhase,
 } from "@t3tools/client-runtime/connection";
+import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
 import {
   canPreloadBrowsePath,
   createBrowseNavigationCoordinator,
@@ -42,6 +43,7 @@ import * as Cause from "effect/Cause";
 import * as Order from "effect/Order";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { cn } from "../../lib/cn";
+import { useMobileI18n } from "../../lib/i18n";
 
 import { useProjects, useServerConfigs } from "../../state/entities";
 import { filesystemEnvironment } from "../../state/filesystem";
@@ -69,6 +71,7 @@ interface EnvironmentOption {
   readonly baseDirectory: string | null;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
+  readonly connectionErrorCode: ConnectionFailureCode | null;
   readonly connectionErrorTraceId: string | null;
 }
 
@@ -355,6 +358,7 @@ function useEnvironmentOptions(): ReadonlyArray<EnvironmentOption> {
         baseDirectory: config?.settings.addProjectBaseDirectory ?? null,
         connectionState: runtime?.connectionState ?? "available",
         connectionError: runtime?.connectionError ?? null,
+        connectionErrorCode: runtime?.connectionErrorCode ?? null,
         connectionErrorTraceId: runtime?.connectionErrorTraceId ?? null,
       };
     });
@@ -453,6 +457,7 @@ function SourceControlRow(props: {
 }
 
 export function AddProjectSourceScreen() {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const accentColor = useThemeColor("--color-icon-muted");
   const iconColor = useThemeColor("--color-icon");
@@ -486,10 +491,9 @@ export function AddProjectSourceScreen() {
                 subtitle={
                   canCreateProjectInEnvironment(environment.connectionState)
                     ? environment.environmentId
-                    : connectionStatusText({
+                    : translateConnectionStatus(t, {
                         phase: environment.connectionState,
-                        error: environment.connectionError,
-                        traceId: environment.connectionErrorTraceId,
+                        errorCode: environment.connectionErrorCode,
                       })
                 }
                 icon={
@@ -568,6 +572,7 @@ export function AddProjectSourceScreen() {
 }
 
 function useCreateProject(environment: EnvironmentOption | null) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
   const projects = useProjects();
@@ -582,7 +587,7 @@ function useCreateProject(environment: EnvironmentOption | null) {
         path: workspaceRoot,
       });
       if (existing) {
-        Alert.alert("Project already exists", existing.title);
+        Alert.alert(t("Project already exists"), existing.title);
         navigation.dispatch(
           CommonActions.reset({
             index: 0,
@@ -632,7 +637,7 @@ function useCreateProject(environment: EnvironmentOption | null) {
       );
       return result;
     },
-    [createProject, environment, projects, navigation],
+    [createProject, environment, projects, navigation, t],
   );
 }
 

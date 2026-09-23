@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   StackActions,
@@ -84,6 +85,7 @@ function deriveProjectEmptyState(catalogState: WorkspaceState): {
 }
 
 export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRouteParams | undefined>) {
+  const { t } = useMobileI18n();
   const projects = useProjects();
   const { projectScopes, selectedEnvironmentId, setProject } = useNewTaskFlow();
   const { state: catalogState } = useWorkspaceState();
@@ -122,10 +124,10 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
         await releaseShareReservation(incomingShare.id, incomingShare.destination);
       } catch (error) {
         Alert.alert(
-          "Could not change project",
+          t("Could not change project"),
           error instanceof Error
             ? error.message
-            : "The shared content reservation could not be updated.",
+            : t("The shared content reservation could not be updated."),
         );
         return;
       }
@@ -192,7 +194,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               catalogState.hasReadyEnvironment
                 ? [
                     {
-                      accessibilityLabel: "Add project",
+                      accessibilityLabel: t("Add project"),
                       icon: "plus",
                       onPress: () => navigation.dispatch(StackActions.push("AddProject")),
                     },
@@ -212,7 +214,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
           <NativeHeaderToolbar placement="right">
             {layout.usesSplitView ? (
               <NativeHeaderToolbar.Button
-                accessibilityLabel="Close chat"
+                accessibilityLabel={t("Close chat")}
                 icon="xmark"
                 onPress={() => navigation.goBack()}
                 separateBackground
@@ -255,7 +257,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                 onPress={() => navigation.navigate("ConnectionsNew")}
               >
                 <Text className="text-sm font-t3-bold text-primary-foreground">
-                  Add environment
+                  {t("Add environment")}
                 </Text>
               </Pressable>
             ) : (
@@ -264,7 +266,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                 onPress={() => navigation.dispatch(StackActions.push("AddProject"))}
               >
                 <Text className="text-sm font-t3-bold text-primary-foreground">
-                  Add new project
+                  {t("Add new project")}
                 </Text>
               </Pressable>
             )}

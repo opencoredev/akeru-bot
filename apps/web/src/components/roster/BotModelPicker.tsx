@@ -4,6 +4,7 @@ import {
   providerInstancePickerBlockReason,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { useI18n } from "../../i18n";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { getTriggerDisplayModelName, type ModelEsque } from "../chat/providerIconUtils";
 
@@ -46,6 +47,7 @@ export function BotModelPicker({
   readonly disabled?: boolean;
   readonly onChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <ProviderModelPicker
       activeInstanceId={activeInstanceId}
@@ -56,7 +58,7 @@ export function BotModelPicker({
       modelOptionsByInstance={modelOptionsByInstance}
       compact
       disabled={disabled}
-      triggerAriaLabel="Change model"
+      triggerAriaLabel={t("Change model")}
       triggerClassName="max-w-52"
       onInstanceModelChange={onChange}
     />

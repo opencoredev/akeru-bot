@@ -1,6 +1,8 @@
 import { MicIcon, RotateCcwIcon, SquareIcon, XIcon } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 
+import { useI18n } from "~/i18n";
+
 export interface DictationControlsProps {
   status: "idle" | "requesting" | "recording" | "transcribing" | "canceled" | "failed";
   unavailableReason?: string | null;
@@ -13,15 +15,6 @@ export interface DictationControlsProps {
   onBlockedPress?: (reason: string) => void;
 }
 
-const announcements = {
-  idle: "Dictation ready.",
-  requesting: "Requesting microphone access…",
-  recording: "Recording dictation.",
-  transcribing: "Transcribing dictation…",
-  canceled: "Dictation canceled.",
-  failed: "Dictation failed. Try again.",
-};
-
 export function DictationControls({
   status,
   unavailableReason,
@@ -31,6 +24,15 @@ export function DictationControls({
   onCancel,
   onBlockedPress,
 }: DictationControlsProps) {
+  const { t } = useI18n();
+  const announcements = {
+    idle: t("Dictation ready."),
+    requesting: t("Requesting microphone access…"),
+    recording: t("Recording dictation."),
+    transcribing: t("Transcribing dictation…"),
+    canceled: t("Dictation canceled."),
+    failed: t("Dictation failed. Try again."),
+  };
   const descriptionId = useId();
   const pointer = useRef<number | null>(null);
   const suppressClick = useRef(false);
@@ -84,14 +86,14 @@ export function DictationControls({
   };
   const label =
     appearance === "send-slot" && status === "transcribing"
-      ? "Cancel dictation"
+      ? t("Cancel dictation")
       : active
-        ? "Stop dictation"
+        ? t("Stop dictation")
         : retry
-          ? "Retry dictation"
-          : "Start dictation";
+          ? t("Retry dictation")
+          : t("Start dictation");
   const statusText = unavailableReason
-    ? `Dictation unavailable: ${unavailableReason}`
+    ? t("Dictation unavailable: {reason}", { reason: unavailableReason })
     : announcements[status];
 
   const button = (
@@ -155,9 +157,9 @@ export function DictationControls({
           <MicIcon className="size-5" aria-hidden="true" />
         )
       ) : active ? (
-        "Stop dictation"
+        t("Stop dictation")
       ) : (
-        "Dictate"
+        t("Dictate")
       )}
     </button>
   );
@@ -170,7 +172,7 @@ export function DictationControls({
           <button
             type="button"
             className="absolute top-1/2 right-full mr-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            aria-label="Cancel dictation"
+            aria-label={t("Cancel dictation")}
             onClick={cancel}
           >
             <XIcon className="size-3.5" aria-hidden="true" />
@@ -180,14 +182,16 @@ export function DictationControls({
           <button
             type="button"
             className="absolute top-1/2 right-full mr-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            aria-label="Dismiss dictation error"
+            aria-label={t("Dismiss dictation error")}
             onClick={() => cancelCallback.current()}
           >
             <XIcon className="size-3.5" aria-hidden="true" />
           </button>
         )}
         <span id={descriptionId} className="sr-only">
-          Hold to dictate and release to finish, or activate to start and activate again to stop.
+          {t(
+            "Hold to dictate and release to finish, or activate to start and activate again to stop.",
+          )}
         </span>
         <span
           id={`${descriptionId}-status`}
@@ -211,11 +215,13 @@ export function DictationControls({
           className="min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
           onClick={cancel}
         >
-          Cancel dictation
+          {t("Cancel dictation")}
         </button>
       )}
       <span id={descriptionId} className="text-xs text-muted-foreground">
-        Hold to dictate and release to finish, or activate to start and activate again to stop.
+        {t(
+          "Hold to dictate and release to finish, or activate to start and activate again to stop.",
+        )}
       </span>
       <span
         id={`${descriptionId}-status`}

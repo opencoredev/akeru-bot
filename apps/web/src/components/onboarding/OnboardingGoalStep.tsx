@@ -2,19 +2,21 @@ import { ArrowLeftIcon, ArrowRightIcon, PencilIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import {
   DESKTOP_ONBOARDING_GOAL_MAX_LENGTH,
   type DesktopOnboardingDraft,
+  type OnboardingTranslate,
 } from "./desktopOnboarding.logic";
 import {
   DESKTOP_ONBOARDING_GOAL_EXAMPLES,
-  DESKTOP_ONBOARDING_GOAL_QUESTION,
   DESKTOP_ONBOARDING_GOAL_THINKING_BEATS,
   desktopOnboardingGoalPlan,
   desktopOnboardingGoalThinkingMs,
   desktopOnboardingGoalThinkingStatus,
+  type GoalTopicId,
 } from "./goalPlan.logic";
 
 /** The step headline: the question while it asks, the plan once it has one. */
@@ -30,7 +32,32 @@ const STEP_STAGGER = 0.06;
 /** Where the step is: asking, working out the plan, or showing it. */
 type GoalPhase = "ask" | "thinking" | "plan";
 
+/** Chip label for an example goal. Short enough to sit four-up in the rail. */
+function goalExampleLabel(topic: GoalTopicId, t: OnboardingTranslate): string {
+  switch (topic) {
+    case "social":
+      return t("Social media");
+    case "research":
+      return t("Research");
+    case "admin":
+      return t("Admin");
+    case "planning":
+      return t("Personal planning");
+    default:
+      // Building and general work have no example chip.
+      return topic;
+  }
+}
+
+/** The thinking beats are English in the logic; this shows each one translated. */
+function thinkingStatusLabel(status: string, t: OnboardingTranslate): string {
+  if (status === "Reading what you wrote") return t("Reading what you wrote");
+  if (status === "Working out where to start") return t("Working out where to start");
+  return status;
+}
+
 function GoalExamples({ onPick }: { readonly onPick: (goal: string) => void }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-wrap gap-1.5" data-testid="onboarding-goal-examples">
       {DESKTOP_ONBOARDING_GOAL_EXAMPLES.map((example) => (
@@ -40,7 +67,7 @@ function GoalExamples({ onPick }: { readonly onPick: (goal: string) => void }) {
           onClick={() => onPick(example.goal)}
           className="rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground outline-none transition-colors hover:border-border hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
         >
-          {example.label}
+          {goalExampleLabel(example.topic, t)}
         </button>
       ))}
     </div>
@@ -53,9 +80,10 @@ function GoalExamples({ onPick }: { readonly onPick: (goal: string) => void }) {
  * reading the answer and deciding what to start on.
  */
 function GoalThinking({ answer, status }: { readonly answer: string; readonly status: string }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4" data-testid="onboarding-goal-thinking">
-      <p className="text-xs font-medium text-muted-foreground">Your goal</p>
+      <p className="text-xs font-medium text-muted-foreground">{t("Your goal")}</p>
       <p className="border-s-2 border-border/70 ps-3 text-sm leading-6 text-muted-foreground">
         {answer}
       </p>
@@ -65,7 +93,7 @@ function GoalThinking({ answer, status }: { readonly answer: string; readonly st
         className="bot-status-shimmer text-sm font-medium"
         data-testid="onboarding-goal-thinking-status"
       >
-        {status}
+        {thinkingStatusLabel(status, t)}
       </p>
     </div>
   );
@@ -87,12 +115,13 @@ function GoalPlanView({
   readonly reducedMotion: boolean;
   readonly onEdit: () => void;
 }) {
-  const plan = useMemo(() => desktopOnboardingGoalPlan(goal), [goal]);
+  const { t } = useI18n();
+  const plan = useMemo(() => desktopOnboardingGoalPlan(goal, t), [goal, t]);
 
   return (
     <div className="space-y-5" data-testid="onboarding-goal-plan">
       <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">Your goal</p>
+        <p className="text-xs font-medium text-muted-foreground">{t("Your goal")}</p>
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 border-s-2 border-border/70 ps-3 text-sm leading-6 text-muted-foreground">
             {goal}
@@ -105,7 +134,7 @@ function GoalPlanView({
             onClick={onEdit}
           >
             <PencilIcon className="size-3.5" />
-            Edit
+            {t("Edit")}
           </Button>
         </div>
       </div>
@@ -114,7 +143,7 @@ function GoalPlanView({
           id={GOAL_HEADING_ID}
           className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]"
         >
-          I'll start by…
+          {t("I'll start by…")}
         </h1>
         <ol className="space-y-2.5" data-testid="onboarding-goal-plan-steps">
           {plan.steps.map((step, index) => (
@@ -166,6 +195,7 @@ export function OnboardingGoalStep({
   readonly onContinue: () => void;
 }) {
   const reducedMotion = useReducedMotion() === true;
+  const { t } = useI18n();
   const [goal, setGoal] = useState(draft.goal);
   const [phase, setPhase] = useState<GoalPhase>(draft.goalPhase);
   const [thinkingStatus, setThinkingStatus] = useState(
@@ -265,10 +295,10 @@ export function OnboardingGoalStep({
                   id={GOAL_HEADING_ID}
                   className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]"
                 >
-                  {DESKTOP_ONBOARDING_GOAL_QUESTION.prompt}
+                  {t("What do you want help with?")}
                 </h1>
                 <p className="text-pretty text-sm leading-6 text-muted-foreground">
-                  {DESKTOP_ONBOARDING_GOAL_QUESTION.hint}
+                  {t("One or two sentences is plenty. Your bot works the rest out from there.")}
                 </p>
               </div>
               <GoalExamples onPick={writeGoal} />
@@ -281,7 +311,7 @@ export function OnboardingGoalStep({
                   value={goal}
                   maxLength={DESKTOP_ONBOARDING_GOAL_MAX_LENGTH}
                   aria-labelledby={GOAL_HEADING_ID}
-                  placeholder={DESKTOP_ONBOARDING_GOAL_QUESTION.placeholder}
+                  placeholder={t("I want my bot to…")}
                   onChange={(event) => writeGoal(event.currentTarget.value)}
                 />
               </div>
@@ -293,7 +323,7 @@ export function OnboardingGoalStep({
         <Button
           size="icon"
           variant="ghost-muted"
-          aria-label="Back"
+          aria-label={t("Back")}
           disabled={thinking}
           onClick={goBack}
         >
@@ -304,7 +334,7 @@ export function OnboardingGoalStep({
           disabled={thinking || !answered}
           onClick={phase === "plan" ? onContinue : workOutPlan}
         >
-          {phase === "plan" ? "Looks right" : "Continue"}
+          {phase === "plan" ? t("Looks right") : t("Continue")}
           <ArrowRightIcon className="size-4" />
         </Button>
       </div>

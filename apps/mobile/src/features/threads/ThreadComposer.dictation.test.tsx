@@ -93,6 +93,11 @@ vi.mock("../../components/ComposerToolbar", () => ({
 vi.mock("../../components/ControlPill", () => ({ ControlPill: "ControlPill" }));
 vi.mock("../../components/ProviderIcon", () => ({ ProviderIcon: "ProviderIcon" }));
 vi.mock("../../lib/useThemeColor", () => ({ useThemeColor: () => "#000000" }));
+vi.mock("../../lib/i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useMobileI18n: () => ({ t: translator.translate, plural: translator.plural }) };
+});
 vi.mock("../../lib/modelOptions", () => ({
   buildModelOptions: () => [],
   groupByProvider: () => [],

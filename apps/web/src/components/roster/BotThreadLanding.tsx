@@ -15,6 +15,7 @@ import { cn } from "~/lib/utils";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
+import { useI18n } from "../../i18n";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
@@ -82,6 +83,7 @@ function RoutineReceiptRow({
   readonly receipt: RoutineReceipt;
   readonly onOpenRoutines?: () => void;
 }) {
+  const { t } = useI18n();
   const Icon =
     receipt.tone === "error"
       ? CircleAlertIcon
@@ -94,7 +96,10 @@ function RoutineReceiptRow({
   return (
     <Row
       {...(opensRoutines
-        ? { type: "button" as const, "aria-label": `${receipt.text}. Open Routines` }
+        ? {
+            type: "button" as const,
+            "aria-label": t("{text}. Open Routines", { text: receipt.text }),
+          }
         : {})}
       className={cn(
         "mx-auto flex w-full max-w-3xl items-start gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground",
@@ -129,6 +134,7 @@ export function BotThreadLanding({
   readonly botId: string;
   readonly onOpenRoutines?: () => void;
 }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
@@ -215,13 +221,17 @@ export function BotThreadLanding({
     turnRunning: runtime.latestTurn?.state === "running",
     waitingForUserInput,
   });
-  const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null);
+  const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null, t);
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
   );
   const today = useLocalDay();
-  const entries = useMemo(() => buildBotConversationEntries(messages, today), [messages, today]);
+  const todayLabel = t("Today");
+  const entries = useMemo(
+    () => buildBotConversationEntries(messages, today, todayLabel),
+    [messages, today, todayLabel],
+  );
   const routineRunHistory = useEnvironmentQuery(
     runtime.linkedThreadRef
       ? serverEnvironment.routineThreadRuns({
@@ -337,6 +347,7 @@ export function BotThreadLanding({
             runtime.linkedThreadRef.threadId,
             [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])],
             mergeRoutineRunHistory(currentHistory.runs, snapshot?.routineRuns ?? []),
+            i18n,
           )
         : [],
     [
@@ -345,6 +356,7 @@ export function BotThreadLanding({
       snapshot?.routineReceiptSources,
       snapshot?.routineRuns,
       currentHistory.runs,
+      i18n,
     ],
   );
   // Each message carries the index it had in `messages`, because the merge below
@@ -369,12 +381,12 @@ export function BotThreadLanding({
   if (routedBot.status === "loading") {
     return (
       <SidebarInset
-        aria-label="Loading bot"
+        aria-label={t("Loading bot…")}
         className="h-dvh min-h-0 items-center justify-center overflow-hidden bg-background text-muted-foreground"
       >
         <div className="flex flex-1 items-center justify-center gap-2 text-sm" role="status">
           <Spinner aria-hidden="true" className="size-4" />
-          Loading bot…
+          {t("Loading bot…")}
         </div>
       </SidebarInset>
     );
@@ -415,7 +427,7 @@ export function BotThreadLanding({
 
   return (
     <SidebarInset
-      aria-label={`${bot.name} chat`}
+      aria-label={t("{name} chat", { name: bot.name })}
       className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
       data-testid="bot-thread-landing"
     >
@@ -451,16 +463,16 @@ export function BotThreadLanding({
                 }}
               >
                 {olderRoutineRuns.isPending
-                  ? "Loading older routine notes…"
+                  ? t("Loading older routine notes…")
                   : olderRoutineRuns.error
-                    ? "Retry older routine notes"
-                    : "Load older routine notes"}
+                    ? t("Retry older routine notes")
+                    : t("Load older routine notes")}
               </button>
             ) : null}
             {timelineItems.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
                 <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-14" />
-                <h1 className="text-lg font-medium">Message {bot.name}</h1>
+                <h1 className="text-lg font-medium">{t("Message {name}", { name: bot.name })}</h1>
               </div>
             ) : (
               timelineItems.map((item) => (
@@ -656,10 +668,12 @@ export function BotThreadLanding({
             }}
           />
           {sendBlocked ? null : !runtime.botReady ? (
-            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">Connecting bot…</p>
+            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
+              {t("Connecting bot…")}
+            </p>
           ) : runtime.bootstrapped && runtime.defaultProject === null ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
-              Add a project before you message a bot.
+              {t("Add a project before you message a bot.")}
             </p>
           ) : null}
         </div>

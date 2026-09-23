@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import {
   EnvironmentId,
   type GitRunStackedActionResult,
@@ -407,6 +408,7 @@ export function useThreadGitCenterHeaderItems(props: ThreadGitControlsProps): He
 }
 
 export function ThreadGitControls(props: ThreadGitControlsProps) {
+  const { t } = useMobileI18n();
   const model = useThreadGitControlModel(props);
   const showActionControls = props.showActionControls ?? true;
 
@@ -450,7 +452,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
               onPress={() => {}}
               subtitle="This project has no saved scripts yet"
             >
-              <NativeHeaderToolbar.Label>No project scripts</NativeHeaderToolbar.Label>
+              <NativeHeaderToolbar.Label>{t("No project scripts")}</NativeHeaderToolbar.Label>
             </NativeHeaderToolbar.MenuAction>
           )}
           {props.terminalSessions.map((session) => (
@@ -476,13 +478,13 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
             onPress={props.onOpenNewTerminal}
             subtitle="Start another shell for this chat"
           >
-            <NativeHeaderToolbar.Label>Open new terminal</NativeHeaderToolbar.Label>
+            <NativeHeaderToolbar.Label>{t("Open new terminal")}</NativeHeaderToolbar.Label>
           </NativeHeaderToolbar.MenuAction>
         </NativeHeaderToolbar.Menu>
       ) : null}
       {showActionControls && props.showDirectFileControl ? (
         <NativeHeaderToolbar.Button
-          accessibilityLabel="Open files"
+          accessibilityLabel={t("Open files")}
           disabled={!props.canOpenFiles}
           icon="folder"
           onPress={model.openFiles}
@@ -500,6 +502,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
  * chat header and the review screen's toolbar.
  */
 export function ThreadGitMenu(props: ThreadGitMenuProps) {
+  const { t } = useMobileI18n();
   const model = useThreadGitControlModel(props);
 
   return (
@@ -528,14 +531,14 @@ export function ThreadGitMenu(props: ThreadGitMenuProps) {
         onPress={model.openReview}
         subtitle="Turn diffs and worktree changes"
       >
-        <NativeHeaderToolbar.Label>Review changes</NativeHeaderToolbar.Label>
+        <NativeHeaderToolbar.Label>{t("Review changes")}</NativeHeaderToolbar.Label>
       </NativeHeaderToolbar.MenuAction>
       <NativeHeaderToolbar.MenuAction
         icon="ellipsis"
         onPress={model.openGitInspector}
         subtitle="Commit, files, branches"
       >
-        <NativeHeaderToolbar.Label>More</NativeHeaderToolbar.Label>
+        <NativeHeaderToolbar.Label>{t("More")}</NativeHeaderToolbar.Label>
       </NativeHeaderToolbar.MenuAction>
     </NativeHeaderToolbar.Menu>
   );

@@ -2,7 +2,7 @@ import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { makeComposerTestProvider } from "../../test/chatComposerProps";
+import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import { buildBotModelChoices } from "./BotModelPicker";
 
 const codex = ProviderInstanceId.make("codex");

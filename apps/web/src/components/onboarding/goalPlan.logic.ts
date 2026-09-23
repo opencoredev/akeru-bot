@@ -9,14 +9,9 @@
  * is offline, and never invents work the app is not doing.
  */
 
-export type GoalTopicId = "social" | "research" | "admin" | "planning" | "building" | "general";
+import { englishOnboardingTranslate, type OnboardingTranslate } from "./desktopOnboarding.logic";
 
-/** The one question setup asks. Everything after it is inferred, not asked. */
-export const DESKTOP_ONBOARDING_GOAL_QUESTION = {
-  prompt: "What do you want help with?",
-  hint: "One or two sentences is plenty. Your bot works the rest out from there.",
-  placeholder: "I want my bot to…",
-} as const;
+export type GoalTopicId = "social" | "research" | "admin" | "planning" | "building" | "general";
 
 /**
  * A concrete noun the answer used, and how to say it back. Matched whole-word,
@@ -24,7 +19,7 @@ export const DESKTOP_ONBOARDING_GOAL_QUESTION = {
  */
 interface GoalSignal {
   readonly match: string;
-  readonly label: string;
+  readonly label: (t: OnboardingTranslate) => string;
 }
 
 interface GoalTopic {
@@ -39,16 +34,16 @@ interface GoalTopic {
    * nothing worth naming have the plain form only.
    */
   readonly lead: {
-    readonly focused?: (focus: string) => string;
-    readonly plain: string;
+    readonly focused?: (t: OnboardingTranslate, focus: string) => string;
+    readonly plain: (t: OnboardingTranslate) => string;
   };
   /** What follows the opening move. Short, and in the order they happen. */
-  readonly rest: readonly [string, string];
+  readonly rest: (t: OnboardingTranslate) => readonly [string, string];
   /**
    * The detail this kind of work eventually needs, and the moment it needs it.
    * Named out loud so deferring it reads as a decision rather than an omission.
    */
-  readonly deferred: string;
+  readonly deferred: (t: OnboardingTranslate) => string;
 }
 
 /**
@@ -82,22 +77,26 @@ const GOAL_TOPICS: readonly GoalTopic[] = [
       "marketing",
     ],
     signals: [
-      { match: "linkedin", label: "LinkedIn" },
-      { match: "instagram", label: "Instagram" },
-      { match: "tiktok", label: "TikTok" },
-      { match: "youtube", label: "YouTube" },
-      { match: "threads", label: "Threads" },
-      { match: "facebook", label: "Facebook" },
-      { match: "tweet", label: "X" },
-      { match: "tweets", label: "X" },
-      { match: "newsletter", label: "your newsletter" },
+      { match: "linkedin", label: () => "LinkedIn" },
+      { match: "instagram", label: () => "Instagram" },
+      { match: "tiktok", label: () => "TikTok" },
+      { match: "youtube", label: () => "YouTube" },
+      { match: "threads", label: () => "Threads" },
+      { match: "facebook", label: () => "Facebook" },
+      { match: "tweet", label: () => "X" },
+      { match: "tweets", label: () => "X" },
+      { match: "newsletter", label: (t) => t("your newsletter") },
     ],
     lead: {
-      focused: (focus) => `Draft a first batch of posts for ${focus}, in your voice`,
-      plain: "Draft a first batch of posts in your voice",
+      focused: (t, focus) =>
+        t("Draft a first batch of posts for {focus}, in your voice", { focus }),
+      plain: (t) => t("Draft a first batch of posts in your voice"),
     },
-    rest: ["Show them to you before anything goes out", "Write more like the ones you keep"],
-    deferred: "I'll ask which accounts to post from once there's a draft worth posting.",
+    rest: (t) => [
+      t("Show them to you before anything goes out"),
+      t("Write more like the ones you keep"),
+    ],
+    deferred: (t) => t("I'll ask which accounts to post from once there's a draft worth posting."),
   },
   {
     id: "research",
@@ -126,20 +125,23 @@ const GOAL_TOPICS: readonly GoalTopic[] = [
       "analysis",
     ],
     signals: [
-      { match: "competitor", label: "your competitors" },
-      { match: "competitors", label: "your competitors" },
-      { match: "pricing", label: "pricing" },
-      { match: "market", label: "the market" },
-      { match: "news", label: "the news" },
-      { match: "papers", label: "research" },
-      { match: "benchmarks", label: "the benchmarks" },
+      { match: "competitor", label: (t) => t("your competitors") },
+      { match: "competitors", label: (t) => t("your competitors") },
+      { match: "pricing", label: (t) => t("pricing") },
+      { match: "market", label: (t) => t("the market") },
+      { match: "news", label: (t) => t("the news") },
+      { match: "papers", label: (t) => t("research") },
+      { match: "benchmarks", label: (t) => t("the benchmarks") },
     ],
     lead: {
-      focused: (focus) => `Gather what is already out there on ${focus}`,
-      plain: "Gather what is already out there on this",
+      focused: (t, focus) => t("Gather what is already out there on {focus}", { focus }),
+      plain: (t) => t("Gather what is already out there on this"),
     },
-    rest: ["Put it on one page you can skim", "Flag what changed instead of making you re-read it"],
-    deferred: "I'll ask where that page should live once there's something on it.",
+    rest: (t) => [
+      t("Put it on one page you can skim"),
+      t("Flag what changed instead of making you re-read it"),
+    ],
+    deferred: (t) => t("I'll ask where that page should live once there's something on it."),
   },
   {
     id: "admin",
@@ -165,23 +167,23 @@ const GOAL_TOPICS: readonly GoalTopic[] = [
       "support",
     ],
     signals: [
-      { match: "inbox", label: "inbox" },
-      { match: "invoices", label: "invoices" },
-      { match: "invoice", label: "invoices" },
-      { match: "receipts", label: "receipts" },
-      { match: "expenses", label: "expenses" },
-      { match: "tickets", label: "tickets" },
-      { match: "paperwork", label: "paperwork" },
+      { match: "inbox", label: (t) => t("inbox") },
+      { match: "invoices", label: (t) => t("invoices") },
+      { match: "invoice", label: (t) => t("invoices") },
+      { match: "receipts", label: (t) => t("receipts") },
+      { match: "expenses", label: (t) => t("expenses") },
+      { match: "tickets", label: (t) => t("tickets") },
+      { match: "paperwork", label: (t) => t("paperwork") },
     ],
     lead: {
-      focused: (focus) => `Go through what is sitting in your ${focus}`,
-      plain: "Go through what has piled up",
+      focused: (t, focus) => t("Go through what is sitting in your {focus}", { focus }),
+      plain: (t) => t("Go through what has piled up"),
     },
-    rest: [
-      "Separate what actually needs you from what does not",
-      "Draft the replies and the filing for you to check",
+    rest: (t) => [
+      t("Separate what actually needs you from what does not"),
+      t("Draft the replies and the filing for you to check"),
     ],
-    deferred: "I'll ask for access when something is ready to send.",
+    deferred: (t) => t("I'll ask for access when something is ready to send."),
   },
   {
     id: "planning",
@@ -212,20 +214,20 @@ const GOAL_TOPICS: readonly GoalTopic[] = [
       "agenda",
     ],
     signals: [
-      { match: "week", label: "your week" },
-      { match: "trip", label: "your trip" },
-      { match: "travel", label: "your trip" },
-      { match: "routine", label: "your routine" },
-      { match: "budget", label: "your budget" },
-      { match: "meals", label: "your meals" },
-      { match: "workouts", label: "your training" },
+      { match: "week", label: (t) => t("your week") },
+      { match: "trip", label: (t) => t("your trip") },
+      { match: "travel", label: (t) => t("your trip") },
+      { match: "routine", label: (t) => t("your routine") },
+      { match: "budget", label: (t) => t("your budget") },
+      { match: "meals", label: (t) => t("your meals") },
+      { match: "workouts", label: (t) => t("your training") },
     ],
     lead: {
-      focused: (focus) => `Lay out what is actually on your plate for ${focus}`,
-      plain: "Lay out what is actually on your plate",
+      focused: (t, focus) => t("Lay out what is actually on your plate for {focus}", { focus }),
+      plain: (t) => t("Lay out what is actually on your plate"),
     },
-    rest: ["Turn it into an order you can follow", "Say something when a piece slips"],
-    deferred: "I'll ask about your calendar when putting it there would help.",
+    rest: (t) => [t("Turn it into an order you can follow"), t("Say something when a piece slips")],
+    deferred: (t) => t("I'll ask about your calendar when putting it there would help."),
   },
   {
     id: "building",
@@ -254,24 +256,24 @@ const GOAL_TOPICS: readonly GoalTopic[] = [
       "ship",
     ],
     signals: [
-      { match: "repo", label: "your repo" },
-      { match: "repository", label: "your repo" },
-      { match: "app", label: "your app" },
-      { match: "site", label: "your site" },
-      { match: "website", label: "your site" },
-      { match: "api", label: "your API" },
-      { match: "database", label: "your database" },
-      { match: "tests", label: "your tests" },
+      { match: "repo", label: (t) => t("your repo") },
+      { match: "repository", label: (t) => t("your repo") },
+      { match: "app", label: (t) => t("your app") },
+      { match: "site", label: (t) => t("your site") },
+      { match: "website", label: (t) => t("your site") },
+      { match: "api", label: (t) => t("your API") },
+      { match: "database", label: (t) => t("your database") },
+      { match: "tests", label: (t) => t("your tests") },
     ],
     lead: {
-      focused: (focus) => `Read through ${focus} to find where this belongs`,
-      plain: "Read through the project to find where this belongs",
+      focused: (t, focus) => t("Read through {focus} to find where this belongs", { focus }),
+      plain: (t) => t("Read through the project to find where this belongs"),
     },
-    rest: [
-      "Make the smallest change that proves it works",
-      "Show you the diff before anything else",
+    rest: (t) => [
+      t("Make the smallest change that proves it works"),
+      t("Show you the diff before anything else"),
     ],
-    deferred: "I'll ask about your setup when I need to run something.",
+    deferred: (t) => t("I'll ask about your setup when I need to run something."),
   },
 ];
 
@@ -281,18 +283,16 @@ const GOAL_TOPICS: readonly GoalTopic[] = [
  */
 const GENERAL_TOPIC: Omit<GoalTopic, "id" | "keywords"> = {
   signals: [],
-  lead: { plain: "Work out what a good result looks like here" },
-  rest: [
-    "Take the first real step and show you what came of it",
-    "Adjust from what you say about it",
+  lead: { plain: (t) => t("Work out what a good result looks like here") },
+  rest: (t) => [
+    t("Take the first real step and show you what came of it"),
+    t("Adjust from what you say about it"),
   ],
-  deferred: "I'll ask for whatever I need, at the point I need it.",
+  deferred: (t) => t("I'll ask for whatever I need, at the point I need it."),
 };
 
 export interface GoalExample {
   readonly topic: GoalTopicId;
-  /** Chip label. Short enough to sit four-up in the rail. */
-  readonly label: string;
   /** What the chip writes into the answer. Editable afterwards. */
   readonly goal: string;
 }
@@ -304,22 +304,18 @@ export interface GoalExample {
 export const DESKTOP_ONBOARDING_GOAL_EXAMPLES: readonly GoalExample[] = [
   {
     topic: "social",
-    label: "Social media",
     goal: "Keep my social accounts posting without me writing every post",
   },
   {
     topic: "research",
-    label: "Research",
     goal: "Research a topic for me and keep one page of findings current",
   },
   {
     topic: "admin",
-    label: "Admin",
     goal: "Take the admin off my desk: inbox, invoices, and filing",
   },
   {
     topic: "planning",
-    label: "Personal planning",
     goal: "Plan my week and keep me on top of what I said I would do",
   },
 ];
@@ -373,12 +369,17 @@ const MAX_MENTIONS = 2;
  * someone who wrote "LinkedIn and X" is told "LinkedIn and X", not "X and
  * LinkedIn" because of how the table happens to be sorted.
  */
-function mentionsIn(answer: string, signals: readonly GoalSignal[]): readonly string[] {
+function mentionsIn(
+  answer: string,
+  signals: readonly GoalSignal[],
+  t: OnboardingTranslate,
+): readonly string[] {
   const found: Array<{ readonly label: string; readonly at: number }> = [];
   for (const signal of signals) {
     const at = answer.search(wordPattern(signal.match));
-    if (at === -1 || found.some((entry) => entry.label === signal.label)) continue;
-    found.push({ label: signal.label, at });
+    const label = signal.label(t);
+    if (at === -1 || found.some((entry) => entry.label === label)) continue;
+    found.push({ label, at });
   }
   return found
     .sort((left, right) => left.at - right.at)
@@ -386,10 +387,11 @@ function mentionsIn(answer: string, signals: readonly GoalSignal[]): readonly st
     .map((entry) => entry.label);
 }
 
-function joinMentions(mentions: readonly string[]): string | null {
-  if (mentions.length === 0) return null;
-  if (mentions.length === 1) return mentions[0] ?? null;
-  return mentions.join(" and ");
+function joinMentions(mentions: readonly string[], t: OnboardingTranslate): string | null {
+  const [first, second] = mentions;
+  if (first === undefined) return null;
+  if (second === undefined) return first;
+  return t("{first} and {second}", { first, second });
 }
 
 export interface GoalPlan {
@@ -407,19 +409,25 @@ export interface GoalPlan {
  * shape, and anything concrete the answer named leads the first step, so the
  * plan reads as a response to what was written rather than as a template that
  * happened to be picked.
+ *
+ * `t` translates the plan for display. The bot brief keeps the English default,
+ * because the plan it writes out is the user's first message, not interface copy.
  */
-export function desktopOnboardingGoalPlan(goal: string): GoalPlan {
+export function desktopOnboardingGoalPlan(
+  goal: string,
+  t: OnboardingTranslate = englishOnboardingTranslate,
+): GoalPlan {
   const answer = condense(goal).toLowerCase();
   const id = classifyDesktopOnboardingGoal(answer);
   const topic = GOAL_TOPICS.find((candidate) => candidate.id === id) ?? GENERAL_TOPIC;
-  const mentions = mentionsIn(answer, topic.signals);
-  const focus = joinMentions(mentions);
-  const lead = focus === null ? null : topic.lead.focused?.(focus);
+  const mentions = mentionsIn(answer, topic.signals, t);
+  const focus = joinMentions(mentions, t);
+  const lead = focus === null ? null : topic.lead.focused?.(t, focus);
   return {
     topic: id,
-    steps: [lead ?? topic.lead.plain, ...topic.rest],
+    steps: [lead ?? topic.lead.plain(t), ...topic.rest(t)],
     mentions,
-    deferred: topic.deferred,
+    deferred: topic.deferred(t),
   };
 }
 

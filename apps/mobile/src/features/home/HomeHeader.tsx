@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type { EnvironmentId, SidebarThreadSortOrder } from "@t3tools/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -63,6 +64,7 @@ export function HomeHeader(props: {
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;
 }) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const iconColor = useThemeColor("--color-icon");
   const mutedColor = useThemeColor("--color-foreground-muted");
@@ -103,11 +105,11 @@ export function HomeHeader(props: {
     () => [
       {
         id: "environment",
-        title: "Environment",
+        title: t("Environment"),
         subactions: [
           {
             id: "environment:all",
-            title: "All environments",
+            title: t("All environments"),
             state: checkedMenuState(props.selectedEnvironmentId === null),
           },
           ...props.environments.map((environment) => ({
@@ -122,11 +124,11 @@ export function HomeHeader(props: {
         : ([
             {
               id: "project",
-              title: "Project",
+              title: t("Project"),
               subactions: [
                 {
                   id: "project:all",
-                  title: "All projects",
+                  title: t("All projects"),
                   state: checkedMenuState(props.selectedProjectKey === null),
                 },
                 ...props.projects.map((project) => ({
@@ -142,7 +144,7 @@ export function HomeHeader(props: {
         : ([
             {
               id: "project-sort",
-              title: "Sort projects",
+              title: t("Sort projects"),
               subactions: PROJECT_SORT_OPTIONS.map((option) => ({
                 id: `project-sort:${option.value}`,
                 title: option.label,
@@ -151,7 +153,7 @@ export function HomeHeader(props: {
             },
             {
               id: "thread-sort",
-              title: "Sort chats",
+              title: t("Sort chats"),
               subactions: THREAD_SORT_OPTIONS.map((option) => ({
                 id: `thread-sort:${option.value}`,
                 title: option.label,
@@ -159,9 +161,9 @@ export function HomeHeader(props: {
               })),
             },
           ] satisfies MenuAction[])),
-      { id: "archive", title: "Archived chats", image: "archivebox" },
-      { id: "environments", title: "Environments", image: "desktopcomputer" },
-      { id: "settings", title: "Settings", image: "gearshape" },
+      { id: "archive", title: t("Archived chats"), image: "archivebox" },
+      { id: "environments", title: t("Environments"), image: "desktopcomputer" },
+      { id: "settings", title: t("Settings"), image: "gearshape" },
     ],
     [
       props.environments,
@@ -170,6 +172,7 @@ export function HomeHeader(props: {
       props.selectedEnvironmentId,
       props.selectedProjectKey,
       props.threadSortOrder,
+      t,
       threadListV2Enabled,
     ],
   );
@@ -242,14 +245,16 @@ export function HomeHeader(props: {
       >
         <View className="w-full max-w-[720px] self-center">
           <View className="flex-row items-center gap-3">
-            <ControlPillMenu
+<ControlPillMenu
               actions={menuActions}
               onPressAction={handleMenuAction}
-              title={selectedEnvironmentLabel ?? "All environments"}
+              title={selectedEnvironmentLabel ?? t("All environments")}
             >
               <Pressable
-                accessibilityHint="Opens filters, archived chats, and settings"
-                accessibilityLabel={`Menu, ${hasCustomListOptions ? "filters active" : "no filters"}`}
+                accessibilityHint={t("Opens filters, archived chats, and settings")}
+                accessibilityLabel={
+                  hasCustomListOptions ? t("Menu, filters active") : t("Menu, no filters")
+                }
                 accessibilityRole="button"
                 className="size-11 items-center justify-center rounded-full border border-border-subtle bg-subtle"
               >
@@ -264,7 +269,7 @@ export function HomeHeader(props: {
             <WorkspaceConnectionTitle grow onPress={props.onOpenEnvironments} brand={null} />
 
             <Pressable
-              accessibilityLabel={searchOpen ? "Close search" : "Search chats"}
+              accessibilityLabel={searchOpen ? t("Close search") : t("Search chats")}
               accessibilityRole="button"
               className="size-11 items-center justify-center rounded-full bg-card"
               onPress={searchOpen ? closeSearch : openSearch}
@@ -285,7 +290,7 @@ export function HomeHeader(props: {
               />
             </Pressable>
             <Pressable
-              accessibilityLabel="New chat"
+              accessibilityLabel={t("New chat")}
               accessibilityRole="button"
               className="size-11 items-center justify-center rounded-full bg-card"
               onPress={props.onStartNewTask}
@@ -311,12 +316,12 @@ export function HomeHeader(props: {
                 type="monochrome"
               />
               <TextInput
-                accessibilityLabel="Search chats"
+                accessibilityLabel={t("Search chats")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 className="h-full flex-1 font-sans text-[16px] text-foreground"
                 onChangeText={props.onSearchQueryChange}
-                placeholder="Search"
+                placeholder={t("Search")}
                 placeholderTextColorClassName="accent-placeholder"
                 ref={searchInputRef}
                 returnKeyType="search"
@@ -324,7 +329,7 @@ export function HomeHeader(props: {
               />
               {props.searchQuery.length > 0 ? (
                 <Pressable
-                  accessibilityLabel="Clear search"
+                  accessibilityLabel={t("Clear search")}
                   accessibilityRole="button"
                   hitSlop={10}
                   onPress={() => props.onSearchQueryChange("")}

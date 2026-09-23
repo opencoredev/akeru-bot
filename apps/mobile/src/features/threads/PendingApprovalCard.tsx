@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ApprovalRequestId,
@@ -18,36 +19,34 @@ export interface PendingApprovalCardProps {
   ) => Promise<unknown>;
 }
 
-const DEFAULT_APPROVAL_OPTIONS = [
-  { decision: "accept", label: "Allow once" },
-  { decision: "acceptForSession", label: "Allow session" },
-  { decision: "decline", label: "Decline" },
-] satisfies ReadonlyArray<ProviderApprovalOption>;
-const MOBILE_FEEDBACK_OPTIONS = [
-  { decision: "decline", label: "Cancel" },
-] satisfies ReadonlyArray<ProviderApprovalOption>;
-
 export function PendingApprovalCard(props: PendingApprovalCardProps) {
+  const { t } = useMobileI18n();
+  const defaultOptions = [
+    { decision: "accept", label: t("Allow once") },
+    { decision: "acceptForSession", label: t("Allow session") },
+    { decision: "decline", label: t("Decline") },
+  ] satisfies ReadonlyArray<ProviderApprovalOption>;
+  const feedbackOptions = [
+    { decision: "decline", label: t("Cancel") },
+  ] satisfies ReadonlyArray<ProviderApprovalOption>;
   const isProductFeedback = props.approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
-  const options = isProductFeedback
-    ? MOBILE_FEEDBACK_OPTIONS
-    : (props.approval.options ?? DEFAULT_APPROVAL_OPTIONS);
+  const options = isProductFeedback ? feedbackOptions : (props.approval.options ?? defaultOptions);
   // Opaque for the same reason as PendingUserInputCard: nothing blurs the feed
   // behind this card, so a translucent surface bleeds messages through it.
   return (
     <View className="gap-2.5 rounded-[20px] border border-neutral-200 bg-neutral-100 p-4 dark:border-white/6 dark:bg-neutral-900">
       <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-sky-700 dark:text-sky-300">
-        Approval needed
+        {t("Approval needed")}
       </Text>
       <Text className="font-t3-bold text-lg text-neutral-950 dark:text-neutral-50">
         {isProductFeedback
-          ? "Product feedback"
+          ? t("Product feedback")
           : (props.approval.appName ?? props.approval.requestKind)}
       </Text>
       {props.approval.detail ? (
         <Text className="font-sans text-sm leading-normal text-neutral-600 dark:text-neutral-400">
           {isProductFeedback
-            ? "Open Akeru on web or desktop to review this feedback draft."
+            ? t("Open Akeru Bot on web or desktop to review this feedback draft.")
             : props.approval.detail}
         </Text>
       ) : null}

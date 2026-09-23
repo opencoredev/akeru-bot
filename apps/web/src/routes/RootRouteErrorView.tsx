@@ -1,8 +1,13 @@
+import { createTranslator, type TranslationParams } from "@t3tools/client-runtime/i18n";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import { APP_DISPLAY_NAME } from "../branding";
 import { AkeruWordmark } from "../components/AkeruWordmark";
 import { Button } from "../components/ui/button";
+import { useI18n } from "../i18n";
+
+type Translate = (message: string, params?: TranslationParams) => string;
+const english: Translate = createTranslator("en").translate;
 
 function reloadApp() {
   window.location.reload();
@@ -10,10 +15,26 @@ function reloadApp() {
 
 interface RootRouteErrorViewProps extends ErrorComponentProps {
   readonly reload?: () => void;
+  /** Interface copy lookup. Defaults to English; the raw error is never translated. */
+  readonly t?: Translate;
 }
 
-export function RootRouteErrorView({ error, reset, reload = reloadApp }: RootRouteErrorViewProps) {
-  const details = errorDetails(error);
+/**
+ * The router's error component. Reads the language through `useI18n`, which
+ * falls back to English when the failure happened above `LanguageProvider`.
+ */
+export function TranslatedRootRouteErrorView(props: RootRouteErrorViewProps) {
+  const { t } = useI18n();
+  return <RootRouteErrorView {...props} t={t} />;
+}
+
+export function RootRouteErrorView({
+  error,
+  reset,
+  reload = reloadApp,
+  t = english,
+}: RootRouteErrorViewProps) {
+  const details = errorDetails(error, t);
 
   return (
     <main
@@ -30,24 +51,24 @@ export function RootRouteErrorView({ error, reset, reload = reloadApp }: RootRou
       <section className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12">
         <div className="flex w-full max-w-md flex-col items-center text-center">
           <h1 className="text-xl font-medium tracking-tight" id="root-error-title">
-            This view failed to load
+            {t("This view failed to load")}
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Retry this view. If it fails again, reload Akeru Bot.
+            {t("Retry this view. If it fails again, reload Akeru Bot.")}
           </p>
 
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <Button onClick={() => reset()} size="sm">
-              Retry
+              {t("Retry")}
             </Button>
             <Button onClick={reload} size="sm" variant="outline">
-              Reload app
+              {t("Reload app")}
             </Button>
           </div>
 
           <details className="group mt-5 w-full text-left">
             <summary className="flex cursor-pointer list-none items-center justify-center rounded-[var(--control-radius)] px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden">
-              Technical details
+              {t("Technical details")}
             </summary>
             <pre
               className="mt-2 max-h-52 overflow-auto rounded-lg border border-border bg-card px-3 py-2.5 font-mono text-xs leading-5 whitespace-pre-wrap text-muted-foreground"
@@ -74,7 +95,7 @@ export function errorMessage(error: unknown): string {
   return "An unexpected error stopped this view from loading.";
 }
 
-export function errorDetails(error: unknown): string {
+export function errorDetails(error: unknown, t: Translate = english): string {
   if (error instanceof Error) {
     return error.stack ?? error.message;
   }
@@ -86,6 +107,6 @@ export function errorDetails(error: unknown): string {
   try {
     return JSON.stringify(error, null, 2);
   } catch {
-    return "No additional error details are available.";
+    return t("No additional error details are available.");
   }
 }

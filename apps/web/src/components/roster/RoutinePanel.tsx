@@ -6,7 +6,9 @@ import {
   Clock3Icon,
   PlusIcon,
 } from "lucide-react";
+import { createTranslator, type MessageKey } from "@t3tools/client-runtime/i18n";
 
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
@@ -122,16 +124,36 @@ export interface RoutinePanelProps {
 const EMPTY_ROUTINES: readonly RoutineAdapterItem[] = [];
 const EMPTY_PROJECT_OPTIONS: readonly RoutineAdapterProject[] = [];
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEKDAYS: readonly MessageKey[] = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
-export function routineScheduleLabel(schedule: RoutineAdapterSchedule) {
+/** The translator slice routine labels need. Helpers default to English outside React. */
+export type RoutineTranslator = Pick<ReturnType<typeof createTranslator>, "t" | "formatDate">;
+
+const englishTranslator: RoutineTranslator = createTranslator("en");
+
+export function routineScheduleLabel(
+  schedule: RoutineAdapterSchedule,
+  i18n: RoutineTranslator = englishTranslator,
+) {
   const frequency =
     schedule.frequency === "daily"
-      ? "Daily"
+      ? i18n.t("Daily")
       : schedule.frequency === "weekdays"
-        ? "Weekdays"
-        : WEEKDAYS[schedule.weekday ?? 1];
-  return `${frequency} at ${schedule.time} (${schedule.timezone})`;
+        ? i18n.t("Weekdays")
+        : i18n.t(WEEKDAYS[schedule.weekday ?? 1] ?? "Monday");
+  return i18n.t("{frequency} at {time} ({timezone})", {
+    frequency,
+    time: schedule.time,
+    timezone: schedule.timezone,
+  });
 }
 
 export function boundedRunHistory(history: readonly RoutineAdapterRun[]) {
@@ -144,7 +166,7 @@ export function boundedRunHistory(history: readonly RoutineAdapterRun[]) {
  * the two take different routes back on.
  */
 export function routineStatus(routine: RoutineAdapterItem): {
-  readonly label: "Active" | "Paused" | "Off" | "Draft";
+  readonly label: MessageKey & ("Active" | "Paused" | "Off" | "Draft");
   readonly variant: "success" | "warning" | "secondary";
 } {
   if (routine.paused) return { label: "Paused", variant: "warning" };
@@ -163,7 +185,7 @@ const RUN_STATUS_PRESENTATION = {
   canceled: { label: "Canceled", variant: "secondary", dot: "bg-muted-foreground" },
 } as const satisfies Record<
   RoutineAdapterRunStatus,
-  { readonly label: string; readonly variant: string; readonly dot: string }
+  { readonly label: MessageKey; readonly variant: string; readonly dot: string }
 >;
 
 /** How one run reads at a glance: its chip wording, its badge colour, and its history dot. */
@@ -172,10 +194,10 @@ export function runStatusPresentation(status: RoutineAdapterRunStatus) {
 }
 
 /** The absolute wall-clock label a relative time is paired with in its tooltip. */
-export function absoluteRunTime(value: string) {
+export function absoluteRunTime(value: string, i18n: RoutineTranslator = englishTranslator) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString(undefined, {
+  return i18n.formatDate(date, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -183,36 +205,43 @@ export function absoluteRunTime(value: string) {
   });
 }
 
-function shortDate(value: string | null) {
-  if (!value) return "Not scheduled";
-  return absoluteRunTime(value);
+function shortDate(value: string | null, i18n: RoutineTranslator) {
+  if (!value) return i18n.t("Not scheduled");
+  return absoluteRunTime(value, i18n);
 }
 
 /**
  * "in 3h" ahead of an instant, "3h ago" behind it. Routine times land on both sides
  * of now — the next run is future, every run in the history is past.
  */
-export function relativeRunTime(value: string, nowMs: number = Date.now()) {
+export function relativeRunTime(
+  value: string,
+  nowMs: number = Date.now(),
+  i18n: RoutineTranslator = englishTranslator,
+) {
   const target = new Date(value).getTime();
   if (Number.isNaN(target)) return "";
   const diffMs = target - nowMs;
   const seconds = Math.floor(Math.abs(diffMs) / 1000);
-  if (seconds < 60) return "now";
+  if (seconds < 60) return i18n.t("now");
   const minutes = Math.floor(seconds / 60);
   const span =
     minutes < 60
-      ? `${minutes}m`
+      ? i18n.t("{count}m", { count: minutes })
       : minutes < 1440
-        ? `${Math.floor(minutes / 60)}h`
-        : `${Math.floor(minutes / 1440)}d`;
-  return diffMs >= 0 ? `in ${span}` : `${span} ago`;
+        ? i18n.t("{count}h", { count: Math.floor(minutes / 60) })
+        : i18n.t("{count}d", { count: Math.floor(minutes / 1440) });
+  return diffMs >= 0 ? i18n.t("in {span}", { span }) : i18n.t("{span} ago", { span });
 }
 
 /** The single line a run gets in the history: its error, else its summary, else its status. */
-export function runSummaryLine(run: RoutineAdapterRun) {
+export function runSummaryLine(
+  run: RoutineAdapterRun,
+  i18n: RoutineTranslator = englishTranslator,
+) {
   const detail = run.error ?? run.summary ?? "";
   const line = detail.split("\n").find((part) => part.trim().length > 0);
-  return line?.trim() || runStatusPresentation(run.status).label;
+  return line?.trim() || i18n.t(runStatusPresentation(run.status).label);
 }
 
 /**
@@ -287,13 +316,14 @@ function RoutineFormDialog({
   onClose,
   onSubmit,
 }: {
-  readonly title: string;
-  readonly submitLabel: string;
+  readonly title: MessageKey;
+  readonly submitLabel: MessageKey;
   readonly initialDraft: RoutineAdapterDraft;
   readonly projectOptions: readonly RoutineAdapterProject[];
   readonly onClose: () => void;
   readonly onSubmit?: (draft: RoutineAdapterDraft) => void | Promise<void>;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(() => initialDraft);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -324,18 +354,18 @@ function RoutineFormDialog({
     >
       <DialogPopup className="max-h-[min(42rem,90dvh)] max-w-lg flex-col overflow-hidden">
         <DialogHeader className="border-b px-6 py-5">
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{t(title)}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4 px-6 py-5">
           <label className="block space-y-1.5 text-sm">
-            <span>Name</span>
+            <span>{t("Name")}</span>
             <Input
               value={draft.name}
               onChange={(event) => setDraft({ ...draft, name: event.target.value })}
             />
           </label>
           <label className="block space-y-1.5 text-sm">
-            <span>Instructions</span>
+            <span>{t("Instructions")}</span>
             <Textarea
               value={draft.prompt}
               onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
@@ -343,7 +373,7 @@ function RoutineFormDialog({
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1.5 text-sm">
-              <span>Schedule</span>
+              <span>{t("Schedule")}</span>
               <select
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={draft.schedule.frequency}
@@ -359,13 +389,13 @@ function RoutineFormDialog({
                   })
                 }
               >
-                <option value="daily">Daily</option>
-                <option value="weekdays">Weekdays</option>
-                <option value="weekly">Weekly</option>
+                <option value="daily">{t("Daily")}</option>
+                <option value="weekdays">{t("Weekdays")}</option>
+                <option value="weekly">{t("Weekly")}</option>
               </select>
             </label>
             <label className="space-y-1.5 text-sm">
-              <span>Time</span>
+              <span>{t("Time")}</span>
               <Input
                 type="time"
                 value={draft.schedule.time}
@@ -377,7 +407,7 @@ function RoutineFormDialog({
           </div>
           {draft.schedule.frequency === "weekly" ? (
             <label className="block space-y-1.5 text-sm">
-              <span>Day</span>
+              <span>{t("Day")}</span>
               <select
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={draft.schedule.weekday ?? 1}
@@ -390,14 +420,14 @@ function RoutineFormDialog({
               >
                 {WEEKDAYS.map((day, index) => (
                   <option key={day} value={index}>
-                    {day}
+                    {t(day)}
                   </option>
                 ))}
               </select>
             </label>
           ) : null}
           <label className="block space-y-1.5 text-sm">
-            <span>Timezone</span>
+            <span>{t("Timezone")}</span>
             <Input
               value={draft.schedule.timezone}
               onChange={(event) =>
@@ -410,7 +440,7 @@ function RoutineFormDialog({
           </label>
           {projectOptions.length > 0 ? (
             <label className="block space-y-1.5 text-sm">
-              <span>Project</span>
+              <span>{t("Project")}</span>
               <select
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={draft.projectId}
@@ -425,18 +455,18 @@ function RoutineFormDialog({
             </label>
           ) : !draft.projectId ? (
             <p className="text-xs text-muted-foreground">
-              Add a project to this environment before creating a routine.
+              {t("Add a project to this environment before creating a routine.")}
             </p>
           ) : null}
           <label className="block space-y-1.5 text-sm">
-            <span>Skills</span>
+            <span>{t("Skills")}</span>
             <Input
               value={draft.skills.join(", ")}
               onChange={(event) => setDraft({ ...draft, skills: csv(event.target.value) })}
             />
           </label>
           <label className="block space-y-1.5 text-sm">
-            <span>Connectors</span>
+            <span>{t("Connectors")}</span>
             <Input
               value={draft.connectors.join(", ")}
               onChange={(event) => setDraft({ ...draft, connectors: csv(event.target.value) })}
@@ -445,16 +475,18 @@ function RoutineFormDialog({
         </DialogPanel>
         {saveError ? (
           <p role="alert" className="px-6 text-sm text-destructive">
-            Could not save routine. Try again.
+            {t("Could not save routine")}. {t("Try again")}
           </p>
         ) : null}
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" disabled={saving} />}>Cancel</DialogClose>
+          <DialogClose render={<Button variant="outline" disabled={saving} />}>
+            {t("Cancel")}
+          </DialogClose>
           <Button
             disabled={saving || !draft.name.trim() || !draft.prompt.trim() || !draft.projectId}
             onClick={() => void save()}
           >
-            {saving ? "Saving" : submitLabel}
+            {saving ? t("Saving") : t(submitLabel)}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -464,11 +496,14 @@ function RoutineFormDialog({
 
 /** A relative time that keeps its exact instant one hover away. */
 function RunTime({ value, className }: { readonly value: string; readonly className?: string }) {
-  const absolute = absoluteRunTime(value);
+  const i18n = useI18n();
+  const absolute = absoluteRunTime(value, i18n);
   if (!absolute) return null;
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className={className}>{relativeRunTime(value)}</span>} />
+      <TooltipTrigger
+        render={<span className={className}>{relativeRunTime(value, Date.now(), i18n)}</span>}
+      />
       <TooltipPopup side="top">{absolute}</TooltipPopup>
     </Tooltip>
   );
@@ -476,14 +511,15 @@ function RunTime({ value, className }: { readonly value: string; readonly classN
 
 /** The outcome of one run on a single line: status, when, and what it said. */
 function RunLine({ run }: { readonly run: RoutineAdapterRun }) {
+  const i18n = useI18n();
   const presentation = runStatusPresentation(run.status);
   return (
     <li className="flex items-baseline gap-2 text-xs">
       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${presentation.dot}`} />
-      <span className="sr-only">{presentation.label}</span>
+      <span className="sr-only">{i18n.t(presentation.label)}</span>
       <RunTime value={run.startedAt} className="shrink-0 tabular-nums text-muted-foreground" />
       <span className={`min-w-0 flex-1 truncate ${run.error ? "text-destructive" : ""}`}>
-        {runSummaryLine(run)}
+        {runSummaryLine(run, i18n)}
       </span>
     </li>
   );
@@ -491,6 +527,7 @@ function RunLine({ run }: { readonly run: RoutineAdapterRun }) {
 
 /** Past runs, newest first, kept out of the way behind their own count until asked for. */
 function RunHistory({ runs }: { readonly runs: readonly RoutineAdapterRun[] }) {
+  const { plural } = useI18n();
   const [expanded, setExpanded] = useState(false);
   if (runs.length === 0) return null;
 
@@ -506,7 +543,7 @@ function RunHistory({ runs }: { readonly runs: readonly RoutineAdapterRun[] }) {
           aria-hidden
           className={`size-3 transition-transform ${expanded ? "" : "-rotate-90"}`}
         />
-        {runs.length} {runs.length === 1 ? "run" : "runs"}
+        {plural(runs.length, { one: "{count} run", other: "{count} runs" })}
       </button>
       {expanded ? (
         <ul className="mt-1.5 space-y-1">
@@ -521,24 +558,25 @@ function RunHistory({ runs }: { readonly runs: readonly RoutineAdapterRun[] }) {
 
 /** When the routine next runs, or why it is not going to. */
 function NextRunLine({ routine }: { readonly routine: RoutineAdapterItem }) {
+  const { t } = useI18n();
   if (routine.paused) {
-    return <p className="text-xs text-muted-foreground">Paused until you resume it.</p>;
+    return <p className="text-xs text-muted-foreground">{t("Paused until you resume it.")}</p>;
   }
   if (!routine.enabled) {
     return (
       <p className="text-xs text-muted-foreground">
         {routine.procedureApproved
-          ? "Off until you turn it back on."
-          : "Draft. Approve its procedure to schedule it."}
+          ? t("Off until you turn it back on.")
+          : t("Draft. Approve its procedure to schedule it.")}
       </p>
     );
   }
   if (!routine.nextRunAt) {
-    return <p className="text-xs text-muted-foreground">No next run scheduled.</p>;
+    return <p className="text-xs text-muted-foreground">{t("No next run scheduled.")}</p>;
   }
   return (
     <p className="text-xs text-muted-foreground">
-      Next run <RunTime value={routine.nextRunAt} className="text-foreground" />
+      {t("Next run")} <RunTime value={routine.nextRunAt} className="text-foreground" />
     </p>
   );
 }
@@ -555,6 +593,8 @@ function RoutineCard({
   readonly busy: boolean;
   readonly onOpen: () => void;
 } & Pick<RoutinePanelProps, "onSetEnabled" | "onSetPaused">) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const status = routineStatus(routine);
   const latest = routine.latestRun;
   const dormant = routine.paused || !routine.enabled;
@@ -573,7 +613,7 @@ function RoutineCard({
     >
       <button
         type="button"
-        aria-label={`Open ${routine.name}`}
+        aria-label={t("Open {name}", { name: routine.name })}
         data-routine-row={routine.id}
         onClick={onOpen}
         className="flex w-full items-center gap-3 rounded-md px-1 py-1 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
@@ -589,11 +629,11 @@ function RoutineCard({
             {routine.name}
           </span>
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            {routineScheduleLabel(routine.schedule)}
+            {routineScheduleLabel(routine.schedule, i18n)}
           </span>
         </span>
         <Badge size="sm" variant={status.variant}>
-          {status.label}
+          {t(status.label)}
         </Badge>
         <ChevronRightIcon aria-hidden className="size-4 shrink-0 text-muted-foreground/60" />
       </button>
@@ -603,18 +643,18 @@ function RoutineCard({
         {latest ? (
           <div className="flex min-w-0 items-center gap-1.5">
             <Badge size="sm" variant={runStatusPresentation(latest.status).variant}>
-              {runStatusPresentation(latest.status).label}
+              {t(runStatusPresentation(latest.status).label)}
             </Badge>
             <Tooltip>
               <TooltipTrigger
                 render={
                   <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                    {runSummaryLine(latest)}
+                    {runSummaryLine(latest, i18n)}
                   </span>
                 }
               />
               <TooltipPopup side="top" className="max-w-80">
-                {runSummaryLine(latest)}
+                {runSummaryLine(latest, i18n)}
               </TooltipPopup>
             </Tooltip>
           </div>
@@ -629,7 +669,7 @@ function RoutineCard({
                 disabled={busy || !onSetPaused}
                 onClick={() => onSetPaused?.(routine.id, false)}
               >
-                Resume
+                {t("Resume")}
               </Button>
             ) : reverse === "enable" ? (
               <Button
@@ -638,7 +678,7 @@ function RoutineCard({
                 disabled={busy || !onSetEnabled}
                 onClick={() => onSetEnabled?.(routine.id, true)}
               >
-                Enable
+                {t("Enable")}
               </Button>
             ) : null}
           </div>
@@ -668,6 +708,8 @@ export function RoutineDetail({
   RoutinePanelProps,
   "onApproveProcedure" | "onDryRun" | "onRunNow" | "onSetEnabled" | "onSetPaused"
 >) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const status = routineStatus(routine);
   const latest = routine.latestRun;
 
@@ -675,7 +717,7 @@ export function RoutineDetail({
     <div data-testid="routine-detail">
       <div className="flex items-center gap-2">
         <Button
-          aria-label="Back to routines"
+          aria-label={t("Back to routines")}
           data-routine-back=""
           size="icon-sm"
           variant="ghost"
@@ -685,33 +727,33 @@ export function RoutineDetail({
         </Button>
         <h4 className="min-w-0 flex-1 truncate text-sm font-medium">{routine.name}</h4>
         <Badge size="sm" variant={status.variant}>
-          {status.label}
+          {t(status.label)}
         </Badge>
       </div>
 
       <div className="mt-4 space-y-4">
         <section>
-          <h5 className="text-xs font-medium text-muted-foreground">Instructions</h5>
+          <h5 className="text-xs font-medium text-muted-foreground">{t("Instructions")}</h5>
           <p className="mt-1 whitespace-pre-wrap text-sm">{routine.prompt}</p>
         </section>
 
         <section>
-          <h5 className="text-xs font-medium text-muted-foreground">When to run</h5>
+          <h5 className="text-xs font-medium text-muted-foreground">{t("When to run")}</h5>
           <p className="mt-1 flex items-center gap-1.5 text-sm">
             <Clock3Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-            {routineScheduleLabel(routine.schedule)}
+            {routineScheduleLabel(routine.schedule, i18n)}
           </p>
           <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
             <div className="flex gap-2">
-              <dt>Next</dt>
-              <dd className="text-foreground">{shortDate(routine.nextRunAt)}</dd>
+              <dt>{t("Next run")}</dt>
+              <dd className="text-foreground">{shortDate(routine.nextRunAt, i18n)}</dd>
             </div>
             <div className="flex gap-2">
-              <dt>Last</dt>
-              <dd className="text-foreground">{shortDate(routine.lastRunAt)}</dd>
+              <dt>{t("Last run")}</dt>
+              <dd className="text-foreground">{shortDate(routine.lastRunAt, i18n)}</dd>
             </div>
             <div className="flex gap-2">
-              <dt>Workspace</dt>
+              <dt>{t("Workspace")}</dt>
               <dd className="min-w-0 truncate text-foreground">{projectName}</dd>
             </div>
           </dl>
@@ -719,15 +761,15 @@ export function RoutineDetail({
 
         {latest ? (
           <section>
-            <h5 className="text-xs font-medium text-muted-foreground">Latest run</h5>
+            <h5 className="text-xs font-medium text-muted-foreground">{t("Latest run")}</h5>
             <div className="mt-1 flex items-center gap-1.5">
               <Badge size="sm" variant={runStatusPresentation(latest.status).variant}>
-                {runStatusPresentation(latest.status).label}
+                {t(runStatusPresentation(latest.status).label)}
               </Badge>
               <RunTime value={latest.startedAt} className="text-xs text-muted-foreground" />
             </div>
             <p className={`mt-1 text-sm ${latest.error ? "text-destructive" : ""}`}>
-              {runSummaryLine(latest)}
+              {runSummaryLine(latest, i18n)}
             </p>
             <div className="mt-2">
               <RunHistory runs={routine.runHistory} />
@@ -738,7 +780,7 @@ export function RoutineDetail({
         {!routine.procedureApproved ? (
           <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
             <p className="text-xs text-muted-foreground">
-              This routine runs only once you approve its procedure.
+              {t("This routine runs only once you approve its procedure.")}
             </p>
             <Button
               className="mt-2"
@@ -746,7 +788,7 @@ export function RoutineDetail({
               disabled={busy || !actions.onApproveProcedure}
               onClick={() => actions.onApproveProcedure?.(routine.id)}
             >
-              Approve procedure
+              {t("Approve procedure")}
             </Button>
           </div>
         ) : null}
@@ -759,7 +801,7 @@ export function RoutineDetail({
               disabled={busy || !actions.onSetPaused}
               onClick={() => actions.onSetPaused?.(routine.id, false)}
             >
-              Resume
+              {t("Resume")}
             </Button>
           ) : !routine.enabled && routine.procedureApproved ? (
             <Button
@@ -768,7 +810,7 @@ export function RoutineDetail({
               disabled={busy || !actions.onSetEnabled}
               onClick={() => actions.onSetEnabled?.(routine.id, true)}
             >
-              Enable
+              {t("Enable")}
             </Button>
           ) : routine.enabled ? (
             <Button
@@ -777,7 +819,7 @@ export function RoutineDetail({
               disabled={busy || !actions.onSetPaused}
               onClick={() => actions.onSetPaused?.(routine.id, true)}
             >
-              Pause
+              {t("Pause")}
             </Button>
           ) : null}
           <Button
@@ -786,7 +828,7 @@ export function RoutineDetail({
             disabled={busy || !actions.onDryRun}
             onClick={() => actions.onDryRun?.(routine.id)}
           >
-            Test
+            {t("Test")}
           </Button>
           <Button
             size="xs"
@@ -794,13 +836,13 @@ export function RoutineDetail({
             disabled={busy || !routine.procedureApproved || !actions.onRunNow}
             onClick={() => actions.onRunNow?.(routine.id)}
           >
-            Run now
+            {t("Run now")}
           </Button>
           <Button size="xs" variant="ghost" disabled={busy} onClick={onEdit}>
-            Edit
+            {t("Edit")}
           </Button>
           <Button size="xs" variant="destructive-outline" disabled={busy} onClick={onDeleteRequest}>
-            Delete
+            {t("Delete")}
           </Button>
         </div>
       </div>
@@ -821,6 +863,7 @@ export function RoutinePanel({
   onDelete,
   ...actions
 }: RoutinePanelProps) {
+  const { t } = useI18n();
   const [creating, setCreating] = useState(false);
   const [editorRoutine, setEditorRoutine] = useState<RoutineAdapterItem | null>(null);
   const [deleteRoutine, setDeleteRoutine] = useState<RoutineAdapterItem | null>(null);
@@ -880,13 +923,13 @@ export function RoutinePanel({
       {openRoutine === null ? (
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium" ref={headingRef} tabIndex={-1}>
-            Routines
+            {t("Routines")}
           </h3>
           {onCreate && status === "ready" && routines.length > 0 ? (
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="New routine"
+              aria-label={t("New routine")}
               onClick={() => setCreating(true)}
             >
               <PlusIcon aria-hidden />
@@ -897,15 +940,15 @@ export function RoutinePanel({
       {status === "loading" ? (
         <div
           className="flex min-h-20 items-center justify-center text-xs text-muted-foreground"
-          aria-label="Loading routines"
+          aria-label={t("Loading routines")}
         >
-          Loading
+          {t("Loading")}
         </div>
       ) : status === "error" ? (
-        <p className="mt-2 text-xs text-destructive">{error || "Could not load routines."}</p>
+        <p className="mt-2 text-xs text-destructive">{error || t("Could not load routines.")}</p>
       ) : status === "unavailable" ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          Routines are not available for this environment.
+          {t("Routines are not available for this environment.")}
         </p>
       ) : openRoutine !== null ? (
         <div ref={detailRef}>
@@ -930,18 +973,18 @@ export function RoutinePanel({
         </div>
       ) : routines.length === 0 ? (
         <div className="py-6 text-center">
-          <p className="text-sm font-medium">No routines</p>
+          <p className="text-sm font-medium">{t("No routines")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Routines are recurring tasks {botName} runs on a schedule.
+            {t("Routines are recurring tasks {botName} runs on a schedule.", { botName })}
           </p>
           {onCreate ? (
             <Button className="mt-3" size="sm" onClick={() => setCreating(true)}>
               <PlusIcon aria-hidden />
-              New routine
+              {t("New routine")}
             </Button>
           ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
-            Or ask {botName} in chat to set one up.
+            {t("Or ask {botName} in chat to set one up.", { botName })}
           </p>
         </div>
       ) : (
@@ -992,14 +1035,16 @@ export function RoutinePanel({
           finalFocus={() => deletedFocusTarget.current === undefined}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete routine "{deleteRoutine?.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("Delete routine “{name}”?", { name: deleteRoutine?.name ?? "" })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the schedule and its run history.
+              {t("This removes the schedule and its run history.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="outline" disabled={deleteBusy} />}>
-              Cancel
+              {t("Cancel")}
             </AlertDialogClose>
             <Button
               variant="destructive"
@@ -1027,12 +1072,12 @@ export function RoutinePanel({
                   });
               }}
             >
-              {deleteBusy ? "Deleting" : "Delete"}
+              {t("Delete")}
             </Button>
           </AlertDialogFooter>
           {deleteError ? (
             <p role="alert" className="text-sm text-destructive">
-              Could not delete routine. Try again.
+              {t("Could not delete routine")}. {t("Try again")}
             </p>
           ) : null}
         </AlertDialogPopup>

@@ -1,3 +1,4 @@
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import type { Routine, RoutineReceiptSource, RoutineRun, ThreadId } from "@t3tools/contracts";
 import type { BotConversationEntry } from "./botConversationPresentation";
 
@@ -33,6 +34,7 @@ export function mergeBotConversationTimeline(
       : item,
   );
 }
+type ReceiptTranslator = Pick<ReturnType<typeof createTranslator>, "t">;
 
 export function mergeRoutineRunHistory(
   history: ReadonlyArray<RoutineRun>,
@@ -41,16 +43,19 @@ export function mergeRoutineRunHistory(
   return [...new Map([...history, ...recent].map((run) => [run.id, run])).values()];
 }
 
-function withDetail(summary: string, detail: string | undefined): string {
-  const trimmed = detail?.trim();
-  return trimmed ? `${summary}: ${trimmed}` : summary;
-}
+const englishTranslator: ReceiptTranslator = createTranslator("en");
 
+/** Routine and run text stay as written; only the sentence around them is translated. */
 export function deriveRoutineReceipts(
   threadId: ThreadId,
   routines: ReadonlyArray<Routine | RoutineReceiptSource>,
   runs: ReadonlyArray<RoutineRun>,
+  { t }: ReceiptTranslator = englishTranslator,
 ): RoutineReceipt[] {
+  const withDetail = (summary: string, detail: string | undefined) => {
+    const trimmed = detail?.trim();
+    return trimmed ? t("{summary}: {detail}", { summary, detail: trimmed }) : summary;
+  };
   const threadRoutines = routines.filter((routine) => routine.targetThreadId === threadId);
   const byRoutineId = new Map(threadRoutines.map((routine) => [routine.id, routine]));
   const receipts: RoutineReceipt[] = [];
@@ -60,7 +65,7 @@ export function deriveRoutineReceipts(
     receipts.push({
       id: `routine-created:${routine.id}`,
       createdAt: routine.createdAt,
-      text: `Routine "${routine.job}" was created`,
+      text: t("Routine “{name}” was created", { name: routine.job }),
       tone: "info",
       ...(archived ? { archived: true } : {}),
     });
@@ -74,7 +79,7 @@ export function deriveRoutineReceipts(
       receipts.push({
         id: `routine-run-started:${run.id}`,
         createdAt: run.startedAt,
-        text: `"${routine.job}" started a run`,
+        text: t("“{name}” started a run", { name: routine.job }),
         tone: "info",
         ...(archived ? { archived: true } : {}),
       });
@@ -90,7 +95,7 @@ export function deriveRoutineReceipts(
         receipts.push({
           id: `routine-run-finished:${run.id}`,
           createdAt: run.completedAt ?? run.updatedAt,
-          text: `"${routine.job}" was canceled`,
+          text: t("“{name}” was canceled", { name: routine.job }),
           tone: "info",
           ...(archived ? { archived: true } : {}),
         });
@@ -100,7 +105,7 @@ export function deriveRoutineReceipts(
         receipts.push({
           id: `routine-run-finished:${run.id}`,
           createdAt: run.completedAt ?? run.updatedAt,
-          text: withDetail(`"${routine.job}" failed`, run.failure?.message),
+          text: withDetail(t("“{name}” failed", { name: routine.job }), run.failure?.message),
           tone: "error",
           ...(archived ? { archived: true } : {}),
         });
@@ -109,7 +114,7 @@ export function deriveRoutineReceipts(
         receipts.push({
           id: `routine-run-finished:${run.id}`,
           createdAt: run.completedAt ?? run.updatedAt,
-          text: withDetail(`"${routine.job}" finished`, run.result?.summary),
+          text: withDetail(t("“{name}” finished", { name: routine.job }), run.result?.summary),
           tone: "success",
           ...(archived ? { archived: true } : {}),
         });

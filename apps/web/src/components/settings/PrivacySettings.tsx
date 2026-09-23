@@ -6,7 +6,10 @@ import {
 } from "@t3tools/client-runtime/durable-memory";
 import { AKERU_MARKETING_SITE_URL, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
 
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
+
 import { usePrimarySettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { Switch } from "../ui/switch";
 import {
   SettingResetButton,
@@ -14,7 +17,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { searchableSetting, type SettingsSearchItemId } from "./settingsSearch";
 
 const privacyPolicyUrl = `${AKERU_MARKETING_SITE_URL}/privacy-policy`;
 const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
@@ -22,8 +25,15 @@ const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
 export function PrivacySettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
-  const memoryHint = (description: string) =>
-    settings.memory.enabled ? description : `${description} ${MEMORY_SETTING_DISABLED_HINT}`;
+  const { t } = useI18n();
+  const memoryHint = (description: MessageKey) =>
+    settings.memory.enabled
+      ? t(description)
+      : `${t(description)} ${t(MEMORY_SETTING_DISABLED_HINT)}`;
+  const translatedSetting = (id: SettingsSearchItemId) => {
+    const setting = searchableSetting(id);
+    return { ...setting, title: t(setting.title) };
+  };
 
   return (
     <SettingsPageContainer>
@@ -90,22 +100,22 @@ export function PrivacySettingsPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Memory">
+      <SettingsSection title={t("Memory")}>
         <SettingsRow
-          {...searchableSetting("memory-enabled")}
-          description="Keep durable facts that bots can use across chats."
+          {...translatedSetting("memory-enabled")}
+          description={t("Keep durable facts that bots can use across chats.")}
           control={
             <Switch
               checked={settings.memory.enabled}
               onCheckedChange={(checked) =>
                 updateSettings({ memory: { enabled: Boolean(checked) } })
               }
-              aria-label="Memory"
+              aria-label={t("Memory")}
             />
           }
         />
         <SettingsRow
-          {...searchableSetting("memory-private-bot")}
+          {...translatedSetting("memory-private-bot")}
           description={memoryHint("Let each bot keep facts about you that only that bot uses.")}
           control={
             <Switch
@@ -114,12 +124,12 @@ export function PrivacySettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ memory: { privateBotMemory: Boolean(checked) } })
               }
-              aria-label="Private bot memory"
+              aria-label={t("Private bot memory")}
             />
           }
         />
         <SettingsRow
-          {...searchableSetting("memory-shared-project")}
+          {...translatedSetting("memory-shared-project")}
           description={memoryHint(SHARED_PROJECT_MEMORY_SETTING.description)}
           control={
             <Switch
@@ -130,7 +140,7 @@ export function PrivacySettingsPanel() {
                   memory: { sharedProjectMemory: sharedProjectMemoryMode(Boolean(checked)) },
                 })
               }
-              aria-label={SHARED_PROJECT_MEMORY_SETTING.label}
+              aria-label={t(SHARED_PROJECT_MEMORY_SETTING.label)}
             />
           }
         />

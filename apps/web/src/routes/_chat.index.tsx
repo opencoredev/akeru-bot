@@ -11,6 +11,7 @@ import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
+import { useI18n } from "../i18n";
 import { openSettings } from "../settingsDialogStore";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 
@@ -51,6 +52,7 @@ export const Route = createFileRoute("/_chat/")({
 });
 
 function HostedStaticOnboardingState() {
+  const { t } = useI18n();
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
@@ -69,15 +71,15 @@ function HostedStaticOnboardingState() {
                 <LinkIcon className="size-5" />
               </div>
               <EmptyTitle className="text-foreground text-xl">
-                Connect an environment to get started
+                {t("Connect an environment to get started")}
               </EmptyTitle>
               <EmptyDescription className="mt-2 text-sm leading-relaxed text-muted-foreground/78">
-                Add a reachable backend manually to start working from this browser.
+                {t("Add a reachable backend manually to start working from this browser.")}
               </EmptyDescription>
               <div className="mt-6 flex justify-center">
                 <Button size="sm" onClick={() => openSettings("connections")}>
                   <PlusIcon className="size-4" />
-                  Add environment
+                  {t("Add environment")}
                 </Button>
               </div>
             </EmptyHeader>

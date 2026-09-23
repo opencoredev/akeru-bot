@@ -20,6 +20,7 @@ import {
 } from "./DurableMemoryPanels";
 
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { usePrimarySessionState } from "../../environments/primary";
 import { environmentBotsAtom } from "../../state/bots";
@@ -80,6 +81,7 @@ function DurableFactsSection({
   botId,
   access,
 }: BotDurableMemoryProps & { readonly access: OperateAccess }) {
+  const { t } = useI18n();
   const memory = useEnvironmentSettings(threadRef.environmentId, (settings) => settings.memory);
   const policy = useMemo(
     () => ({
@@ -108,7 +110,9 @@ function DurableFactsSection({
   const [busyRootId, setBusyRootId] = useState<string | null>(null);
   const [editing, setEditing] = useState<DurableFactEditing | null>(null);
   const [confirmingDeleteRootId, setConfirmingDeleteRootId] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<ReturnType<typeof describeDurableFactFailure> | null>(
+    null,
+  );
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
   const query = useEnvironmentQuery(
     memoryEnvironment.listFacts({
@@ -131,7 +135,7 @@ function DurableFactsSection({
       });
       if (result._tag === "Failure") {
         const described = describeDurableFactFailure(squashAtomCommandFailure(result));
-        setFailure(described.message);
+        setFailure(described);
         // A stale edit would overwrite the newer text, so drop it with the old revision.
         if (described.conflict) resetDrafts();
         return;
@@ -145,9 +149,9 @@ function DurableFactsSection({
   return (
     <section className="space-y-3 rounded-lg border border-border p-3">
       <div>
-        <h3 className="text-sm font-medium">Durable facts</h3>
+        <h3 className="text-sm font-medium">{t("Durable facts")}</h3>
         <p className="text-xs text-muted-foreground">
-          Facts kept beyond this chat. Clearing chat observations does not remove them.
+          {t("Facts kept beyond this chat. Clearing chat observations does not remove them.")}
         </p>
       </div>
       <DurableScopePicker
@@ -162,16 +166,17 @@ function DurableFactsSection({
       />
       {query.error ? (
         <p role="alert" className="text-sm text-destructive">
-          Durable facts unavailable.
+          {t("Durable facts unavailable.")}
         </p>
       ) : null}
       {failure ? (
         <p role="alert" className="text-sm text-destructive">
-          {failure}
+          {t(failure.message)}
+          {failure.detail ? ` ${failure.detail}` : null}
         </p>
       ) : null}
       {query.isPending && !query.data ? (
-        <p className="text-sm text-muted-foreground">Loading durable facts…</p>
+        <p className="text-sm text-muted-foreground">{t("Loading durable facts…")}</p>
       ) : null}
       {query.data && !query.error ? (
         <DurableFactList
@@ -200,7 +205,7 @@ function DurableFactsSection({
           onCancelDelete={() => setConfirmingDeleteRootId(null)}
         />
       ) : null}
-      {readOnlyReason ? <p className="text-xs text-muted-foreground">{readOnlyReason}</p> : null}
+      {readOnlyReason ? <p className="text-xs text-muted-foreground">{t(readOnlyReason)}</p> : null}
     </section>
   );
 }

@@ -27,6 +27,10 @@ import {
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import { ensureLocalApi } from "~/localApi";
 import {
+  CLIENT_SETTINGS_STORAGE_KEY,
+  readBrowserClientSettings,
+} from "../clientPersistenceStorage";
+import {
   getThemeDefinition,
   getThemePreviewSidebarArtwork,
   resolveThemeHalf,
@@ -79,11 +83,23 @@ function setClientSettingsHydrated(nextHydrated: boolean): void {
   emitClientSettingsHydrationChange();
 }
 
+function onClientSettingsStorage(event: StorageEvent): void {
+  if (window.desktopBridge || (event.key !== CLIENT_SETTINGS_STORAGE_KEY && event.key !== null))
+    return;
+  void hydrateClientSettings().then(() => {
+    replaceClientSettingsSnapshot({ ...DEFAULT_CLIENT_SETTINGS, ...readBrowserClientSettings() });
+  });
+}
+
 function subscribeClientSettings(listener: () => void): () => void {
+  if (clientSettingsListeners.size === 0)
+    window.addEventListener("storage", onClientSettingsStorage);
   clientSettingsListeners.add(listener);
   void hydrateClientSettings();
   return () => {
     clientSettingsListeners.delete(listener);
+    if (clientSettingsListeners.size === 0)
+      window.removeEventListener("storage", onClientSettingsStorage);
   };
 }
 

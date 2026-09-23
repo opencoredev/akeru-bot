@@ -9,6 +9,11 @@ const effects = vi.hoisted(() => ({
   slots: [] as { deps: readonly unknown[]; cleanup: void | (() => void) }[],
 }));
 
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");

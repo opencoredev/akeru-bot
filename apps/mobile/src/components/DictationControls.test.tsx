@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { DictationControls, type DictationControlsProps } from "./DictationControls";
 
 const state = vi.hoisted(() => ({
+  locale: "en" as "en" | "zh-CN",
   announce: vi.fn(),
   platform: { OS: "ios" },
   refs: [] as Array<{ current: unknown }>,
@@ -28,6 +29,12 @@ vi.mock("react-native", () => ({
 vi.mock("./AppText", () => ({ AppText: "Text" }));
 vi.mock("./AppSymbol", () => ({ SymbolView: "SymbolView" }));
 vi.mock("../lib/useThemeColor", () => ({ useThemeColor: () => "#000" }));
+vi.mock("../lib/i18n", async () => {
+  const { catalogRegistry, createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const zhCN = await catalogRegistry["zh-CN"]!();
+  const translators = { en: createTranslator("en"), "zh-CN": createTranslator("zh-CN", zhCN) };
+  return { useMobileI18n: () => ({ t: translators[state.locale].translate }) };
+});
 
 function find(node: ReactNode, key: string, value: unknown): Record<string, unknown> | undefined {
   if (Array.isArray(node)) {
@@ -57,6 +64,7 @@ const callbacks = () => ({ onStart: vi.fn(), onRelease: vi.fn(), onCancel: vi.fn
 const event = {} as Parameters<NonNullable<ComponentProps<typeof View>["onResponderGrant"]>>[0];
 
 beforeEach(() => {
+  state.locale = "en";
   state.platform.OS = "ios";
   state.cursor = 0;
   state.refs = [];
@@ -164,6 +172,24 @@ describe("native DictationControls interaction handlers", () => {
     >;
     dismiss.onPress!(event);
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces and labels dictation in the selected language", () => {
+    state.locale = "zh-CN";
+    const recording = DictationControls({ status: "recording", ...callbacks() });
+    expect(find(recording, "accessibilityLiveRegion", "polite")!.children).toBe("正在录制听写。");
+    expect(state.announce).toHaveBeenCalledWith("正在录制听写。");
+    expect(find(recording, "accessibilityLabel", "停止听写")).toBeDefined();
+    state.cursor = 0;
+    const unavailable = DictationControls({
+      status: "idle",
+      unavailableReason: "No microphone",
+      ...callbacks(),
+    });
+    // The provider reason stays verbatim inside the translated template.
+    expect(find(unavailable, "accessibilityLiveRegion", "polite")!.children).toBe(
+      "听写不可用：No microphone",
+    );
   });
 
   it("explains a blocked send-slot mic instead of starting", () => {

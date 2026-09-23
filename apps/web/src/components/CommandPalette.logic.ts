@@ -118,6 +118,35 @@ export interface CommandPaletteGroup {
   readonly items: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
 }
 
+export function buildLanguageCommandPaletteAction(input: {
+  readonly translate: (message: string) => string;
+  readonly openSettings: (section: "general", targetId: "language") => void;
+  readonly icon: ReactNode;
+}): CommandPaletteActionItem {
+  const title = input.translate("Change language");
+  return {
+    kind: "action",
+    value: "action:language",
+    searchTerms: [
+      title,
+      "language",
+      "locale",
+      "translation",
+      "English",
+      "system default",
+      "preferences",
+      "Chinese",
+      "中文",
+      "简体中文",
+    ],
+    title,
+    icon: input.icon,
+    run: async () => {
+      input.openSettings("general", "language");
+    },
+  };
+}
+
 export function buildModelPickerCommandPaletteAction(input: {
   readonly composerHandle: { readonly openModelPicker: () => void } | null;
   readonly closePalette: () => void;

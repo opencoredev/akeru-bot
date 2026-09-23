@@ -26,7 +26,8 @@ import {
   type DesktopWslState,
   type EnvironmentId,
 } from "@t3tools/contracts";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
+import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
+import { useI18n } from "../../i18n";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -1298,6 +1299,7 @@ function SavedBackendListRow({
   onConnect,
   onRemove,
 }: SavedBackendListRowProps) {
+  const { t } = useI18n();
   const environmentId = environment.environmentId;
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
@@ -1310,7 +1312,7 @@ function SavedBackendListRow({
         : connectionState === "error"
           ? "bg-destructive"
           : "bg-muted-foreground/40";
-  const statusTooltip = connectionStatusText(environment.connection);
+  const statusTooltip = translateConnectionStatus(t, environment.connection);
   const errorTraceId = environment.connection.traceId;
   const { copyToClipboard: copyTraceIdToClipboard } = useCopyToClipboard<{ traceId: string }>({
     target: "trace ID",
@@ -1400,14 +1402,21 @@ function SavedBackendListRow({
           ) : null}
           {environment.connection.error && !resumingServerUpdate ? (
             <p className="flex min-w-0 items-center gap-2 text-destructive text-xs">
-              <span className="truncate">{connectionStatusText(environment.connection)}</span>
+              <Tooltip>
+                <TooltipTrigger render={<span className="truncate" />}>
+                  {statusTooltip}
+                </TooltipTrigger>
+                <TooltipPopup side="top" className="max-w-sm break-words">
+                  {environment.connection.error}
+                </TooltipPopup>
+              </Tooltip>
               {errorTraceId ? (
                 <button
                   type="button"
                   className="shrink-0 underline underline-offset-2"
                   onClick={() => copyTraceId(errorTraceId)}
                 >
-                  Copy trace ID
+                  {t("Copy trace ID")}
                 </button>
               ) : null}
             </p>

@@ -29,13 +29,17 @@ describe("confirm dialog coordinator", () => {
   it("resolves a displayed confirmation and waits for its close transition", async () => {
     const unregister = registerConfirmDialogHost();
     const confirmation = requireConfirmation(
-      requestConfirmDialog("Delete this thread?", { variant: "destructive" }),
+      requestConfirmDialog("Delete this thread?", {
+        variant: "destructive",
+        confirmLabel: "Delete chat",
+      }),
     );
 
     expect(readConfirmDialogState()).toEqual({
       status: "confirming",
       message: "Delete this thread?",
       variant: "destructive",
+      confirmLabel: "Delete chat",
     });
 
     respondToConfirmDialog(true);
@@ -44,6 +48,7 @@ describe("confirm dialog coordinator", () => {
       status: "closing",
       message: "Delete this thread?",
       variant: "destructive",
+      confirmLabel: "Delete chat",
     });
 
     completeConfirmDialogClose();
@@ -62,6 +67,7 @@ describe("confirm dialog coordinator", () => {
       status: "closing",
       message: "Delete the project?",
       variant: "default",
+      confirmLabel: null,
     });
 
     completeConfirmDialogClose();
@@ -69,6 +75,7 @@ describe("confirm dialog coordinator", () => {
       status: "confirming",
       message: "Delete the worktree too?",
       variant: "default",
+      confirmLabel: null,
     });
 
     respondToConfirmDialog(true);

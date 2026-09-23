@@ -1,9 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
 import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useId, useReducer, useState, type ReactNode } from "react";
 
+import { useI18n } from "../../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { ensureLocalApi } from "../../localApi";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
@@ -37,22 +39,29 @@ function reducePanelState(state: PanelState, action: PanelAction): PanelState {
   return { ...state, mobileOpen: action.open };
 }
 
+type Translate = (message: string, params?: Record<string, string | number>) => string;
+
+const englishTranslate: Translate = createTranslator("en").translate;
+
 /**
  * Explains why the member list blocks removal, so the way back out of a group
  * change is always visible. Returns null when every specialist can be removed.
  */
-export function groupMemberRemovalHint(input: {
-  readonly memberCount: number;
-  readonly bossName: string | null;
-  readonly canAddBot: boolean;
-}): string | null {
+export function groupMemberRemovalHint(
+  input: {
+    readonly memberCount: number;
+    readonly bossName: string | null;
+    readonly canAddBot: boolean;
+  },
+  t: Translate = englishTranslate,
+): string | null {
   if (input.memberCount <= 2) {
     return input.canAddBot
-      ? "A group needs at least two bots. Add another bot before you remove one."
-      : "A group needs at least two bots. Create a new bot in the roster before you remove one.";
+      ? t("A group needs at least two bots. Add another bot before you remove one.")
+      : t("A group needs at least two bots. Create a new bot in the roster before you remove one.");
   }
   if (input.bossName !== null) {
-    return `To remove ${input.bossName}, make another bot the boss first.`;
+    return t("To remove {name}, make another bot the boss first.", { name: input.bossName });
   }
   return null;
 }
@@ -76,6 +85,7 @@ function GroupEditor({
   readonly bots: readonly Bot[];
   readonly onDeleted: () => void;
 }) {
+  const { t, plural } = useI18n();
   const renameGroup = useAtomCommand(botEnvironment.groups.rename, {
     reportFailure: false,
   });
@@ -105,11 +115,14 @@ function GroupEditor({
   const availableBots = activeBots.filter((bot) => !groupContainsBot(group, bot.id));
   const removalHintId = useId();
   const addHintId = useId();
-  const removalHint = groupMemberRemovalHint({
-    memberCount: members.length,
-    bossName: members.find((bot) => bot.id === group.bossBotId)?.name ?? null,
-    canAddBot: availableBots.length > 0,
-  });
+  const removalHint = groupMemberRemovalHint(
+    {
+      memberCount: members.length,
+      bossName: members.find((bot) => bot.id === group.bossBotId)?.name ?? null,
+      canAddBot: availableBots.length > 0,
+    },
+    t,
+  );
 
   useEffect(() => setName(group.name), [group.name]);
   useEffect(() => {
@@ -131,14 +144,16 @@ function GroupEditor({
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
       <div className="flex flex-col items-center gap-3 pb-7 pt-6">
         <GroupMemberStack group={group} bots={bots} sizeClassName="size-16" />
-        <span className="text-sm text-muted-foreground">{members.length} bots</span>
+        <span className="text-sm text-muted-foreground">
+          {plural(members.length, { one: "{count} bot", other: "{count} bots" })}
+        </span>
       </div>
       <div className="space-y-5">
         <label className="block space-y-2 text-sm font-medium">
-          Name
+          {t("Name")}
           <div className="flex gap-2">
             <Input
-              aria-label="Group name"
+              aria-label={t("Group name")}
               className="w-0 min-w-0 flex-1"
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
@@ -156,16 +171,16 @@ function GroupEditor({
                         name: name.trim(),
                       },
                     }),
-                  "Could not rename group",
+                  t("Could not rename group"),
                 )
               }
             >
-              Save
+              {t("Save")}
             </Button>
           </div>
         </label>
         <label className="block space-y-2 text-sm font-medium">
-          Boss
+          {t("Boss")}
           <Select
             value={group.bossBotId ?? ""}
             onValueChange={(botId) => {
@@ -180,13 +195,13 @@ function GroupEditor({
                       unassignPreviousBoss: false,
                     },
                   }),
-                "Could not change group boss",
+                t("Could not change group boss"),
               );
             }}
           >
-            <SelectTrigger aria-label="Group boss" className="w-full">
+            <SelectTrigger aria-label={t("Group boss")} className="w-full">
               <SelectValue>
-                {members.find((bot) => bot.id === group.bossBotId)?.name ?? "Choose boss"}
+                {members.find((bot) => bot.id === group.bossBotId)?.name ?? t("Choose boss")}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup>
@@ -200,7 +215,7 @@ function GroupEditor({
         </label>
         <section className="space-y-2" aria-labelledby="group-bots-heading">
           <h3 id="group-bots-heading" className="text-sm font-medium">
-            Bots
+            {t("Bots")}
           </h3>
           <div className="space-y-1 rounded-lg border p-2">
             {members.map((bot) => {
@@ -215,11 +230,14 @@ function GroupEditor({
                 <div key={bot.id} className="flex min-h-9 items-center gap-2 rounded-md px-1">
                   <span className="min-w-0 flex-1 truncate text-sm">{bot.name}</span>
                   <span className="text-xs capitalize text-muted-foreground">
-                    {role?.kind === "bot" ? role.role : "specialist"}
+                    {role?.kind === "bot" && role.role === "boss" ? t("Boss") : t("Specialist")}
                   </span>
                   <Button
                     aria-describedby={removalHint && blockedByRule ? removalHintId : undefined}
-                    aria-label={`Remove ${bot.name} from ${group.name}`}
+                    aria-label={t("Remove {bot} from {group}", {
+                      bot: bot.name,
+                      group: group.name,
+                    })}
                     disabled={busy || role?.kind !== "bot" || blockedByRule}
                     size="icon-sm"
                     variant="ghost"
@@ -233,7 +251,7 @@ function GroupEditor({
                               botId: BotId.make(bot.id),
                             },
                           }),
-                        `Could not remove ${bot.name}`,
+                        t("Could not remove {name}", { name: bot.name }),
                       )
                     }
                   >
@@ -255,11 +273,11 @@ function GroupEditor({
               onValueChange={(value) => value && setNewMemberId(value)}
             >
               <SelectTrigger
-                aria-label="Add bot"
+                aria-label={t("Add bot")}
                 aria-describedby={availableBots.length === 0 ? addHintId : undefined}
                 className="min-w-0 flex-1"
               >
-                <SelectValue placeholder="Choose bot" />
+                <SelectValue placeholder={t("Choose bot")} />
               </SelectTrigger>
               <SelectPopup>
                 {availableBots.map((bot) => (
@@ -270,7 +288,7 @@ function GroupEditor({
               </SelectPopup>
             </Select>
             <Button
-              aria-label="Add bot to group"
+              aria-label={t("Add bot to group")}
               disabled={busy || !newMemberId}
               size="icon"
               variant="outline"
@@ -285,7 +303,7 @@ function GroupEditor({
                         role: "specialist",
                       },
                     }),
-                  "Could not add bot",
+                  t("Could not add bot"),
                 ).then((success) => success && setNewMemberId(""))
               }
             >
@@ -294,7 +312,7 @@ function GroupEditor({
           </div>
           {availableBots.length === 0 ? (
             <p id={addHintId} className="text-xs text-muted-foreground">
-              Every bot is already in this group.
+              {t("Every bot is already in this group.")}
             </p>
           ) : null}
         </section>
@@ -358,15 +376,15 @@ function GroupEditor({
       </div>
       <div className="mt-6 -mx-2">
         <SettingsRow
-          title="Delete group"
+          title={t("Delete group")}
           control={
             <Button
               disabled={busy}
               variant="destructive"
               onClick={async () => {
                 const confirmed = await ensureLocalApi().dialogs.confirm(
-                  `Delete "${group.name}"? Its bots stay in your roster.`,
-                  { variant: "destructive" },
+                  t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
+                  { variant: "destructive", confirmLabel: t("Delete group") },
                 );
                 if (!confirmed) return;
                 const success = await run(
@@ -375,12 +393,12 @@ function GroupEditor({
                       environmentId,
                       input: { groupId: GroupId.make(group.id) },
                     }),
-                  "Could not delete group",
+                  t("Could not delete group"),
                 );
                 if (success) onDeleted();
               }}
             >
-              Delete
+              {t("Delete")}
             </Button>
           }
         />
@@ -395,6 +413,7 @@ export function GroupDetailsPanel(props: {
   readonly bots: readonly Bot[];
   readonly onDeleted: () => void;
 }) {
+  const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reducePanelState, {
     desktopOpen: true,
@@ -427,7 +446,7 @@ export function GroupDetailsPanel(props: {
   const content = (closeButton?: ReactNode) => (
     <>
       <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-        <h2 className="text-sm font-medium">Group</h2>
+        <h2 className="text-sm font-medium">{t("Group")}</h2>
         <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
           {closeButton}
         </div>
@@ -440,7 +459,7 @@ export function GroupDetailsPanel(props: {
     <>
       <aside
         aria-hidden={!panelState.desktopOpen}
-        aria-label={`${props.group.name} group sidebar`}
+        aria-label={t("{name} group sidebar", { name: props.group.name })}
         data-testid="group-details-panel"
         className={
           panelState.desktopOpen
@@ -454,7 +473,7 @@ export function GroupDetailsPanel(props: {
               render={
                 <Button
                   aria-expanded="true"
-                  aria-label={`Collapse ${props.group.name} group sidebar`}
+                  aria-label={t("Collapse {name} group sidebar", { name: props.group.name })}
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => dispatchPanel({ type: "toggle-desktop" })}
@@ -464,7 +483,9 @@ export function GroupDetailsPanel(props: {
               }
             />
             <TooltipPopup side="left">
-              Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
+              {shortcutLabel
+                ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
+                : t("Collapse")}
             </TooltipPopup>
           </Tooltip>,
         )}
@@ -472,7 +493,7 @@ export function GroupDetailsPanel(props: {
       {!panelState.desktopOpen ? (
         <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex">
           <Button
-            aria-label={`Open ${props.group.name} group sidebar`}
+            aria-label={t("Open {name} group sidebar", { name: props.group.name })}
             size="icon-sm"
             variant="ghost"
             onClick={() => dispatchPanel({ type: "toggle-desktop" })}
@@ -483,7 +504,7 @@ export function GroupDetailsPanel(props: {
       ) : null}
       <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 flex h-[var(--workspace-topbar-height)] items-center min-[981px]:hidden">
         <Button
-          aria-label={`Open ${props.group.name} group sidebar`}
+          aria-label={t("Open {name} group sidebar", { name: props.group.name })}
           size="icon-sm"
           variant="ghost"
           onClick={() => dispatchPanel({ type: "set-mobile", open: true })}
@@ -500,10 +521,12 @@ export function GroupDetailsPanel(props: {
           showCloseButton={false}
           side="right"
         >
-          <SheetTitle className="sr-only">Edit {props.group.name}</SheetTitle>
+          <SheetTitle className="sr-only">
+            {t("Edit {name}", { name: props.group.name })}
+          </SheetTitle>
           {content(
             <SheetClose
-              aria-label="Close group sidebar"
+              aria-label={t("Close group sidebar")}
               render={<Button size="icon-sm" variant="ghost" />}
             >
               <AppIcon icon={Cancel01Icon} />

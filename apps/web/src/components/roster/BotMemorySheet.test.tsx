@@ -38,14 +38,14 @@ describe("BotMemorySheet", () => {
       "utf8",
     );
     expect(transfer).toContain("onClick={() => fileInputRef.current?.click()}");
-    expect(transfer).toMatch(/>\s*Import memory archive\s*</);
+    expect(transfer).toMatch(/>\s*\{t\("Import memory archive"\)\}\s*</);
     expect(transfer).toMatch(/<input\s+ref=\{fileInputRef\}\s+className="sr-only"/);
-    expect(transfer).not.toContain('aria-label="Import memory archive"');
+    expect(transfer).not.toContain('aria-label={t("Import memory archive")}');
   });
 
   it("keeps server failures and falls back for unknown errors", () => {
     expect(memoryErrorMessage(new Error("Memory is too large."))).toBe("Memory is too large.");
-    expect(memoryErrorMessage(null)).toBe("Memory request failed.");
+    expect(memoryErrorMessage(null)).toBeNull();
   });
 
   it("wires the authorized bot thread into the panel", () => {

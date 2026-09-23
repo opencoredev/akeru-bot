@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { createPortal } from "react-dom";
 
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { randomUUID } from "../../lib/utils";
 import { botEnvironment, environmentBotsAtom, environmentRosterLoadedAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -66,6 +67,7 @@ import {
   DESKTOP_ONBOARDING_STEPS,
   DESKTOP_ONBOARDING_STORAGE_KEY,
   type DesktopOnboardingDraft,
+  type DesktopOnboardingStep,
   desktopOnboardingHandoffStages,
   type DesktopOnboardingHandoffPhase,
   desktopOnboardingModelSelection,
@@ -80,6 +82,7 @@ import {
   recoverMissingDesktopOnboardingBot,
   resolveDesktopOnboardingCreationReadiness,
   shouldShowDesktopOnboarding,
+  type OnboardingTranslate,
 } from "./desktopOnboarding.logic";
 import { desktopOnboardingBotBrief } from "./goalPlan.logic";
 
@@ -107,9 +110,26 @@ function writeDraft(draft: DesktopOnboardingDraft): void {
   window.localStorage.setItem(DESKTOP_ONBOARDING_STORAGE_KEY, JSON.stringify(draft));
 }
 
-function commandError(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
+function commandError(
+  result: Parameters<typeof squashAtomCommandFailure>[0],
+  t: OnboardingTranslate,
+): string {
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "The request failed.";
+  return error instanceof Error ? error.message : t("The request failed.");
+}
+
+/** Rail label for a setup step. Short enough to sit in a four-up stepper. */
+function stepLabel(step: DesktopOnboardingStep, t: OnboardingTranslate): string {
+  switch (step) {
+    case "subscription":
+      return t("Connect");
+    case "goal":
+      return t("Goal");
+    case "identity":
+      return t("Identity");
+    case "message":
+      return t("First message");
+  }
 }
 
 function readCaptureMode(): boolean {
@@ -152,6 +172,7 @@ export function SubscriptionStep({
   const cancelAuth = useAtomCommand(serverEnvironment.cancelSubscriptionAuth, {
     reportFailure: false,
   });
+  const { t } = useI18n();
   const [activeLogin, setActiveLogin] = useState<ActiveLogin | null>(null);
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
@@ -195,7 +216,7 @@ export function SubscriptionStep({
       if (cancelled || isAtomCommandInterrupted(result)) return;
       if (result._tag === "Failure") {
         setActiveLogin((current) =>
-          current ? { ...current, error: commandError(result) } : current,
+          current ? { ...current, error: commandError(result, t) } : current,
         );
         setBusy(false);
         return;
@@ -210,7 +231,7 @@ export function SubscriptionStep({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [activeLogin, environmentId, pollAuth, settle]);
+  }, [activeLogin, environmentId, pollAuth, settle, t]);
 
   const openKey = () => {
     setCode("");
@@ -231,7 +252,7 @@ export function SubscriptionStep({
     });
     if (started._tag !== "Success") {
       setBusy(false);
-      if (started._tag === "Failure") setError(commandError(started));
+      if (started._tag === "Failure") setError(commandError(started, t));
       return;
     }
     const result = await completeAuth({
@@ -247,10 +268,12 @@ export function SubscriptionStep({
       onContinue();
       return;
     }
-    if (result._tag === "Failure") setError(commandError(result));
+    if (result._tag === "Failure") setError(commandError(result, t));
     else if (result._tag === "Success") {
       setError(
-        result.value.status === "failed" ? result.value.error : "The key was not saved. Try again.",
+        result.value.status === "failed"
+          ? result.value.error
+          : t("The key was not saved. Try again."),
       );
     }
     await cancelAuth({ environmentId, input: { loginId: started.value.loginId } });
@@ -278,7 +301,7 @@ export function SubscriptionStep({
       return;
     }
     if (result._tag === "Failure") {
-      setError(commandError(result));
+      setError(commandError(result, t));
       setBusy(false);
       return;
     }
@@ -300,7 +323,7 @@ export function SubscriptionStep({
     }
     if (result._tag === "Failure") {
       setActiveLogin((current) =>
-        current ? { ...current, error: commandError(result) } : current,
+        current ? { ...current, error: commandError(result, t) } : current,
       );
       setBusy(false);
       return;
@@ -322,7 +345,7 @@ export function SubscriptionStep({
     return (
       <div className="space-y-4">
         <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
-          Connect {selected.label} with an API key
+          {t("Connect {provider} with an API key", { provider: selected.label })}
         </h1>
         <ProviderApiKeyForm
           supportsBaseUrl={providerSupportsBaseUrl(draft.providerId)}
@@ -348,10 +371,10 @@ export function SubscriptionStep({
     return (
       <div className="space-y-4">
         <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
-          Finish connecting {selected.label}
+          {t("Finish connecting {provider}", { provider: selected.label })}
         </h1>
         <p className="text-sm leading-6 text-muted-foreground">
-          {activeLogin.flow.instructions ?? "Finish signing in on the provider page."}
+          {activeLogin.flow.instructions ?? t("Finish signing in on the provider page.")}
         </p>
         {activeLogin.flow.userCode ? (
           <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2.5">
@@ -361,7 +384,7 @@ export function SubscriptionStep({
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Copy sign-in code"
+              aria-label={t("Copy sign-in code")}
               onClick={() => void navigator.clipboard.writeText(activeLogin.flow.userCode ?? "")}
             >
               <CopyIcon className="size-3.5" />
@@ -373,8 +396,8 @@ export function SubscriptionStep({
             <Input
               value={code}
               onChange={(event) => setCode(event.currentTarget.value)}
-              placeholder="Paste authorization code"
-              aria-label="Authorization code"
+              placeholder={t("Paste authorization code")}
+              aria-label={t("Authorization code")}
             />
             <Button
               className="w-full"
@@ -384,13 +407,13 @@ export function SubscriptionStep({
               {busy ? (
                 <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
               ) : null}
-              Connect
+              {t("Connect")}
             </Button>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
-            Waiting for approval
+            {t("Waiting for approval")}
           </div>
         )}
         {activeLogin.error ? <p className="text-sm text-destructive">{activeLogin.error}</p> : null}
@@ -400,10 +423,10 @@ export function SubscriptionStep({
             variant="outline"
             render={<a href={activeLogin.flow.url} target="_blank" rel="noreferrer" />}
           >
-            Open sign-in <ExternalLinkIcon className="size-4" />
+            {t("Open sign-in")} <ExternalLinkIcon className="size-4" />
           </Button>
           <Button variant="ghost-muted" onClick={() => void cancel()}>
-            Cancel
+            {t("Cancel")}
           </Button>
         </div>
       </div>
@@ -414,10 +437,10 @@ export function SubscriptionStep({
     <div className="space-y-6">
       <div>
         <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
-          Connect your provider
+          {t("Connect your provider")}
         </h1>
       </div>
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Provider">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("Provider")}>
         {SUBSCRIPTION_PROVIDERS.map((definition) => {
           const active = definition.id === draft.providerId;
           const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
@@ -471,7 +494,7 @@ export function SubscriptionStep({
       ) : null}
       {!connected && selected.id !== "opencode-go" ? (
         <Button className="w-full" variant="outline" disabled={busy} onClick={openKey}>
-          Use an API key
+          {t("Use an API key")}
         </Button>
       ) : null}
       <Button
@@ -480,7 +503,7 @@ export function SubscriptionStep({
         onClick={connected ? onContinue : () => void connect()}
       >
         {busy ? <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" /> : null}
-        {connected ? "Continue" : `Connect ${selected.label}`}
+        {connected ? t("Continue") : t("Connect {provider}", { provider: selected.label })}
         {!busy ? <ArrowRightIcon className="size-4" /> : null}
       </Button>
     </div>
@@ -504,36 +527,37 @@ function IdentityStep({
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
-          Give it a name
+          {t("Give it a name")}
         </h1>
         <p className="text-sm leading-6 text-muted-foreground">
-          You will call on this bot by name every day. Pick one that sounds like a teammate.
+          {t("You will call on this bot by name every day. Pick one that sounds like a teammate.")}
         </p>
       </div>
       <label className="flex w-full flex-col gap-2 text-sm font-medium">
-        Name
+        {t("Name")}
         <Input
           autoFocus
           size="lg"
           value={draft.name}
           maxLength={80}
-          placeholder="Nova, Scout, Dispatch…"
+          placeholder={t("Nova, Scout, Dispatch…")}
           onChange={(event) => onChange({ ...draft, name: event.currentTarget.value })}
         />
       </label>
-      <section aria-label="Avatar" className="space-y-5 border-t pt-5">
+      <section aria-label={t("Avatar")} className="space-y-5 border-t pt-5">
         <div className="space-y-3">
-          <h2 className="text-xs font-medium text-muted-foreground">Shape</h2>
+          <h2 className="text-xs font-medium text-muted-foreground">{t("Shape")}</h2>
           <div className="grid grid-cols-8 gap-1.5">
             {BLOB_SHAPES.map((shape) => (
               <button
                 key={shape}
                 type="button"
-                aria-label={`${shape} avatar`}
+                aria-label={t("{shape} avatar", { shape })}
                 aria-pressed={draft.avatar.shape === shape}
                 onClick={() => onChange({ ...draft, avatar: { ...draft.avatar, shape } })}
                 className={`flex aspect-square items-center justify-center rounded-lg border border-transparent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
@@ -542,7 +566,7 @@ function IdentityStep({
               >
                 <BotAvatarView
                   avatar={{ ...draft.avatar, shape }}
-                  name={draft.name || "Bot"}
+                  name={draft.name || t("Bot")}
                   className="size-7"
                 />
               </button>
@@ -550,7 +574,7 @@ function IdentityStep({
           </div>
         </div>
         <div className="space-y-3">
-          <h2 className="text-xs font-medium text-muted-foreground">Color</h2>
+          <h2 className="text-xs font-medium text-muted-foreground">{t("Color")}</h2>
           <AvatarColorPicker
             value={draft.avatar.color}
             onChange={(color) => onChange({ ...draft, avatar: { ...draft.avatar, color } })}
@@ -560,17 +584,17 @@ function IdentityStep({
       {providerReadiness.status === "loading" ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
-          Preparing your provider…
+          {t("Preparing your provider…")}
         </p>
       ) : providerReadiness.status === "unavailable" ? (
         <p className="text-sm text-destructive">
-          This provider is not ready. Go back and reconnect it.
+          {t("This provider is not ready. Go back and reconnect it.")}
         </p>
       ) : error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : null}
       <div className="flex gap-2">
-        <Button size="icon" variant="ghost-muted" aria-label="Back" onClick={onBack}>
+        <Button size="icon" variant="ghost-muted" aria-label={t("Back")} onClick={onBack}>
           <ArrowLeftIcon className="size-4" />
         </Button>
         <Button
@@ -581,7 +605,7 @@ function IdentityStep({
           {creating ? (
             <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
           ) : null}
-          Continue
+          {t("Continue")}
           {!creating ? <ArrowRightIcon className="size-4" /> : null}
         </Button>
       </div>
@@ -597,6 +621,7 @@ function OnboardingSurface({
 }: DesktopOnboardingSurfaceProps) {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
+  const { t } = useI18n();
   const createBot = useAtomCommand(botEnvironment.create, { reportFailure: false });
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
   const [draft, setDraft] = useState(initialDraft);
@@ -731,7 +756,7 @@ function OnboardingSurface({
     setCreating(false);
     if (isAtomCommandInterrupted(result)) return;
     if (result._tag === "Failure") {
-      setCreateError("Could not create your bot.");
+      setCreateError(t("Could not create your bot."));
       return;
     }
     writeBotDraft(`onboarding:${botId}`, goal.prompt);
@@ -844,7 +869,7 @@ function OnboardingSurface({
       data-testid="desktop-onboarding"
       role="dialog"
       aria-modal="true"
-      aria-label="Set up Akeru Bot"
+      aria-label={t("Set up Akeru Bot")}
       tabIndex={-1}
       className="fixed inset-0 z-[10000] flex flex-col overflow-hidden bg-background text-foreground lg:flex-row"
       style={{ pointerEvents: revealing ? "none" : "auto" }}
@@ -861,7 +886,7 @@ function OnboardingSurface({
       <aside className="relative z-10 flex min-h-0 w-full min-w-0 flex-1 flex-col border-b border-border/70 bg-card/45 px-6 pb-6 pt-6 backdrop-blur-xl lg:w-[38%] lg:min-w-[380px] lg:max-w-[540px] lg:flex-none lg:border-b-0 lg:border-r lg:px-10 lg:pb-10 lg:pt-8">
         <div className="space-y-5">
           <span className="text-sm font-semibold tracking-[-0.015em]">Akeru Bot</span>
-          <ol className="flex items-start gap-2" aria-label="Setup steps">
+          <ol className="flex items-start gap-2" aria-label={t("Setup steps")}>
             {DESKTOP_ONBOARDING_STEPS.map((definition, index) => {
               const position = index + 1;
               const current = position === progress.number;
@@ -882,7 +907,7 @@ function OnboardingSurface({
                       current ? "font-medium text-foreground" : "text-muted-foreground"
                     }`}
                   >
-                    {definition.label}
+                    {stepLabel(definition.id, t)}
                   </span>
                 </li>
               );
@@ -927,16 +952,17 @@ function OnboardingSurface({
               ) : (
                 <div className="space-y-4">
                   <h1 className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]">
-                    Say hello to {draft.name}
+                    {t("Say hello to {name}", { name: draft.name })}
                   </h1>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Your goal and the plan for it, written out. Edit it however you like, then send.
-                    This is the real conversation, not a demo.
+                    {t(
+                      "Your goal and the plan for it, written out. Edit it however you like, then send. This is the real conversation, not a demo.",
+                    )}
                   </p>
                   {!rosterBot ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
-                      Waking up {draft.name}
+                      {t("Waking up {name}", { name: draft.name })}
                     </div>
                   ) : null}
                 </div>
@@ -945,14 +971,16 @@ function OnboardingSurface({
           </AnimatePresence>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">{progress.label}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("Step {number} of {total}", { number: progress.number, total: progress.total })}
+          </p>
           <Button
             size="xs"
             variant="ghost-muted"
             disabled={creating || handoff !== null}
             onClick={() => setSkipConfirmOpen(true)}
           >
-            Skip setup
+            {t("Skip setup")}
           </Button>
         </div>
       </aside>
@@ -973,14 +1001,14 @@ function OnboardingSurface({
       <AlertDialog open={skipConfirmOpen} onOpenChange={setSkipConfirmOpen}>
         <AlertDialogPopup portalContainer={surfaceRef}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Skip setup?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Skip setup?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              You can connect a subscription and create a bot later.
+              {t("You can connect a subscription and create a bot later.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-            <Button onClick={skip}>Skip setup</Button>
+            <AlertDialogClose render={<Button variant="outline" />}>{t("Cancel")}</AlertDialogClose>
+            <Button onClick={skip}>{t("Skip setup")}</Button>
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>

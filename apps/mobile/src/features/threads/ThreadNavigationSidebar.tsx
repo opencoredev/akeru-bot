@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -149,6 +150,7 @@ function NativeSidebarContainer(props: ThreadNavigationSidebarProps) {
 function ThreadNavigationSidebarPane(
   props: ThreadNavigationSidebarProps & { readonly nativeChrome: boolean },
 ) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const projects = useProjects();
   const threads = useThreadShells();
@@ -1119,14 +1121,14 @@ function ThreadNavigationSidebarPane(
   const listEmpty = (
     <Text className="px-2 py-4 text-sm text-foreground-muted">
       {catalogState.isLoadingConnections
-        ? "Loading chats…"
+        ? t("Loading chats…")
         : props.searchQuery.trim().length > 0
           ? threadSearch.isPending
-            ? "Searching chats…"
-            : "No matching chats"
+            ? t("Searching chats…")
+            : t("No matching chats")
           : selectedProjectScope !== null
             ? `No chats in ${selectedProjectScope.title}`
-            : "No chats yet"}
+            : t("No chats yet")}
     </Text>
   );
 
@@ -1274,7 +1276,10 @@ function ThreadNavigationSidebarPane(
           />
           <View className="flex-row items-center gap-2.5">
             <ControlPillMenu actions={listMenuActions} onPressAction={handleListMenuAction}>
-              <SidebarFilterButton accessibilityLabel="Filter and sort chats" icon={filterIcon} />
+              <SidebarFilterButton
+                accessibilityLabel={t("Filter and sort chats")}
+                icon={filterIcon}
+              />
             </ControlPillMenu>
             <SidebarHeaderActions onOpenSettings={props.onOpenSettings} />
           </View>
@@ -1284,12 +1289,12 @@ function ThreadNavigationSidebarPane(
           <SymbolView name="magnifyingglass" size={15} tintColor={mutedColor} type="monochrome" />
           <TextInput
             ref={searchInputRef}
-            accessibilityLabel="Search chats"
+            accessibilityLabel={t("Search chats")}
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"
             onChangeText={props.onSearchQueryChange}
-            placeholder="Search"
+            placeholder={t("Search")}
             placeholderTextColor={placeholderColor}
             returnKeyType="search"
             className="h-[34px] flex-1 px-0 py-0 font-sans text-base text-foreground"

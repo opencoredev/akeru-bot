@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   NativeStackHeaderItem,
   NativeStackNavigationOptions,
@@ -98,6 +99,7 @@ export function WorkspaceConnectionTitle(props: {
   /** Horizontal correction so the status aligns with the brand in native title slots. */
   readonly statusOffset?: number;
 }) {
+  const { t } = useMobileI18n();
   const iconColor = String(useThemeColor("--color-icon-muted"));
   const status = useDelayedConnectionStatus();
   const size = props.size ?? "navbar";
@@ -115,7 +117,7 @@ export function WorkspaceConnectionTitle(props: {
   return (
     <StatusFadeIn grow={props.grow}>
       <Pressable
-        accessibilityHint="Opens environment settings"
+        accessibilityHint={t("Opens environment settings")}
         accessibilityLabel={status.label}
         accessibilityRole="button"
         disabled={props.onPress === undefined}

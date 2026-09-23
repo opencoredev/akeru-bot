@@ -12,6 +12,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Orchestration](#orchestration)
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
+- [Interface language](#interface-language)
 - [Checkpointing](#checkpointing)
 - [Dictation](#dictation)
 - [Stored-reply playback](#stored-reply-playback)
@@ -124,6 +125,10 @@ Reading an existing assistant message on the current client speaker. Identity, s
 ### Subscription provider
 
 A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Grok, or Kimi For Coding. OpenCode Go uses an API key instead of OAuth. The environment server stores the credential and gives a run only the access token it needs. See [subscription authentication](./subscription-auth.md).
+
+### Interface language
+
+A client-local preference for interface copy. Web, Electron, and native mobile each store their own selection. It never rewrites stored messages, bot names, instructions, paths, or protocol identifiers. See [interface-translations.md](./interface-translations.md) and [app language](../user/language.md).
 
 ## Provider runtime
 

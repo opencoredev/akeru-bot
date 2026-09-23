@@ -1,5 +1,6 @@
 import { XIcon } from "lucide-react";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "../chat/ExpandedImagePreview";
 
@@ -67,6 +68,7 @@ export function BotPromptAttachments({
   onRemove: (attachmentId: string) => void;
   className?: string;
 }) {
+  const { t } = useI18n();
   if (attachments.length === 0) return null;
 
   return (
@@ -80,7 +82,7 @@ export function BotPromptAttachments({
           {attachment.previewUrl !== null ? (
             <button
               type="button"
-              aria-label={`Preview ${attachment.file.name}`}
+              aria-label={t("Preview {name}", { name: attachment.file.name })}
               className="size-full cursor-zoom-in"
               onClick={() => onExpand(attachment.id)}
             >
@@ -110,7 +112,7 @@ export function BotPromptAttachments({
           )}
           <button
             type="button"
-            aria-label={`Remove ${attachment.file.name}`}
+            aria-label={t("Remove {name}", { name: attachment.file.name })}
             onClick={() => onRemove(attachment.id)}
             className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/80 text-muted-foreground hover:bg-background hover:text-foreground"
           >

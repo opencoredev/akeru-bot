@@ -41,7 +41,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/voice": "Voice",
   "/settings/image-generation": "Image generation",
   "/settings/privacy": "Privacy",
-  "/settings/source-control": "Source Control",
+  "/settings/source-control": "Source control",
   "/settings/connections": "Connections",
   "/settings/archived": "Archive",
 };
@@ -53,6 +53,21 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
  * here once instead of separately in the panel and the index.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "language",
+    title: "Language",
+    to: "/settings/general",
+    keywords: [
+      "locale",
+      "translation",
+      "English",
+      "system default",
+      "device language",
+      "Chinese",
+      "中文",
+      "简体中文",
+    ],
+  },
   {
     id: "color-scheme",
     title: "Color scheme",
@@ -419,6 +434,7 @@ function normalizeSearchText(value: string): string {
 export function searchSettings(
   query: string,
   items: ReadonlyArray<SettingsSearchItem> = SETTINGS_SEARCH_ITEMS,
+  translateTitle: (title: string) => string = (title) => title,
 ): ReadonlyArray<SettingsSearchItem> {
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return [];
@@ -426,7 +442,7 @@ export function searchSettings(
   return items.filter(
     (item) =>
       (isElectron || item.desktopOnly !== true) &&
-      [item.title, ...(item.keywords ?? [])].some((value) =>
+      [item.title, translateTitle(item.title), ...(item.keywords ?? [])].some((value) =>
         normalizeSearchText(value).includes(normalizedQuery),
       ),
   );

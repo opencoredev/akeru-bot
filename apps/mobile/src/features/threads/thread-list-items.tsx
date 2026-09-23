@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useRecyclingState } from "@legendapp/list/react-native";
 import type {
   EnvironmentProject,
@@ -274,6 +275,7 @@ export const PendingTaskListRow = memo(function PendingTaskListRow(props: {
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
   readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
 }) {
+  const { t } = useMobileI18n();
   const compact = props.variant === "compact";
   const separatorColor = useThemeColor("--color-separator");
   const iconSubtleColor = useThemeColor("--color-icon-subtle");
@@ -295,7 +297,7 @@ export const PendingTaskListRow = memo(function PendingTaskListRow(props: {
 
   const statusPill = (
     <View className="rounded-full bg-zinc-500/12 px-1.5 py-0.5 dark:bg-zinc-500/16">
-      <Text className="text-3xs font-t3-bold text-zinc-600 dark:text-zinc-300">Pending</Text>
+      <Text className="text-3xs font-t3-bold text-zinc-600 dark:text-zinc-300">{t("Pending")}</Text>
     </View>
   );
 
@@ -323,7 +325,7 @@ export const PendingTaskListRow = memo(function PendingTaskListRow(props: {
 
   const rowContent = compact ? (
     <Pressable
-      accessibilityHint="Opens the queued chat for editing"
+      accessibilityHint={t("Opens the queued chat for editing")}
       accessibilityLabel={pendingTask.title}
       accessibilityRole="button"
       className="bg-screen"
@@ -366,7 +368,7 @@ export const PendingTaskListRow = memo(function PendingTaskListRow(props: {
     </Pressable>
   ) : (
     <Pressable
-      accessibilityHint="Opens the queued chat for editing"
+      accessibilityHint={t("Opens the queued chat for editing")}
       accessibilityLabel={pendingTask.title}
       accessibilityRole="button"
       onPress={() => onSelectPendingTask(pendingTask)}
@@ -438,6 +440,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
     typeof ThreadSwipeable
   >["simultaneousWithExternalGesture"];
 }) {
+  const { t } = useMobileI18n();
   const { width: windowWidth } = useWindowDimensions();
   const { themeAppearance: colorScheme } = useAppearancePreferences();
   const compact = props.variant === "compact";
@@ -565,7 +568,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
   const rowContent = (close: () => void) =>
     compact ? (
       <Pressable
-        accessibilityHint="Swipe left for archive and delete actions"
+        accessibilityHint={t("Swipe left for archive and delete actions")}
         accessibilityLabel={threadAccessibilityLabel}
         accessibilityRole="button"
         className="bg-screen"
@@ -618,7 +621,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
       </Pressable>
     ) : (
       <Pressable
-        accessibilityHint="Opens the chat"
+        accessibilityHint={t("Opens the chat")}
         accessibilityLabel={threadAccessibilityLabel}
         accessibilityRole="button"
         accessibilityState={{ selected }}

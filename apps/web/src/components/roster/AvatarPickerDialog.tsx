@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import {
@@ -13,7 +14,7 @@ import {
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { AvatarColorPicker } from "./AvatarColorPicker";
 import { BotAvatarView } from "./BotAvatarView";
-import { BLOB_SHAPES, resolveBlobRendering } from "./roster.logic";
+import { BLOB_SHAPES, blobShapeLabel, resolveBlobRendering } from "./roster.logic";
 import type { Bot, BotAvatar, BotBlobShape } from "./types";
 import { useSaveBotAvatar } from "./useServerRoster";
 
@@ -50,11 +51,6 @@ async function downscaleAvatarImage(file: File): Promise<string> {
   }
 }
 
-const TAB_LABELS: Record<PickerTab, string> = {
-  bot: "Bot",
-  upload: "Upload",
-};
-
 /**
  * Avatar picker for one bot. The Bot tab picks a body shape and color;
  * Upload previews a local image and applies it as a data URL until server
@@ -69,6 +65,7 @@ export function AvatarPickerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const saveBotAvatar = useSaveBotAvatar();
   const initialBlob = resolveBlobRendering(bot.avatar);
   const [tab, setTab] = useState<PickerTab>("bot");
@@ -125,11 +122,11 @@ export function AvatarPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Avatar</DialogTitle>
+          <DialogTitle>{t("Avatar")}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
           <ToggleGroup
-            aria-label="Avatar source"
+            aria-label={t("Avatar source")}
             variant="segmented"
             className="w-full *:flex-1"
             value={[tab]}
@@ -143,7 +140,7 @@ export function AvatarPickerDialog({
           >
             {(["bot", "upload"] as const).map((option) => (
               <Toggle key={option} value={option}>
-                {TAB_LABELS[option]}
+                {option === "bot" ? t("Bot") : t("Upload")}
               </Toggle>
             ))}
           </ToggleGroup>
@@ -161,7 +158,7 @@ export function AvatarPickerDialog({
                   <button
                     key={option}
                     type="button"
-                    aria-label={option}
+                    aria-label={blobShapeLabel(option, t)}
                     aria-pressed={shape === option}
                     data-bot-hover
                     onClick={() => setShape(option)}
@@ -185,12 +182,12 @@ export function AvatarPickerDialog({
               {upload !== null ? (
                 <img
                   src={upload}
-                  alt="Avatar preview"
+                  alt={t("Avatar preview")}
                   className="size-20 rounded-full object-cover"
                 />
               ) : null}
               <label className="cursor-pointer text-sm font-medium text-foreground underline-offset-4 hover:underline">
-                Choose image
+                {t("Choose image")}
                 <input
                   type="file"
                   accept="image/*"
@@ -205,17 +202,17 @@ export function AvatarPickerDialog({
           {failure !== null ? (
             <p role="alert" className="mr-auto self-center text-sm text-destructive">
               {failure === "save"
-                ? "Could not save"
+                ? t("Could not save")
                 : failure === "too-large"
-                  ? "Image too large"
-                  : "Could not read image"}
+                  ? t("Image too large")
+                  : t("Could not read image")}
             </p>
           ) : null}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button onClick={() => void handleSave()} disabled={draftAvatar === null || saving}>
-            {saving ? "Saving" : "Save"}
+            {saving ? t("Saving") : t("Save")}
           </Button>
         </DialogFooter>
       </DialogPopup>

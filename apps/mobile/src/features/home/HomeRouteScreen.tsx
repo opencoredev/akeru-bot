@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
@@ -23,6 +24,7 @@ import { useThreadListActions } from "./useThreadListActions";
 /* ─── Route screen ───────────────────────────────────────────────────── */
 
 export function HomeRouteScreen() {
+  const { t } = useMobileI18n();
   const { layout } = useAdaptiveWorkspaceLayout();
   const projects = useProjects();
   const threads = useThreadShells();
@@ -114,7 +116,7 @@ export function HomeRouteScreen() {
         <WorkspaceSidebarToolbar
           afterSidebarButton={
             <NativeHeaderToolbar.Button
-              accessibilityLabel="New chat"
+              accessibilityLabel={t("New chat")}
               icon="square.and.pencil"
               onPress={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
             />

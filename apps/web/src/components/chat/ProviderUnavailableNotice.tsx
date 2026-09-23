@@ -3,6 +3,7 @@ import type { ProviderAvailabilityPresentation } from "@t3tools/client-runtime/p
 import { settingsDeepLinkHref } from "@t3tools/client-runtime/settings-deep-link";
 import { CircleAlertIcon } from "lucide-react";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { parseSettingsDeepLink } from "../../settingsDeepLink";
 import { Button } from "../ui/button";
@@ -19,6 +20,7 @@ export function ProviderSettingsChip({
   readonly environmentId: EnvironmentId | null;
   readonly className?: string;
 }) {
+  const { t } = useI18n();
   if (!PROVIDERS_DESTINATION) return null;
   return (
     <SettingsLinkChip
@@ -27,7 +29,7 @@ export function ProviderSettingsChip({
       environmentId={environmentId}
       {...(className ? { className } : {})}
     >
-      Settings &gt; Providers
+      {t("Settings > Providers")}
     </SettingsLinkChip>
   );
 }
@@ -46,13 +48,14 @@ export function ProviderRepairAction({
   readonly environmentId: EnvironmentId | null;
   readonly onOpenUsage?: (() => void) | undefined;
 }) {
+  const { t } = useI18n();
   if (action === "providers") {
     return <ProviderSettingsChip environmentId={environmentId} />;
   }
   if (action === "usage" && onOpenUsage) {
     return (
       <Button size="xs" type="button" variant="outline" onClick={onOpenUsage}>
-        Bot settings
+        {t("Bot settings")}
       </Button>
     );
   }

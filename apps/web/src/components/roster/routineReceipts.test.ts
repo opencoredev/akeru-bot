@@ -1,3 +1,4 @@
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import {
   RoutineId,
   ThreadId,
@@ -108,19 +109,19 @@ describe("deriveRoutineReceipts", () => {
       {
         id: "routine-created:routine-1",
         createdAt: "2026-09-19T08:00:00.000Z",
-        text: 'Routine "Daily digest" was created',
+        text: "Routine “Daily digest” was created",
         tone: "info",
       },
       {
         id: "routine-run-started:run-1",
         createdAt: "2026-09-19T09:00:00.000Z",
-        text: '"Daily digest" started a run',
+        text: "“Daily digest” started a run",
         tone: "info",
       },
       {
         id: "routine-run-finished:run-1",
         createdAt: "2026-09-19T09:01:00.000Z",
-        text: '"Daily digest" finished: 2 files changed',
+        text: "“Daily digest” finished: 2 files changed",
         tone: "success",
       },
     ]);
@@ -140,7 +141,31 @@ describe("deriveRoutineReceipts", () => {
       "routine-created:routine-1",
       "routine-run-started:run-2",
     ]);
-    expect(receipts[1]?.text).toBe('"Daily digest" started a run');
+    expect(receipts[1]?.text).toBe("“Daily digest” started a run");
+  });
+
+  it("translates the receipt sentence and keeps the routine name and run text as written", () => {
+    const i18n = createTranslator("zh-CN", {
+      "Routine “{name}” was created": "已创建例行任务“{name}”",
+      "“{name}” failed": "“{name}”失败",
+      "{summary}: {detail}": "{summary}：{detail}",
+    });
+    const failed = {
+      id: "run-9",
+      routineId: routine.id,
+      status: "failed",
+      createdAt: "2026-09-19T09:00:00.000Z",
+      startedAt: "2026-09-19T09:00:00.000Z",
+      completedAt: "2026-09-19T09:05:00.000Z",
+      updatedAt: "2026-09-19T09:05:00.000Z",
+      failure: { message: "The workspace is missing" },
+      result: null,
+    } as unknown as RoutineRun;
+    const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed], i18n);
+    expect(receipts.map((receipt) => receipt.text)).toEqual([
+      "已创建例行任务“Daily digest”",
+      "“Daily digest”失败：The workspace is missing",
+    ]);
   });
 
   it("reports a failed run with its failure message", () => {
@@ -154,7 +179,7 @@ describe("deriveRoutineReceipts", () => {
     } as unknown as RoutineRun;
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed]);
     expect(receipts[2]).toMatchObject({
-      text: '"Daily digest" failed: The workspace is missing',
+      text: "“Daily digest” failed: The workspace is missing",
       tone: "error",
     });
   });
@@ -193,6 +218,6 @@ describe("deriveRoutineReceipts", () => {
       ["routine-run-started:run-5", "info"],
       ["routine-run-finished:run-5", "info"],
     ]);
-    expect(receipts[2]?.text).toBe('"Daily digest" was canceled');
+    expect(receipts[2]?.text).toBe("“Daily digest” was canceled");
   });
 });

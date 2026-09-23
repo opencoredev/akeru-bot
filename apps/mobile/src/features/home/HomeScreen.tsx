@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import {
   LegendList,
   type LegendListRef,
@@ -199,6 +200,7 @@ function deriveEmptyState(props: {
 /* ─── Main screen ────────────────────────────────────────────────────── */
 
 export function HomeScreen(props: HomeScreenProps) {
+  const { t } = useMobileI18n();
   const [groupDisplayStates, setGroupDisplayStates] = useState<
     ReadonlyMap<string, HomeGroupDisplayState>
   >(() => new Map());
@@ -1076,7 +1078,10 @@ export function HomeScreen(props: HomeScreenProps) {
 
   const listEmpty = !hasResults ? (
     hasSearchQuery && threadSearch.isPending ? null : hasSearchQuery ? (
-      <EmptyState title="No results" detail={`No chats matching "${props.searchQuery}".`} />
+      <EmptyState
+        title={t("No results")}
+        detail={t('No chats matching "{query}".', { query: props.searchQuery })}
+      />
     ) : selectedProjectScope !== null ? (
       <EmptyState
         title={`No chats in ${selectedProjectScope.title}`}
@@ -1088,7 +1093,7 @@ export function HomeScreen(props: HomeScreenProps) {
         detail="Choose another environment or talk to a bot."
       />
     ) : (
-      <EmptyState title="No chats yet" detail="Pick a bot to start a chat." />
+      <EmptyState title={t("No chats yet")} detail={t("Pick a bot to start a chat.")} />
     )
   ) : null;
   // Self-contained: v1's listEmpty keys off projectGroups, which ignores the
@@ -1097,7 +1102,10 @@ export function HomeScreen(props: HomeScreenProps) {
   // is a list row even while collapsed.
   const v2ListEmpty =
     hasSearchQuery && threadSearch.isPending ? null : hasSearchQuery ? (
-      <EmptyState title="No results" detail={`No chats matching "${props.searchQuery}".`} />
+      <EmptyState
+        title={t("No results")}
+        detail={t('No chats matching "{query}".', { query: props.searchQuery })}
+      />
     ) : v2ScopedProjectGroup !== null ? (
       <EmptyState
         title={`No chats in ${v2ScopedProjectGroup.title}`}

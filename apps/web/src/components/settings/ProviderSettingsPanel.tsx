@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
+import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
+import { useI18n } from "../../i18n";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
@@ -167,6 +168,7 @@ function EnvironmentUnavailableRow({
   readonly environment: EnvironmentPresentation;
   readonly access: Exclude<ProviderEnvironmentAccess, { kind: "editable" | "read-only" }>;
 }) {
+  const { t } = useI18n();
   const isLoading = access.kind === "loading";
   const title = isLoading
     ? "Loading provider settings"
@@ -177,7 +179,7 @@ function EnvironmentUnavailableRow({
     ? access.reason === "permissions"
       ? "Checking what this session is allowed to change."
       : `Waiting for ${environment.label}'s configuration.`
-    : connectionStatusText(environment.connection);
+    : translateConnectionStatus(t, environment.connection);
   // No spinner: this state can persist indefinitely for a wedged device, and a
   // continuously repainting animation would run the whole time.
   return (
@@ -188,6 +190,7 @@ function EnvironmentUnavailableRow({
 }
 
 export function ProviderSettingsPanel() {
+  const { t } = useI18n();
   const { environments, isReady } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const options = useMemo(
@@ -230,7 +233,7 @@ export function ProviderSettingsPanel() {
               {options.map((environment) => {
                 const Icon = providerEnvironmentIcon(environment);
                 const selected = environment.environmentId === effectiveEnvironmentId;
-                const statusText = connectionStatusText(environment.connection);
+                const statusText = translateConnectionStatus(t, environment.connection);
                 return (
                   <button
                     key={environment.environmentId}

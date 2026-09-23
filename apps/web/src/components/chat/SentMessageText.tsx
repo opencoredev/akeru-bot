@@ -1,12 +1,8 @@
-import {
-  BROWSER_MENTION_LABEL,
-  collectComposerInlineTokens,
-  UNKNOWN_BOT_MENTION_LABEL,
-  UNKNOWN_CHAT_MENTION_LABEL,
-} from "@t3tools/shared/composerInlineTokens";
+import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 import { AtSignIcon, CornerDownRightIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
+import { useI18n } from "../../i18n";
 import { useThreadShells } from "../../state/entities";
 import {
   CHAT_INLINE_CHIP_CLASS_NAME,
@@ -52,6 +48,7 @@ export function SentMessageText({ text }: { readonly text: string }) {
 
 /** Shows `@browser`, `@chat:<id>`, and `@bot:<id>` as chips; copying still yields the raw token. */
 function MentionText({ text }: { readonly text: string }) {
+  const { t } = useI18n();
   const tokens = collectComposerInlineTokens(`${text}\n`).filter(
     (token) =>
       token.type === "browser-mention" ||
@@ -65,12 +62,7 @@ function MentionText({ text }: { readonly text: string }) {
     if (token.start > cursor) nodes.push(text.slice(cursor, token.start));
     nodes.push(
       token.type === "browser-mention" ? (
-        <MentionChip
-          key={token.start}
-          source={token.source}
-          label={BROWSER_MENTION_LABEL}
-          icon="browser"
-        />
+        <MentionChip key={token.start} source={token.source} label={t("Browser")} icon="browser" />
       ) : token.type === "bot-mention" ? (
         <BotMentionChip key={token.start} source={token.source} botId={token.value} />
       ) : (
@@ -84,19 +76,19 @@ function MentionText({ text }: { readonly text: string }) {
 }
 
 function ThreadMentionChip({ source, threadId }: { source: string; threadId: string }) {
+  const { t } = useI18n();
   const shells = useThreadShells();
   const title = useMemo(
-    () => shells.find((shell) => shell.id === threadId)?.title ?? UNKNOWN_CHAT_MENTION_LABEL,
+    () => shells.find((shell) => shell.id === threadId)?.title ?? null,
     [shells, threadId],
   );
-  return <MentionChip source={source} label={title} icon="thread" />;
+  return <MentionChip source={source} label={title ?? t("Unknown chat")} icon="thread" />;
 }
 
 function BotMentionChip({ source, botId }: { source: string; botId: string }) {
-  const name = useRosterStore(
-    (state) => state.bots.find((bot) => bot.id === botId)?.name ?? UNKNOWN_BOT_MENTION_LABEL,
-  );
-  return <MentionChip source={source} label={name} icon="bot" />;
+  const { t } = useI18n();
+  const name = useRosterStore((state) => state.bots.find((bot) => bot.id === botId)?.name ?? null);
+  return <MentionChip source={source} label={name ?? t("Unknown bot")} icon="bot" />;
 }
 
 const MENTION_CHIP_ICONS = { browser: GlobeIcon, thread: MessageSquareIcon, bot: AtSignIcon };

@@ -24,6 +24,7 @@ const LEGACY_PREFERENCES_KEY = "t3code.preferences";
 const LEGACY_PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
+  readonly language?: string;
   readonly reviewedPrivacyPolicyVersion?: string;
   readonly reviewedTermsVersion?: string;
   readonly liveActivitiesEnabled?: boolean;
@@ -95,6 +96,7 @@ export class MobilePreferencesStore extends Context.Service<
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    language?: string;
     reviewedPrivacyPolicyVersion?: string;
     reviewedTermsVersion?: string;
     liveActivitiesEnabled?: boolean;
@@ -116,6 +118,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListV2SnoozedShelfExpanded?: boolean;
   } = {};
 
+  if (typeof parsed.language === "string") preferences.language = parsed.language;
   if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
     preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
   }

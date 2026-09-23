@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type { VcsRef } from "@t3tools/client-runtime/state/vcs";
 import { LegendList } from "@legendapp/list/react-native";
 import {
@@ -142,6 +143,7 @@ function PickerSurface(props: { readonly children: ReactNode }) {
 }
 
 export function NewTaskEnvironmentPickerRouteScreen() {
+  const { t } = useMobileI18n();
   const flow = useNewTaskFlow();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -155,7 +157,7 @@ export function NewTaskEnvironmentPickerRouteScreen() {
         }}
       />
       {Platform.OS === "android" ? (
-        <AndroidScreenHeader title="Environment" onBack={() => navigation.goBack()} />
+        <AndroidScreenHeader title={t("Environment")} onBack={() => navigation.goBack()} />
       ) : null}
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
@@ -188,6 +190,7 @@ export function NewTaskEnvironmentPickerRouteScreen() {
 }
 
 export function NewTaskBranchPickerRouteScreen() {
+  const { t } = useMobileI18n();
   const flow = useNewTaskFlow();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -265,8 +268,8 @@ export function NewTaskBranchPickerRouteScreen() {
             if (mountedRef.current && navigation.isFocused() && !isAtomCommandInterrupted(result)) {
               const error = squashAtomCommandFailure(result);
               Alert.alert(
-                "Could not switch branch",
-                error instanceof Error ? error.message : "The branch could not be checked out.",
+                t("Could not switch branch"),
+                error instanceof Error ? error.message : t("The branch could not be checked out."),
               );
             }
             return;
@@ -333,7 +336,7 @@ export function NewTaskBranchPickerRouteScreen() {
       <View className="mb-3 overflow-hidden rounded-2xl">
         <ToggleRow
           onValueChange={flow.setStartFromOrigin}
-          title="Start from origin"
+          title={t("Start from origin")}
           value={flow.startFromOrigin}
         />
       </View>
@@ -360,12 +363,12 @@ export function NewTaskBranchPickerRouteScreen() {
           {flow.branchesLoading ? <ActivityIndicator /> : null}
           <Text className="text-center text-sm text-foreground-muted">
             {flow.branchesLoading
-              ? "Loading branches…"
+              ? t("Loading branches…")
               : flow.branchesError
                 ? flow.branchesError
                 : flow.branchQuery
-                  ? "No matching branches"
-                  : "No branches available"}
+                  ? t("No matching branches")
+                  : t("No branches available")}
           </Text>
           {!flow.branchesLoading && flow.branchesError ? (
             <Pressable
@@ -373,7 +376,7 @@ export function NewTaskBranchPickerRouteScreen() {
               className="rounded-full bg-card px-4 py-2 active:opacity-70"
               onPress={flow.loadBranches}
             >
-              <Text className="text-sm font-t3-medium text-foreground">Try again</Text>
+              <Text className="text-sm font-t3-medium text-foreground">{t("Try again")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -418,7 +421,7 @@ export function NewTaskBranchPickerRouteScreen() {
             autoCorrect={false}
             className="h-11 rounded-xl bg-card px-4 text-base text-foreground"
             onChangeText={flow.setBranchQuery}
-            placeholder="Find a branch"
+            placeholder={t("Find a branch")}
             placeholderTextColor={placeholderColor}
             style={{ color: foregroundColor, fontFamily }}
             value={flow.branchQuery}

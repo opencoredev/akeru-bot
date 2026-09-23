@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { useThreadShells } from "../../state/entities";
 import { useComposerPathSearch, useThreadSearch } from "../../state/queries";
@@ -71,11 +72,6 @@ export function useBotPromptMentionScope(input: {
 }
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
-const MENTION_KIND_DESCRIPTION: Record<Exclude<BotPromptMentionItem["kind"], "path">, string> = {
-  browser: "Preview browser",
-  bot: "Bot",
-  thread: "Chat",
-};
 const NO_ENVIRONMENTS: ReadonlyArray<EnvironmentId> = [];
 
 export function botPromptMentionOptionId(listboxId: string, index: number): string {
@@ -105,6 +101,12 @@ export function BotPromptMentionMenu({
   onClose: () => void;
   onActiveOptionChange: (optionId: string | null) => void;
 }) {
+  const { t } = useI18n();
+  const mentionKindDescription: Record<Exclude<BotPromptMentionItem["kind"], "path">, string> = {
+    browser: t("Preview browser"),
+    bot: t("Bot"),
+    thread: t("Chat"),
+  };
   const browserAccess = useEnvironmentSettings(
     scope?.environmentId ?? NO_ENVIRONMENT,
     (settings) => settings.enableAgentBrowserAccess,
@@ -187,7 +189,7 @@ export function BotPromptMentionMenu({
     <div
       id={listboxId}
       role="listbox"
-      aria-label="Mention"
+      aria-label={t("Mention")}
       data-testid="bot-prompt-mention-menu"
       className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
     >
@@ -218,13 +220,15 @@ export function BotPromptMentionMenu({
             onClick={() => onSelect(item)}
           >
             <Icon aria-hidden="true" className="size-4 shrink-0 opacity-70" />
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {item.kind === "browser" ? t("Browser") : item.label}
+            </span>
             <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
               {item.kind === "path"
                 ? item.directory
                 : item.kind === "bot" && item.detail !== null
                   ? item.detail
-                  : MENTION_KIND_DESCRIPTION[item.kind]}
+                  : mentionKindDescription[item.kind]}
             </span>
           </div>
         );
@@ -250,19 +254,20 @@ export function BotPromptMentionChips({
   bots: ReadonlyArray<BotPromptMentionBot>;
   onRemove: (chip: BotPromptMentionChip) => void;
 }) {
+  const { t } = useI18n();
   const shells = useThreadShells();
   const chips = useMemo(() => {
     const titles = new Map(shells.map((shell) => [shell.id as string, shell.title]));
     return botPromptMentionChips(
       draft,
-      (threadId) => titles.get(threadId) ?? null,
-      (botId) => bots.find((bot) => bot.id === botId)?.name ?? null,
-    );
-  }, [bots, draft, shells]);
+      (threadId) => titles.get(threadId) ?? t("Unknown chat"),
+      (botId) => bots.find((bot) => bot.id === botId)?.name ?? t("Unknown bot"),
+    ).map((chip) => (chip.kind === "browser" ? { ...chip, label: t("Browser") } : chip));
+  }, [bots, draft, shells, t]);
   if (chips.length === 0) return null;
   return (
     <ul
-      aria-label="Mentions"
+      aria-label={t("Mentions")}
       className="flex flex-wrap gap-1.5 px-3 pt-3 text-[15px]"
       data-testid="bot-prompt-mention-chips"
     >
@@ -279,7 +284,7 @@ export function BotPromptMentionChips({
             <span className={CHAT_INLINE_CHIP_LABEL_CLASS_NAME}>{chip.label}</span>
             <button
               type="button"
-              aria-label={`Remove ${chip.label}`}
+              aria-label={t("Remove {name}", { name: chip.label })}
               className={COMPOSER_INLINE_CHIP_DISMISS_BUTTON_CLASS_NAME}
               onClick={() => onRemove(chip)}
             >

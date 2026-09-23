@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useMemo } from "react";
 
+import { useI18n } from "../../i18n";
 import { BotAvatarView } from "../roster/BotAvatarView";
 import { OnboardingCelebration } from "./OnboardingCelebration";
 import {
@@ -37,14 +38,15 @@ function HandoffStatus({
   readonly botName: string;
 }) {
   const reducedMotion = useReducedMotion();
-  const status = desktopOnboardingHandoffStatus(phase, botName);
+  const { t } = useI18n();
+  const status = desktopOnboardingHandoffStatus(phase, botName, t);
   const widest = useMemo(
     () =>
-      desktopOnboardingHandoffStatuses(botName).reduce(
+      desktopOnboardingHandoffStatuses(botName, t).reduce(
         (longest, candidate) => (candidate.length > longest.length ? candidate : longest),
         "",
       ),
-    [botName],
+    [botName, t],
   );
 
   return (

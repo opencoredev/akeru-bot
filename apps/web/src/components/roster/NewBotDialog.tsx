@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { readFileAsDataUrl } from "../ChatView.logic";
@@ -9,7 +10,7 @@ import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { AvatarColorPicker } from "./AvatarColorPicker";
 import { BotAvatarView } from "./BotAvatarView";
-import { BLOB_SHAPES, randomBotAvatar } from "./roster.logic";
+import { BLOB_SHAPES, blobShapeLabel, randomBotAvatar } from "./roster.logic";
 import type { BotAvatar } from "./types";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 
@@ -26,6 +27,7 @@ export function NewBotDialog({
   onCreate: (input: { name: string; avatar: BotAvatar }) => void;
   submitting?: boolean;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [blobAvatar, setBlobAvatar] = useState(() => randomBotAvatar());
   const [avatar, setAvatar] = useState<BotAvatar>(() => blobAvatar);
@@ -63,7 +65,7 @@ export function NewBotDialog({
           }}
         >
           <header className="border-b px-6 py-5">
-            <DialogTitle>New bot</DialogTitle>
+            <DialogTitle>{t("New bot")}</DialogTitle>
           </header>
 
           <div className="space-y-6 px-6 py-6">
@@ -77,18 +79,18 @@ export function NewBotDialog({
               <BotAvatarView avatar={avatar} name={trimmedName} className="size-16 shrink-0" />
               <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium text-foreground">
                 <span>
-                  Name{" "}
+                  {t("Name")}{" "}
                   <span className="text-destructive" aria-hidden="true">
                     *
                   </span>
-                  <span className="sr-only"> (required)</span>
+                  <span className="sr-only"> {t("(required)")}</span>
                 </span>
                 <Input
                   autoFocus
                   aria-describedby="new-bot-name-help"
                   data-testid="new-bot-name-input"
                   maxLength={80}
-                  placeholder="Bot name"
+                  placeholder={t("Bot name")}
                   required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -101,8 +103,8 @@ export function NewBotDialog({
                   )}
                 >
                   {trimmedName.length === 0
-                    ? "Enter a name to create this bot."
-                    : "This is how the bot appears in your roster."}
+                    ? t("Enter a name to create this bot.")
+                    : t("This is how the bot appears in your roster.")}
                 </span>
               </label>
             </div>
@@ -110,10 +112,10 @@ export function NewBotDialog({
             <section aria-labelledby="new-bot-avatar-heading" className="space-y-4 border-t pt-5">
               <div className="flex items-center justify-between gap-3">
                 <h3 id="new-bot-avatar-heading" className="text-sm font-medium text-foreground">
-                  Avatar
+                  {t("Avatar")}
                 </h3>
                 <label className="cursor-pointer rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-xs/5 outline-none transition-colors hover:bg-accent focus-within:ring-2 focus-within:ring-ring">
-                  Upload image
+                  {t("Upload image")}
                   <input
                     type="file"
                     accept="image/*"
@@ -130,7 +132,7 @@ export function NewBotDialog({
                     <button
                       key={shape}
                       type="button"
-                      aria-label={shape}
+                      aria-label={blobShapeLabel(shape, t)}
                       aria-pressed={selected}
                       data-bot-hover
                       onClick={() => updateBlobAvatar({ ...blobAvatar, shape })}
@@ -163,7 +165,7 @@ export function NewBotDialog({
               disabled={submitting}
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="submit"
@@ -171,7 +173,7 @@ export function NewBotDialog({
               className="disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
               disabled={submitting || trimmedName.length === 0}
             >
-              {submitting ? "Creating" : "Create bot"}
+              {submitting ? t("Creating") : t("Create bot")}
             </Button>
           </footer>
         </form>

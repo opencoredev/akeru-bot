@@ -9,6 +9,7 @@ import {
   browseInputEndPaddingClass,
   buildBrowseGroups,
   buildModelPickerCommandPaletteAction,
+  buildLanguageCommandPaletteAction,
   buildRootGroups,
   buildThreadActionItems,
   enumerateCommandPaletteItems,
@@ -18,6 +19,31 @@ import {
   reduceCommandPaletteUiState,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
+
+describe("language command", () => {
+  it("keeps stable action and setting ids while matching English and translated labels", async () => {
+    const openSettings = vi.fn();
+    const action = buildLanguageCommandPaletteAction({
+      translate: () => "Changer la langue",
+      openSettings,
+      icon: null,
+    });
+    expect(action.value).toBe("action:language");
+    expect(action.title).toBe("Changer la langue");
+    for (const query of ["language", "locale", "langue", "> langue", "简体中文"]) {
+      const groups = filterCommandPaletteGroups({
+        activeGroups: [{ value: "actions", label: "Actions", items: [action] }],
+        query,
+        isInSubmenu: false,
+        projectSearchItems: [],
+        threadSearchItems: [],
+      });
+      expect(groups[0]?.items[0]?.value).toBe("action:language");
+    }
+    await action.run();
+    expect(openSettings).toHaveBeenCalledExactlyOnceWith("general", "language");
+  });
+});
 
 describe("command palette product language", () => {
   it("uses chat language for history and search", () => {

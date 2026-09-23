@@ -29,6 +29,14 @@ vi.mock("react/compiler-runtime", async () => {
   return { c: reactHookHarness.useMemoCache };
 });
 
+// A plain-function render has no React dispatcher for useContext, so the
+// step reads the English translator directly.
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
+
 vi.mock("motion/react", () => ({
   AnimatePresence: ({ children }: { readonly children: unknown }) => children,
   motion: { div: "div", li: "li" },

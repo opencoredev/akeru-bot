@@ -17,7 +17,8 @@ import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { SurfaceNavigationCoordinator } from "../components/SurfaceNavigationCoordinator";
 import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
 import { PolicyNotice } from "../components/privacy/PolicyNotice";
-import { RootRouteErrorView } from "./RootRouteErrorView";
+import { TranslatedRootRouteErrorView } from "./RootRouteErrorView";
+import { useI18n } from "../i18n";
 import {
   AnchoredToastProvider,
   stackedThreadToast,
@@ -78,7 +79,7 @@ export const Route = createRootRoute({
     };
   },
   component: RootRouteView,
-  errorComponent: RootRouteErrorView,
+  errorComponent: TranslatedRootRouteErrorView,
   head: () => ({
     meta: [{ name: "title", content: APP_DISPLAY_NAME }],
   }),
@@ -259,6 +260,7 @@ function AuthenticatedTracingBootstrap() {
 
 function EventRouter() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const pathname = useLocation({ select: (loc) => loc.pathname });
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const primaryEnvironment = usePrimaryEnvironment();
@@ -325,8 +327,8 @@ function EventRouter() {
     if (decision._tag === "Success") {
       toastManager.add({
         type: "success",
-        title: "Keybindings updated",
-        description: "Keybindings configuration reloaded successfully.",
+        title: t("Keybindings updated"),
+        description: t("Keybindings configuration reloaded successfully."),
       });
       return;
     }
@@ -334,11 +336,11 @@ function EventRouter() {
     toastManager.add(
       stackedThreadToast({
         type: "warning",
-        title: "Invalid keybindings configuration",
+        title: t("Invalid keybindings configuration"),
         description: decision.message,
         actionVariant: "outline",
         actionProps: {
-          children: "Open keybindings.json",
+          children: t("Open keybindings.json"),
           onClick: () => {
             if (!serverConfig || !primaryEnvironment) {
               return;
@@ -363,9 +365,9 @@ function EventRouter() {
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Unable to open keybindings file",
+                  title: t("Unable to open keybindings file"),
                   description:
-                    error instanceof Error ? error.message : "Unknown error opening file.",
+                    error instanceof Error ? error.message : t("Unknown error opening file."),
                 }),
               );
             })();

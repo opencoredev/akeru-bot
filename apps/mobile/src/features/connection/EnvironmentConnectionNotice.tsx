@@ -1,7 +1,9 @@
+import { useMobileI18n } from "../../lib/i18n";
 import {
   type EnvironmentConnectionPhase,
   type EnvironmentConnectionPresentation,
 } from "@t3tools/client-runtime/connection";
+import { connectionFailureMessage } from "@t3tools/client-runtime/i18n";
 import { SymbolView } from "../../components/AppSymbol";
 import { ActivityIndicator, Pressable, View } from "react-native";
 
@@ -9,41 +11,57 @@ import { AppText as Text } from "../../components/AppText";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { useThemeColor } from "../../lib/useThemeColor";
 
-function noticeTitle(phase: EnvironmentConnectionPhase, environmentLabel: string): string {
+type Translate = ReturnType<typeof useMobileI18n>["t"];
+type NoticeResource = "review" | "terminal";
+
+function noticeTitle(
+  t: Translate,
+  phase: EnvironmentConnectionPhase,
+  environmentLabel: string,
+): string {
+  const environment = environmentLabel;
   switch (phase) {
     case "offline":
-      return "You are offline";
+      return t("You are offline");
     case "connecting":
-      return `Connecting to ${environmentLabel}...`;
+      return t("Connecting to {environment}…", { environment });
     case "reconnecting":
-      return `Reconnecting to ${environmentLabel}...`;
+      return t("Reconnecting to {environment}…", { environment });
     case "error":
-      return `${environmentLabel} is unavailable`;
+      return t("{environment} is unavailable", { environment });
     case "available":
-      return `${environmentLabel} is disconnected`;
+      return t("{environment} is disconnected", { environment });
     case "connected":
       return "";
   }
 }
 
 function noticeDetail(
-  phase: EnvironmentConnectionPhase,
-  resourceName: string,
-  error: string | null,
+  t: Translate,
+  connection: EnvironmentConnectionPresentation,
+  resource: NoticeResource,
 ): string {
-  if (error) {
-    return `The app will keep retrying automatically. ${error}`;
+  if (connection.error) {
+    const reason = connection.errorCode ? t(connectionFailureMessage(connection.errorCode)) : null;
+    const retrying = t("The app will keep retrying automatically.");
+    return [retrying, reason, connection.error].filter(Boolean).join(" ");
   }
 
-  switch (phase) {
+  switch (connection.phase) {
     case "offline":
-      return `Cached data remains available. The ${resourceName} will load when your connection returns.`;
+      return resource === "review"
+        ? t("Cached data remains available. The review will load when your connection returns.")
+        : t("Cached data remains available. The terminal will load when your connection returns.");
     case "connecting":
     case "reconnecting":
-      return `The ${resourceName} will load as soon as the environment is ready.`;
+      return resource === "review"
+        ? t("The review will load as soon as the environment is ready.")
+        : t("The terminal will load as soon as the environment is ready.");
     case "available":
     case "error":
-      return `Reconnect the environment to load the ${resourceName}.`;
+      return resource === "review"
+        ? t("Reconnect the environment to load the review.")
+        : t("Reconnect the environment to load the terminal.");
     case "connected":
       return "";
   }
@@ -52,9 +70,10 @@ function noticeDetail(
 export function EnvironmentConnectionNotice(props: {
   readonly environmentLabel: string;
   readonly connection: EnvironmentConnectionPresentation;
-  readonly resourceName: string;
+  readonly resourceName: NoticeResource;
   readonly onRetry: () => void;
 }) {
+  const { t } = useMobileI18n();
   const iconColor = String(useThemeColor("--color-icon-muted"));
   const isRetrying =
     props.connection.phase === "connecting" || props.connection.phase === "reconnecting";
@@ -74,15 +93,15 @@ export function EnvironmentConnectionNotice(props: {
         )}
 
         <Text className="text-center text-lg font-t3-bold text-foreground">
-          {noticeTitle(props.connection.phase, props.environmentLabel)}
+          {noticeTitle(t, props.connection.phase, props.environmentLabel)}
         </Text>
         <Text className="text-center text-sm leading-normal text-foreground-muted">
-          {noticeDetail(props.connection.phase, props.resourceName, props.connection.error)}
+          {noticeDetail(t, props.connection, props.resourceName)}
           {props.connection.traceId ? (
             <>
-              {" Trace ID: "}
+              {` ${t("Trace ID:")} `}
               <Text
-                accessibilityHint="Copies the trace ID"
+                accessibilityHint={t("Copies the trace ID")}
                 accessibilityRole="button"
                 className="underline decoration-dotted"
                 onPress={() =>
@@ -103,7 +122,7 @@ export function EnvironmentConnectionNotice(props: {
             className="mt-1 rounded-full bg-subtle px-4 py-2.5 active:opacity-70"
             onPress={props.onRetry}
           >
-            <Text className="text-sm font-t3-bold text-foreground">Retry now</Text>
+            <Text className="text-sm font-t3-bold text-foreground">{t("Retry now")}</Text>
           </Pressable>
         ) : null}
       </View>

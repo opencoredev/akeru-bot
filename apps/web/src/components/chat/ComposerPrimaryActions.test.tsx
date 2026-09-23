@@ -7,7 +7,8 @@ const stageArtworkState = vi.hoisted(() => ({
   variant: null as "dev" | null,
 }));
 
-vi.mock("~/hooks/useSettings", () => ({
+vi.mock("~/hooks/useSettings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/hooks/useSettings")>()),
   useEnvironmentIdentificationMode: () => stageArtworkState.mode,
 }));
 vi.mock("../SidebarStageBackdrop", () => ({
@@ -16,6 +17,7 @@ vi.mock("../SidebarStageBackdrop", () => ({
 }));
 
 import { ComposerPrimaryActions, formatPendingPrimaryActionLabel } from "./ComposerPrimaryActions";
+import { LanguageProvider, type TestLanguageCatalog } from "../../i18n";
 
 function renderPendingActions(isRunning: boolean) {
   return renderToStaticMarkup(
@@ -87,24 +89,29 @@ function renderRunningActions(showSendWhileRunning: boolean, hasSendableContent:
   );
 }
 
-function renderSendButton(sendDisabledReason: string | null = null) {
+function renderSendButton(
+  sendDisabledReason: string | null = null,
+  testCatalog?: TestLanguageCatalog,
+) {
   return renderToStaticMarkup(
-    createElement(ComposerPrimaryActions, {
-      compact: true,
-      pendingAction: null,
-      isRunning: false,
-      showPlanFollowUpPrompt: false,
-      promptHasText: true,
-      isSendBusy: false,
-      sendDisabledReason,
-      isConnecting: false,
-      isEnvironmentUnavailable: false,
-      isPreparingWorktree: false,
-      hasSendableContent: true,
-      onPreviousPendingQuestion: () => {},
-      onInterrupt: () => {},
-      onImplementPlanInNewThread: () => {},
-    }),
+    <LanguageProvider testCatalog={testCatalog}>
+      <ComposerPrimaryActions
+        compact
+        pendingAction={null}
+        isRunning={false}
+        showPlanFollowUpPrompt={false}
+        promptHasText
+        isSendBusy={false}
+        sendDisabledReason={sendDisabledReason}
+        isConnecting={false}
+        isEnvironmentUnavailable={false}
+        isPreparingWorktree={false}
+        hasSendableContent
+        onPreviousPendingQuestion={() => {}}
+        onInterrupt={() => {}}
+        onImplementPlanInNewThread={() => {}}
+      />
+    </LanguageProvider>,
   );
 }
 
@@ -114,7 +121,7 @@ afterEach(() => {
 });
 
 describe("formatPendingPrimaryActionLabel", () => {
-  it("returns 'Sending...' while responding", () => {
+  it("returns 'Sending…' while responding", () => {
     expect(
       formatPendingPrimaryActionLabel({
         compact: false,
@@ -122,10 +129,10 @@ describe("formatPendingPrimaryActionLabel", () => {
         isResponding: true,
         questionIndex: 0,
       }),
-    ).toBe("Sending...");
+    ).toBe("Sending…");
   });
 
-  it("returns 'Sending...' while responding regardless of other flags", () => {
+  it("returns 'Sending…' while responding regardless of other flags", () => {
     expect(
       formatPendingPrimaryActionLabel({
         compact: true,
@@ -133,7 +140,7 @@ describe("formatPendingPrimaryActionLabel", () => {
         isResponding: true,
         questionIndex: 3,
       }),
-    ).toBe("Sending...");
+    ).toBe("Sending…");
   });
 
   it("returns 'Submit' in compact mode on the last question", () => {
@@ -204,6 +211,17 @@ describe("formatPendingPrimaryActionLabel", () => {
 });
 
 describe("ComposerPrimaryActions", () => {
+  it("translates send labels without translating externally supplied disabled reasons", () => {
+    const testCatalog = {
+      locale: "fr",
+      catalog: { "Send message": "Envoyer test", "Raw provider error": "Must not appear" },
+    };
+    expect(renderSendButton(null, testCatalog)).toContain('aria-label="Envoyer test"');
+    expect(renderSendButton("Raw provider error", testCatalog)).toContain(
+      'aria-label="Raw provider error"',
+    );
+    expect(renderSendButton("Raw provider error", testCatalog)).not.toContain("Must not appear");
+  });
   it("disables and labels the send button while feedback is uploading", () => {
     const markup = renderSendButton("Sending feedback");
 

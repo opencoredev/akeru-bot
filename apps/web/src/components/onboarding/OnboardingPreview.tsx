@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { BotAvatarView } from "../roster/BotAvatarView";
 import { BotPromptComposer } from "../roster/BotPromptComposer";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
@@ -13,16 +14,17 @@ import {
   type DesktopOnboardingDraft,
   type DesktopOnboardingHandoffPhase,
   type desktopOnboardingModelSelection,
+  type OnboardingTranslate,
 } from "./desktopOnboarding.logic";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
 /** Caption under the assembling bot. Names what the user just did. */
-function previewCaption(draft: DesktopOnboardingDraft): string {
-  if (draft.step === "subscription") return "Pick the subscription that powers your bot";
-  if (draft.step === "goal") return "Say what you want help with";
-  if (draft.step === "identity") return "Give it a name and a look";
-  return "Send the first message";
+function previewCaption(draft: DesktopOnboardingDraft, t: OnboardingTranslate): string {
+  if (draft.step === "subscription") return t("Pick the subscription that powers your bot");
+  if (draft.step === "goal") return t("Say what you want help with");
+  if (draft.step === "identity") return t("Give it a name and a look");
+  return t("Send the first message");
 }
 
 function ProviderChip({
@@ -79,6 +81,7 @@ function FirstMessageComposer({
   readonly onDestinationReady: () => void;
 }) {
   const runtime = useBotThreadRuntime(botId, modelSelection);
+  const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
   const destinationReady =
     submittedMessage !== null &&
@@ -106,7 +109,7 @@ function FirstMessageComposer({
           }
           const sent = await runtime.send(prompt, files);
           if (!sent) {
-            setError(runtime.error ?? "Could not send the message.");
+            setError(runtime.error ?? t("Could not send the message."));
             return false;
           }
           onComplete(prompt);
@@ -145,8 +148,9 @@ export function OnboardingPreview({
   readonly onDestinationReady: () => void;
 }) {
   const reducedMotion = useReducedMotion();
+  const { t } = useI18n();
   const messageStep = draft.step === "message";
-  const displayName = draft.name.trim() || "Your bot";
+  const displayName = draft.name.trim() || t("Your bot");
   const focusLabel =
     draft.step === "subscription" ? null : resolveDesktopOnboardingFocusLabel(draft.goal);
   const named = draft.name.trim().length > 0;
@@ -213,7 +217,9 @@ export function OnboardingPreview({
                   ) : null}
                 </AnimatePresence>
               </div>
-              <p className="mt-4 max-w-xs text-sm text-muted-foreground">{previewCaption(draft)}</p>
+              <p className="mt-4 max-w-xs text-sm text-muted-foreground">
+                {previewCaption(draft, t)}
+              </p>
             </div>
           )}
         </div>

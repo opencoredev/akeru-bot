@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, TextInput, View } from "react-native";
 import type {
@@ -56,6 +57,7 @@ function Action({
 }
 
 export function ProviderConnections({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const { t } = useMobileI18n();
   const query = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
@@ -230,7 +232,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const activeProvider = keyProvider ?? flow?.provider;
   const label = PROVIDER_CONNECTIONS.find((provider) => provider.id === activeProvider)?.label;
   return (
-    <SettingsSection title={activeProvider ? `Connect ${label}` : "Provider connections"} card>
+    <SettingsSection title={activeProvider ? `Connect ${label}` : t("Provider connections")} card>
       <View className="gap-3 p-4">
         {error || query.error ? (
           <Text accessibilityRole="alert" className="text-sm text-danger">
@@ -239,9 +241,9 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
         ) : null}
         {keyProvider ? (
           <>
-            <Text className="text-sm font-t3-medium text-foreground">API key</Text>
+            <Text className="text-sm font-t3-medium text-foreground">{t("API key")}</Text>
             <TextInput
-              accessibilityLabel="API key"
+              accessibilityLabel={t("API key")}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
@@ -253,10 +255,12 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
             />
             {providerSupportsBaseUrl(keyProvider) ? (
               <>
-                <Text className="text-sm font-t3-medium text-foreground">Base URL (optional)</Text>
+                <Text className="text-sm font-t3-medium text-foreground">
+                  {t("Base URL (optional)")}
+                </Text>
                 <TextInput
-                  accessibilityLabel="Base URL (optional)"
-                  placeholder="Provider default"
+                  accessibilityLabel={t("Base URL (optional)")}
+                  placeholder={t("Provider default")}
                   keyboardType="url"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -270,17 +274,17 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
             ) : null}
             <Text className="text-sm text-foreground-muted">
               {providerSupportsBaseUrl(keyProvider)
-                ? "The environment sends this key to the selected endpoint."
-                : "Grok uses its default endpoint."}{" "}
+                ? t("The environment sends this key to the selected endpoint.")
+                : t("Grok uses its default endpoint.")}{" "}
               API billing can be separate from your subscription.
             </Text>
             <View className="flex-row gap-2">
               <Action
-                label={busy ? "Saving…" : "Save"}
+                label={busy ? t("Saving…") : t("Save")}
                 disabled={busy || !code.trim()}
                 onPress={() => void saveKey()}
               />
-              <Action label="Cancel" disabled={busy} onPress={() => void cancelLogin()} />
+              <Action label={t("Cancel")} disabled={busy} onPress={() => void cancelLogin()} />
             </View>
           </>
         ) : flow ? (
@@ -289,7 +293,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
               <Text className="text-sm text-foreground-muted">{flow.instructions}</Text>
             ) : null}
             {flow.url ? (
-              <Action label="Open sign-in" onPress={() => void openUrl(flow.url)} />
+              <Action label={t("Open sign-in")} onPress={() => void openUrl(flow.url)} />
             ) : null}
             {flow.userCode ? (
               <Text selectable className="text-lg font-t3-medium text-foreground">
@@ -299,8 +303,8 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
             {flow.completion === "paste" ? (
               <>
                 <TextInput
-                  accessibilityLabel="Authorization code"
-                  placeholder="Paste the authorization code"
+                  accessibilityLabel={t("Authorization code")}
+                  placeholder={t("Paste the authorization code")}
                   autoCapitalize="none"
                   autoCorrect={false}
                   value={code}
@@ -309,20 +313,20 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                   className="min-h-11 rounded-xl border border-border-subtle px-3 py-2 text-foreground"
                 />
                 <Action
-                  label="Connect"
+                  label={t("Connect")}
                   disabled={busy || !code.trim()}
                   onPress={() => void finish()}
                 />
               </>
             ) : !error ? (
-              <Text className="text-sm text-foreground-muted">Waiting for approval…</Text>
+              <Text className="text-sm text-foreground-muted">{t("Waiting for approval…")}</Text>
             ) : null}
-            <Action label="Cancel" disabled={busy} onPress={() => void cancelLogin()} />
+            <Action label={t("Cancel")} disabled={busy} onPress={() => void cancelLogin()} />
           </>
         ) : (
           <>
             {query.isPending ? (
-              <Text className="text-sm text-foreground-muted">Loading connections…</Text>
+              <Text className="text-sm text-foreground-muted">{t("Loading connections…")}</Text>
             ) : null}
             {PROVIDER_CONNECTIONS.map((provider) => {
               const status = query.data?.providers.find((entry) => entry.provider === provider.id);
@@ -331,7 +335,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                 <View key={provider.id} className="gap-2 border-b border-border-subtle py-3">
                   <Text className="text-base font-t3-medium text-foreground">{provider.label}</Text>
                   <Text className="text-sm text-foreground-muted">
-                    {status ? providerConnectionLabel(status) : "Status unavailable"}
+                    {status ? providerConnectionLabel(status) : t("Status unavailable")}
                   </Text>
                   {status?.baseUrl ? (
                     <Text selectable className="text-sm text-foreground-muted">
@@ -346,16 +350,16 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                       label={
                         status?.connected
                           ? apiKey && provider.id !== "opencode-go"
-                            ? "Use OAuth"
-                            : "Reconnect"
-                          : "Connect"
+                            ? t("Use OAuth")
+                            : t("Reconnect")
+                          : t("Connect")
                       }
                       disabled={busy || query.isPending}
                       onPress={() => void connect(provider.id)}
                     />
                     {provider.id !== "opencode-go" ? (
                       <Action
-                        label={apiKey ? "Reconnect key" : "API key"}
+                        label={apiKey ? t("Reconnect key") : t("API key")}
                         disabled={busy || query.isPending}
                         onPress={() => openKey(provider.id)}
                       />
@@ -363,12 +367,12 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                     {status?.connected ? (
                       <>
                         <Action
-                          label={apiKey ? "Check key" : "Check OAuth"}
+                          label={apiKey ? t("Check key") : t("Check OAuth")}
                           disabled={busy}
                           onPress={() => void runAction(provider.id, "test")}
                         />
                         <Action
-                          label="Disconnect"
+                          label={t("Disconnect")}
                           disabled={busy}
                           onPress={() => void runAction(provider.id, "disconnect")}
                         />

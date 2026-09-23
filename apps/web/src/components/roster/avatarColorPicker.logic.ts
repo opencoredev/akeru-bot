@@ -1,3 +1,5 @@
+import { createTranslator } from "@t3tools/client-runtime/i18n";
+
 export interface HsvColor {
   readonly h: number;
   readonly s: number;
@@ -45,6 +47,19 @@ export function clampColorFraction(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-export function formatColorFieldValueText(color: HsvColor, hex: string): string {
-  return `Saturation ${Math.round(color.s * 100)}%, brightness ${Math.round(color.v * 100)}%, ${hex}`;
+type Translate = (message: string, params?: Record<string, string | number>) => string;
+
+const englishTranslate: Translate = createTranslator("en").translate;
+
+/** Accessible value text for the saturation and brightness field. */
+export function formatColorFieldValueText(
+  color: HsvColor,
+  hex: string,
+  t: Translate = englishTranslate,
+): string {
+  return t("Saturation {saturation}%, brightness {brightness}%, {hex}", {
+    saturation: Math.round(color.s * 100),
+    brightness: Math.round(color.v * 100),
+    hex,
+  });
 }

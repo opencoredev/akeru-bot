@@ -172,6 +172,35 @@ describe("mobile connection storage", () => {
     });
   });
 
+  it("persists language locally and resets to system without changing other preferences", async () => {
+    mocks.setPreferencesJson(JSON.stringify({ baseFontSize: 17 }), 10);
+    await expect(savePreferencesPatch({ language: "en" })).resolves.toEqual({
+      baseFontSize: 17,
+      language: "en",
+    });
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17, language: "en" });
+    await expect(savePreferencesPatch({ language: "system" })).resolves.toEqual({
+      baseFontSize: 17,
+      language: "system",
+    });
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17, language: "system" });
+    expect(JSON.parse(mocks.getPreferencesJson() ?? "")).toEqual({
+      baseFontSize: 17,
+      language: "system",
+    });
+  });
+
+  it("ignores malformed language preferences", async () => {
+    mocks.setPreferencesJson(JSON.stringify({ language: { locale: "en" }, baseFontSize: 17 }), 10);
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17 });
+  });
+
+  it("retains language in the device-local fallback when SQLite is unavailable", async () => {
+    mocks.setDatabaseFailures(true, true);
+    await expect(savePreferencesPatch({ language: "en" })).resolves.toEqual({ language: "en" });
+    await expect(loadPreferences()).resolves.toEqual({ language: "en" });
+  });
+
   it("persists independent light and dark theme choices", async () => {
     mocks.setPreferencesJson(
       JSON.stringify({

@@ -1,5 +1,7 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
+import { botInboxKindLabel } from "@t3tools/client-runtime/bot-inbox";
 import type { BotInboxItem, EnvironmentId } from "@t3tools/contracts";
 import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,11 +40,12 @@ function BotInbox({
   readonly environmentId: EnvironmentId;
   readonly items: ReadonlyArray<BotInboxItem>;
 }) {
+  const { t } = useMobileI18n();
   const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
   return (
-    <SettingsSection title="Bot inbox" card>
+    <SettingsSection title={t("Bot inbox")} card>
       {items.length === 0 ? (
-        <Text className="p-4 text-sm text-foreground-muted">No open items.</Text>
+        <Text className="p-4 text-sm text-foreground-muted">{t("No open items.")}</Text>
       ) : (
         items.map((item, index) => (
           <View
@@ -51,11 +54,11 @@ function BotInbox({
           >
             <Text className="text-base font-t3-medium text-foreground">{item.botName}</Text>
             <Field
-              label="Bot work or routine"
-              value={`${item.taskOrRoutine} · ${item.kind === "silence-watchdog-failure" ? "Bot stopped responding" : item.kind}`}
+              label={t("Bot work or routine")}
+              value={`${item.taskOrRoutine} · ${t(botInboxKindLabel(item.kind))}`}
             />
-            <Field label="Last failure" value={item.lastFailure} />
-            <Field label="Next action" value={item.nextAction} />
+            <Field label={t("Last failure")} value={item.lastFailure} />
+            <Field label={t("Next action")} value={item.nextAction} />
             {canResolveInboxItem(item) ? (
               <Pressable
                 accessibilityRole="button"
@@ -64,7 +67,7 @@ function BotInbox({
                   void resolveIncident({ environmentId, input: { id: item.id } });
                 }}
               >
-                <Text className="text-sm font-t3-medium text-foreground">Resolve</Text>
+                <Text className="text-sm font-t3-medium text-foreground">{t("Resolve")}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -75,14 +78,15 @@ function BotInbox({
 }
 
 function LocalExecution({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   const mode = settings?.defaultThreadEnvMode ?? "local";
   return (
-    <SettingsSection title="Local execution" card>
+    <SettingsSection title={t("Local execution")} card>
       <View className="gap-3 p-4">
         <Text className="text-sm text-foreground-muted">
-          Pick the default workspace mode for new threads on this environment.
+          {t("Pick the default workspace mode for new chats on this environment.")}
         </Text>
         <View className="flex-row gap-2">
           {(["local", "worktree"] as const).map((value) => (
@@ -109,7 +113,7 @@ function LocalExecution({ environmentId }: { readonly environmentId: Environment
                     : "text-center text-sm font-t3-medium text-foreground"
                 }
               >
-                {value === "local" ? "Local" : "New worktree"}
+                {value === "local" ? t("Local") : t("New worktree")}
               </Text>
             </Pressable>
           ))}
@@ -122,6 +126,7 @@ function LocalExecution({ environmentId }: { readonly environmentId: Environment
 export function SettingsProviderHealthRouteScreen({
   route,
 }: StaticScreenProps<SettingsProviderHealthParams>) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const query = useEnvironmentQuery(
@@ -149,7 +154,7 @@ export function SettingsProviderHealthRouteScreen({
         <NativeStackScreenOptions options={{ headerShown: false }} />
       ) : null}
       {Platform.OS === "android" ? (
-        <AndroidScreenHeader title="Settings" onBack={() => navigation.goBack()} />
+        <AndroidScreenHeader title={t("Settings")} onBack={() => navigation.goBack()} />
       ) : null}
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
@@ -180,7 +185,7 @@ export function SettingsProviderHealthRouteScreen({
           <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
         ) : inboxView?.kind === "loading" ? (
           <Text className="py-16 text-center text-sm text-foreground-muted">
-            Loading bot inbox…
+            {t("Loading bot inbox…")}
           </Text>
         ) : (
           section

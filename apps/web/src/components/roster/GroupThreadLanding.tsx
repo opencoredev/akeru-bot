@@ -17,6 +17,7 @@ import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageContro
 import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
+import { useI18n } from "~/i18n";
 import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
@@ -55,11 +56,6 @@ import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
-const NO_PROVIDER_PRESENTATION = {
-  title: "No provider is connected",
-  description: "Connect a provider in Settings > Providers so this group can reply.",
-  action: "providers",
-} as const;
 
 export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
   members: ReadonlyArray<T>,
@@ -69,6 +65,7 @@ export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
 }
 
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const peopleIdentity = useAtomValue(
     environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
@@ -128,13 +125,17 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     turnRunning: runtime.latestTurn?.state === "running",
     waitingForUserInput,
   });
-  const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null);
+  const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null, t);
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
   );
   const today = useLocalDay();
-  const entries = useMemo(() => buildBotConversationEntries(messages, today), [messages, today]);
+  const todayLabel = t("Today");
+  const entries = useMemo(
+    () => buildBotConversationEntries(messages, today, todayLabel),
+    [messages, today, todayLabel],
+  );
   const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: group ? runtime.linkedThreadRef?.threadId : null,
@@ -163,7 +164,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     : [];
   return (
     <SidebarInset
-      aria-label={`${group.name} group chat`}
+      aria-label={t("{name} group chat", { name: group.name })}
       className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
       data-testid="group-thread-landing"
     >
@@ -188,7 +189,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 ))}
               </div>
               <h1 className="text-lg font-medium">
-                {boss ? `Message ${group.name}` : "Group boss unavailable"}
+                {boss ? t("Message {name}", { name: group.name }) : t("Group boss unavailable")}
               </h1>
             </div>
           ) : (
@@ -282,13 +283,17 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           <ProviderUnavailableNotice
             id={noProviderNoticeId}
             className="mx-auto mt-2 w-[min(46rem,calc(100%-2rem))]"
-            presentation={NO_PROVIDER_PRESENTATION}
+            presentation={{
+              title: t("No provider is connected"),
+              description: t("Connect a provider in Settings > Providers so this group can reply."),
+              action: "providers",
+            }}
             environmentId={environmentId}
           />
         ) : null}
         {boss === null ? (
           <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
-            Choose an active group boss in the group sidebar.
+            {t("Choose an active group boss in the group sidebar.")}
           </div>
         ) : null}
         <BotPromptComposer
@@ -330,7 +335,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               />
             ) : null
           }
-          {...(waitingForUserInput ? { placeholder: "Write a custom answer..." } : {})}
+          {...(waitingForUserInput ? { placeholder: t("Write a custom answer…") } : {})}
           disabled={
             pendingApproval !== null ||
             runtime.respondingRequestIds.length > 0 ||

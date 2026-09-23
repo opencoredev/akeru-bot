@@ -3,7 +3,7 @@ import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { makeComposerTestProvider } from "../../test/chatComposerProps";
+import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import {
   botEngineFailureContext,
   botEngineUnavailability,

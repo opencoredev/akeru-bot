@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   StackActions,
@@ -98,6 +99,7 @@ export function NewTaskDraftScreen(props: {
   /** Durable native share inbox item to merge into this project draft. */
   readonly incomingShareId?: string;
 }) {
+  const { plural, t } = useMobileI18n();
   const projects = useProjects();
   const createProjectThread = useCreateProjectThread();
   const flow = useNewTaskFlow();
@@ -446,8 +448,10 @@ export function NewTaskDraftScreen(props: {
       if (isIncomingShareUnavailable && alertedUnavailableIncomingShareIdRef.current !== shareId) {
         alertedUnavailableIncomingShareIdRef.current = shareId;
         Alert.alert(
-          "Shared content unavailable",
-          "The shared content is no longer in the inbox. You can continue editing this chat draft.",
+          t("Shared content unavailable"),
+          t(
+            "The shared content is no longer in the inbox. You can continue editing this chat draft.",
+          ),
         );
       }
       return;
@@ -502,11 +506,15 @@ export function NewTaskDraftScreen(props: {
       const warnings = [...incomingShare.warnings];
       if (skippedAttachmentCount > 0) {
         warnings.push(
-          `${skippedAttachmentCount} shared image${skippedAttachmentCount === 1 ? " was" : "s were"} skipped because this draft reached the attachment limit.`,
+          plural(skippedAttachmentCount, {
+            one: "{count} shared image was skipped because this draft reached the attachment limit.",
+            other:
+              "{count} shared images were skipped because this draft reached the attachment limit.",
+          }),
         );
       }
       if (warnings.length > 0) {
-        Alert.alert("Some shared content was skipped", warnings.join("\n"));
+        Alert.alert(t("Some shared content was skipped"), warnings.join("\n"));
       }
       shareImportDraftBackupRef.current.delete(importKey);
     })()
@@ -515,11 +523,11 @@ export function NewTaskDraftScreen(props: {
           return;
         }
         Alert.alert(
-          "Could not import shared content",
-          error instanceof Error ? error.message : "The shared content could not be saved.",
+          t("Could not import shared content"),
+          error instanceof Error ? error.message : t("The shared content could not be saved."),
           [
             {
-              text: "Cancel import",
+              text: t("Cancel import"),
               style: "cancel",
               onPress: () => {
                 const cancelImport = async (): Promise<void> => {
@@ -552,13 +560,13 @@ export function NewTaskDraftScreen(props: {
                       return;
                     }
                     Alert.alert(
-                      "Could not cancel import",
+                      t("Could not cancel import"),
                       cancelError instanceof Error
                         ? cancelError.message
-                        : "The shared content could not be restored safely.",
+                        : t("The shared content could not be restored safely."),
                       [
                         {
-                          text: "Retry import",
+                          text: t("Retry import"),
                           onPress: () => {
                             cancellingShareImportKeyRef.current = null;
                             setIsCancellingShareImport(false);
@@ -566,7 +574,7 @@ export function NewTaskDraftScreen(props: {
                           },
                         },
                         {
-                          text: "Retry cancel",
+                          text: t("Retry cancel"),
                           onPress: () => void cancelImport(),
                         },
                       ],
@@ -578,7 +586,7 @@ export function NewTaskDraftScreen(props: {
               },
             },
             {
-              text: "Retry",
+              text: t("Retry"),
               onPress: () => setShareImportAttempt((attempt) => attempt + 1),
             },
           ],
@@ -725,8 +733,8 @@ export function NewTaskDraftScreen(props: {
         await enqueueThreadOutboxMessage(message);
       } catch (error) {
         Alert.alert(
-          "Could not queue chat",
-          error instanceof Error ? error.message : "The chat could not be saved to the outbox.",
+          t("Could not queue chat"),
+          error instanceof Error ? error.message : t("The chat could not be saved to the outbox."),
         );
         return;
       } finally {
@@ -779,8 +787,8 @@ export function NewTaskDraftScreen(props: {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         Alert.alert(
-          "Could not start chat",
-          error instanceof Error ? error.message : "The chat could not be started.",
+          t("Could not start chat"),
+          error instanceof Error ? error.message : t("The chat could not be started."),
         );
       }
       return;
@@ -811,7 +819,7 @@ export function NewTaskDraftScreen(props: {
         {Platform.OS === "android" ? (
           <>
             <NativeStackScreenOptions options={{ headerShown: false }} />
-            <AndroidScreenHeader title="New chat" onBack={() => navigation.goBack()} />
+            <AndroidScreenHeader title={t("New chat")} onBack={() => navigation.goBack()} />
           </>
         ) : (
           <NativeStackScreenOptions options={{ title: "Loading chat" }} />
@@ -848,7 +856,7 @@ export function NewTaskDraftScreen(props: {
       onFocus={() => setIsComposerFocused(true)}
       onBlur={() => setIsComposerFocused(false)}
       onPasteImages={(uris) => void handleNativePasteImages(uris)}
-      placeholder="Ask anything…"
+      placeholder={t("Ask anything…")}
       singleLineCentered={false}
       contentInsetVertical={0}
       style={{
@@ -887,17 +895,25 @@ export function NewTaskDraftScreen(props: {
     navigation.dispatch(StackActions.push(routeName));
   };
 
+  // The project title is a pressable, so the translated line is split around its placeholder.
+  const [projectLinePrefix = "", projectLineSuffix = ""] = t("in {project}?", {
+    project: "{project}",
+  }).split("{project}");
   const hero = (
     <View className="items-center gap-6 px-6" testID="new-task-hero">
       <View className="w-full items-center gap-1.5">
         <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
-          What should we build
+          {t("What should we build")}
         </Text>
         <View className="max-w-full flex-row items-center justify-center">
-          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">in </Text>
+          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">
+            {projectLinePrefix}
+          </Text>
           <Pressable
-            accessibilityHint="Opens the project picker"
-            accessibilityLabel={`Change project from ${selectedProject.title}`}
+            accessibilityHint={t("Opens the project picker")}
+            accessibilityLabel={t("Change project from {project}", {
+              project: selectedProject.title,
+            })}
             accessibilityRole="button"
             disabled={isIncomingShareTransferPending}
             onPress={chooseProject}
@@ -914,16 +930,20 @@ export function NewTaskDraftScreen(props: {
               {selectedProject.title}
             </Text>
           </Pressable>
-          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">?</Text>
+          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">
+            {projectLineSuffix}
+          </Text>
         </View>
       </View>
 
       <ComposerInlineControl
-        accessibilityLabel={`Environment: ${selectedEnvironmentLabel}`}
+        accessibilityLabel={t("Environment: {environment}", {
+          environment: selectedEnvironmentLabel,
+        })}
         chevronDirection="right"
         disabled={isIncomingShareTransferPending}
         icon="desktopcomputer"
-        label={`on ${selectedEnvironmentLabel}`}
+        label={t("on {environment}", { environment: selectedEnvironmentLabel })}
         maxWidth={260}
         onPress={
           flow.environments.length > 1 ? () => openContextPicker("NewTaskEnvironment") : undefined
@@ -974,7 +994,7 @@ export function NewTaskDraftScreen(props: {
         chevronDirection="right"
         disabled={isIncomingShareTransferPending}
         icon="arrow.triangle.branch"
-        label={showBranchLoading ? "Loading branches…" : selectedBranchLabel}
+        label={showBranchLoading ? t("Loading branches…") : selectedBranchLabel}
         maxWidth={190}
         onPress={() => openContextPicker("NewTaskBranch")}
       />
@@ -1017,14 +1037,14 @@ export function NewTaskDraftScreen(props: {
             contentPaddingRight={8}
           >
             <ComposerToolbarButton
-              accessibilityLabel="Add attachment"
+              accessibilityLabel={t("Add attachment")}
               disabled={isIncomingShareTransferPending}
               icon="plus"
               onPress={() => void handlePickImages()}
               showChevron={false}
             />
             <ComposerInlineControl
-              accessibilityLabel="Model and reasoning settings"
+              accessibilityLabel={t("Model and reasoning settings")}
               disabled={isIncomingShareTransferPending}
               emphasized
               iconNode={
@@ -1045,7 +1065,7 @@ export function NewTaskDraftScreen(props: {
                     ? { ios: "list.bullet.clipboard", android: "auto_awesome" }
                     : { ios: "hammer", android: "construction" }
                 }
-                label={flow.interactionMode === "plan" ? "Plan" : "Build"}
+                label={flow.interactionMode === "plan" ? t("Plan") : t("Build")}
                 onPress={() =>
                   flow.setInteractionMode(flow.interactionMode === "plan" ? "default" : "plan")
                 }
@@ -1059,10 +1079,10 @@ export function NewTaskDraftScreen(props: {
             <ComposerToolbarButton
               accessibilityLabel={
                 flow.submitting
-                  ? "Starting chat"
+                  ? t("Starting chat")
                   : environmentConnected
-                    ? "Start chat"
-                    : "Queue chat"
+                    ? t("Start chat")
+                    : t("Queue chat")
               }
               disabled={!canStart}
               icon={environmentConnected ? "arrow.up" : "tray.and.arrow.up"}
@@ -1080,7 +1100,7 @@ export function NewTaskDraftScreen(props: {
     return (
       <View className="flex-1 bg-sheet" collapsable={false}>
         <NativeStackScreenOptions options={{ headerShown: false }} />
-        <AndroidScreenHeader title="New chat" onBack={closeNewTask} />
+        <AndroidScreenHeader title={t("New chat")} onBack={closeNewTask} />
         {heroViewport}
 
         <KeyboardStickyView
@@ -1104,8 +1124,8 @@ export function NewTaskDraftScreen(props: {
       />
       <NativeHeaderToolbar placement="left">
         <NativeHeaderToolbar.Button
-          accessibilityLabel="Cancel chat"
-          label="Cancel"
+          accessibilityLabel={t("Cancel chat")}
+          label={t("Cancel")}
           onPress={closeNewTask}
         />
       </NativeHeaderToolbar>

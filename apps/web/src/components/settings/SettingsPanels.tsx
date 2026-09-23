@@ -143,6 +143,8 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PortabilitySettings } from "./PortabilitySettings";
+import { LanguageSetting } from "./LanguageSetting";
+import { useI18n } from "../../i18n";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -864,6 +866,7 @@ function BackgroundActivityAdvancedDialog({
 }
 
 export function AppearanceSettingsPanel() {
+  const { t } = useI18n();
   const {
     appearanceMode,
     refreshTheme,
@@ -897,7 +900,7 @@ export function AppearanceSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="appearance" title="Appearance">
+      <SettingsSection id="appearance" title={t("Appearance")}>
         <div id={searchableSetting("theme").id}>
           <ThemeLibrary
             appearanceMode={appearanceMode}
@@ -1763,6 +1766,7 @@ export function BotSandboxBrowserSharingSettings({
 }
 
 export function GeneralSettingsPanel() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const [backgroundActivityDialogOpen, setBackgroundActivityDialogOpen] = useState(false);
@@ -1814,7 +1818,8 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="General">
+      <SettingsSection title={t("General")}>
+        <LanguageSetting />
         <BotSandboxBrowserSharingSettings
           value={settings.botSandboxBrowserSharing}
           onChange={(value) => updateSettings({ botSandboxBrowserSharing: value })}
@@ -2264,7 +2269,7 @@ export function GeneralSettingsPanel() {
         <PortabilitySettings />
       </SettingsSection>
 
-      <SettingsSection title="About">
+      <SettingsSection title={t("About")}>
         {isElectron ? (
           <AboutVersionSection />
         ) : (

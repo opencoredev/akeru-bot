@@ -238,7 +238,7 @@ export function ProductFeedbackDialog() {
                 Cancel
               </Button>
               <Button disabled={!canSend} type="submit">
-                {submitting ? "Sending..." : "Send"}
+                {submitting ? "Sending…" : "Send"}
               </Button>
             </div>
           </DialogFooter>

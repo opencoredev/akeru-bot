@@ -1234,6 +1234,8 @@ export type ConfirmDialogVariant = "default" | "destructive";
 
 export interface ConfirmDialogOptions {
   readonly variant?: ConfirmDialogVariant;
+  /** Names the confirming action, such as "Delete group". Defaults to "Confirm". */
+  readonly confirmLabel?: string;
 }
 
 /**

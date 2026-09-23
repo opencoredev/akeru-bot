@@ -40,6 +40,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
 import { useClientSettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
 import { isPreviewFocused } from "../../lib/previewFocus";
 import { isTerminalFocused } from "../../lib/terminalFocus";
@@ -158,6 +159,7 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
   onNewBot: () => void;
   onNewGroup: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <SidebarHeader
       className={cn(
@@ -180,7 +182,7 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
             <MenuTrigger
               render={
                 <Button
-                  aria-label="Create"
+                  aria-label={t("Create")}
                   data-testid="roster-new-bot"
                   className="size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]"
                   size="icon"
@@ -193,11 +195,11 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
             <MenuPopup align="end">
               <MenuItem onClick={onNewBot}>
                 <BotIcon />
-                New bot
+                {t("New bot")}
               </MenuItem>
               <MenuItem onClick={onNewGroup}>
                 <UsersIcon />
-                New group
+                {t("New group")}
               </MenuItem>
             </MenuPopup>
           </Menu>
@@ -347,6 +349,7 @@ const BotRosterRow = memo(function BotRosterRow({
   onArchive: (bot: Bot) => void;
   sortable: SortableRosterRowBag;
 }) {
+  const { t } = useI18n();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -416,10 +419,12 @@ const BotRosterRow = memo(function BotRosterRow({
                   // plus hover text say what it actually is.
                   <time
                     dateTime={latestMessage.at}
-                    aria-label={`Last message ${formatRosterFullTimestamp(latestMessage.at)}`}
+                    aria-label={t("Last message {time}", {
+                      time: formatRosterFullTimestamp(latestMessage.at),
+                    })}
                     className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground"
                   >
-                    {formatRosterTimestamp(latestMessage.at, timestampFormat)}
+                    {formatRosterTimestamp(latestMessage.at, timestampFormat, Date.now(), t)}
                   </time>
                 ) : null}
               </span>
@@ -437,7 +442,7 @@ const BotRosterRow = memo(function BotRosterRow({
               <button
                 ref={menuTriggerRef}
                 type="button"
-                aria-label={`Actions for ${bot.name}`}
+                aria-label={t("Actions for {name}", { name: bot.name })}
                 className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
               />
             }
@@ -445,23 +450,23 @@ const BotRosterRow = memo(function BotRosterRow({
           <MenuPopup align="end">
             <MenuItem onClick={() => onOpenSettings(bot)}>
               <SettingsIcon />
-              Bot settings
+              {t("Bot settings")}
             </MenuItem>
             <MenuItem onClick={() => onPin(item, !pinned)}>
               <PinIcon />
-              {pinned ? "Unpin" : "Pin"}
+              {pinned ? t("Unpin") : t("Pin")}
             </MenuItem>
             <MenuItem disabled={!canMoveUp} onClick={() => onNudge(item, -1)}>
               <ArrowUpIcon />
-              Move up
+              {t("Move up")}
             </MenuItem>
             <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
               <ArrowDownIcon />
-              Move down
+              {t("Move down")}
             </MenuItem>
             <MenuItem variant="destructive" onClick={() => onArchive(bot)}>
               <ArchiveIcon />
-              Archive bot
+              {t("Archive bot")}
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -532,6 +537,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
   onNudge: (item: RosterItemRef, delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
 }) {
+  const { t, plural } = useI18n();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const item = useMemo(() => ({ kind: "group" as const, id: group.id }), [group.id]);
   const members = group.members.filter(
@@ -583,7 +589,15 @@ const GroupRosterRow = memo(function GroupRosterRow({
         >
           {group.name}
         </span>
-        {pinned ? null : <span className="text-xs text-sidebar-muted-foreground">{members}</span>}
+        {pinned ? null : (
+          <span
+            aria-label={plural(members, { one: "{count} bot", other: "{count} bots" })}
+            className="flex flex-none items-center gap-1 text-xs text-sidebar-muted-foreground"
+          >
+            <UsersIcon aria-hidden className="size-3" />
+            {members}
+          </span>
+        )}
       </button>
       <Menu>
         <MenuTrigger
@@ -591,7 +605,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
             <button
               ref={menuTriggerRef}
               type="button"
-              aria-label={`Actions for ${group.name}`}
+              aria-label={t("Actions for {name}", { name: group.name })}
               className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
@@ -599,15 +613,15 @@ const GroupRosterRow = memo(function GroupRosterRow({
         <MenuPopup align="end">
           <MenuItem onClick={() => onPin(item, !pinned)}>
             <PinIcon />
-            {pinned ? "Unpin" : "Pin"}
+            {pinned ? t("Unpin") : t("Pin")}
           </MenuItem>
           <MenuItem disabled={!canMoveUp} onClick={() => onNudge(item, -1)}>
             <ArrowUpIcon />
-            Move up
+            {t("Move up")}
           </MenuItem>
           <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
             <ArrowDownIcon />
-            Move down
+            {t("Move down")}
           </MenuItem>
         </MenuPopup>
       </Menu>
@@ -721,6 +735,7 @@ function RosterSectionPlaceholder(props: {
 }
 
 export default function BotRosterSidebar() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -1072,7 +1087,7 @@ export default function BotRosterSidebar() {
     if (environmentId === null) {
       // Nothing was archived, so the dialog restores focus to the row menu itself.
       setArchivingBot(null);
-      toastManager.add({ type: "error", title: "Connect an environment first" });
+      toastManager.add({ type: "error", title: t("Connect an environment first") });
       return;
     }
     const botKey = rosterItemKey({ kind: "bot", id: bot.id });
@@ -1089,7 +1104,7 @@ export default function BotRosterSidebar() {
       // Archiving is refused with a reason (a group boss, a group left too small), so say it.
       toastManager.add({
         type: "error",
-        title: `Could not archive ${bot.name}`,
+        title: t("Could not archive {name}", { name: bot.name }),
         description: commandFailureMessage(result),
       });
       return;
@@ -1117,7 +1132,7 @@ export default function BotRosterSidebar() {
 
   const handleRestoreBot = async (bot: Bot) => {
     if (environmentId === null) {
-      toastManager.add({ type: "error", title: "Connect an environment first" });
+      toastManager.add({ type: "error", title: t("Connect an environment first") });
       return;
     }
     const result = await restoreBotCommand({
@@ -1127,7 +1142,7 @@ export default function BotRosterSidebar() {
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
-        title: `Could not restore ${bot.name}`,
+        title: t("Could not restore {name}", { name: bot.name }),
         description: commandFailureMessage(result),
       });
     }
@@ -1143,7 +1158,7 @@ export default function BotRosterSidebar() {
       if (environmentId === null) {
         toastManager.add({
           type: "error",
-          title: "Connect an environment first",
+          title: t("Connect an environment first"),
         });
         return;
       }
@@ -1167,7 +1182,7 @@ export default function BotRosterSidebar() {
           },
         });
         if (result._tag === "Failure") {
-          toastManager.add({ type: "error", title: "Could not create bot" });
+          toastManager.add({ type: "error", title: t("Could not create bot") });
           return;
         }
         setNewBotOpen(false);
@@ -1181,7 +1196,7 @@ export default function BotRosterSidebar() {
     if (environmentId === null) {
       toastManager.add({
         type: "error",
-        title: "Connect an environment first",
+        title: t("Connect an environment first"),
       });
       return;
     }
@@ -1196,7 +1211,7 @@ export default function BotRosterSidebar() {
       },
     });
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not create group" });
+      toastManager.add({ type: "error", title: t("Could not create group") });
       return;
     }
     setNewGroupOpen(false);
@@ -1233,7 +1248,7 @@ export default function BotRosterSidebar() {
                 ref={rosterSearchRef}
                 type="text"
                 data-testid="roster-search-input"
-                placeholder="Search"
+                placeholder={t("Search")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -1250,7 +1265,7 @@ export default function BotRosterSidebar() {
       >
         {bots.every((bot) => bot.archivedAt !== null) ? (
           <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-            No bots yet
+            {t("No bots yet")}
           </div>
         ) : (
           <>
@@ -1318,7 +1333,7 @@ export default function BotRosterSidebar() {
                     // Focusable only on purpose: where focus lands when an
                     // archived row leaves and no sibling row survives it.
                     tabIndex={-1}
-                    aria-label="Bots and groups"
+                    aria-label={t("Bots and groups")}
                     className="relative flex flex-wrap justify-center gap-x-1 gap-y-px"
                   >
                     {rosterListItems.map((item) => {
@@ -1397,7 +1412,7 @@ export default function BotRosterSidebar() {
                             <RosterDragBoundary
                               key="pinned-header"
                               marker="pinned-header"
-                              label="Pinned"
+                              label={t("Pinned")}
                               visible={dragging}
                               isDropTarget={dragTargetZone === "pinned"}
                             />
@@ -1428,10 +1443,19 @@ export default function BotRosterSidebar() {
                                 )}
                               >
                                 <ChevronDownIcon className="size-3.5" />
-                                <span>{rosterZoneHeading(visibleUnassignedItems)}</span>
+                                <span>
+                                  {(() => {
+                                    const heading = rosterZoneHeading(visibleUnassignedItems);
+                                    if (heading === "Bots and groups") return t("Bots and groups");
+                                    if (heading === "Groups") return t("Groups");
+                                    return t("Bots");
+                                  })()}
+                                </span>
                                 <span
                                   className="tabular-nums"
-                                  aria-label={`${visibleUnassignedItems.length} unpinned`}
+                                  aria-label={t("{count} unpinned", {
+                                    count: visibleUnassignedItems.length,
+                                  })}
                                 >
                                   {visibleUnassignedItems.length}
                                 </span>
@@ -1452,7 +1476,7 @@ export default function BotRosterSidebar() {
                             <RosterSectionPlaceholder
                               key="unassigned-placeholder"
                               marker="unassigned-placeholder"
-                              label="Bots"
+                              label={t("Bots")}
                               showHint={
                                 dragging &&
                                 (visibleUnassignedItems.length === 0 ||
@@ -1473,7 +1497,7 @@ export default function BotRosterSidebar() {
               </DndContext>
               {visibleBots.length === 0 && visibleGroups.length === 0 ? (
                 <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-                  No bots match
+                  {t("No bots match")}
                 </div>
               ) : null}
             </SidebarGroup>
@@ -1494,13 +1518,16 @@ export default function BotRosterSidebar() {
               <ChevronDownIcon
                 className={cn("size-3.5 transition-transform", !archivedOpen && "-rotate-90")}
               />
-              <span>Archived</span>
-              <span className="tabular-nums" aria-label={`${archivedBots.length} archived`}>
+              <span>{t("Archived")}</span>
+              <span
+                className="tabular-nums"
+                aria-label={t("{count} archived", { count: archivedBots.length })}
+              >
                 {archivedBots.length}
               </span>
             </button>
             {archivedOpen ? (
-              <ul role="list" aria-label="Archived bots" className="flex flex-col gap-px">
+              <ul role="list" aria-label={t("Archived bots")} className="flex flex-col gap-px">
                 {archivedBots.map((bot) => (
                   <li
                     key={bot.id}
@@ -1519,7 +1546,7 @@ export default function BotRosterSidebar() {
                         render={
                           <button
                             type="button"
-                            aria-label={`Restore ${bot.name}`}
+                            aria-label={t("Restore {name}", { name: bot.name })}
                             onClick={() => void handleRestoreBot(bot)}
                             className="flex size-7 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
                           >
@@ -1527,7 +1554,7 @@ export default function BotRosterSidebar() {
                           </button>
                         }
                       />
-                      <TooltipPopup side="top">Restore</TooltipPopup>
+                      <TooltipPopup side="top">{t("Restore")}</TooltipPopup>
                     </Tooltip>
                   </li>
                 ))}
@@ -1543,7 +1570,7 @@ export default function BotRosterSidebar() {
             render={
               <button
                 type="button"
-                aria-label="Create"
+                aria-label={t("Create")}
                 className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none select-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PlusIcon className="size-4" />
@@ -1553,11 +1580,11 @@ export default function BotRosterSidebar() {
           <MenuPopup align="end" side="right">
             <MenuItem onClick={handleNewBot}>
               <BotIcon />
-              New bot
+              {t("New bot")}
             </MenuItem>
             <MenuItem onClick={handleNewGroup}>
               <UsersIcon />
-              New group
+              {t("New group")}
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -1592,16 +1619,22 @@ export default function BotRosterSidebar() {
             finalFocus={() => archivedFocusTarget.current === undefined}
           >
             <AlertDialogHeader>
-              <AlertDialogTitle>Archive {archivingBot.name}?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {t("Archive {name}?", { name: archivingBot.name })}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                {archivingBot.name} leaves the roster and stops taking messages. Its chat history is
-                kept, and you can restore it from Archived at any time.
+                {t(
+                  "{name} leaves the roster and stops taking messages. Its chat history is kept, and you can restore it from Archived at any time.",
+                  { name: archivingBot.name },
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+              <AlertDialogClose render={<Button variant="outline" />}>
+                {t("Cancel")}
+              </AlertDialogClose>
               <Button variant="destructive" onClick={() => void handleArchiveBot(archivingBot)}>
-                Archive
+                {t("Archive")}
               </Button>
             </AlertDialogFooter>
           </AlertDialogPopup>

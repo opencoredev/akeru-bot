@@ -6,6 +6,7 @@ import {
 import { type PendingApproval } from "../../session-logic";
 import { useTheme } from "../../hooks/useTheme";
 import { describeCommandApproval } from "~/lib/commandApprovalDetails";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { ShellCommandCode } from "./ShellCommandCode";
 
@@ -37,6 +38,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   className,
   hideLabel = false,
 }: ComposerPendingApprovalPanelProps) {
+  const { t, plural } = useI18n();
   const { resolvedTheme } = useTheme();
   const isProductFeedback = approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
   const isRoutine = approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME;
@@ -44,7 +46,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
     isRoutine && approval.args && typeof approval.args === "object"
       ? (approval.args as Record<string, unknown>)
       : null;
-  const routineName = typeof routineArgs?.name === "string" ? routineArgs.name : "New routine";
+  const routineName = typeof routineArgs?.name === "string" ? routineArgs.name : t("New routine");
   const routineInstructions =
     typeof routineArgs?.instructions === "string" ? routineArgs.instructions : null;
   const routineSchedule =
@@ -58,34 +60,34 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
     : [];
   const scheduleKind =
     routineSchedule?.kind === "weekdays"
-      ? "Weekdays"
+      ? t("Weekdays")
       : routineSchedule?.kind === "weekly"
         ? weeklyDays.length > 0
           ? weeklyDays.map((day) => `${day.slice(0, 1).toUpperCase()}${day.slice(1)}`).join(", ")
-          : "Weekly"
-        : "Daily";
+          : t("Weekly")
+        : t("Daily");
   const fallbackLabel = isRoutine
-    ? "Routine approval"
+    ? t("Routine approval")
     : isProductFeedback
-      ? "Product feedback approval"
+      ? t("Product feedback approval")
       : approval.requestKind === "mcp-elicitation"
-        ? "App access approval"
+        ? t("App access approval")
         : approval.requestKind === "command"
-          ? "Command approval"
+          ? t("Command approval")
           : approval.requestKind === "file-read"
-            ? "File read approval"
-            : "File change approval";
+            ? t("File read approval")
+            : t("File change approval");
   const detailAriaLabel = isRoutine
-    ? "Routine details"
+    ? t("Routine details")
     : isProductFeedback
-      ? "Product feedback draft"
+      ? t("Product feedback draft")
       : approval.requestKind === "mcp-elicitation"
-        ? "App access request"
+        ? t("App access request")
         : approval.requestKind === "command"
-          ? "Command"
+          ? t("Command")
           : approval.requestKind === "file-read"
-            ? "File to read"
-            : "File change";
+            ? t("File to read")
+            : t("File change");
   const argsCommand =
     approval.requestKind === "command" &&
     approval.args &&
@@ -114,7 +116,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         role="group"
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="text-xs font-medium text-foreground">Review routine</span>
+          <span className="text-xs font-medium text-foreground">{t("Review routine")}</span>
           {pendingCount > 1 ? (
             <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
               1/{pendingCount}
@@ -126,7 +128,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
             <span className="truncate text-sm font-medium text-foreground">{routineName}</span>
             {scheduleTime ? (
               <span className="shrink-0 text-xs text-muted-foreground">
-                {scheduleKind} at {scheduleTime}
+                {t("{schedule} at {time}", { schedule: scheduleKind, time: scheduleTime })}
                 {scheduleTimezone ? ` (${scheduleTimezone})` : ""}
               </span>
             ) : null}
@@ -223,10 +225,10 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
               {firstLine}
             </code>
             <span className="shrink-0 text-[11px] text-muted-foreground group-open:hidden">
-              {detailLineCount} lines
+              {plural(detailLineCount, { one: "{count} line", other: "{count} lines" })}
             </span>
             <span className="hidden shrink-0 text-[11px] text-muted-foreground group-open:inline">
-              Collapse
+              {t("Collapse")}
             </span>
           </summary>
           <div className="mt-1.5 flex min-w-0 flex-col gap-2 rounded-lg bg-background/45 px-3 py-2.5">

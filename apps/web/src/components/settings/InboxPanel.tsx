@@ -1,14 +1,11 @@
 import { CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
-import {
-  botInboxKindLabel,
-  selectOpenBotInboxItems,
-  type BotInboxItem,
-} from "@t3tools/client-runtime/bot-inbox";
+import { botInboxKindLabel, selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
+import { useI18n } from "../../i18n";
 import { botInboxEnvironment } from "../../state/botInbox";
 import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -32,6 +29,7 @@ export function inboxRowAction(item: BotInboxItem): InboxRowAction {
 }
 
 export function InboxPanel() {
+  const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   const inboxQuery = useEnvironmentQuery(
     environmentId === null ? null : botInboxEnvironment.list({ environmentId, input: {} }),
@@ -42,17 +40,22 @@ export function InboxPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection
-        title="Bot inbox"
+        title={t("Bot inbox")}
         headerAction={
-          openItems.length > 0 ? <Badge variant="error">{openItems.length} open</Badge> : null
+          openItems.length > 0 ? (
+            <Badge variant="error">{t("{count} open", { count: openItems.length })}</Badge>
+          ) : null
         }
       >
         {inboxQuery.isPending ? (
-          <SettingsRow title="Loading errors" />
+          <SettingsRow title={t("Loading errors")} />
         ) : inboxQuery.error ? (
-          <SettingsRow title="Could not load errors" description={inboxQuery.error} />
+          <SettingsRow title={t("Could not load errors")} description={inboxQuery.error} />
         ) : openItems.length === 0 ? (
-          <SettingsRow title="No errors" description="Bot failures appear here." />
+          <SettingsRow
+            title={t("No errors")}
+            description={t("Bot failures appear here.")}
+          />
         ) : (
           openItems.map((item) => (
             <InboxIncidentRow
@@ -89,6 +92,7 @@ function InboxIncidentRow({
   readonly environmentId: ReturnType<typeof useSettingsEnvironmentId>;
   readonly onResolve: (() => Promise<string | null>) | null;
 }) {
+  const { t } = useI18n();
   const action = inboxRowAction(item);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -115,7 +119,7 @@ function InboxIncidentRow({
       title={
         <span className="flex items-center gap-2">
           <CircleAlertIcon className="size-4 text-destructive" />
-          {item.botName} · {item.taskOrRoutine} · {botInboxKindLabel(item.kind)}
+          {item.botName} · {item.taskOrRoutine} · {t(botInboxKindLabel(item.kind))}
         </span>
       }
       description={item.lastFailure}
@@ -128,11 +132,11 @@ function InboxIncidentRow({
             disabled={isResolving || onResolve === null}
             onClick={() => void handleResolve()}
           >
-            {isResolving ? "Resolving..." : "Resolve"}
+            {isResolving ? t("Resolving…") : t("Resolve")}
           </Button>
         ) : (
           <Button size="xs" variant="outline" onClick={openRepair}>
-            {action === "plugins" ? "Open Plugins" : "Open Providers"}
+            {action === "plugins" ? t("Open Plugins") : t("Open Providers")}
           </Button>
         )
       }

@@ -8,6 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { useEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
 
+import { useI18n } from "../../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
 import { primaryServerKeybindingsAtom } from "../../state/server";
@@ -70,6 +71,7 @@ export function BotOverview({
   /** Why the bot's model cannot run right now. The model stays on the bot. */
   readonly modelUnavailable?: string | null;
 }) {
+  const { t } = useI18n();
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
       <div className="flex flex-col items-center text-center">
@@ -90,30 +92,32 @@ export function BotOverview({
         onClick={onOpenSettings}
       >
         <AppIcon className="size-4" icon={Settings02Icon} />
-        Open bot settings
+        {t("Open bot settings")}
       </Button>
 
       <dl className="mt-6 divide-y divide-border/70 border-y border-border/70 text-sm">
         <div className="flex items-center justify-between gap-4 py-3">
-          <dt className="text-muted-foreground">Personality</dt>
+          <dt className="text-muted-foreground">{t("Personality")}</dt>
           <dd className="font-medium">
-            {botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone))}
+            {botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone), t)}
           </dd>
         </div>
         <div className="flex items-center justify-between gap-4 py-3">
-          <dt className="text-muted-foreground">Model</dt>
+          <dt className="text-muted-foreground">{t("Model")}</dt>
           <dd className="min-w-0 max-w-44 text-right">
-            <span className="block truncate font-medium">{bot.engine?.model ?? "App default"}</span>
+            <span className="block truncate font-medium">
+              {bot.engine?.model ?? t("App default")}
+            </span>
             {modelUnavailable ? (
               <span className="block text-xs text-warning" data-model-unavailable="">
-                Unavailable: {modelUnavailable}
+                {t("Unavailable: {reason}", { reason: modelUnavailable })}
               </span>
             ) : null}
           </dd>
         </div>
         <div className="flex items-center justify-between gap-4 py-3">
-          <dt className="text-muted-foreground">Sandbox</dt>
-          <dd className="font-medium">{botSandboxLabel(botSandboxChoice(bot.sandbox))}</dd>
+          <dt className="text-muted-foreground">{t("Sandbox")}</dt>
+          <dd className="font-medium">{botSandboxLabel(botSandboxChoice(bot.sandbox), t)}</dd>
         </div>
       </dl>
 
@@ -142,6 +146,7 @@ export function BotDetailsPanel({
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
   readonly routinePanelRequest?: number;
 }) {
+  const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
     desktopOpen: true,
@@ -217,7 +222,7 @@ export function BotDetailsPanel({
       {!browserExpanded || !canExpandBrowser ? (
         <>
           <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-            <h2 className="text-sm font-medium">Bot</h2>
+            <h2 className="text-sm font-medium">{t("Bot")}</h2>
             <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
               {closeButton}
             </div>
@@ -239,7 +244,7 @@ export function BotDetailsPanel({
     <>
       <aside
         aria-hidden={!panelState.desktopOpen}
-        aria-label={`${bot.name} bot sidebar`}
+        aria-label={t("{name} bot sidebar", { name: bot.name })}
         data-testid="bot-details-panel"
         className={
           panelState.desktopOpen
@@ -257,7 +262,7 @@ export function BotDetailsPanel({
               render={
                 <Button
                   aria-expanded="true"
-                  aria-label={`Collapse ${bot.name} bot sidebar`}
+                  aria-label={t("Collapse {name} bot sidebar", { name: bot.name })}
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => dispatchPanel({ type: "toggle-desktop" })}
@@ -267,7 +272,9 @@ export function BotDetailsPanel({
               }
             />
             <TooltipPopup side="left">
-              Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
+              {shortcutLabel
+                ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
+                : t("Collapse")}
             </TooltipPopup>
           </Tooltip>,
           true,
@@ -280,7 +287,7 @@ export function BotDetailsPanel({
               render={
                 <Button
                   aria-expanded="false"
-                  aria-label={`Open ${bot.name} bot sidebar`}
+                  aria-label={t("Open {name} bot sidebar", { name: bot.name })}
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => dispatchPanel({ type: "toggle-desktop" })}
@@ -290,14 +297,16 @@ export function BotDetailsPanel({
               }
             />
             <TooltipPopup side="left">
-              Open sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+              {shortcutLabel
+                ? t("Open sidebar ({shortcut})", { shortcut: shortcutLabel })
+                : t("Open sidebar")}
             </TooltipPopup>
           </Tooltip>
         </div>
       ) : null}
       <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 flex h-[var(--workspace-topbar-height)] items-center min-[981px]:hidden">
         <Button
-          aria-label={`Open ${bot.name} bot sidebar`}
+          aria-label={t("Open {name} bot sidebar", { name: bot.name })}
           size="icon-sm"
           variant="ghost"
           onClick={() => dispatchPanel({ type: "set-mobile", open: true })}
@@ -314,12 +323,12 @@ export function BotDetailsPanel({
           showCloseButton={false}
           side="right"
         >
-          <SheetTitle className="sr-only">{bot.name} overview</SheetTitle>
+          <SheetTitle className="sr-only">{t("{name} overview", { name: bot.name })}</SheetTitle>
           {content(
             panelState.mobileOpen,
             mobileRoutineRef,
             <SheetClose
-              aria-label="Close bot sidebar"
+              aria-label={t("Close bot sidebar")}
               render={<Button size="icon-sm" variant="ghost" />}
             >
               <AppIcon icon={Cancel01Icon} />

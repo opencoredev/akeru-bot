@@ -8,6 +8,10 @@
       "types": "./src/dictation/index.ts",
       "default": "./src/dictation/index.ts"
     },
+    "./i18n": {
+      "types": "./src/i18n/index.ts",
+      "default": "./src/i18n/index.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"

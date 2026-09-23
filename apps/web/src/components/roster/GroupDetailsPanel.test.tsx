@@ -40,7 +40,7 @@ describe("GroupDetailsPanel", () => {
 
     const source = NodeFS.readFileSync(new URL("./GroupDetailsPanel.tsx", import.meta.url), "utf8");
     expect(source).toContain("aria-describedby={removalHint && blockedByRule ? removalHintId");
-    expect(source).toContain('<SelectValue placeholder="Choose bot" />');
+    expect(source).toContain('<SelectValue placeholder={t("Choose bot")} />');
     expect(source).toContain("Every bot is already in this group.");
   });
 

@@ -64,7 +64,7 @@ describe("duplicate submit guard", () => {
 
     expect(source).toContain("if (submitting || trimmedName.length === 0) return;");
     expect(source).toContain("disabled={submitting || trimmedName.length === 0}");
-    expect(source).toContain('{submitting ? "Creating" : "Create bot"}');
+    expect(source).toContain('{submitting ? t("Creating") : t("Create bot")}');
     // Cancel is disabled too, so the dialog cannot be dismissed mid-create.
     expect(source).toContain("disabled={submitting}");
   });

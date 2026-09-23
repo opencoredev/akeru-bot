@@ -23,6 +23,7 @@ import {
   resolveImportConflicts,
   summarizeDurableFacts,
 } from "./durableMemory.ts";
+import { createTranslator } from "./i18n/index.ts";
 
 const revision = (
   overrides: Partial<AkeruMemoryRevision> & Pick<AkeruMemoryRevision, "id" | "rootId" | "revision">,
@@ -261,6 +262,39 @@ describe("durable fact actions", () => {
     );
   });
 
+  it("names provenance fallbacks and bot counts in the client's language", () => {
+    const i18n = createTranslator("zh-CN", {
+      "this chat": "此聊天",
+      "another chat": "另一个聊天",
+      "this bot": "此机器人",
+      "another bot": "另一个机器人",
+      "{count} other bots": "其他 {count} 个机器人",
+      ", ": "、",
+    });
+    const names = { currentThreadId: "thread-1", threadTitles: new Map<string, string>() };
+    expect(durableFactSourceLabel(fact({ sourceThreadId: "thread-1" as never }), names, i18n)).toBe(
+      "此聊天",
+    );
+    expect(durableFactSourceLabel(fact({ sourceThreadId: "thread-9" as never }), names, i18n)).toBe(
+      "另一个聊天",
+    );
+    const bots = { currentBotId: "bot-1", botNames: new Map([["bot-2", "Iris"]]) };
+    expect(
+      durableFactBotsLabel(
+        fact({ affectedBotIds: ["bot-1", "bot-2", "bot-8"] as never }),
+        bots,
+        i18n,
+      ),
+    ).toBe("此机器人、Iris、另一个机器人");
+    expect(
+      durableFactBotsLabel(
+        fact({ affectedBotIds: ["bot-7", "bot-8", "bot-9"] as never }),
+        bots,
+        i18n,
+      ),
+    ).toBe("其他 3 个机器人");
+  });
+
   it("builds each mutation against the revision the user saw", () => {
     const current = fact();
     const target = { memoryId: "root-1", expectedRevision: 3 };
@@ -314,7 +348,7 @@ describe("durable fact actions", () => {
         operation: "facts.mutate",
         detail: "Memory revision conflict for root-1. Expected 3, found 4.",
       }),
-    ).toEqual({ conflict: true, message: DURABLE_FACT_CONFLICT_MESSAGE });
+    ).toEqual({ conflict: true, message: DURABLE_FACT_CONFLICT_MESSAGE, detail: null });
     expect(
       describeDurableFactFailure({
         _tag: "EnvironmentAuthorizationError",
@@ -327,6 +361,10 @@ describe("durable fact actions", () => {
         _tag: "AkeruMemoryOperationError",
         detail: "Memory is turned off.",
       }),
-    ).toEqual({ conflict: false, message: "Memory is turned off." });
+    ).toEqual({
+      conflict: false,
+      message: "The fact could not be updated.",
+      detail: "Memory is turned off.",
+    });
   });
 });

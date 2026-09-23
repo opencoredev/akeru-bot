@@ -4,11 +4,16 @@ import {
   type ModelSelection,
   type SubscriptionProviderId,
 } from "@t3tools/contracts";
+import { createTranslator, type TranslationParams } from "@t3tools/client-runtime/i18n";
 
 import type { BotAnimationState } from "../roster/BotAvatarView";
 import type { BotAvatar, BotBlobShape } from "../roster/types";
 import { BLOB_COLORS, BLOB_SHAPES, isBotAvatarColor } from "../roster/roster.logic";
 import { normalizeDesktopOnboardingGoal } from "./goalPlan.logic";
+
+/** Interface copy lookup. Components pass `useI18n().t`; the default is English. */
+export type OnboardingTranslate = (message: string, params?: TranslationParams) => string;
+export const englishOnboardingTranslate: OnboardingTranslate = createTranslator("en").translate;
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
 export const DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY = "akeru:desktop-onboarding-completed:v1";
@@ -524,20 +529,24 @@ export function canStartDesktopOnboardingReveal(input: {
 export function desktopOnboardingHandoffStatus(
   phase: DesktopOnboardingHandoffPhase,
   botName: string,
+  t: OnboardingTranslate = englishOnboardingTranslate,
 ): string {
-  const name = botName.trim() || "your bot";
-  if (phase === "sending") return "Message sent";
-  if (phase === "waking") return `Waking ${name} up`;
-  return "Opening your workspace";
+  const name = botName.trim() || t("your bot");
+  if (phase === "sending") return t("Message sent");
+  if (phase === "waking") return t("Waking {name} up", { name });
+  return t("Opening your workspace");
 }
 
 /**
  * Every distinct status in order. The widest one sizes the status box so a
  * swap never resizes the row underneath the avatar.
  */
-export function desktopOnboardingHandoffStatuses(botName: string): readonly string[] {
+export function desktopOnboardingHandoffStatuses(
+  botName: string,
+  t: OnboardingTranslate = englishOnboardingTranslate,
+): readonly string[] {
   const statuses = DESKTOP_ONBOARDING_HANDOFF_PHASES.map((phase) =>
-    desktopOnboardingHandoffStatus(phase, botName),
+    desktopOnboardingHandoffStatus(phase, botName, t),
   );
   return [...new Set(statuses)];
 }

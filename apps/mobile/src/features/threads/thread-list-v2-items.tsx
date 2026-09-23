@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -138,6 +139,7 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
   readonly onToggle: () => void;
   readonly pane?: "screen" | "sidebar";
 }) {
+  const { t } = useMobileI18n();
   const { themeAppearance: colorScheme } = useAppearancePreferences();
   return (
     <Pressable
@@ -156,7 +158,7 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       <Text className="text-xs font-t3-medium text-blue-600 dark:text-blue-400">
-        {props.expanded ? "Snoozed" : `Snoozed (${props.count})`}
+        {props.expanded ? t("Snoozed") : `Snoozed (${props.count})`}
       </Text>
       <View className="h-px flex-1 bg-blue-500/20 dark:bg-blue-400/15" />
       <SymbolView
@@ -177,6 +179,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
   readonly onToggle: () => void;
   readonly pane?: "screen" | "sidebar";
 }) {
+  const { t } = useMobileI18n();
   const mutedColor = useThemeColor("--color-foreground-muted");
   return (
     <Pressable
@@ -195,7 +198,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       <Text className="text-xs font-t3-medium text-foreground-tertiary">
-        {props.expanded ? "Settled" : `Settled (${props.count})`}
+        {props.expanded ? t("Settled") : `Settled (${props.count})`}
       </Text>
       <View className="h-px flex-1 bg-border" />
       <SymbolView
@@ -233,6 +236,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
   readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
 }) {
+  const { t } = useMobileI18n();
   const { pendingTask, onSelectPendingTask, onDeletePendingTask } = props;
   const drawerColor = useThemeColor("--color-drawer");
   const pressedBackgroundColor = useThemeColor("--color-subtle");
@@ -273,7 +277,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   return (
     <>
       {props.showPendingDivider ? (
-        <ThreadListV2SectionDivider label="Pending" pane={props.pane} />
+        <ThreadListV2SectionDivider label={t("Pending")} pane={props.pane} />
       ) : null}
       <ControlPillMenu
         actions={PENDING_TASK_MENU_ACTIONS}
@@ -281,7 +285,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
         shouldOpenOnLongPress
       >
         <Pressable
-          accessibilityHint="Opens the queued chat for editing"
+          accessibilityHint={t("Opens the queued chat for editing")}
           accessibilityLabel={pendingTask.title}
           accessibilityRole="button"
           onPress={() => onSelectPendingTask(pendingTask)}
@@ -383,6 +387,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     typeof ThreadSwipeable
   >["simultaneousWithExternalGesture"];
 }) {
+  const { t } = useMobileI18n();
   const { width: windowWidth } = useWindowDimensions();
   const {
     thread,
@@ -577,7 +582,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (snoozeSelection._tag === "selected") {
         handleSnooze(snoozeSelection.preset.snoozedUntil);
       } else if (snoozeSelection._tag === "expired") {
-        Alert.alert("Could not snooze chat", "That snooze time has passed. Choose another time.");
+        Alert.alert(
+          t("Could not snooze chat"),
+          t("That snooze time has passed. Choose another time."),
+        );
       }
     },
     [
@@ -593,6 +601,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleUnsettle,
       handleUnsnooze,
       snoozePresets,
+      t,
     ],
   );
   const primaryAction = useMemo(() => {

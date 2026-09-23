@@ -15,7 +15,10 @@ import {
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
-import { Suspense, lazy, type ComponentType } from "react";
+import { Suspense, lazy, useState, type ComponentType } from "react";
+import { useI18n } from "../../i18n";
+import { searchSettings, SETTINGS_SECTION_LABELS } from "./settingsSearch";
+import { settingsSectionFromPathname } from "../../settingsDialogStore";
 
 import { cn } from "~/lib/utils";
 import { Dialog, DialogPopup, DialogTitle } from "~/components/ui/dialog";
@@ -94,12 +97,13 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
  * "something is wrong".
  */
 function SettingsPanelSkeleton() {
+  const { t } = useI18n();
   return (
     <div className="flex-1 overflow-hidden px-5 pt-6 sm:px-6">
       {/* The placeholder bars carry no information, so they stay hidden from
           assistive tech; this announces the wait instead. */}
       <span className="sr-only" role="status">
-        Loading settings
+        {t("Loading settings")}
       </span>
       <div aria-hidden className="mx-auto flex w-full max-w-4xl flex-col gap-8">
         <Skeleton className="h-6 w-40 rounded-md" />
@@ -199,6 +203,11 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<SettingsNavItem> = SETTINGS_NAV_G
 );
 
 export function SettingsDialog() {
+  const { t } = useI18n();
+  const [query, setQuery] = useState("");
+  const searchResults = searchSettings(query, undefined, t).filter(
+    (item) => item.to !== "/settings/archived",
+  );
   const section = useSettingsDialogStore((state) => state.section);
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
 
@@ -213,42 +222,78 @@ export function SettingsDialog() {
         className="h-[min(44rem,88dvh)] max-w-4xl flex-row overflow-hidden max-sm:flex-col"
         bottomStickOnMobile={false}
       >
-        <DialogTitle className="sr-only">Settings</DialogTitle>
+        <DialogTitle className="sr-only">{t("Settings")}</DialogTitle>
         <nav
-          aria-label="Settings sections"
+          aria-label={t("Settings sections")}
           // Narrow layouts scroll the nav horizontally underneath the absolute
           // close control, so reserve its width at the end: the padding keeps
           // the last row reachable, and the scroll padding stops a scrolled row
           // from resting beneath the button.
           className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-e bg-muted/30 p-2 max-sm:w-full max-sm:flex-row max-sm:gap-2 max-sm:overflow-x-auto max-sm:scroll-pe-12 max-sm:border-e-0 max-sm:border-b max-sm:pe-12"
         >
-          {SETTINGS_NAV_GROUPS.map((group) => (
-            <div key={group.id} className="flex flex-col gap-0.5 max-sm:flex-row">
-              <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 max-sm:hidden">
-                {group.label}
-              </div>
-              {group.items.map((item) => {
-                const isActive = section === item.section;
-                return (
+          <input
+            type="search"
+            aria-label={t("Search settings")}
+            placeholder={t("Search settings")}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            className="h-8 min-w-0 shrink-0 rounded-md border bg-background px-2 text-sm max-sm:w-40"
+          />
+          {query.trim() ? (
+            <div className="flex flex-col gap-0.5 max-sm:flex-row">
+              {searchResults.length ? (
+                searchResults.map((item) => (
                   <button
-                    key={item.section}
+                    key={item.id}
                     type="button"
-                    aria-current={isActive ? "page" : undefined}
-                    onClick={() => openSettings(item.section)}
-                    className={cn(
-                      "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)]",
-                      isActive
-                        ? "bg-selected text-selected-foreground"
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                    )}
+                    data-setting-id={item.id}
+                    onClick={() => {
+                      openSettings(settingsSectionFromPathname(item.to), item.targetId ?? item.id);
+                      setQuery("");
+                    }}
+                    className="shrink-0 rounded-md px-2 py-1.5 text-start text-sm hover:bg-accent/50"
                   >
-                    <AppIcon className="size-4 shrink-0" icon={item.icon} />
-                    <span className="truncate">{item.label}</span>
+                    <span className="block">{t(item.title)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t(SETTINGS_SECTION_LABELS[item.to])}
+                    </span>
                   </button>
-                );
-              })}
+                ))
+              ) : (
+                <p role="status" className="px-2 text-sm text-muted-foreground">
+                  {t("No settings found")}
+                </p>
+              )}
             </div>
-          ))}
+          ) : (
+            SETTINGS_NAV_GROUPS.map((group) => (
+              <div key={group.id} className="flex flex-col gap-0.5 max-sm:flex-row">
+                <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 max-sm:hidden">
+                  {t(group.label)}
+                </div>
+                {group.items.map((item) => {
+                  const isActive = section === item.section;
+                  return (
+                    <button
+                      key={item.section}
+                      type="button"
+                      aria-current={isActive ? "page" : undefined}
+                      onClick={() => openSettings(item.section)}
+                      className={cn(
+                        "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)]",
+                        isActive
+                          ? "bg-selected text-selected-foreground"
+                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                      )}
+                    >
+                      <AppIcon className="size-4 shrink-0" icon={item.icon} />
+                      <span className="truncate">{t(item.label)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </nav>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

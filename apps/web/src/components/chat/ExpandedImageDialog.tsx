@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 
@@ -12,6 +13,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   preview,
   onClose,
 }: ExpandedImageDialogProps) {
+  const { t } = useI18n();
   const [imageOffset, setImageOffset] = useState(0);
   const index = (preview.index + imageOffset + preview.images.length) % preview.images.length;
 
@@ -51,12 +53,12 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 [-webkit-app-region:no-drag]"
       role="dialog"
       aria-modal="true"
-      aria-label="Expanded image preview"
+      aria-label={t("Expanded image preview")}
     >
       <button
         type="button"
         className="absolute inset-0 z-0 cursor-zoom-out"
-        aria-label="Close image preview"
+        aria-label={t("Close image preview")}
         onClick={onClose}
       />
       {preview.images.length > 1 && (
@@ -65,7 +67,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           size="icon"
           variant="ghost"
           className="absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:left-6"
-          aria-label="Previous image"
+          aria-label={t("Previous image")}
           onClick={() => navigateImage(-1)}
         >
           <ChevronLeftIcon className="size-5" />
@@ -78,7 +80,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           variant="ghost"
           className="absolute right-2 top-2"
           onClick={onClose}
-          aria-label="Close image preview"
+          aria-label={t("Close image preview")}
         >
           <XIcon />
         </Button>
@@ -99,7 +101,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           size="icon"
           variant="ghost"
           className="absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:right-6"
-          aria-label="Next image"
+          aria-label={t("Next image")}
           onClick={() => navigateImage(1)}
         >
           <ChevronRightIcon className="size-5" />

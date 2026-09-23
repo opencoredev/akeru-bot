@@ -36,6 +36,29 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("finds language by English aliases and translated titles without changing its destination", () => {
+    for (const query of [
+      "language",
+      "locale",
+      "translation",
+      "English",
+      "system default",
+      "简体中文",
+      "中文",
+    ]) {
+      expect(searchSettings(query)).toContainEqual(
+        expect.objectContaining({
+          id: "language",
+          to: "/settings/general",
+          title: "Language",
+        }),
+      );
+    }
+    expect(
+      searchSettings("langue", undefined, (title) => (title === "Language" ? "Langue" : title)),
+    ).toEqual([expect.objectContaining({ id: "language", to: "/settings/general" })]);
+    expect(searchableSetting("language")).toEqual({ id: "language", title: "Language" });
+  });
   it("matches only setting titles", () => {
     expect(searchSettings("word", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("network", ITEMS).map((item) => item.id)).toEqual(["network-access"]);

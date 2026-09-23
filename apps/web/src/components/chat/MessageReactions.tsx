@@ -1,5 +1,6 @@
 import type { OrchestrationMessageReaction } from "@t3tools/contracts";
 
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { reactionOptionFromEmoji } from "./MessageControls";
 
@@ -22,6 +23,7 @@ export function MessageReactions({
   readonly align?: "start" | "end";
   readonly onToggle?: (emoji: string) => void;
 }) {
+  const { t } = useI18n();
   const counts = new Map<string, number>();
   for (const reaction of reactions) {
     counts.set(reaction.emoji, (counts.get(reaction.emoji) ?? 0) + 1);
@@ -49,7 +51,9 @@ export function MessageReactions({
         }
         return (
           <button
-            aria-label={mine ? `Remove your ${emoji} reaction` : `React ${emoji}`}
+            aria-label={
+              mine ? t("Remove your {emoji} reaction", { emoji }) : t("React {emoji}", { emoji })
+            }
             aria-pressed={mine}
             className={cn(
               className,

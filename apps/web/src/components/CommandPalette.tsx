@@ -8,7 +8,7 @@ import {
   getDefaultCloneUrl,
   normalizePastedCloneUrl,
 } from "@t3tools/client-runtime/operations/projects";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
+import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
 import {
   canPreloadBrowsePath,
   createBrowseNavigationCoordinator,
@@ -116,6 +116,7 @@ import {
   buildBotActionItems,
   buildBrowseGroups,
   buildModelPickerCommandPaletteAction,
+  buildLanguageCommandPaletteAction,
   buildProjectActionItems,
   buildRootGroups,
   buildThreadActionItems,
@@ -146,6 +147,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { openSettings } from "~/settingsDialogStore";
+import { useI18n } from "../i18n";
 import { openProductFeedback } from "~/productFeedbackStore";
 import { openPlugins } from "~/pluginsDialogStore";
 import { openUsage } from "~/usageDialogStore";
@@ -158,9 +160,7 @@ import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import { activeComposerModelPicker } from "../composerModelPickerRegistry";
-import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import {
@@ -411,7 +411,6 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme } = useTheme();
-  const composerHandleRef = useRef<ChatComposerHandle | null>(null);
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -490,28 +489,26 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ComposerHandleContext value={composerHandleRef}>
-      <CommandDialog
-        open={state.open}
-        onOpenChange={(open, eventDetails) => {
-          if (!open && eventDetails.reason === "escape-key" && state.mode !== "command") {
-            eventDetails.cancel();
-            toggleMode("command");
-            return;
-          }
-          setOpen(open);
-        }}
-      >
-        {children}
-        <CommandPaletteDialog
-          mode={state.mode}
-          openIntent={state.openIntent}
-          setOpen={setOpen}
-          openOverlayMode={toggleMode}
-          clearOpenIntent={clearOpenIntent}
-        />
-      </CommandDialog>
-    </ComposerHandleContext>
+    <CommandDialog
+      open={state.open}
+      onOpenChange={(open, eventDetails) => {
+        if (!open && eventDetails.reason === "escape-key" && state.mode !== "command") {
+          eventDetails.cancel();
+          toggleMode("command");
+          return;
+        }
+        setOpen(open);
+      }}
+    >
+      {children}
+      <CommandPaletteDialog
+        mode={state.mode}
+        openIntent={state.openIntent}
+        setOpen={setOpen}
+        openOverlayMode={toggleMode}
+        clearOpenIntent={clearOpenIntent}
+      />
+    </CommandDialog>
   );
 }
 
@@ -522,8 +519,6 @@ function CommandPaletteDialog(props: {
   readonly openOverlayMode: (mode: SearchOverlayMode) => void;
   readonly clearOpenIntent: () => void;
 }) {
-  const composerHandleRef = useComposerHandleContext();
-
   return (
     <CommandDialogPopup
       aria-label={
@@ -537,10 +532,7 @@ function CommandPaletteDialog(props: {
       data-command-palette="true"
       data-palette-mode={props.mode}
       data-testid="command-palette"
-      finalFocus={() => {
-        composerHandleRef?.current?.focusAtEnd();
-        return false;
-      }}
+      finalFocus={() => false}
       onBackdropPointerDown={() => {
         props.setOpen(false);
       }}
@@ -568,8 +560,8 @@ function OpenCommandPaletteDialog(props: {
   readonly clearOpenIntent: () => void;
 }) {
   const navigate = useNavigate();
-  const composerHandleRef = useComposerHandleContext();
   const { clearOpenIntent, openIntent, openOverlayMode, setOpen } = props;
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = deferredQuery.startsWith(">");
@@ -748,7 +740,7 @@ function OpenCommandPaletteDialog(props: {
         }),
         isPrimary,
         isConnected: canCreateProjectInEnvironment(environment.connection.phase),
-        status: connectionStatusText(environment.connection),
+        status: translateConnectionStatus(t, environment.connection),
       };
     });
 
@@ -760,7 +752,7 @@ function OpenCommandPaletteDialog(props: {
     });
 
     return options;
-  }, [environments]);
+  }, [environments, t]);
   const defaultAddProjectEnvironmentId =
     addProjectEnvironmentOptions.find((option) => option.isConnected)?.environmentId ?? null;
   const wslAddProjectEnvironmentOption = useMemo(
@@ -1357,8 +1349,7 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push(
     buildModelPickerCommandPaletteAction({
-      // Bot chats have no full chat composer; their composer registers just the picker.
-      composerHandle: composerHandleRef?.current ?? activeComposerModelPicker(),
+      composerHandle: activeComposerModelPicker(),
       closePalette: () => setOpen(false),
       scheduleAfterClose: (openModelPicker) => {
         window.requestAnimationFrame(openModelPicker);
@@ -1490,8 +1481,8 @@ function OpenCommandPaletteDialog(props: {
   actionItems.push({
     kind: "action",
     value: "action:settings",
-    searchTerms: ["settings", "preferences", "configuration", "keybindings"],
-    title: "Open settings",
+    searchTerms: [t("Open settings"), "settings", "preferences", "configuration", "keybindings"],
+    title: t("Open settings"),
     icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       openSettings();
@@ -1502,12 +1493,20 @@ function OpenCommandPaletteDialog(props: {
     kind: "action",
     value: "action:image-generation-settings",
     searchTerms: ["image generation", "images", "pictures", "chatgpt", "grok", "settings"],
-    title: "Image generation settings",
+    title: t("Image generation settings"),
     icon: <ImageIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       openSettings("image-generation");
     },
   });
+
+  actionItems.push(
+    buildLanguageCommandPaletteAction({
+      translate: t,
+      openSettings,
+      icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
+    }),
+  );
 
   // There is no projects listing page; the action targets the contextual
   // project (active thread/draft, falling back to the first sidebar group).
@@ -2356,7 +2355,7 @@ function OpenCommandPaletteDialog(props: {
                     emptyStateMessage: "Press Enter to create this folder and add it as a project.",
                   }
                 : threadSearch.isPending
-                  ? { emptyStateMessage: "Searching conversations…" }
+                  ? { emptyStateMessage: t("Searching chats…") }
                   : {})}
       />
     </CommandPaletteContent>

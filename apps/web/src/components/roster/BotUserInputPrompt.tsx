@@ -1,5 +1,6 @@
 import { type ApprovalRequestId } from "@t3tools/contracts";
 
+import { useI18n } from "../../i18n";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingUserInput } from "../../session-logic";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
@@ -21,6 +22,7 @@ export function BotUserInputPrompt({
   readonly onSelectSingleOption: (questionId: string, optionLabel: string) => void;
   readonly onAdvance: () => void;
 }) {
+  const { t } = useI18n();
   // Once an answer is on its way the question has been dealt with: the composer's working
   // status takes over rather than leaving a dead card docked above the prompt box.
   const activePrompt = pendingUserInputs[0];
@@ -28,7 +30,7 @@ export function BotUserInputPrompt({
 
   return (
     <section
-      aria-label="Question"
+      aria-label={t("Question")}
       className="mb-1.5 w-full rounded-t-[1.65rem] rounded-b-lg border border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]"
       data-testid="bot-user-input-prompt"
     >

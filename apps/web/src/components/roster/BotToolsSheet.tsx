@@ -8,6 +8,7 @@ import {
   resolveCatalogInstallations,
   type PluginDefinition,
 } from "../../../../../plugins";
+import { useI18n } from "../../i18n";
 import { isBuiltinMcpServer } from "../plugins/pluginRegistry";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -100,6 +101,7 @@ function ToolRow({
   readonly enabled: boolean;
   readonly onToggle: (enabled: boolean) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/40">
       <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background text-muted-foreground">
@@ -117,14 +119,18 @@ function ToolRow({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{item.name}</span>
         <span className="block truncate text-xs text-muted-foreground">
-          {item.workspaceEnabled ? item.description : "Disabled for the workspace"}
+          {item.workspaceEnabled ? item.description : t("Disabled for the workspace")}
         </span>
       </span>
       <Switch
         checked={enabled}
         disabled={!item.workspaceEnabled}
         onCheckedChange={(checked) => onToggle(Boolean(checked))}
-        aria-label={`${enabled ? "Disable" : "Enable"} ${item.name} for this bot`}
+        aria-label={
+          enabled
+            ? t("Disable {name} for this bot", { name: item.name })
+            : t("Enable {name} for this bot", { name: item.name })
+        }
       />
     </div>
   );
@@ -143,6 +149,7 @@ export function BotToolsSheet({
   readonly disabledIds: readonly McpServerId[];
   readonly onDisabledIdsChange: (ids: readonly McpServerId[]) => void;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const items = useMemo(() => buildBotToolItems(servers), [servers]);
 
@@ -169,11 +176,15 @@ export function BotToolsSheet({
     onDisabledIdsChange(planBotToolToggle(disabledIds, id, enabled));
   };
 
-  const section = (title: string, sectionItems: readonly BotToolItem[]) =>
+  const section = (
+    kind: BotToolItem["kind"],
+    title: string,
+    sectionItems: readonly BotToolItem[],
+  ) =>
     sectionItems.length > 0 ? (
       <section className="mt-5" aria-label={title}>
         <div className="mb-1 flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
-          {title === "Plugins" ? (
+          {kind === "plugin" ? (
             <PuzzleIcon className="size-3.5" />
           ) : (
             <ServerIcon className="size-3.5" />
@@ -199,7 +210,7 @@ export function BotToolsSheet({
     <div className="fixed inset-0 z-[70] flex justify-end" role="presentation">
       <button
         type="button"
-        aria-label="Close bot tools"
+        aria-label={t("Close bot tools")}
         className="absolute inset-0 bg-background/60 backdrop-blur-xs"
         onClick={() => onOpenChange(false)}
       />
@@ -212,19 +223,19 @@ export function BotToolsSheet({
         <header className="border-b border-border px-5 pb-4 pt-5">
           <div className="flex items-center justify-between gap-3">
             <h2 id="bot-tools-title" className="text-base font-semibold">
-              Tools
+              {t("Tools")}
             </h2>
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label="Close bot tools"
+              aria-label={t("Close bot tools")}
               onClick={() => onOpenChange(false)}
             >
               <XIcon className="size-4" />
             </Button>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose which workspace tools this bot can use.
+            {t("Choose which workspace tools this bot can use.")}
           </p>
           <div className="mt-4 flex items-center gap-2">
             <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-2.5 focus-within:ring-2 focus-within:ring-ring">
@@ -232,8 +243,8 @@ export function BotToolsSheet({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
-                placeholder="Search tools"
-                aria-label="Search bot tools"
+                placeholder={t("Search tools")}
+                aria-label={t("Search bot tools")}
                 className="border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </label>
@@ -244,7 +255,7 @@ export function BotToolsSheet({
                 onDisabledIdsChange(disabledIds.filter((id) => !workspaceEnabledIds.includes(id)))
               }
             >
-              Enable all
+              {t("Enable all")}
             </Button>
             <Button
               size="sm"
@@ -253,7 +264,7 @@ export function BotToolsSheet({
                 onDisabledIdsChange([...new Set([...disabledIds, ...workspaceEnabledIds])])
               }
             >
-              Disable all
+              {t("Disable all")}
             </Button>
           </div>
         </header>
@@ -261,13 +272,13 @@ export function BotToolsSheet({
           {visible.length === 0 ? (
             <p className="px-2 py-10 text-center text-sm text-muted-foreground">
               {items.length === 0
-                ? "No workspace tools are installed."
-                : "No tools match your search."}
+                ? t("No workspace tools are installed.")
+                : t("No tools match your search.")}
             </p>
           ) : (
             <>
-              {section("Plugins", plugins)}
-              {section("MCP servers", mcpServers)}
+              {section("plugin", t("Plugins"), plugins)}
+              {section("mcp", t("MCP servers"), mcpServers)}
             </>
           )}
         </div>

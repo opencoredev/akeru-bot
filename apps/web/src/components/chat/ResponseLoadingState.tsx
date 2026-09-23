@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 
 /*
@@ -79,7 +80,7 @@ function LoadingElapsed({ startedAt }: { readonly startedAt: number }) {
 
 export function ResponseLoadingState({
   createdAt,
-  label = "Working",
+  label: labelOverride,
   className,
 }: {
   /** Turn start; omit or pass `null` to hide the timer. */
@@ -87,13 +88,15 @@ export function ResponseLoadingState({
   readonly label?: string;
   readonly className?: string;
 }) {
+  const { t } = useI18n();
+  const label = labelOverride ?? t("Working");
   const startedAt = createdAt ? Date.parse(createdAt) : Number.NaN;
   const showTimer = Number.isFinite(startedAt);
 
   return (
     <div
       role="status"
-      aria-label={showTimer ? `${label}, elapsed time updating` : label}
+      aria-label={showTimer ? t("{label}, elapsed time updating", { label }) : label}
       className={cn("flex min-w-0 items-center gap-2 text-muted-foreground", className)}
       data-testid="response-loading-state"
     >

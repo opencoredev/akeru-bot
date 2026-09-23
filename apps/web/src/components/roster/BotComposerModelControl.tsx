@@ -3,6 +3,7 @@ import { BotId, ProviderInstanceId } from "@t3tools/contracts";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
 import { isTerminalFocused } from "../../lib/terminalFocus";
 import {
@@ -36,6 +37,7 @@ export function BotComposerModelControl({
   readonly botId: string;
   readonly disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
   const environmentId = usePrimaryEnvironmentId();
   const providers = useAtomValue(primaryServerProvidersAtom);
@@ -115,7 +117,7 @@ export function BotComposerModelControl({
       },
     });
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not change the model" });
+      toastManager.add({ type: "error", title: t("Could not change the model") });
     }
   };
 
@@ -131,7 +133,7 @@ export function BotComposerModelControl({
       compact
       disabled={disabled}
       open={pickerOpen}
-      triggerAriaLabel="Change model"
+      triggerAriaLabel={t("Change model")}
       triggerClassName="max-w-52"
       onOpenChange={setPickerOpen}
       onInstanceModelChange={(instanceId, model) => {

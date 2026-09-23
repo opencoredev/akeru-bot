@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import {
   NativeStackScreenOptions,
   type AppNativeStackNavigationOptions,
@@ -116,7 +117,8 @@ function firstRouteParam(value: string | string[] | undefined): string | null {
 }
 
 function OpeningThreadLoadingScreen() {
-  return <LoadingScreen message="Opening chat…" messagePlacement="above-spinner" />;
+  const { t } = useMobileI18n();
+  return <LoadingScreen message={t("Opening chat…")} messagePlacement="above-spinner" />;
 }
 
 type ThreadRouteScreenRouteProps = StaticScreenProps<{
@@ -130,6 +132,7 @@ interface ThreadRouteScreenProps extends ThreadRouteScreenRouteProps {
 }
 
 function ThreadUnavailableScreen() {
+  const { t } = useMobileI18n();
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
@@ -142,7 +145,7 @@ function ThreadUnavailableScreen() {
       className="bg-screen flex-1"
     >
       <EmptyState
-        title="Chat unavailable"
+        title={t("Chat unavailable")}
         detail="This chat is not available in the current mobile snapshot."
       />
     </ScrollView>
@@ -199,6 +202,7 @@ function ThreadRouteContent(
     readonly selectedThreadDetailState: ReturnType<typeof useSelectedThreadDetailState>;
   },
 ) {
+  const { t } = useMobileI18n();
   const {
     fileInspector,
     layout,
@@ -684,7 +688,7 @@ function ThreadRouteContent(
     auxiliaryPaneControl:
       !layout.usesSplitView && fileInspector.supported && selectedThreadCwd !== null
         ? {
-            accessibilityLabel: "Toggle inspector",
+            accessibilityLabel: t("Toggle inspector"),
             onPress: handleToggleInspector,
           }
         : undefined,
@@ -748,7 +752,7 @@ function ThreadRouteContent(
       ...(props.onReturnToThread
         ? [
             withNativeGlassHeaderItem({
-              accessibilityLabel: "Return to chat",
+              accessibilityLabel: t("Return to chat"),
               icon: { name: "chevron.left", type: "sfSymbol" as const },
               identifier: "thread-left-return",
               onPress: props.onReturnToThread,
@@ -757,7 +761,9 @@ function ThreadRouteContent(
           ]
         : []),
       withNativeGlassHeaderItem({
-        accessibilityLabel: panes.primarySidebarVisible ? "Maximize content" : "Show chat sidebar",
+        accessibilityLabel: panes.primarySidebarVisible
+          ? t("Maximize content")
+          : t("Show chat sidebar"),
         icon: {
           name: panes.primarySidebarVisible ? "arrow.up.left.and.arrow.down.right" : "sidebar.left",
           type: "sfSymbol" as const,
@@ -767,14 +773,14 @@ function ThreadRouteContent(
         type: "button" as const,
       }),
       withNativeGlassHeaderItem({
-        accessibilityLabel: "New chat",
+        accessibilityLabel: t("New chat"),
         icon: { name: "square.and.pencil", type: "sfSymbol" as const },
         identifier: "thread-left-new-task",
         onPress: () => navigation.navigate("NewTaskSheet", { screen: "NewTask" }),
         type: "button" as const,
       }),
     ],
-    [panes.primarySidebarVisible, props.onReturnToThread, navigation, togglePrimarySidebar],
+    [panes.primarySidebarVisible, props.onReturnToThread, navigation, togglePrimarySidebar, t],
   );
   // Deep links / cold starts land with Thread as the ONLY route, where the
   // native back button does not render. Provide an explicit Home escape for
@@ -783,14 +789,14 @@ function ThreadRouteContent(
   const compactHomeHeaderItems = useMemo<NativeHeaderItems>(
     () => [
       withNativeGlassHeaderItem({
-        accessibilityLabel: "Go to bots list",
+        accessibilityLabel: t("Go to bots list"),
         icon: { name: "list.bullet", type: "sfSymbol" as const },
         identifier: "thread-left-home",
         onPress: () => navigation.dispatch(StackActions.replace("Home")),
         type: "button" as const,
       }),
     ],
-    [navigation],
+    [navigation, t],
   );
 
   // Memoized so a composer keystroke does not re-sign the whole header config.

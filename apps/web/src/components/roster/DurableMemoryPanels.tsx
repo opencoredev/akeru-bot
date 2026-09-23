@@ -16,15 +16,20 @@ import {
   durableFactSourceLabel,
   type ImportConflictDecision,
 } from "@t3tools/client-runtime/durable-memory";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { AkeruMemoryImportClassification } from "@t3tools/contracts";
+
+import { useI18n } from "../../i18n";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 
-function formatTime(value: string) {
+const TIME_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" };
+
+function formatTime(value: string, formatDate: ReturnType<typeof useI18n>["formatDate"]) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatDate(date, TIME_FORMAT);
 }
 
 /** Segmented scope choice. Each option is a pressed-state button so screen readers hear the pick. */
@@ -35,17 +40,18 @@ export function DurableScopePicker({
   disabled,
   onChange,
 }: {
-  readonly label: string;
+  readonly label: MessageKey;
   readonly options: ReadonlyArray<{
     readonly scope: DurableMemoryExportScope;
-    readonly label: string;
+    readonly label: MessageKey;
   }>;
   readonly value: DurableMemoryExportScope;
   readonly disabled?: boolean;
   readonly onChange: (scope: DurableMemoryExportScope) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1">
+    <div role="group" aria-label={t(label)} className="flex flex-wrap gap-1">
       {options.map((option) => (
         <Button
           key={option.scope}
@@ -55,7 +61,7 @@ export function DurableScopePicker({
           disabled={disabled}
           onClick={() => onChange(option.scope)}
         >
-          {option.label}
+          {t(option.label)}
         </Button>
       ))}
     </div>
@@ -67,13 +73,15 @@ export interface DurableFactEditing {
   readonly draft: string;
 }
 
-const SIMPLE_ACTION_LABELS = {
+const SIMPLE_ACTION_LABELS: Readonly<
+  Record<"pin" | "unpin" | "approve" | "reject" | "forget", MessageKey>
+> = {
   pin: "Pin",
   unpin: "Unpin",
   approve: "Approve",
   reject: "Reject",
   forget: "Forget",
-} as const;
+};
 
 /**
  * Durable fact cards with provenance, approval, the value each fact replaced, and the actions
@@ -114,8 +122,12 @@ export function DurableFactList({
   readonly onRequestDelete: (fact: DurableMemoryFact) => void;
   readonly onCancelDelete: () => void;
 }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   if (facts.length === 0) {
-    return <p className="text-sm text-muted-foreground">No durable facts in this scope yet.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">{t("No durable facts in this scope yet.")}</p>
+    );
   }
   return (
     <ul className="space-y-2" data-testid="durable-facts">
@@ -126,7 +138,7 @@ export function DurableFactList({
         const isEditing = editing?.rootId === fact.rootId && actions.includes("edit");
         const confirmingDelete =
           confirmingDeleteRootId === fact.rootId && actions.includes("delete");
-        const sourceLabel = durableFactSourceLabel(fact, { currentThreadId, threadTitles });
+        const sourceLabel = durableFactSourceLabel(fact, { currentThreadId, threadTitles }, i18n);
         return (
           <li
             key={fact.rootId}
@@ -136,7 +148,7 @@ export function DurableFactList({
             {isEditing ? (
               <div className="space-y-1.5">
                 <Textarea
-                  aria-label="Edit fact"
+                  aria-label={t("Edit fact")}
                   size="sm"
                   value={editing.draft}
                   disabled={busy}
@@ -148,10 +160,10 @@ export function DurableFactList({
                     disabled={busy || !canSaveDurableFactEdit(fact, editing.draft)}
                     onClick={() => onIntent(fact, { action: "edit", fact: editing.draft })}
                   >
-                    Save
+                    {t("Save")}
                   </Button>
                   <Button size="xs" variant="ghost" disabled={busy} onClick={onCancelEdit}>
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 </div>
               </div>
@@ -168,59 +180,53 @@ export function DurableFactList({
                 </p>
                 {fact.pinned ? (
                   <Badge size="sm" variant="secondary">
-                    Pinned
+                    {t("Pinned")}
                   </Badge>
                 ) : null}
                 {fact.approvalState === "approved" ? null : (
                   <Badge size="sm" variant={fact.approvalState === "pending" ? "warning" : "error"}>
-                    {DURABLE_MEMORY_APPROVAL_LABELS[fact.approvalState]}
+                    {t(DURABLE_MEMORY_APPROVAL_LABELS[fact.approvalState])}
                   </Badge>
                 )}
                 {fact.deletionState === "active" ? null : (
                   <Badge size="sm" variant="outline">
-                    {DURABLE_MEMORY_DELETION_LABELS[fact.deletionState]}
+                    {t(DURABLE_MEMORY_DELETION_LABELS[fact.deletionState])}
                   </Badge>
                 )}
               </div>
             )}
             {fact.supersededFact ? (
               <p className="text-xs text-muted-foreground">
-                Replaced: <span className="line-through">{fact.supersededFact}</span>
+                {t("Replaced:")} <span className="line-through">{fact.supersededFact}</span>
               </p>
             ) : null}
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              <dt>Scope</dt>
-              <dd>{DURABLE_MEMORY_SCOPE_LABELS[fact.scope]}</dd>
-              <dt>Status</dt>
-              <dd>
-                {DURABLE_MEMORY_APPROVAL_LABELS[fact.approvalState]}
-                {fact.deletionState === "active"
-                  ? ""
-                  : `, ${DURABLE_MEMORY_DELETION_LABELS[fact.deletionState]}`}
-                {fact.pinned ? ", Pinned" : ""}
-              </dd>
+              <dt>{t("Scope")}</dt>
+              <dd>{t(DURABLE_MEMORY_SCOPE_LABELS[fact.scope])}</dd>
+              <dt>{t("Status")}</dt>
+              <dd>{factStatus(fact, t)}</dd>
               {sourceLabel === null ? null : (
                 <>
-                  <dt>Source chat</dt>
+                  <dt>{t("Source chat")}</dt>
                   <dd className="first-letter:uppercase">{sourceLabel}</dd>
                 </>
               )}
-              <dt>Bots</dt>
+              <dt>{t("Bots")}</dt>
               <dd className="first-letter:uppercase">
-                {durableFactBotsLabel(fact, { currentBotId, botNames }) ?? "None"}
+                {durableFactBotsLabel(fact, { currentBotId, botNames }, i18n) ?? t("None")}
               </dd>
-              <dt>Created</dt>
-              <dd>{formatTime(fact.createdAt)}</dd>
-              <dt>Updated</dt>
-              <dd>{formatTime(fact.updatedAt)}</dd>
+              <dt>{t("Created")}</dt>
+              <dd>{formatTime(fact.createdAt, i18n.formatDate)}</dd>
+              <dt>{t("Updated")}</dt>
+              <dd>{formatTime(fact.updatedAt, i18n.formatDate)}</dd>
             </dl>
             {busyRootId === fact.rootId ? (
-              <p className="text-xs text-muted-foreground">Saving…</p>
+              <p className="text-xs text-muted-foreground">{t("Saving…")}</p>
             ) : null}
             {confirmingDelete ? (
-              <div role="alertdialog" aria-label="Delete fact" className="space-y-1.5">
+              <div role="alertdialog" aria-label={t("Delete fact")} className="space-y-1.5">
                 <p className="text-xs">
-                  {DURABLE_FACT_DELETE_CONFIRM.title} {DURABLE_FACT_DELETE_CONFIRM.message}
+                  {t(DURABLE_FACT_DELETE_CONFIRM.title)} {t(DURABLE_FACT_DELETE_CONFIRM.message)}
                 </p>
                 <div className="flex gap-1">
                   <Button
@@ -229,15 +235,15 @@ export function DurableFactList({
                     disabled={busy}
                     onClick={() => onIntent(fact, { action: "delete" })}
                   >
-                    {DURABLE_FACT_DELETE_CONFIRM.confirm}
+                    {t(DURABLE_FACT_DELETE_CONFIRM.confirm)}
                   </Button>
                   <Button size="xs" variant="ghost" disabled={busy} onClick={onCancelDelete}>
-                    {DURABLE_FACT_DELETE_CONFIRM.cancel}
+                    {t(DURABLE_FACT_DELETE_CONFIRM.cancel)}
                   </Button>
                 </div>
               </div>
             ) : !isEditing && actions.length > 0 ? (
-              <div role="group" aria-label="Fact actions" className="flex flex-wrap gap-1">
+              <div role="group" aria-label={t("Fact actions")} className="flex flex-wrap gap-1">
                 {actions.flatMap((action) => {
                   switch (action) {
                     case "edit":
@@ -249,7 +255,7 @@ export function DurableFactList({
                           disabled={busy}
                           onClick={() => onStartEdit(fact)}
                         >
-                          Edit
+                          {t("Edit")}
                         </Button>,
                       ];
                     case "move":
@@ -261,7 +267,7 @@ export function DurableFactList({
                           disabled={busy}
                           onClick={() => onIntent(fact, { action: "move", scope: option.scope })}
                         >
-                          {option.label}
+                          {t(option.label)}
                         </Button>
                       ));
                     case "delete":
@@ -274,7 +280,7 @@ export function DurableFactList({
                           disabled={busy}
                           onClick={() => onRequestDelete(fact)}
                         >
-                          Delete
+                          {t("Delete")}
                         </Button>,
                       ];
                     default:
@@ -286,7 +292,7 @@ export function DurableFactList({
                           disabled={busy}
                           onClick={() => onIntent(fact, { action })}
                         >
-                          {SIMPLE_ACTION_LABELS[action]}
+                          {t(SIMPLE_ACTION_LABELS[action])}
                         </Button>,
                       ];
                   }
@@ -300,9 +306,20 @@ export function DurableFactList({
   );
 }
 
+/** Approval, deletion, and pin state as one list, in the client's language. */
+function factStatus(fact: DurableMemoryFact, t: (message: MessageKey) => string) {
+  return [
+    t(DURABLE_MEMORY_APPROVAL_LABELS[fact.approvalState]),
+    fact.deletionState === "active" ? null : t(DURABLE_MEMORY_DELETION_LABELS[fact.deletionState]),
+    fact.pinned ? t("Pinned") : null,
+  ]
+    .filter((part) => part !== null)
+    .join(t(", "));
+}
+
 const CONFLICT_CHOICES: ReadonlyArray<{
   readonly decision: ImportConflictDecision;
-  readonly label: string;
+  readonly label: MessageKey;
 }> = [
   { decision: "keep-local", label: "Keep mine" },
   { decision: "use-archive", label: "Use archive" },
@@ -332,15 +349,19 @@ export function DurableImportReview({
   readonly onApply: () => void;
   readonly onCancel: () => void;
 }) {
+  const { t, plural } = useI18n();
   return (
     <div className="space-y-3 text-sm" data-testid="durable-import-review">
       {groups.length === 0 ? (
-        <p className="text-muted-foreground">This archive has no durable facts to import.</p>
+        <p className="text-muted-foreground">{t("This archive has no durable facts to import.")}</p>
       ) : null}
       {groups.map((group) => (
         <div key={group.classification} className="space-y-1.5">
           <h4 className="text-xs font-medium text-muted-foreground">
-            {IMPORT_CLASSIFICATION_LABELS[group.classification]} ({group.items.length})
+            {t("{label} ({count})", {
+              label: t(IMPORT_CLASSIFICATION_LABELS[group.classification]),
+              count: group.items.length,
+            })}
           </h4>
           <ul className="space-y-1.5">
             {group.items.map((item) => (
@@ -348,14 +369,14 @@ export function DurableImportReview({
                 {group.classification === "conflicting" ? (
                   <>
                     <p className="text-xs text-muted-foreground">
-                      Yours: {item.localFact ?? "Not loaded"}
+                      {t("Yours:")} {item.localFact ?? t("Not loaded")}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Archive: {item.archiveFact ?? "Unknown"}
+                      {t("Archive:")} {item.archiveFact ?? t("Unknown")}
                     </p>
                     <div
                       role="radiogroup"
-                      aria-label={`Resolve conflict ${item.rootId}`}
+                      aria-label={t("Resolve conflict {id}", { id: item.rootId })}
                       className="flex gap-1"
                     >
                       {CONFLICT_CHOICES.map((choice) => (
@@ -368,7 +389,7 @@ export function DurableImportReview({
                           disabled={busy}
                           onClick={() => onChoose(item.rootId, choice.decision)}
                         >
-                          {choice.label}
+                          {t(choice.label)}
                         </Button>
                       ))}
                     </div>
@@ -384,16 +405,19 @@ export function DurableImportReview({
       ))}
       {unresolvedCount > 0 ? (
         <p className="text-xs text-muted-foreground">
-          Choose a version for {unresolvedCount} {unresolvedCount === 1 ? "conflict" : "conflicts"}{" "}
-          before applying. Nothing changes until you apply.
+          {plural(unresolvedCount, {
+            one: "Choose a version for {count} conflict before applying. Nothing changes until you apply.",
+            other:
+              "Choose a version for {count} conflicts before applying. Nothing changes until you apply.",
+          })}
         </p>
       ) : null}
       <div className="flex gap-2">
         <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
-          Cancel import
+          {t("Cancel import")}
         </Button>
         <Button size="sm" disabled={busy || unresolvedCount > 0} onClick={onApply}>
-          Apply import
+          {t("Apply import")}
         </Button>
       </div>
     </div>

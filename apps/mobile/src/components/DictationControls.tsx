@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { AccessibilityInfo, Platform, Pressable, View } from "react-native";
 import { AppText } from "./AppText";
 import { SymbolView } from "./AppSymbol";
+import { useMobileI18n } from "../lib/i18n";
 import { useThemeColor } from "../lib/useThemeColor";
 
 export interface DictationControlsProps {
@@ -33,6 +34,7 @@ export function DictationControls({
   onCancel,
   onBlockedPress,
 }: DictationControlsProps) {
+  const { t } = useMobileI18n();
   const holding = useRef(false);
   const holdStartedAt = useRef(0);
   const startedThisGesture = useRef(false);
@@ -69,9 +71,10 @@ export function DictationControls({
     operation.current = true;
     onStart();
   };
+  // The reason is provider text, so it is interpolated untranslated.
   const announcement = unavailableReason
-    ? `Dictation unavailable: ${unavailableReason}`
-    : announcements[status];
+    ? t("Dictation unavailable: {reason}", { reason: unavailableReason })
+    : t(announcements[status]);
 
   useEffect(() => {
     // Android uses the live region; iOS needs an explicit announcement.
@@ -94,19 +97,21 @@ export function DictationControls({
 
   const label =
     appearance === "send-slot" && status === "transcribing"
-      ? "Cancel dictation"
+      ? t("Cancel dictation")
       : active
-        ? "Stop dictation"
+        ? t("Stop dictation")
         : retry
-          ? "Retry dictation"
-          : "Start dictation";
+          ? t("Retry dictation")
+          : t("Start dictation");
   const micButton = (
     <View
       accessible
       focusable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint="Hold to dictate and release to finish, or activate to start and activate again to stop."
+      accessibilityHint={t(
+        "Hold to dictate and release to finish, or activate to start and activate again to stop.",
+      )}
       accessibilityState={{ disabled: disabled || explainsBlock, busy: status === "transcribing" }}
       accessibilityActions={[{ name: "activate" }]}
       onAccessibilityTap={activate}
@@ -160,7 +165,7 @@ export function DictationControls({
           type="monochrome"
         />
       ) : (
-        <AppText className="text-sm">{active ? "Stop dictation" : "Dictate"}</AppText>
+        <AppText className="text-sm">{active ? t("Stop dictation") : t("Dictate")}</AppText>
       )}
     </View>
   );
@@ -171,7 +176,7 @@ export function DictationControls({
       <View className="flex-row items-center gap-2">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={retry ? "Dismiss dictation error" : "Cancel dictation"}
+          accessibilityLabel={retry ? t("Dismiss dictation error") : t("Cancel dictation")}
           onPress={retry ? () => cancelCallback.current() : cancel}
           className="h-11 w-11 items-center justify-center rounded-full bg-subtle"
         >
@@ -189,16 +194,16 @@ export function DictationControls({
         {busy && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Cancel dictation"
+            accessibilityLabel={t("Cancel dictation")}
             onPress={cancel}
             className="min-h-11 items-center justify-center rounded-full bg-subtle px-4"
           >
-            <AppText className="text-sm">Cancel dictation</AppText>
+            <AppText className="text-sm">{t("Cancel dictation")}</AppText>
           </Pressable>
         )}
       </View>
       <AppText className="text-xs text-foreground-muted">
-        Hold to dictate, or activate to toggle.
+        {t("Hold to dictate, or activate to toggle.")}
       </AppText>
       <AppText accessibilityLiveRegion="polite" className="text-xs text-foreground-muted">
         {announcement}

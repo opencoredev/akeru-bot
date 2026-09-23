@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
   MEMORY_SETTING_DISABLED_HINT,
@@ -5,6 +6,7 @@ import {
   sharedProjectMemoryAutoSaves,
   sharedProjectMemoryMode,
 } from "@t3tools/client-runtime/durable-memory";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { EnvironmentId } from "@t3tools/contracts";
 import type { MemorySettingsPatch } from "@t3tools/contracts/settings";
 import Constants from "expo-constants";
@@ -33,6 +35,7 @@ import { useSavedRemoteConnections } from "../../state/use-remote-environment-re
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsRow } from "./components/SettingsRow";
+import { LanguageSettingsSection } from "./LanguageSettingsSection";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { ReplyReadoutPreference } from "../replyPlayback/ReplyReadoutPreference";
@@ -48,6 +51,7 @@ type SettingsRouteParams = {
 };
 
 export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRouteParams | undefined>) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const rawEnvironmentId = route.params?.environmentId;
   const environmentId =
@@ -64,7 +68,7 @@ export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRoutePa
         <>
           {/* Android renders its own in-screen header instead of the native bar. */}
           <NativeStackScreenOptions options={{ headerShown: false }} />
-          <AndroidScreenHeader title="Settings" onBack={() => navigation.goBack()} />
+          <AndroidScreenHeader title={t("Settings")} onBack={() => navigation.goBack()} />
         </>
       ) : (
         <NativeStackScreenOptions
@@ -73,7 +77,7 @@ export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRoutePa
               Platform.OS === "ios"
                 ? () => [
                     withNativeGlassHeaderItem({
-                      accessibilityLabel: "Close settings",
+                      accessibilityLabel: t("Close settings"),
                       icon: { name: "xmark", type: "sfSymbol" } as const,
                       identifier: "settings-close",
                       label: "",
@@ -95,6 +99,7 @@ function LocalSettingsRouteScreen({
 }: {
   readonly environmentId: EnvironmentId | null;
 }) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const connections = Object.values(savedConnectionsById);
@@ -115,10 +120,10 @@ function LocalSettingsRouteScreen({
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
       >
-        <SettingsSection title="Configuration">
+        <SettingsSection title={t("Configuration")}>
           <SettingsRow
             icon="desktopcomputer"
-            label="Environments"
+            label={t("Environments")}
             value={`${environmentCount}`}
             target="SettingsEnvironments"
           />
@@ -128,14 +133,16 @@ function LocalSettingsRouteScreen({
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
 
+        <LanguageSettingsSection />
+
         <GeneralSettingsSection />
 
         <PrivacySettingsSection environmentId={settingsEnvironmentId} />
 
         <MemorySettingsSection environmentId={settingsEnvironmentId} />
 
-        <SettingsSection title="Appearance">
-          <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
+        <SettingsSection title={t("Appearance")}>
+          <SettingsRow icon="paintbrush" label={t("Appearance")} target="SettingsAppearance" />
         </SettingsSection>
 
         <LegacySettingsSection />
@@ -153,18 +160,19 @@ function ProviderSettingsSection({
 }: {
   readonly environmentId: EnvironmentId | null;
 }) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   return (
-    <SettingsSection title="Providers">
+    <SettingsSection title={t("Providers")}>
       {environmentId === null ? (
         <Text className="text-sm text-foreground-muted">
-          Open Settings from an environment to connect a provider.
+          {t("Open Settings from an environment to connect a provider.")}
         </Text>
       ) : (
         <>
           <SettingsRow
             icon="key"
-            label="Provider connections"
+            label={t("Provider connections")}
             onPress={() =>
               navigation.navigate("SettingsSheet", {
                 screen: "SettingsContent",
@@ -177,7 +185,7 @@ function ProviderSettingsSection({
           />
           <SettingsRow
             icon="photo"
-            label="Image generation"
+            label={t("Image generation")}
             onPress={() =>
               navigation.navigate("SettingsSheet", {
                 screen: "SettingsContent",
@@ -199,13 +207,14 @@ function ErrorsSettingsSection({
 }: {
   readonly environmentId: EnvironmentId | null;
 }) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   if (environmentId === null) return null;
   return (
-    <SettingsSection title="Health">
+    <SettingsSection title={t("Health")}>
       <SettingsRow
         icon="exclamationmark.triangle"
-        label="Errors"
+        label={t("Errors")}
         onPress={() =>
           navigation.navigate("SettingsSheet", {
             screen: "SettingsContent",
@@ -244,6 +253,7 @@ function EnvironmentPrivacySettingsSection({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   if (!settings) return null;
@@ -256,29 +266,32 @@ function EnvironmentPrivacySettingsSection({
   };
 
   return (
-    <SettingsSection title="Privacy">
+    <SettingsSection title={t("Privacy")}>
       <SettingsSwitchRow
         icon="chart.bar.xaxis"
-        label="Anonymous analytics"
+        label={t("Anonymous analytics")}
         value={settings.analyticsEnabled}
         onValueChange={(enabled) => updateControl("analytics", enabled)}
       />
       <SettingsSwitchRow
         icon="text.bubble"
-        label="Product feedback"
+        label={t("Product feedback")}
         value={settings.productFeedbackEnabled}
         onValueChange={(enabled) => updateControl("product-feedback", enabled)}
       />
       <SettingsSwitchRow
         icon="bolt.circle"
-        label="Voice calls"
+        label={t("Voice calls")}
+        subtitle={t(
+          "Controls this environment's web and desktop calls. Native mobile audio calls are not supported. Configure voice services in web or desktop Settings.",
+        )}
         value={settings.voice.enabled}
         onValueChange={(enabled) => updateControl("voice", enabled)}
       />
       <AutomaticReadoutSettingsRow />
       <SettingsSwitchRow
         icon="arrow.clockwise"
-        label="Provider update checks"
+        label={t("Provider update checks")}
         value={settings.enableProviderUpdateChecks}
         onValueChange={(enabled) => updateControl("provider-update-checks", enabled)}
       />
@@ -300,6 +313,7 @@ function EnvironmentMemorySettingsSection({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   if (!settings) return null;
@@ -308,22 +322,22 @@ function EnvironmentMemorySettingsSection({
     void updateSettings({ environmentId, input: { patch: { memory } } });
   };
   const memory = settings.memory;
-  const memoryHint = (description: string) =>
-    memory.enabled ? description : `${description} ${MEMORY_SETTING_DISABLED_HINT}`;
+  const memoryHint = (description: MessageKey) =>
+    memory.enabled ? t(description) : `${t(description)} ${t(MEMORY_SETTING_DISABLED_HINT)}`;
 
   return (
-    <SettingsSection title="Memory">
+    <SettingsSection title={t("Memory")}>
       <SettingsSwitchRow
         icon="doc.text"
-        label="Memory"
-        subtitle="Keep durable facts that bots can use across chats."
+        label={t("Memory")}
+        subtitle={t("Keep durable facts that bots can use across chats.")}
         value={memory.enabled}
         onValueChange={(enabled) => updateMemory({ enabled })}
       />
       <SettingsSwitchRow
         disabled={!memory.enabled}
         icon="person.crop.circle"
-        label="Private bot memory"
+        label={t("Private bot memory")}
         subtitle={memoryHint("Let each bot keep facts about you that only that bot uses.")}
         value={memory.privateBotMemory}
         onValueChange={(privateBotMemory) => updateMemory({ privateBotMemory })}
@@ -331,7 +345,7 @@ function EnvironmentMemorySettingsSection({
       <SettingsSwitchRow
         disabled={!memory.enabled}
         icon="folder.fill"
-        label={SHARED_PROJECT_MEMORY_SETTING.label}
+        label={t(SHARED_PROJECT_MEMORY_SETTING.label)}
         subtitle={memoryHint(SHARED_PROJECT_MEMORY_SETTING.description)}
         value={sharedProjectMemoryAutoSaves(memory.sharedProjectMemory)}
         onValueChange={(auto) =>
@@ -343,10 +357,11 @@ function EnvironmentMemorySettingsSection({
 }
 
 function GeneralSettingsSection() {
+  const { t } = useMobileI18n();
   return (
-    <SettingsSection title="General">
-      <SettingsRow icon="folder" label="Project Grouping" target="SettingsProjectGrouping" />
-      <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
+    <SettingsSection title={t("General")}>
+      <SettingsRow icon="folder" label={t("Project Grouping")} target="SettingsProjectGrouping" />
+      <SettingsRow icon="chart.bar.xaxis" label={t("Usage")} target="SettingsUsage" />
     </SettingsSection>
   );
 }
@@ -357,6 +372,7 @@ function GeneralSettingsSection() {
  * mobile preferences.
  */
 function LegacySettingsSection() {
+  const { t } = useMobileI18n();
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const preferences = useAtomValue(mobilePreferencesAtom);
   const threadListV2Enabled = useThreadListV2Enabled();
@@ -365,29 +381,31 @@ function LegacySettingsSection() {
 
   return (
     <View className="gap-3">
-      <SettingsSection title="Legacy">
+      <SettingsSection title={t("Legacy")}>
         <SettingsSwitchRow
           icon="sidebar.left"
-          label="Legacy Chat List"
+          label={t("Legacy Chat List")}
           value={!threadListV2Enabled}
           onValueChange={(value) => savePreferences({ legacyThreadListEnabled: value })}
         />
         <SettingsSwitchRow
           icon="hammer"
-          label="Plan Mode"
+          label={t("Plan Mode")}
           value={planModeEnabled}
           onValueChange={(value) => savePreferences({ planModeEnabled: value })}
         />
       </SettingsSection>
       <Text className="px-2 text-sm text-foreground-muted">
-        Opt into retired interfaces kept for compatibility. Plan Mode restores the Build/Plan
-        control; otherwise every task runs in Build mode.
+        {t(
+          "Opt into retired interfaces kept for compatibility. Plan Mode restores the Build/Plan control; otherwise every task runs in Build mode.",
+        )}
       </Text>
     </View>
   );
 }
 
 function AppSettingsSection() {
+  const { t } = useMobileI18n();
   const icon = useThemeColor("--color-icon");
   const [updateState, setUpdateState] = useState<AppUpdateCheckState>("idle");
   const updateInFlight = useRef(false);
@@ -421,7 +439,7 @@ function AppSettingsSection() {
       // apply immediately instead of prompting.
       await runAppUpdateCheck({
         applyMode: "immediate",
-        onFailure: (message) => Alert.alert("Update failed", message),
+        onFailure: (message) => Alert.alert(t("Update failed"), message),
         onStateChange: setUpdateState,
       });
     } finally {
@@ -440,17 +458,17 @@ function AppSettingsSection() {
 
   const statusLabel =
     updateState === "checking"
-      ? "Checking…"
+      ? t("Checking…")
       : updateState === "downloading"
-        ? "Downloading…"
+        ? t("Downloading…")
         : // "ready" appears only when this check joined an in-flight background-mode
           // check; that download installs at the next backgrounding.
           updateState === "ready"
-          ? "Update ready"
+          ? t("Update ready")
           : updateState === "restarting"
-            ? "Restarting…"
+            ? t("Restarting…")
             : updateState === "current"
-              ? "Up to date"
+              ? t("Up to date")
               : null;
 
   const versionRow = (
@@ -462,7 +480,7 @@ function AppSettingsSection() {
         type="monochrome"
         weight="regular"
       />
-      <Text className="flex-1 text-lg text-foreground">Version</Text>
+      <Text className="flex-1 text-lg text-foreground">{t("Version")}</Text>
       <View className="items-end">
         <Text className="text-lg text-foreground-muted">{versionLabel}</Text>
         {statusLabel ? (
@@ -473,12 +491,16 @@ function AppSettingsSection() {
   );
 
   return (
-    <SettingsSection title="App">
-      <SettingsRow icon="internaldrive" label="Client Storage" target="SettingsClientStorage" />
-      <SettingsRow icon="doc.text" label="Legal" fullScreenTarget="SettingsLegal" />
+    <SettingsSection title={t("App")}>
+      <SettingsRow
+        icon="internaldrive"
+        label={t("Client Storage")}
+        target="SettingsClientStorage"
+      />
+      <SettingsRow icon="doc.text" label={t("Legal")} fullScreenTarget="SettingsLegal" />
       {updateCheckAvailable ? (
         <Pressable
-          accessibilityLabel={`Version ${versionLabel}`}
+          accessibilityLabel={t("Version {version}", { version: versionLabel })}
           accessibilityRole="text"
           disabled={busy}
           onPress={handleVersionPress}
@@ -497,9 +519,10 @@ function capitalize(value: string): string {
 }
 
 function ArchivedThreadsSettingsSection() {
+  const { t } = useMobileI18n();
   return (
-    <SettingsSection title="Chats">
-      <SettingsRow icon="archivebox" label="Archived chats" target="SettingsArchive" />
+    <SettingsSection title={t("Chats")}>
+      <SettingsRow icon="archivebox" label={t("Archived chats")} target="SettingsArchive" />
     </SettingsSection>
   );
 }

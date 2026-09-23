@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import { resolveChannelSettingsAccess } from "../../channelAccess";
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentSessionState } from "../../state/session";
@@ -53,6 +54,7 @@ export function BotChannelsSheet({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const targetEnvironmentId = environmentId ?? NO_ENVIRONMENT;
   const session = useEnvironmentSessionState(targetEnvironmentId);
@@ -103,7 +105,7 @@ export function BotChannelsSheet({
             });
     setBusyId(null);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not update channel" });
+      toastManager.add({ type: "error", title: t("Could not update channel") });
     }
   };
 
@@ -116,7 +118,7 @@ export function BotChannelsSheet({
     });
     setBusyId(null);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not unassign channel" });
+      toastManager.add({ type: "error", title: t("Could not unassign channel") });
     }
   };
 
@@ -129,23 +131,27 @@ export function BotChannelsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetPopup side="right" className="w-[min(94vw,28rem)]">
         <SheetHeader>
-          <SheetTitle>{bot.name} channels</SheetTitle>
+          <SheetTitle>{t("{name} channels", { name: bot.name })}</SheetTitle>
         </SheetHeader>
         <SheetPanel className="space-y-2 px-3">
           {environmentId === null ? (
-            <div className="py-8 text-sm text-muted-foreground">Connect an environment first.</div>
+            <div className="py-8 text-sm text-muted-foreground">
+              {t("Connect an environment first.")}
+            </div>
           ) : access === "pending" ? (
             <div className="flex justify-center py-8">
-              <Spinner aria-label="Loading channel access" />
+              <Spinner aria-label={t("Loading channel access")} />
             </div>
           ) : access === "denied" ? (
             <div className="py-8 text-sm text-muted-foreground">
-              This client does not have permission to manage channels.
+              {t("This client does not have permission to manage channels.")}
             </div>
           ) : connections.length === 0 ? (
             <div className="space-y-3 py-4">
-              <p className="text-sm text-muted-foreground">Set up a channel connection first.</p>
-              <Button onClick={openChannelSettings}>Set up channels</Button>
+              <p className="text-sm text-muted-foreground">
+                {t("Set up a channel connection first.")}
+              </p>
+              <Button onClick={openChannelSettings}>{t("Set up channels")}</Button>
             </div>
           ) : (
             <>
@@ -157,14 +163,14 @@ export function BotChannelsSheet({
                 const ownedByCurrentBot = owner?.id === bot.id;
                 const action =
                   owner && !ownedByCurrentBot
-                    ? "Assigned"
+                    ? t("Assigned")
                     : binding?.status === "needs-reconnect" ||
                         binding?.status === "failed" ||
                         binding?.status === "disconnected"
-                      ? "Reconnect"
+                      ? t("Reconnect")
                       : binding
-                        ? "Disconnect"
-                        : "Connect";
+                        ? t("Disconnect")
+                        : t("Connect");
                 return (
                   <div
                     key={connection.id}
@@ -198,16 +204,16 @@ export function BotChannelsSheet({
                           size="sm"
                         >
                           {binding?.status === "failed"
-                            ? "Connection failed"
+                            ? t("Connection failed")
                             : binding?.status === "needs-reconnect"
-                              ? "Needs reconnect"
+                              ? t("Needs reconnect")
                               : binding?.status === "disconnected"
-                                ? `Disconnected · ${owner.name}`
-                                : `Assigned to ${owner.name}`}
+                                ? t("Disconnected · {name}", { name: owner.name })
+                                : t("Assigned to {name}", { name: owner.name })}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" size="sm">
-                          Unassigned
+                          {t("Unassigned")}
                         </Badge>
                       )}
                     </div>
@@ -219,7 +225,7 @@ export function BotChannelsSheet({
                             <a href={connection.managementUrl} target="_blank" rel="noreferrer" />
                           }
                         >
-                          Open provider
+                          {t("Open provider")}
                         </Button>
                       ) : null}
                       {ownedByCurrentBot ? (
@@ -228,7 +234,7 @@ export function BotChannelsSheet({
                           disabled={busyId !== null}
                           onClick={() => void unassign(connection)}
                         >
-                          Unassign
+                          {t("Unassign")}
                         </Button>
                       ) : null}
                       <Button
@@ -243,7 +249,7 @@ export function BotChannelsSheet({
                 );
               })}
               <Button variant="outline" onClick={openChannelSettings}>
-                Manage connections
+                {t("Manage connections")}
               </Button>
             </>
           )}

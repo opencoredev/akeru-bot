@@ -32,6 +32,7 @@ import {
   type PromptStashEntry,
 } from "../../promptStashStore";
 import { primaryServerKeybindingsAtom } from "../../state/server";
+import { createTranslator, type TranslationParams } from "@t3tools/client-runtime/i18n";
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { DictationControls } from "../chat/DictationControls";
 import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
@@ -41,6 +42,7 @@ import { LoaderMeter } from "../chat/ResponseLoadingState";
 import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
+import { useI18n } from "../../i18n";
 import { BotComposerModelControl } from "./BotComposerModelControl";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
 import { useRosterStore } from "./rosterStore";
@@ -136,9 +138,18 @@ export function resolveBotMention(prompt: string, bots: ReadonlyArray<MentionBot
   return resolveComposerBotMention(prompt, bots);
 }
 
-export function botMentionHint(mention: BotMention): string | null {
+type TranslateMessage = (message: string, params?: TranslationParams) => string;
+
+const translateEnglish: TranslateMessage = createTranslator("en").translate;
+
+export function botMentionHint(
+  mention: BotMention,
+  t: TranslateMessage = translateEnglish,
+): string | null {
   return mention.kind === "ambiguous"
-    ? `More than one bot here is named ${mention.name}. Pick one from the @ menu to mention it.`
+    ? t("More than one bot here is named {name}. Pick one from the @ menu to mention it.", {
+        name: mention.name,
+      })
     : null;
 }
 
@@ -185,6 +196,7 @@ export function BotPromptComposer({
   sendBlockedDescriptionId?: string | undefined;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
+  const { t, plural } = useI18n();
   const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   // A bot chat keys its draft by bot id; group and onboarding composers namespace
@@ -199,7 +211,7 @@ export function BotPromptComposer({
   // Bumped whenever the draft is sent, stashed, or swapped, so a late transcript is dropped.
   const [dictationGeneration, setDictationGeneration] = useState(0);
   const mentionHintId = useId();
-  const mentionHint = botMentionHint(resolveBotMention(draft, mentionBots));
+  const mentionHint = botMentionHint(resolveBotMention(draft, mentionBots), t);
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -380,20 +392,23 @@ export function BotPromptComposer({
       if (missingImageCount > 0) {
         toastManager.add({
           type: "warning",
-          title: "Some images were not restored",
-          description: `${missingImageCount} image${missingImageCount === 1 ? " was" : "s were"} unavailable or over the attachment limit.`,
+          title: t("Some images were not restored"),
+          description: plural(missingImageCount, {
+            one: "{count} image was unavailable or over the attachment limit.",
+            other: "{count} images were unavailable or over the attachment limit.",
+          }),
         });
       }
       if (!durable) {
         toastManager.add({
           type: "warning",
-          title: "Stash entry may come back",
-          description: "Browser storage rejected the update.",
+          title: t("Stash entry may come back"),
+          description: t("Browser storage rejected the update."),
         });
       }
       window.requestAnimationFrame(() => promptInputRef.current?.focus());
     },
-    [draft, persistDraft, takeStashEntry],
+    [draft, persistDraft, plural, t, takeStashEntry],
   );
 
   const deleteStashEntry = useCallback(
@@ -402,12 +417,12 @@ export function BotPromptComposer({
       if (!durable) {
         toastManager.add({
           type: "warning",
-          title: "Stash entry may come back",
-          description: "Browser storage rejected the delete.",
+          title: t("Stash entry may come back"),
+          description: t("Browser storage rejected the delete."),
         });
       }
     },
-    [takeStashEntry],
+    [t, takeStashEntry],
   );
 
   const stashCurrentPrompt = useCallback(async () => {
@@ -438,8 +453,8 @@ export function BotPromptComposer({
       if (!written) {
         toastManager.add({
           type: "error",
-          title: "Could not stash this prompt",
-          description: "Browser storage rejected the write, so the message was left in place.",
+          title: t("Could not stash this prompt"),
+          description: t("Browser storage rejected the write, so the message was left in place."),
         });
         return;
       }
@@ -464,15 +479,18 @@ export function BotPromptComposer({
       if (!durable) {
         toastManager.add({
           type: "warning",
-          title: "Stashed prompt will not survive a reload",
-          description: "Browser storage is unavailable, so the stash is kept for this session.",
+          title: t("Stashed prompt will not survive a reload"),
+          description: t("Browser storage is unavailable, so the stash is kept for this session."),
         });
       }
       if (evicted) {
         toastManager.add({
           type: "warning",
-          title: "Oldest stashed prompt discarded",
-          description: `The stash holds ${MAX_STASH_ENTRIES} prompts.`,
+          title: t("Oldest stashed prompt discarded"),
+          description: plural(MAX_STASH_ENTRIES, {
+            one: "The stash holds {count} prompt.",
+            other: "The stash holds {count} prompts.",
+          }),
         });
       }
 
@@ -504,14 +522,14 @@ export function BotPromptComposer({
       if (attached && !imagesDurable && durable && stashedFiles.length > 0) {
         toastManager.add({
           type: "warning",
-          title: "Stashed images were not saved",
-          description: "The text was saved, but the images may be missing after a reload.",
+          title: t("Stashed images were not saved"),
+          description: t("The text was saved, but the images may be missing after a reload."),
         });
       } else if (!attached && kept.length > 0) {
         toastManager.add({
           type: "warning",
-          title: "Stashed images did not attach",
-          description: "The prompt was restored or deleted before its images finished saving.",
+          title: t("Stashed images did not attach"),
+          description: t("The prompt was restored or deleted before its images finished saving."),
         });
       }
     } finally {
@@ -523,9 +541,11 @@ export function BotPromptComposer({
     expandedAttachmentId,
     finalizeStashEntryImages,
     persistDraft,
+    plural,
     pulseStashBadge,
     releaseAttachments,
     stashEntryToQueue,
+    t,
   ]);
 
   useEffect(() => {
@@ -600,10 +620,10 @@ export function BotPromptComposer({
     if (dictation.status !== "failed" || !dictation.errorMessage) return;
     toastManager.add({
       type: "error",
-      title: "Could not dictate",
+      title: t("Could not dictate"),
       description: dictation.errorMessage,
     });
-  }, [dictation.errorMessage, dictation.status]);
+  }, [dictation.errorMessage, dictation.status, t]);
   const showDictation =
     !readOnly &&
     !showBusyMeter &&
@@ -752,7 +772,7 @@ export function BotPromptComposer({
                 </span>
                 <button
                   type="button"
-                  aria-label="Cancel reply"
+                  aria-label={t("Cancel reply")}
                   className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={onCancelReply}
                 >
@@ -782,9 +802,9 @@ export function BotPromptComposer({
             ) : null}
             <textarea
               ref={promptInputRef}
-              aria-label={`Message ${botName}`}
+              aria-label={t("Message {name}", { name: botName })}
               data-testid="bot-prompt-input"
-              placeholder={placeholder ?? `Message ${botName}`}
+              placeholder={placeholder ?? t("Message {name}", { name: botName })}
               rows={1}
               value={draft}
               readOnly={readOnly}
@@ -835,7 +855,7 @@ export function BotPromptComposer({
                     render={
                       <button
                         type="button"
-                        aria-label="Add to prompt"
+                        aria-label={t("Add to prompt")}
                         disabled={readOnly}
                         className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
@@ -846,7 +866,7 @@ export function BotPromptComposer({
                   <MenuPopup align="start" side="top" sideOffset={8}>
                     <MenuItem onClick={() => fileInputRef.current?.click()}>
                       <PaperclipIcon />
-                      Attach file
+                      {t("Attach file")}
                     </MenuItem>
                     {mentionBots.map((bot) => {
                       const mention = botPromptMention(bot, mentionBots);
@@ -856,7 +876,7 @@ export function BotPromptComposer({
                           onClick={() => persistDraft(appendBotMention(draft, mention.source))}
                         >
                           <AtSignIcon />
-                          Mention {bot.name}
+                          {t("Mention {name}", { name: bot.name })}
                           {mention.detail ? ` (${mention.detail})` : ""}
                         </MenuItem>
                       );
@@ -875,7 +895,7 @@ export function BotPromptComposer({
                     onBlockedPress={(reason) =>
                       toastManager.add({
                         type: "info",
-                        title: "Dictation unavailable",
+                        title: t("Dictation unavailable"),
                         description: reason,
                       })
                     }
@@ -884,7 +904,9 @@ export function BotPromptComposer({
               ) : (
                 <button
                   type="submit"
-                  aria-label={showBusyMeter ? `${botName} is working` : "Send message"}
+                  aria-label={
+                    showBusyMeter ? t("{name} is working", { name: botName }) : t("Send message")
+                  }
                   aria-describedby={
                     [mentionHint ? mentionHintId : null, disabled ? sendBlockedDescriptionId : null]
                       .filter(Boolean)
@@ -909,7 +931,7 @@ export function BotPromptComposer({
       <input
         ref={fileInputRef}
         type="file"
-        aria-label="Attach files"
+        aria-label={t("Attach files")}
         accept="image/*,.txt,.md,.markdown,.csv,.json,.yaml,.yml,.toml,.xml,.pdf"
         multiple
         disabled={readOnly}

@@ -1,3 +1,4 @@
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -87,6 +88,29 @@ describe("RoutinePanel", () => {
         weekday: 5,
       }),
     ).toBe("Friday at 14:00 (Europe/London)");
+  });
+
+  it("labels schedules, run times, and statuses in the client's language", () => {
+    const i18n = createTranslator("zh-CN", {
+      Friday: "星期五",
+      "{frequency} at {time} ({timezone})": "{frequency} {time}（{timezone}）",
+      "{count}h": "{count} 小时",
+      "{count}d": "{count} 天",
+      "in {span}": "{span}后",
+      "{span} ago": "{span}前",
+      Failed: "失败",
+    });
+    expect(
+      routineScheduleLabel(
+        { frequency: "weekly", time: "14:00", timezone: "Europe/London", weekday: 5 },
+        i18n,
+      ),
+    ).toBe("星期五 14:00（Europe/London）");
+    const now = Date.parse("2026-09-01T12:00:00.000Z");
+    expect(relativeRunTime("2026-09-01T15:00:00.000Z", now, i18n)).toBe("3 小时后");
+    expect(relativeRunTime("2026-08-30T12:00:00.000Z", now, i18n)).toBe("2 天前");
+    expect(runSummaryLine({ ...run, error: null, summary: null }, i18n)).toBe("失败");
+    expect(runSummaryLine(run, i18n)).toBe("Connector timed out");
   });
 
   it("maps the selected weekly day to the routine contract", () => {

@@ -6,6 +6,12 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import type { PendingUserInput } from "../../session-logic";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
 
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
+
 const prompt: PendingUserInput = {
   requestId: ApprovalRequestId.make("request-1"),
   createdAt: "2026-09-01T00:00:00.000Z",

@@ -121,11 +121,11 @@ describe("BotThreadLanding message formatting", () => {
       "const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;",
     );
     expect(rows).toContain("<UnavailableReactionControl");
-    expect(rows).toContain("aria-label={REACTION_UNAVAILABLE_REASON}");
+    expect(rows).toContain("aria-label={unavailableReason}");
     expect(rows).toContain("disabled:pointer-events-auto");
     expect(rows).toContain("if (!onReactionChange) return { controls: {}, chips: {} };");
     expect(source).not.toContain(
-      'if (!threadRef) {\n      toastManager.add({ type: "error", title: "Could not update reaction" });',
+      'if (!threadRef) {\n      toastManager.add({ type: "error", title: t("Could not update reaction") });',
     );
   });
 

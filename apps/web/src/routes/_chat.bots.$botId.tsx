@@ -20,6 +20,7 @@ import { toRoutinePanelItem, toRoutineSchedule } from "../components/roster/rout
 import { resolveRoutedBot } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
+import { useI18n } from "../i18n";
 import { randomUUID } from "../lib/utils";
 import { botRoutePanelKeys } from "./botRoutePanelKeys";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -31,6 +32,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 function BotThreadRouteView() {
+  const { t } = useI18n();
   const { botId } = Route.useParams();
   const panelKeys = botRoutePanelKeys(botId);
   const navigate = useNavigate();
@@ -134,7 +136,7 @@ function BotThreadRouteView() {
           createdAt: new Date().toISOString(),
         },
       });
-      requireSuccess(result, `Could not assign ${name}`);
+      requireSuccess(result, t("Could not assign {name}", { name }));
       ids.push(assignmentId);
     }
     return ids;
@@ -201,8 +203,8 @@ function BotThreadRouteView() {
                           createdAt: new Date().toISOString(),
                         },
                       });
-                      requireSuccess(result, "Could not create routine");
-                      toastManager.add({ type: "success", title: "Routine draft created" });
+                      requireSuccess(result, t("Could not create routine"));
+                      toastManager.add({ type: "success", title: t("Routine draft created") });
                     });
                   },
                 }
@@ -222,8 +224,8 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not save routine");
-                toastManager.add({ type: "success", title: "Routine draft saved" });
+                requireSuccess(result, t("Could not save routine"));
+                toastManager.add({ type: "success", title: t("Routine draft saved") });
               });
             },
             onApproveProcedure: (routineId) => {
@@ -238,7 +240,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not approve procedure");
+                requireSuccess(result, t("Could not approve procedure"));
               });
             },
             onDryRun: (routineId) => {
@@ -253,7 +255,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not start dry run");
+                requireSuccess(result, t("Could not start dry run"));
               });
             },
             onRunNow: (routineId) => {
@@ -268,7 +270,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not start routine");
+                requireSuccess(result, t("Could not start routine"));
               });
             },
             onSetEnabled: (routineId, enabled) => {
@@ -290,7 +292,7 @@ function BotThreadRouteView() {
                     });
                 requireSuccess(
                   result,
-                  enabled ? "Could not enable routine" : "Could not pause routine",
+                  enabled ? t("Could not enable routine") : t("Could not pause routine"),
                 );
               });
             },
@@ -313,7 +315,7 @@ function BotThreadRouteView() {
                     });
                 requireSuccess(
                   result,
-                  paused ? "Could not pause routine" : "Could not resume routine",
+                  paused ? t("Could not pause routine") : t("Could not resume routine"),
                 );
               });
             },
@@ -327,7 +329,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not delete routine");
+                requireSuccess(result, t("Could not delete routine"));
               });
             },
           }}

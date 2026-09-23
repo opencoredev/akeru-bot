@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentId,
   MessageId,
@@ -283,6 +284,7 @@ const ComposerConnectionStatusPill = memo(function ComposerConnectionStatusPill(
 });
 
 export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposerProps) {
+  const { t, plural } = useMobileI18n();
   const navigation = useNavigation();
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
@@ -1026,13 +1028,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 contentPaddingRight={8}
               >
                 <ComposerToolbarButton
-                  accessibilityLabel="Add attachment"
+                  accessibilityLabel={t("Add attachment")}
                   icon="plus"
                   onPress={() => void props.onPickDraftImages()}
                   showChevron={false}
                 />
                 <ComposerInlineControl
-                  accessibilityLabel="Model and reasoning settings"
+                  accessibilityLabel={t("Model and reasoning settings")}
                   emphasized
                   iconNode={
                     <ProviderIcon provider={currentModelOption?.providerDriver} size={16} />
@@ -1043,7 +1045,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 />
                 {showStopAction ? (
                   <ComposerToolbarButton
-                    accessibilityLabel="Stop"
+                    accessibilityLabel={t("Stop")}
                     icon="stop.fill"
                     variant="danger"
                     onPress={props.onStopThread}
@@ -1072,8 +1074,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         {props.queueCount > 0 ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
             <Text className="pt-2 text-xs text-foreground-muted">
-              {props.queueCount} queued message{props.queueCount === 1 ? "" : "s"} will send
-              automatically.
+              {plural(props.queueCount, {
+                one: "{count} queued message will send automatically.",
+                other: "{count} queued messages will send automatically.",
+              })}
             </Text>
           </Animated.View>
         ) : null}

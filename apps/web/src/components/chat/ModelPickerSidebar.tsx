@@ -3,6 +3,7 @@ import { memo, useLayoutEffect, useRef, useState } from "react";
 import { SparklesIcon, StarIcon } from "lucide-react";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import {
   isProviderInstancePickerReady,
@@ -16,10 +17,13 @@ import {
  * Hover tooltip for an instance that cannot run turns right now. The rail
  * stays browsable so the user can see which models it would offer.
  */
-function describeUnavailableInstance(entry: ProviderInstanceEntry): string {
+function describeUnavailableInstance(
+  entry: ProviderInstanceEntry,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   return (
     providerInstanceUnavailableReason(entry) ??
-    (entry.snapshot.message?.trim() || `${entry.displayName} is not ready yet.`)
+    (entry.snapshot.message?.trim() || t("{name} is not ready yet.", { name: entry.displayName }))
   );
 }
 
@@ -56,6 +60,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
    */
   newBadgeInstanceIds?: ReadonlySet<ProviderInstanceId>;
 }) {
+  const { t } = useI18n();
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
     props.onSelectInstance(instanceId);
   };
@@ -105,7 +110,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                         )}
                         onClick={() => handleSelect("favorites")}
                         type="button"
-                        aria-label="Favorites"
+                        aria-label={t("Favorites")}
                       >
                         <StarIcon className="size-5 fill-current shrink-0" aria-hidden />
                       </button>
@@ -117,7 +122,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     align="center"
                     className={PICKER_TOOLTIP_CLASS}
                   >
-                    Favorites
+                    {t("Favorites")}
                   </TooltipPopup>
                 </Tooltip>
               </div>
@@ -140,11 +145,11 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
 
             const tooltip =
               isUnavailable || isNotReady
-                ? describeUnavailableInstance(entry)
+                ? describeUnavailableInstance(entry, t)
                 : isContextDisabled
                   ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
                   : showNewBadge
-                    ? `${entry.displayName}, new`
+                    ? t("{name}, new", { name: entry.displayName })
                     : entry.displayName;
 
             const button = (
@@ -170,7 +175,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                   isDisabled || isUnavailable
                     ? tooltip
                     : showNewBadge
-                      ? `${entry.displayName}, new`
+                      ? t("{name}, new", { name: entry.displayName })
                       : entry.displayName
                 }
               >

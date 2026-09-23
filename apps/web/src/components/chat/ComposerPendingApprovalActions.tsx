@@ -8,6 +8,7 @@ import {
 } from "@t3tools/contracts";
 import { ShieldCheckIcon } from "lucide-react";
 import { memo } from "react";
+import { useI18n } from "~/i18n";
 import { Button } from "../ui/button";
 
 interface ComposerPendingApprovalActionsProps {
@@ -23,35 +24,44 @@ interface ComposerPendingApprovalActionsProps {
 }
 
 const APPROVAL_ACTION_CLASS_NAME = "font-medium";
-const DEFAULT_APPROVAL_OPTIONS = [
-  { decision: "cancel", label: "Cancel" },
-  { decision: "decline", label: "Decline" },
-  { decision: "acceptForSession", label: "Always allow this session" },
-  { decision: "accept", label: "Approve" },
-] satisfies ReadonlyArray<ProviderApprovalOption>;
-const ROUTINE_APPROVAL_OPTIONS = [
-  { decision: "accept", label: "Create routine" },
-  { decision: "decline", label: "Cancel" },
-] satisfies ReadonlyArray<ProviderApprovalOption>;
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function defaultApprovalOptions(t: Translate): ReadonlyArray<ProviderApprovalOption> {
+  return [
+    { decision: "cancel", label: t("Cancel") },
+    { decision: "decline", label: t("Decline") },
+    { decision: "acceptForSession", label: t("Always allow this session") },
+    { decision: "accept", label: t("Approve") },
+  ];
+}
+
+function routineApprovalOptions(t: Translate): ReadonlyArray<ProviderApprovalOption> {
+  return [
+    { decision: "accept", label: t("Create routine") },
+    { decision: "decline", label: t("Cancel") },
+  ];
+}
 
 function commandApprovalOptions(
   options: ReadonlyArray<ProviderApprovalOption>,
+  t: Translate,
 ): ReadonlyArray<ProviderApprovalOption> {
   const always =
     options.find((option) => option.decision === "acceptAlways") ??
     options.find((option) => option.decision === "acceptForSession");
   const once =
     options.find((option) => option.decision === "accept") ??
-    ({ decision: "accept", label: "Allow once" } as const);
+    ({ decision: "accept", label: t("Allow once") } as const);
   const never =
     options.find((option) => option.decision === "decline") ??
     options.find((option) => option.decision === "cancel") ??
-    ({ decision: "decline", label: "Never" } as const);
+    ({ decision: "decline", label: t("Never") } as const);
 
   return [
-    { ...never, label: "Never" },
-    ...(always ? [{ ...always, label: "Enable Auto Review" } as const] : []),
-    { ...once, label: "Allow once" },
+    { ...never, label: t("Never") },
+    ...(always ? [{ ...always, label: t("Enable Auto Review") } as const] : []),
+    { ...once, label: t("Allow once") },
   ];
 }
 
@@ -62,16 +72,18 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
   requestKind,
   toolName,
   isResponding,
-  options = DEFAULT_APPROVAL_OPTIONS,
+  options: providedOptions,
   onRespondToApproval,
 }: ComposerPendingApprovalActionsProps) {
+  const { t } = useI18n();
+  const options = providedOptions ?? defaultApprovalOptions(t);
   const visibleOptions =
     toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
-      ? ROUTINE_APPROVAL_OPTIONS
+      ? routineApprovalOptions(t)
       : toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
         ? options
         : requestKind === "command"
-          ? commandApprovalOptions(options)
+          ? commandApprovalOptions(options, t)
           : options;
 
   return (
@@ -99,7 +111,9 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
             }`}
             disabled={isResponding}
             onClick={() => void onRespondToApproval(requestId, option.decision)}
-            {...(isAutoReview ? { title: "Let Auto Review decide the rest of this session" } : {})}
+            {...(isAutoReview
+              ? { title: t("Let Auto Review decide the rest of this session") }
+              : {})}
           >
             {isAutoReview ? <ShieldCheckIcon aria-hidden="true" /> : null}
             <span className="max-w-40 truncate">{option.label}</span>

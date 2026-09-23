@@ -7,11 +7,13 @@ import {
   memoryArchiveSchemaVersion,
   resolveImportConflicts,
 } from "@t3tools/client-runtime/durable-memory";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   AkeruMarkdownMemoryArchiveV3,
   AkeruMemoryArchiveV2,
   type AkeruMarkdownMemoryImportPreview,
+  type AkeruMarkdownMemoryImportPreviewItem,
   type AkeruMemoryImportPreview,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -20,6 +22,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { DurableImportReview, DurableScopePicker } from "./DurableMemoryPanels";
 
+import { useI18n } from "../../i18n";
 import { memoryEnvironment } from "../../state/memory";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -39,6 +42,20 @@ function download(value: unknown, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+const NOTES_FILE_NAMES: Readonly<Record<AkeruMarkdownMemoryImportPreviewItem["target"], string>> = {
+  user: "USER.md",
+  memory: "MEMORY.md",
+  group: "GROUP.md",
+};
+
+const NOTES_CLASSIFICATION_LABELS: Readonly<
+  Record<AkeruMarkdownMemoryImportPreviewItem["classification"], MessageKey>
+> = {
+  new: "New",
+  changed: "Changed",
+  unchanged: "Unchanged",
+};
+
 type PendingImport =
   | {
       readonly kind: "notes";
@@ -52,6 +69,7 @@ type PendingImport =
     };
 
 export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
+  const { t, formatNumber } = useI18n();
   const exportArchive = useAtomCommand(memoryEnvironment.exportArchive, { reportFailure: false });
   const previewImport = useAtomCommand(memoryEnvironment.previewImport, { reportFailure: false });
   const applyImport = useAtomCommand(memoryEnvironment.applyImport, { reportFailure: false });
@@ -101,11 +119,14 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Memory transfer failed.");
+      setError(cause instanceof Error ? cause.message : t("Memory transfer failed."));
     } finally {
       setBusy(false);
     }
   };
+  const exportDescription = DURABLE_MEMORY_EXPORT_SCOPES.find(
+    (option) => option.scope === exportScope,
+  )?.description;
   const startReview = (next: PendingImport | null) => {
     setChoices({});
     setPending(next);
@@ -113,10 +134,11 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-medium">Transfer memory</h3>
+      <h3 className="text-sm font-medium">{t("Transfer memory")}</h3>
       <p className="text-xs text-muted-foreground">
-        Export bot notes and chat observations, or durable facts for one scope. Review an import
-        before anything changes.
+        {t(
+          "Export bot notes and chat observations, or durable facts for one scope. Review an import before anything changes.",
+        )}
       </p>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -144,13 +166,14 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
             })
           }
         >
-          Export notes
+          {t("Export notes")}
         </Button>
       </div>
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Durable facts:{" "}
-          {DURABLE_MEMORY_EXPORT_SCOPES.find((option) => option.scope === exportScope)?.description}
+          {exportDescription
+            ? t("Durable facts: {description}", { description: t(exportDescription) })
+            : null}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <DurableScopePicker
@@ -178,7 +201,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
               })
             }
           >
-            Export durable facts
+            {t("Export durable facts")}
           </Button>
         </div>
       </div>
@@ -189,7 +212,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
           disabled={busy}
           onClick={() => fileInputRef.current?.click()}
         >
-          Import memory archive
+          {t("Import memory archive")}
         </Button>
       </div>
       <input
@@ -211,7 +234,9 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
               const archive = decodeDurableArchive(raw);
               if (archive.target === "all") {
                 throw new Error(
-                  "All-memory archives can't be imported. Export and import one scope at a time.",
+                  t(
+                    "All-memory archives can't be imported. Export and import one scope at a time.",
+                  ),
                 );
               }
               const result = await previewDurable({
@@ -236,17 +261,22 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
         <div className="space-y-2 text-sm">
           {pending.preview.documents.map((item) => (
             <p key={item.target}>
-              {item.target}: {item.classification}, {item.charCount} / {item.charLimit} characters
+              {t("{name}: {status}, {count} / {limit} characters", {
+                name: NOTES_FILE_NAMES[item.target],
+                status: t(NOTES_CLASSIFICATION_LABELS[item.classification]),
+                count: formatNumber(item.charCount),
+                limit: formatNumber(item.charLimit),
+              })}
             </p>
           ))}
           <p>
             {pending.preview.restoresObservations
-              ? "This import will replace this chat's observations."
-              : "Chat observations are unchanged."}
+              ? t("This import will replace this chat's observations.")
+              : t("Chat observations are unchanged.")}
           </p>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => startReview(null)}>
-              Cancel import
+              {t("Cancel import")}
             </Button>
             <Button
               size="sm"
@@ -266,7 +296,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                 })
               }
             >
-              Apply import
+              {t("Apply import")}
             </Button>
           </div>
         </div>
@@ -300,7 +330,11 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
               if (result._tag === "Failure") throw squashAtomCommandFailure(result);
               startReview(null);
               setNotice(
-                `Imported ${result.value.imported}, changed ${result.value.changed}, skipped ${result.value.skipped}.`,
+                t("Imported {imported}, changed {changed}, skipped {skipped}.", {
+                  imported: formatNumber(result.value.imported),
+                  changed: formatNumber(result.value.changed),
+                  skipped: formatNumber(result.value.skipped),
+                }),
               );
             });
           }}

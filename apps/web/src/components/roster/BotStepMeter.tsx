@@ -1,8 +1,10 @@
 import { formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
 
+import { useI18n } from "../../i18n";
 import { formatBotStepEngine, type BotStepMeterData } from "./botStepMeter.logic";
 
 export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | undefined }) {
+  const { t } = useI18n();
   if (!meter) return null;
 
   return (
@@ -11,10 +13,12 @@ export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | und
       data-testid="bot-step-meter"
     >
       {formatBotStepEngine(meter.engine)} ·{" "}
-      {meter.tokens === null ? "—" : formatTokens(meter.tokens)}
-      {" tokens · "}
+      {t("{tokens} tokens", {
+        tokens: meter.tokens === null ? "—" : formatTokens(meter.tokens),
+      })}
+      {" · "}
       {meter.costUsd === null ? "$—" : formatUsd(meter.costUsd)}
-      {meter.hardStopReached ? " · Hard stop" : null}
+      {meter.hardStopReached ? ` · ${t("Hard stop")}` : null}
     </div>
   );
 }

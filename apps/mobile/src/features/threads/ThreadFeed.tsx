@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
@@ -254,6 +255,7 @@ function ThreadMarkdownImageView(props: {
   readonly alt: string | null;
   readonly onPressImage: (uri: string) => void;
 }) {
+  const { t } = useMobileI18n();
   const codeBackground = useThemeColor("--color-md-code-bg");
   const [availableWidth, setAvailableWidth] = useState(0);
   const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null);
@@ -296,7 +298,7 @@ function ThreadMarkdownImageView(props: {
           }}
         >
           {failed ? (
-            <Text className="text-xs text-foreground-muted">Image unavailable</Text>
+            <Text className="text-xs text-foreground-muted">{t("Image unavailable")}</Text>
           ) : (
             <ActivityIndicator />
           )}
@@ -342,6 +344,7 @@ function ThreadMarkdownImageRequest(props: {
   readonly onLoad: (sourceSize: { width: number; height: number }) => void;
   readonly onError: () => void;
 }) {
+  const { t } = useMobileI18n();
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -362,7 +365,7 @@ function ThreadMarkdownImageRequest(props: {
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}
         >
-          <Text className="text-xs text-foreground-muted">Loading image…</Text>
+          <Text className="text-xs text-foreground-muted">{t("Loading image…")}</Text>
         </View>
       )}
     </>
@@ -500,6 +503,7 @@ function MarkdownCodeBlock(props: {
   readonly textColor: string;
   readonly theme: ReviewDiffTheme;
 }) {
+  const { t } = useMobileI18n();
   const content = props.content.replace(/\n$/, "");
   const languageLabel = props.language?.trim() || "text";
   const highlighted = useMarkdownCodeHighlight({
@@ -531,7 +535,7 @@ function MarkdownCodeBlock(props: {
           {languageLabel}
         </NativeText>
         <CopyTextButton
-          accessibilityLabel="Copy code"
+          accessibilityLabel={t("Copy code")}
           text={content}
           tintColor={props.copyTintColor}
           buttonSize={32}
@@ -1616,6 +1620,7 @@ function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean
 }
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const replyPlayback = useOptionalReplyPlayback();
   const environment = useEnvironmentPresentation(props.environmentId);
@@ -2232,13 +2237,13 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             className="items-center py-2"
           >
             <Text className="text-xs text-foreground-secondary">
-              {loadEarlier.loading ? "Loading earlier turns…" : "Load earlier turns"}
+              {loadEarlier.loading ? t("Loading earlier turns…") : t("Load earlier turns")}
             </Text>
           </Pressable>
         ) : null}
       </>
     ),
-    [loadEarlier, props.botId, props.environmentId, topContentInset, usesNativeAutomaticInsets],
+    [loadEarlier, props.botId, props.environmentId, t, topContentInset, usesNativeAutomaticInsets],
   );
   const listContentContainerStyle = useMemo(
     () => ({ paddingTop: 12, paddingHorizontal: contentHorizontalPadding }),
@@ -2387,8 +2392,8 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         props.contentPresentation.kind === "ready" ? (
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             <ThreadFeedPlaceholder
-              title="No messages yet"
-              detail="Ask for a look at the project, or run a command to get started."
+              title={t("No messages yet")}
+              detail={t("Ask for a look at the project, or run a command to get started.")}
               topInset={topContentInset}
               bottomInset={bottomContentInset}
               horizontalPadding={horizontalPadding}

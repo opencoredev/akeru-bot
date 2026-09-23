@@ -192,6 +192,7 @@ export const DEFAULT_BROWSER_VIEWPORT: PreviewViewportSetting = FILL_PREVIEW_VIE
 export const DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW = true;
 
 export const ClientSettingsSchema = Schema.Struct({
+  language: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("system"))),
   reviewedPrivacyPolicyVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   reviewedTermsVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   appearanceContrast: AppearanceContrast.pipe(
@@ -1170,6 +1171,7 @@ export const ServerSettingsRpcPatch = Schema.Struct(
 export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
+  language: Schema.optionalKey(TrimmedString),
   reviewedPrivacyPolicyVersion: Schema.optionalKey(TrimmedString),
   reviewedTermsVersion: Schema.optionalKey(TrimmedString),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),

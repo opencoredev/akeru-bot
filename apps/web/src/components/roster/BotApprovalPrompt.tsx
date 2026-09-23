@@ -4,6 +4,7 @@ import {
   type ProviderApprovalDecision,
 } from "@t3tools/contracts";
 
+import { useI18n } from "../../i18n";
 import type { PendingApproval } from "../../session-logic";
 import { ComposerPendingApprovalActions } from "../chat/ComposerPendingApprovalActions";
 import { ComposerPendingApprovalPanel } from "../chat/ComposerPendingApprovalPanel";
@@ -21,6 +22,7 @@ export function BotApprovalPrompt({
   readonly error: string | null;
   readonly onRespond: (decision: ProviderApprovalDecision) => Promise<unknown>;
 }) {
+  const { t } = useI18n();
   const isSpecialReview =
     approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME ||
     approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
@@ -32,22 +34,22 @@ export function BotApprovalPrompt({
       false);
   const heading =
     approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
-      ? "Review routine"
+      ? t("Review routine")
       : approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
-        ? "Review product feedback"
+        ? t("Review product feedback")
         : approval.toolName === "Computer Use"
-          ? "Use the computer?"
+          ? t("Use the computer?")
           : approval.requestKind === "command"
-            ? "Run this command?"
+            ? t("Run this command?")
             : approval.requestKind === "file-read"
-              ? "Read this file?"
+              ? t("Read this file?")
               : approval.requestKind === "file-change"
-                ? "Change this file?"
-                : "Allow app access?";
+                ? t("Change this file?")
+                : t("Allow app access?");
 
   return (
     <section
-      aria-label="Approval required"
+      aria-label={t("Approval required")}
       className="mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-white/10 border-b-transparent bg-foreground/[0.12] px-3.5 pt-3 pb-2.5 dark:bg-white/[0.16]"
       data-testid="bot-approval-prompt"
     >
@@ -59,10 +61,10 @@ export function BotApprovalPrompt({
             {approval.appName}
           </span>
         ) : null}
-        {oneUse ? <span className="text-xs text-muted-foreground">Runs once</span> : null}
+        {oneUse ? <span className="text-xs text-muted-foreground">{t("Runs once")}</span> : null}
         {pendingCount > 1 ? (
           <span className="ml-auto text-[11px] font-medium text-muted-foreground tabular-nums">
-            1 of {pendingCount}
+            {t("1 of {count}", { count: pendingCount })}
           </span>
         ) : null}
       </div>

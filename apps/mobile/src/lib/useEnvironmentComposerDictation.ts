@@ -9,6 +9,7 @@ import { useEffect, useMemo } from "react";
 import { Alert } from "react-native";
 
 import type { DictationControlsProps } from "../components/DictationControls";
+import { useMobileI18n } from "./i18n";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -34,6 +35,7 @@ export function useEnvironmentComposerDictation(input: {
   readonly applyDraft: (draft: DictationDraft) => void;
 }): DictationControlsProps {
   const { environmentId } = input;
+  const { t } = useMobileI18n();
   const settings =
     useAtomValue(serverEnvironment.settingsValueAtom(environmentId ?? NO_ENVIRONMENT)) ??
     DEFAULT_SERVER_SETTINGS;
@@ -74,11 +76,12 @@ export function useEnvironmentComposerDictation(input: {
     getDraft: () => ({ identity, ...input.getDraft() }),
     applyDraft: input.applyDraft,
   });
+  // Titles are interface copy; the message and reason stay as the provider reported them.
   useEffect(() => {
-    if (errorMessage) Alert.alert("Could not dictate", errorMessage);
+    if (errorMessage) Alert.alert(t("Could not dictate"), errorMessage);
   }, [errorMessage]);
   return {
     ...dictation,
-    onBlockedPress: (reason) => Alert.alert("Dictation unavailable", reason),
+    onBlockedPress: (reason) => Alert.alert(t("Dictation unavailable"), reason),
   };
 }

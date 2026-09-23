@@ -1,6 +1,7 @@
 import { CheckIcon, CopyIcon, EllipsisIcon, ReplyIcon, SmilePlusIcon } from "lucide-react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { useI18n } from "~/i18n";
 import { ReplyPlaybackControls, type ReplyPlaybackControlsProps } from "./ReplyPlaybackControls";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
@@ -89,13 +90,14 @@ export function MessageControls(props: {
   readonly onReactionChange?: (reaction: MessageReactionOption | null) => void;
   readonly readAloud?: ReplyPlaybackControlsProps;
 }) {
+  const { t } = useI18n();
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target: "message",
     timeout: 1200,
     onError: (error) => {
       toastManager.add({
         type: "error",
-        title: "Failed to copy message",
+        title: t("Failed to copy message"),
         description: error.message,
       });
     },
@@ -118,7 +120,7 @@ export function MessageControls(props: {
               <MenuTrigger
                 render={
                   <Button
-                    aria-label={isCopied ? "Copied" : "More message actions"}
+                    aria-label={isCopied ? t("Copied") : t("More message actions")}
                     size="icon-xs"
                     variant="ghost"
                   />
@@ -132,12 +134,12 @@ export function MessageControls(props: {
               <EllipsisIcon className="size-3.5" />
             )}
           </TooltipTrigger>
-          <TooltipPopup side="top">{isCopied ? "Copied" : "More"}</TooltipPopup>
+          <TooltipPopup side="top">{isCopied ? t("Copied") : t("More")}</TooltipPopup>
         </Tooltip>
         <MenuPopup align={props.align === "end" ? "end" : "start"} side="top">
           <MenuItem onClick={() => copyToClipboard(props.copyText)}>
             <CopyIcon />
-            Copy
+            {t("Copy")}
           </MenuItem>
         </MenuPopup>
       </Menu>
@@ -146,7 +148,7 @@ export function MessageControls(props: {
           <TooltipTrigger
             render={
               <Button
-                aria-label="Reply to message"
+                aria-label={t("Reply to message")}
                 size="icon-xs"
                 variant="ghost"
                 onClick={props.onReply}
@@ -155,7 +157,7 @@ export function MessageControls(props: {
           >
             <ReplyIcon className="size-3.5" />
           </TooltipTrigger>
-          <TooltipPopup side="top">Reply</TooltipPopup>
+          <TooltipPopup side="top">{t("Reply")}</TooltipPopup>
         </Tooltip>
       ) : null}
       {props.onReactionChange ? (
@@ -168,8 +170,10 @@ export function MessageControls(props: {
                     <Button
                       aria-label={
                         props.selectedReaction
-                          ? `Change reaction, ${props.selectedReaction} selected`
-                          : "React"
+                          ? t("Change reaction, {emoji} selected", {
+                              emoji: props.selectedReaction,
+                            })
+                          : t("React")
                       }
                       size="icon-xs"
                       variant="ghost"
@@ -186,7 +190,7 @@ export function MessageControls(props: {
                 <SmilePlusIcon className="size-3.5" />
               )}
             </TooltipTrigger>
-            <TooltipPopup side="top">React</TooltipPopup>
+            <TooltipPopup side="top">{t("React")}</TooltipPopup>
           </Tooltip>
           {/* Sits clear of the message it decorates, so the picker never covers the text
               being reacted to. Picking the selected emoji again removes the reaction. */}
@@ -196,12 +200,14 @@ export function MessageControls(props: {
             side="top"
             sideOffset={8}
           >
-            <div aria-label="Choose a reaction" className="flex gap-0.5" role="group">
+            <div aria-label={t("Choose a reaction")} className="flex gap-0.5" role="group">
               {MESSAGE_REACTION_OPTIONS.map((option) => (
                 <Button
                   key={option}
                   aria-label={
-                    props.selectedReaction === option ? `Remove ${option}` : `React ${option}`
+                    props.selectedReaction === option
+                      ? t("Remove {emoji}", { emoji: option })
+                      : t("React {emoji}", { emoji: option })
                   }
                   aria-pressed={props.selectedReaction === option}
                   className="text-base [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]"

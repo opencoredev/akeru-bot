@@ -11,6 +11,7 @@ import { useLocation } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
+import { useI18n } from "../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
@@ -66,6 +67,7 @@ function readInitialThreadSidebarWidth(): number {
 }
 
 function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean }) {
+  const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { isMobile, toggleSidebar } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
@@ -122,12 +124,14 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
                   stageBackdropVariant &&
                   resolveSidebarStageFocusRingOffsetClass(stageBackdropVariant),
               )}
-              aria-label="Toggle main sidebar"
+              aria-label={t("Toggle main sidebar")}
             />
           }
         />
         <TooltipPopup side="bottom">
-          Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+          {shortcutLabel
+            ? t("Toggle main sidebar ({shortcut})", { shortcut: shortcutLabel })
+            : t("Toggle main sidebar")}
         </TooltipPopup>
       </Tooltip>
     </div>

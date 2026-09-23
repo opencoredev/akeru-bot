@@ -14,6 +14,7 @@ import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { requestConfirmDialog } from "../../confirmDialog";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { openSettings } from "../../settingsDialogStore";
@@ -67,6 +68,7 @@ const NO_ENVIRONMENT = "" as EnvironmentId;
  * rather than the only place these controls fit.
  */
 export function BotSettingsPage({ botId }: { readonly botId: string }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const canGoBack = useCanGoBack();
   const environmentId = usePrimaryEnvironmentId();
@@ -108,24 +110,24 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
         input: { botId: BotId.make(bot.id), ...input },
       });
       if (result._tag === "Failure") {
-        toastManager.add({ type: "error", title: "Could not save bot settings" });
+        toastManager.add({ type: "error", title: t("Could not save bot settings") });
         return false;
       }
-      toastManager.add({ type: "success", title: "Bot settings saved" });
+      toastManager.add({ type: "success", title: t("Bot settings saved") });
       return true;
     },
-    [bot, environmentId, updateBot],
+    [bot, environmentId, t, updateBot],
   );
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border/70">
-          <WorkspaceBreadcrumb ariaLabel="Bot settings breadcrumb">
-            <WorkspaceBreadcrumbItem>Bots</WorkspaceBreadcrumbItem>
+          <WorkspaceBreadcrumb ariaLabel={t("Bot settings breadcrumb")}>
+            <WorkspaceBreadcrumbItem>{t("Bots")}</WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator />
             <WorkspaceBreadcrumbItem current>
-              {bot ? bot.name : "Unavailable bot"}
+              {bot ? bot.name : t("Unavailable bot")}
             </WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
         </WorkspacePageHeader>
@@ -133,7 +135,7 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
           <BotSettingsForm key={bot.id} bot={bot} onSave={onSaveBot} />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-            This bot is no longer available.
+            {t("This bot is no longer available.")}
           </div>
         )}
       </div>
@@ -148,6 +150,7 @@ function BotSettingsForm({
   readonly bot: Bot;
   readonly onSave: (input: BotProfileUpdate) => Promise<boolean>;
 }) {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const mcpServers = useAtomValue(environmentMcpServersAtom(environmentId ?? NO_ENVIRONMENT));
   const imageSettings = useEnvironmentSettings(
@@ -172,12 +175,12 @@ function BotSettingsForm({
 
   const shouldBlockNavigation = useCallback(async () => {
     if (!draft.dirty) return false;
-    const confirmation = requestConfirmDialog("Discard unsaved bot settings?", {
+    const confirmation = requestConfirmDialog(t("Discard unsaved bot settings?"), {
       variant: "destructive",
     });
     if (!confirmation) return true;
     return !(await confirmation);
-  }, [draft.dirty]);
+  }, [draft.dirty, t]);
   useBlocker({
     shouldBlockFn: shouldBlockNavigation,
     enableBeforeUnload: () => draft.dirty,
@@ -199,14 +202,14 @@ function BotSettingsForm({
   return (
     <>
       <SettingsPageContainer>
-        <SettingsSection title="Bot">
+        <SettingsSection title={t("Bot")}>
           <SettingsRow
-            title="Avatar"
-            description="Shown in the roster, the chat header, and anywhere this bot speaks."
+            title={t("Avatar")}
+            description={t("Shown in the roster, the chat header, and anywhere this bot speaks.")}
             control={
               <button
                 type="button"
-                aria-label="Change bot avatar"
+                aria-label={t("Change bot avatar")}
                 onClick={() => setAvatarOpen(true)}
                 className="group relative rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -223,12 +226,12 @@ function BotSettingsForm({
           />
 
           <SettingsRow
-            title="Name"
-            description="What you call this bot in chats and mentions."
+            title={t("Name")}
+            description={t("What you call this bot in chats and mentions.")}
             control={
               <Input
                 className="w-full sm:w-64"
-                aria-label="Bot name"
+                aria-label={t("Bot name")}
                 value={draft.name}
                 onChange={(event) => {
                   draft.setName(event.currentTarget.value);
@@ -239,14 +242,14 @@ function BotSettingsForm({
           />
 
           <SettingsRow
-            title="Label"
-            description="An optional role, such as research, marketing, or admin."
+            title={t("Label")}
+            description={t("An optional role, such as research, marketing, or admin.")}
             control={
               <Input
                 className="w-full sm:w-64"
-                aria-label="Bot label"
+                aria-label={t("Bot label")}
                 value={draft.label}
-                placeholder="Research, marketing, admin"
+                placeholder={t("Research, marketing, admin")}
                 onChange={(event) => {
                   draft.setLabel(event.currentTarget.value);
                   draft.markChanged();
@@ -256,14 +259,16 @@ function BotSettingsForm({
           />
 
           <SettingsRow
-            title="Description"
-            description="A note to yourself about what this bot is for. Searchable from the roster."
+            title={t("Description")}
+            description={t(
+              "A note to yourself about what this bot is for. Searchable from the roster.",
+            )}
           >
             <div className="mt-3 max-w-2xl pb-3.5">
               <Textarea
-                aria-label="Bot description"
+                aria-label={t("Bot description")}
                 value={draft.description}
-                placeholder="What this bot is for"
+                placeholder={t("What this bot is for")}
                 rows={4}
                 className="min-h-24 resize-none"
                 onChange={(event) => {
@@ -275,11 +280,13 @@ function BotSettingsForm({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection title="Voice and personality">
+        <SettingsSection title={t("Voice and personality")}>
           <SettingsRow
             id="personality"
-            title="Personality"
-            description="Choose how this bot usually sounds. It is a baseline, not a costume. The bot still adapts to you and to the task, so serious work stays serious in every mode."
+            title={t("Personality")}
+            description={t(
+              "Choose how this bot usually sounds. It is a baseline, not a costume. The bot still adapts to you and to the task, so serious work stays serious in every mode.",
+            )}
           >
             <div className="mt-3 max-w-2xl pb-3.5">
               <BotPersonalityToneField
@@ -294,8 +301,10 @@ function BotSettingsForm({
           </SettingsRow>
 
           <SettingsRow
-            title="Voice calls"
-            description="Let this bot take subscription voice calls. Voice must also be enabled in Settings."
+            title={t("Voice calls")}
+            description={t(
+              "Let this bot take subscription voice calls. Voice must also be enabled in Settings.",
+            )}
             control={
               <Switch
                 checked={draft.voiceEnabled}
@@ -303,16 +312,20 @@ function BotSettingsForm({
                   draft.setVoiceEnabled(Boolean(checked));
                   draft.markChanged();
                 }}
-                aria-label={`${draft.voiceEnabled ? "Disable" : "Enable"} voice calls for ${bot.name}`}
+                aria-label={
+                  draft.voiceEnabled
+                    ? t("Disable voice calls for {name}", { name: bot.name })
+                    : t("Enable voice calls for {name}", { name: bot.name })
+                }
               />
             }
           />
         </SettingsSection>
 
-        <SettingsSection title="Model">
+        <SettingsSection title={t("Model")}>
           <SettingsRow
-            title="Model"
-            description="The provider and model this bot runs on."
+            title={t("Model")}
+            description={t("The provider and model this bot runs on.")}
             control={
               draft.model ? (
                 <BotModelPicker
@@ -323,7 +336,7 @@ function BotSettingsForm({
                   onChange={draft.selectModel}
                 />
               ) : (
-                <span className="text-sm text-muted-foreground">No model yet</span>
+                <span className="text-sm text-muted-foreground">{t("No model yet")}</span>
               )
             }
           >
@@ -338,8 +351,8 @@ function BotSettingsForm({
 
           {draft.showModelOptions && draft.activeEntry ? (
             <SettingsRow
-              title="Reasoning"
-              description="How much thinking this bot spends before it answers."
+              title={t("Reasoning")}
+              description={t("How much thinking this bot spends before it answers.")}
               control={
                 <TraitsPicker
                   provider={draft.activeEntry.driverKind}
@@ -359,18 +372,20 @@ function BotSettingsForm({
 
           {draft.resolvedUsageCap.available ? (
             <SettingsRow
-              title="Token hard stop"
-              description="Stop this bot once it has spent this many tokens. Leave empty for no limit."
+              title={t("Token hard stop")}
+              description={t(
+                "Stop this bot once it has spent this many tokens. Leave empty for no limit.",
+              )}
               control={
                 <Input
                   className="w-full sm:w-40"
-                  aria-label="Token hard stop"
+                  aria-label={t("Token hard stop")}
                   type="number"
                   inputMode="numeric"
                   min={1}
                   step={1}
                   value={draft.usageCap}
-                  placeholder="No limit"
+                  placeholder={t("No limit")}
                   onChange={(event) => {
                     draft.setUsageCap(event.currentTarget.value);
                     draft.markChanged();
@@ -380,23 +395,25 @@ function BotSettingsForm({
             />
           ) : (
             <SettingsRow
-              title="Token hard stop"
-              description="This provider reports occupancy rather than tokens, so a token limit does not apply."
-              control={<span className="text-sm text-muted-foreground">Unavailable</span>}
+              title={t("Token hard stop")}
+              description={t(
+                "This provider reports occupancy rather than tokens, so a token limit does not apply.",
+              )}
+              control={<span className="text-sm text-muted-foreground">{t("Unavailable")}</span>}
             />
           )}
 
-          <SettingsRow title="Usage" description="What this bot has spent so far.">
+          <SettingsRow title={t("Usage")} description={t("What this bot has spent so far.")}>
             <div className="mt-3 max-w-2xl pb-3.5">
               <BotUsageSection environmentId={environmentId} botId={bot.id} />
             </div>
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection title="Workspace">
+        <SettingsSection title={t("Workspace")}>
           <SettingsRow
-            title="Sandbox"
-            description="Where this bot runs commands and edits files."
+            title={t("Sandbox")}
+            description={t("Where this bot runs commands and edits files.")}
             control={
               <Select
                 value={draft.sandbox}
@@ -407,13 +424,13 @@ function BotSettingsForm({
                   draft.markChanged();
                 }}
               >
-                <SelectTrigger className="w-full sm:w-48" aria-label="Sandbox provider">
-                  <SelectValue>{botSandboxLabel(draft.sandbox)}</SelectValue>
+                <SelectTrigger className="w-full sm:w-48" aria-label={t("Sandbox provider")}>
+                  <SelectValue>{botSandboxLabel(draft.sandbox, t)}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   {BOT_SANDBOX_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                      {botSandboxLabel(option.value, t)}
                     </SelectItem>
                   ))}
                 </SelectPopup>
@@ -422,28 +439,33 @@ function BotSettingsForm({
           />
 
           <SettingsRow
-            title="Tools"
-            description="Which workspace tools this bot may reach."
+            title={t("Tools")}
+            description={t("Which workspace tools this bot may reach.")}
             control={
               <Button
                 variant="outline"
                 size="xs"
                 type="button"
-                aria-label="Manage bot tools"
+                aria-label={t("Manage bot tools")}
                 aria-expanded={toolsOpen}
                 onClick={() => setToolsOpen(true)}
               >
                 <AppIcon className="size-3.5" icon={WrenchIcon} />
                 {tools.length === 0
-                  ? "No workspace tools"
-                  : `${enabledToolCount} of ${tools.length} enabled`}
+                  ? t("No workspace tools")
+                  : t("{enabled} of {total} enabled", {
+                      enabled: enabledToolCount,
+                      total: tools.length,
+                    })}
               </Button>
             }
           />
 
           <SettingsRow
-            title="Image generation"
-            description="Which subscription this bot uses to create images. The chat model above stays the same."
+            title={t("Image generation")}
+            description={t(
+              "Which subscription this bot uses to create images. The chat model above stays the same.",
+            )}
             control={
               <div className="flex items-center gap-1.5">
                 <Select
@@ -453,7 +475,7 @@ function BotSettingsForm({
                     draft.markChanged();
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-56" aria-label="Image provider">
+                  <SelectTrigger className="w-full sm:w-56" aria-label={t("Image provider")}>
                     <SelectValue>
                       {draft.imageProvider
                         ? imageProviderLabel(draft.imageProvider)
@@ -476,48 +498,51 @@ function BotSettingsForm({
                   size="xs"
                   type="button"
                   onClick={() => openSettings("image-generation", null, environmentId)}
-                  aria-label="Open image generation settings"
+                  aria-label={t("Open image generation settings")}
                 >
-                  Image settings
+                  {t("Image settings")}
                 </Button>
               </div>
             }
           />
 
           <SettingsRow
-            title="Memory"
-            description="Facts this bot keeps between chats."
+            title={t("Memory")}
+            description={t("Facts this bot keeps between chats.")}
             control={
               <Button
                 variant="outline"
                 size="xs"
                 type="button"
-                aria-label="Manage bot memory"
+                aria-label={t("Manage bot memory")}
                 disabled={!threadRef}
                 onClick={() => setMemoryOpen(true)}
               >
                 <AppIcon className="size-3.5" icon={Brain02Icon} />
-                Facts and history
+                {t("Facts and history")}
               </Button>
             }
           />
 
           <SettingsRow
-            title="Channels"
-            description="Where this bot answers outside Akeru Bot."
+            title={t("Channels")}
+            description={t("Where this bot answers outside Akeru Bot.")}
             control={
               <Button
                 variant="outline"
                 size="xs"
                 type="button"
-                aria-label="Manage bot channels"
+                aria-label={t("Manage bot channels")}
                 aria-expanded={channelsOpen}
                 onClick={() => setChannelsOpen(true)}
               >
                 <AppIcon className="size-3.5" icon={Link02Icon} />
                 {assignedChannels.length === 0
-                  ? "No channels"
-                  : `${connectedChannelCount} of ${assignedChannels.length} connected`}
+                  ? t("No channels")
+                  : t("{connected} of {total} connected", {
+                      connected: connectedChannelCount,
+                      total: assignedChannels.length,
+                    })}
               </Button>
             }
           />
@@ -530,13 +555,13 @@ function BotSettingsForm({
       >
         <span aria-live="polite" className="mr-auto text-xs text-muted-foreground">
           {draft.saved ? (
-            <span className="text-success">Saved</span>
+            <span className="text-success">{t("Saved")}</span>
           ) : draft.dirty ? (
-            "Unsaved changes"
+            t("Unsaved changes")
           ) : null}
         </span>
         <Button size="sm" disabled={!draft.canSave || draft.saving} onClick={draft.save}>
-          {draft.saving ? "Saving" : "Save"}
+          {draft.saving ? t("Saving") : t("Save")}
         </Button>
       </div>
 

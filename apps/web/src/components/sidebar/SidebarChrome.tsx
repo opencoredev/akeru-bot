@@ -21,7 +21,10 @@ import {
   type PluginDefinition,
 } from "../../../../../plugins";
 
+import { createTranslator, type PluralForms } from "@t3tools/client-runtime/i18n";
+
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { openSettings } from "../../settingsDialogStore";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openUsage } from "../../usageDialogStore";
@@ -62,6 +65,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }: {
   isElectron: boolean;
 }) {
+  const { t } = useI18n();
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
@@ -94,7 +98,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         </div>
         <div className="relative flex items-center justify-center">
           <Link
-            aria-label="Go to chats"
+            aria-label={t("Go to chats")}
             className={cn(
               "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]",
               backdropVariant ? "text-white" : "text-sidebar-foreground",
@@ -154,9 +158,17 @@ export function findActiveComputerUseControl(input: {
   return null;
 }
 
-export function formatEnabledPluginStatus(enabledCount: number): string {
-  if (enabledCount === 0) return "No plugins enabled";
-  return `${enabledCount} ${enabledCount === 1 ? "plugin" : "plugins"} enabled`;
+type Pluralize = (count: number, forms: PluralForms) => string;
+
+const englishTranslator = createTranslator("en");
+
+export function formatEnabledPluginStatus(
+  enabledCount: number,
+  t: (message: string) => string = englishTranslator.translate,
+  plural: Pluralize = englishTranslator.plural,
+): string {
+  if (enabledCount === 0) return t("No plugins enabled");
+  return plural(enabledCount, { one: "{count} plugin enabled", other: "{count} plugins enabled" });
 }
 
 export function formatEnabledPluginBadge(enabledCount: number): string | null {
@@ -194,9 +206,10 @@ function SidebarPluginSummaryForEnvironment({
   readonly environmentId: EnvironmentId;
   readonly onClick: () => void;
 }) {
+  const { t, plural } = useI18n();
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const { enabledCount } = summarizeEnabledPlugins(servers);
-  const statusLabel = formatEnabledPluginStatus(enabledCount);
+  const statusLabel = formatEnabledPluginStatus(enabledCount, t, plural);
 
   return (
     <SidebarPluginButton enabledCount={enabledCount} onClick={onClick} statusLabel={statusLabel} />
@@ -212,6 +225,7 @@ function SidebarPluginButton({
   readonly onClick: () => void;
   readonly statusLabel: string;
 }) {
+  const { t } = useI18n();
   const badgeLabel = formatEnabledPluginBadge(enabledCount);
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -222,12 +236,12 @@ function SidebarPluginButton({
         <TooltipTrigger
           render={
             <SidebarMenuButton
-              aria-label={`Plugins, ${statusLabel}`}
+              aria-label={t("Plugins, {status}", { status: statusLabel })}
               className="relative overflow-visible!"
               onClick={onClick}
             >
               <AppIcon className="size-4" icon={PlugSocketIcon} />
-              <span className="truncate group-data-[collapsible=icon]:hidden">Plugins</span>
+              <span className="truncate group-data-[collapsible=icon]:hidden">{t("Plugins")}</span>
               {/* Expanded, the count sits inline where it can be read as a
                   number; collapsed, it becomes the badge on the glyph. */}
               {badgeLabel ? (
@@ -241,20 +255,25 @@ function SidebarPluginButton({
             </SidebarMenuButton>
           }
         />
-        {collapsed ? <TooltipPopup side="right">{`Plugins · ${statusLabel}`}</TooltipPopup> : null}
+        {collapsed ? (
+          <TooltipPopup side="right">
+            {t("Plugins · {status}", { status: statusLabel })}
+          </TooltipPopup>
+        ) : null}
       </Tooltip>
     </SidebarMenuItem>
   );
 }
 
 function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   if (!environmentId) {
     return (
       <SidebarPluginButton
         enabledCount={0}
         onClick={onClick}
-        statusLabel="Connect an environment"
+        statusLabel={t("Connect an environment")}
       />
     );
   }
@@ -266,6 +285,7 @@ function ComputerUseControlForEnvironment({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const { t } = useI18n();
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId));
   const stopSession = useAtomCommand(threadEnvironment.stopSession);
   const disableServer = useAtomCommand(mcpServerEnvironment.disable);
@@ -309,22 +329,24 @@ function ComputerUseControlForEnvironment({
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5" role="status">
       <div className="flex items-center gap-2 text-xs font-medium">
         <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
-        <span className="min-w-0 truncate">{control.botName} controls this Mac</span>
+        <span className="min-w-0 truncate">
+          {t("{name} controls this Mac", { name: control.botName })}
+        </span>
       </div>
       <div className="mt-2 flex gap-2">
         <Button className="h-7 flex-1 text-xs" disabled={pending} size="sm" onClick={stop}>
-          Stop
+          {t("Stop")}
         </Button>
         <Button
-          aria-label="Revoke Computer Use for all bots"
+          aria-label={t("Revoke Computer Use for all bots")}
           className="h-7 flex-1 text-xs"
           disabled={pending}
           size="sm"
-          title="Disable Computer Use for all bots"
+          title={t("Disable Computer Use for all bots")}
           variant="destructive-outline"
           onClick={revoke}
         >
-          Revoke
+          {t("Revoke")}
         </Button>
       </div>
     </div>
@@ -375,6 +397,7 @@ export function SidebarUtilityItem({
 }
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+  const { t } = useI18n();
   const { isMobile, setOpenMobile } = useSidebar();
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
@@ -410,17 +433,17 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarPluginSummary onClick={handlePluginsClick} />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Analytics01Icon} />}
-          label="Usage"
+          label={t("Usage")}
           onClick={handleUsageClick}
         />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}
-          label="Settings"
+          label={t("Settings")}
           onClick={handleSettingsClick}
         />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={HelpCircleIcon} />}
-          label="Feedback"
+          label={t("Feedback")}
           onClick={handleFeedbackClick}
         />
         <SidebarUpdatePill />

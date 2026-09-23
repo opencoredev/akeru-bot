@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -35,6 +36,7 @@ export function NewGroupDialog({
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreate: (input: NewGroupInput) => void;
 }) {
+  const { t } = useI18n();
   const activeBots = useMemo(() => bots.filter((bot) => bot.archivedAt === null), [bots]);
   const [name, setName] = useState("");
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(() =>
@@ -62,22 +64,22 @@ export function NewGroupDialog({
           }}
         >
           <header className="border-b px-6 py-5">
-            <DialogTitle>New group</DialogTitle>
+            <DialogTitle>{t("New group")}</DialogTitle>
           </header>
           <div className="space-y-5 px-6 py-6">
             <label className="block space-y-2 text-sm font-medium">
-              Name
+              {t("Name")}
               <Input
                 autoFocus
-                aria-label="Group name"
+                aria-label={t("Group name")}
                 maxLength={80}
-                placeholder="Group name"
+                placeholder={t("Group name")}
                 value={name}
                 onChange={(event) => setName(event.currentTarget.value)}
               />
             </label>
             <fieldset className="space-y-2">
-              <legend className="mb-2 text-sm font-medium">Bots</legend>
+              <legend className="mb-2 text-sm font-medium">{t("Bots")}</legend>
               <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border p-2">
                 {activeBots.map((bot) => {
                   const checked = selectedIds.includes(bot.id);
@@ -102,14 +104,14 @@ export function NewGroupDialog({
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground">Select at least two bots.</p>
+              <p className="text-xs text-muted-foreground">{t("Select at least two bots.")}</p>
             </fieldset>
             <label className="block space-y-2 text-sm font-medium">
-              Boss
+              {t("Boss")}
               <Select value={bossBotId} onValueChange={(value) => value && setBossBotId(value)}>
-                <SelectTrigger aria-label="Group boss" className="w-full">
+                <SelectTrigger aria-label={t("Group boss")} className="w-full">
                   <SelectValue>
-                    {selectedBots.find((bot) => bot.id === bossBotId)?.name ?? "Choose boss"}
+                    {selectedBots.find((bot) => bot.id === bossBotId)?.name ?? t("Choose boss")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
@@ -124,10 +126,10 @@ export function NewGroupDialog({
           </div>
           <footer className="flex justify-end gap-2 border-t bg-muted px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button type="submit" disabled={!canCreateGroup(name, selectedIds, bossBotId)}>
-              Create group
+              {t("Create group")}
             </Button>
           </footer>
         </form>

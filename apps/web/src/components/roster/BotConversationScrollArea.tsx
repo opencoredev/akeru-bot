@@ -1,6 +1,7 @@
 import { ArrowDownIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
@@ -11,6 +12,7 @@ import {
 } from "./botConversationScroll.logic";
 
 export function BotConversationScrollArea({ children }: { readonly children: ReactNode }) {
+  const { t } = useI18n();
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const followStateRef = useRef<ConversationFollowState>({
@@ -89,7 +91,7 @@ export function BotConversationScrollArea({ children }: { readonly children: Rea
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Scroll to latest message"
+          aria-label={t("Scroll to latest message")}
           className="absolute bottom-3 start-1/2 z-10 -translate-x-1/2 rounded-full bg-popover shadow-lg"
           onClick={scrollToEnd}
         >

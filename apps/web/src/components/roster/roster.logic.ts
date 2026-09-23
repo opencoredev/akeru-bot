@@ -4,6 +4,7 @@ import {
   isGroupPersonMember,
   type GroupPersonMembership,
 } from "@t3tools/contracts";
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { threadJumpIndexFromCommand } from "../../keybindings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
@@ -19,6 +20,32 @@ export const BLOB_SHAPES: readonly BotBlobShape[] = [
   "cloud",
   "drop",
 ];
+
+type Translate = (message: string, params?: Record<string, string | number>) => string;
+
+const englishTranslate: Translate = createTranslator("en").translate;
+
+/** Accessible name for a blob shape button; the shape value itself stays a wire enum. */
+export function blobShapeLabel(shape: BotBlobShape, t: Translate = englishTranslate): string {
+  switch (shape) {
+    case "circle":
+      return t("Circle");
+    case "squircle":
+      return t("Squircle");
+    case "square":
+      return t("Square");
+    case "pill":
+      return t("Pill");
+    case "triangle":
+      return t("Triangle");
+    case "hex":
+      return t("Hexagon");
+    case "cloud":
+      return t("Cloud");
+    case "drop":
+      return t("Drop");
+  }
+}
 
 export const BLOB_COLORS: readonly string[] = [
   "#FF4A5A",
@@ -776,6 +803,7 @@ export function formatRosterTimestamp(
   isoDate: string,
   timestampFormat: TimestampFormat,
   nowMs: number = Date.now(),
+  t: Translate = englishTranslate,
 ): string {
   const date = parseTimestampDate(isoDate);
   if (!date) return "";
@@ -786,7 +814,7 @@ export function formatRosterTimestamp(
   const dayDiff = Math.round((startOfToday - startOfMessageDay) / 86_400_000);
 
   if (dayDiff <= 0) return formatShortTimestamp(isoDate, timestampFormat);
-  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff === 1) return t("Yesterday");
   if (dayDiff < 7) return weekdayFormatter.format(date);
   return date.getFullYear() === now.getFullYear()
     ? numericDateFormatter.format(date)
