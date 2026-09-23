@@ -1,13 +1,24 @@
+/**
+ * Every id a chat Settings chip may name, in Settings rail order. A new
+ * Settings section adds its id here; the web and mobile destination maps are
+ * keyed by this list, so the compiler points at each surface that must learn
+ * the new id.
+ */
 export const SETTINGS_DEEP_LINK_IDS = [
   "general",
   "local-execution",
   "appearance",
-  "providers",
-  "bot-inbox",
-  "voice",
-  "connections",
   "keybindings",
+  "providers",
+  "channels",
+  "voice",
+  "browser",
+  "plugins",
+  "sandbox",
+  "privacy",
+  "connections",
   "source-control",
+  "bot-inbox",
   "diagnostics",
 ] as const;
 
@@ -35,4 +46,12 @@ export function parseSettingsDeepLinkId(href: string | undefined): SettingsDeepL
   }
   const id = url.searchParams.get("id")?.trim() || "general";
   return settingsDeepLinkIds.has(id) ? (id as SettingsDeepLinkId) : null;
+}
+
+/**
+ * True for any in-app link, valid or not. Clients never hand one to the OS or
+ * a browser; an href that fails `parseSettingsDeepLinkId` renders inert.
+ */
+export function isAppDeepLink(href: string): boolean {
+  return /^grokbot:/i.test(href.trim());
 }

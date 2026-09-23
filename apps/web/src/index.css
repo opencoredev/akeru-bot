@@ -2301,6 +2301,34 @@ code {
   vertical-align: middle;
 }
 
+/* Checklist summary above a list with two or more tasks. Static: the fill
+   width changes only when the message text does, with no transition. */
+.chat-markdown .chat-markdown-task-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.5rem 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-markdown .chat-markdown-task-progress-track {
+  display: block;
+  width: 4rem;
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentcolor 18%, transparent);
+}
+
+.chat-markdown .chat-markdown-task-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+}
+
 /* Markdown assumes inline images — GitHub comments lay button images out in a row — and the
    Tailwind preflight's block-level img would stack them one per line. */
 .chat-markdown img {
@@ -2428,6 +2456,39 @@ code {
 
 .chat-markdown .chat-markdown-shiki .shiki {
   background: transparent !important;
+}
+
+/* Diff fences: one block per line so add/remove tints span the scroll width.
+   The code element grows to the widest line; static colors, no transitions. */
+.chat-markdown .chat-markdown-diff code {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.chat-markdown .chat-markdown-diff-line {
+  display: block;
+  margin-inline: -0.9rem;
+  padding-inline: 0.9rem;
+}
+
+.chat-markdown .chat-markdown-diff-line:empty::before {
+  content: "\200b";
+}
+
+.chat-markdown .chat-markdown-diff-line[data-diff-line="add"] {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+
+.chat-markdown .chat-markdown-diff-line[data-diff-line="remove"] {
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
+}
+
+.chat-markdown .chat-markdown-diff-line[data-diff-line="hunk"] {
+  color: var(--info-foreground);
+}
+
+.chat-markdown .chat-markdown-diff-line[data-diff-line="meta"] {
+  color: color-mix(in srgb, currentcolor 60%, transparent);
 }
 
 /* Diagnostics-style tables: row separators only, uppercase headers, and a

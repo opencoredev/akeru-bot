@@ -25,6 +25,8 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
+import { stabilizeStreamingMarkdown } from "@t3tools/client-runtime/markdown-streaming";
+import { isAppDeepLink } from "@t3tools/client-runtime/settings-deep-link";
 import { faviconUrlForOrigin } from "@t3tools/shared/favicon";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -133,7 +135,9 @@ import {
 } from "~/lib/openPullRequestLink";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
+import { MARKDOWN_DIFF_LANGUAGES, parseMarkdownDiff } from "../markdownDiff";
 import { parseSettingsDeepLink } from "../settingsDeepLink";
+import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
 import { resolvePathLinkTarget } from "../terminal-links";
 import {
   isBrowserPreviewFile,
@@ -832,12 +836,15 @@ function MarkdownCodeBlock({
   language,
   fenceTitle,
   theme,
+  headerDetail,
   children,
 }: {
   code: string;
   language: string;
   fenceTitle: string | null;
   theme: "light" | "dark";
+  /** Extra header content after the title, such as diff line counts. */
+  headerDetail?: ReactNode;
   children: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
@@ -897,6 +904,7 @@ function MarkdownCodeBlock({
             language={language}
             theme={theme}
           />
+          {headerDetail}
         </span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
           <Tooltip>
@@ -938,6 +946,66 @@ function MarkdownCodeBlock({
       </div>
       {children}
     </div>
+  );
+}
+
+function diffBlockTitle(fenceTitle: string | null, files: ReadonlyArray<string>): string | null {
+  if (fenceTitle) return fenceTitle;
+  if (files.length === 1) return files[0] ?? null;
+  return null;
+}
+
+/**
+ * ```diff and ```patch fences render as a change card: per-line add/remove
+ * tints and a header with the file and line counts. Parsing is line-local, so
+ * a streaming diff never repaints lines that already arrived.
+ */
+function MarkdownDiffBlock({
+  code,
+  language,
+  fenceTitle,
+  theme,
+}: {
+  code: string;
+  language: string;
+  fenceTitle: string | null;
+  theme: "light" | "dark";
+}) {
+  const diff = useMemo(() => parseMarkdownDiff(code), [code]);
+  const title = diffBlockTitle(fenceTitle, diff.files);
+  const fileCount = diff.files.length > 1 ? `${diff.files.length} files` : null;
+  return (
+    <MarkdownCodeBlock
+      code={code}
+      language={language}
+      fenceTitle={title}
+      theme={theme}
+      headerDetail={
+        <>
+          {fileCount ? <span className="shrink-0">{fileCount}</span> : null}
+          {hasNonZeroStat(diff) ? (
+            <DiffStatLabel
+              additions={diff.additions}
+              deletions={diff.deletions}
+              layout="inline"
+              className="shrink-0"
+            />
+          ) : null}
+        </>
+      }
+    >
+      <pre className="chat-markdown-diff">
+        <code>
+          {diff.lines.map((line, index) => (
+            // Lines never reorder, so the index is a stable key while streaming.
+            // oxlint-disable-next-line react/no-array-index-key
+            <span key={index} className="chat-markdown-diff-line" data-diff-line={line.kind}>
+              {line.text}
+            </span>
+          ))}
+        </code>
+      </pre>
+    </MarkdownCodeBlock>
   );
 }
 
@@ -1852,7 +1920,8 @@ function useChatMarkdownState({
     return buildFileLinkParentSuffixByPath(filePaths);
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
   const markdownUrlTransform = useCallback((href: string) => {
-    if (parseSettingsDeepLink(href)) return href;
+    // Keep in-app links intact so the renderer can show a chip or swallow them.
+    if (isAppDeepLink(href)) return href;
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
   // Re-emit highlighted content as markdown so copying out of the rendered
@@ -2097,6 +2166,85 @@ function useChatMarkdownState({
   };
 }
 
+function isTaskListItem(node: MarkdownHtmlAstNode): boolean {
+  const className = node.properties?.className;
+  return Array.isArray(className) && className.includes("task-list-item");
+}
+
+function findTaskCheckbox(node: MarkdownHtmlAstNode): MarkdownHtmlAstNode | null {
+  for (const child of node.children ?? []) {
+    if (child.type !== "element") continue;
+    if (child.tagName === "input" && child.properties?.type === "checkbox") return child;
+    // Loose lists wrap the checkbox in a paragraph.
+    if (child.tagName === "p") {
+      const nested = findTaskCheckbox(child);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+/** Done and total counts for a checklist's own items, or null below two tasks. */
+export function taskListProgress(
+  node: MarkdownHtmlAstNode | undefined,
+): { readonly done: number; readonly total: number } | null {
+  let done = 0;
+  let total = 0;
+  for (const child of node?.children ?? []) {
+    if (child.type !== "element" || child.tagName !== "li" || !isTaskListItem(child)) continue;
+    const checkbox = findTaskCheckbox(child);
+    if (!checkbox) continue;
+    total += 1;
+    if (checkbox.properties?.checked === true) done += 1;
+  }
+  return total >= 2 ? { done, total } : null;
+}
+
+/** True inside a list, so nested checklists do not repeat the progress summary. */
+const MarkdownListNestingContext = React.createContext(false);
+
+function MarkdownTaskListProgress({ done, total }: { done: number; total: number }) {
+  return (
+    <div className="chat-markdown-task-progress" data-task-progress={`${done}/${total}`}>
+      <span
+        className="chat-markdown-task-progress-track"
+        role="progressbar"
+        aria-label="Checklist progress"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={done}
+      >
+        <span
+          className="chat-markdown-task-progress-fill"
+          style={{ width: `${Math.round((done / total) * 100)}%` }}
+        />
+      </span>
+      <span>
+        {done} of {total} done
+      </span>
+    </div>
+  );
+}
+
+function MarkdownList({
+  node,
+  children,
+}: {
+  node: MarkdownHtmlAstNode | undefined;
+  children: ReactNode;
+}) {
+  const nested = use(MarkdownListNestingContext);
+  const progress = nested ? null : taskListProgress(node);
+  const list = <MarkdownListNestingContext value>{children}</MarkdownListNestingContext>;
+  if (!progress) return list;
+  return (
+    <>
+      <MarkdownTaskListProgress done={progress.done} total={progress.total} />
+      {list}
+    </>
+  );
+}
+
 const ChatMarkdownRendererContext = React.createContext<
   ReturnType<typeof useChatMarkdownState>["componentState"]
 >(null!);
@@ -2125,13 +2273,22 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       </div>
     );
   },
+  ul: function MarkdownUnorderedList({ node, ...props }) {
+    return (
+      <MarkdownList node={node}>
+        <ul {...props} />
+      </MarkdownList>
+    );
+  },
   ol: function MarkdownOrderedList({ node, start, style, ...props }) {
     const itemCount =
       node?.children?.filter((child) => child.type === "element" && child.tagName === "li")
         .length ?? 0;
     const gutterStyle = orderedListGutterStyle(itemCount, start);
     return (
-      <ol {...props} start={start} style={gutterStyle ? { ...style, ...gutterStyle } : style} />
+      <MarkdownList node={node}>
+        <ol {...props} start={start} style={gutterStyle ? { ...style, ...gutterStyle } : style} />
+      </MarkdownList>
     );
   },
   li: function MarkdownListItem({ node, children, ...props }) {
@@ -2199,6 +2356,8 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         </SettingsLinkChip>
       );
     }
+    // A malformed in-app link must never reach the OS or a browser tab.
+    if (isAppDeepLink(normalizedHref)) return <>{children}</>;
     const fileLinkMeta = normalizedHref
       ? (markdownFileLinkMetaByHref.get(normalizedHref) ??
         resolveMarkdownFileLinkMeta(normalizedHref, cwd))
@@ -2376,6 +2535,16 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       return <MarkdownMermaidDiagram code={codeBlock.code} theme={resolvedTheme} />;
     }
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+    if (MARKDOWN_DIFF_LANGUAGES.has(language.toLowerCase())) {
+      return (
+        <MarkdownDiffBlock
+          code={codeBlock.code}
+          language={language}
+          fenceTitle={fenceTitle}
+          theme={resolvedTheme}
+        />
+      );
+    }
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}
@@ -2405,8 +2574,11 @@ function ChatMarkdown({
   parseRawHtml = true,
   ...props
 }: ChatMarkdownProps) {
+  // Streaming frames drop unstable trailing tokens; the result is always a
+  // prefix of the text, so task marker offsets stay valid.
+  const renderedText = props.isStreaming ? stabilizeStreamingMarkdown(text) : text;
   const { componentState, handleCopy, markdownUrlTransform } = useChatMarkdownState({
-    text,
+    text: renderedText,
     ...props,
   });
 
@@ -2431,7 +2603,7 @@ function ChatMarkdown({
           components={CHAT_MARKDOWN_COMPONENTS}
           urlTransform={markdownUrlTransform}
         >
-          {text}
+          {renderedText}
         </ReactMarkdown>
       </ChatMarkdownRendererContext>
     </div>

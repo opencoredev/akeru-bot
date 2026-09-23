@@ -8,6 +8,7 @@ import {
 import { RefreshControl, ScrollView, Text as NativeText, View } from "react-native";
 
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
+import { isAppDeepLink } from "@t3tools/client-runtime/settings-deep-link";
 import { useFontFamily } from "../../lib/useFontFamily";
 import {
   resolveMarkdownFontSizes,
@@ -56,7 +57,7 @@ function useMarkdownPreviewStyles(): MarkdownPreviewStyles {
         <NativeText
           className="font-t3-medium"
           onPress={() => {
-            if (href) {
+            if (href && !isAppDeepLink(href)) {
               void tryOpenExternalUrl(href, "markdown-link");
             }
           }}
@@ -188,6 +189,8 @@ export function FileMarkdownPreview(props: {
   }, [props.onRefresh]);
   const styles = useMarkdownPreviewStyles();
   const onLinkPress = useCallback((href: string) => {
+    // File previews have no chat context, so in-app links are swallowed rather than sent to the OS.
+    if (isAppDeepLink(href)) return;
     void tryOpenExternalUrl(href, "markdown-link");
   }, []);
 

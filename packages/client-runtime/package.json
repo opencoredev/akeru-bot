@@ -28,6 +28,10 @@
       "types": "./src/markdownImages.ts",
       "default": "./src/markdownImages.ts"
     },
+    "./markdown-streaming": {
+      "types": "./src/markdownStreaming.ts",
+      "default": "./src/markdownStreaming.ts"
+    },
     "./errors": {
       "types": "./src/errors/index.ts",
       "default": "./src/errors/index.ts"

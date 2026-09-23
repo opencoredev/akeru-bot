@@ -43,6 +43,31 @@ apart, so it holds the message and asks you to rename one of them. Mentions of p
 
 Groups hold bots only. You cannot add people to a group yet.
 
+## Tables, checklists, and other rich replies
+
+Bot replies render richer Markdown directly in the chat. There is no separate dashboard.
+
+- **Tables** keep their header row and scroll sideways when they are wider than the chat.
+- **Checklists** show each task as done or open. You cannot tick them. A list with two or more
+  tasks also shows a summary such as "2 of 3 done".
+- **Diffs** in a `diff` or `patch` code block appear as a change card. Added and removed lines are
+  tinted, and the card header shows the file name and how many lines changed.
+- **File references** appear as code cards titled with the file path, or as file chips inside a
+  sentence.
+- **Links** open in your browser.
+- **Settings chips** open a section of Settings for the same environment as the chat. Hover a chip
+  to see which section it opens, for example **Open Settings > Voice**. A chip that points
+  somewhere Akeru does not recognize stays plain text and never opens outside the app.
+
+While a reply is still streaming, Akeru waits for a table's header to finish before it shows the
+table, and it waits for a partial code fence, list marker, or heading underline to complete. The
+reply looks the same after it finishes and after you reload the chat.
+
+On mobile, tables, checklists, file references, and links look the same as on desktop. Diffs appear
+as a plain code block without the tinted lines or counts, and checklists do not show the progress
+summary. Settings chips open the matching mobile screen, or the main Settings screen when mobile
+has no matching screen.
+
 ## Link a pull request
 
 Right-click a pull-request link and select **Link to chat**. Select **Unlink from chat** from the same

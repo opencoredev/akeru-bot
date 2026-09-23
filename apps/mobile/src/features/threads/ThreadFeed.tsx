@@ -4,6 +4,7 @@ import { type LegendListRef } from "@legendapp/list/react-native";
 import type { BotId, EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
 import { channelOriginLabel } from "@t3tools/client-runtime/channel-presentation";
 import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
+import { stabilizeStreamingMarkdown } from "@t3tools/client-runtime/markdown-streaming";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
 import { formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
@@ -124,7 +125,8 @@ import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import { useAssetUrl, useAssetUrlState } from "../../state/assets";
 import { resolveWorkspaceRelativeFilePath } from "../files/filePath";
 import { MARKDOWN_IMAGE_MAX_WIDTH, resolveMarkdownImageDisplaySize } from "./markdownImageSize";
-import { resolveMobileSettingsHealthTarget } from "../settings/settingsDeepLink";
+import { isAppDeepLink } from "@t3tools/client-runtime/settings-deep-link";
+import { resolveMobileSettingsDestination } from "../settings/settingsDeepLink";
 
 const WIDE_MARKDOWN_BLOCK_OPTIONS = {
   includeOrderedLists: Platform.OS === "android",
@@ -753,7 +755,8 @@ function useMarkdownStyles(
       highlightCode: boolean,
     ): CustomRenderers => ({
       link: ({ children, href = "" }) => {
-        if (resolveMobileSettingsHealthTarget(href) !== null) {
+        // In-app links, valid or not, always go through onLinkPress so none reach the OS.
+        if (isAppDeepLink(href)) {
           return (
             <NativeText
               className="font-t3-bold underline"
@@ -1193,6 +1196,9 @@ function renderFeedEntry(
     }
 
     const enterAnimated = isFreshTimestamp(message.createdAt);
+    const assistantMarkdown = message.streaming
+      ? stabilizeStreamingMarkdown(message.text)
+      : message.text;
     return (
       <Animated.View
         className={cn(showAssistantMeta ? "mb-5 px-1" : "mb-2 px-1")}
@@ -1202,7 +1208,7 @@ function renderFeedEntry(
         {message.text.trim().length > 0 ? (
           hasNativeSelectableMarkdownText() ? (
             <SelectableMarkdownText
-              markdown={message.text}
+              markdown={assistantMarkdown}
               skills={props.skills}
               textStyle={styles.nativeTextStyle}
               onLinkPress={props.onMarkdownLinkPress}
@@ -1215,7 +1221,7 @@ function renderFeedEntry(
               styles={styles.styles}
               theme={styles.theme}
             >
-              {message.text}
+              {assistantMarkdown}
             </Markdown>
           )
         ) : null}
@@ -1718,22 +1724,29 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const userBubbleColor = useThemeColor("--color-user-bubble");
   const onMarkdownLinkPress = useCallback(
     (href: string) => {
-      const settingsTarget = resolveMobileSettingsHealthTarget(href);
-      if (settingsTarget !== null) {
+      if (isAppDeepLink(href)) {
+        const destination = resolveMobileSettingsDestination(href);
+        if (destination === null) return;
         void Haptics.selectionAsync();
-        navigation.navigate("SettingsSheet", {
-          screen: "SettingsContent",
-          params: {
-            screen: "SettingsProviderHealth",
+        if (destination.kind === "health") {
+          navigation.navigate("SettingsSheet", {
+            screen: "SettingsContent",
             params: {
-              environmentId: props.environmentId,
-              target: settingsTarget,
+              screen: "SettingsProviderHealth",
+              params: {
+                environmentId: props.environmentId,
+                target: destination.target,
+              },
             },
-          },
-        });
+          });
+        } else {
+          navigation.navigate("SettingsSheet", {
+            screen: "SettingsContent",
+            params: { screen: destination.kind === "home" ? "Settings" : destination.screen },
+          });
+        }
         return;
       }
-      if (/^grokbot:/i.test(href.trim())) return;
       const presentation = resolveMarkdownLinkPresentation(href);
       if (presentation.kind === "file") {
         const relativePath = resolveWorkspaceRelativeFilePath(

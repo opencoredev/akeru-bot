@@ -1,9 +1,13 @@
 import type { SettingsSection } from "./settingsDialogStore";
-import { parseSettingsDeepLinkId } from "@t3tools/client-runtime/settings-deep-link";
+import {
+  parseSettingsDeepLinkId,
+  type SettingsDeepLinkId,
+} from "@t3tools/client-runtime/settings-deep-link";
 
+// Keyed by every shared id so a new Settings section cannot ship without a web destination.
 const destinations: Readonly<
   Record<
-    string,
+    SettingsDeepLinkId,
     { readonly section: SettingsSection; readonly label: string; readonly targetId?: string }
   >
 > = {
@@ -14,13 +18,17 @@ const destinations: Readonly<
     targetId: "local-execution",
   },
   appearance: { section: "appearance", label: "Appearance" },
-  providers: { section: "providers", label: "Providers" },
-  browser: { section: "browser", label: "Browser" },
-  "bot-inbox": { section: "inbox", label: "Errors" },
-  voice: { section: "voice", label: "Voice" },
-  connections: { section: "connections", label: "Connections" },
   keybindings: { section: "keybindings", label: "Keybindings" },
+  providers: { section: "providers", label: "Providers" },
+  channels: { section: "channels", label: "Bot channels" },
+  voice: { section: "voice", label: "Voice" },
+  browser: { section: "browser", label: "Browser" },
+  plugins: { section: "plugins", label: "Plugins" },
+  sandbox: { section: "sandbox", label: "Sandbox" },
+  privacy: { section: "privacy", label: "Privacy" },
+  connections: { section: "connections", label: "Connections" },
   "source-control": { section: "source-control", label: "Source control" },
+  "bot-inbox": { section: "inbox", label: "Errors" },
   diagnostics: { section: "diagnostics", label: "Diagnostics" },
 };
 
@@ -36,7 +44,6 @@ export function parseSettingsDeepLink(
   const id = parseSettingsDeepLinkId(href);
   if (id === null) return null;
   const destination = destinations[id];
-  if (!destination) return null;
   return {
     section: destination.section,
     targetId: destination.targetId ?? null,
