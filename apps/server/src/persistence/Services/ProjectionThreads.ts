@@ -7,6 +7,7 @@
  * @module ProjectionThreadRepository
  */
 import {
+  DelegationId,
   BotId,
   CommandId,
   GroupId,
@@ -33,6 +34,8 @@ export const ProjectionThread = Schema.Struct({
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationId)),
   title: Schema.String,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,

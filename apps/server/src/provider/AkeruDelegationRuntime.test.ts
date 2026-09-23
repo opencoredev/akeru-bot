@@ -380,7 +380,12 @@ describe("AkeruDelegationRuntime", () => {
       ThreadId.make("child"),
     );
     const create = test.commands.find((command) => command.type === "thread.create");
-    expect(create).toMatchObject({ title: "Bot work for bot-child", worktreePath: null });
+    expect(create).toMatchObject({
+      title: "Bot work for bot-child",
+      worktreePath: null,
+      parentThreadId: PARENT_THREAD_ID,
+      parentDelegationId: expect.any(String),
+    });
     expect(create && "threadId" in create ? create.threadId : null).not.toBe(PARENT_THREAD_ID);
     const start = test.commands.find((command) => command.type === "thread.turn.start");
     expect(start && "message" in start ? start.message.text : null).toBe(

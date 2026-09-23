@@ -378,6 +378,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       child: childAccess(bot, parent.access.enabledMcpServerIds),
       requested: request,
     });
+    const delegationId = DelegationId.make(`delegation-${id()}`);
     const childThreadId = ThreadId.make(`delegation-thread-${id()}`);
     const createdAt = now();
     await dispatch({
@@ -387,6 +388,8 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       projectId: parentThread.projectId,
       botId: group ? null : bot.id,
       groupId: group?.id ?? null,
+      parentThreadId: parent.threadId,
+      parentDelegationId: delegationId,
       title: `Bot work for ${bot.name}`,
       modelSelection:
         bot.engine === null
@@ -403,7 +406,6 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       createdAt,
     });
 
-    const delegationId = DelegationId.make(`delegation-${id()}`);
     let delegation: AkeruDelegationRecord = {
       delegationId,
       parentDelegationId: parent.parentDelegationId,

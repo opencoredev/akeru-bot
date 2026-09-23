@@ -116,7 +116,10 @@ export function createEnvironmentThreadShellAtoms(input: {
       const next = get(environmentThreadsAtom(environmentId)).map((thread) => ({
         environmentId,
         threadId: thread.id,
-      }));
+      })).filter((ref) => {
+        const thread = get(environmentThreadIndexAtom(environmentId)).get(ref.threadId);
+        return thread?.parentThreadId == null;
+      });
       if (threadRefsEqual(previous, next)) {
         return previous;
       }
@@ -133,6 +136,9 @@ export function createEnvironmentThreadShellAtoms(input: {
     return Atom.make((get) => {
       const grouped = new Map<ProjectId, ScopedThreadRef[]>();
       for (const thread of get(environmentThreadsAtom(environmentId))) {
+        if (thread.parentThreadId != null) {
+          continue;
+        }
         const refs = grouped.get(thread.projectId);
         const ref = { environmentId, threadId: thread.id };
         if (refs === undefined) {

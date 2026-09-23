@@ -28,7 +28,7 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
-import { AkeruDelegationRecord, DelegationId } from "./akeruDelegation.ts";
+import { AkeruDelegationRecord } from "./akeruDelegation.ts";
 import { ImageProviderId } from "./imageGeneration.ts";
 import {
   ClientRoutineCommand,
@@ -53,6 +53,10 @@ import {
   RoutineSkillUnassignedPayload,
   SkillAssignmentId,
 } from "./routines.ts";
+
+// Keep this schema local to avoid evaluating the delegation module's
+// orchestration import while defining the orchestration contracts.
+const DelegationIdSchema = TrimmedNonEmptyString.pipe(Schema.brand("DelegationId"));
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -766,6 +770,10 @@ export const OrchestrationThread = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  // Child work threads retain their owning chat and delegation without
+  // changing the bot's continuous conversation. Optional for old snapshots.
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
@@ -854,6 +862,8 @@ export const OrchestrationThreadShell = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
@@ -1524,6 +1534,8 @@ const ThreadCreateCommand = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -1807,7 +1819,7 @@ const ThreadSessionStopCommand = Schema.Struct({
 export const DelegationCancelCommand = Schema.Struct({
   type: Schema.Literal("delegation.cancel"),
   commandId: CommandId,
-  delegationId: Schema.suspend(() => DelegationId),
+  delegationId: Schema.suspend(() => DelegationIdSchema),
   keep: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   createdAt: IsoDateTime,
 });
@@ -2309,6 +2321,8 @@ export const ThreadCreatedPayload = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
@@ -2569,7 +2583,7 @@ const EventBaseFields = {
     BotId,
     GroupId,
     McpServerId,
-    Schema.suspend(() => DelegationId),
+    Schema.suspend(() => DelegationIdSchema),
     RoutineId,
     RoutineRunId,
     SkillAssignmentId,

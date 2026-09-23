@@ -234,12 +234,18 @@ export function resolveLatestRosterMessage(
     role: "user" | "assistant" | "system";
     text: string;
     createdAt: string;
+    parentThreadId?: string | null | undefined;
   }>,
 ): RosterLastMessage | null {
   let latest: RosterLastMessage | null = null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message && message.role !== "system" && message.text.trim().length > 0) {
+    if (
+      message &&
+      message.parentThreadId == null &&
+      message.role !== "system" &&
+      message.text.trim().length > 0
+    ) {
       latest = { text: message.text, at: message.createdAt };
       break;
     }

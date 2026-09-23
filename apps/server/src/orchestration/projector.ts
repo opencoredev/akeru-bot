@@ -778,6 +778,8 @@ export function projectEvent(
             projectId: payload.projectId,
             botId: payload.botId ?? null,
             groupId: payload.groupId ?? null,
+            parentThreadId: payload.parentThreadId ?? null,
+            parentDelegationId: payload.parentDelegationId ?? null,
             respondingBotId: null,
             title: payload.title,
             modelSelection: payload.modelSelection,

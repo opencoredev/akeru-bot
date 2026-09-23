@@ -129,6 +129,7 @@ export function findLatestBotThreadTarget(
     environmentId: string;
     id: string;
     botId?: string | null | undefined;
+    parentThreadId?: string | null | undefined;
     updatedAt: string;
     archivedAt: string | null;
     deletedAt?: string | null | undefined;
@@ -140,6 +141,7 @@ export function findLatestBotThreadTarget(
       thread.environmentId !== environmentId ||
       thread.botId !== botId ||
       thread.archivedAt !== null ||
+      thread.parentThreadId != null ||
       thread.deletedAt != null
     ) {
       continue;
@@ -175,6 +177,7 @@ export function findLatestGroupThreadTarget(
     environmentId: string;
     id: string;
     groupId?: string | null | undefined;
+    parentThreadId?: string | null | undefined;
     updatedAt: string;
     archivedAt: string | null;
     deletedAt?: string | null | undefined;
@@ -186,6 +189,7 @@ export function findLatestGroupThreadTarget(
       thread.environmentId !== environmentId ||
       thread.groupId !== groupId ||
       thread.archivedAt !== null ||
+      thread.parentThreadId != null ||
       thread.deletedAt != null
     ) {
       continue;

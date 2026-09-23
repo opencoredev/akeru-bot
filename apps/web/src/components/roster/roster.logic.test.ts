@@ -511,6 +511,17 @@ describe("resolveLatestRosterMessage", () => {
       ),
     ).toEqual(fallback);
   });
+
+  it("ignores messages from parent-linked child threads", () => {
+    expect(
+      resolveLatestRosterMessage(
+        { text: "Own conversation", at: "2026-08-20T10:00:00.000Z" },
+        messages([{ role: "assistant", text: "Delegated task", at: "2026-08-20T10:05:00.000Z" }]).map(
+          (message) => ({ ...message, parentThreadId: "parent-thread" }),
+        ),
+      ),
+    ).toEqual({ text: "Own conversation", at: "2026-08-20T10:00:00.000Z" });
+  });
 });
 
 describe("resolveBlobRendering", () => {

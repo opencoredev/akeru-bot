@@ -789,6 +789,23 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
   }),
 );
 
+it.effect("decodes historical thread.created payloads without parent links", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadCreatedPayload({
+      threadId: "thread-legacy",
+      projectId: "project-1",
+      title: "Legacy thread",
+      modelSelection: { provider: "codex", model: "gpt-5.4" },
+      branch: null,
+      worktreePath: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.parentThreadId, undefined);
+    assert.strictEqual(parsed.parentDelegationId, undefined);
+  }),
+);
+
 it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadMetaUpdatedPayload({

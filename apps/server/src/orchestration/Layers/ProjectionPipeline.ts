@@ -1005,6 +1005,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             projectId: event.payload.projectId,
             botId: event.payload.botId ?? null,
             groupId: event.payload.groupId ?? null,
+            parentThreadId: event.payload.parentThreadId ?? null,
+            parentDelegationId: event.payload.parentDelegationId ?? null,
             respondingBotId: null,
             title: event.payload.title,
             modelSelection: event.payload.modelSelection,

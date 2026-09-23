@@ -1990,6 +1990,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           projectId: command.projectId,
           botId: command.botId ?? null,
           groupId: command.groupId ?? null,
+          parentThreadId: command.parentThreadId ?? null,
+          parentDelegationId: command.parentDelegationId ?? null,
           title: command.title,
           modelSelection: command.modelSelection,
           runtimeMode: command.runtimeMode,

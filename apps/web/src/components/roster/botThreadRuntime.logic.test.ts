@@ -261,6 +261,15 @@ describe("bot thread runtime", () => {
           deletedAt: null,
         },
         {
+          environmentId: "env-a",
+          id: "delegated-child",
+          botId: "bot-akeru",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          archivedAt: null,
+          deletedAt: null,
+        },
+        {
           environmentId: "env-b",
           id: "thread-new",
           botId: "bot-akeru",
@@ -270,6 +279,21 @@ describe("bot thread runtime", () => {
         },
       ]),
     ).toEqual({ environmentId: "env-a", threadId: "thread-old" });
+  });
+
+  it("does not target a parent-linked child thread", () => {
+    expect(
+      findLatestBotThreadTarget("bot-akeru", "env-a", [
+        {
+          environmentId: "env-a",
+          id: "delegated-child",
+          botId: "bot-akeru",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          archivedAt: null,
+        },
+      ]),
+    ).toBeNull();
   });
 
   it("restores the latest durable thread owned by a group", () => {
@@ -289,7 +313,30 @@ describe("bot thread runtime", () => {
           updatedAt: "2026-08-27T00:00:00.000Z",
           archivedAt: null,
         },
+        {
+          environmentId: "env-a",
+          id: "delegated-child",
+          groupId: "group-product",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-28T00:00:00.000Z",
+          archivedAt: null,
+        },
       ]),
     ).toEqual({ environmentId: "env-a", threadId: "thread-new" });
+  });
+
+  it("does not target a parent-linked group child thread", () => {
+    expect(
+      findLatestGroupThreadTarget("group-product", "env-a", [
+        {
+          environmentId: "env-a",
+          id: "delegated-child",
+          groupId: "group-product",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-28T00:00:00.000Z",
+          archivedAt: null,
+        },
+      ]),
+    ).toBeNull();
   });
 });
