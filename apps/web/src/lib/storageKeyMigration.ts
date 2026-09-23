@@ -41,16 +41,19 @@ export function createMigratingStorage(
 /** Read-through migration for single-value keys: returns the new value, or
  * the legacy value copied forward when only the old key exists. */
 export function readMigratedLocalStorage(key: string, legacyKey: string): string | null {
-  if (typeof window === "undefined") return null;
+  // `window` can exist without `localStorage` (node-style test environments,
+  // disabled storage), and restricted storage can throw on read. Both read as
+  // empty so module-load callers keep working.
   let storage: Storage;
   let legacy: string | null;
   try {
-    storage = window.localStorage;
+    const available = typeof window === "undefined" ? undefined : window.localStorage;
+    if (available === undefined || available === null) return null;
+    storage = available;
     const value = storage.getItem(key);
     if (value !== null) return value;
     legacy = storage.getItem(legacyKey);
   } catch {
-    // Restricted storage reads as empty so module-load callers keep working.
     return null;
   }
   if (legacy === null) return null;
