@@ -262,7 +262,41 @@ function completeLegacyTurnWithMemoryReview(
   });
 }
 
+const instanceModelCatalog = new Map<
+  string,
+  { readonly models: ReadonlyArray<string>; readonly status?: "ready" | "warning" | "error" }
+>();
+
+function makeInstanceSnapshot(
+  instanceId: ProviderInstanceId,
+  driverKind: ProviderDriverKind,
+  entry: {
+    readonly models: ReadonlyArray<string>;
+    readonly status?: "ready" | "warning" | "error";
+  },
+) {
+  return {
+    instanceId,
+    driver: driverKind,
+    enabled: true,
+    installed: true,
+    version: null,
+    status: entry.status ?? ("ready" as const),
+    auth: { status: "authenticated" as const },
+    checkedAt: "2026-01-01T00:00:00.000Z",
+    models: entry.models.map((slug) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      capabilities: null,
+    })),
+    slashCommands: [],
+    skills: [],
+  };
+}
+
 function makeBridge() {
+  instanceModelCatalog.clear();
   let instanceEnabled = true;
   let disableBeforeNextDispatchAdmission = false;
   let nextDispatchAdmissionWait: Promise<void> | undefined;
@@ -309,6 +343,7 @@ function makeBridge() {
         const driverKind = ProviderDriverKind.make(
           instanceId === kimiInstanceId ? "kimi" : String(instanceId),
         );
+        const advertisedModels = instanceModelCatalog.get(String(instanceId));
         return {
           instanceId,
           driverKind,
@@ -318,6 +353,11 @@ function makeBridge() {
             driverKind,
             continuationKey: `${driverKind}:instance:${instanceId}`,
           },
+          ...(advertisedModels !== undefined
+            ? {
+                instanceSnapshot: makeInstanceSnapshot(instanceId, driverKind, advertisedModels),
+              }
+            : {}),
         };
       }),
     dispatchIfEnabled: (instanceId, operation, dispatch) => {
@@ -5647,6 +5687,58 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
+  it.effect("re-acquires the user-computer workspace when cwd changes locally", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const makeBotBrowser = vi.fn(() => ({
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    }));
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeBotBrowser: makeBotBrowser as never,
+    }).pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "akeru-mastra-cwd-change-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      const firstCwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-cwd-a-"));
+      const secondCwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-cwd-b-"));
+      try {
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+        };
+        yield* controller.startSession(codexThreadId, { ...input, cwd: firstCwd });
+        yield* controller.startSession(codexThreadId, { ...input, cwd: secondCwd });
+
+        const [session] = yield* controller.listSessions();
+        assert.equal(session?.cwd, secondCwd);
+        // A new Mastra session means the old one and its user-computer
+        // workspace lease were torn down instead of reused.
+        expect(mastra.createSession).toHaveBeenCalledTimes(2);
+      } finally {
+        NodeFS.rmSync(firstCwd, { recursive: true, force: true });
+        NodeFS.rmSync(secondCwd, { recursive: true, force: true });
+      }
+    }).pipe(Effect.provide(layer), Effect.orDie);
+  });
+
   it.effect("runs Claude through the Akeru Mastra harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -6416,6 +6508,197 @@ describe("AgentControllerLive", () => {
       bridge.service,
       mastra.factory,
     );
+  });
+
+  describe("in-session model switch between turns", () => {
+    const switchCases = [
+      {
+        provider: "codex",
+        threadId: codexThreadId,
+        instanceId: codexInstanceId,
+        from: "gpt-5.6-sol",
+        to: "gpt-5.6-astra",
+        wirePrefix: "openai",
+      },
+      {
+        provider: "claudeAgent",
+        threadId: claudeThreadId,
+        instanceId: claudeInstanceId,
+        from: "claude-fable-5",
+        to: "claude-opus-4-6",
+        wirePrefix: "anthropic",
+      },
+      {
+        provider: "grok",
+        threadId: grokThreadId,
+        instanceId: grokInstanceId,
+        from: "grok-code-fast-1",
+        to: "grok-4.20-beta",
+        wirePrefix: "xai",
+      },
+      {
+        provider: "opencodeGo",
+        threadId: openCodeGoThreadId,
+        instanceId: openCodeGoInstanceId,
+        from: "gpt-5.6-sol",
+        to: "gpt-5.6-luna",
+        wirePrefix: "opencode-go",
+      },
+    ] as const;
+
+    for (const testCase of switchCases) {
+      it.effect(
+        `switches the saved ${testCase.provider} model in-session between turns via resolveEngine`,
+        () => {
+          const bridge = makeBridge();
+          const mastra = makeMastraHarness();
+          const model = (model: string) => ({
+            instanceId: testCase.instanceId,
+            model,
+          });
+          return provideController(
+            Effect.gen(function* () {
+              const controller = yield* AgentController;
+              const resolve = (model: string) =>
+                controller.resolveEngine({
+                  threadId: testCase.threadId,
+                  engine: { provider: String(testCase.instanceId), model },
+                  fallback: codexSelection,
+                  mode: "default",
+                  botConversation: true,
+                });
+              yield* resolve(testCase.from);
+              yield* controller.startSession(testCase.threadId, {
+                threadId: testCase.threadId,
+                provider: ProviderDriverKind.make(testCase.provider),
+                providerInstanceId: testCase.instanceId,
+                cwd: process.cwd(),
+                modelSelection: model(testCase.from),
+                runtimeMode: "approval-required",
+              });
+              yield* controller.sendTurn({
+                threadId: testCase.threadId,
+                input: "First turn.",
+              });
+              yield* Effect.yieldNow;
+              mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+              mastra.finishSend();
+              yield* Effect.yieldNow;
+              expect(mastra.session.model.switch).toHaveBeenCalledWith({
+                modelId: `${testCase.wirePrefix}/${testCase.from}`,
+              });
+
+              yield* resolve(testCase.to);
+              expect(mastra.session.model.switch).toHaveBeenCalledWith({
+                modelId: `${testCase.wirePrefix}/${testCase.to}`,
+              });
+              expect(mastra.createSession).toHaveBeenCalledOnce();
+
+              const completed = yield* controller.streamEvents.pipe(
+                Stream.filter((event) => event.type === "turn.completed"),
+                Stream.runHead,
+                Effect.forkChild({ startImmediately: true }),
+              );
+              yield* controller.sendTurn({
+                threadId: testCase.threadId,
+                input: "Second turn.",
+                modelSelection: model(testCase.to),
+              });
+              yield* Effect.yieldNow;
+              mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+              mastra.finishSend();
+              assert.equal((yield* Fiber.join(completed))._tag, "Some");
+
+              const [session] = yield* controller.listSessions();
+              assert.equal(session?.model, testCase.to);
+              expect(mastra.sendMessage).toHaveBeenNthCalledWith(2, {
+                content: "Second turn.",
+              });
+              expect(bridge.sendTurn).not.toHaveBeenCalled();
+            }),
+            bridge.service,
+            mastra.factory,
+          );
+        },
+      );
+    }
+
+    it.effect("fails closed when the saved model is not in the instance snapshot", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      instanceModelCatalog.set(String(codexInstanceId), { models: ["gpt-5.6-sol"] });
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const failure = yield* Effect.flip(
+            controller.resolveEngine({
+              threadId: codexThreadId,
+              engine: { provider: "codex", model: "not-a-model" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            }),
+          );
+          assert.equal(failure._tag, "AgentControllerUnsupportedEngineError");
+          if (failure._tag === "AgentControllerUnsupportedEngineError") {
+            assert.include(failure.detail, "Model 'not-a-model' is not available for codex.");
+          }
+          expect(mastra.createSession).not.toHaveBeenCalled();
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
+    it.effect("allows a saved model advertised through the instance snapshot", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      instanceModelCatalog.set(String(codexInstanceId), {
+        models: ["gpt-5.6-sol", "custom-codex"],
+      });
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const resolved = yield* controller.resolveEngine({
+            threadId: codexThreadId,
+            engine: { provider: "codex", model: "custom-codex" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          assert.equal(resolved.modelSelection.model, "custom-codex");
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
+    it.effect("does not fail closed on a pending snapshot's model list", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      // A pending probe still advertises the built-in catalog. The saved model
+      // may be real but only show up once the probe finishes, so the check
+      // must not reject it.
+      instanceModelCatalog.set(String(codexInstanceId), {
+        models: ["gpt-5.6-sol"],
+        status: "warning",
+      });
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const resolved = yield* controller.resolveEngine({
+            threadId: codexThreadId,
+            engine: { provider: "codex", model: "cli-only-model" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          assert.equal(resolved.modelSelection.model, "cli-only-model");
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
   });
 
   describe("Kimi Mastra normalization", () => {

@@ -447,6 +447,26 @@ export function runtimeEventToActivities(
       ];
     }
 
+    case "model.rerouted": {
+      const { fromModel, toModel, reason } = event.payload;
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "model.rerouted",
+          summary: truncateDetail(`Model rerouted from ${fromModel} to ${toModel}`, 120),
+          payload: {
+            fromModel,
+            toModel,
+            reason: truncateDetail(reason),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
     case "runtime.error": {
       return [
         {

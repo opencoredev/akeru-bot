@@ -152,7 +152,11 @@ import {
   isCodexComputerUseTool,
   resolveCodexComputerUseServer,
 } from "../CodexComputerUse.ts";
-import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
+import {
+  isRemoteBotSandbox,
+  type AkeruBotWorkspace,
+  type CreateRemoteBotWorkspaceInput,
+} from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
   botWorkspaceCredentialFingerprint,
@@ -251,7 +255,7 @@ interface ActiveSession {
   readonly session: MastraSession;
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
-  readonly cwd: string | undefined;
+  cwd: string | undefined;
   readonly createdAt: string;
   readonly mcpServerIds: readonly McpServer["id"][];
   readonly mcpServers: readonly McpServer[];
@@ -2395,6 +2399,29 @@ const make = (options?: AgentControllerLiveOptions) =>
           modelSelection.instanceId,
         );
       }
+      // Fail closed on a model the instance's snapshot does not advertise.
+      // The bot engine is applied after ws-level preflight ran against the
+      // command's own selection, so this check is the only validation a
+      // bot-owned thread ever sees. An empty snapshot is not evidence the
+      // model is unknown — the first probe may still be running.
+      // Only a settled probe is authoritative: pending snapshots still carry
+      // the built-in catalog, and probe fallbacks do too, so neither proves the
+      // saved model is gone.
+      if (
+        usesMastraCode(routing.driverKind) &&
+        routing.instanceSnapshot !== undefined &&
+        routing.instanceSnapshot.status === "ready"
+      ) {
+        const advertised = routing.instanceSnapshot.models;
+        if (advertised.length > 0 && !advertised.some((entry) => entry.slug === model)) {
+          const name = routing.instanceSnapshot.displayName ?? routing.driverKind;
+          return yield* new AgentControllerUnsupportedEngineError({
+            provider,
+            model,
+            detail: `Model '${model}' is not available for ${name}.`,
+          });
+        }
+      }
       if (routing.mastraConnection) {
         modelConnections.set(String(modelSelection.instanceId), routing.mastraConnection);
       } else {
@@ -2653,9 +2680,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
       }
+      // A cwd change invalidates reuse for local workspaces: the user-computer
+      // workspace lease is keyed by cwd and the session tools would keep
+      // acting on the old directory. Remote sandboxes have no user-computer
+      // workspace, so cwd only feeds projectPath there and can update in place.
       if (
         existing?.workspaceResourceKey === workspaceResourceKey &&
-        existing.cwd === input.cwd &&
+        (existing.cwd === input.cwd || isRemoteBotSandbox(access.sandbox)) &&
         existing.toolSession.workspaceType === workspaceType &&
         sameMcpServerConfigurations(existing.mcpServers, mcpServers) &&
         resolved &&
@@ -2663,6 +2694,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.providerInstanceId === resolved.providerInstanceId
       ) {
         existing.runtimeMode = access.runtimeMode;
+        existing.cwd = input.cwd;
         yield* runMastra("state.set", () =>
           existing.session.state.set({
             ...(input.cwd ? { projectPath: input.cwd } : {}),

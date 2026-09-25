@@ -28,6 +28,7 @@ import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.t
 import {
   ProviderAdapterRegistry,
   type ProviderAdapterRegistryShape,
+  type ProviderInstanceRoutingInfo,
 } from "../Services/ProviderAdapterRegistry.ts";
 
 const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(function* () {
@@ -55,15 +56,43 @@ const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(fun
                 provider: instanceId,
               }),
             )
-          : Effect.succeed({
-              instanceId: instance.instanceId,
-              driverKind: instance.driverKind,
-              displayName: instance.displayName,
-              accentColor: instance.accentColor,
-              enabled: instance.enabled,
-              continuationIdentity: instance.continuationIdentity,
-              ...(instance.mastraConnection ? { mastraConnection: instance.mastraConnection } : {}),
-            }),
+          : instance.snapshot.getSnapshot.pipe(
+              Effect.map(
+                (snapshot): ProviderInstanceRoutingInfo => ({
+                  instanceId: instance.instanceId,
+                  driverKind: instance.driverKind,
+                  displayName: instance.displayName,
+                  accentColor: instance.accentColor,
+                  enabled: instance.enabled,
+                  continuationIdentity: instance.continuationIdentity,
+                  instanceSnapshot: snapshot,
+                  ...(instance.mastraConnection
+                    ? { mastraConnection: instance.mastraConnection }
+                    : {}),
+                }),
+              ),
+              // A snapshot read that fails must not block routing entirely;
+              // advertise the instance without a snapshot so callers treat the
+              // catalog as unknown rather than fabricating a failure.
+              Effect.catchCause((cause) =>
+                Effect.logWarning("provider instance snapshot unavailable during routing", {
+                  instanceId,
+                  cause,
+                }).pipe(
+                  Effect.as({
+                    instanceId: instance.instanceId,
+                    driverKind: instance.driverKind,
+                    displayName: instance.displayName,
+                    accentColor: instance.accentColor,
+                    enabled: instance.enabled,
+                    continuationIdentity: instance.continuationIdentity,
+                    ...(instance.mastraConnection
+                      ? { mastraConnection: instance.mastraConnection }
+                      : {}),
+                  } satisfies ProviderInstanceRoutingInfo),
+                ),
+              ),
+            ),
       ),
     );
 

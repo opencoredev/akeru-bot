@@ -72,6 +72,13 @@ export const preflightProvider = (input: {
       }
     | undefined;
   readonly now: number;
+  /**
+   * When true, the unsupported-model verdict only fires once the provider's
+   * snapshot reports `status === "ready"`. Pending and fallback snapshots
+   * still carry the built-in catalog, so a model missing from them is not
+   * proof the model is gone.
+   */
+  readonly requireSettledCatalog?: boolean;
 }): ProviderPreflightVerdict | undefined => {
   const provider = input.providers.find((candidate) => candidate.instanceId === input.providerId);
   if (!provider) {
@@ -160,7 +167,12 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
-  if (provider.models.length > 0 && !provider.models.some((model) => model.slug === input.model)) {
+  const catalogSettled = !input.requireSettledCatalog || provider.status === "ready";
+  if (
+    catalogSettled &&
+    provider.models.length > 0 &&
+    !provider.models.some((model) => model.slug === input.model)
+  ) {
     return {
       category: "unsupported-model",
       detail: `Model '${input.model}' is not available for ${name}.`,

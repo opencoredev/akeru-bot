@@ -1023,6 +1023,37 @@ routing.layer("ProviderServiceLive routing", (it) => {
     }),
   );
 
+  it.effect("rejects a sendTurn whose modelSelection targets a different instance", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+
+      const session = yield* provider.startSession(asThreadId("thread-1"), {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: asThreadId("thread-1"),
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      routing.codex.sendTurn.mockClear();
+      const failure = yield* Effect.flip(
+        provider.sendTurn({
+          threadId: session.threadId,
+          input: "wrong instance",
+          attachments: [],
+          modelSelection: createModelSelection(claudeAgentInstanceId, "claude-opus-4-6"),
+        }),
+      );
+
+      assert.instanceOf(failure, ProviderValidationError);
+      assert.include(
+        failure.issue,
+        "Model selection targets provider instance 'claudeAgent' but thread 'thread-1' is bound to 'codex'.",
+      );
+      assert.equal(routing.codex.sendTurn.mock.calls.length, 0);
+    }),
+  );
+
   it.effect("routes feedback to the Codex adapter and returns its feedback ID", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
