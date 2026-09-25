@@ -7,6 +7,7 @@
 - [Bot channels](./user/channels.md)
 - [Image generation](./user/image-generation.md)
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
+- [Provider access and limits](./user/provider-access.md)
 - [Permission modes](./user/permission-modes.md)
 - [Configure sandboxes](./user/sandboxes.md)
 - [Watch and control a bot's computer](./user/computer.md)

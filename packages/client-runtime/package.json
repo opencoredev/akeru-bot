@@ -72,6 +72,10 @@
       "types": "./src/providerAuth.ts",
       "default": "./src/providerAuth.ts"
     },
+    "./provider-access": {
+      "types": "./src/providerAccessGuide.ts",
+      "default": "./src/providerAccessGuide.ts"
+    },
     "./providerSkills": {
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"

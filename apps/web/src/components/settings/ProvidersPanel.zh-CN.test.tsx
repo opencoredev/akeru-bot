@@ -27,7 +27,11 @@ vi.mock("../../state/query", () => ({
   }),
 }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => () => undefined }));
-vi.mock("../../state/server", () => ({ serverEnvironment: { subscriptionAuth: () => ({}) } }));
+vi.mock("../../state/server", async () => {
+  const { Atom } = await import("effect/unstable/reactivity");
+  const noConfig = Atom.make(null);
+  return { serverEnvironment: { subscriptionAuth: () => ({}), configValueAtom: () => noConfig } };
+});
 
 import {
   ProviderApiKeyForm,
@@ -58,6 +62,7 @@ describe("providers settings in Simplified Chinese", () => {
       "未连接",
       "通过 Codex 模型使用你的 ChatGPT 订阅。",
       "Pro 或 Max",
+      "访问详情",
     ]) {
       expect(html).toContain(label);
     }
@@ -68,6 +73,9 @@ describe("providers settings in Simplified Chinese", () => {
       ">API key<",
       "Credentials stay on this environment",
       "Use your ChatGPT subscription",
+      "Access details",
+      "Unlocks with",
+      "does not include OpenAI API access",
     ]) {
       expect(html).not.toContain(label);
     }

@@ -21,8 +21,10 @@ import {
   providerUsesApiKey,
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
+import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
 
+import { useAtomValue } from "@effect/atom-react";
 import { useI18n } from "../../i18n";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { serverEnvironment } from "../../state/server";
@@ -31,6 +33,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { ProviderAccessDetails } from "./ProviderAccessDetails";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { SignInCodeCopy } from "./SignInCodeCopy";
 import {
@@ -108,9 +111,12 @@ export function ProviderLoginCard({
   onDisconnect,
   onTest,
   onApiKey,
+  models,
 }: {
   readonly definition: SubscriptionProviderDefinition;
   readonly status: SubscriptionProviderStatus | undefined;
+  /** Live model names from this environment, listed in the access details. */
+  readonly models?: ReadonlyArray<string> | undefined;
   readonly busy: boolean;
   readonly disabled?: boolean;
   readonly onConnect: () => void;
@@ -195,7 +201,9 @@ export function ProviderLoginCard({
           )}
         </div>
       }
-    />
+    >
+      <ProviderAccessDetails provider={definition.id} status={status} models={models} />
+    </SettingsRow>
   );
 }
 
@@ -365,6 +373,7 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
   const startAuth = useAtomCommand(serverEnvironment.startSubscriptionAuth, {
     reportFailure: false,
   });
@@ -645,6 +654,7 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
             key={definition.id}
             definition={definition}
             status={statusByProvider.get(definition.id)}
+            models={providerAccessModelNames(serverProviders, definition.id)}
             busy={busyProvider === definition.id}
             disabled={busyProvider !== null || statusQuery.isPending}
             onApiKey={() => openApiKey(definition)}

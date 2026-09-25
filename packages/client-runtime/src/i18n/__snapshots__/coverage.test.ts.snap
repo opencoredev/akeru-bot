@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1416,
+  "directMessageCount": 1436,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -169,6 +169,15 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "label)\`.",
       "MEMORY_APPROVAL_HEADINGS[scope]);",
     ],
+    "packages/client-runtime/src/providerAccessGuide.ts": [
+      "copy.connect);",
+      "STATE_LABELS[state]),",
+      "copy.unlockedBy),",
+      "copy.alternative) : null,",
+      "copy.models)",
+      "copy.apiAccess),",
+      "copy.limits),",
+    ],
     "packages/client-runtime/src/providerAvailability.ts": [
       "known, { ...params, provider }) : t(unknown, params);",
       "unknown, params);",
@@ -325,6 +334,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/settings/ImageGenerationSummaryView.tsx",
     "apps/mobile/src/features/settings/LanguageSettingsSection.tsx",
     "apps/mobile/src/features/settings/MobilePolicyNotice.tsx",
+    "apps/mobile/src/features/settings/ProviderAccessSummary.tsx",
     "apps/mobile/src/features/settings/ProviderConnections.tsx",
     "apps/mobile/src/features/settings/SettingsAppearanceRouteScreen.tsx",
     "apps/mobile/src/features/settings/SettingsClientStorageRouteScreen.tsx",
@@ -456,6 +466,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/LanguageSetting.tsx",
     "apps/web/src/components/settings/PortabilitySettings.tsx",
     "apps/web/src/components/settings/PrivacySettings.tsx",
+    "apps/web/src/components/settings/ProviderAccessDetails.tsx",
     "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
     "apps/web/src/components/settings/ProvidersPanel.tsx",
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx",
@@ -481,6 +492,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "packages/client-runtime/src/durableMemory.ts",
     "packages/client-runtime/src/errors/threadErrorPresentation.ts",
     "packages/client-runtime/src/imageGeneration.ts",
+    "packages/client-runtime/src/providerAccessGuide.ts",
     "packages/client-runtime/src/providerAvailability.ts",
   ],
 }

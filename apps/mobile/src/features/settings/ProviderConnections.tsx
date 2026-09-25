@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { useMobileI18n } from "../../lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, TextInput, View } from "react-native";
@@ -17,12 +18,14 @@ import {
   providerUsesApiKey,
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
+import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 
 import { AppText as Text } from "../../components/AppText";
+import { ProviderAccessSummary } from "./ProviderAccessSummary";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -67,6 +70,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const query = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
   const start = useAtomCommand(serverEnvironment.startSubscriptionAuth, { reportFailure: false });
   const complete = useAtomCommand(serverEnvironment.completeSubscriptionAuth, {
     reportFailure: false,
@@ -382,9 +386,11 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                       {status.baseUrl}
                     </Text>
                   ) : null}
-                  {status?.lastFailedRequest ? (
-                    <Text className="text-sm text-danger">{status.lastFailedRequest.message}</Text>
-                  ) : null}
+                  <ProviderAccessSummary
+                    provider={provider.id}
+                    status={status}
+                    models={providerAccessModelNames(serverProviders, provider.id)}
+                  />
                   <View className="flex-row flex-wrap gap-2">
                     <Action
                       label={

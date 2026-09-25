@@ -67,7 +67,8 @@ export function providerConnectionLabel(status: SubscriptionProviderStatus): Mes
   return providerUsesApiKey(status) ? "API key saved" : "OAuth connected";
 }
 
-const SUBSCRIPTION_PROVIDER_BY_DRIVER: Readonly<Record<string, SubscriptionProviderId>> = {
+/** Subscription connection that backs each built-in driver's default instance. */
+export const SUBSCRIPTION_PROVIDER_BY_DRIVER: Readonly<Record<string, SubscriptionProviderId>> = {
   codex: "openai-codex",
   claudeAgent: "anthropic",
   grok: "xai",

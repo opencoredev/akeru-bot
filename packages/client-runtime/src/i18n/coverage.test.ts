@@ -148,6 +148,7 @@ describe("discovered interface message coverage", () => {
       "packages/client-runtime/src/durableMemory.ts",
       "packages/client-runtime/src/errors/threadErrorPresentation.ts",
       "packages/client-runtime/src/imageGeneration.ts",
+      "packages/client-runtime/src/providerAccessGuide.ts",
       "packages/client-runtime/src/providerAvailability.ts",
       "apps/web/src/components/roster/botEngineSelection.ts",
       "apps/web/src/components/roster/routineReceipts.ts",

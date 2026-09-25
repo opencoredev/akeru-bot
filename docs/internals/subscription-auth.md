@@ -23,6 +23,12 @@ The directory uses mode `0700`. The file uses mode `0600`. Writes use a temporar
 
 Local desktop, a remote server, and a future hosted control plane use the same boundary. The storage adapter can move from the local file to an encrypted tenant secret store without changing the client contract.
 
+## Access copy in Settings
+
+`providerAccessGuide` in `packages/client-runtime/src/providerAccessGuide.ts` turns a `SubscriptionProviderStatus` into the access lines that web and mobile Settings show: what unlocks the provider, the other credential, whether the subscription includes API access, published limits, what the environment has saved, and one next step. Web renders it in `ProviderAccessDetails` and mobile in `ProviderAccessSummary`. Both pass their locale's translator, so the copy lives once in the shared catalogs.
+
+The guide calls access ready only when `health` is `healthy` or `recovered`, meaning the server recorded a successful provider request. `detected` stays "Not verified yet", and the optional `healthChecking` flag shows "Checking access" while the post-login check runs. Subscription statuses never report `unsupported` or `disabled`, so the guide has no state for them. The guide does not run checks; the server's health test owns that. Model names come from the default instance's `ServerProvider.models` in the environment config, so the list matches the environment the user is looking at. Custom instances keep their own credentials and are not listed.
+
 ## Sandbox boundary
 
 Do not store OAuth refresh tokens in an E2B sandbox, project workspace, checkpoint, event, database projection, log, or client persistence.

@@ -1786,6 +1786,88 @@ export const englishCatalog = {
     "This preference could not be saved on this device.",
   "Could not open the sign-in page. Try Open sign-in again.":
     "Could not open the sign-in page. Try Open sign-in again.",
+  "Unlocks with": "Unlocks with",
+  Models: "Models",
+  "API access": "API access",
+  "Published limits": "Published limits",
+  "This environment": "This environment",
+  Access: "Access",
+  "Next step": "Next step",
+  "Access details": "Access details",
+  "ChatGPT Plus, Pro, Business, Enterprise, or Edu subscription.":
+    "ChatGPT Plus, Pro, Business, Enterprise, or Edu subscription.",
+  "Or an OpenAI API key, billed separately by OpenAI.":
+    "Or an OpenAI API key, billed separately by OpenAI.",
+  "Codex models.": "Codex models.",
+  "A ChatGPT subscription does not include OpenAI API access.":
+    "A ChatGPT subscription does not include OpenAI API access.",
+  "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.":
+    "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.",
+  "Choose Connect and sign in with your ChatGPT account.":
+    "Choose Connect and sign in with your ChatGPT account.",
+  "Claude Pro or Max subscription.": "Claude Pro or Max subscription.",
+  "Or an Anthropic API key, billed separately in the Claude Console.":
+    "Or an Anthropic API key, billed separately in the Claude Console.",
+  "Claude models.": "Claude models.",
+  "A Claude Pro or Max subscription does not include Anthropic API access.":
+    "A Claude Pro or Max subscription does not include Anthropic API access.",
+  "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.":
+    "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.",
+  "Choose Connect and sign in with your Claude account.":
+    "Choose Connect and sign in with your Claude account.",
+  "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.":
+    "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.",
+  "Or an xAI API key, billed separately by xAI.": "Or an xAI API key, billed separately by xAI.",
+  "Grok models.": "Grok models.",
+  "SuperGrok and X Premium+ do not include xAI API credits.":
+    "SuperGrok and X Premium+ do not include xAI API credits.",
+  "xAI does not publish Grok limits that Akeru can show.":
+    "xAI does not publish Grok limits that Akeru can show.",
+  "Choose Connect and sign in with the xAI account that has SuperGrok or X Premium+.":
+    "Choose Connect and sign in with the xAI account that has SuperGrok or X Premium+.",
+  "Kimi For Coding membership.": "Kimi For Coding membership.",
+  "Or a Kimi For Coding API key from the Kimi Code console.":
+    "Or a Kimi For Coding API key from the Kimi Code console.",
+  "Kimi coding models.": "Kimi coding models.",
+  "The membership works only in coding tools. It does not include Moonshot Open Platform API credit.":
+    "The membership works only in coding tools. It does not include Moonshot Open Platform API credit.",
+  "Kimi sets limits by membership tier and shows them in the Kimi Code console.":
+    "Kimi sets limits by membership tier and shows them in the Kimi Code console.",
+  "Choose Connect and sign in with your Kimi account.":
+    "Choose Connect and sign in with your Kimi account.",
+  "OpenCode Go subscription API key.": "OpenCode Go subscription API key.",
+  "OpenCode Go models.": "OpenCode Go models.",
+  "The key is API access, but only to OpenCode Go models through OpenCode.":
+    "The key is API access, but only to OpenCode Go models through OpenCode.",
+  "OpenCode Go limits use per 5-hour window, per week, and per month.":
+    "OpenCode Go limits use per 5-hour window, per week, and per month.",
+  "Choose Connect and paste your OpenCode Go API key.":
+    "Choose Connect and paste your OpenCode Go API key.",
+  "Checking access": "Checking access",
+  Ready: "Ready",
+  "Not verified yet": "Not verified yet",
+  "Login expired": "Login expired",
+  "Access revoked": "Access revoked",
+  "Check failed": "Check failed",
+  "Wait for the health check to finish.": "Wait for the health check to finish.",
+  "No action needed. A provider request succeeded.":
+    "No action needed. A provider request succeeded.",
+  "Choose Check key to send a health request.": "Choose Check key to send a health request.",
+  "Choose Check OAuth to send a health request.": "Choose Check OAuth to send a health request.",
+  "Choose Reconnect key and enter a current key.": "Choose Reconnect key and enter a current key.",
+  "Choose Reconnect and sign in again.": "Choose Reconnect and sign in again.",
+  "Check the key and its billing, then choose Check key.":
+    "Check the key and its billing, then choose Check key.",
+  "Check that the subscription is active, then choose Reconnect.":
+    "Check that the subscription is active, then choose Reconnect.",
+  "Missing: no OpenCode Go API key in this environment.":
+    "Missing: no OpenCode Go API key in this environment.",
+  "Missing: no subscription login or API key in this environment.":
+    "Missing: no subscription login or API key in this environment.",
+  "API key saved in this environment.": "API key saved in this environment.",
+  "Subscription login saved in this environment.": "Subscription login saved in this environment.",
+  "{models}, and {count} more.": "{models}, and {count} more.",
+  "{models}.": "{models}.",
   "{name} is in control": "{name} is in control",
   "You are in control": "You are in control",
   "Someone else is in control": "Someone else is in control",

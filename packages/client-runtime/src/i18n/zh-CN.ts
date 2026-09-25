@@ -1715,6 +1715,86 @@ export const zhCNCatalog: TranslationCatalog = {
   "This preference could not be saved on this device.": "无法在此设备上保存此偏好设置。",
   "Could not open the sign-in page. Try Open sign-in again.":
     "无法打开登录页面。请再次点击“打开登录”。",
+  "Unlocks with": "解锁方式",
+  Models: "模型",
+  "API access": "API 访问",
+  "Published limits": "公布的限制",
+  "This environment": "此环境",
+  Access: "访问状态",
+  "Next step": "下一步",
+  "Access details": "访问详情",
+  "ChatGPT Plus, Pro, Business, Enterprise, or Edu subscription.":
+    "ChatGPT Plus、Pro、Business、Enterprise 或 Edu 订阅。",
+  "Or an OpenAI API key, billed separately by OpenAI.":
+    "也可以使用 OpenAI API 密钥，由 OpenAI 单独计费。",
+  "Codex models.": "Codex 模型。",
+  "A ChatGPT subscription does not include OpenAI API access.":
+    "ChatGPT 订阅不包含 OpenAI API 访问权限。",
+  "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.":
+    "OpenAI 按每 5 小时窗口和每周限制 Codex 用量。额度取决于你的套餐。",
+  "Choose Connect and sign in with your ChatGPT account.":
+    "选择“连接”，然后使用你的 ChatGPT 账号登录。",
+  "Claude Pro or Max subscription.": "Claude Pro 或 Max 订阅。",
+  "Or an Anthropic API key, billed separately in the Claude Console.":
+    "也可以使用 Anthropic API 密钥，在 Claude Console 中单独计费。",
+  "Claude models.": "Claude 模型。",
+  "A Claude Pro or Max subscription does not include Anthropic API access.":
+    "Claude Pro 或 Max 订阅不包含 Anthropic API 访问权限。",
+  "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.":
+    "Anthropic 按每 5 小时会话和每周限制 Claude 用量。Max 的额度高于 Pro。",
+  "Choose Connect and sign in with your Claude account.":
+    "选择“连接”，然后使用你的 Claude 账号登录。",
+  "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.":
+    "你的 xAI 账号上的 SuperGrok 或 X Premium+。Akeru 无法查看该账号使用的套餐。",
+  "Or an xAI API key, billed separately by xAI.": "也可以使用 xAI API 密钥，由 xAI 单独计费。",
+  "Grok models.": "Grok 模型。",
+  "SuperGrok and X Premium+ do not include xAI API credits.":
+    "SuperGrok 和 X Premium+ 不包含 xAI API 额度。",
+  "xAI does not publish Grok limits that Akeru can show.":
+    "xAI 没有公布 Akeru 可以显示的 Grok 限制。",
+  "Choose Connect and sign in with the xAI account that has SuperGrok or X Premium+.":
+    "选择“连接”，然后使用拥有 SuperGrok 或 X Premium+ 的 xAI 账号登录。",
+  "Kimi For Coding membership.": "Kimi For Coding 会员。",
+  "Or a Kimi For Coding API key from the Kimi Code console.":
+    "也可以使用 Kimi Code 控制台中的 Kimi For Coding API 密钥。",
+  "Kimi coding models.": "Kimi 编程模型。",
+  "The membership works only in coding tools. It does not include Moonshot Open Platform API credit.":
+    "该会员仅可在编程工具中使用，不包含 Moonshot 开放平台 API 额度。",
+  "Kimi sets limits by membership tier and shows them in the Kimi Code console.":
+    "Kimi 按会员等级设置限制，并在 Kimi Code 控制台中显示。",
+  "Choose Connect and sign in with your Kimi account.": "选择“连接”，然后使用你的 Kimi 账号登录。",
+  "OpenCode Go subscription API key.": "OpenCode Go 订阅 API 密钥。",
+  "OpenCode Go models.": "OpenCode Go 模型。",
+  "The key is API access, but only to OpenCode Go models through OpenCode.":
+    "该密钥提供 API 访问，但仅限通过 OpenCode 使用 OpenCode Go 模型。",
+  "OpenCode Go limits use per 5-hour window, per week, and per month.":
+    "OpenCode Go 按每 5 小时窗口、每周和每月限制用量。",
+  "Choose Connect and paste your OpenCode Go API key.":
+    "选择“连接”，然后粘贴你的 OpenCode Go API 密钥。",
+  "Checking access": "正在检查访问",
+  Ready: "可用",
+  "Not verified yet": "尚未验证",
+  "Login expired": "登录已过期",
+  "Access revoked": "访问已被撤销",
+  "Check failed": "检查失败",
+  "Wait for the health check to finish.": "请等待健康检查完成。",
+  "No action needed. A provider request succeeded.": "无需操作。提供商请求已成功。",
+  "Choose Check key to send a health request.": "选择“检查密钥”以发送健康检查请求。",
+  "Choose Check OAuth to send a health request.": "选择“检查 OAuth”以发送健康检查请求。",
+  "Choose Reconnect key and enter a current key.": "选择“重新连接密钥”，然后输入当前有效的密钥。",
+  "Choose Reconnect and sign in again.": "选择“重新连接”，然后重新登录。",
+  "Check the key and its billing, then choose Check key.":
+    "检查密钥及其计费状态，然后选择“检查密钥”。",
+  "Check that the subscription is active, then choose Reconnect.":
+    "确认订阅仍然有效，然后选择“重新连接”。",
+  "Missing: no OpenCode Go API key in this environment.":
+    "缺少：此环境中没有 OpenCode Go API 密钥。",
+  "Missing: no subscription login or API key in this environment.":
+    "缺少：此环境中没有订阅登录或 API 密钥。",
+  "API key saved in this environment.": "API 密钥已保存在此环境中。",
+  "Subscription login saved in this environment.": "订阅登录已保存在此环境中。",
+  "{models}, and {count} more.": "{models}，以及另外 {count} 个。",
+  "{models}.": "{models}。",
   "{name} is in control": "{name} 正在控制",
   "You are in control": "你正在控制",
   "Someone else is in control": "其他人正在控制",
