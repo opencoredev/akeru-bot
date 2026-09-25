@@ -5,12 +5,12 @@ import {
   AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_DELEGATION_MAX_DEPTH,
   AkeruDelegationRecord,
-  AkeruDelegationState,
+  AkeruDelegationPhase,
 } from "./akeruDelegation.ts";
 import { OrchestrationCommand, OrchestrationEvent } from "./orchestration.ts";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
-const decodeDelegationState = Schema.decodeUnknownSync(AkeruDelegationState);
+const decodeDelegationPhase = Schema.decodeUnknownSync(AkeruDelegationPhase);
 const decodeOrchestrationCommand = Schema.decodeUnknownSync(OrchestrationCommand);
 const decodeOrchestrationEvent = Schema.decodeUnknownSync(OrchestrationEvent);
 
@@ -20,9 +20,7 @@ const record = {
   parentBotId: "bot-parent",
   childBotId: "bot-child",
   parentThreadId: "thread-parent",
-  childThreadId: "thread-child",
   parentTurnId: "turn-parent",
-  childTurnId: "turn-child",
   ancestorBotIds: ["bot-parent"],
   depth: 1,
   task: "Compare three flights.",
@@ -38,19 +36,23 @@ const record = {
     disabledMcpServerIds: ["email"],
     approvalCeiling: "send",
   },
-  state: "completed",
   billedBotId: "bot-child",
-  result: {
-    summary: "Compared the three requested flights.",
+  phase: {
+    _tag: "Completed",
+    startedAt: "2026-08-31T00:00:10.000Z",
+    completedAt: "2026-08-31T00:01:00.000Z",
     childThreadId: "thread-child",
     childTurnId: "turn-child",
+    acknowledgedAt: null,
+    result: {
+      summary: "Compared the three requested flights.",
+      childThreadId: "thread-child",
+      childTurnId: "turn-child",
+    },
   },
-  failure: null,
   keep: false,
   createdAt: "2026-08-31T00:00:00.000Z",
   updatedAt: "2026-08-31T00:01:00.000Z",
-  startedAt: "2026-08-31T00:00:10.000Z",
-  completedAt: "2026-08-31T00:01:00.000Z",
 } as const;
 
 describe("Akeru delegation contracts", () => {
@@ -58,16 +60,19 @@ describe("Akeru delegation contracts", () => {
     expect(decodeDelegationRecord(record)).toMatchObject({
       delegationId: "delegation-1",
       billedBotId: "bot-child",
-      result: { childThreadId: "thread-child" },
+      phase: { _tag: "Completed", result: { childThreadId: "thread-child" } },
     });
   });
 
-  it("decodes every lifecycle state", () => {
-    expect(
-      ["queued", "running", "blocked", "failed", "canceled", "completed"].map((state) =>
-        decodeDelegationState(state),
-      ),
-    ).toEqual(["queued", "running", "blocked", "failed", "canceled", "completed"]);
+  it("exposes every lifecycle phase", () => {
+    expect(Object.keys(AkeruDelegationPhase.cases)).toEqual([
+      "Queued",
+      "Running",
+      "Blocked",
+      "Completed",
+      "Failed",
+      "Canceled",
+    ]);
   });
 
   it("caps delegation depth and publishes the concurrency limit", () => {
@@ -78,6 +83,60 @@ describe("Akeru delegation contracts", () => {
       }),
     ).toThrow();
     expect(AKERU_DELEGATION_MAX_CONCURRENCY).toBe(3);
+  });
+
+  it("lifts legacy event records into the tagged phase without changing identity", () => {
+    const { phase, ...base } = record;
+    const legacy = {
+      ...base,
+      state: "completed",
+      result: phase.result,
+      failure: null,
+      childThreadId: "thread-child",
+      childTurnId: "turn-child",
+      startedAt: "2026-08-31T00:00:10.000Z",
+      completedAt: "2026-08-31T00:01:00.000Z",
+    };
+    const decoded = decodeDelegationRecord(legacy);
+    expect(decoded.delegationId).toBe(record.delegationId);
+    expect(decoded).not.toHaveProperty("state");
+    expect(decoded.phase).toEqual({ ...phase, result: phase.result });
+  });
+
+  it("lifts legacy queued and failed records", () => {
+    const { phase: _phase, ...base } = record;
+    const legacy = {
+      ...base,
+      childThreadId: null,
+      childTurnId: null,
+      result: null,
+      failure: null,
+      startedAt: null,
+      completedAt: null,
+    };
+    expect(decodeDelegationRecord({ ...legacy, state: "queued" }).phase).toEqual({
+      _tag: "Queued",
+    });
+    expect(
+      decodeDelegationRecord({
+        ...legacy,
+        state: "failed",
+        failure: { failureCode: "timeout", message: "Timed out." },
+        completedAt: "2026-08-31T00:01:00.000Z",
+      }).phase,
+    ).toMatchObject({ _tag: "Failed", failure: { failureCode: "timeout" } });
+  });
+
+  it("rejects a completed result without childTurnId", () => {
+    expect(() =>
+      decodeDelegationRecord({
+        ...record,
+        phase: {
+          ...record.phase,
+          result: { summary: "Done.", childThreadId: "thread-child" },
+        },
+      }),
+    ).toThrow();
   });
 
   it("decodes delegation commands and events", () => {

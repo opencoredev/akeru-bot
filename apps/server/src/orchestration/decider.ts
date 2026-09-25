@@ -2,8 +2,9 @@ import {
   AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_DELEGATION_MAX_DEPTH,
+  AKERU_DELEGATION_TRANSITIONS,
+  type AkeruDelegationPhase,
   type AkeruDelegationRecord,
-  type AkeruDelegationState,
   BALANCED_BOT_PERSONALITY_TONE,
   BotId,
   DEFAULT_LOCAL_EXECUTION_MODE,
@@ -16,6 +17,8 @@ import {
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
+  type ThreadId,
+  type TurnId,
 } from "@t3tools/contracts";
 import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
@@ -73,78 +76,38 @@ function userInputAnswerText(answers: Record<string, unknown>): string | null {
 // window is a failed/stale start, not pending work. Mirrors the client's
 // QUEUED_TURN_START_GRACE_MS in client-runtime threadSettled.ts.
 const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
-const TERMINAL_DELEGATION_STATES = new Set<AkeruDelegationState>([
-  "failed",
-  "canceled",
-  "completed",
+const TERMINAL_DELEGATION_PHASES = new Set<AkeruDelegationPhase["_tag"]>([
+  "Failed",
+  "Canceled",
+  "Completed",
 ]);
-const DELEGATION_STATE_TRANSITIONS: Record<
-  Exclude<AkeruDelegationState, "failed" | "canceled" | "completed">,
-  ReadonlySet<AkeruDelegationState>
-> = {
-  queued: new Set(["running", "failed"]),
-  running: new Set(["blocked", "failed", "completed"]),
-  blocked: new Set(["running", "failed"]),
+
+const isDelegationTransitionAllowed = (
+  from: AkeruDelegationPhase["_tag"],
+  to: AkeruDelegationPhase["_tag"],
+): boolean => {
+  switch (from) {
+    case "Queued":
+    case "Running":
+    case "Blocked":
+      return AKERU_DELEGATION_TRANSITIONS[from].has(to);
+    default:
+      return false;
+  }
 };
 
-function delegationStateError(delegation: AkeruDelegationRecord): string | null {
-  switch (delegation.state) {
-    case "queued":
-      return delegation.startedAt === null &&
-        delegation.completedAt === null &&
-        delegation.result === null &&
-        delegation.failure === null
-        ? null
-        : "Queued delegations cannot have start, completion, result, or failure data.";
-    case "running":
-    case "blocked":
-      return delegation.childThreadId !== null &&
-        delegation.startedAt !== null &&
-        delegation.completedAt === null &&
-        delegation.result === null &&
-        delegation.failure === null
-        ? null
-        : `${delegation.state} delegations require childThreadId and startedAt without completion data.`;
-    case "failed":
-      return delegation.completedAt !== null &&
-        delegation.result === null &&
-        delegation.failure !== null
-        ? null
-        : "Failed delegations require completedAt and failure without a result.";
-    case "canceled":
-      return delegation.completedAt !== null &&
-        delegation.result === null &&
-        delegation.failure === null
-        ? null
-        : "Canceled delegations require completedAt without result or failure data.";
-    case "completed":
-      return delegation.childThreadId !== null &&
-        delegation.startedAt !== null &&
-        delegation.completedAt !== null &&
-        delegation.result !== null &&
-        delegation.result.childThreadId === delegation.childThreadId &&
-        delegation.result.childTurnId === delegation.childTurnId &&
-        delegation.failure === null
-        ? null
-        : "Completed delegations require start, completion, and result data without a failure.";
-  }
-}
+const delegationChildThreadId = (phase: AkeruDelegationPhase): ThreadId | null =>
+  phase._tag === "Queued" ? null : phase.childThreadId;
+const delegationChildTurnId = (phase: AkeruDelegationPhase): TurnId | null =>
+  phase._tag === "Queued" ? null : phase.childTurnId;
 
 function hasSameDelegationOwnership(
   current: AkeruDelegationRecord,
   next: AkeruDelegationRecord,
 ): boolean {
-  return NodeUtil.isDeepStrictEqual(current, {
-    ...next,
-    childThreadId: current.childThreadId,
-    childTurnId: current.childTurnId,
-    state: current.state,
-    result: current.result,
-    failure: current.failure,
-    updatedAt: current.updatedAt,
-    startedAt: current.startedAt,
-    completedAt: current.completedAt,
-  });
+  const { phase: _currentPhase, updatedAt: _currentUpdatedAt, ...currentOwnership } = current;
+  const { phase: _nextPhase, updatedAt: _nextUpdatedAt, ...nextOwnership } = next;
+  return NodeUtil.isDeepStrictEqual(currentOwnership, nextOwnership);
 }
 
 /**
@@ -1281,8 +1244,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       yield* requireBotNotArchived({ readModel, command, botId: delegation.parentBotId });
       yield* requireBotNotArchived({ readModel, command, botId: delegation.childBotId });
       yield* requireThread({ readModel, command, threadId: delegation.parentThreadId });
-      if (delegation.childThreadId !== null) {
-        yield* requireThread({ readModel, command, threadId: delegation.childThreadId });
+      const createdChildThreadId = delegationChildThreadId(delegation.phase);
+      if (createdChildThreadId !== null) {
+        yield* requireThread({ readModel, command, threadId: createdChildThreadId });
       }
 
       if (delegation.billedBotId !== delegation.childBotId) {
@@ -1332,7 +1296,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       const activeDelegationCount = readModel.delegations.filter(
         (candidate) =>
           candidate.parentBotId === delegation.parentBotId &&
-          !TERMINAL_DELEGATION_STATES.has(candidate.state),
+          !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
       ).length;
       if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
         return yield* new OrchestrationCommandInvariantError({
@@ -1340,11 +1304,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Bot '${delegation.parentBotId}' already has ${activeDelegationCount} active delegations.`,
         });
       }
-      const stateError = delegationStateError(delegation);
-      if (delegation.state !== "queued" || stateError !== null) {
+      if (delegation.phase._tag !== "Queued") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: stateError ?? "New delegations must start queued.",
+          detail: "New delegations must start queued.",
         });
       }
 
@@ -1373,17 +1336,21 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Delegation '${next.delegationId}' ownership and access fields are immutable.`,
         });
       }
+      const currentChildThreadId = delegationChildThreadId(current.phase);
+      const currentChildTurnId = delegationChildTurnId(current.phase);
+      const nextChildThreadId = delegationChildThreadId(next.phase);
+      const nextChildTurnId = delegationChildTurnId(next.phase);
       if (
-        (current.childThreadId !== null && next.childThreadId !== current.childThreadId) ||
-        (current.childTurnId !== null && next.childTurnId !== current.childTurnId)
+        (currentChildThreadId !== null && nextChildThreadId !== currentChildThreadId) ||
+        (currentChildTurnId !== null && nextChildTurnId !== currentChildTurnId)
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Delegation '${next.delegationId}' child ownership is immutable once assigned.`,
         });
       }
-      if (next.childThreadId !== null) {
-        yield* requireThread({ readModel, command, threadId: next.childThreadId });
+      if (nextChildThreadId !== null) {
+        yield* requireThread({ readModel, command, threadId: nextChildThreadId });
       }
       if (!(Date.parse(next.updatedAt) >= Date.parse(current.updatedAt))) {
         return yield* new OrchestrationCommandInvariantError({
@@ -1391,14 +1358,20 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Delegation '${next.delegationId}' cannot move updatedAt backward.`,
         });
       }
-      if (current.state === next.state) {
+      if (current.phase._tag === next.phase._tag) {
         const assignsChildOwnership =
-          (current.childThreadId === null && next.childThreadId !== null) ||
-          (current.childTurnId === null && next.childTurnId !== null);
+          (currentChildThreadId === null && nextChildThreadId !== null) ||
+          (currentChildTurnId === null && nextChildTurnId !== null);
         const changesOnlyChildOwnership = NodeUtil.isDeepStrictEqual(current, {
           ...next,
-          childThreadId: current.childThreadId,
-          childTurnId: current.childTurnId,
+          phase:
+            next.phase._tag === "Queued"
+              ? next.phase
+              : {
+                  ...next.phase,
+                  childThreadId: currentChildThreadId,
+                  childTurnId: currentChildTurnId,
+                },
           updatedAt: current.updatedAt,
         });
         if (
@@ -1410,25 +1383,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             detail: `Delegation '${next.delegationId}' cannot change data without a state transition.`,
           });
         }
-      } else if (
-        TERMINAL_DELEGATION_STATES.has(current.state) ||
-        !DELEGATION_STATE_TRANSITIONS[
-          current.state as keyof typeof DELEGATION_STATE_TRANSITIONS
-        ].has(next.state)
-      ) {
+      } else if (!isDelegationTransitionAllowed(current.phase._tag, next.phase._tag)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${next.delegationId}' cannot transition from '${current.state}' to '${next.state}'.`,
+          detail: `Delegation '${next.delegationId}' cannot transition from '${current.phase._tag}' to '${next.phase._tag}'.`,
         });
       }
-      const stateError = delegationStateError(next);
-      if (stateError !== null) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: stateError,
-        });
-      }
-
       return {
         ...(yield* withEventBase({
           aggregateKind: "delegation",
@@ -1451,17 +1411,21 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         Date.parse(command.createdAt) >= Date.parse(current.updatedAt)
           ? command.createdAt
           : current.updatedAt;
-      const delegation = command.keep
+      const delegation: AkeruDelegationRecord = command.keep
         ? { ...current, keep: true, updatedAt: canceledAt }
-        : TERMINAL_DELEGATION_STATES.has(current.state)
+        : TERMINAL_DELEGATION_PHASES.has(current.phase._tag)
           ? current
           : {
               ...current,
-              state: "canceled" as const,
-              result: null,
-              failure: null,
+              phase: {
+                _tag: "Canceled",
+                childThreadId: delegationChildThreadId(current.phase),
+                childTurnId: delegationChildTurnId(current.phase),
+                startedAt: current.phase._tag === "Queued" ? null : current.phase.startedAt,
+                completedAt: canceledAt,
+                canceledBy: "user",
+              },
               updatedAt: canceledAt,
-              completedAt: canceledAt,
             };
 
       return {

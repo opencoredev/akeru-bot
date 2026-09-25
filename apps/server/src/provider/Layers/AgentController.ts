@@ -949,7 +949,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         .filter((member) => member.kind === "bot")
         .map((member) => member.botId);
       const respondingBotId = access.respondingBotId ?? access.botId;
-      if (respondingBotId === null || !groupMemberBotIds.includes(respondingBotId)) return undefined;
+      if (respondingBotId === null || !groupMemberBotIds.includes(respondingBotId))
+        return undefined;
       return { ...access, groupMemberBotIds };
     };
     const entityMemoryContext = async (
@@ -957,7 +958,9 @@ const make = (options?: AgentControllerLiveOptions) =>
     ): Promise<string> => {
       const current = await refreshEntityMemoryAccess(access);
       if (!current || !options?.entityMemoryRepository) return "";
-      const revisions = await runPromise(options.entityMemoryRepository.listCurrent({ access: current }));
+      const revisions = await runPromise(
+        options.entityMemoryRepository.listCurrent({ access: current }),
+      );
       await runPromise(
         options.entityMemoryRepository.recordDerivedCopies?.({
           tenantId: current.tenantId,
@@ -1724,7 +1727,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (memoryAccess && pending.entityMemoryAccess && !entityMemoryAccess) {
           active.admittingTurn = null;
           beginPendingTurn(active, pending);
-          await failActiveTurn(active, pending.threadId, pending.turnId, new Error("The bot is no longer a member of this group."));
+          await failActiveTurn(
+            active,
+            pending.threadId,
+            pending.turnId,
+            new Error("The bot is no longer a member of this group."),
+          );
           return;
         }
         if (settings) active.privateBotMemory = settings.privateBotMemory;
@@ -1777,7 +1785,9 @@ const make = (options?: AgentControllerLiveOptions) =>
             const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
               currentState;
             const entityPacket = await entityMemoryContext(entityMemoryAccess);
-            const persistentMemoryContext = [memoryTurn.context, entityPacket].filter(Boolean).join("\n\n");
+            const persistentMemoryContext = [memoryTurn.context, entityPacket]
+              .filter(Boolean)
+              .join("\n\n");
             await active.session.state.set({
               ...stateWithoutMemory,
               ...(persistentMemoryContext ? { persistentMemoryContext } : {}),
@@ -2341,9 +2351,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
 
     const isOpenDelegation = (delegation: AkeruDelegationRecord) =>
-      delegation.state !== "completed" &&
-      delegation.state !== "failed" &&
-      delegation.state !== "canceled";
+      !["Completed", "Failed", "Canceled"].includes(delegation.phase._tag);
+    const isChildOf = (delegation: AkeruDelegationRecord, threadId: ThreadId) =>
+      delegation.phase._tag !== "Queued" && delegation.phase.childThreadId === threadId;
 
     // Resolves the thread's bot, group boss, and delegation links with by-id
     // reads. Falls back to the command read model for query doubles that do
@@ -2373,7 +2383,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
         const bot = botId ? Option.getOrUndefined(yield* getBotById(botId)) : undefined;
         return {
-          parentDelegation: delegations.find((candidate) => candidate.childThreadId === threadId),
+          parentDelegation: delegations.find((candidate) => isChildOf(candidate, threadId)),
           bot,
           botId,
           activeChildDelegations: delegations.filter(
@@ -2391,7 +2401,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
       return {
         parentDelegation: snapshot.delegations.find(
-          (candidate) => candidate.childThreadId === threadId && isOpenDelegation(candidate),
+          (candidate) => isChildOf(candidate, threadId) && isOpenDelegation(candidate),
         ),
         bot: snapshot.bots.find((candidate) => candidate.id === botId),
         botId,
@@ -2676,13 +2686,11 @@ const make = (options?: AgentControllerLiveOptions) =>
                 yield* Effect.promise(() =>
                   settings.privateBotMemory
                     ? botMemoryStore.readPromptSnapshot(nextMemoryAccess)
-                    : botMemoryStore
-                        .readPromptSnapshot(nextMemoryAccess)
-                        .then((snapshot) => ({
-                          ...snapshot,
-                          memory: { ...snapshot.memory, content: "", charCount: 0 },
-                        })),
-              ),
+                    : botMemoryStore.readPromptSnapshot(nextMemoryAccess).then((snapshot) => ({
+                        ...snapshot,
+                        memory: { ...snapshot.memory, content: "", charCount: 0 },
+                      })),
+                ),
               )
             : "";
         const entityPacket = nextMemoryAccess
@@ -2695,9 +2703,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           .startSession(threadId, {
             ...input,
             personalityTone,
-            ...(combinedMemoryContext
-              ? { persistentMemoryContext: combinedMemoryContext }
-              : {}),
+            ...(combinedMemoryContext ? { persistentMemoryContext: combinedMemoryContext } : {}),
           })
           .pipe(
             Effect.tap((session) =>
@@ -3075,7 +3081,8 @@ const make = (options?: AgentControllerLiveOptions) =>
                 Effect.gen(function* () {
                   if (!hasLegacyPending(key, pendingMemory)) return;
                   pendingMemory.turnId = String(result.turnId);
-                  if (input.hiddenWake === true) legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
+                  if (input.hiddenWake === true)
+                    legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
                   pendingMemory.dispatchReturned = true;
                   for (const event of pendingMemory.earlyEvents) {
                     if (String(event.turnId) !== pendingMemory.turnId) continue;
@@ -3704,11 +3711,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           Stream.map((event) => {
             if (event.type !== "turn.started") return event;
             const key = String(event.threadId);
-            const hiddenWake = event.turnId === undefined
-              ? false
-              : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
-                legacyPending(key).some((pending) => !pending.dispatchReturned && pending.hiddenWake);
-            return hiddenWake ? { ...event, payload: { ...event.payload, hiddenWake: true } } : event;
+            const hiddenWake =
+              event.turnId === undefined
+                ? false
+                : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
+                  legacyPending(key).some(
+                    (pending) => !pending.dispatchReturned && pending.hiddenWake,
+                  );
+            return hiddenWake
+              ? { ...event, payload: { ...event.payload, hiddenWake: true } }
+              : event;
           }),
           Stream.tap((event) =>
             Effect.gen(function* () {

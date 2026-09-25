@@ -14,7 +14,9 @@ import {
   ThreadId,
   type AkeruDelegationAccessGrant,
   type AkeruDelegationFailureCode,
+  type AkeruDelegationPhase,
   type AkeruDelegationRecord,
+  akeruDelegationStateOf,
   type AkeruToolInputSchemas,
   type AkeruToolReceipt,
   type OrchestrationBot,
@@ -26,11 +28,13 @@ import {
 
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
 
-const TERMINAL_STATES = new Set<AkeruDelegationRecord["state"]>([
-  "completed",
-  "failed",
-  "canceled",
-]);
+const TERMINAL_PHASES = new Set<AkeruDelegationPhase["_tag"]>(["Completed", "Failed", "Canceled"]);
+const phaseChildThreadId = (delegation: AkeruDelegationRecord): ThreadId | null =>
+  delegation.phase._tag === "Queued" ? null : delegation.phase.childThreadId;
+const phaseChildTurnId = (delegation: AkeruDelegationRecord): TurnId | null =>
+  delegation.phase._tag === "Queued" ? null : delegation.phase.childTurnId;
+const phaseStartedAt = (delegation: AkeruDelegationRecord): string | null =>
+  delegation.phase._tag === "Queued" ? null : delegation.phase.startedAt;
 
 export interface AkeruDelegationParent {
   readonly threadId: ThreadId;
@@ -170,11 +174,8 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     };
   };
 
-  const deliver = async (
-    delegation: AkeruDelegationRecord,
-    state: AkeruDelegationRecord["state"],
-    detail: string,
-  ) => {
+  const deliver = async (delegation: AkeruDelegationRecord, detail: string) => {
+    const state = akeruDelegationStateOf(delegation.phase);
     const createdAt = now();
     await dispatch({
       type: "thread.activity.append",
@@ -187,12 +188,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         summary: detail,
         payload: {
           delegationId: delegation.delegationId,
-          childThreadId: delegation.childThreadId,
-          childTurnId: delegation.childTurnId,
+          childThreadId: phaseChildThreadId(delegation),
+          childTurnId: phaseChildTurnId(delegation),
           childBotId: delegation.childBotId,
           state,
-          result: delegation.result,
-          failure: delegation.failure,
+          result: delegation.phase._tag === "Completed" ? delegation.phase.result : null,
+          failure: delegation.phase._tag === "Failed" ? delegation.phase.failure : null,
         },
         turnId: delegation.parentTurnId,
         createdAt,
@@ -204,7 +205,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   const setState = async (delegation: AkeruDelegationRecord) => {
     await dispatch({
       type: "delegation.state.set",
-      commandId: commandId(delegation.state),
+      commandId: commandId(akeruDelegationStateOf(delegation.phase)),
       delegation,
     });
   };
@@ -280,10 +281,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         )
         .map((delegation) => ({
           delegationId: delegation.delegationId,
-          state: delegation.state,
-          childThreadId: delegation.childThreadId,
-          result: delegation.result,
-          failure: delegation.failure,
+          state: akeruDelegationStateOf(delegation.phase),
+          childThreadId: phaseChildThreadId(delegation),
+          result: delegation.phase._tag === "Completed" ? delegation.phase.result : null,
+          failure: delegation.phase._tag === "Failed" ? delegation.phase.failure : null,
         })),
     };
   };
@@ -298,7 +299,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       (delegation) =>
         delegation.parentThreadId === parent.threadId &&
         delegation.childBotId === request.botId &&
-        !TERMINAL_STATES.has(delegation.state),
+        !TERMINAL_PHASES.has(delegation.phase._tag),
     );
     if (active.length === 0) throw new Error("The target bot has no active delegated work.");
     for (const delegation of active) {
@@ -321,14 +322,18 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     const completedAt = now();
     const failed: AkeruDelegationRecord = {
       ...delegation,
-      state: "failed",
-      result: null,
-      failure: { failureCode, message },
+      phase: {
+        _tag: "Failed",
+        childThreadId: phaseChildThreadId(delegation),
+        childTurnId: phaseChildTurnId(delegation),
+        startedAt: phaseStartedAt(delegation),
+        completedAt,
+        failure: { failureCode, message },
+      },
       updatedAt: completedAt,
-      completedAt,
     };
     await setState(failed);
-    await deliver(failed, "failed", message);
+    await deliver(failed, message);
     return failed;
   };
 
@@ -350,7 +355,8 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     }
     const active = snapshot.delegations.filter(
       (delegation) =>
-        delegation.parentThreadId === parent.threadId && !TERMINAL_STATES.has(delegation.state),
+        delegation.parentThreadId === parent.threadId &&
+        !TERMINAL_PHASES.has(delegation.phase._tag),
     );
     if (active.length >= AKERU_DELEGATION_MAX_CONCURRENCY) {
       throw new Error(
@@ -412,24 +418,18 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       parentBotId: parent.botId,
       childBotId: bot.id,
       parentThreadId: parent.threadId,
-      childThreadId: null,
       parentTurnId: parent.turnId,
-      childTurnId: null,
       ancestorBotIds: [...parent.ancestorBotIds, parent.botId],
       depth: parent.depth + 1,
       task: request.task,
       expectedResult: request.expectedResult,
       deadline: request.deadline ?? null,
       access: grant,
-      state: "queued",
       billedBotId: bot.id,
-      result: null,
-      failure: null,
       keep: false,
       createdAt,
       updatedAt: createdAt,
-      startedAt: null,
-      completedAt: null,
+      phase: { _tag: "Queued" },
     };
     try {
       await dispatch({
@@ -449,17 +449,15 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     const startedAt = now();
     delegation = {
       ...delegation,
-      childThreadId,
-      state: "running",
+      phase: { _tag: "Running", childThreadId, childTurnId: null, startedAt, progress: null },
       updatedAt: startedAt,
-      startedAt,
     };
     await setState(delegation);
     accessByThread.set(childThreadId, grant);
     const byParent = activeByParent.get(parent.threadId) ?? new Map();
     byParent.set(delegationId, { threadId: childThreadId, turnId: null });
     activeByParent.set(parent.threadId, byParent);
-    await deliver(delegation, "running", `Sent bot work to ${bot.name}.`);
+    await deliver(delegation, `Sent bot work to ${bot.name}.`);
 
     await dispatch({
       type: "thread.turn.start",
@@ -492,33 +490,52 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         if (outcome.state === "blocked") {
           const blocked: AkeruDelegationRecord = {
             ...delegation,
-            childTurnId: outcome.turnId,
-            state: "blocked",
+            phase: {
+              _tag: "Blocked",
+              childThreadId,
+              childTurnId: outcome.turnId,
+              startedAt,
+              reason: outcome.error ?? "The bot is blocked.",
+            },
             updatedAt: now(),
           };
           await setState(blocked);
-          await deliver(blocked, "blocked", outcome.error ?? "The bot is blocked.");
+          await deliver(blocked, outcome.error ?? "The bot is blocked.");
           return { blocked: true, childThreadId, childTurnId: outcome.turnId };
         }
         return await fail(
-          { ...delegation, childTurnId: outcome.turnId },
+          {
+            ...delegation,
+            phase: {
+              _tag: "Running",
+              childThreadId,
+              childTurnId: outcome.turnId,
+              startedAt,
+              progress: null,
+            },
+          },
           "child_failed",
           outcome.error ?? "The bot did not return a result.",
         );
       }
       const completedAt = now();
+      const result = {
+        summary: outcome.summary.trim(),
+        childThreadId,
+        childTurnId: outcome.turnId,
+      };
       const completed: AkeruDelegationRecord = {
         ...delegation,
-        childTurnId: outcome.turnId,
-        state: "completed",
-        result: {
-          summary: outcome.summary.trim(),
+        phase: {
+          _tag: "Completed",
           childThreadId,
           childTurnId: outcome.turnId,
+          startedAt,
+          completedAt,
+          result,
+          acknowledgedAt: null,
         },
-        failure: null,
         updatedAt: completedAt,
-        completedAt,
       };
       await setState(completed);
       await options.recordUsage?.({
@@ -529,8 +546,8 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         inputTokens: outcome.usage?.inputTokens ?? 0,
         outputTokens: outcome.usage?.outputTokens ?? 0,
       });
-      await deliver(completed, "completed", outcome.summary.trim());
-      return completed.result;
+      await deliver(completed, result.summary);
+      return result;
     } catch (cause) {
       const timeout =
         request.deadline !== undefined && Date.parse(request.deadline) <= Date.parse(now());
@@ -555,13 +572,13 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     const snapshot = await options.readSnapshot();
     const records = snapshot.delegations.filter(
       (delegation) =>
-        delegation.parentThreadId === input.threadId && !TERMINAL_STATES.has(delegation.state),
+        delegation.parentThreadId === input.threadId && !TERMINAL_PHASES.has(delegation.phase._tag),
     );
     const children = activeByParent.get(input.threadId);
     for (const record of records) {
       const keep = record.keep || input.keep?.has(record.delegationId) === true;
       const child = children?.get(record.delegationId);
-      const childThreadId = child?.threadId ?? record.childThreadId;
+      const childThreadId = child?.threadId ?? phaseChildThreadId(record);
       if (keep || !input.failed) {
         await dispatch({
           type: "delegation.cancel",
@@ -577,7 +594,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       if (input.failed) {
         await fail(record, "parent_failed", "The parent turn failed.");
         if (childThreadId) {
-          await options.interruptChild(childThreadId, child?.turnId ?? record.childTurnId);
+          await options.interruptChild(childThreadId, child?.turnId ?? phaseChildTurnId(record));
         }
       }
     }

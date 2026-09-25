@@ -1,8 +1,9 @@
-import type {
-  AkeruDelegationAccessGrant,
-  AkeruDelegationRecord,
-  AkeruDelegationState,
-  OrchestrationThreadActivity,
+import {
+  akeruDelegationStateOf,
+  type AkeruDelegationAccessGrant,
+  type AkeruDelegationRecord,
+  type AkeruDelegationState,
+  type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { MessageKey, TranslationParams } from "@t3tools/client-runtime/i18n";
@@ -85,24 +86,32 @@ export function delegationUsageTokens(
   delegation: AkeruDelegationRecord,
   childActivities: ReadonlyArray<OrchestrationThreadActivity>,
 ): number | null {
-  if (!delegation.childTurnId) return null;
-  const activities = childActivities.filter(
-    (activity) => activity.turnId === delegation.childTurnId,
-  );
+  const childTurnId = delegation.phase._tag === "Queued" ? null : delegation.phase.childTurnId;
+  if (!childTurnId) return null;
+  const activities = childActivities.filter((activity) => activity.turnId === childTurnId);
   const usage = deriveLatestContextWindowSnapshot(activities);
   return usage?.totalProcessedTokens ?? usage?.usedTokens ?? null;
 }
 
 function delegationElapsed(delegation: AkeruDelegationRecord, now = Date.now()): string | null {
-  const startedAt = Date.parse(delegation.startedAt ?? delegation.createdAt);
-  const endedAt = delegation.completedAt ? Date.parse(delegation.completedAt) : now;
+  const startedAt = Date.parse(
+    delegation.phase._tag === "Queued" || delegation.phase.startedAt === null
+      ? delegation.createdAt
+      : delegation.phase.startedAt,
+  );
+  const endedAt =
+    delegation.phase._tag === "Failed" ||
+    delegation.phase._tag === "Canceled" ||
+    delegation.phase._tag === "Completed"
+      ? Date.parse(delegation.phase.completedAt)
+      : now;
   if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) return null;
   return formatDuration(endedAt - startedAt);
 }
 
 function DelegationElapsed({ delegation }: { readonly delegation: AkeruDelegationRecord }) {
   const textRef = useRef<HTMLSpanElement>(null);
-  const live = !TERMINAL_STATES.has(delegation.state);
+  const live = !TERMINAL_STATES.has(akeruDelegationStateOf(delegation.phase));
 
   useEffect(() => {
     if (!live) return;
@@ -132,31 +141,28 @@ export function DelegationCard({
   const { t } = useI18n();
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  const childThreadId = delegation.phase._tag === "Queued" ? null : delegation.phase.childThreadId;
   const cancelDelegation = useAtomCommand(orchestrationEnvironment.cancelDelegation, {
     reportFailure: false,
   });
   const childThreadRef = useMemo(
-    () =>
-      environmentId && delegation.childThreadId
-        ? scopeThreadRef(environmentId, delegation.childThreadId)
-        : null,
-    [delegation.childThreadId, environmentId],
+    () => (environmentId && childThreadId ? scopeThreadRef(environmentId, childThreadId) : null),
+    [childThreadId, environmentId],
   );
   const childThread = useThreadShell(childThreadRef);
   const childActivities = useThreadActivities(childThreadRef);
   const activeChildBot = childBot?.archivedAt === null ? childBot : null;
+  const state = akeruDelegationStateOf(delegation.phase);
   const childName = activeChildBot?.name ?? t("Unknown bot");
   const usageTokens = childThread ? delegationUsageTokens(delegation, childActivities) : null;
-  const canCancel = !TERMINAL_STATES.has(delegation.state) && environmentId !== null;
+  const canCancel = !TERMINAL_STATES.has(state) && environmentId !== null;
   const canOpen = activeChildBot !== null && childThread !== null && environmentId !== null;
   const outcome =
-    delegation.failure?.message ??
-    delegation.result?.summary ??
-    (delegation.state === "failed"
-      ? t("Failure details unavailable")
-      : delegation.state === "completed"
-        ? t("Result unavailable")
-        : null);
+    delegation.phase._tag === "Failed"
+      ? (delegation.phase.failure?.message ?? t("Failure details unavailable"))
+      : delegation.phase._tag === "Completed"
+        ? (delegation.phase.result?.summary ?? t("Result unavailable"))
+        : null;
 
   return (
     <article
@@ -172,8 +178,8 @@ export function DelegationCard({
         />
         <span className="min-w-0 truncate text-sm font-medium">{childName}</span>
         <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span aria-hidden className={`size-1.5 rounded-full ${STATE_DOT[delegation.state]}`} />
-          <span aria-live="polite">{delegationStateLabel(delegation.state, t)}</span>
+          <span aria-hidden className={`size-1.5 rounded-full ${STATE_DOT[state]}`} />
+          <span aria-live="polite">{delegationStateLabel(state, t)}</span>
         </span>
       </div>
       <p className="mt-1 line-clamp-2 text-sm leading-5">{delegation.task}</p>
@@ -200,7 +206,7 @@ export function DelegationCard({
       </div>
       {outcome ? (
         <p
-          className={`mt-1 text-sm leading-5 ${delegation.failure ? "text-destructive-foreground" : "text-muted-foreground"}`}
+          className={`mt-1 text-sm leading-5 ${delegation.phase._tag === "Failed" ? "text-destructive-foreground" : "text-muted-foreground"}`}
         >
           {outcome}
         </p>

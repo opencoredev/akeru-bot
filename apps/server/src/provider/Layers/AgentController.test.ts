@@ -1010,7 +1010,11 @@ describe("AgentControllerLive", () => {
       undefined,
       undefined,
       {
-        send: vi.fn(async () => null),
+        send: vi.fn(async () => ({
+          canceled: true,
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+        })),
         sendToUser: vi.fn(async () => {
           throw new Error("not used");
         }),
@@ -4352,7 +4356,11 @@ describe("AgentControllerLive", () => {
       approvalCeiling: "send",
     };
     const runtime = {
-      send: vi.fn(async () => null),
+      send: vi.fn(async () => ({
+        canceled: true,
+        childThreadId: ThreadId.make("thread-child"),
+        childTurnId: null,
+      })),
       sendToUser: vi.fn(async () => {
         throw new Error("not used");
       }),
@@ -4447,7 +4455,11 @@ describe("AgentControllerLive", () => {
       undefined,
       undefined,
       {
-        send: vi.fn(async () => null),
+        send: vi.fn(async () => ({
+          canceled: true,
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+        })),
         sendToUser: vi.fn(async () => {
           throw new Error("not used");
         }),
@@ -4505,7 +4517,11 @@ describe("AgentControllerLive", () => {
       makeRemoteWorkspace,
       makeBotBrowser: makeBotBrowser as never,
       delegationRuntime: {
-        send: vi.fn(async () => null),
+        send: vi.fn(async () => ({
+          canceled: true,
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+        })),
         sendToUser: vi.fn(async () => {
           throw new Error("not used");
         }),

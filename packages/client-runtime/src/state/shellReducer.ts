@@ -1,5 +1,6 @@
 import * as Arr from "effect/Array";
 import {
+  akeruDelegationStateOf,
   isTerminalDelegationState,
   SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
   type AkeruDelegationRecord,
@@ -82,7 +83,7 @@ export function applyShellStreamEvent(
         : Arr.append(snapshot.delegations, event.delegation);
       return {
         ...snapshot,
-        delegations: isTerminalDelegationState(event.delegation.state)
+        delegations: isTerminalDelegationState(akeruDelegationStateOf(event.delegation.phase))
           ? capTerminalDelegations(delegations, event.delegation.parentThreadId)
           : delegations,
         snapshotSequence: event.sequence,
@@ -182,7 +183,8 @@ function capTerminalDelegations(
 ): ReadonlyArray<AkeruDelegationRecord> {
   const terminal = delegations.filter(
     (delegation) =>
-      delegation.parentThreadId === parentThreadId && isTerminalDelegationState(delegation.state),
+      delegation.parentThreadId === parentThreadId &&
+      isTerminalDelegationState(akeruDelegationStateOf(delegation.phase)),
   );
   if (terminal.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) return delegations;
   const dropped = new Set(

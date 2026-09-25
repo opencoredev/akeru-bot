@@ -2121,7 +2121,12 @@ const make = Effect.gen(function* () {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
       ...(event.type === "delegation.updated"
-        ? { "orchestration.thread_id": event.payload.delegation.childThreadId ?? "unassigned" }
+        ? {
+            "orchestration.thread_id":
+              (event.payload.delegation.phase._tag === "Queued"
+                ? null
+                : event.payload.delegation.phase.childThreadId) ?? "unassigned",
+          }
         : { "orchestration.thread_id": event.payload.threadId }),
       ...(event.commandId ? { "orchestration.command_id": event.commandId } : {}),
     });
@@ -2131,10 +2136,10 @@ const make = Effect.gen(function* () {
     switch (event.type) {
       case "delegation.updated": {
         const delegation = event.payload.delegation;
-        if (delegation.state === "canceled" && delegation.childThreadId !== null) {
+        if (delegation.phase._tag === "Canceled" && delegation.phase.childThreadId !== null) {
           yield* agentController.interruptTurn({
-            threadId: delegation.childThreadId,
-            ...(delegation.childTurnId ? { turnId: delegation.childTurnId } : {}),
+            threadId: delegation.phase.childThreadId,
+            ...(delegation.phase.childTurnId ? { turnId: delegation.phase.childTurnId } : {}),
           });
         }
         return;
@@ -2218,9 +2223,10 @@ const make = Effect.gen(function* () {
 
   const processDomainEventSafely = (event: ProviderIntentEvent) =>
     (event.type === "delegation.updated"
-      ? event.payload.delegation.childThreadId === null
+      ? event.payload.delegation.phase._tag === "Queued" ||
+        event.payload.delegation.phase.childThreadId === null
         ? Effect.succeed(false)
-        : reconcileRestrictiveSessionCleanup(event.payload.delegation.childThreadId)
+        : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId)
       : reconcileRestrictiveSessionCleanup(event.payload.threadId)
     ).pipe(
       Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),

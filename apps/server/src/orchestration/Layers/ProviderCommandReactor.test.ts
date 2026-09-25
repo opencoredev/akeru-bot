@@ -3974,9 +3974,7 @@ describe("ProviderCommandReactor", () => {
             parentBotId,
             childBotId,
             parentThreadId: ThreadId.make("thread-1"),
-            childThreadId: null,
             parentTurnId: TurnId.make("turn-parent"),
-            childTurnId: null,
             ancestorBotIds: [parentBotId],
             depth: 1,
             task: "Research the answer.",
@@ -3992,15 +3990,11 @@ describe("ProviderCommandReactor", () => {
               disabledMcpServerIds: [],
               approvalCeiling: "send" as const,
             },
-            state: "queued" as const,
+            phase: { _tag: "Queued" as const },
             billedBotId: childBotId,
-            result: null,
-            failure: null,
             keep: false,
             createdAt: now,
             updatedAt: now,
-            startedAt: null,
-            completedAt: null,
           };
           yield* harness.engine.dispatch({
             type: "delegation.create",
@@ -4012,10 +4006,13 @@ describe("ProviderCommandReactor", () => {
             commandId: CommandId.make(`cmd-delegation-running-${suffix}`),
             delegation: {
               ...queued,
-              childThreadId,
-              childTurnId,
-              state: "running",
-              startedAt: now,
+              phase: {
+                _tag: "Running",
+                childThreadId,
+                childTurnId,
+                startedAt: now,
+                progress: null,
+              },
             },
           });
           return { delegationId, childThreadId, childTurnId };

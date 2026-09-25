@@ -100,6 +100,45 @@ const childThread = {
   hasActionableProposedPlan: false,
 } satisfies OrchestrationThreadShell;
 
+const CHILD_RUN = {
+  childThreadId: "thread-child",
+  childTurnId: "turn-child",
+  startedAt: "2026-08-31T00:00:10.000Z",
+};
+const FINISHED_AT = "2026-08-31T00:01:00.000Z";
+
+function phaseFor(state: AkeruDelegationState) {
+  switch (state) {
+    case "queued":
+      return { _tag: "Queued" };
+    case "running":
+      return { _tag: "Running", ...CHILD_RUN, progress: null };
+    case "blocked":
+      return { _tag: "Blocked", ...CHILD_RUN, reason: "The provider is blocked." };
+    case "completed":
+      return {
+        _tag: "Completed",
+        ...CHILD_RUN,
+        completedAt: FINISHED_AT,
+        acknowledgedAt: null,
+        result: {
+          summary: "Release comparison complete.",
+          childThreadId: "thread-child",
+          childTurnId: "turn-child",
+        },
+      };
+    case "failed":
+      return {
+        _tag: "Failed",
+        ...CHILD_RUN,
+        completedAt: FINISHED_AT,
+        failure: { failureCode: "child_failed", message: "The provider stopped." },
+      };
+    case "canceled":
+      return { _tag: "Canceled", ...CHILD_RUN, completedAt: FINISHED_AT, canceledBy: "user" };
+  }
+}
+
 function delegation(state: AkeruDelegationState) {
   return decodeDelegationRecord({
     delegationId: `delegation-${state}`,
@@ -107,9 +146,7 @@ function delegation(state: AkeruDelegationState) {
     parentBotId: "bot-parent",
     childBotId: "bot-child",
     parentThreadId: "thread-parent",
-    childThreadId: state === "queued" ? null : "thread-child",
     parentTurnId: "turn-parent",
-    childTurnId: state === "queued" ? null : "turn-child",
     ancestorBotIds: ["bot-parent"],
     depth: 1,
     task: "Compare the release options.",
@@ -125,25 +162,11 @@ function delegation(state: AkeruDelegationState) {
       disabledMcpServerIds: [],
       approvalCeiling: "none",
     },
-    state,
     billedBotId: "bot-child",
-    result:
-      state === "completed"
-        ? {
-            summary: "Release comparison complete.",
-            childThreadId: "thread-child",
-            childTurnId: "turn-child",
-          }
-        : null,
-    failure:
-      state === "failed" ? { failureCode: "child_failed", message: "The provider stopped." } : null,
+    phase: phaseFor(state),
     keep: false,
     createdAt: "2026-08-31T00:00:00.000Z",
     updatedAt: "2026-08-31T00:01:00.000Z",
-    startedAt: state === "queued" ? null : "2026-08-31T00:00:10.000Z",
-    completedAt: ["failed", "canceled", "completed"].includes(state)
-      ? "2026-08-31T00:01:00.000Z"
-      : null,
   });
 }
 
@@ -199,14 +222,23 @@ describe("DelegationCard", () => {
   it("shows fallback text when terminal details are missing", () => {
     const completed = delegation("completed");
     const failed = delegation("failed");
+    if (completed.phase._tag !== "Completed" || failed.phase._tag !== "Failed") {
+      throw new Error("Expected completed and failed delegations");
+    }
     expect(
       renderToStaticMarkup(
-        <DelegationCard delegation={{ ...completed, result: null }} childBot={childBot} />,
+        <DelegationCard
+          delegation={{ ...completed, phase: { ...completed.phase, result: null as never } }}
+          childBot={childBot}
+        />,
       ),
     ).toContain("Result unavailable");
     expect(
       renderToStaticMarkup(
-        <DelegationCard delegation={{ ...failed, failure: null }} childBot={childBot} />,
+        <DelegationCard
+          delegation={{ ...failed, phase: { ...failed.phase, failure: null as never } }}
+          childBot={childBot}
+        />,
       ),
     ).toContain("Failure details unavailable");
   });

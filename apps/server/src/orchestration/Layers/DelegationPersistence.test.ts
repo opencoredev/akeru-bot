@@ -42,9 +42,7 @@ const delegation: AkeruDelegationRecord = {
   parentBotId: PARENT_BOT_ID,
   childBotId: CHILD_BOT_ID,
   parentThreadId: PARENT_THREAD_ID,
-  childThreadId: null,
   parentTurnId: TurnId.make("turn-parent"),
-  childTurnId: null,
   ancestorBotIds: [PARENT_BOT_ID],
   depth: 1,
   task: "Compare three flights.",
@@ -60,15 +58,11 @@ const delegation: AkeruDelegationRecord = {
     disabledMcpServerIds: [],
     approvalCeiling: "send",
   },
-  state: "queued",
+  phase: { _tag: "Queued" },
   billedBotId: CHILD_BOT_ID,
-  result: null,
-  failure: null,
   keep: false,
   createdAt: NOW,
   updatedAt: NOW,
-  startedAt: null,
-  completedAt: null,
 };
 
 const makeLayer = (dbPath: string) =>

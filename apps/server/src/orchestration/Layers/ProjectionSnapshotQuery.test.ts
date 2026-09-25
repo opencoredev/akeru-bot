@@ -186,11 +186,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const failed = snapshot.delegations.find(
         (delegation) => delegation.delegationId === "delegation-050",
       );
-      assert.equal(failed?.failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
-      assert.isTrue(failed?.failure?.message.endsWith("…"));
+      const failure = failed?.phase._tag === "Failed" ? failed.phase.failure : undefined;
+      assert.equal(failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
+      assert.isTrue(failure?.message.endsWith("…"));
+      const completed = snapshot.delegations.find(
+        (delegation) => delegation.delegationId === "delegation-025",
+      );
       assert.equal(
-        snapshot.delegations.find((delegation) => delegation.delegationId === "delegation-025")
-          ?.result?.summary,
+        completed?.phase._tag === "Completed" ? completed.phase.result.summary : undefined,
         "Done 25",
       );
       yield* sql`DELETE FROM projection_delegations`;

@@ -634,7 +634,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
   });
 
   // Open delegations plus the newest terminal ones per parent thread, so the
-  // shell snapshot never hydrates a thread's whole delegation history.
+  // shell snapshot never hydrates a thread's whole delegation history. Records
+  // store a tagged `phase`; rows written before it carry a legacy `state`.
   const listShellDelegationRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionDelegationDbRowSchema,
@@ -645,11 +646,17 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           record_json AS delegation,
           delegation_id,
           json_extract(record_json, '$.createdAt') AS created_at,
-          json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled') AS terminal,
+          COALESCE(
+            json_extract(record_json, '$.phase._tag'),
+            json_extract(record_json, '$.state')
+          ) IN ('Completed', 'Failed', 'Canceled', 'completed', 'failed', 'canceled') AS terminal,
           ROW_NUMBER() OVER (
             PARTITION BY
               json_extract(record_json, '$.parentThreadId'),
-              json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled')
+              COALESCE(
+                json_extract(record_json, '$.phase._tag'),
+                json_extract(record_json, '$.state')
+              ) IN ('Completed', 'Failed', 'Canceled', 'completed', 'failed', 'canceled')
             ORDER BY
               json_extract(record_json, '$.updatedAt') DESC,
               json_extract(record_json, '$.createdAt') ASC,
@@ -699,7 +706,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId }) => sql`
       SELECT record_json AS delegation
       FROM projection_delegations
-      WHERE json_extract(record_json, '$.childThreadId') = ${threadId}
+      WHERE COALESCE(
+          json_extract(record_json, '$.phase.childThreadId'),
+          json_extract(record_json, '$.childThreadId')
+        ) = ${threadId}
         OR json_extract(record_json, '$.parentThreadId') = ${threadId}
       ORDER BY json_extract(record_json, '$.createdAt') ASC, delegation_id ASC
     `,

@@ -7,13 +7,14 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
+  AkeruDelegationRecord,
   type AkeruDelegationAccessGrant,
-  type AkeruDelegationRecord,
   type OrchestrationBot,
   type OrchestrationCommand,
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -111,24 +112,18 @@ function delegation(
     parentBotId: PARENT_BOT_ID,
     childBotId: CHILD_BOT_ID,
     parentThreadId: PARENT_THREAD_ID,
-    childThreadId: null,
     parentTurnId: PARENT_TURN_ID,
-    childTurnId: null,
     ancestorBotIds: [PARENT_BOT_ID],
     depth: 1,
     task: "Research the answer.",
     expectedResult: "A concise answer.",
     deadline: null,
     access: access(),
-    state: "queued",
+    phase: { _tag: "Queued" },
     billedBotId: CHILD_BOT_ID,
-    result: null,
-    failure: null,
     keep: false,
     createdAt: NOW,
     updatedAt: NOW,
-    startedAt: null,
-    completedAt: null,
     ...overrides,
   };
 }
@@ -195,13 +190,20 @@ function harness(
       const index = state.delegations.findIndex(
         (entry) => entry.delegationId === command.delegationId,
       );
-      if (index >= 0) {
+      const current = state.delegations[index];
+      if (current !== undefined) {
         state.delegations[index] = command.keep
-          ? { ...state.delegations[index]!, keep: true }
+          ? { ...current, keep: true }
           : {
-              ...state.delegations[index]!,
-              state: "canceled",
-              completedAt: command.createdAt,
+              ...current,
+              phase: {
+                _tag: "Canceled",
+                childThreadId: current.phase._tag === "Queued" ? null : current.phase.childThreadId,
+                childTurnId: current.phase._tag === "Queued" ? null : current.phase.childTurnId,
+                startedAt: current.phase._tag === "Queued" ? null : current.phase.startedAt,
+                completedAt: command.createdAt,
+                canceledBy: "user",
+              },
             };
       }
     }
@@ -411,6 +413,42 @@ describe("AkeruDelegationRuntime", () => {
     });
   });
 
+  it("persists a completed record that decodes with the child turn", async () => {
+    const test = harness();
+    await test.runtime.send(parent(), request() as never);
+
+    const persisted = test.state.delegations.at(-1);
+    const encoded = Schema.encodeUnknownSync(AkeruDelegationRecord)(persisted);
+    const decoded = Schema.decodeUnknownSync(AkeruDelegationRecord)(encoded);
+    expect(decoded.phase).toMatchObject({
+      _tag: "Completed",
+      childTurnId: CHILD_TURN_ID,
+      result: { summary: "The delegated answer.", childTurnId: CHILD_TURN_ID },
+    });
+  });
+
+  it("keeps lowercase activity kinds and states for delivered phases", async () => {
+    const outcomes: ReadonlyArray<[AkeruDelegationChildOutcome, string, string]> = [
+      [{ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." }, "completed", "info"],
+      [{ state: "blocked", turnId: CHILD_TURN_ID, error: "Access denied." }, "blocked", "info"],
+      [{ state: "failed", turnId: CHILD_TURN_ID, error: "Provider failed." }, "failed", "error"],
+    ];
+    for (const [outcome, state, tone] of outcomes) {
+      const test = harness(snapshot(), outcome);
+      await test.runtime.send(parent(), request() as never);
+      const activities = test.commands.flatMap((command) =>
+        command.type === "thread.activity.append" && command.activity.kind.startsWith("delegation.")
+          ? [command.activity]
+          : [],
+      );
+      expect(activities.at(-1)).toMatchObject({
+        kind: `delegation.${state}`,
+        tone,
+        payload: { state },
+      });
+    }
+  });
+
   it("rejects A to B to A cycles, depth, and concurrency caps", async () => {
     await expect(
       harness().runtime.send(
@@ -465,8 +503,7 @@ describe("AkeruDelegationRuntime", () => {
     });
     await blocked.runtime.send(parent(), request() as never);
     expect(blocked.state.delegations.at(-1)).toMatchObject({
-      state: "blocked",
-      failure: null,
+      phase: { _tag: "Blocked", reason: "Access denied." },
       billedBotId: CHILD_BOT_ID,
     });
 
@@ -477,8 +514,7 @@ describe("AkeruDelegationRuntime", () => {
     });
     await failed.runtime.send(parent(), request() as never);
     expect(failed.state.delegations.at(-1)).toMatchObject({
-      state: "failed",
-      failure: { failureCode: "child_failed" },
+      phase: { _tag: "Failed", failure: { failureCode: "child_failed" } },
       billedBotId: CHILD_BOT_ID,
     });
   });
@@ -502,8 +538,7 @@ describe("AkeruDelegationRuntime", () => {
     });
     await runtime.send(parent(), request({ deadline: "2020-01-01T00:00:00.000Z" }) as never);
     expect(test.state.delegations.at(-1)).toMatchObject({
-      state: "failed",
-      failure: { failureCode: "timeout" },
+      phase: { _tag: "Failed", failure: { failureCode: "timeout" } },
     });
     expect(test.interrupts).toHaveLength(1);
   });
@@ -553,30 +588,27 @@ describe("AkeruDelegationRuntime", () => {
 
     const canceled = await checks("cancel");
     expect(canceled.commands.some((command) => command.type === "delegation.cancel")).toBe(true);
-    expect(canceled.state.delegations.at(-1)?.state).toBe("canceled");
+    expect(canceled.state.delegations.at(-1)?.phase._tag).toBe("Canceled");
     const kept = await checks("keep");
     expect(
       kept.commands.some((command) => command.type === "delegation.cancel" && command.keep),
     ).toBe(true);
-    expect(kept.state.delegations.at(-1)?.state).toBe("completed");
+    expect(kept.state.delegations.at(-1)?.phase._tag).toBe("Completed");
     expect((await checks("fail")).state.delegations.at(-1)).toMatchObject({
-      state: "failed",
-      failure: { failureCode: "parent_failed" },
+      phase: { _tag: "Failed", failure: { failureCode: "parent_failed" } },
     });
   });
 
   it("persists child cancellation for the reactor after the runtime restarts", async () => {
     const childThreadId = ThreadId.make("persisted-child");
     const active = delegation(DelegationId.make("persisted-delegation"), {
-      childThreadId,
-      state: "running",
-      startedAt: NOW,
+      phase: { _tag: "Running", childThreadId, childTurnId: null, startedAt: NOW, progress: null },
     });
     const test = harness(snapshot({ delegations: [active] }));
 
     await test.runtime.parentFinished({ threadId: PARENT_THREAD_ID, failed: false });
 
-    expect(test.state.delegations[0]?.state).toBe("canceled");
+    expect(test.state.delegations[0]?.phase._tag).toBe("Canceled");
     expect(test.commands.at(-1)).toMatchObject({
       type: "delegation.cancel",
       delegationId: active.delegationId,

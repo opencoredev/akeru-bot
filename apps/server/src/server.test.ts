@@ -5539,9 +5539,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         parentBotId: BotId.make("bot-parent"),
         childBotId: BotId.make("bot-child"),
         parentThreadId: ThreadId.make("thread-parent"),
-        childThreadId: null,
         parentTurnId: TurnId.make("turn-parent"),
-        childTurnId: null,
         ancestorBotIds: [BotId.make("bot-parent")],
         depth: 1,
         task: "Compare the release options.",
@@ -5557,26 +5555,29 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           disabledMcpServerIds: [],
           approvalCeiling: "none",
         },
-        state: "queued",
+        phase: { _tag: "Queued" },
         billedBotId: BotId.make("bot-child"),
-        result: null,
-        failure: null,
         keep: false,
         createdAt: now,
         updatedAt: now,
-        startedAt: null,
-        completedAt: null,
       });
       const created = record(DelegationId.make("delegation-created"));
-      const updated = {
+      const updated: AkeruDelegationRecord = {
         ...record(DelegationId.make("delegation-updated")),
-        state: "completed",
-        result: {
-          summary: "y".repeat(10_000),
+        phase: {
+          _tag: "Completed",
           childThreadId: ThreadId.make("thread-child"),
           childTurnId: null,
+          startedAt: now,
+          completedAt: now,
+          result: {
+            summary: "y".repeat(10_000),
+            childThreadId: ThreadId.make("thread-child"),
+            childTurnId: null,
+          },
+          acknowledgedAt: null,
         },
-      } as const;
+      };
       const events = [
         {
           sequence: 1,
@@ -5633,7 +5634,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const streamedUpdate = Array.from(items)[1];
       assert.isTrue(
         streamedUpdate?.kind === "delegation-upserted" &&
-          (streamedUpdate.delegation.result?.summary.length ?? 0) < updated.result.summary.length,
+          streamedUpdate.delegation.phase._tag === "Completed" &&
+          streamedUpdate.delegation.phase.result.summary.length < 10_000,
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
