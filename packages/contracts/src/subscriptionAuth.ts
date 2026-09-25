@@ -67,6 +67,11 @@ export const SubscriptionProviderStatus = Schema.Struct({
       "recovered",
     ]),
   ),
+  /**
+   * True while the server runs the health check that follows a login. A separate
+   * optional field so older clients still decode the status list.
+   */
+  healthChecking: Schema.optional(Schema.Boolean),
   lastSuccessfulRequestAt: Schema.optional(IsoDateTime),
   lastFailedRequest: Schema.optional(
     Schema.Struct({
@@ -214,7 +219,11 @@ export const SubscriptionAuthCompleteInput = Schema.Struct({
 export type SubscriptionAuthCompleteInput = typeof SubscriptionAuthCompleteInput.Type;
 
 export const SubscriptionAuthLoginProgress = Schema.Union([
-  Schema.Struct({ status: Schema.Literal("connected") }),
+  Schema.Struct({
+    status: Schema.Literal("connected"),
+    /** Added field is optional so older clients still decode connected logins. */
+    health: Schema.optional(Schema.Literal("checking")),
+  }),
   Schema.Struct({ status: Schema.Literal("pending"), nextPollMs: Schema.Number }),
   Schema.Struct({ status: Schema.Literal("failed"), error: Schema.String }),
 ]);

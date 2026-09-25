@@ -36,6 +36,7 @@ import {
   type CodexDeviceLoginPending,
 } from "./providers/openaiCodex.ts";
 import {
+  getKimiCodingDeviceHeaders,
   isKimiCodingDeviceId,
   pollKimiDeviceLogin,
   refreshKimiToken,
@@ -96,7 +97,7 @@ export interface StartedLogin {
 }
 
 export type LoginPollStatus =
-  | { status: "connected" }
+  | { status: "connected"; health?: "checking" }
   | { status: "pending"; nextPollMs: number }
   | { status: "failed"; error: string };
 
@@ -116,6 +117,7 @@ export interface ProviderStatus {
     | "failed"
     | "failed-first-request"
     | "recovered";
+  healthChecking?: boolean;
   lastSuccessfulRequestAt?: string;
   lastFailedRequest?: { at: string; message: string };
   nextRetryAt?: string;
@@ -141,6 +143,54 @@ interface ProviderHealthRecord {
   healthTest?: { status: "passed" | "failed"; checkedAt: string };
   oauthCheck?: { status: "passed" | "failed"; checkedAt: string };
   failureKind?: "request" | "revoked";
+  /** Set while the post-login health check runs; shared across service instances. */
+  healthCheckStartedAt?: string;
+}
+
+/** A post-login check older than this is treated as abandoned (for example, the server restarted). */
+const HEALTH_CHECK_STALE_MS = 60_000;
+const HEALTH_CHECK_TIMEOUT_MS = 30_000;
+
+/** OAuth-only endpoints that prove a subscription token can reach the provider. */
+function oauthHealthRequest(
+  provider: SubscriptionProviderId,
+  credential: OAuthCredentials,
+): { readonly url: string; readonly headers: Record<string, string> } | undefined {
+  switch (provider) {
+    case "anthropic":
+      // Claude Pro/Max OAuth tokens are rejected by /v1/models; the usage endpoint accepts them.
+      return {
+        url: "https://api.anthropic.com/api/oauth/usage",
+        headers: {
+          Authorization: `Bearer ${credential.access}`,
+          Accept: "application/json",
+          "anthropic-beta": "oauth-2025-04-20",
+          "User-Agent": "claude-code/2.1.69",
+        },
+      };
+    case "openai-codex":
+      return {
+        url: "https://chatgpt.com/backend-api/wham/usage",
+        headers: { Authorization: `Bearer ${credential.access}` },
+      };
+    case "xai":
+      return {
+        url: "https://api.x.ai/v1/models",
+        headers: { Authorization: `Bearer ${credential.access}` },
+      };
+    case "kimi-for-coding":
+      return {
+        url: "https://api.kimi.com/coding/v1/models",
+        headers: {
+          Authorization: `Bearer ${credential.access}`,
+          ...getKimiCodingDeviceHeaders(
+            typeof credential.deviceId === "string" ? credential.deviceId : "",
+          ),
+        },
+      };
+    default:
+      return undefined;
+  }
 }
 
 export interface RequestHealthStatus {
@@ -189,16 +239,29 @@ export class SubscriptionAuthService {
   private health: ProviderHealthData = {};
   private readonly pendingLogins = new Map<string, PendingLogin>();
   private readonly refreshInFlight = new Map<string, Promise<string | undefined>>();
+  private readonly healthChecks = new Map<SubscriptionProviderId, Promise<void>>();
+  private readonly checkHealthOnConnect: boolean;
 
-  constructor(authPath: string) {
+  /**
+   * `checkHealthOnConnect` runs a provider health check on the server as soon as a
+   * login stores credentials, so the result does not depend on the client staying connected.
+   */
+  constructor(authPath: string, options: { readonly checkHealthOnConnect?: boolean } = {}) {
     this.authPath = authPath;
+    this.checkHealthOnConnect = options.checkHealthOnConnect ?? false;
     this.pendingPath = `${authPath}.pending`;
     this.healthPath = `${authPath}.health`;
     this.reload();
   }
 
-  static forSecretsDir(secretsDir: string): SubscriptionAuthService {
-    return new SubscriptionAuthService(NodePath.join(secretsDir, "subscription-auth.json"));
+  static forSecretsDir(
+    secretsDir: string,
+    options?: { readonly checkHealthOnConnect?: boolean },
+  ): SubscriptionAuthService {
+    return new SubscriptionAuthService(
+      NodePath.join(secretsDir, "subscription-auth.json"),
+      options,
+    );
   }
 
   reload(): void {
@@ -289,6 +352,9 @@ export class SubscriptionAuthService {
         health?.lastSuccessfulRequestAt !== undefined &&
         health.lastFailedRequest !== undefined &&
         health.lastSuccessfulRequestAt > health.lastFailedRequest.at;
+      const checking =
+        health?.healthCheckStartedAt !== undefined &&
+        now - Date.parse(health.healthCheckStartedAt) < HEALTH_CHECK_STALE_MS;
       const state = !credential
         ? "missing"
         : failedAfterSuccess
@@ -313,6 +379,7 @@ export class SubscriptionAuthService {
           : {}),
         ...(credential?.type === "oauth" ? { expiresAt: credential.expires } : {}),
         health: state,
+        ...(credential && checking ? { healthChecking: true } : {}),
         ...(health?.lastSuccessfulRequestAt
           ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
           : {}),
@@ -565,6 +632,7 @@ export class SubscriptionAuthService {
       try {
         const response = await fetch(url, {
           redirect: "error",
+          signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
           headers: {
             ...(provider === "anthropic"
               ? { "x-api-key": credential.access, "anthropic-version": "2023-06-01" }
@@ -592,14 +660,24 @@ export class SubscriptionAuthService {
       return;
     }
     try {
-      const refreshed = await this.runRefresh(provider, credential);
+      const refreshed = credential.expires > Date.now()
+        ? credential
+        : await this.runRefresh(provider, credential);
       this.reload();
       const current = this.data[provider];
       if (current?.type !== "oauth" || current.refresh !== credential.refresh) return;
       this.setCredential(provider, refreshed);
-      // Refresh proves the OAuth grant is usable. It does not prove that the
-      // subscription can make a model request, so keep access detected until
-      // the runtime records the first successful provider request.
+      const request = oauthHealthRequest(provider, refreshed);
+      if (!request) throw new Error("This subscription does not expose a health endpoint.");
+      const response = await fetch(request.url, {
+        redirect: "error",
+        headers: request.headers,
+        signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        throw new Error(`The provider rejected the health request (${response.status}).`);
+      }
+      this.recordRequestSuccess(provider);
       const checkedAt = new Date().toISOString();
       this.reloadHealth();
       this.health[provider] = {
@@ -608,12 +686,47 @@ export class SubscriptionAuthService {
       };
       this.saveHealth();
     } catch (cause) {
-      this.recordOAuthFailure(
+      this.recordRequestFailure(
         provider,
         cause instanceof Error ? cause.message : "The provider rejected the health request.",
+        undefined,
         oauthFailureKind(cause),
       );
     }
+  }
+
+  /**
+   * Start the post-login health check in the background. It keeps running when the
+   * client that finished the login disconnects; `awaitHealthCheck` observes it.
+   */
+  private startHealthCheck(provider: SubscriptionProviderId): LoginPollStatus {
+    if (!this.checkHealthOnConnect) return { status: "connected" };
+    this.reloadHealth();
+    this.health[provider] = {
+      ...this.health[provider],
+      healthCheckStartedAt: new Date().toISOString(),
+    };
+    this.saveHealth();
+    const check = this.testHealth(provider)
+      .finally(() => {
+        this.reloadHealth();
+        const current = this.health[provider];
+        if (current?.healthCheckStartedAt === undefined) return;
+        const { healthCheckStartedAt: _startedAt, ...rest } = current;
+        this.health[provider] = rest;
+        this.saveHealth();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.healthChecks.get(provider) === check) this.healthChecks.delete(provider);
+      });
+    this.healthChecks.set(provider, check);
+    return { status: "connected", health: "checking" };
+  }
+
+  /** Resolves when the post-login health check for `provider` has recorded its result. */
+  awaitHealthCheck(provider: SubscriptionProviderId): Promise<void> {
+    return this.healthChecks.get(provider) ?? Promise.resolve();
   }
 
   private recordOAuthFailure(
@@ -807,7 +920,7 @@ export class SubscriptionAuthService {
         this.pendingLogins.delete(loginId);
         this.savePending();
         this.setCredential(provider, result.credentials, true);
-        return { status: "connected" };
+        return this.startHealthCheck(provider);
       case "failed":
         this.pendingLogins.delete(loginId);
         this.savePending();
@@ -845,7 +958,7 @@ export class SubscriptionAuthService {
         if (pending.provider === login.provider) this.pendingLogins.delete(id);
       }
       this.savePending();
-      return { status: "connected" };
+      return this.startHealthCheck(login.provider);
     }
     if (login.provider !== "anthropic") {
       return { status: "failed", error: "This login completes by polling, not with a code." };
@@ -859,7 +972,7 @@ export class SubscriptionAuthService {
       this.pendingLogins.delete(loginId);
       this.savePending();
       this.setCredential("anthropic", credentials, true);
-      return { status: "connected" };
+      return this.startHealthCheck("anthropic");
     } catch (error) {
       // Keep the pending login: a mangled paste should not force a restart.
       return {

@@ -56,4 +56,20 @@ Pending login state stays on the environment server. It is bounded and contains 
 
 Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Kimi and OpenCode Go resolve keys and custom endpoints for model requests. Claude, Grok, and OpenCode receive saved API credentials when their adapter starts a provider process. The login, completion, and logout RPC paths stop affected bridge sessions when the API key or endpoint changes. The next turn starts a new process with the current connection. Grok supports API keys at its default endpoint; its current bridge rejects custom base URLs.
 
+## Post-login health check
+
+The service checks health itself right after it stores a credential, so the result does not depend on the client that finished login staying connected. `ws.ts` enables this with `forSecretsDir(dir, { checkHealthOnConnect: true })`. Other callers and tests leave it off, which keeps them off the network.
+
+While a check runs, the health file holds a `healthCheckStartedAt` marker. `statuses()` reports it as the optional `healthChecking` flag, and ignores markers older than 60 seconds so a crashed server cannot leave a provider stuck in checking. A connected login progress result carries `health: "checking"` when a check started. The flag is optional rather than a new health literal so older clients still decode the status. Tests wait on `awaitHealthCheck(provider)`.
+
+Each provider's request:
+
+- Claude OAuth: `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer`, `anthropic-beta: oauth-2025-04-20`, and the Claude Code user agent, matching the plan-limit reader.
+- Codex OAuth: `GET https://chatgpt.com/backend-api/wham/usage` with the bearer token.
+- Grok OAuth: `GET https://api.x.ai/v1/models` with the bearer token.
+- Kimi OAuth: `GET https://api.kimi.com/coding/v1/models` with the bearer token and the `X-Msh-*` device headers from `getKimiCodingDeviceHeaders(credential.deviceId)`.
+- API keys, including OpenCode Go: the provider's usage or models endpoint at the saved base URL.
+
+Every request times out after 30 seconds.
+
 Custom endpoints must use the selected provider's protocol. They do not make every model compatible with every driver. Health checks use the selected endpoint and disable HTTP redirects so a redirect cannot forward a key to another host.

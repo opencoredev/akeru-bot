@@ -14,7 +14,6 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CheckIcon,
-  CopyIcon,
   ExternalLinkIcon,
   LoaderIcon,
 } from "lucide-react";
@@ -57,6 +56,7 @@ import {
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
 import { ProviderApiKeyForm } from "../settings/ProvidersPanel";
+import { SignInCodeCopy } from "../settings/SignInCodeCopy";
 import { SUBSCRIPTION_PROVIDERS } from "../settings/subscriptionProviders";
 import {
   canStartDesktopOnboardingReveal,
@@ -377,19 +377,10 @@ export function SubscriptionStep({
           {activeLogin.flow.instructions ?? t("Finish signing in on the provider page.")}
         </p>
         {activeLogin.flow.userCode ? (
-          <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2.5">
-            <code className="flex-1 text-sm font-semibold tracking-[0.18em]">
-              {activeLogin.flow.userCode}
-            </code>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label={t("Copy sign-in code")}
-              onClick={() => void navigator.clipboard.writeText(activeLogin.flow.userCode ?? "")}
-            >
-              <CopyIcon className="size-3.5" />
-            </Button>
-          </div>
+          <SignInCodeCopy
+            code={activeLogin.flow.userCode}
+            className="rounded-xl border border-border/70 bg-background/60 py-2.5"
+          />
         ) : null}
         {activeLogin.flow.completion === "paste" ? (
           <div className="space-y-2">

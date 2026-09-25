@@ -8,8 +8,10 @@ import type {
   SubscriptionProviderId,
 } from "@t3tools/contracts";
 import {
+  anyProviderHealthChecking,
   apiKeyStartInput,
   apiKeyValidationError,
+  HEALTH_CHECK_REFRESH_MS,
   PROVIDER_CONNECTIONS,
   providerConnectionLabel,
   providerUsesApiKey,
@@ -25,6 +27,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
+import { copySignInCode } from "./copySignInCode";
 
 const RETRY_POLL_MS = 5000;
 
@@ -78,6 +81,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const [baseUrl, setBaseUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   const settle = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
@@ -92,6 +96,14 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     },
     [query],
   );
+
+  // The server checks health right after a login stores credentials. Refresh until
+  // that check lands so the row does not stay on "Checking health…".
+  useEffect(() => {
+    if (!anyProviderHealthChecking(query.data?.providers)) return;
+    const timer = setTimeout(() => query.refresh(), HEALTH_CHECK_REFRESH_MS);
+    return () => clearTimeout(timer);
+  }, [query, query.data]);
 
   useEffect(() => {
     if (!flow || flow.completion !== "poll") return;
@@ -159,6 +171,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       return;
     }
     if (result._tag !== "Success") return;
+    setCopyState("idle");
     setFlow(result.value);
     if (result.value.url) await openUrl(result.value.url);
   };
@@ -306,9 +319,26 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
               <Action label={t("Open sign-in")} onPress={() => void openUrl(flow.url)} />
             ) : null}
             {flow.userCode ? (
-              <Text selectable className="text-lg font-t3-medium text-foreground">
-                {flow.userCode}
-              </Text>
+              <>
+                <Text selectable className="text-lg font-t3-medium text-foreground">
+                  {flow.userCode}
+                </Text>
+                <Action
+                  label={copyState === "copied" ? t("Code copied") : t("Copy code")}
+                  onPress={() => {
+                    const userCode = flow.userCode;
+                    if (!userCode) return;
+                    void copySignInCode(userCode).then((copied) =>
+                      setCopyState(copied ? "copied" : "failed"),
+                    );
+                  }}
+                />
+                {copyState === "failed" ? (
+                  <Text accessibilityRole="alert" className="text-sm text-foreground-muted">
+                    {t("Couldn't copy the code. Select it and copy it manually.")}
+                  </Text>
+                ) : null}
+              </>
             ) : null}
             {flow.completion === "paste" ? (
               <>

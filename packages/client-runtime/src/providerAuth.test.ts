@@ -10,6 +10,7 @@ import {
   apiKeyValidationError,
   filterProvidersBySubscriptionConnection,
   PROVIDER_CONNECTIONS,
+  anyProviderHealthChecking,
   providerConnectionLabel,
   providerUsesApiKey,
   providerSupportsBaseUrl,
@@ -85,6 +86,19 @@ describe("provider API key forms", () => {
     );
     expect(providerConnectionLabel({ ...status, connected: false })).toBe("Not connected");
     expect(providerConnectionLabel(status)).toBe("OAuth connected");
+  });
+
+  it("labels an in-flight health check and reports when to keep refreshing", () => {
+    expect(providerConnectionLabel({ ...status, healthChecking: true })).toBe("Checking health…");
+    expect(providerConnectionLabel({ ...status, authMode: "api-key", healthChecking: true })).toBe(
+      "Checking health…",
+    );
+    expect(providerConnectionLabel({ ...status, connected: false, healthChecking: true })).toBe(
+      "Not connected",
+    );
+    expect(anyProviderHealthChecking([status, { ...status, healthChecking: true }])).toBe(true);
+    expect(anyProviderHealthChecking([status, { ...status, healthChecking: false }])).toBe(false);
+    expect(anyProviderHealthChecking(undefined)).toBe(false);
   });
 
   it("keeps OAuth and legacy OpenCode key status distinct", () => {

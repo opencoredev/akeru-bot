@@ -152,6 +152,25 @@ describe("subscription auth contracts", () => {
     }
   });
 
+  it("decodes the optional health-checking flag", () => {
+    expect(
+      decodeStatuses({
+        providers: [
+          {
+            provider: "kimi-for-coding",
+            connected: true,
+            health: "detected",
+            healthChecking: true,
+          },
+        ],
+      }).providers[0],
+    ).toMatchObject({ health: "detected", healthChecking: true });
+    expect(
+      decodeStatuses({ providers: [{ provider: "xai", connected: true, health: "healthy" }] })
+        .providers[0],
+    ).not.toHaveProperty("healthChecking");
+  });
+
   it("decodes a remote-safe device login", () => {
     expect(
       decodeStartResult({

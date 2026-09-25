@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { SubscriptionProviderStatus } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { LanguageProvider } from "../../i18n";
 import { ProviderApiKeyForm, ProviderLoginCard, SUBSCRIPTION_PROVIDERS } from "./ProvidersPanel";
 
 describe("subscription providers", () => {
@@ -65,6 +66,32 @@ describe("subscription providers", () => {
     expect(markup).toContain("Connected");
     expect(markup).not.toContain("Detected");
     expect(markup).not.toContain(SUBSCRIPTION_PROVIDERS[1]!.description);
+  });
+
+  it("shows a translated badge while the server checks a new login", () => {
+    const markup = renderToStaticMarkup(
+      <LanguageProvider
+        testCatalog={{ locale: "zh-CN", catalog: { "Checking health…": "正在检查健康状态…" } }}
+      >
+        <ProviderLoginCard
+          definition={SUBSCRIPTION_PROVIDERS[0]!}
+          status={{
+            provider: SUBSCRIPTION_PROVIDERS[0]!.id,
+            connected: true,
+            health: "detected",
+            healthChecking: true,
+            dependentBots: [],
+            dependentRoutines: [],
+          }}
+          busy={false}
+          onConnect={() => undefined}
+          onDisconnect={() => undefined}
+          onTest={() => undefined}
+        />
+      </LanguageProvider>,
+    );
+    expect(markup).toContain("正在检查健康状态…");
+    expect(markup).not.toContain(">Connected<");
   });
 
   it("disables other providers without showing false progress", () => {

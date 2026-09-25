@@ -737,7 +737,9 @@ const makeWsRpcLayer = (
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
       const botMemoryStore = new BotMemoryStore(config.stateDir);
-      const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+      const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir, {
+        checkHealthOnConnect: true,
+      });
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;

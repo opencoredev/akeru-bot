@@ -50,9 +50,20 @@ export function apiKeyStartInput(
   };
 }
 
+/** How often clients refresh statuses while a server-side post-login health check runs. */
+export const HEALTH_CHECK_REFRESH_MS = 1500;
+
+/** True while the server is still checking a newly stored credential for any provider. */
+export function anyProviderHealthChecking(
+  statuses: ReadonlyArray<SubscriptionProviderStatus> | undefined,
+): boolean {
+  return statuses?.some((status) => status.healthChecking === true) ?? false;
+}
+
 /** Catalog copy: render through `t`. */
 export function providerConnectionLabel(status: SubscriptionProviderStatus): MessageKey {
   if (!status.connected) return "Not connected";
+  if (status.healthChecking === true) return "Checking health…";
   return providerUsesApiKey(status) ? "API key saved" : "OAuth connected";
 }
 

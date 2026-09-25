@@ -1,4 +1,4 @@
-import { CopyIcon, ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
+import { ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   EnvironmentId,
@@ -14,8 +14,10 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 
 import {
+  anyProviderHealthChecking,
   apiKeyStartInput,
   apiKeyValidationError,
+  HEALTH_CHECK_REFRESH_MS,
   providerUsesApiKey,
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
@@ -30,6 +32,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { SignInCodeCopy } from "./SignInCodeCopy";
 import {
   SUBSCRIPTION_PROVIDERS,
   subscriptionProviderTargetId,
@@ -61,6 +64,7 @@ const healthLabels: Readonly<
 
 function providerBadgeLabel(status: SubscriptionProviderStatus | undefined): MessageKey {
   if (status?.connected !== true) return "Missing";
+  if (status.healthChecking === true) return "Checking health…";
   if (
     status.health === "expired" ||
     status.health === "revoked" ||
@@ -307,19 +311,7 @@ function ActiveLoginPanel({
         </Button>
       </div>
 
-      {flow.userCode ? (
-        <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-2">
-          <code className="flex-1 text-sm font-semibold tracking-widest">{flow.userCode}</code>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label={t("Copy sign-in code")}
-            onClick={() => void navigator.clipboard.writeText(flow.userCode ?? "")}
-          >
-            <CopyIcon className="size-3.5" />
-          </Button>
-        </div>
-      ) : null}
+      {flow.userCode ? <SignInCodeCopy code={flow.userCode} /> : null}
 
       {flow.completion === "paste" ? (
         <div className="flex gap-2">
@@ -421,6 +413,14 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
     },
     [statusQuery],
   );
+
+  // The server checks health right after a login stores credentials. Refresh until
+  // that check lands so the badge does not stay on "Checking health…".
+  useEffect(() => {
+    if (!anyProviderHealthChecking(statusQuery.data?.providers)) return;
+    const timer = setTimeout(() => statusQuery.refresh(), HEALTH_CHECK_REFRESH_MS);
+    return () => clearTimeout(timer);
+  }, [statusQuery, statusQuery.data]);
 
   useEffect(() => {
     if (!activeLogin || activeLogin.flow.completion !== "poll" || environmentId === null) return;
