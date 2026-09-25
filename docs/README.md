@@ -9,6 +9,7 @@
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
 - [Permission modes](./user/permission-modes.md)
 - [Configure sandboxes](./user/sandboxes.md)
+- [Watch and control a bot's computer](./user/computer.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Terminal history](./user/terminal.md)
 - [Organizing chats](./user/chats.md)

@@ -124,6 +124,14 @@ also binds transcription to the environment's `voice.transcribe` RPC. Browser ca
 `apps/mobile/src/lib/expoDictationCapture.ts`. A transcript is applied only while the environment,
 thread, draft, and draft generation still match the ones captured at start.
 
+### Computer viewer
+
+The client window that shows a bot's Daytona computer and hands input control between the bot and one
+person. The state machine and the controller that serializes RPC calls live in
+`packages/client-runtime/src/state/computerViewer.ts` and `computerViewerController.ts`. The web
+client renders it; mobile only points to desktop or web. See
+[computer-control.md](./computer-control.md#client-lifecycle).
+
 ### Stored-reply playback
 
 Reading an existing assistant message on the current client speaker. Identity, spoken-text conversion, playback ownership, and the client-local automatic-readout preference live in `packages/client-runtime/src/replyPlayback`. Synthesis credentials and the speech operation belong to the live-call voice work, not this module. See [reply-playback.md](./reply-playback.md).

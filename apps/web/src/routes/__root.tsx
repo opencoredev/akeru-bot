@@ -15,6 +15,7 @@ import { VoiceCallProvider } from "../components/voice/VoiceCall";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { SurfaceNavigationCoordinator } from "../components/SurfaceNavigationCoordinator";
+import { ComputerViewerDialog } from "../components/computer/ComputerViewerDialog";
 import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
 import { PolicyNotice } from "../components/privacy/PolicyNotice";
 import { TranslatedRootRouteErrorView } from "./RootRouteErrorView";
@@ -144,6 +145,7 @@ function RootRouteView() {
           <VoiceCallProvider>{appShell}</VoiceCallProvider>
         </ReplyPlaybackProvider>
         <ProductFeedbackDialog />
+        <ComputerViewerDialog />
         <PolicyNotice />
         {/* Above the router: a theme draft is judged by walking the app, so the
             editor has to survive navigation away from settings. */}

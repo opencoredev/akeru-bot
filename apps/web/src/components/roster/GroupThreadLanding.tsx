@@ -355,6 +355,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 onToggleOption={runtime.selectPendingUserInputOption}
                 onSelectSingleOption={runtime.selectPendingUserInputOption}
                 onAdvance={runtime.advancePendingUserInput}
+                threadRef={runtime.linkedThreadRef}
+                askingBot={activeBot ?? null}
               />
             ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
               <MemoryApprovalPrompt

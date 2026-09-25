@@ -2,12 +2,14 @@ import { useAtomValue } from "@effect/atom-react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import {
   Cancel01Icon,
+  ComputerIcon,
   PanelRightCloseIcon,
   PanelRightIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import { useEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
 
+import { openComputerViewer } from "../../computerViewerStore";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
@@ -58,6 +60,7 @@ export {
 export function BotOverview({
   bot,
   onOpenSettings,
+  onOpenComputer,
   routinePanel,
   routinePanelRef,
   routinePanelRequest = 0,
@@ -65,6 +68,8 @@ export function BotOverview({
 }: {
   readonly bot: Bot;
   readonly onOpenSettings?: () => void;
+  /** Opens the live computer viewer. Omitted until the bot has a chat to attach it to. */
+  readonly onOpenComputer?: () => void;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
   readonly routinePanelRef: Ref<HTMLDivElement>;
   readonly routinePanelRequest?: number;
@@ -94,6 +99,17 @@ export function BotOverview({
         <AppIcon className="size-4" icon={Settings02Icon} />
         {t("Open bot settings")}
       </Button>
+      {onOpenComputer ? (
+        <Button
+          className="mt-2 w-full justify-center"
+          variant="outline"
+          onClick={onOpenComputer}
+          data-bot-open-computer=""
+        >
+          <AppIcon className="size-4" icon={ComputerIcon} />
+          {t("Open computer")}
+        </Button>
+      ) : null}
 
       <dl className="mt-6 divide-y divide-border/70 border-y border-border/70 text-sm">
         <div className="flex items-center justify-between gap-4 py-3">
@@ -233,6 +249,17 @@ export function BotDetailsPanel({
             routinePanelRequest={routinePanelRequest}
             modelUnavailable={engine.blocked ? (engine.unavailability?.title ?? null) : null}
             {...(onOpenSettings ? { onOpenSettings } : {})}
+            {...(threadRef
+              ? {
+                  onOpenComputer: () =>
+                    openComputerViewer({
+                      threadRef,
+                      botName: bot.name,
+                      sandbox: bot.sandbox,
+                      engine: bot.engine,
+                    }),
+                }
+              : {})}
             {...(routinePanel ? { routinePanel } : {})}
           />
         </>

@@ -1774,6 +1774,47 @@ export const englishCatalog = {
     "This preference could not be saved on this device.",
   "Could not open the sign-in page. Try Open sign-in again.":
     "Could not open the sign-in page. Try Open sign-in again.",
+  "{name} is in control": "{name} is in control",
+  "You are in control": "You are in control",
+  "Someone else is in control": "Someone else is in control",
+  "No one is in control": "No one is in control",
+  "Your minute of control ran out, so the computer stopped. Resume it to continue.":
+    "Your minute of control ran out, so the computer stopped. Resume it to continue.",
+  "Your control ended.": "Your control ended.",
+  "The computer stopped.": "The computer stopped.",
+  "The computer is no longer available. The bot's work may have ended.":
+    "The computer is no longer available. The bot's work may have ended.",
+  "The connection dropped, so your control ended and the computer stopped.":
+    "The connection dropped, so your control ended and the computer stopped.",
+  "Someone else took control first.": "Someone else took control first.",
+  "The computer did not accept that. Try again.": "The computer did not accept that. Try again.",
+  "{name} works in a local workspace, which has no desktop to watch. Choose a Daytona sandbox in bot settings to give it a computer.":
+    "{name} works in a local workspace, which has no desktop to watch. Choose a Daytona sandbox in bot settings to give it a computer.",
+  "This bot's sandbox has no graphical desktop. Only Daytona sandboxes provide a computer you can watch and control.":
+    "This bot's sandbox has no graphical desktop. Only Daytona sandboxes provide a computer you can watch and control.",
+  "Computer control needs a Codex or Kimi For Coding engine. Claude, Grok, and OpenCode bots cannot share a computer yet.":
+    "Computer control needs a Codex or Kimi For Coding engine. Claude, Grok, and OpenCode bots cannot share a computer yet.",
+  "The computer starts when {name} begins work in its Daytona sandbox. Send it a message, then open the computer again.":
+    "The computer starts when {name} begins work in its Daytona sandbox. Send it a message, then open the computer again.",
+  "This computer is unavailable right now.": "This computer is unavailable right now.",
+  "Connecting to the computer…": "Connecting to the computer…",
+  "Reconnecting to the computer…": "Reconnecting to the computer…",
+  "The computer is stopped.": "The computer is stopped.",
+  "Waiting for the first picture…": "Waiting for the first picture…",
+  "Take control": "Take control",
+  "Return to {name}": "Return to {name}",
+  "Control is unavailable: {reason}": "Control is unavailable: {reason}",
+  "{name}'s screen": "{name}'s screen",
+  "Click, type, paste, and scroll on the picture. Control lasts up to one minute, then the computer stops.":
+    "Click, type, paste, and scroll on the picture. Control lasts up to one minute, then the computer stops.",
+  "You see the screen the bot works on. Pictures are streamed while this window is open and are not saved.":
+    "You see the screen the bot works on. Pictures are streamed while this window is open and are not saved.",
+  "{name}'s computer": "{name}'s computer",
+  "Open computer": "Open computer",
+  "Open {name}'s computer": "Open {name}'s computer",
+  "{name}'s computer is running": "{name}'s computer is running",
+  "Open Akeru Bot on a desktop or in a web browser to watch or take control of it.":
+    "Open Akeru Bot on a desktop or in a web browser to watch or take control of it.",
   "API key saved · {baseUrl}": "API key saved · {baseUrl}",
   "API key saved": "API key saved",
   "Disconnect {provider}": "Disconnect {provider}",

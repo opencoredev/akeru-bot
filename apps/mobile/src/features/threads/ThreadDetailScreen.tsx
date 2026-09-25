@@ -72,6 +72,7 @@ import type {
   ThreadFeedEntry,
 } from "../../lib/threadActivity";
 import { PendingApprovalCard } from "./PendingApprovalCard";
+import { ComputerDesktopNotice } from "./ComputerDesktopNotice";
 import { PendingUserInputCard } from "./PendingUserInputCard";
 import {
   derivePendingUserInputMaxHeight,
@@ -822,6 +823,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 </Animated.View>
               ) : null}
             </View>
+
+            <ComputerDesktopNotice
+              environmentId={props.environmentId}
+              threadId={props.selectedThread.id}
+              botId={props.selectedThread.botId ?? null}
+            />
 
             {/* Hidden (not unmounted) while a user-input request owns the
                 composer slot, so composer drafts and editor state survive. */}

@@ -35,3 +35,16 @@ Provider credentials and raw CDP URLs stay server-side. Connection identity is p
 Codex and Kimi register this computer through Mastra session resources. Claude, Grok, and OpenCode stay unavailable until they use the same gated browser tools. Shell processes can still send desktop input outside the gate; that residual risk is documented rather than silently claimed exclusive. Unbrokered MCP browser credentials are withheld from the graphical computer.
 
 Sleep, missing workspaces, and replacement recovery remain LEO-284 / LEO-399. Those flows must call `stop` on the shared computer and must not restore control leases from a checkpoint.
+
+## Client lifecycle
+
+`packages/client-runtime/src/state/computerViewer.ts` is a pure reducer over the server state, the local lease, the latest frame, and connection and visibility. `deriveComputerViewer` turns it into one phase and one owner (`bot`, `you`, `someone-else`, or `nobody`). The owner is derived from the lease and the server status, so a client never shows two owners at once. `explainComputerCapability` explains an unavailable computer from the bot's sandbox and engine instead of a generic error.
+
+`computerViewerController.ts` owns the RPC order through a port the web client binds to atom commands:
+
+- `show` reads state and opens the stream. `hide` calls `close`, which hands control back to the bot and keeps the computer running.
+- Input goes through one serialized queue capped at 32 actions. Consecutive scrolls coalesce, and a full queue drops the oldest pointer move, or the new action when no move is queued. Sequence numbers are assigned only when an action is sent.
+- A rejected input drops the local lease, releases it on the server, and re-reads state. The action is never replayed.
+- The lease cannot be renewed. The client times it on its own clock from the grant, so skew with a remote server cannot end it early. Local expiry, disconnect, and a stopped or ended computer all read as stopped, matching the server gate.
+
+The web client (`apps/web/src/components/computer/`) subscribes to `computer.events` only while the viewer is open, the page is visible, the environment is connected, and the computer is not stopped. It opens from the bot details panel and from pending human-input prompts in bot and group chats. Electron uses the same web surface. Mobile renders `ComputerDesktopNotice` while the computer is ready or human-controlled and does not stream frames.

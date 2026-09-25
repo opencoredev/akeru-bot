@@ -1,9 +1,11 @@
-import { type ApprovalRequestId } from "@t3tools/contracts";
+import { type ApprovalRequestId, type ScopedThreadRef } from "@t3tools/contracts";
 
 import { useI18n } from "../../i18n";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingUserInput } from "../../session-logic";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
+import { OpenComputerAction } from "../computer/OpenComputerAction";
+import type { Bot } from "./types";
 
 export function BotUserInputPrompt({
   pendingUserInputs,
@@ -13,6 +15,8 @@ export function BotUserInputPrompt({
   onToggleOption,
   onSelectSingleOption,
   onAdvance,
+  threadRef = null,
+  askingBot = null,
 }: {
   readonly pendingUserInputs: PendingUserInput[];
   readonly respondingRequestIds: ApprovalRequestId[];
@@ -21,6 +25,9 @@ export function BotUserInputPrompt({
   readonly onToggleOption: (questionId: string, optionLabel: string) => void;
   readonly onSelectSingleOption: (questionId: string, optionLabel: string) => void;
   readonly onAdvance: () => void;
+  /** The chat's thread and the bot asking, so the prompt can open that bot's computer. */
+  readonly threadRef?: ScopedThreadRef | null;
+  readonly askingBot?: Pick<Bot, "name" | "sandbox" | "engine"> | null;
 }) {
   const { t } = useI18n();
   // Once an answer is on its way the question has been dealt with: the composer's working
@@ -43,6 +50,11 @@ export function BotUserInputPrompt({
         onSelectSingleOption={onSelectSingleOption}
         onAdvance={onAdvance}
       />
+      {askingBot ? (
+        <div className="px-3 pb-2">
+          <OpenComputerAction threadRef={threadRef} bot={askingBot} />
+        </div>
+      ) : null}
     </section>
   );
 }

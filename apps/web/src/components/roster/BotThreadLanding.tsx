@@ -56,6 +56,7 @@ import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
+import { OpenComputerAction } from "../computer/OpenComputerAction";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
 import { ConversationSeparator } from "../chat/ConversationSeparator";
@@ -573,6 +574,9 @@ export function BotThreadLanding({
                       void runtime.advancePendingUserInput();
                     }}
                   />
+                  <div className="mt-2">
+                    <OpenComputerAction threadRef={runtime.linkedThreadRef} bot={bot} />
+                  </div>
                 </div>
               </div>
             ) : null}
