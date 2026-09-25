@@ -1,3 +1,4 @@
+import { isSilentRunActivity } from "@t3tools/client-runtime/silent-run";
 import * as Option from "effect/Option";
 import * as Arr from "effect/Array";
 import * as Schema from "effect/Schema";
@@ -680,6 +681,8 @@ export function deriveWorkLogEntries(
     if (activity.kind === "tool.progress") continue;
     if (activity.kind === "context-window.updated") continue;
     if (activity.summary === "Checkpoint captured") continue;
+    // Silent-run state drives the status line; it is not work the bot did.
+    if (isSilentRunActivity(activity)) continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));

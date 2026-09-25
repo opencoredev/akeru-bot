@@ -1,3 +1,4 @@
+import { isSilentRunActivity } from "@t3tools/client-runtime/silent-run";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -244,6 +245,8 @@ function deriveWorkLogEntries(
     if (activity.kind === "context-window.updated") continue;
     if (activity.kind === "bot.step-usage.updated") continue;
     if (activity.kind === "bot.usage-cap.hit") continue;
+    // Silent-run state drives the status line; it is not work the bot did.
+    if (isSilentRunActivity(activity)) continue;
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;

@@ -32,6 +32,10 @@
       "types": "./src/voice.ts",
       "default": "./src/voice.ts"
     },
+    "./silent-run": {
+      "types": "./src/silentRun.ts",
+      "default": "./src/silentRun.ts"
+    },
     "./pending-requests": {
       "types": "./src/pendingRequests.ts",
       "default": "./src/pendingRequests.ts"

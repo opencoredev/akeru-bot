@@ -1,4 +1,4 @@
-import { TurnId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { ProviderDriverKind, TurnId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -44,6 +44,27 @@ describe("bot activity status", () => {
 
     expect(withStart).toContain('data-testid="response-loading-time">12s<');
     expect(withoutStart).not.toContain("response-loading-time");
+  });
+
+  it("replaces the working shimmer with a silent-run notice", () => {
+    const markup = renderToStaticMarkup(
+      <BotActivityStatus
+        avatar={avatar}
+        name="Akeru"
+        startedAt={new Date(NOW.getTime() - 300_000).toISOString()}
+        silentRun={{
+          provider: ProviderDriverKind.make("kimi"),
+          providerName: "Kimi For Coding",
+          lastActivityAt: new Date(NOW.getTime() - 120_000).toISOString(),
+        }}
+      />,
+    );
+
+    expect(markup).toContain("data-silent-run");
+    expect(markup).toContain("No response from Kimi For Coding");
+    expect(markup).toContain('data-testid="response-loading-time">2m');
+    expect(markup).not.toContain("bot-status-shimmer");
+    expect(markup).not.toContain("Akeru is working");
   });
 
   it("drops the avatar when compact, for rails that already name the bot", () => {

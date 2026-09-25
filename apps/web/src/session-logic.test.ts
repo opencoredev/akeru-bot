@@ -999,6 +999,34 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
+  it("keeps silent-run state out of the work log", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "silent",
+        kind: "turn.silent",
+        summary: "No response from Codex",
+        tone: "info",
+        turnId: "turn-1",
+      }),
+      makeActivity({
+        id: "cleared",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "turn.silent.cleared",
+        summary: "Codex responded",
+        tone: "info",
+        turnId: "turn-1",
+      }),
+      makeActivity({
+        id: "tool-complete",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "tool.completed",
+        turnId: "turn-1",
+      }),
+    ];
+
+    expect(deriveWorkLogEntries(activities).map((entry) => entry.id)).toEqual(["tool-complete"]);
+  });
+
   it("omits tool started entries and keeps completed entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

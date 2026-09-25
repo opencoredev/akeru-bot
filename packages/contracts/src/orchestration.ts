@@ -26,7 +26,7 @@ import {
   TrimmedString,
   TurnId,
 } from "./baseSchemas.ts";
-import { ProviderInstanceId } from "./providerInstance.ts";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
 import { AkeruDelegationRecord } from "./akeruDelegation.ts";
 import { ImageProviderId } from "./imageGeneration.ts";
@@ -711,6 +711,20 @@ export const OrchestrationThreadActivity = Schema.Struct({
   createdAt: IsoDateTime,
 });
 export type OrchestrationThreadActivity = typeof OrchestrationThreadActivity.Type;
+
+/**
+ * The silence watchdog appends `turn.silent` when a running turn has produced no
+ * provider activity for a while, and `turn.silent.cleared` when activity resumes.
+ * The latest of the two for a still-running turn is its current silent-run state.
+ */
+export const THREAD_SILENT_RUN_ACTIVITY_KIND = "turn.silent";
+export const THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND = "turn.silent.cleared";
+export const ThreadSilentRunActivityPayload = Schema.Struct({
+  provider: ProviderDriverKind,
+  /** Last provider activity before the silence; clients time the silence from here. */
+  lastActivityAt: IsoDateTime,
+});
+export type ThreadSilentRunActivityPayload = typeof ThreadSilentRunActivityPayload.Type;
 
 const OrchestrationLatestTurnState = Schema.Literals([
   "running",

@@ -27,6 +27,7 @@ import { openSettings } from "../../settingsDialogStore";
 import { SidebarInset } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
@@ -228,6 +229,9 @@ export function BotThreadLanding({
     waitingForUserInput,
   });
   const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null, t);
+  const silentRun = runtime.latestTurn?.completedAt
+    ? null
+    : threadSilentRun(activities, runtime.latestTurn?.turnId);
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
@@ -642,6 +646,7 @@ export function BotThreadLanding({
                     runtime.latestTurn?.completedAt ? null : (runtime.latestTurn?.startedAt ?? null)
                   }
                   update={workingUpdate}
+                  silentRun={silentRun}
                   compact
                 />
               ) : null

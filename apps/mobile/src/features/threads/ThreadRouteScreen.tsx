@@ -1,3 +1,4 @@
+import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import {
   NativeStackScreenOptions,
@@ -229,6 +230,16 @@ function ThreadRouteContent(
       )?.unavailability ??
       null,
     [selectedThread, selectedThreadDetail],
+  );
+  const silentRun = useMemo(
+    () =>
+      selectedThread?.latestTurn?.completedAt
+        ? null
+        : threadSilentRun(
+            selectedThreadDetail?.activities ?? [],
+            selectedThread?.latestTurn?.turnId,
+          ),
+    [selectedThread?.latestTurn, selectedThreadDetail?.activities],
   );
   // "Load earlier turns" header state for windowed (paginated) thread loads.
   const loadEarlierTurns = useMemo(() => {
@@ -877,6 +888,7 @@ function ThreadRouteContent(
           environmentLabel={selectedEnvironmentConnection?.environmentLabel ?? null}
           selectedThreadFeed={composer.selectedThreadFeed}
           activeWorkStartedAt={composer.activeWorkStartedAt}
+          silentRun={silentRun}
           activePendingApproval={requests.activePendingApproval}
           respondingApprovalId={requests.respondingApprovalId}
           activePendingUserInput={requests.activePendingUserInput}

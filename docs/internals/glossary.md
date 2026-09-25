@@ -43,6 +43,10 @@ The internal durable record for one user-facing chat and its workspace history. 
 
 A single user-to-assistant work cycle inside a thread. It starts with user input and ends when the session leaves `running` status, which [projector.ts][4] treats as the authoritative completion signal (`settledTurnStateForSessionStatus`). Checkpoint and diff work may settle afterward without changing when the turn ended. See [the contracts][1] and [ProviderRuntimeIngestion.ts][5].
 
+#### Silent run
+
+A running turn whose provider has sent no output for `SILENCE_WATCHDOG_SILENT_MS` (90 seconds). Ingestion records it as a `turn.silent` activity and clears it with `turn.silent.cleared` or the end of the turn. It is a status, not a failure: nothing interrupts the turn. See [silence-watchdog.md](./silence-watchdog.md).
+
 ### Roster organization
 
 The live sidebar is `BotRosterSidebar`. Pins and the main Bots list are a client layout over bots and groups. They must not assign or remove group members, and they must not settle chats. Drag planning lives in `roster.logic.ts`; pointer cleanup, insertion-gap projection, and list motion live beside it in `roster.pointer.ts`, `roster.drag.ts`, and `roster.motion.ts`.

@@ -74,6 +74,27 @@ describe("bot inbox incidents", () => {
     expect(second.lastSeenAt).toBe("2026-08-30T20:00:00.000Z");
   });
 
+  it("reopens one silent-turn item across repeated silent windows", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+      "2026-08-30T20:04:00.000Z",
+    ]);
+    const silence = {
+      ...incident,
+      incidentKey: "silence:thread-1:turn-1",
+      kind: "silence-watchdog-failure" as const,
+    };
+    const first = service.ensureOpen(silence);
+    service.resolve(silence.incidentKey);
+    const second = service.ensureOpen(silence);
+
+    expect(second.id).toBe(first.id);
+    expect(second.status).toBe("open");
+    expect(second.occurrenceCount).toBe(2);
+    expect(service.list()).toHaveLength(1);
+  });
+
   it("resolves on recovery and opens a new incident after a later failure", () => {
     const { filePath, service } = makeService([
       "2026-08-30T20:00:00.000Z",

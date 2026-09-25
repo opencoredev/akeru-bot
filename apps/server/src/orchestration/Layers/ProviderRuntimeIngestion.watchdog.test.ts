@@ -16,7 +16,10 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   RuntimeRequestId,
+  THREAD_SILENT_RUN_ACTIVITY_KIND,
+  THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
   ThreadId,
+  ThreadSilentRunActivityPayload,
   TurnId,
   type OrchestrationCommand,
   type ProjectId,
@@ -30,6 +33,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as PubSub from "effect/PubSub";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -59,6 +63,7 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import { SILENCE_WATCHDOG_SILENT_MS } from "../SilenceWatchdog.ts";
 import { BotUsageLedgerLive } from "../../usage/BotUsageLedger.ts";
 
 const asProjectId = (value: string): ProjectId => value as unknown as ProjectId;
@@ -66,8 +71,7 @@ const asEventId = (value: string): EventId => EventId.make(value);
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
 
-const BEAT_MS = 60_000;
-const FAILURE_MS = 120_000;
+const SILENT_MS = SILENCE_WATCHDOG_SILENT_MS;
 
 type ReadModel = OrchestrationReadModel;
 type TestThread = ReadModel["threads"][number];
@@ -276,7 +280,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
       return botInbox.list();
     };
 
-    const emitTurnStarted = (turnId: string, extra?: { hiddenWake?: boolean }) => {
+    const emitTurnStarted = (turnId: string) => {
       emit({
         type: "turn.started",
         eventId: asEventId(`evt-turn-started-${turnId}`),
@@ -284,8 +288,42 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
         threadId: asThreadId("thread-1"),
         turnId: asTurnId(turnId),
         createdAt,
-        payload: extra?.hiddenWake ? { hiddenWake: true } : {},
+        payload: {},
       });
+    };
+    const emitReasoning = (turnId: string, id: string) => {
+      emit({
+        type: "content.delta",
+        eventId: asEventId(`evt-delta-${id}`),
+        provider,
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId(turnId),
+        createdAt,
+        payload: { streamKind: "reasoning_text", delta: "thinking" },
+      });
+    };
+    const emitTurnEnded = (turnId: string, kind: "completed" | "interrupted" | "aborted") => {
+      emit(
+        kind === "aborted"
+          ? {
+              type: "turn.aborted",
+              eventId: asEventId(`evt-turn-aborted-${turnId}`),
+              provider,
+              threadId: asThreadId("thread-1"),
+              turnId: asTurnId(turnId),
+              createdAt,
+              payload: { reason: "user cancelled" },
+            }
+          : {
+              type: "turn.completed",
+              eventId: asEventId(`evt-turn-${kind}-${turnId}`),
+              provider,
+              threadId: asThreadId("thread-1"),
+              turnId: asTurnId(turnId),
+              createdAt,
+              payload: { state: kind },
+            },
+      );
     };
 
     const activitiesOf = async () =>
@@ -297,6 +335,8 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     return {
       emit,
       emitTurnStarted,
+      emitReasoning,
+      emitTurnEnded,
       drain,
       dispatch,
       readModel,
@@ -309,49 +349,98 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     };
   }
 
-  it("fails a silent Mastra-family turn, opens one inbox incident, and interrupts", async () => {
+  const silenceIncidents = (harness: Awaited<ReturnType<typeof createHarness>>) =>
+    harness.botInboxList().filter((item) => item.kind === "silence-watchdog-failure");
+  const silentKinds = (activities: ReadonlyArray<TestActivity>) =>
+    activities.map((activity) => activity.kind);
+
+  // Codex and Kimi run through the Mastra AgentController; Claude, Grok, and OpenCode
+  // through the legacy adapter bridge. All reach ingestion as normalized runtime events.
+  it.each(["codex", "kimi", "claude", "grok", "opencode"])(
+    "records a silent run and one inbox item for a quiet %s turn without interrupting it",
+    async (driver) => {
+      const harness = await createHarness({
+        provider: ProviderDriverKind.make(driver),
+        botOwned: true,
+      });
+      const turnId = asTurnId(`turn-silent-${driver}`);
+      harness.emitTurnStarted(turnId);
+      await harness.drain();
+
+      await harness.adjustClock(SILENT_MS - 1);
+      await harness.drain();
+      expect(await harness.watchdogActivities()).toHaveLength(0);
+
+      await harness.adjustClock(1);
+      await harness.drain();
+      const watchdog = await harness.watchdogActivities();
+      expect(silentKinds(watchdog)).toEqual([THREAD_SILENT_RUN_ACTIVITY_KIND]);
+      expect(watchdog[0]?.turnId).toBe(turnId);
+      expect(
+        Schema.decodeUnknownSync(ThreadSilentRunActivityPayload)(watchdog[0]?.payload),
+      ).toEqual({
+        provider: driver,
+        lastActivityAt: "1970-01-01T00:00:00.000Z",
+      });
+      expect(harness.interruptCalls).toEqual([]);
+
+      const incidents = silenceIncidents(harness);
+      expect(incidents).toHaveLength(1);
+      expect(incidents[0]).toMatchObject({
+        status: "open",
+        incidentKey: `silence:thread-1:${turnId}`,
+        botName: "Akeru",
+        taskOrRoutine: "Watchdog thread",
+      });
+    },
+  );
+
+  it("clears the silent run and resolves the inbox item when output resumes", async () => {
     const harness = await createHarness({ botOwned: true });
-    const turnId = asTurnId("turn-silent-mastra");
+    const turnId = "turn-resume";
     harness.emitTurnStarted(turnId);
     await harness.drain();
+    await harness.adjustClock(SILENT_MS);
+    await harness.drain();
+    expect(silenceIncidents(harness)[0]?.status).toBe("open");
 
-    await harness.adjustClock(FAILURE_MS);
+    await harness.adjustClock(1_000);
+    harness.emitReasoning(turnId, "resume");
+    await harness.drain();
+    await harness.adjustClock(1);
     await harness.drain();
 
-    const watchdog = await harness.watchdogActivities();
-    const beats = watchdog.filter((a) => a.id === `silence-watchdog:beat:thread-1:${turnId}`);
-    const failures = watchdog.filter((a) => a.id === `silence-watchdog:failure:thread-1:${turnId}`);
-    expect(beats).toHaveLength(1);
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.tone).toBe("error");
-    expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
-
-    const incidents = harness.botInboxList().filter((i) => i.kind === "silence-watchdog-failure");
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]?.status).toBe("open");
-    expect(incidents[0]?.incidentKey).toBe(`silence:thread-1:${turnId}`);
+    expect(silentKinds(await harness.watchdogActivities())).toEqual([
+      THREAD_SILENT_RUN_ACTIVITY_KIND,
+      THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
+    ]);
+    expect(silenceIncidents(harness)).toMatchObject([{ status: "resolved" }]);
   });
 
-  it("fails a silent legacy-family turn, opens one inbox incident, and interrupts", async () => {
-    const harness = await createHarness({
-      provider: ProviderDriverKind.make("claude"),
-      botOwned: true,
-    });
-    const turnId = asTurnId("turn-silent-legacy");
+  it("keeps one inbox item across repeated silent windows in the same turn", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = "turn-repeated";
     harness.emitTurnStarted(turnId);
     await harness.drain();
 
-    await harness.adjustClock(FAILURE_MS);
+    for (const window of [1, 2, 3]) {
+      await harness.adjustClock(SILENT_MS);
+      await harness.drain();
+      await harness.adjustClock(1_000);
+      harness.emitReasoning(turnId, `window-${window}`);
+      await harness.drain();
+    }
+    await harness.adjustClock(SILENT_MS);
     await harness.drain();
 
-    const watchdog = await harness.watchdogActivities();
-    expect(
-      watchdog.filter((a) => a.id === `silence-watchdog:failure:thread-1:${turnId}`),
-    ).toHaveLength(1);
-    expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
-    const incidents = harness.botInboxList().filter((i) => i.kind === "silence-watchdog-failure");
+    const incidents = silenceIncidents(harness);
     expect(incidents).toHaveLength(1);
-    expect(incidents[0]?.status).toBe("open");
+    expect(incidents[0]).toMatchObject({ status: "open", occurrenceCount: 4 });
+    const kinds = silentKinds(await harness.watchdogActivities());
+    expect(kinds.filter((kind) => kind === THREAD_SILENT_RUN_ACTIVITY_KIND)).toHaveLength(4);
+    expect(kinds.filter((kind) => kind === THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND)).toHaveLength(
+      3,
+    );
   });
 
   it("keeps the turn alive on reasoning and tool content deltas", async () => {
@@ -360,21 +449,11 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     harness.emitTurnStarted(turnId);
     await harness.drain();
 
-    await harness.adjustClock(FAILURE_MS - 10_000);
-    harness.emit({
-      type: "content.delta",
-      eventId: asEventId("evt-delta-reasoning"),
-      provider: harness.provider,
-      threadId: asThreadId("thread-1"),
-      turnId,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      payload: { streamKind: "reasoning_text", delta: "thinking" },
-    });
+    await harness.adjustClock(SILENT_MS - 10_000);
+    harness.emitReasoning(turnId, "reasoning");
     await harness.drain();
-
-    await harness.adjustClock(FAILURE_MS - 5_000);
-    const watchdog = await harness.watchdogActivities();
-    expect(watchdog.filter((a) => a.id.includes(":failure:"))).toHaveLength(0);
+    await harness.adjustClock(SILENT_MS - 5_000);
+    await harness.drain();
 
     harness.emit({
       type: "content.delta",
@@ -386,11 +465,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
       payload: { streamKind: "command_output", delta: "tool output" },
     });
     await harness.drain();
-
-    await harness.adjustClock(FAILURE_MS - 5_000);
-    expect(
-      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
-    ).toHaveLength(0);
+    await harness.adjustClock(SILENT_MS - 5_000);
+    await harness.drain();
+    expect(await harness.watchdogActivities()).toHaveLength(0);
   });
 
   it("pauses on approval wait and resumes on request.resolved", async () => {
@@ -412,12 +489,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     });
     await harness.drain();
 
-    await harness.adjustClock(FAILURE_MS + 30_000);
+    await harness.adjustClock(SILENT_MS * 3);
     await harness.drain();
-    expect(
-      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
-    ).toHaveLength(0);
-    expect(harness.interruptCalls).toEqual([]);
+    expect(await harness.watchdogActivities()).toHaveLength(0);
 
     harness.emit({
       type: "request.resolved",
@@ -431,12 +505,12 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     });
     await harness.drain();
 
-    await harness.adjustClock(FAILURE_MS);
+    await harness.adjustClock(SILENT_MS);
     await harness.drain();
-    expect(
-      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
-    ).toHaveLength(1);
-    expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
+    expect(silentKinds(await harness.watchdogActivities())).toEqual([
+      THREAD_SILENT_RUN_ACTIVITY_KIND,
+    ]);
+    expect(harness.interruptCalls).toEqual([]);
   });
 
   it("pauses on user-input wait and resumes on user-input.resolved", async () => {
@@ -467,11 +541,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     });
     await harness.drain();
 
-    await harness.adjustClock(FAILURE_MS + 30_000);
+    await harness.adjustClock(SILENT_MS * 3);
     await harness.drain();
-    expect(
-      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
-    ).toHaveLength(0);
+    expect(await harness.watchdogActivities()).toHaveLength(0);
 
     harness.emit({
       type: "user-input.resolved",
@@ -485,55 +557,39 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     });
     await harness.drain();
 
-    await harness.adjustClock(FAILURE_MS);
+    await harness.adjustClock(SILENT_MS);
     await harness.drain();
-    expect(
-      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
-    ).toHaveLength(1);
-    expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
+    expect(silentKinds(await harness.watchdogActivities())).toEqual([
+      THREAD_SILENT_RUN_ACTIVITY_KIND,
+    ]);
   });
 
-  it("stops the watchdog on turn.completed", async () => {
-    const harness = await createHarness({ botOwned: true });
-    const turnId = asTurnId("turn-completed-stop");
-    harness.emitTurnStarted(turnId);
-    await harness.drain();
-    harness.emit({
-      type: "turn.completed",
-      eventId: asEventId("evt-completed-stop"),
-      provider: harness.provider,
-      threadId: asThreadId("thread-1"),
-      turnId,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      payload: { state: "completed" },
-    });
-    await harness.drain();
-    await harness.adjustClock(FAILURE_MS + 30_000);
-    await harness.drain();
-    expect(await harness.watchdogActivities()).toHaveLength(0);
-    expect(harness.interruptCalls).toEqual([]);
-  });
+  it.each(["completed", "interrupted", "aborted"] as const)(
+    "disposes the watchdog and resolves the inbox item when a silent turn is %s",
+    async (ending) => {
+      const harness = await createHarness({ botOwned: true });
+      const turnId = `turn-ended-${ending}`;
+      harness.emitTurnStarted(turnId);
+      await harness.drain();
+      await harness.adjustClock(SILENT_MS);
+      await harness.drain();
+      expect(silenceIncidents(harness)).toMatchObject([{ status: "open" }]);
 
-  it("stops the watchdog on turn.aborted", async () => {
-    const harness = await createHarness({ botOwned: true });
-    const turnId = asTurnId("turn-aborted-stop");
-    harness.emitTurnStarted(turnId);
-    await harness.drain();
-    harness.emit({
-      type: "turn.aborted",
-      eventId: asEventId("evt-aborted-stop"),
-      provider: harness.provider,
-      threadId: asThreadId("thread-1"),
-      turnId,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      payload: { reason: "user cancelled" },
-    });
-    await harness.drain();
-    await harness.adjustClock(FAILURE_MS + 30_000);
-    await harness.drain();
-    expect(await harness.watchdogActivities()).toHaveLength(0);
-    expect(harness.interruptCalls).toEqual([]);
-  });
+      harness.emitTurnEnded(turnId, ending);
+      await harness.drain();
+      expect(silenceIncidents(harness)).toMatchObject([{ status: "resolved" }]);
+
+      // A late event for the ended turn cannot revive the disposed watchdog.
+      harness.emitReasoning(turnId, "late");
+      await harness.drain();
+      await harness.adjustClock(SILENT_MS * 3);
+      await harness.drain();
+      expect(silentKinds(await harness.watchdogActivities())).toEqual([
+        THREAD_SILENT_RUN_ACTIVITY_KIND,
+      ]);
+      expect(silenceIncidents(harness)).toMatchObject([{ status: "resolved" }]);
+    },
+  );
 
   it("stops the watchdog on session.exited", async () => {
     const harness = await createHarness({ botOwned: true });
@@ -550,70 +606,21 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
       payload: {},
     });
     await harness.drain();
-    await harness.adjustClock(FAILURE_MS + 30_000);
+    await harness.adjustClock(SILENT_MS * 3);
     await harness.drain();
     expect(await harness.watchdogActivities()).toHaveLength(0);
-    expect(harness.interruptCalls).toEqual([]);
+    expect(silenceIncidents(harness)).toHaveLength(0);
   });
 
-  it("skips the first beat for a hidden-wake turn", async () => {
-    const harness = await createHarness({ botOwned: true });
-    const turnId = asTurnId("turn-hidden-wake");
-    harness.emitTurnStarted(turnId, { hiddenWake: true });
+  it("records the silent state without an inbox item for a chat with no bot", async () => {
+    const harness = await createHarness();
+    harness.emitTurnStarted("turn-no-bot");
     await harness.drain();
-    await harness.adjustClock(BEAT_MS + 10_000);
+    await harness.adjustClock(SILENT_MS);
     await harness.drain();
-    const watchdog = await harness.watchdogActivities();
-    expect(watchdog.filter((a) => a.id.includes(":beat:"))).toHaveLength(0);
-    await harness.adjustClock(FAILURE_MS);
-    await harness.drain();
-    expect(
-      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
-    ).toHaveLength(1);
-  });
-
-  it("dedupes open incidents across silent turns and resolves on a later success", async () => {
-    const harness = await createHarness({ botOwned: true });
-
-    harness.emitTurnStarted("turn-first-silent");
-    await harness.drain();
-    await harness.adjustClock(FAILURE_MS);
-    await harness.drain();
-    expect(
-      harness
-        .botInboxList()
-        .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open"),
-    ).toHaveLength(1);
-
-    harness.emitTurnStarted("turn-second-silent");
-    await harness.drain();
-    await harness.adjustClock(FAILURE_MS);
-    await harness.drain();
-    const openIncidents = harness
-      .botInboxList()
-      .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open");
-    expect(openIncidents).toHaveLength(2);
-
-    harness.emitTurnStarted("turn-success");
-    await harness.drain();
-    harness.emit({
-      type: "turn.completed",
-      eventId: asEventId("evt-success-completed"),
-      provider: harness.provider,
-      threadId: asThreadId("thread-1"),
-      turnId: asTurnId("turn-success"),
-      createdAt: "2026-01-01T00:00:00.000Z",
-      payload: { state: "completed" },
-    });
-    await harness.drain();
-
-    const remainingOpen = harness
-      .botInboxList()
-      .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open");
-    expect(remainingOpen).toHaveLength(0);
-    const resolved = harness
-      .botInboxList()
-      .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "resolved");
-    expect(resolved).toHaveLength(2);
+    expect(silentKinds(await harness.watchdogActivities())).toEqual([
+      THREAD_SILENT_RUN_ACTIVITY_KIND,
+    ]);
+    expect(silenceIncidents(harness)).toHaveLength(0);
   });
 });

@@ -82,11 +82,14 @@ export function ResponseLoadingState({
   createdAt,
   label: labelOverride,
   className,
+  stalled = false,
 }: {
   /** Turn start; omit or pass `null` to hide the timer. */
   readonly createdAt: string | null;
   readonly label?: string;
   readonly className?: string;
+  /** Nothing is arriving: drop the shimmer so the line does not imply progress. */
+  readonly stalled?: boolean;
 }) {
   const { t } = useI18n();
   const label = labelOverride ?? t("Working");
@@ -102,7 +105,14 @@ export function ResponseLoadingState({
     >
       {/* Keyed by label so a new step replays the one-shot sweep. */}
       <LoaderMeter key={label} />
-      <span className="bot-status-shimmer min-w-0 truncate text-[13px] font-medium">{label}</span>
+      <span
+        className={cn(
+          "min-w-0 truncate text-[13px] font-medium",
+          stalled ? "text-foreground" : "bot-status-shimmer",
+        )}
+      >
+        {label}
+      </span>
       {showTimer ? <LoadingElapsed startedAt={startedAt} /> : null}
     </div>
   );

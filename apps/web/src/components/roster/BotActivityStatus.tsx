@@ -1,4 +1,5 @@
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
 import type { OrchestrationThreadActivity, TurnId } from "@t3tools/contracts";
 
 import { useI18n } from "../../i18n";
@@ -68,6 +69,7 @@ export function BotActivityStatus({
   startedAt = null,
   compact = false,
   update = null,
+  silentRun = null,
 }: {
   readonly avatar: BotAvatar;
   readonly name: string;
@@ -76,8 +78,29 @@ export function BotActivityStatus({
   /** Drops the avatar for rails that already show who is working. */
   readonly compact?: boolean;
   readonly update?: string | null;
+  /** A running turn the provider went quiet on; replaces the working label and timer. */
+  readonly silentRun?: ThreadSilentRun | null;
 }) {
   const { t } = useI18n();
+  if (silentRun) {
+    return (
+      <div
+        className="flex min-w-0 items-center gap-2.5 text-sm"
+        data-testid="bot-activity-status"
+        data-silent-run=""
+      >
+        {compact ? null : (
+          <BotAvatarView avatar={avatar} name={name} className="size-7 shrink-0" state="working" />
+        )}
+        {/* The timer counts from the last output, so it reads as how long it has been quiet. */}
+        <ResponseLoadingState
+          createdAt={silentRun.lastActivityAt}
+          label={t("No response from {provider}", { provider: silentRun.providerName })}
+          stalled
+        />
+      </div>
+    );
+  }
   return (
     // ResponseLoadingState owns the live region; announcing from here too would nest them.
     <div className="flex min-w-0 items-center gap-2.5 text-sm" data-testid="bot-activity-status">

@@ -122,8 +122,13 @@ export class BotInboxService {
       (item) => item.incidentKey === incident.incidentKey && item.status === "open",
     );
     if (existingIndex < 0) {
+      // A silent turn keeps one item per chat and turn, so its later silent windows
+      // reopen that item even when nobody acknowledged the earlier one.
+      const reopensUnacknowledged = incident.kind === "silence-watchdog-failure";
       existingIndex = this.items.findLastIndex(
-        (item) => item.incidentKey === incident.incidentKey && item.acknowledgedAt !== undefined,
+        (item) =>
+          item.incidentKey === incident.incidentKey &&
+          (reopensUnacknowledged || item.acknowledgedAt !== undefined),
       );
     }
     if (existingIndex < 0) return this.upsert(incident);

@@ -22,6 +22,7 @@ import { useI18n } from "~/i18n";
 import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
+import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
@@ -148,6 +149,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     waitingForUserInput,
   });
   const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null, t);
+  const silentRun = runtime.latestTurn?.completedAt
+    ? null
+    : threadSilentRun(activities, runtime.latestTurn?.turnId);
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
@@ -333,6 +337,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   runtime.latestTurn?.completedAt ? null : (runtime.latestTurn?.startedAt ?? null)
                 }
                 update={workingUpdate}
+                silentRun={silentRun}
                 compact
               />
             ) : null

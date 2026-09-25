@@ -1,3 +1,4 @@
+import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
@@ -97,6 +98,7 @@ export interface ThreadDetailScreenProps {
   readonly environmentLabel: string | null;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
   readonly activeWorkStartedAt: string | null;
+  readonly silentRun: ThreadSilentRun | null;
   readonly activePendingApproval: PendingApproval | null;
   readonly respondingApprovalId: ApprovalRequestId | null;
   readonly activePendingUserInput: PendingUserInput | null;
@@ -681,6 +683,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             agentLabel={agentLabel}
             latestTurn={props.selectedThread.latestTurn}
             activeWorkStartedAt={props.activeWorkStartedAt}
+            silentRun={props.silentRun}
             listRef={listRef}
             freeze={freeze}
             anchorMessageId={anchorMessageId}

@@ -1,3 +1,4 @@
+import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
@@ -177,6 +178,8 @@ export interface ThreadFeedProps {
   readonly agentLabel: string;
   readonly latestTurn: ThreadFeedLatestTurn | null;
   readonly activeWorkStartedAt: string | null;
+  /** The running turn's provider went quiet; the working row says so instead. */
+  readonly silentRun?: ThreadSilentRun | null;
   readonly listRef: RefObject<LegendListRef | null>;
   readonly freeze: SharedValue<boolean>;
   readonly anchorMessageId: MessageId | null;
@@ -1040,7 +1043,7 @@ function useMarkdownStyles(
 
 function renderFeedEntry(
   info: { item: ThreadFeedEntry; index: number },
-  props: Pick<ThreadFeedProps, "environmentId" | "skills"> & {
+  props: Pick<ThreadFeedProps, "environmentId" | "skills" | "silentRun"> & {
     readonly copiedRowId: string | null;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly terminalAssistantMessageIds: ReadonlySet<string>;
@@ -1066,7 +1069,7 @@ function renderFeedEntry(
   const { markdownStyles, iconSubtleColor, userBubbleColor } = props;
 
   if (entry.type === "working") {
-    return <WorkingTimelineRow startedAt={entry.createdAt} />;
+    return <WorkingTimelineRow startedAt={entry.createdAt} silentRun={props.silentRun ?? null} />;
   }
 
   if (entry.type === "turn-fold") {
@@ -1308,7 +1311,11 @@ function BotStepMeter(props: { readonly meter: BotStepMeterData }) {
   );
 }
 
-const WorkingTimelineRow = memo(function WorkingTimelineRow(props: { readonly startedAt: string }) {
+const WorkingTimelineRow = memo(function WorkingTimelineRow(props: {
+  readonly startedAt: string;
+  readonly silentRun: ThreadSilentRun | null;
+}) {
+  const { t } = useMobileI18n();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -1318,7 +1325,12 @@ const WorkingTimelineRow = memo(function WorkingTimelineRow(props: { readonly st
     return () => clearInterval(intervalId);
   }, [props.startedAt]);
 
-  const durationLabel = formatElapsed(props.startedAt, new Date(nowMs).toISOString()) ?? "0s";
+  // A silent run counts from the last output, so the duration is how long it has been quiet.
+  const durationLabel =
+    formatElapsed(
+      props.silentRun?.lastActivityAt ?? props.startedAt,
+      new Date(nowMs).toISOString(),
+    ) ?? "0s";
 
   return (
     <View className="mb-4 flex-row items-center gap-2 px-1.5 py-1">
@@ -1328,7 +1340,12 @@ const WorkingTimelineRow = memo(function WorkingTimelineRow(props: { readonly st
         <View className="h-1 w-1 rounded-full bg-neutral-400/60 dark:bg-neutral-500/60" />
       </View>
       <Text className="font-t3-medium text-xs tabular-nums text-neutral-600 dark:text-neutral-400">
-        Working for {durationLabel}
+        {props.silentRun
+          ? t("No response from {provider} for {duration}", {
+              provider: props.silentRun.providerName,
+              duration: durationLabel,
+            })
+          : t("Working for {duration}", { duration: durationLabel })}
       </Text>
     </View>
   );
@@ -2199,6 +2216,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       reviewCommentBubbleWidth,
       userBubbleMaxWidth,
       skills: props.skills,
+      silentRun: props.silentRun,
       replyPlayback,
       replySynthesis,
       formatDate,
@@ -2223,6 +2241,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       onToggleWorkRow,
       props.environmentId,
       props.skills,
+      props.silentRun,
       renderMarkdownImage,
       replyPlayback,
       replySynthesis,

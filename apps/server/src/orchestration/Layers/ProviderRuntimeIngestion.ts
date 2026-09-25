@@ -21,9 +21,15 @@ import {
   type OrchestrationThreadShell,
   type ProviderRuntimeEvent,
   ProductFeedbackToolDraft,
+  PROVIDER_DISPLAY_NAMES,
+  THREAD_SILENT_RUN_ACTIVITY_KIND,
+  THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
+  type ProviderDriverKind,
+  type ThreadSilentRunActivityPayload,
 } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as DateTime from "effect/DateTime";
@@ -1021,77 +1027,122 @@ const make = Effect.gen(function* () {
         Effect.sync(() => silenceWatchdogs.delete(key)).pipe(Effect.andThen(handle.stop)),
       { concurrency: 1, discard: true },
     );
+  // Silent-run reports and their resolutions run in order on one worker, so a report
+  // queued just before a turn ends can never reopen the incident the ending closed.
+  const silenceReportWorker = yield* makeDrainableWorker((report: Effect.Effect<void>) => report);
+  const resolveSilenceIncidents = (threadId: ThreadId) =>
+    silenceReportWorker.enqueue(
+      Effect.sync(() => {
+        for (const incident of botInbox.list()) {
+          if (
+            incident.kind === "silence-watchdog-failure" &&
+            incident.status === "open" &&
+            incident.incidentKey.startsWith(`silence:${threadId}:`)
+          ) {
+            botInbox.resolve(incident.incidentKey);
+          }
+        }
+      }),
+    );
   const startTurnSilenceWatchdog = (
     thread: Pick<OrchestrationThreadShell, "id" | "botId" | "respondingBotId"> & {
       readonly title: string;
     },
     turnId: TurnId,
-    skipFirstBeat: boolean,
+    provider: ProviderDriverKind,
   ) =>
     Effect.gen(function* () {
-      yield* stopSilenceWatchdog(thread.id, turnId);
+      // One turn runs per chat, so a new turn retires any watchdog left behind.
+      yield* stopAllSilenceWatchdogs(thread.id);
+      yield* resolveSilenceIncidents(thread.id);
       const botId = resolveControllerBotId(thread);
-      const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
-      const bot =
-        botId === null ? undefined : snapshot.bots.find((candidate) => candidate.id === botId);
       const incidentKey = silenceIncidentKey(thread.id, turnId);
-      const handle = yield* startSilenceWatchdog({
-        skipFirstBeat,
-        callbacks: {
-          onBeat: orchestrationEngine
-            .dispatch({
-              type: "thread.activity.append",
-              commandId: CommandId.make(`silence-watchdog:beat:${thread.id}:${turnId}`),
+      const providerName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+      const appendSilenceActivity = (input: {
+        readonly id: string;
+        readonly kind: string;
+        readonly summary: string;
+        readonly payload: unknown;
+      }) =>
+        Effect.gen(function* () {
+          const createdAt = DateTime.formatIso(yield* DateTime.now);
+          yield* orchestrationEngine.dispatch({
+            type: "thread.activity.append",
+            commandId: CommandId.make(input.id),
+            threadId: thread.id,
+            activity: {
+              id: EventId.make(input.id),
+              tone: "info",
+              kind: input.kind,
+              summary: input.summary,
+              payload: input.payload,
+              turnId,
+              createdAt,
+            },
+            createdAt,
+          });
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("failed to record silent-run state", {
               threadId: thread.id,
-              activity: {
-                id: EventId.make(`silence-watchdog:beat:${thread.id}:${turnId}`),
-                tone: "info",
-                kind: "status.beat",
-                summary: "Still working",
-                payload: { source: "silence-watchdog" },
-                turnId,
-                createdAt: DateTime.formatIso(DateTime.nowUnsafe()),
-              },
-              createdAt: DateTime.formatIso(DateTime.nowUnsafe()),
-            })
-            .pipe(Effect.asVoid, Effect.orDie),
-          onFailure: Effect.gen(function* () {
-            yield* orchestrationEngine
-              .dispatch({
-                type: "thread.activity.append",
-                commandId: CommandId.make(`silence-watchdog:failure:${thread.id}:${turnId}`),
-                threadId: thread.id,
-                activity: {
-                  id: EventId.make(`silence-watchdog:failure:${thread.id}:${turnId}`),
-                  tone: "error",
-                  kind: "runtime.error",
-                  summary: "Turn stopped after no activity",
-                  payload: { message: "The bot stopped responding after two minutes of silence." },
-                  turnId,
-                  createdAt: DateTime.formatIso(DateTime.nowUnsafe()),
-                },
-                createdAt: DateTime.formatIso(DateTime.nowUnsafe()),
-              })
-              .pipe(Effect.orDie);
-            if (botId !== null && bot) {
-              botInbox.ensureOpen({
-                incidentKey,
-                kind: "silence-watchdog-failure",
-                botId,
-                botName: bot.name,
-                taskOrRoutine: thread.title,
-                lastFailure: "The bot stopped responding after two minutes of silence.",
-                nextAction: "Try the chat again or inspect the provider connection.",
-              });
-            }
-            yield* agentController
-              .interruptTurn({ threadId: thread.id, turnId })
-              .pipe(Effect.orElseSucceed(() => undefined));
-            silenceWatchdogs.delete(providerTurnKey(thread.id, turnId));
-          }).pipe(
-            Effect.ensuring(
-              Effect.sync(() => silenceWatchdogs.delete(providerTurnKey(thread.id, turnId))),
+              turnId,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        );
+      const handle = yield* startSilenceWatchdog({
+        callbacks: {
+          onSilent: (lastActivityAtMs) =>
+            silenceReportWorker.enqueue(
+              Effect.gen(function* () {
+                const payload: ThreadSilentRunActivityPayload = {
+                  provider,
+                  lastActivityAt: DateTime.formatIso(DateTime.makeUnsafe(lastActivityAtMs)),
+                };
+                yield* appendSilenceActivity({
+                  id: `silence-watchdog:silent:${thread.id}:${turnId}:${lastActivityAtMs}`,
+                  kind: THREAD_SILENT_RUN_ACTIVITY_KIND,
+                  summary: `No response from ${providerName}`,
+                  payload,
+                });
+                if (botId === null) return;
+                const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+                const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+                if (!bot) return;
+                // Keyed by chat and turn: a later silent window reopens the same item.
+                yield* Effect.sync(() =>
+                  botInbox.ensureOpen({
+                    incidentKey,
+                    kind: "silence-watchdog-failure",
+                    botId,
+                    botName: bot.name,
+                    taskOrRoutine: thread.title,
+                    lastFailure: `No response from ${providerName} for over a minute while the chat is running.`,
+                    nextAction:
+                      "Wait for it to continue, or stop the chat and send your message again. If it keeps happening, check the provider connection.",
+                  }),
+                );
+              }).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning("failed to report silent run", {
+                    threadId: thread.id,
+                    turnId,
+                    cause: Cause.pretty(cause),
+                  }),
+                ),
+              ),
             ),
+          onResumed: silenceReportWorker.enqueue(
+            Effect.gen(function* () {
+              const now = yield* Clock.currentTimeMillis;
+              yield* appendSilenceActivity({
+                id: `silence-watchdog:cleared:${thread.id}:${turnId}:${now}`,
+                kind: THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
+                summary: `${providerName} responded`,
+                payload: { provider },
+              });
+              yield* Effect.sync(() => botInbox.resolve(incidentKey));
+            }),
           ),
         },
       });
@@ -1816,12 +1867,9 @@ const make = Effect.gen(function* () {
       if (!thread) return;
       const eventTurnId = toTurnId(event.turnId);
       if (event.type === "turn.started" && eventTurnId) {
-        yield* startTurnSilenceWatchdog(
-          thread,
-          eventTurnId,
-          (event.payload as { readonly hiddenWake?: boolean } | undefined)?.hiddenWake === true,
-        );
-      } else if (eventTurnId) {
+        yield* startTurnSilenceWatchdog(thread, eventTurnId, event.provider);
+      } else if (eventTurnId && event.type !== "turn.completed" && event.type !== "turn.aborted") {
+        // A turn ending disposes its watchdog below; it is not output resuming.
         const handle = silenceWatchdogs.get(providerTurnKey(thread.id, eventTurnId));
         if (handle) yield* handle.touch;
       }
@@ -1833,22 +1881,14 @@ const make = Effect.gen(function* () {
       const now = event.createdAt;
       if (event.type === "session.exited") {
         yield* stopAllSilenceWatchdogs(thread.id);
+        yield* resolveSilenceIncidents(thread.id);
       } else if (
         (event.type === "turn.completed" || event.type === "turn.aborted") &&
         eventTurnId
       ) {
+        // Any ending, including an interrupt, closes the silent run and its inbox item.
         yield* stopSilenceWatchdog(thread.id, eventTurnId);
-        if (event.type === "turn.completed" && event.payload.state === "completed") {
-          yield* Effect.sync(() => {
-            for (const incident of botInbox.list()) {
-              if (
-                incident.kind === "silence-watchdog-failure" &&
-                incident.incidentKey.startsWith(`silence:${thread.id}:`)
-              )
-                botInbox.resolve(incident.incidentKey);
-            }
-          });
-        }
+        yield* resolveSilenceIncidents(thread.id);
       }
       const activeWatchdog = eventTurnId
         ? silenceWatchdogs.get(providerTurnKey(thread.id, eventTurnId))
@@ -2658,6 +2698,8 @@ const make = Effect.gen(function* () {
   return {
     start,
     drain: worker.drain.pipe(
+      Effect.andThen(silenceReportWorker.drain),
+      Effect.andThen(worker.drain),
       Effect.andThen(channelStatusWorker.drain),
       Effect.andThen(automaticChannelReplyWorker.drain),
     ),
