@@ -483,6 +483,7 @@ export const CHANNEL_TRANSPORT_CAPABILITIES = {
 
 export const ChannelBindingStatus = Schema.Literals([
   "disconnected",
+  "connecting",
   "connected",
   "needs-reconnect",
   "failed",
@@ -490,6 +491,15 @@ export const ChannelBindingStatus = Schema.Literals([
   "not-live",
 ]);
 export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
+/** Why a channel binding last failed. Clients pick one repair action from status plus category. */
+export const ChannelFailureCategory = Schema.Literals([
+  "credentials",
+  "network",
+  "project",
+  "delivery-unknown",
+  "restore",
+]);
+export type ChannelFailureCategory = typeof ChannelFailureCategory.Type;
 export const ChannelBinding = Schema.Struct({
   botId: BotId,
   connectionId: Schema.optional(ChannelConnectionId),
@@ -499,7 +509,11 @@ export const ChannelBinding = Schema.Struct({
   externalIdentity: Schema.NullOr(TrimmedNonEmptyString),
   connectedAt: Schema.NullOr(IsoDateTime),
   lastAttemptAt: Schema.optional(IsoDateTime),
+  /** Most recent successful connect or confirmed delivery. Survives later failures. */
+  lastSucceededAt: Schema.optional(IsoDateTime),
   lastError: Schema.optional(TrimmedNonEmptyString),
+  /** Present only with `lastError`. */
+  failureCategory: Schema.optional(ChannelFailureCategory),
   sentMessageIds: Schema.Array(MessageId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type ChannelBinding = typeof ChannelBinding.Type;

@@ -24,6 +24,21 @@ If reassignment changes the workspace, replies from the earlier workspace cannot
 
 Credentials stay on the environment server. Web, desktop, and mobile receive safe connection and delivery state only. A standard remote client cannot change channel credentials or assignment.
 
+## Channel health
+
+Each channel card shows whether the channel is working.
+
+- **Connecting** appears while Akeru starts the channel. It changes to connected or to an error when the start finishes.
+- **Reconnect required** means the channel stopped after it was working, for example after a server restart or a dropped Discord or iMessage connection. Reconnect to resume.
+- **Connection failed** means the provider rejected the connection or Akeru could not reach it. A rejection usually means the credentials changed, so update them and connect again.
+- **Choose another project** means the channel's project is unavailable.
+
+A connected channel can also show a warning. If you reconnect with a token the provider rejects, the channel keeps running on its earlier connection and the card tells you to check the credentials. If the provider rejects a reply, the card tells you to correct the channel problem before you retry. The warning clears after the next successful connect or reply.
+
+Status changes reach every open client without a refresh.
+
+Error text comes from Akeru, not from the messaging service. Service error messages can contain tokens or account details, so Akeru never shows or logs them.
+
 ## Delivery state
 
 Akeru records confirmed replies and prevents normal retries from posting them again. If a provider confirms that it rejected a reply, you can retry that reply.

@@ -154,8 +154,15 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 ChannelCommand.executeChannelCommand(services.value.channelRuntime, command),
               )
               .pipe(
+                // The log gets the category only; channel errors can wrap provider responses.
                 Effect.catchCause((cause) =>
-                  failEnvironmentInternal("orchestration_dispatch_failed", Cause.squash(cause)),
+                  ChannelCommand.channelCommandFailure(command, cause).pipe(
+                    Effect.flatMap((failure) =>
+                      failEnvironmentInternal("orchestration_dispatch_failed", {
+                        channelFailureCategory: failure.category ?? "internal",
+                      }),
+                    ),
+                  ),
                 ),
               );
           }

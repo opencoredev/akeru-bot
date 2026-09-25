@@ -18,6 +18,8 @@ export function channelProviderLabel(provider: ChannelProvider): string {
 
 export function channelHealthLabel(status: ChannelBindingStatus): string {
   switch (status) {
+    case "connecting":
+      return "Connecting";
     case "connected":
       return "Connected";
     case "disconnected":
@@ -30,6 +32,79 @@ export function channelHealthLabel(status: ChannelBindingStatus): string {
       return "Choose another project";
     case "not-live":
       return "Not live";
+  }
+}
+
+/** The single repair a client offers for a binding. */
+export type ChannelRepairAction =
+  | "none"
+  | "wait"
+  | "connect"
+  | "reconnect"
+  | "update-credentials"
+  | "choose-project"
+  | "check-delivery"
+  | "configure-public-url";
+
+/**
+ * Picks one repair action from status and failure category. With `liveProjects`, a binding whose
+ * project is gone asks for a project first, because every other repair would start it there.
+ */
+export function channelRepairAction(
+  binding: Pick<ChannelBinding, "status" | "projectId" | "failureCategory">,
+  liveProjects?: ReadonlyArray<ProjectRef>,
+): ChannelRepairAction {
+  if (binding.status === "connecting") return "wait";
+  if (binding.status === "not-live") return "configure-public-url";
+  if (
+    binding.status === "blocked" ||
+    binding.failureCategory === "project" ||
+    (liveProjects && channelBindingNeedsProject(binding, liveProjects))
+  ) {
+    return "choose-project";
+  }
+  switch (binding.status) {
+    case "connected":
+      // A connected binding with a failure means a later attempt or reply failed while the
+      // running transport stayed up. Offer the repair for that failure.
+      switch (binding.failureCategory) {
+        case "delivery-unknown":
+          return "check-delivery";
+        case "credentials":
+          return "update-credentials";
+        case "network":
+        case "restore":
+          return "reconnect";
+        default:
+          return "none";
+      }
+    case "disconnected":
+      return "connect";
+    case "needs-reconnect":
+      return "reconnect";
+    case "failed":
+      return binding.failureCategory === "credentials" ? "update-credentials" : "reconnect";
+  }
+}
+
+export function channelRepairLabel(action: ChannelRepairAction): string | null {
+  switch (action) {
+    case "none":
+      return null;
+    case "wait":
+      return "Connecting…";
+    case "connect":
+      return "Connect";
+    case "reconnect":
+      return "Reconnect";
+    case "update-credentials":
+      return "Update credentials";
+    case "choose-project":
+      return "Choose project";
+    case "check-delivery":
+      return "Check the channel";
+    case "configure-public-url":
+      return "Set a public URL";
   }
 }
 

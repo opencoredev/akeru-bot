@@ -1942,16 +1942,13 @@ const makeWsRpcLayer = (
                 }
                 return yield* startup.enqueueCommand(
                   ChannelCommand.executeChannelCommand(channelRuntime.value, command).pipe(
-                    Effect.catchCause((cause) => {
-                      const error = Cause.squash(cause);
-                      return Effect.fail(
-                        new OrchestrationDispatchCommandError({
-                          message:
-                            error instanceof Error ? error.message : "Channel command failed.",
-                          cause: error,
-                        }),
-                      );
-                    }),
+                    Effect.catchCause((cause) =>
+                      ChannelCommand.channelCommandFailure(command, cause).pipe(
+                        Effect.flatMap(({ message }) =>
+                          Effect.fail(new OrchestrationDispatchCommandError({ message })),
+                        ),
+                      ),
+                    ),
                   ),
                 );
               }

@@ -1,7 +1,15 @@
 import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
-import type { ChannelOperationError, ChannelRuntimeShape } from "./ChannelRuntime.ts";
+import {
+  channelFailureMessage,
+  channelFailurePresentation,
+  isChannelPostRejected,
+  type ChannelFailurePresentation,
+  type ChannelOperationError,
+  type ChannelRuntimeShape,
+} from "./ChannelRuntime.ts";
 
 export type ChannelCommand = Extract<
   ClientOrchestrationCommand,
@@ -34,3 +42,30 @@ export const executeChannelCommand = (
                   ? runtime.reconnect(command.botId, command.provider)
                   : runtime.sendChannelMessage(command)
   ).pipe(Effect.map((sequence) => ({ sequence })));
+
+/**
+ * The only way a channel command failure leaves the server. Returns fixed, client-safe text
+ * and logs just the command type and failure category, never the provider error or cause.
+ */
+export const channelCommandFailure = (
+  command: ChannelCommand,
+  cause: Cause.Cause<unknown>,
+): Effect.Effect<ChannelFailurePresentation> => {
+  const error = Cause.hasInterruptsOnly(cause) ? undefined : Cause.squash(cause);
+  const presented =
+    error === undefined
+      ? { message: "Channel command was interrupted. Try again." }
+      : channelFailurePresentation(error);
+  // A provider error after a reply post began is ambiguous: the message may have been delivered.
+  // A definite rejection is not, so it keeps its own category and repair.
+  const failure: ChannelFailurePresentation =
+    command.type === "channel.send" &&
+    !isChannelPostRejected(error) &&
+    (presented.category === "network" || presented.category === "credentials")
+      ? { message: channelFailureMessage("delivery-unknown"), category: "delivery-unknown" }
+      : presented;
+  return Effect.logWarning("channel command failed", {
+    commandType: command.type,
+    category: failure.category ?? "internal",
+  }).pipe(Effect.as(failure));
+};

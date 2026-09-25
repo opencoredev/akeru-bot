@@ -23,6 +23,7 @@ import {
   AuthEnvironmentBootstrapTokenType,
   AuthTokenExchangeGrantType,
   BotId,
+  type ChannelBinding,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
   DelegationId,
@@ -360,6 +361,7 @@ const makeChannelTestBot = () => ({
   runtimeMode: "full-access" as const,
   usageCap: null,
   voiceEnabled: false,
+  imageProvider: null,
   channelBindings: [],
   groupId: null,
   archivedAt: null,
@@ -2305,6 +2307,110 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
       assert.deepEqual(adminStatus, { applicable: false, report: null });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("keeps channel management host-only and serves channel health over HTTP", () =>
+    Effect.gen(function* () {
+      const bot = makeChannelTestBot();
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getShellSnapshot: () =>
+              Effect.succeed({
+                snapshotSequence: 1,
+                bots: [
+                  {
+                    ...bot,
+                    channelBindings: [
+                      {
+                        botId: bot.id,
+                        provider: "telegram" as const,
+                        status: "needs-reconnect" as const,
+                        externalIdentity: "@channel_bot",
+                        connectedAt: "2026-01-01T00:00:00.000Z",
+                        lastSucceededAt: "2026-01-01T00:05:00.000Z",
+                        lastError: "The channel connection stopped. Reconnect to resume.",
+                        failureCategory: "network" as const,
+                        sentMessageIds: [],
+                      },
+                      {
+                        botId: bot.id,
+                        provider: "slack" as const,
+                        status: "connected" as const,
+                        externalIdentity: "channel-bot",
+                        connectedAt: "2026-01-01T00:00:00.000Z",
+                        lastSucceededAt: "2026-01-01T00:00:00.000Z",
+                        sentMessageIds: [],
+                      },
+                    ],
+                  },
+                ],
+                groups: [],
+                delegations: [],
+                projects: [],
+                threads: [],
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              }),
+          },
+        },
+      });
+
+      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "orchestration:read orchestration:operate terminal:operate review:write",
+      });
+      const authorization = `Bearer ${tokenBody.access_token ?? ""}`;
+      const command = {
+        type: "channel.disconnect" as const,
+        commandId: CommandId.make("cmd-channel-standard"),
+        botId: bot.id,
+        provider: "telegram" as const,
+      };
+
+      const httpDenied = yield* HttpClient.post("/api/orchestration/dispatch", {
+        headers: { authorization },
+        body: yield* HttpBody.json(command),
+      });
+      const httpDeniedBody = (yield* httpDenied.json) as { readonly requiredScope: string };
+      assert.equal(httpDenied.status, 403);
+      assert.equal(httpDeniedBody.requiredScope, "access:write");
+
+      const ticketResponse = yield* HttpClient.post("/api/auth/websocket-ticket", {
+        headers: { authorization },
+      });
+      const ticketBody = (yield* ticketResponse.json) as { readonly ticket: string };
+      const standardWsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(ticketBody.ticket)}`;
+      const wsDenied = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(standardWsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand](command),
+          ),
+        ),
+      );
+      assert.equal(wsDenied._tag, "OrchestrationDispatchCommandError");
+      assert.equal(wsDenied.message, "Only the environment host can manage external channels.");
+
+      // A standard client can still read health; a connected binding with no live transport
+      // reads as needs-reconnect, and a stored failure keeps its category and last success.
+      const shellResponse = yield* HttpClient.get("/api/orchestration/shell", {
+        headers: { authorization },
+      });
+      const shell = (yield* shellResponse.json) as {
+        readonly bots: ReadonlyArray<{ readonly channelBindings: ReadonlyArray<ChannelBinding> }>;
+      };
+      assert.equal(shellResponse.status, 200);
+      const [telegram, slack] = shell.bots[0]?.channelBindings ?? [];
+      assert.deepInclude(telegram, {
+        status: "needs-reconnect",
+        failureCategory: "network",
+        lastSucceededAt: "2026-01-01T00:05:00.000Z",
+        lastError: "The channel connection stopped. Reconnect to resume.",
+      });
+      assert.deepInclude(slack, {
+        status: "needs-reconnect",
+        lastSucceededAt: "2026-01-01T00:00:00.000Z",
+      });
+      assert.notProperty(slack, "failureCategory");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
