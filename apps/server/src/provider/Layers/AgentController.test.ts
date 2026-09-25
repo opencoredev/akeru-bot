@@ -1591,6 +1591,96 @@ describe("AgentControllerLive", () => {
     },
   );
 
+  it.effect("stops renewing a Mastra review claim once the turn settles", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-renewal-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-review-renewal");
+    const renew = vi.spyOn(botMemoryStore, "renewReviewClaim");
+
+    return provideController(
+      Effect.gen(function* () {
+        for (let prompt = 1; prompt <= 10; prompt += 1) {
+          const reservation = yield* Effect.promise(() =>
+            botMemoryStore.reserveReviewCadence(botId),
+          );
+          yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
+        }
+        const settled = Promise.withResolvers<void>();
+        const settleReviewClaim = botMemoryStore.settleReviewClaim.bind(botMemoryStore);
+        vi.spyOn(botMemoryStore, "settleReviewClaim").mockImplementation(async (...args) => {
+          const result = await settleReviewClaim(...args);
+          settled.resolve();
+          return result;
+        });
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          memoryAccess: {
+            tenantId: AkeruMemoryTenantId.make("local"),
+            userId: AkeruMemoryUserId.make("owner"),
+            threadId: codexThreadId,
+            projectId: ProjectId.make("project-review-renewal"),
+            workspaceRoot: "/workspace/review-renewal",
+            botId,
+            groupId: null,
+            respondingBotId: botId,
+            groupMemberBotIds: [],
+          },
+        });
+        // Effect's scheduler and the lock retry also use timers, so pump fake
+        // time until the awaited receipt lands instead of advancing blindly.
+        const pumpUntil = async (receipt: Promise<void>) => {
+          let landed = false;
+          void receipt.then(() => {
+            landed = true;
+          });
+          while (!landed) await vi.advanceTimersByTimeAsync(15);
+        };
+        const secondRenewal = Promise.withResolvers<void>();
+        renew.mockImplementation(async (...args) => {
+          const result = await BotMemoryStore.prototype.renewReviewClaim.apply(
+            botMemoryStore,
+            args,
+          );
+          if (renew.mock.calls.length >= 2) secondRenewal.resolve();
+          return result;
+        });
+
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Review this turn." });
+        yield* Effect.promise(() => pumpUntil(mastra.waitForSendMessageCount(1)));
+        // While the turn runs, the claim is renewed on its 20 second schedule.
+        yield* Effect.promise(() => pumpUntil(secondRenewal.promise));
+
+        mastra.finishSend();
+        yield* Effect.promise(() => pumpUntil(settled.promise));
+        const renewalsBeforeSettlement = renew.mock.calls.length;
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(120_000));
+        expect(renew).toHaveBeenCalledTimes(renewalsBeforeSettlement);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          vi.useRealTimers();
+          NodeFS.rmSync(memoryDir, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
+
   it.effect("honors the Memory setting per turn on the Mastra path", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
