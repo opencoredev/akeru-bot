@@ -4,10 +4,12 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { BotId, McpServerId } from "@t3tools/contracts";
+import { BotId, McpServerId, ThreadId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
+import { computerRegistry } from "./computerRegistry.ts";
+import { WorkspaceComputer } from "./workspaceComputer.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
 import { createBotBrowser } from "./botBrowser.ts";
 import {
@@ -892,6 +894,42 @@ describe("AkeruSessionResources", () => {
         mcpServers: [computerServer()],
       }),
     ).rejects.toThrow("Computer Use MCP failed to start.");
+    await resources.shutdown();
+  });
+  it("registers exclusive computers only when requested and unregisters on release", async () => {
+    const graphical = new WorkspaceComputer(
+      "daytona-id",
+      {
+        open: async () => undefined,
+        input: async () => undefined,
+        capture: async () => ({ mimeType: "image/jpeg", data: "Zg==", width: 2, height: 2 }),
+      },
+      async () => undefined,
+      async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
+      async () => "running",
+    );
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => ({
+        ...localBotWorkspace(workspace()),
+        computer: graphical,
+      }),
+      makeBotBrowser: () => browser(),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "legacy" });
+    expect(computerRegistry.state(ThreadId.make("legacy")).capability).toBe("none");
+    await resources.release("legacy");
+
+    await resources.acquire({ ...remoteInput, threadId: "codex", exclusiveComputer: true });
+    expect(computerRegistry.state(ThreadId.make("codex"))).toMatchObject({
+      capability: "desktop",
+      controlAvailable: true,
+      workspaceId: "daytona-id",
+    });
+    await resources.release("codex");
+    expect(computerRegistry.state(ThreadId.make("codex")).capability).toBe("none");
     await resources.shutdown();
   });
 });

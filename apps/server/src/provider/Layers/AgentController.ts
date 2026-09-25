@@ -2607,6 +2607,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   ? { userComputerCwd: input.cwd }
                   : {}),
                 mcpServers,
+                exclusiveComputer: resolved.provider === "codex" || resolved.provider === "kimi",
                 ...(botId ? { botId } : {}),
                 ...(bot?.name ? { botName: bot.name } : {}),
                 taskOrRoutine: threadTitle ?? "Browser task",

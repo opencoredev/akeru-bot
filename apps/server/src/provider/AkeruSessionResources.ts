@@ -24,6 +24,7 @@ import {
   type CreateRemoteBotWorkspaceInput,
 } from "./botWorkspace.ts";
 import { BotWorkspacePool, type BotWorkspaceLease } from "./botWorkspacePool.ts";
+import { computerRegistry } from "./computerRegistry.ts";
 import { mcpServerNeedsBrowserAttachment } from "./McpServerConfig.ts";
 import {
   CODEX_COMPUTER_USE_SERVER_ID,
@@ -42,6 +43,7 @@ export interface AkeruSessionResourceInput {
   readonly sandboxEnvironment?: Readonly<Record<string, string>>;
   readonly userComputerCwd?: string;
   readonly mcpServers: readonly McpServer[];
+  readonly exclusiveComputer?: boolean;
   readonly botId?: BotId;
   readonly botName?: string;
   readonly taskOrRoutine?: string;
@@ -95,6 +97,7 @@ export class AkeruSessionResources {
   private readonly userComputerWorkspaceLeases = new Map<string, BotWorkspaceLease>();
   private readonly workspacePool = new BotWorkspacePool();
   private readonly threadBrowsers = new Map<string, BotBrowser>();
+  private readonly computerRegistrations = new Map<string, () => void>();
   private readonly browserResourceKeys = new Map<string, string>();
   private readonly resourceBrowsers = new Map<string, BotBrowser>();
   private readonly browserReferences = new Map<string, number>();
@@ -235,6 +238,7 @@ export class AkeruSessionResources {
           threadId: input.resourceScope,
           workspace: workspaceLease.workspace.workspace,
           cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
+          ...(workspaceLease.workspace.computer ? { makeRpc: () => workspaceLease.workspace.computer! } : {}),
           ...(workspaceLease.workspace.browserEndpoint
             ? { browserEndpoint: workspaceLease.workspace.browserEndpoint }
             : {}),
@@ -257,6 +261,10 @@ export class AkeruSessionResources {
               }
             : {}),
         });
+      }
+
+      if (workspaceLease.workspace.computer && input.exclusiveComputer) {
+        this.computerRegistrations.set(key, computerRegistry.register(key, workspaceLease.workspace.computer, null));
       }
 
       this.resourceBrowsers.set(input.workspaceResourceKey, browser);
@@ -430,6 +438,8 @@ export class AkeruSessionResources {
       }
     }
 
+    this.computerRegistrations.get(threadId)?.();
+    this.computerRegistrations.delete(threadId);
     const browser = this.threadBrowsers.get(threadId);
     const resourceKey = this.browserResourceKeys.get(threadId);
     this.threadBrowsers.delete(threadId);

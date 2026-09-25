@@ -20,6 +20,7 @@ export * from "./providerRuntime.ts";
 export * from "./model.ts";
 export * from "./mcpServer.ts";
 export * from "./composio.ts";
+export * from "./computer.ts";
 export * from "./keybindings.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
